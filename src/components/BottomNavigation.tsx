@@ -8,10 +8,9 @@ const BottomNavigation = () => {
         <Button
           variant="secondary"
           size="lg"
-          className="flex-1 h-12 rounded-full font-medium"
+          className="w-12 h-12 rounded-full p-0"
         >
-          <ArrowRight className="w-4 h-4 mr-2" />
-          Iniciar
+          <ArrowRight className="w-5 h-5" />
         </Button>
         
         <Button
