@@ -1,12 +1,22 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import BottomNavigation from "@/components/BottomNavigation";
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+      {/* Main content area */}
+      <div className="flex-1 flex items-start justify-center pt-16 px-6">
+        <div className="text-center max-w-md mx-auto">
+          <h1 className="text-2xl font-bold text-foreground leading-tight">
+            Bem-vindo à Notinha, a sua rede de preços
+          </h1>
+        </div>
       </div>
+      
+      {/* Bottom navigation */}
+      <BottomNavigation />
+      
+      {/* Spacer for fixed bottom navigation */}
+      <div className="h-20"></div>
     </div>
   );
 };
