@@ -1,10 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, FileText, Menu, QrCode } from "lucide-react";
 import QRCodeScanner from "./QRCodeScanner";
+import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import { useQRScanner } from "@/hooks/useQRScanner";
+import { useState } from "react";
 
 const BottomNavigation = () => {
   const { isOpen, openScanner, closeScanner, handleScanSuccess } = useQRScanner();
+  const [showCaptureDialog, setShowCaptureDialog] = useState(false);
 
   return (
     <>
@@ -33,12 +36,32 @@ const BottomNavigation = () => {
           variant="outline"
           size="lg"
           className="flex-1 h-12 rounded-full font-medium"
+          onClick={() => setShowCaptureDialog(true)}
         >
           <Menu className="w-4 h-4 mr-2" />
           Menu
         </Button>
         </div>
       </div>
+      
+      {/* Dialog para captura de tela */}
+      {showCaptureDialog && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card p-6 rounded-lg shadow-lg w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Capturar Nota Fiscal</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCaptureDialog(false)}
+              >
+                ×
+              </Button>
+            </div>
+            <ScreenCaptureComponent />
+          </div>
+        </div>
+      )}
       
       <QRCodeScanner
         isOpen={isOpen}
