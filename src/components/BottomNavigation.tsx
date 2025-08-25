@@ -11,36 +11,36 @@ const BottomNavigation = () => {
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border p-4">
-      <div className="flex justify-between items-center max-w-md mx-auto gap-3">
-        <Button
-          variant="secondary"
-          size="lg"
-          className="flex-1 h-12 rounded-full font-medium"
-        >
-          <ArrowRight className="w-4 h-4 mr-2" />
-          Início
-        </Button>
-        
-        <Button
-          variant="default"
-          size="lg"
-          className="flex-1 h-12 rounded-full font-medium bg-gradient-primary shadow-button hover:shadow-lg transition-all duration-300"
-          onClick={openScanner}
-        >
-          <QrCode className="w-4 h-4 mr-2" />
-          Escanear QR
-        </Button>
-        
-        <Button
-          variant="outline"
-          size="lg"
-          className="flex-1 h-12 rounded-full font-medium"
-          onClick={() => setShowCaptureDialog(true)}
-        >
-          <Menu className="w-4 h-4 mr-2" />
-          Menu
-        </Button>
+      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border p-4 safe-area-inset-bottom">
+        <div className="flex justify-between items-center w-full max-w-screen-lg mx-auto gap-2 px-2">
+          <Button
+            variant="secondary"
+            size="lg"
+            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm"
+          >
+            <ArrowRight className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
+            <span className="truncate">Início</span>
+          </Button>
+          
+          <Button
+            variant="default"
+            size="lg"
+            className="flex-1 min-w-0 h-12 rounded-full font-medium bg-gradient-primary shadow-button hover:shadow-lg transition-all duration-300 text-xs sm:text-sm"
+            onClick={openScanner}
+          >
+            <QrCode className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
+            <span className="truncate">Escanear QR</span>
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm"
+            onClick={() => setShowCaptureDialog(true)}
+          >
+            <Menu className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
+            <span className="truncate">Menu</span>
+          </Button>
         </div>
       </div>
       
