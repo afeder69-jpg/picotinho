@@ -21,8 +21,13 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   useEffect(() => {
     if (isOpen && isNative) {
-      console.log("=== INICIANDO SCANNER QR ===");
+      console.log("=== QR SCANNER ABERTO ===");
+      console.log("Ambiente nativo:", isNative);
+      console.log("Iniciando scanner...");
       startScanner();
+    } else if (isOpen && !isNative) {
+      console.log("=== MODO NAVEGADOR ===");
+      // No navegador, mostrar apenas a opção manual
     }
     
     return () => {
