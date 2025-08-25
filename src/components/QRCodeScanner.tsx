@@ -13,7 +13,6 @@ interface QRCodeScannerProps {
 
 const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) => {
   const [isScanning, setIsScanning] = useState(false);
-  const [hasPermission, setHasPermission] = useState(false);
   const [isNative, setIsNative] = useState(false);
 
   useEffect(() => {
@@ -21,134 +20,93 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      checkPermissionAndStart();
-    } else if (isScanning) {
-      stopScanner();
+    if (isOpen && isNative) {
+      console.log("=== INICIANDO SCANNER QR ===");
+      startScanner();
     }
-
+    
     return () => {
       if (isScanning) {
-        stopScanner();
+        console.log("=== LIMPANDO SCANNER ===");
+        cleanup();
       }
     };
   }, [isOpen]);
 
-  const checkPermissionAndStart = async () => {
+  const startScanner = async () => {
     try {
-      console.log("Verificando ambiente:", { isNative: Capacitor.isNativePlatform() });
+      console.log("1. Tentando importar BarcodeScanner...");
+      const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
       
-      if (!Capacitor.isNativePlatform()) {
-        // No navegador, usar entrada manual
+      console.log("2. Verificando permissão...");
+      const permission = await BarcodeScanner.checkPermission({ force: true });
+      console.log("Permissão:", permission);
+      
+      if (!permission.granted) {
         toast({
-          title: "Modo navegador",
-          description: "Use o scanner manual no navegador",
-          variant: "default",
+          title: "Permissão necessária",
+          description: "Permita o acesso à câmera nas configurações",
+          variant: "destructive",
         });
-        setHasPermission(true);
+        onClose();
         return;
       }
 
-      // Verificar se o plugin está disponível
-      try {
-        const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
-        console.log("Plugin BarcodeScanner carregado:", BarcodeScanner);
-        
-        if (!BarcodeScanner) {
-          throw new Error("Plugin não disponível");
-        }
-
-        // Verificar e solicitar permissões
-        console.log("Verificando permissões...");
-        const status = await BarcodeScanner.checkPermission({ force: true });
-        console.log("Status da permissão:", status);
-        
-        if (status.granted) {
-          setHasPermission(true);
-          startNativeScanner();
-        } else if (status.denied) {
-          throw new Error("Permissão de câmera negada permanentemente");
-        } else {
-          throw new Error("Permissão de câmera não concedida");
-        }
-        
-      } catch (pluginError) {
-        console.error("Erro do plugin:", pluginError);
-        throw new Error(`Plugin error: ${pluginError.message}`);
+      console.log("3. Preparando scanner...");
+      setIsScanning(true);
+      
+      // Esconder fundo da webview
+      await BarcodeScanner.hideBackground();
+      document.body.classList.add('scanner-active');
+      
+      console.log("4. Iniciando scan...");
+      const result = await BarcodeScanner.startScan();
+      console.log("Resultado:", result);
+      
+      if (result.hasContent) {
+        console.log("5. QR detectado:", result.content);
+        onScanSuccess(result.content);
+        toast({
+          title: "QR Code detectado!",
+          description: "Processando...",
+        });
+        onClose();
       }
       
     } catch (error) {
-      console.error("Erro detalhado:", error);
+      console.error("ERRO SCANNER:", error);
       toast({
-        title: "Erro de câmera",
-        description: `${error.message || 'Erro desconhecido'}`,
+        title: "Erro na câmera",
+        description: error.message || "Não foi possível abrir a câmera",
         variant: "destructive",
       });
       onClose();
     }
   };
 
-  const startNativeScanner = async () => {
+  const cleanup = async () => {
     try {
-      setIsScanning(true);
-      const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
-      
-      console.log("Iniciando scanner nativo...");
-      
-      // Esconder o background da webview
-      await BarcodeScanner.hideBackground();
-      document.body.classList.add('scanner-active');
-      
-      const result = await BarcodeScanner.startScan();
-      console.log("Resultado do scan:", result);
-      
-      if (result.hasContent) {
-        onScanSuccess(result.content);
-        
-        toast({
-          title: "QR Code detectado!",
-          description: "Processando informações...",
-        });
-        
-        await stopScanner();
-        onClose();
-      }
-      
-    } catch (error) {
-      console.error("Erro ao iniciar scanner nativo:", error);
-      toast({
-        title: "Erro ao escanear",
-        description: `Falha no scanner: ${error.message}`,
-        variant: "destructive",
-      });
-      await stopScanner();
-    }
-  };
-
-  const stopScanner = async () => {
-    try {
-      if (isNative) {
+      if (isNative && isScanning) {
         const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
         await BarcodeScanner.showBackground();
         await BarcodeScanner.stopScan();
         document.body.classList.remove('scanner-active');
       }
       setIsScanning(false);
-      console.log("Scanner parado");
     } catch (error) {
-      console.warn("Erro ao parar scanner:", error);
+      console.warn("Erro ao limpar scanner:", error);
       setIsScanning(false);
     }
   };
 
   const handleClose = () => {
-    stopScanner();
+    cleanup();
     onClose();
   };
 
   const handleManualInput = () => {
-    const input = prompt("Digite o código QR manualmente:");
-    if (input && input.trim()) {
+    const input = prompt("Digite o código QR:");
+    if (input?.trim()) {
       onScanSuccess(input.trim());
       onClose();
     }
@@ -156,13 +114,13 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   if (!isOpen) return null;
 
-  // Se estiver escaneando no nativo, mostrar overlay transparente
+  // Scanner ativo (transparente)
   if (isScanning && isNative) {
     return (
       <div className="fixed inset-0 bg-transparent z-50 flex flex-col justify-between p-6">
         <div className="flex justify-between items-center">
           <div className="bg-background/90 backdrop-blur-sm rounded-lg p-3">
-            <h2 className="text-lg font-semibold text-foreground">Escaneando QR Code</h2>
+            <h2 className="text-lg font-semibold">Escaneando QR</h2>
           </div>
           <Button 
             variant="secondary" 
@@ -177,19 +135,17 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         <div className="text-center">
           <div className="bg-background/90 backdrop-blur-sm rounded-lg p-4 mx-auto max-w-sm">
             <QrCode className="w-8 h-8 mx-auto mb-2 text-primary" />
-            <p className="text-sm text-foreground">
-              Posicione o QR Code na câmera
-            </p>
+            <p className="text-sm">Posicione o QR Code na câmera</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Tela de preparação/carregamento
+  // Modo navegador ou preparação
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-6 relative">
+      <Card className="w-full max-w-md p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Escanear QR Code</h2>
           <Button variant="ghost" size="sm" onClick={handleClose}>
@@ -201,28 +157,21 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           <div className="flex flex-col items-center space-y-4">
             <Camera className="w-12 h-12 text-muted-foreground animate-pulse" />
             <p className="text-sm text-muted-foreground text-center">
-              {hasPermission ? "Iniciando câmera..." : "Verificando permissões..."}
+              {isNative ? "Iniciando câmera..." : "Modo navegador - use entrada manual"}
             </p>
           </div>
           
-          {!isNative && (
-            <div className="space-y-2">
-              <Button 
-                onClick={handleManualInput}
-                variant="outline" 
-                className="w-full"
-              >
-                Digite o código manualmente
-              </Button>
-              <div className="text-center text-xs text-muted-foreground">
-                Scanner QR funciona melhor no app instalado
-              </div>
-            </div>
-          )}
+          <Button 
+            onClick={handleManualInput}
+            variant="outline" 
+            className="w-full"
+          >
+            Digite o código manualmente
+          </Button>
           
-          {isNative && (
+          {!isNative && (
             <div className="text-center text-xs text-muted-foreground">
-              A câmera traseira será aberta automaticamente
+              Para usar a câmera, instale o app no celular
             </div>
           )}
         </div>
