@@ -17,9 +17,9 @@ const BottomNavigation = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border p-4 safe-area-inset-bottom">
         <div className="flex justify-between items-center w-full max-w-screen-lg mx-auto gap-2 px-2">
           <Button
-            variant={location.pathname === '/' ? "default" : "secondary"}
+            variant="ghost"
             size="lg"
-            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm"
+            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm text-white border border-white/20 hover:bg-white/10"
             onClick={() => navigate('/')}
           >
             <ArrowRight className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
@@ -29,7 +29,7 @@ const BottomNavigation = () => {
           <Button
             variant="default"
             size="lg"
-            className="flex-1 min-w-0 h-12 rounded-full font-medium bg-gradient-primary shadow-button hover:shadow-lg transition-all duration-300 text-xs sm:text-sm"
+            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white border-0"
             onClick={openScanner}
             disabled={isProcessing}
           >
@@ -40,9 +40,9 @@ const BottomNavigation = () => {
           </Button>
           
           <Button
-            variant={location.pathname === '/menu' ? "default" : "outline"}
+            variant="ghost"
             size="lg"
-            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm"
+            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm text-white border border-white/20 hover:bg-white/10"
             onClick={() => navigate('/menu')}
           >
             <Menu className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
