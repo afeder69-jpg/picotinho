@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import BottomNavigation from "@/components/BottomNavigation";
 
 interface Screenshot {
   id: number;
@@ -14,7 +14,6 @@ interface Screenshot {
 
 const Screenshots = () => {
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadScreenshots();
@@ -46,19 +45,10 @@ const Screenshots = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <div className="p-4">
-        <div className="flex items-center mb-6">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => navigate('/')}
-            className="mr-4"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <h1 className="text-2xl font-bold">Screenshots QR Code</h1>
-        </div>
+    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+      <div className="flex-1 p-4 pb-24">
+        <div className="max-w-md mx-auto">
+          <h1 className="text-2xl font-bold mb-6">Páginas Salvas</h1>
 
         {screenshots.length === 0 ? (
           <Card>
@@ -116,7 +106,11 @@ const Screenshots = () => {
             ))}
           </div>
         )}
+        </div>
       </div>
+      
+      {/* Bottom navigation */}
+      <BottomNavigation />
     </div>
   );
 };
