@@ -39,44 +39,37 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       console.log("Verificando ambiente:", { isNative: Capacitor.isNativePlatform() });
       
       if (!Capacitor.isNativePlatform()) {
-        // No navegador, usar HTML5 QR Code Scanner
+        // No navegador, usar entrada manual
         toast({
           title: "Modo navegador",
           description: "Use o scanner manual no navegador",
           variant: "default",
         });
         setHasPermission(true);
-        startWebScanner();
         return;
       }
 
       // Verificar se o plugin está disponível
       try {
-        const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+        const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
         console.log("Plugin BarcodeScanner carregado:", BarcodeScanner);
         
         if (!BarcodeScanner) {
           throw new Error("Plugin não disponível");
         }
 
-        // Verificar disponibilidade primeiro
-        const isAvailable = await BarcodeScanner.isSupported();
-        console.log("Plugin disponível:", isAvailable);
+        // Verificar e solicitar permissões
+        console.log("Verificando permissões...");
+        const status = await BarcodeScanner.checkPermission({ force: true });
+        console.log("Status da permissão:", status);
         
-        if (!isAvailable.supported) {
-          throw new Error("Scanner não suportado neste dispositivo");
-        }
-
-        // Solicitar permissões
-        console.log("Solicitando permissões...");
-        const permission = await BarcodeScanner.requestPermissions();
-        console.log("Resultado da permissão:", permission);
-        
-        if (permission.camera === 'granted') {
+        if (status.granted) {
           setHasPermission(true);
           startNativeScanner();
+        } else if (status.denied) {
+          throw new Error("Permissão de câmera negada permanentemente");
         } else {
-          throw new Error("Permissão de câmera negada");
+          throw new Error("Permissão de câmera não concedida");
         }
         
       } catch (pluginError) {
@@ -98,35 +91,28 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
   const startNativeScanner = async () => {
     try {
       setIsScanning(true);
-      const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
+      const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
       
       console.log("Iniciando scanner nativo...");
       
-      // Esconder o background
-      document.body.style.background = "transparent";
+      // Esconder o background da webview
+      await BarcodeScanner.hideBackground();
+      document.body.classList.add('scanner-active');
       
-      const listener = await BarcodeScanner.addListener('barcodeScanned', async (result) => {
-        console.log("QR Code detectado:", result);
+      const result = await BarcodeScanner.startScan();
+      console.log("Resultado do scan:", result);
+      
+      if (result.hasContent) {
+        onScanSuccess(result.content);
         
-        if (result.barcode && result.barcode.rawValue) {
-          onScanSuccess(result.barcode.rawValue);
-          
-          toast({
-            title: "QR Code detectado!",
-            description: "Processando informações...",
-          });
-          
-          await stopScanner();
-          listener.remove();
-          onClose();
-        }
-      });
-      
-      await BarcodeScanner.startScan({
-        formats: [BarcodeFormat.QrCode]
-      });
-      
-      console.log("Scanner nativo iniciado com sucesso");
+        toast({
+          title: "QR Code detectado!",
+          description: "Processando informações...",
+        });
+        
+        await stopScanner();
+        onClose();
+      }
       
     } catch (error) {
       console.error("Erro ao iniciar scanner nativo:", error);
@@ -139,19 +125,14 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
     }
   };
 
-  const startWebScanner = () => {
-    // Implementação simplificada para web
-    setIsScanning(true);
-    console.log("Scanner web iniciado (modo manual)");
-  };
-
   const stopScanner = async () => {
     try {
       if (isNative) {
-        const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+        const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
+        await BarcodeScanner.showBackground();
         await BarcodeScanner.stopScan();
+        document.body.classList.remove('scanner-active');
       }
-      document.body.style.background = "";
       setIsScanning(false);
       console.log("Scanner parado");
     } catch (error) {
@@ -175,7 +156,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   if (!isOpen) return null;
 
-  // Se estiver escaneando no nativo
+  // Se estiver escaneando no nativo, mostrar overlay transparente
   if (isScanning && isNative) {
     return (
       <div className="fixed inset-0 bg-transparent z-50 flex flex-col justify-between p-6">

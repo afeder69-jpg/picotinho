@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor-mlkit/barcode-scanning": "^6.2.0",
+    "@capacitor-community/barcode-scanner": "^4.0.1",
     "@capacitor/android": "^6.1.2",
     "@capacitor/camera": "^6.1.2",
     "@capacitor/cli": "^6.1.2",
