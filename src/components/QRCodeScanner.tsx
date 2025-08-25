@@ -35,10 +35,13 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         "qr-reader",
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: { width: 280, height: 280 },
           aspectRatio: 1.0,
           showTorchButtonIfSupported: true,
           supportedScanTypes: [],
+          rememberLastUsedCamera: true,
+          showZoomSliderIfSupported: true,
+          defaultZoomValueIfSupported: 2,
         },
         false
       );
@@ -46,19 +49,17 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       scanner.render(
         (decodedText) => {
           // Success callback
+          console.log("QR Code detectado:", decodedText);
           onScanSuccess(decodedText);
-          toast({
-            title: "QR Code detectado!",
-            description: `Código: ${decodedText}`,
-          });
           stopScanner();
           onClose();
         },
         (error) => {
-          // Error callback - we can ignore most errors as they're just "no QR code found"
-          if (error.includes("NotFoundException")) {
-            // This is normal when no QR code is in view
-            return;
+          // Error callback - ignoramos erros comuns quando não há QR code
+          if (error.includes("NotFoundException") || 
+              error.includes("No MultiFormat Readers") ||
+              error.includes("NotFound")) {
+            return; // Erro normal quando não há QR code na visão
           }
           console.warn("QR Scanner error:", error);
         }
@@ -66,6 +67,12 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
       scannerRef.current = scanner;
       setIsScanning(true);
+      
+      toast({
+        title: "Câmera iniciada",
+        description: "Posicione o QR Code na área de leitura",
+      });
+      
     } catch (error) {
       console.error("Erro ao iniciar scanner:", error);
       toast({

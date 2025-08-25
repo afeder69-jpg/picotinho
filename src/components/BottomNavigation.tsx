@@ -4,10 +4,12 @@ import QRCodeScanner from "./QRCodeScanner";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import { useQRScanner } from "@/hooks/useQRScanner";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const BottomNavigation = () => {
-  const { isOpen, openScanner, closeScanner, handleScanSuccess } = useQRScanner();
+  const { isOpen, openScanner, closeScanner, handleScanSuccess, isProcessing } = useQRScanner();
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <>
@@ -27,19 +29,22 @@ const BottomNavigation = () => {
             size="lg"
             className="flex-1 min-w-0 h-12 rounded-full font-medium bg-gradient-primary shadow-button hover:shadow-lg transition-all duration-300 text-xs sm:text-sm"
             onClick={openScanner}
+            disabled={isProcessing}
           >
             <QrCode className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
-            <span className="truncate">Escanear QR</span>
+            <span className="truncate">
+              {isProcessing ? "Processando..." : "Escanear QR"}
+            </span>
           </Button>
           
           <Button
             variant="outline"
             size="lg"
             className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm"
-            onClick={() => setShowCaptureDialog(true)}
+            onClick={() => navigate('/screenshots')}
           >
-            <Menu className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
-            <span className="truncate">Menu</span>
+            <FileText className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
+            <span className="truncate">Screenshots</span>
           </Button>
         </div>
       </div>
