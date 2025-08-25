@@ -1,14 +1,24 @@
 import { useState } from "react";
 import { toast } from "./use-toast";
-import html2canvas from "html2canvas";
 
 export const useQRScanner = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
+  const [currentReceiptUrl, setCurrentReceiptUrl] = useState<string | null>(null);
 
   const openScanner = () => setIsOpen(true);
   const closeScanner = () => setIsOpen(false);
+  
+  const openReceiptViewer = (url: string) => {
+    setCurrentReceiptUrl(url);
+    setShowReceiptViewer(true);
+  };
+  
+  const closeReceiptViewer = () => {
+    setShowReceiptViewer(false);
+    setCurrentReceiptUrl(null);
+  };
 
   const isValidUrl = (string: string) => {
     try {
@@ -34,64 +44,13 @@ export const useQRScanner = () => {
     }
   };
 
-  const captureAndSaveScreenshot = async (url: string) => {
-    try {
-      setIsProcessing(true);
-      
-      // Abre a URL em uma nova janela/aba
-      const newWindow = window.open(url, '_blank');
-      
-      if (!newWindow) {
-        throw new Error('Popup bloqueado. Permita popups para este site.');
-      }
-
-      // Aguarda um momento para a página carregar
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Captura screenshot da página atual (onde o QR code foi escaneado)
-      const canvas = await html2canvas(document.body, {
-        height: window.innerHeight,
-        width: window.innerWidth,
-        useCORS: true,
-        scale: 0.5 // Reduz a escala para economizar espaço
-      });
-
-      // Converte para blob
-      canvas.toBlob(async (blob) => {
-        if (blob) {
-          // Aqui você salvaria no banco de dados
-          // Por enquanto, vamos simular salvando no localStorage
-          const reader = new FileReader();
-          reader.onload = () => {
-            const dataUrl = reader.result as string;
-            const screenshots = JSON.parse(localStorage.getItem('qr_screenshots') || '[]');
-            screenshots.push({
-              id: Date.now(),
-              url: url,
-              timestamp: new Date().toISOString(),
-              screenshot: dataUrl
-            });
-            localStorage.setItem('qr_screenshots', JSON.stringify(screenshots));
-            
-            toast({
-              title: "Screenshot salvo!",
-              description: `Página ${url} capturada e salva com sucesso.`,
-            });
-          };
-          reader.readAsDataURL(blob);
-        }
-      }, 'image/jpeg', 0.8);
-
-    } catch (error) {
-      console.error('Erro ao capturar screenshot:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível capturar a página. Tente novamente.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
+  const isReceiptUrl = (url: string) => {
+    // Verifica se é uma URL da Receita Federal (NFCe ou NFe)
+    return url.includes('fazenda.') || 
+           url.includes('receita.') || 
+           url.includes('sefaz.') ||
+           url.includes('nfce') ||
+           url.includes('nfe');
   };
 
   const handleScanSuccess = async (result: string) => {
@@ -102,13 +61,25 @@ export const useQRScanner = () => {
     if (isValidUrl(result)) {
       const formattedUrl = formatUrl(result);
       
-      toast({
-        title: "QR Code detectado!",
-        description: `Abrindo: ${formattedUrl}`,
-      });
-
-      // Captura screenshot e abre a URL
-      await captureAndSaveScreenshot(formattedUrl);
+      // Verifica se é uma nota fiscal
+      if (isReceiptUrl(formattedUrl)) {
+        toast({
+          title: "Nota Fiscal detectada!",
+          description: "Abrindo página da Receita Federal...",
+        });
+        
+        // Fecha o scanner e abre o visualizador da nota
+        closeScanner();
+        openReceiptViewer(formattedUrl);
+      } else {
+        toast({
+          title: "QR Code detectado!",
+          description: `URL: ${formattedUrl}`,
+        });
+        
+        // Para outras URLs, abre em nova aba
+        window.open(formattedUrl, '_blank');
+      }
     } else {
       toast({
         title: "QR Code detectado!",
@@ -120,9 +91,12 @@ export const useQRScanner = () => {
   return {
     isOpen,
     lastScannedCode,
-    isProcessing,
+    showReceiptViewer,
+    currentReceiptUrl,
     openScanner,
     closeScanner,
+    openReceiptViewer,
+    closeReceiptViewer,
     handleScanSuccess,
   };
 };

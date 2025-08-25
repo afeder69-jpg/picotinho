@@ -2,12 +2,21 @@ import { Button } from "@/components/ui/button";
 import { Home, FileText, Menu, QrCode } from "lucide-react";
 import QRCodeScanner from "./QRCodeScanner";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
+import ReceiptViewer from "./ReceiptViewer";
 import { useQRScanner } from "@/hooks/useQRScanner";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const BottomNavigation = () => {
-  const { isOpen, openScanner, closeScanner, handleScanSuccess, isProcessing } = useQRScanner();
+  const { 
+    isOpen, 
+    showReceiptViewer,
+    currentReceiptUrl,
+    openScanner, 
+    closeScanner, 
+    closeReceiptViewer,
+    handleScanSuccess 
+  } = useQRScanner();
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,12 +42,9 @@ const BottomNavigation = () => {
             size="lg"
             className="flex-col h-20 w-32 rounded-xl bg-green-600 hover:bg-green-700 text-white border-0 shadow-lg"
             onClick={openScanner}
-            disabled={isProcessing}
           >
             <QrCode className="w-6 h-6 mb-1" />
-            <span className="text-sm font-medium">
-              {isProcessing ? "Processando..." : "Escanear QR"}
-            </span>
+            <span className="text-sm font-medium">Escanear QR</span>
           </Button>
           
           {/* Botão Menu - menor, verde claro */}
@@ -78,6 +84,16 @@ const BottomNavigation = () => {
         onClose={closeScanner}
         onScanSuccess={handleScanSuccess}
       />
+
+      {/* Receipt Viewer */}
+      {showReceiptViewer && currentReceiptUrl && (
+        <ReceiptViewer
+          url={currentReceiptUrl}
+          isOpen={showReceiptViewer}
+          onClose={closeReceiptViewer}
+          onConfirm={closeReceiptViewer}
+        />
+      )}
     </>
   );
 };

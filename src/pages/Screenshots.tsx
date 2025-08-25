@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ExternalLink, Trash2 } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ExternalLink, Trash2, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/BottomNavigation";
 
@@ -14,6 +15,7 @@ interface Screenshot {
 
 const Screenshots = () => {
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     loadScreenshots();
@@ -98,7 +100,8 @@ const Screenshots = () => {
                     <img
                       src={screenshot.screenshot}
                       alt={`Screenshot de ${screenshot.url}`}
-                      className="w-full rounded-lg border max-h-40 object-cover"
+                      className="w-full rounded-lg border max-h-40 object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => setSelectedImage(screenshot.screenshot)}
                     />
                   </div>
                 </CardContent>
@@ -111,6 +114,29 @@ const Screenshots = () => {
       
       {/* Bottom navigation */}
       <BottomNavigation />
+
+      {/* Full screen image viewer */}
+      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
+        <DialogContent className="max-w-none w-screen h-screen p-0 bg-black/95">
+          <div className="relative w-full h-full flex items-center justify-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
+              onClick={() => setSelectedImage(null)}
+            >
+              <X className="w-6 h-6" />
+            </Button>
+            {selectedImage && (
+              <img
+                src={selectedImage}
+                alt="Nota fiscal em tela cheia"
+                className="max-w-full max-h-full object-contain"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

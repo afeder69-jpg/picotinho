@@ -42,6 +42,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           rememberLastUsedCamera: true,
           showZoomSliderIfSupported: true,
           defaultZoomValueIfSupported: 2,
+          // Configuração específica para câmera traseira será tratada internamente
         },
         false
       );
