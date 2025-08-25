@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Html5QrcodeScanner, Html5QrcodeScanType } from "html5-qrcode";
+import { useState, useEffect } from "react";
+import { BarcodeScanner, SupportedFormat } from "@capacitor-community/barcode-scanner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { X, Camera } from "lucide-react";
+import { X, Camera, QrCode } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Capacitor } from "@capacitor/core";
 
 interface QRCodeScannerProps {
   onScanSuccess: (result: string) => void;
@@ -12,158 +13,181 @@ interface QRCodeScannerProps {
 }
 
 const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) => {
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
 
   useEffect(() => {
-    if (isOpen && !scannerRef.current) {
-      startScanner();
-    } else if (!isOpen && scannerRef.current) {
+    if (isOpen) {
+      checkPermissionAndStart();
+    } else if (isScanning) {
       stopScanner();
     }
 
     return () => {
-      if (scannerRef.current) {
+      if (isScanning) {
         stopScanner();
       }
     };
   }, [isOpen]);
 
-  const requestCameraPermission = async () => {
+  const checkPermissionAndStart = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
-      });
-      stream.getTracks().forEach(track => track.stop());
-      return true;
+      // Verifica se estamos em um ambiente nativo
+      if (!Capacitor.isNativePlatform()) {
+        toast({
+          title: "Funcionalidade indisponível",
+          description: "O scanner QR funciona apenas no app instalado",
+          variant: "destructive",
+        });
+        onClose();
+        return;
+      }
+
+      // Verifica permissão atual
+      const status = await BarcodeScanner.checkPermission({ force: false });
+      
+      if (status.granted) {
+        setHasPermission(true);
+        startScanner();
+      } else if (status.denied) {
+        // Permissão foi negada permanentemente
+        toast({
+          title: "Permissão necessária",
+          description: "Habilite a permissão de câmera nas configurações do app",
+          variant: "destructive",
+        });
+        onClose();
+      } else {
+        // Solicita permissão
+        const newStatus = await BarcodeScanner.checkPermission({ force: true });
+        if (newStatus.granted) {
+          setHasPermission(true);
+          startScanner();
+        } else {
+          toast({
+            title: "Permissão negada",
+            description: "É necessário permitir o acesso à câmera",
+            variant: "destructive",
+          });
+          onClose();
+        }
+      }
     } catch (error) {
-      console.error("Erro ao solicitar permissão da câmera:", error);
-      return false;
+      console.error("Erro ao verificar permissão:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível acessar a câmera",
+        variant: "destructive",
+      });
+      onClose();
     }
   };
 
   const startScanner = async () => {
     try {
-      // Solicitar permissão explicitamente
-      const hasPermission = await requestCameraPermission();
-      if (!hasPermission) {
-        toast({
-          title: "Permissão necessária",
-          description: "Por favor, permita o acesso à câmera nas configurações do navegador.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const scanner = new Html5QrcodeScanner(
-        "qr-reader",
-        {
-          fps: 10,
-          qrbox: { width: 280, height: 280 },
-          aspectRatio: 1.0,
-          showTorchButtonIfSupported: true,
-          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-          rememberLastUsedCamera: true,
-          showZoomSliderIfSupported: true,
-          defaultZoomValueIfSupported: 2,
-          disableFlip: false,
-          videoConstraints: {
-            facingMode: "environment"
-          }
-        },
-        false
-      );
-
-      scanner.render(
-        (decodedText) => {
-          // Success callback
-          console.log("QR Code detectado:", decodedText);
-          onScanSuccess(decodedText);
-          stopScanner();
-          onClose();
-        },
-        (error) => {
-          // Error callback - ignoramos erros comuns quando não há QR code
-          if (error.includes("NotFoundException") || 
-              error.includes("No MultiFormat Readers") ||
-              error.includes("NotFound")) {
-            return; // Erro normal quando não há QR code na visão
-          }
-          console.warn("QR Scanner error:", error);
-        }
-      );
-
-      scannerRef.current = scanner;
       setIsScanning(true);
       
-      toast({
-        title: "Câmera iniciada",
-        description: "Posicione o QR Code na área de leitura",
+      // Esconde o background do app para mostrar a câmera
+      document.body.style.background = "transparent";
+      
+      const result = await BarcodeScanner.startScan({
+        targetedFormats: [SupportedFormat.QR_CODE],
+        cameraDirection: 'back' // Força câmera traseira
       });
-      
-    } catch (error) {
-      console.error("Erro ao iniciar scanner:", error);
-      let errorMessage = "Não foi possível acessar a câmera.";
-      
-      if (error.name === "NotAllowedError") {
-        errorMessage = "Permissão de câmera negada. Permita o acesso à câmera nas configurações.";
-      } else if (error.name === "NotFoundError") {
-        errorMessage = "Nenhuma câmera encontrada no dispositivo.";
-      } else if (error.name === "NotSupportedError") {
-        errorMessage = "Câmera não suportada neste navegador.";
+
+      if (result.hasContent) {
+        console.log("QR Code detectado:", result.content);
+        onScanSuccess(result.content);
+        
+        toast({
+          title: "QR Code detectado!",
+          description: "Processando informações...",
+        });
+        
+        stopScanner();
+        onClose();
       }
-      
+    } catch (error) {
+      console.error("Erro ao escanear:", error);
       toast({
-        title: "Erro de Câmera",
-        description: errorMessage,
+        title: "Erro ao escanear",
+        description: "Não foi possível ler o QR Code",
         variant: "destructive",
       });
+      stopScanner();
     }
   };
 
-  const stopScanner = () => {
-    if (scannerRef.current) {
-      try {
-        scannerRef.current.clear();
-      } catch (error) {
-        console.warn("Erro ao parar scanner:", error);
-      }
-      scannerRef.current = null;
+  const stopScanner = async () => {
+    try {
+      await BarcodeScanner.stopScan();
+      document.body.style.background = "";
+      setIsScanning(false);
+    } catch (error) {
+      console.warn("Erro ao parar scanner:", error);
       setIsScanning(false);
     }
   };
 
+  const handleClose = () => {
+    stopScanner();
+    onClose();
+  };
+
   if (!isOpen) return null;
 
+  // Se estiver escaneando, mostra overlay mínimo
+  if (isScanning) {
+    return (
+      <div className="fixed inset-0 bg-transparent z-50 flex flex-col justify-between p-6">
+        <div className="flex justify-between items-center">
+          <div className="bg-background/90 backdrop-blur-sm rounded-lg p-3">
+            <h2 className="text-lg font-semibold text-foreground">Escaneando QR Code</h2>
+          </div>
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={handleClose}
+            className="bg-background/90 backdrop-blur-sm"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        
+        <div className="text-center">
+          <div className="bg-background/90 backdrop-blur-sm rounded-lg p-4 mx-auto max-w-sm">
+            <QrCode className="w-8 h-8 mx-auto mb-2 text-primary" />
+            <p className="text-sm text-foreground">
+              Posicione o QR Code na câmera
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Tela de preparação/carregamento
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-6 relative">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Escanear QR Code</h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={handleClose}>
             <X className="w-4 h-4" />
           </Button>
         </div>
         
         <div className="space-y-4">
-          <div className="text-center text-sm text-muted-foreground">
-            Posicione o QR Code dentro da área de leitura
+          <div className="flex flex-col items-center space-y-4">
+            <Camera className="w-12 h-12 text-muted-foreground animate-pulse" />
+            <p className="text-sm text-muted-foreground text-center">
+              {hasPermission ? "Iniciando câmera..." : "Verificando permissões..."}
+            </p>
           </div>
           
-          <div
-            id="qr-reader"
-            className="w-full"
-            style={{ minHeight: "300px" }}
-          />
-          
-          {!isScanning && (
-            <div className="flex flex-col items-center space-y-4">
-              <Camera className="w-12 h-12 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground text-center">
-                Aguardando acesso à câmera...
-              </p>
-            </div>
-          )}
+          <div className="text-center text-xs text-muted-foreground">
+            A câmera traseira será aberta automaticamente
+          </div>
         </div>
       </Card>
     </div>
