@@ -38,16 +38,16 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           qrbox: { width: 280, height: 280 },
           aspectRatio: 1.0,
           showTorchButtonIfSupported: true,
-          supportedScanTypes: [],
+          supportedScanTypes: [], // Remove file support, camera only
           rememberLastUsedCamera: true,
           showZoomSliderIfSupported: true,
           defaultZoomValueIfSupported: 2,
-          // Força usar apenas câmera (não galeria)
+          // Força apenas câmera
+          disableFlip: false,
+          // Configuração para câmera traseira
           videoConstraints: {
-            facingMode: "environment" // Câmera traseira
-          },
-          // Configuração para forçar câmera diretamente
-          formatsToSupport: [0, 1, 2], // QR Code formats
+            facingMode: "environment"
+          }
         },
         false
       );
