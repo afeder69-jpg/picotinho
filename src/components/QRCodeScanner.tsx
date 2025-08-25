@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { BarcodeScanner, BarcodeFormat } from "@capacitor-mlkit/barcode-scanning";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { X, Camera, QrCode } from "lucide-react";
@@ -15,6 +14,11 @@ interface QRCodeScannerProps {
 const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) => {
   const [isScanning, setIsScanning] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
+  const [isNative, setIsNative] = useState(false);
+
+  useEffect(() => {
+    setIsNative(Capacitor.isNativePlatform());
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -32,62 +36,73 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   const checkPermissionAndStart = async () => {
     try {
-      // Verifica se estamos em um ambiente nativo
+      console.log("Verificando ambiente:", { isNative: Capacitor.isNativePlatform() });
+      
       if (!Capacitor.isNativePlatform()) {
+        // No navegador, usar HTML5 QR Code Scanner
         toast({
-          title: "Funcionalidade indisponível",
-          description: "O scanner QR funciona apenas no app instalado",
-          variant: "destructive",
+          title: "Modo navegador",
+          description: "Use o scanner manual no navegador",
+          variant: "default",
         });
-        onClose();
-        return;
-      }
-
-      console.log("Solicitando permissões de câmera...");
-      
-      // Verifica se o plugin está disponível
-      if (!BarcodeScanner) {
-        console.error("Plugin BarcodeScanner não encontrado");
-        toast({
-          title: "Erro do plugin",
-          description: "Plugin de escaneamento não está disponível",
-          variant: "destructive",
-        });
-        onClose();
-        return;
-      }
-
-      // Solicita permissão de câmera com tratamento de erro específico
-      const permission = await BarcodeScanner.requestPermissions();
-      console.log("Resultado da permissão:", permission);
-      
-      if (permission.camera === 'granted') {
         setHasPermission(true);
-        startScanner();
-      } else {
-        toast({
-          title: "Permissão negada",
-          description: "É necessário permitir o acesso à câmera para escanear QR codes",
-          variant: "destructive",
-        });
-        onClose();
+        startWebScanner();
+        return;
       }
+
+      // Verificar se o plugin está disponível
+      try {
+        const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+        console.log("Plugin BarcodeScanner carregado:", BarcodeScanner);
+        
+        if (!BarcodeScanner) {
+          throw new Error("Plugin não disponível");
+        }
+
+        // Verificar disponibilidade primeiro
+        const isAvailable = await BarcodeScanner.isSupported();
+        console.log("Plugin disponível:", isAvailable);
+        
+        if (!isAvailable.supported) {
+          throw new Error("Scanner não suportado neste dispositivo");
+        }
+
+        // Solicitar permissões
+        console.log("Solicitando permissões...");
+        const permission = await BarcodeScanner.requestPermissions();
+        console.log("Resultado da permissão:", permission);
+        
+        if (permission.camera === 'granted') {
+          setHasPermission(true);
+          startNativeScanner();
+        } else {
+          throw new Error("Permissão de câmera negada");
+        }
+        
+      } catch (pluginError) {
+        console.error("Erro do plugin:", pluginError);
+        throw new Error(`Plugin error: ${pluginError.message}`);
+      }
+      
     } catch (error) {
-      console.error("Erro detalhado ao verificar permissão:", error);
+      console.error("Erro detalhado:", error);
       toast({
-        title: "Erro",
-        description: `Erro ao acessar câmera: ${error.message || 'Desconhecido'}`,
+        title: "Erro de câmera",
+        description: `${error.message || 'Erro desconhecido'}`,
         variant: "destructive",
       });
       onClose();
     }
   };
 
-  const startScanner = async () => {
+  const startNativeScanner = async () => {
     try {
       setIsScanning(true);
+      const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
       
-      // Esconde o background do app para mostrar a câmera
+      console.log("Iniciando scanner nativo...");
+      
+      // Esconder o background
       document.body.style.background = "transparent";
       
       const listener = await BarcodeScanner.addListener('barcodeScanned', async (result) => {
@@ -111,22 +126,34 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         formats: [BarcodeFormat.QrCode]
       });
       
+      console.log("Scanner nativo iniciado com sucesso");
+      
     } catch (error) {
-      console.error("Erro ao escanear:", error);
+      console.error("Erro ao iniciar scanner nativo:", error);
       toast({
         title: "Erro ao escanear",
-        description: "Não foi possível ler o QR Code",
+        description: `Falha no scanner: ${error.message}`,
         variant: "destructive",
       });
       await stopScanner();
     }
   };
 
+  const startWebScanner = () => {
+    // Implementação simplificada para web
+    setIsScanning(true);
+    console.log("Scanner web iniciado (modo manual)");
+  };
+
   const stopScanner = async () => {
     try {
-      await BarcodeScanner.stopScan();
+      if (isNative) {
+        const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+        await BarcodeScanner.stopScan();
+      }
       document.body.style.background = "";
       setIsScanning(false);
+      console.log("Scanner parado");
     } catch (error) {
       console.warn("Erro ao parar scanner:", error);
       setIsScanning(false);
@@ -138,10 +165,18 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
     onClose();
   };
 
+  const handleManualInput = () => {
+    const input = prompt("Digite o código QR manualmente:");
+    if (input && input.trim()) {
+      onScanSuccess(input.trim());
+      onClose();
+    }
+  };
+
   if (!isOpen) return null;
 
-  // Se estiver escaneando, mostra overlay mínimo
-  if (isScanning) {
+  // Se estiver escaneando no nativo
+  if (isScanning && isNative) {
     return (
       <div className="fixed inset-0 bg-transparent z-50 flex flex-col justify-between p-6">
         <div className="flex justify-between items-center">
@@ -189,9 +224,26 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
             </p>
           </div>
           
-          <div className="text-center text-xs text-muted-foreground">
-            A câmera traseira será aberta automaticamente
-          </div>
+          {!isNative && (
+            <div className="space-y-2">
+              <Button 
+                onClick={handleManualInput}
+                variant="outline" 
+                className="w-full"
+              >
+                Digite o código manualmente
+              </Button>
+              <div className="text-center text-xs text-muted-foreground">
+                Scanner QR funciona melhor no app instalado
+              </div>
+            </div>
+          )}
+          
+          {isNative && (
+            <div className="text-center text-xs text-muted-foreground">
+              A câmera traseira será aberta automaticamente
+            </div>
+          )}
         </div>
       </Card>
     </div>
