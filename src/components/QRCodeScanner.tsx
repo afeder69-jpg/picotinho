@@ -21,6 +21,9 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
     if (isOpen && Capacitor.isNativePlatform()) {
       console.log("QRCodeScanner - Iniciando scanner nativo...");
       startScanner();
+    } else if (isOpen && !Capacitor.isNativePlatform()) {
+      console.log("QRCodeScanner - Modo navegador, não iniciando scanner automaticamente");
+      setIsScanning(false);
     }
   }, [isOpen]);
 
