@@ -29,22 +29,39 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
   const startScanner = async () => {
     try {
       setIsScanning(true);
+      console.log("🔍 Iniciando scanner...");
 
       // 🔑 1. Solicita permissão antes de abrir
       const perm = await BarcodeScanner.requestPermissions();
-      console.log("Permissão da câmera:", perm);
+      console.log("🔑 Permissão da câmera:", perm);
 
       if (perm.camera === "granted" || perm.camera === "limited") {
+        console.log("✅ Permissão concedida, iniciando scan...");
+        
         // 🔑 2. Inicia o scanner
         const result = await BarcodeScanner.scan();
-        console.log("Resultado do scan:", result);
+        console.log("📱 Resultado do scan:", result);
 
         if (result.barcodes && result.barcodes.length > 0) {
           const qrContent = result.barcodes[0].rawValue;
+          console.log("✅ QR Code encontrado:", qrContent);
+          toast({
+            title: "QR Code detectado!",
+            description: `Conteúdo: ${qrContent.substring(0, 50)}...`,
+          });
           onScanSuccess(qrContent);
+          onClose();
+        } else {
+          console.log("❌ Nenhum código encontrado");
+          toast({
+            title: "Nenhum código encontrado",
+            description: "Tente posicionar melhor o QR Code",
+            variant: "destructive",
+          });
           onClose();
         }
       } else {
+        console.log("❌ Permissão negada:", perm);
         toast({
           title: "Permissão negada",
           description: "Ative a câmera para escanear o QR Code",
@@ -53,10 +70,16 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         onClose();
       }
     } catch (error: any) {
-      console.error("Erro ao escanear:", error);
+      console.error("💥 Erro ao escanear:", error);
+      console.error("💥 Error details:", {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack
+      });
+      
       toast({
-        title: "Erro na câmera",
-        description: error?.message || "Erro desconhecido",
+        title: "Erro no scanner",
+        description: `${error?.message || "Erro desconhecido"} - Verifique se o ML Kit está configurado`,
         variant: "destructive",
       });
       onClose();
