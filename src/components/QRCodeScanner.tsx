@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { Html5QrcodeScanner, Html5QrcodeScanType } from "html5-qrcode";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { X, Camera } from "lucide-react";
@@ -38,13 +38,11 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           qrbox: { width: 280, height: 280 },
           aspectRatio: 1.0,
           showTorchButtonIfSupported: true,
-          supportedScanTypes: [], // Remove file support, camera only
+          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
           rememberLastUsedCamera: true,
           showZoomSliderIfSupported: true,
           defaultZoomValueIfSupported: 2,
-          // Força apenas câmera
           disableFlip: false,
-          // Configuração para câmera traseira
           videoConstraints: {
             facingMode: "environment"
           }
