@@ -16,6 +16,13 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true
     }
+  },
+  android: {
+    iconBackgroundColor: '#FFFFFF',
+    iconBackgroundColorDark: '#FFFFFF'
+  },
+  ios: {
+    icon: '/public/app-icon.png'
   }
 };
 
