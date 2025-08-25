@@ -35,37 +35,53 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   const startScanner = async () => {
     try {
-      console.log("1. Tentando importar BarcodeScanner...");
-      const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
+      console.log("1. Tentando importar BarcodeScanning...");
+      const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
       
       console.log("2. Verificando permissão...");
-      const permission = await BarcodeScanner.checkPermission({ force: true });
-      console.log("Permissão:", permission);
+      const permission = await BarcodeScanner.checkPermissions();
+      console.log("Permissão atual:", permission);
       
-      if (!permission.granted) {
+      if (permission.camera !== 'granted') {
+        console.log("3. Solicitando permissão...");
+        const requestResult = await BarcodeScanner.requestPermissions();
+        console.log("Resultado da solicitação:", requestResult);
+        
+        if (requestResult.camera !== 'granted') {
+          toast({
+            title: "Permissão necessária",
+            description: "Permita o acesso à câmera nas configurações",
+            variant: "destructive",
+          });
+          onClose();
+          return;
+        }
+      }
+
+      console.log("4. Verificando disponibilidade...");
+      const isAvailable = await BarcodeScanner.isSupported();
+      console.log("Scanner disponível:", isAvailable);
+      
+      if (!isAvailable.supported) {
         toast({
-          title: "Permissão necessária",
-          description: "Permita o acesso à câmera nas configurações",
+          title: "Scanner não suportado",
+          description: "Dispositivo não suporta scanner de QR",
           variant: "destructive",
         });
         onClose();
         return;
       }
 
-      console.log("3. Preparando scanner...");
+      console.log("5. Iniciando scan...");
       setIsScanning(true);
       
-      // Esconder fundo da webview
-      await BarcodeScanner.hideBackground();
-      document.body.classList.add('scanner-active');
-      
-      console.log("4. Iniciando scan...");
-      const result = await BarcodeScanner.startScan();
+      const result = await BarcodeScanner.scan();
       console.log("Resultado:", result);
       
-      if (result.hasContent) {
-        console.log("5. QR detectado:", result.content);
-        onScanSuccess(result.content);
+      if (result.barcodes && result.barcodes.length > 0) {
+        const qrContent = result.barcodes[0].rawValue;
+        console.log("6. QR detectado:", qrContent);
+        onScanSuccess(qrContent);
         toast({
           title: "QR Code detectado!",
           description: "Processando...",
@@ -81,18 +97,16 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         variant: "destructive",
       });
       onClose();
+    } finally {
+      setIsScanning(false);
     }
   };
 
   const cleanup = async () => {
     try {
-      if (isNative && isScanning) {
-        const { BarcodeScanner } = await import("@capacitor-community/barcode-scanner");
-        await BarcodeScanner.showBackground();
-        await BarcodeScanner.stopScan();
-        document.body.classList.remove('scanner-active');
-      }
       setIsScanning(false);
+      // MLKit não precisa de cleanup manual como o plugin antigo
+      console.log("Scanner limpo");
     } catch (error) {
       console.warn("Erro ao limpar scanner:", error);
       setIsScanning(false);
