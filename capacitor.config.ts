@@ -19,14 +19,15 @@ const config: CapacitorConfig = {
   },
   android: {
     adaptiveIcon: {
-      foreground: 'public/app-icon.png',
+      foreground: './public/app-icon.png',
       background: '#FFFFFF'
     },
+    icon: './public/app-icon.png',
     iconBackgroundColor: '#FFFFFF',
-    iconBackgroundColorDark: '#FFFFFF'
+    iconBackgroundColorDark: '#000000'
   },
   ios: {
-    icon: 'public/app-icon.png'
+    icon: './public/app-icon.png'
   }
 };
 
