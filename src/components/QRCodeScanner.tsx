@@ -43,15 +43,40 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         return;
       }
 
-      // Solicita permissão de câmera
-      await BarcodeScanner.requestPermissions();
-      setHasPermission(true);
-      startScanner();
+      console.log("Solicitando permissões de câmera...");
+      
+      // Verifica se o plugin está disponível
+      if (!BarcodeScanner) {
+        console.error("Plugin BarcodeScanner não encontrado");
+        toast({
+          title: "Erro do plugin",
+          description: "Plugin de escaneamento não está disponível",
+          variant: "destructive",
+        });
+        onClose();
+        return;
+      }
+
+      // Solicita permissão de câmera com tratamento de erro específico
+      const permission = await BarcodeScanner.requestPermissions();
+      console.log("Resultado da permissão:", permission);
+      
+      if (permission.camera === 'granted') {
+        setHasPermission(true);
+        startScanner();
+      } else {
+        toast({
+          title: "Permissão negada",
+          description: "É necessário permitir o acesso à câmera para escanear QR codes",
+          variant: "destructive",
+        });
+        onClose();
+      }
     } catch (error) {
-      console.error("Erro ao verificar permissão:", error);
+      console.error("Erro detalhado ao verificar permissão:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível acessar a câmera",
+        description: `Erro ao acessar câmera: ${error.message || 'Desconhecido'}`,
         variant: "destructive",
       });
       onClose();
