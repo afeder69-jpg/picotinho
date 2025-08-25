@@ -17,7 +17,9 @@ const config: CapacitorConfig = {
       enabled: true
     },
     BarcodeScanning: {
-      permissions: ['camera']
+      permissions: ['camera'],
+      enableAutoZoom: true,
+      showCameraPermissionDialog: true
     }
   },
   android: {

@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { X, Camera } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Capacitor } from "@capacitor/core";
-import { BarcodeScanner } from "@capacitor-mlkit/barcode-scanning";
+import { BarcodeScanner, BarcodeFormat } from "@capacitor-mlkit/barcode-scanning";
 
 interface QRCodeScannerProps {
   onScanSuccess: (result: string) => void;
@@ -31,15 +31,35 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       setIsScanning(true);
       console.log("🔍 Iniciando scanner...");
 
-      // 🔑 1. Solicita permissão antes de abrir
+      // Verifica se está na plataforma nativa
+      if (!Capacitor.isNativePlatform()) {
+        throw new Error("Scanner QR só funciona em dispositivos móveis");
+      }
+
+      // 🔑 1. Verifica se o plugin está disponível
+      const available = await BarcodeScanner.isSupported();
+      console.log("📱 Scanner disponível:", available);
+      
+      if (!available.supported) {
+        throw new Error("Scanner QR não suportado neste dispositivo");
+      }
+
+      // 🔑 2. Solicita permissão antes de abrir
       const perm = await BarcodeScanner.requestPermissions();
       console.log("🔑 Permissão da câmera:", perm);
 
-      if (perm.camera === "granted" || perm.camera === "limited") {
+      if (perm.camera === "granted") {
         console.log("✅ Permissão concedida, iniciando scan...");
         
-        // 🔑 2. Inicia o scanner
-        const result = await BarcodeScanner.scan();
+        // 🔑 3. Inicia o scanner com configurações específicas
+        const result = await BarcodeScanner.scan({
+          formats: [
+            BarcodeFormat.QrCode,
+            BarcodeFormat.DataMatrix,
+            BarcodeFormat.Pdf417,
+            BarcodeFormat.Aztec
+          ]
+        });
         console.log("📱 Resultado do scan:", result);
 
         if (result.barcodes && result.barcodes.length > 0) {
@@ -60,11 +80,19 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           });
           onClose();
         }
-      } else {
+      } else if (perm.camera === "denied") {
         console.log("❌ Permissão negada:", perm);
         toast({
           title: "Permissão negada",
-          description: "Ative a câmera para escanear o QR Code",
+          description: "Você precisa permitir o acesso à câmera nas configurações do app",
+          variant: "destructive",
+        });
+        onClose();
+      } else {
+        console.log("❌ Permissão não concedida:", perm);
+        toast({
+          title: "Erro na câmera",
+          description: "Não foi possível acessar a câmera",
           variant: "destructive",
         });
         onClose();
@@ -77,9 +105,18 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         stack: error?.stack
       });
       
+      let errorMessage = "Erro desconhecido";
+      if (error?.message?.includes("não suportado")) {
+        errorMessage = "Scanner QR não suportado neste dispositivo";
+      } else if (error?.message?.includes("dispositivos móveis")) {
+        errorMessage = "Scanner QR só funciona em dispositivos móveis";
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: "Erro no scanner",
-        description: `${error?.message || "Erro desconhecido"} - Verifique se o ML Kit está configurado`,
+        title: "Erro na câmera",
+        description: errorMessage,
         variant: "destructive",
       });
       onClose();
