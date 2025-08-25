@@ -29,8 +29,32 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
     };
   }, [isOpen]);
 
-  const startScanner = () => {
+  const requestCameraPermission = async () => {
     try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+      });
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error("Erro ao solicitar permissão da câmera:", error);
+      return false;
+    }
+  };
+
+  const startScanner = async () => {
+    try {
+      // Solicitar permissão explicitamente
+      const hasPermission = await requestCameraPermission();
+      if (!hasPermission) {
+        toast({
+          title: "Permissão necessária",
+          description: "Por favor, permita o acesso à câmera nas configurações do navegador.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const scanner = new Html5QrcodeScanner(
         "qr-reader",
         {
@@ -79,9 +103,19 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       
     } catch (error) {
       console.error("Erro ao iniciar scanner:", error);
+      let errorMessage = "Não foi possível acessar a câmera.";
+      
+      if (error.name === "NotAllowedError") {
+        errorMessage = "Permissão de câmera negada. Permita o acesso à câmera nas configurações.";
+      } else if (error.name === "NotFoundError") {
+        errorMessage = "Nenhuma câmera encontrada no dispositivo.";
+      } else if (error.name === "NotSupportedError") {
+        errorMessage = "Câmera não suportada neste navegador.";
+      }
+      
       toast({
-        title: "Erro",
-        description: "Não foi possível acessar a câmera. Verifique as permissões.",
+        title: "Erro de Câmera",
+        description: errorMessage,
         variant: "destructive",
       });
     }

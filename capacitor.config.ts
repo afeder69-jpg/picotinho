@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
   // },
   plugins: {
     Camera: {
-      permissions: ['camera', 'photos']
+      permissions: ['camera']
     },
     CapacitorHttp: {
       enabled: true
