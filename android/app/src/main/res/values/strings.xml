@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Picotinho</string>
+    <string name="title_activity_main">Picotinho</string>
+    <string name="package_name">app.lovable.b5ea6089d5bc4939b83e6c590c392e34</string>
+    <string name="custom_url_scheme">app.lovable.b5ea6089d5bc4939b83e6c590c392e34</string>
+</resources>

@@ -1,0 +1,19 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Plugin do Android atualizado
+        classpath 'com.android.tools.build:gradle:8.4.2'
+        // Plugin Kotlin (necessário mesmo se não usar Kotlin direto)
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
