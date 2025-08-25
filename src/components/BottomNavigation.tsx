@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, FileText, Menu, QrCode } from "lucide-react";
+import { Home, FileText, Menu, QrCode } from "lucide-react";
 import QRCodeScanner from "./QRCodeScanner";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import { useQRScanner } from "@/hooks/useQRScanner";
@@ -15,38 +15,41 @@ const BottomNavigation = () => {
   return (
     <>
       <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border p-4 safe-area-inset-bottom">
-        <div className="flex justify-between items-center w-full max-w-screen-lg mx-auto gap-2 px-2">
+        <div className="flex justify-between items-end w-full max-w-screen-lg mx-auto gap-2 px-2">
+          {/* Botão Início - menor, verde claro */}
           <Button
             variant="ghost"
-            size="lg"
-            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm text-white border border-white/20 hover:bg-white/10"
+            size="sm"
+            className="flex-col h-16 w-20 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 border border-green-200"
             onClick={() => navigate('/')}
           >
-            <ArrowRight className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
-            <span className="truncate">Início</span>
+            <Home className="w-5 h-5 mb-1" />
+            <span className="text-xs font-medium">Início</span>
           </Button>
           
+          {/* Botão Escanear QR - maior, verde forte, centralizado */}
           <Button
             variant="default"
             size="lg"
-            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white border-0"
+            className="flex-col h-20 w-32 rounded-xl bg-green-600 hover:bg-green-700 text-white border-0 shadow-lg"
             onClick={openScanner}
             disabled={isProcessing}
           >
-            <QrCode className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
-            <span className="truncate">
+            <QrCode className="w-6 h-6 mb-1" />
+            <span className="text-sm font-medium">
               {isProcessing ? "Processando..." : "Escanear QR"}
             </span>
           </Button>
           
+          {/* Botão Menu - menor, verde claro */}
           <Button
             variant="ghost"
-            size="lg"
-            className="flex-1 min-w-0 h-12 rounded-full font-medium text-xs sm:text-sm text-white border border-white/20 hover:bg-white/10"
+            size="sm"
+            className="flex-col h-16 w-20 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 border border-green-200"
             onClick={() => navigate('/menu')}
           >
-            <Menu className="w-4 h-4 mr-1 sm:mr-2 flex-shrink-0" />
-            <span className="truncate">Menu</span>
+            <Menu className="w-5 h-5 mb-1" />
+            <span className="text-xs font-medium">Menu</span>
           </Button>
         </div>
       </div>
