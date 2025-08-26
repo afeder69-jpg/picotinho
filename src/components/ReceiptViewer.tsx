@@ -93,29 +93,93 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
     }
   }, [isLoading, useExternalBrowser]);
 
+  // Iniciar captura automática em background
+  const startBackgroundCapture = async () => {
+    if (!user) return;
+    
+    try {
+      // Chama edge function para capturar a nota automaticamente
+      const { data, error } = await supabase.functions.invoke('capture-receipt-external', {
+        body: {
+          receiptUrl: url,
+          userId: user.id
+        }
+      });
+      
+      if (error) {
+        console.error('Erro ao iniciar captura automática:', error);
+      } else {
+        console.log('Captura automática iniciada:', data);
+      }
+    } catch (error) {
+      console.error('Erro na captura automática:', error);
+    }
+  };
+  
+  // Verificar status da captura
+  const checkCaptureStatus = async () => {
+    if (!user) return;
+    
+    try {
+      // Buscar notas recentes do usuário para verificar se foi salva
+      const { data: recentNotes } = await supabase
+        .from('notas_imagens')
+        .select('*')
+        .eq('usuario_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (recentNotes && recentNotes.length > 0) {
+        const lastNote = recentNotes[0];
+        const noteTime = new Date(lastNote.created_at).getTime();
+        const nowTime = Date.now();
+        
+        // Se a nota foi criada nos últimos 5 minutos
+        if (nowTime - noteTime < 5 * 60 * 1000) {
+          toast({
+            title: "Nota salva automaticamente!",
+            description: "A nota fiscal foi capturada e salva no seu perfil.",
+          });
+          onConfirm();
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status da captura:', error);
+    }
+  };
+
   const openInExternalBrowser = async () => {
     try {
+      // Primeiro, iniciar processo de captura em background
+      await startBackgroundCapture();
+      
       if (Capacitor.isNativePlatform()) {
+        // Chrome Custom Tabs (Android) ou Safari View Controller (iOS)
         await Browser.open({
           url: url,
-          windowName: '_system',
-          presentationStyle: 'fullscreen'
+          windowName: '_blank',
+          presentationStyle: 'popover',
+          toolbarColor: '#ffffff'
         });
         
-        toast({
-          title: "Nota aberta no navegador",
-          description: "A nota foi aberta no navegador nativo. Volte para o app quando terminar.",
+        // Listener para quando o navegador fechar
+        Browser.addListener('browserFinished', () => {
+          console.log('Navegador externo fechado - verificando captura');
+          checkCaptureStatus();
         });
         
-        // Aguardar um tempo e depois fechar o viewer atual
-        setTimeout(() => {
-          onClose();
-        }, 1000);
       } else {
-        // No navegador web, abrir em nova aba
+        // No web, abrir em nova aba
         window.open(url, '_blank');
-        onClose();
+        // Verificar captura após alguns segundos
+        setTimeout(checkCaptureStatus, 10000);
       }
+      
+      toast({
+        title: "Capturando nota fiscal...",
+        description: "A nota será salva automaticamente no seu perfil.",
+      });
+      
     } catch (error) {
       console.error('Erro ao abrir navegador externo:', error);
       toast({
