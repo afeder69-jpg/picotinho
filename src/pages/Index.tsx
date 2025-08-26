@@ -28,7 +28,10 @@ const Index = () => {
           {/* QR Scanner Button */}
           <div className="flex justify-center">
             <Button 
-              onClick={() => setShowScanner(true)}
+              onClick={() => {
+                console.log("Botão clicado - abrindo scanner");
+                setShowScanner(true);
+              }}
               className="w-24 h-24 bg-sky-400 hover:bg-sky-500 rounded-full text-white font-bold shadow-lg animate-pulse hover:animate-none transition-all duration-300"
             >
               Escanear QR Code
