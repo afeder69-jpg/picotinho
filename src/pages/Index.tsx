@@ -6,23 +6,25 @@ const Index = () => {
       {/* Main content area */}
       <div className="flex-1 flex items-center justify-center pt-16 px-6">
         <div className="text-center max-w-md mx-auto relative">
-          <h1 className="text-4xl font-bold text-red-500 leading-tight mb-8 animate-pulse">
-            🔴 VERSÃO TESTE ATUALIZADA 🔴
+          <h1 className="text-6xl font-bold text-purple-500 leading-tight mb-8 animate-pulse">
+            ⭐ VERSÃO FINAL TESTE ⭐
           </h1>
           
-          {/* TRÊS BOLINHAS COLORIDAS PARA GARANTIR QUE VOCÊ VÊ */}
-          <div className="flex justify-center space-x-4 mb-6">
-            <div className="w-16 h-16 bg-red-500 rounded-full animate-bounce"></div>
-            <div className="w-16 h-16 bg-blue-500 rounded-full animate-spin"></div>
-            <div className="w-16 h-16 bg-yellow-500 rounded-full animate-pulse"></div>
+          {/* GRANDE CÍRCULO ROXO QUE VOCÊ DEVE VER */}
+          <div className="w-48 h-48 bg-purple-600 rounded-full mx-auto animate-spin shadow-2xl border-8 border-yellow-400 mb-6 flex items-center justify-center">
+            <span className="text-4xl text-white font-bold">NOVO!</span>
           </div>
           
-          <div className="bg-red-500 text-white p-6 rounded-lg font-bold text-xl animate-bounce">
-            ⚡ SE VOCÊ VÊ ISSO, FUNCIONOU! ⚡
+          <div className="bg-purple-600 text-white p-8 rounded-lg font-bold text-2xl animate-bounce mb-4">
+            🎯 CÍRCULO ROXO GIGANTE 🎯
           </div>
           
-          <p className="text-lg text-foreground mt-4 font-bold">
-            Três bolinhas coloridas + texto em destaque
+          <div className="bg-yellow-400 text-black p-4 rounded-lg font-bold text-lg">
+            {new Date().toLocaleString('pt-BR')} - TIMESTAMP ATUAL
+          </div>
+          
+          <p className="text-xl text-foreground mt-4 font-bold">
+            Se você vê o círculo roxo gigante, funcionou!
           </p>
         </div>
       </div>
