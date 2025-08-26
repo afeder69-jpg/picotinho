@@ -33,6 +33,8 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   const checkPermissionAndStart = async () => {
     try {
+      console.log("Verificando permissões...", { isNative });
+      
       if (isNative) {
         const status = await BarcodeScanner.requestPermissions();
         if (status.camera === "granted") {
@@ -47,6 +49,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           onClose();
         }
       } else {
+        console.log("Plataforma web detectada, iniciando scanner web...");
         setHasPermission(true);
         startWebScanner();
       }
@@ -92,11 +95,19 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
   const startWebScanner = () => {
     try {
       setIsScanning(true);
+      console.log("Iniciando scanner web...");
+      
       setTimeout(() => {
-        if (document.getElementById("qr-reader")) {
+        const element = document.getElementById("qr-reader");
+        if (element) {
+          console.log("Elemento encontrado, criando scanner...");
           scannerRef.current = new Html5QrcodeScanner(
             "qr-reader",
-            { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+            { 
+              fps: 10, 
+              qrbox: { width: 250, height: 250 },
+              aspectRatio: 1.0
+            },
             false
           );
 
@@ -106,10 +117,17 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
               onScanSuccess(decodedText);
               stopScanner();
             },
-            (error) => console.debug("Scanner error:", error)
+            (error) => {
+              // Não logar erros comuns do scanner
+              if (!error.includes("QR code parse error")) {
+                console.debug("Scanner error:", error);
+              }
+            }
           );
+        } else {
+          console.error("Elemento qr-reader não encontrado");
         }
-      }, 100);
+      }, 200);
     } catch (error) {
       console.error("Erro ao escanear:", error);
       toast({
