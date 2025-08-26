@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Home, FileText, Menu, QrCode } from "lucide-react";
-// import QRCodeScanner from "./QRCodeScanner";
+import QRCodeScanner from "./QRCodeScanner";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import ReceiptViewer from "./ReceiptViewer";
 import { useQRScanner } from "@/hooks/useQRScanner";
@@ -79,13 +79,12 @@ const BottomNavigation = () => {
         </div>
       )}
       
-      {/* QRCodeScanner temporariamente desabilitado
+      {/* QR Code Scanner ativo */}
       <QRCodeScanner
         isOpen={isOpen}
         onClose={closeScanner}
         onScanSuccess={handleScanSuccess}
       />
-      */}
 
       {/* Receipt Viewer */}
       {showReceiptViewer && currentReceiptUrl && (
