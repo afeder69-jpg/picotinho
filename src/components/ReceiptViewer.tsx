@@ -155,8 +155,8 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
       if (error) throw error;
       
       toast({
-        title: "Nota salva com sucesso!",
-        description: "A nota foi capturada e salva no seu perfil.",
+        title: "📸 Nota capturada com sucesso!",
+        description: "A imagem da nota foi salva e aparecerá em 'Minhas Notas'.",
       });
 
       onConfirm();
@@ -201,19 +201,27 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
             <ExternalLink className="w-12 h-12 mx-auto text-primary" />
             <h3 className="text-lg font-semibold">Nota aberta no navegador</h3>
             <p className="text-muted-foreground text-sm">
-              A nota fiscal foi aberta no navegador nativo. Aguarde a página carregar completamente e depois toque no botão abaixo para salvar.
+              A nota fiscal foi aberta no navegador nativo. Aguarde a página carregar completamente e depois toque no botão abaixo para capturar e salvar a imagem da nota.
             </p>
           </div>
           
           <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm font-medium mb-2">Como funciona:</p>
+            <p className="text-sm font-medium mb-2">📋 Como funciona:</p>
             <ol className="text-xs text-muted-foreground space-y-1 text-left">
-              <li>1. A página da nota está carregando no navegador</li>
-              <li>2. Aguarde o carregamento completo</li>
-              <li>3. Toque em "Confirmar Nota" para capturar</li>
-              <li>4. A imagem será salva automaticamente</li>
+              <li>✅ 1. Nota aberta no navegador</li>
+              <li>⏱️ 2. Aguarde carregamento completo</li>
+              <li>📸 3. Toque "Confirmar" para capturar</li>
+              <li>💾 4. Imagem salva em "Minhas Notas"</li>
             </ol>
           </div>
+          
+          {isCapturing && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-700">
+                🤖 Sistema capturando imagem da nota automaticamente...
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
