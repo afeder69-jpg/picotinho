@@ -7,14 +7,28 @@ import {
   TrendingDown, 
   BarChart3, 
   ChefHat, 
-  ShoppingCart 
+  ShoppingCart,
+  LogIn,
+  LogOut
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { toast } from "sonner";
 import BottomNavigation from "@/components/BottomNavigation";
 
 
 const Menu = () => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast.success("Logout realizado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao fazer logout");
+    }
+  };
 
   const menuOptions = [
     {
@@ -69,12 +83,39 @@ const Menu = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col">
+      {/* Header com botão de login/logout */}
+      <div className="flex justify-between items-center p-4">
+        <h1 className="text-2xl font-bold text-foreground">
+          Menu Principal
+        </h1>
+        {user ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {user.email}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleSignOut}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sair
+            </Button>
+          </div>
+        ) : (
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/auth')}
+          >
+            <LogIn className="w-4 h-4 mr-2" />
+            Entrar
+          </Button>
+        )}
+      </div>
+
       {/* Main content area */}
-      <div className="flex-1 px-6 pt-8 pb-24">
+      <div className="flex-1 px-6 pb-24">
         <div className="max-w-md mx-auto">
-          <h1 className="text-2xl font-bold text-foreground mb-8">
-            Menu Principal
-          </h1>
           
           <div className="space-y-3">
             {menuOptions.map((option) => (
