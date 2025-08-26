@@ -16,22 +16,31 @@ export type Database = {
     Tables: {
       categorias: {
         Row: {
+          ativa: boolean | null
+          cor: string | null
           created_at: string | null
           descricao: string | null
+          icone: string | null
           id: string
           nome: string | null
           user_id: string
         }
         Insert: {
+          ativa?: boolean | null
+          cor?: string | null
           created_at?: string | null
           descricao?: string | null
+          icone?: string | null
           id?: string
           nome?: string | null
           user_id: string
         }
         Update: {
+          ativa?: boolean | null
+          cor?: string | null
           created_at?: string | null
           descricao?: string | null
+          icone?: string | null
           id?: string
           nome?: string | null
           user_id?: string
@@ -55,6 +64,141 @@ export type Database = {
           nome?: string
         }
         Relationships: []
+      }
+      compras_app: {
+        Row: {
+          chave_acesso: string | null
+          created_at: string | null
+          data_compra: string
+          desconto: number | null
+          forma_pagamento: string | null
+          hora_compra: string | null
+          id: string
+          numero_nota_fiscal: string | null
+          observacoes: string | null
+          preco_total: number
+          qr_code_url: string | null
+          status: string | null
+          supermercado_id: string
+          taxa_servico: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          chave_acesso?: string | null
+          created_at?: string | null
+          data_compra: string
+          desconto?: number | null
+          forma_pagamento?: string | null
+          hora_compra?: string | null
+          id?: string
+          numero_nota_fiscal?: string | null
+          observacoes?: string | null
+          preco_total?: number
+          qr_code_url?: string | null
+          status?: string | null
+          supermercado_id: string
+          taxa_servico?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          chave_acesso?: string | null
+          created_at?: string | null
+          data_compra?: string
+          desconto?: number | null
+          forma_pagamento?: string | null
+          hora_compra?: string | null
+          id?: string
+          numero_nota_fiscal?: string | null
+          observacoes?: string | null
+          preco_total?: number
+          qr_code_url?: string | null
+          status?: string | null
+          supermercado_id?: string
+          taxa_servico?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compras_app_supermercado_id_fkey"
+            columns: ["supermercado_id"]
+            isOneToOne: false
+            referencedRelation: "supermercados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compras_app_supermercado_id_fkey"
+            columns: ["supermercado_id"]
+            isOneToOne: false
+            referencedRelation: "view_comparacao_supermercados_app"
+            referencedColumns: ["supermercado_id"]
+          },
+        ]
+      }
+      historico_precos_app: {
+        Row: {
+          created_at: string | null
+          data_preco: string
+          id: string
+          preco: number
+          produto_id: string
+          supermercado_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data_preco: string
+          id?: string
+          preco: number
+          produto_id: string
+          supermercado_id: string
+        }
+        Update: {
+          created_at?: string | null
+          data_preco?: string
+          id?: string
+          preco?: number
+          produto_id?: string
+          supermercado_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historico_precos_app_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_app"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_precos_app_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "view_comparacao_supermercados_app"
+            referencedColumns: ["produto_id"]
+          },
+          {
+            foreignKeyName: "historico_precos_app_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "view_preco_medio_produto_app"
+            referencedColumns: ["produto_id"]
+          },
+          {
+            foreignKeyName: "historico_precos_app_supermercado_id_fkey"
+            columns: ["supermercado_id"]
+            isOneToOne: false
+            referencedRelation: "supermercados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_precos_app_supermercado_id_fkey"
+            columns: ["supermercado_id"]
+            isOneToOne: false
+            referencedRelation: "view_comparacao_supermercados_app"
+            referencedColumns: ["supermercado_id"]
+          },
+        ]
       }
       ingestion_jobs: {
         Row: {
@@ -88,6 +232,71 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      itens_compra_app: {
+        Row: {
+          compra_id: string
+          created_at: string | null
+          desconto_item: number | null
+          id: string
+          observacoes: string | null
+          preco_total: number
+          preco_unitario: number
+          produto_id: string
+          quantidade: number
+        }
+        Insert: {
+          compra_id: string
+          created_at?: string | null
+          desconto_item?: number | null
+          id?: string
+          observacoes?: string | null
+          preco_total: number
+          preco_unitario: number
+          produto_id: string
+          quantidade: number
+        }
+        Update: {
+          compra_id?: string
+          created_at?: string | null
+          desconto_item?: number | null
+          id?: string
+          observacoes?: string | null
+          preco_total?: number
+          preco_unitario?: number
+          produto_id?: string
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "itens_compra_app_compra_id_fkey"
+            columns: ["compra_id"]
+            isOneToOne: false
+            referencedRelation: "compras_app"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "itens_compra_app_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_app"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "itens_compra_app_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "view_comparacao_supermercados_app"
+            referencedColumns: ["produto_id"]
+          },
+          {
+            foreignKeyName: "itens_compra_app_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "view_preco_medio_produto_app"
+            referencedColumns: ["produto_id"]
+          },
+        ]
       }
       mercados: {
         Row: {
@@ -237,6 +446,60 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      produtos_app: {
+        Row: {
+          ativo: boolean | null
+          categoria_id: string
+          codigo_barras: string | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          marca: string | null
+          nome: string
+          unidade_medida: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria_id: string
+          codigo_barras?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          marca?: string | null
+          nome: string
+          unidade_medida?: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria_id?: string
+          codigo_barras?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          marca?: string | null
+          nome?: string
+          unidade_medida?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produtos_app_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "produtos_app_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "view_gastos_categoria_app"
+            referencedColumns: ["categoria_id"]
+          },
+        ]
       }
       receipt_items: {
         Row: {
@@ -434,6 +697,51 @@ export type Database = {
         }
         Relationships: []
       }
+      supermercados: {
+        Row: {
+          ativo: boolean | null
+          cep: string | null
+          cidade: string | null
+          cnpj: string
+          created_at: string | null
+          email: string | null
+          endereco: string | null
+          estado: string | null
+          id: string
+          nome: string
+          telefone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj: string
+          created_at?: string | null
+          email?: string | null
+          endereco?: string | null
+          estado?: string | null
+          id?: string
+          nome: string
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string
+          created_at?: string | null
+          email?: string | null
+          endereco?: string | null
+          estado?: string | null
+          id?: string
+          nome?: string
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           created_at: string
@@ -460,7 +768,40 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      view_comparacao_supermercados_app: {
+        Row: {
+          preco_medio: number | null
+          produto_id: string | null
+          produto_nome: string | null
+          supermercado_id: string | null
+          supermercado_nome: string | null
+          ultima_compra: string | null
+          vezes_comprado: number | null
+        }
+        Relationships: []
+      }
+      view_gastos_categoria_app: {
+        Row: {
+          categoria_id: string | null
+          categoria_nome: string | null
+          gasto_medio: number | null
+          total_gasto: number | null
+          total_itens: number | null
+        }
+        Relationships: []
+      }
+      view_preco_medio_produto_app: {
+        Row: {
+          categoria_nome: string | null
+          maior_preco: number | null
+          menor_preco: number | null
+          preco_medio: number | null
+          produto_id: string | null
+          produto_nome: string | null
+          total_compras: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
