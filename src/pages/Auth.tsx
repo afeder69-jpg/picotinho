@@ -283,6 +283,15 @@ const AuthPage = () => {
 
         <Card>
           <CardHeader className="text-center">
+            {/* Mascote do Picotinho */}
+            <div className="flex justify-center mb-4">
+              <img 
+                src="/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png" 
+                alt="Mascote Picotinho" 
+                className="w-20 h-20 object-contain"
+              />
+            </div>
+            
             <CardTitle>Picotinho</CardTitle>
             <CardDescription>
               Gerencie suas compras de supermercado

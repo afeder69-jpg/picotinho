@@ -62,6 +62,15 @@ const Index = () => {
       {/* Main content area */}
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="text-center max-w-md mx-auto space-y-8">
+          {/* Mascote do Picotinho */}
+          <div className="flex justify-center">
+            <img 
+              src="/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png" 
+              alt="Mascote Picotinho" 
+              className="w-32 h-32 object-contain"
+            />
+          </div>
+          
           <h1 className="text-2xl font-bold text-foreground leading-tight">
             Bem-vindo ao Picotinho, gerencie suas compras de supermercado
           </h1>
