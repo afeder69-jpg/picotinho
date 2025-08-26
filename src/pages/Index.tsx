@@ -66,18 +66,6 @@ const Index = () => {
             Bem-vindo ao Picotinho, gerencie suas compras de supermercado
           </h1>
           
-          {/* QR Scanner Button */}
-          <div className="flex justify-center">
-            <Button 
-              onClick={() => {
-                console.log("Botão clicado - abrindo scanner");
-                setShowScanner(true);
-              }}
-              className="px-6 py-3"
-            >
-              Escanear QR Code
-            </Button>
-          </div>
 
           {!user && (
             <div className="text-center space-y-2">
