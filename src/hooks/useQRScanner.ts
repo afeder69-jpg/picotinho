@@ -65,10 +65,10 @@ export const useQRScanner = () => {
       if (isReceiptUrl(formattedUrl)) {
         toast({
           title: "Nota Fiscal detectada!",
-          description: "Abrindo página da Receita Federal...",
+          description: "Abrindo no navegador nativo...",
         });
         
-        // Fecha o scanner e abre o visualizador da nota
+        // Fecha o scanner e abre diretamente no navegador externo
         closeScanner();
         openReceiptViewer(formattedUrl);
       } else {

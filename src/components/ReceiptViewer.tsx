@@ -17,81 +17,15 @@ interface ReceiptViewerProps {
 
 const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [useExternalBrowser, setUseExternalBrowser] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const { user } = useAuth();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Configurar WebView otimizado para Receita Federal
+  // Abrir automaticamente no navegador nativo quando modal abrir
   useEffect(() => {
-    if (iframeRef.current && !useExternalBrowser) {
-      const iframe = iframeRef.current;
-      
-      // Configurações avançadas do iframe para simular navegador nativo
-      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-      iframe.setAttribute('credentialless', 'false');
-      
-      // Timeout mais agressivo para detectar problemas da Receita
-      const loadTimeout = setTimeout(() => {
-        if (isLoading) {
-          console.log('WebView travou na Receita Federal, forçando navegador externo');
-          setLoadError(true);
-          setUseExternalBrowser(false); // Permitir retry
-        }
-      }, 8000); // 8 segundos - mais rápido para Receita
-
-      const handleLoad = () => {
-        clearTimeout(loadTimeout);
-        setIsLoading(false);
-        setLoadError(false);
-        
-        // Injetar scripts para otimizar página da Receita
-        try {
-          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-          if (iframeDoc) {
-            // Meta viewport otimizado
-            if (!iframeDoc.querySelector('meta[name="viewport"]')) {
-              const metaViewport = iframeDoc.createElement('meta');
-              metaViewport.name = 'viewport';
-              metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
-              iframeDoc.head?.appendChild(metaViewport);
-            }
-            
-            // Forçar cookies e storage
-            try {
-              iframe.contentWindow?.localStorage.setItem('webview_test', 'enabled');
-            } catch (e) {
-              console.log('Storage não disponível no iframe');
-            }
-          }
-        } catch (error) {
-          console.log('Cross-origin restriction no iframe:', error);
-          // Se não conseguir acessar, pode ser problema de CORS da Receita
-          setTimeout(() => {
-            if (isLoading) {
-              setLoadError(true);
-            }
-          }, 3000);
-        }
-      };
-
-      const handleError = () => {
-        clearTimeout(loadTimeout);
-        setLoadError(true);
-        setIsLoading(false);
-      };
-
-      iframe.addEventListener('load', handleLoad);
-      iframe.addEventListener('error', handleError);
-
-      return () => {
-        clearTimeout(loadTimeout);
-        iframe.removeEventListener('load', handleLoad);
-        iframe.removeEventListener('error', handleError);
-      };
+    if (isOpen && url) {
+      openInExternalBrowser();
     }
-  }, [isLoading, useExternalBrowser]);
+  }, [isOpen, url]);
 
   // Iniciar captura automática em background
   const startBackgroundCapture = async () => {
@@ -150,6 +84,8 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
 
   const openInExternalBrowser = async () => {
     try {
+      setIsCapturing(true);
+      
       // Primeiro, iniciar processo de captura em background
       await startBackgroundCapture();
       
@@ -165,6 +101,7 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
         // Listener para quando o navegador fechar
         Browser.addListener('browserFinished', () => {
           console.log('Navegador externo fechado - verificando captura');
+          setIsCapturing(false);
           checkCaptureStatus();
         });
         
@@ -172,95 +109,26 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
         // No web, abrir em nova aba
         window.open(url, '_blank');
         // Verificar captura após alguns segundos
-        setTimeout(checkCaptureStatus, 10000);
+        setTimeout(() => {
+          setIsCapturing(false);
+          checkCaptureStatus();
+        }, 10000);
       }
       
       toast({
-        title: "Capturando nota fiscal...",
-        description: "A nota será salva automaticamente no seu perfil.",
+        title: "Nota aberta no navegador",
+        description: "Aguarde a página carregar completamente e toque em 'Confirmar Nota'",
       });
       
     } catch (error) {
       console.error('Erro ao abrir navegador externo:', error);
+      setIsCapturing(false);
       toast({
         title: "Erro",
         description: "Não foi possível abrir o navegador externo.",
         variant: "destructive",
       });
     }
-  };
-
-  const retryInIframe = () => {
-    setIsLoading(true);
-    setLoadError(false);
-    setUseExternalBrowser(false);
-    
-    // Forçar recarregamento do iframe
-    if (iframeRef.current) {
-      iframeRef.current.src = url;
-    }
-  };
-
-  const captureFullPage = async (iframe: HTMLIFrameElement): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      try {
-        const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
-        if (!iframeDocument) {
-          throw new Error("Não foi possível acessar o conteúdo da página");
-        }
-
-        // Captura a página inteira do iframe, incluindo conteúdo que requer rolagem
-        html2canvas(iframeDocument.body, {
-          useCORS: true,
-          allowTaint: true,
-          height: iframeDocument.body.scrollHeight,
-          width: iframeDocument.body.scrollWidth,
-          scale: 1,
-          backgroundColor: '#ffffff',
-          scrollX: 0,
-          scrollY: 0
-        }).then(canvas => {
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => reject(new Error("Erro ao converter imagem"));
-              reader.readAsDataURL(blob);
-            } else {
-              reject(new Error("Erro ao gerar imagem"));
-            }
-          }, 'image/jpeg', 0.9);
-        }).catch(reject);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  };
-
-  const uploadImageToSupabase = async (dataUrl: string): Promise<{ path: string; url: string }> => {
-    const base64Data = dataUrl.split(',')[1];
-    const byteCharacters = atob(base64Data);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'image/jpeg' });
-    
-    const fileName = `nota-${Date.now()}.jpg`;
-    const filePath = `${user?.id}/${fileName}`;
-    
-    const { data, error } = await supabase.storage
-      .from('receipts')
-      .upload(filePath, blob);
-    
-    if (error) throw error;
-    
-    const { data: urlData } = supabase.storage
-      .from('receipts')
-      .getPublicUrl(filePath);
-    
-    return { path: filePath, url: urlData.publicUrl };
   };
 
   const handleConfirmNote = async () => {
@@ -275,48 +143,20 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
 
     try {
       setIsProcessing(true);
-
-      // Aguarda um momento para garantir que a página esteja totalmente carregada
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      if (!iframeRef.current) {
-        throw new Error("Iframe não encontrado");
-      }
-
-      // Captura a página inteira do iframe
-      const imageDataUrl = await captureFullPage(iframeRef.current);
       
-      // Upload da imagem para o Supabase Storage
-      const { path, url: imageUrl } = await uploadImageToSupabase(imageDataUrl);
-      
-      // Salva a referência da imagem no banco
-      const { data: notaImagem, error: dbError } = await supabase
-        .from('notas_imagens')
-        .insert({
-          usuario_id: user.id,
-          imagem_url: imageUrl,
-          imagem_path: path,
-          processada: false
-        })
-        .select()
-        .single();
-
-      if (dbError) throw dbError;
-
-      // Processa a imagem com IA em segundo plano
-      supabase.functions.invoke('process-receipt-full', {
+      // Usar a edge function para capturar e salvar a nota
+      const { data, error } = await supabase.functions.invoke('capture-receipt-external', {
         body: {
-          notaImagemId: notaImagem.id,
-          imageUrl: imageUrl,
-          qrUrl: url
+          receiptUrl: url,
+          userId: user.id
         }
-      }).catch(error => {
-        console.error('Erro no processamento em segundo plano:', error);
       });
+      
+      if (error) throw error;
       
       toast({
         title: "Nota salva com sucesso!",
-        description: "A nota foi salva e está sendo processada em segundo plano.",
+        description: "A nota foi capturada e salva no seu perfil.",
       });
 
       onConfirm();
@@ -341,74 +181,44 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
       <div className="bg-background border-b p-4">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">Nota Fiscal</h2>
-          <div className="flex items-center gap-2">
-            {loadError && (
-              <>
-                <Button variant="outline" size="sm" onClick={retryInIframe}>
-                  <RefreshCw className="w-4 h-4 mr-1" />
-                  Tentar Novamente
-                </Button>
-                <Button variant="outline" size="sm" onClick={openInExternalBrowser}>
-                  <ExternalLink className="w-4 h-4 mr-1" />
-                  Abrir no Navegador
-                </Button>
-              </>
-            )}
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
         </div>
         
-        {isLoading && (
+        {isCapturing && (
           <div className="mt-2 flex items-center text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            Carregando nota fiscal...
-          </div>
-        )}
-        
-        {loadError && (
-          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-sm text-yellow-800">
-              A nota não carregou corretamente no app. Tente recarregar ou abra no navegador externo para uma melhor experiência.
-            </p>
+            Aguardando carregamento da página...
           </div>
         )}
       </div>
 
-      {/* Iframe container */}
-      <div className="flex-1 overflow-hidden">
-        {!useExternalBrowser ? (
-          <iframe
-            ref={iframeRef}
-            src={url}
-            className="w-full h-full border-0"
-            title="Nota Fiscal - Receita Federal"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation allow-downloads allow-modals"
-            allow="fullscreen; camera; microphone; geolocation; payment"
-            referrerPolicy="strict-origin-when-cross-origin"
-            loading="eager"
-            style={{
-              colorScheme: 'normal'
-            }}
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full p-8">
-            <div className="text-center space-y-4">
-              <p className="text-muted-foreground">
-                A nota foi aberta no navegador externo.
-              </p>
-              <Button onClick={onClose}>
-                Voltar ao App
-              </Button>
-            </div>
+      {/* Main content */}
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center space-y-6 max-w-md">
+          <div className="space-y-2">
+            <ExternalLink className="w-12 h-12 mx-auto text-primary" />
+            <h3 className="text-lg font-semibold">Nota aberta no navegador</h3>
+            <p className="text-muted-foreground text-sm">
+              A nota fiscal foi aberta no navegador nativo. Aguarde a página carregar completamente e depois toque no botão abaixo para salvar.
+            </p>
           </div>
-        )}
+          
+          <div className="p-4 bg-muted rounded-lg">
+            <p className="text-sm font-medium mb-2">Como funciona:</p>
+            <ol className="text-xs text-muted-foreground space-y-1 text-left">
+              <li>1. A página da nota está carregando no navegador</li>
+              <li>2. Aguarde o carregamento completo</li>
+              <li>3. Toque em "Confirmar Nota" para capturar</li>
+              <li>4. A imagem será salva automaticamente</li>
+            </ol>
+          </div>
+        </div>
       </div>
 
       {/* Fixed bottom button */}
       <div className="bg-background border-t p-4">
-        {!loadError ? (
         <Button
           onClick={handleConfirmNote}
           disabled={isProcessing}
@@ -418,30 +228,15 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
           {isProcessing ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Salvando nota...
+              Capturando nota...
             </>
           ) : (
             <>
               <Check className="w-4 h-4 mr-2" />
               Confirmar Nota
             </>
-            )}
-          </Button>
-        ) : (
-          <div className="space-y-2">
-            <Button
-              onClick={openInExternalBrowser}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
-              size="lg"
-            >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Abrir no Navegador Nativo
-            </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              Para salvar a nota, abra-a no navegador e volte ao app
-            </p>
-          </div>
-        )}
+          )}
+        </Button>
       </div>
     </div>
   );
