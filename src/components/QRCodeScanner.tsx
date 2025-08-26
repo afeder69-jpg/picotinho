@@ -34,7 +34,6 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
   const checkPermissionAndStart = async () => {
     try {
       if (isNative) {
-        // 🔑 Solicita permissão direto
         const status = await BarcodeScanner.requestPermissions();
         if (status.camera === "granted") {
           setHasPermission(true);
@@ -66,8 +65,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
     try {
       setIsScanning(true);
 
-      // 🔑 Usando listener contínuo do MLKit
-      const listener = await BarcodeScanner.addListener("barcodeScanned", (result) => {
+      await BarcodeScanner.addListener("barcodeScanned", (result) => {
         if (result?.barcode?.rawValue) {
           console.log("QR Code escaneado:", result.barcode.rawValue);
           onScanSuccess(result.barcode.rawValue);
@@ -139,3 +137,47 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       console.warn("Erro ao parar scanner:", error);
       setIsScanning(false);
     }
+  };
+
+  const handleClose = () => {
+    stopScanner();
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md p-6 relative">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">Escanear QR Code</h2>
+          <Button variant="ghost" size="sm" onClick={handleClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {isScanning ? (
+          isNative ? (
+            <div className="text-center">
+              <QrCode className="w-8 h-8 mx-auto mb-2 text-primary animate-pulse" />
+              <p className="text-sm">Posicione o QR Code na frente da câmera</p>
+            </div>
+          ) : (
+            <div id="qr-reader" className="w-full"></div>
+          )
+        ) : (
+          <div className="flex flex-col items-center space-y-4">
+            <Camera className="w-12 h-12 text-muted-foreground animate-pulse" />
+            <p className="text-sm text-muted-foreground text-center">
+              {hasPermission ? "Iniciando câmera..." : "Verificando permissões..."}
+            </p>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+export default QRCodeScanner;
+
+
