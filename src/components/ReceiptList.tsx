@@ -6,6 +6,7 @@ import { Eye, Trash2, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import CaptureNoteButton from './CaptureNoteButton';
 
 interface Receipt {
   id: string;
@@ -186,8 +187,11 @@ const ReceiptList = () => {
 
   return (
     <>
-      <div className="space-y-4">
-        {receipts.map((receipt) => (
+      <div className="space-y-6">
+        <CaptureNoteButton onCaptureSuccess={loadReceipts} />
+        
+        <div className="space-y-4">
+          {receipts.map((receipt) => (
           <Card key={receipt.id}>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
@@ -248,7 +252,8 @@ const ReceiptList = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
+          ))}
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

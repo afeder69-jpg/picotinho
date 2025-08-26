@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { toast } from "./use-toast";
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 
 export const useQRScanner = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -65,12 +67,39 @@ export const useQRScanner = () => {
       if (isReceiptUrl(formattedUrl)) {
         toast({
           title: "Nota Fiscal detectada!",
-          description: "Abrindo no navegador nativo...",
+          description: "Abrindo no navegador para visualização...",
         });
         
-        // Fecha o scanner e abre diretamente no navegador externo
+        // Fecha o scanner e abre diretamente no navegador nativo
         closeScanner();
-        openReceiptViewer(formattedUrl);
+        
+        // Abre direto no navegador nativo sem tela intermediária
+        try {
+          if (Capacitor.isNativePlatform()) {
+            await Browser.open({
+              url: formattedUrl,
+              windowName: '_blank',
+              presentationStyle: 'popover',
+              toolbarColor: '#ffffff'
+            });
+            
+            // Mostra instrução para o usuário
+            toast({
+              title: "📱 Nota aberta no navegador",
+              description: "Após visualizar, volte ao app e acesse 'Minhas Notas' para salvar a captura",
+              duration: 5000,
+            });
+          } else {
+            window.open(formattedUrl, '_blank');
+          }
+        } catch (error) {
+          console.error('Erro ao abrir navegador:', error);
+          toast({
+            title: "Erro",
+            description: "Não foi possível abrir o navegador",
+            variant: "destructive",
+          });
+        }
       } else {
         toast({
           title: "QR Code detectado!",
