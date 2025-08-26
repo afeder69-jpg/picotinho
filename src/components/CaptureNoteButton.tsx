@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,12 +77,11 @@ const CaptureNoteButton = ({ onCaptureSuccess }: CaptureNoteButtonProps) => {
       </div>
       
       <div className="space-y-3">
-        <input
+        <Input
           type="url"
           placeholder="Cole a URL da nota fiscal aqui..."
           value={receiptUrl}
           onChange={(e) => setReceiptUrl(e.target.value)}
-          className="w-full px-3 py-2 border border-border rounded-md bg-background"
         />
         
         <Button
