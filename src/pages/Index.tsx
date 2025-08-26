@@ -1,6 +1,9 @@
 import BottomNavigation from "@/components/BottomNavigation";
 
 const Index = () => {
+  // LOG PARA DEBUG
+  console.log("🚀 NOVA VERSÃO CARREGANDO!", new Date().toISOString());
+  console.log("🎯 Este é o código MAIS NOVO!");
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col">
       {/* Main content area */}
