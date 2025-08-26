@@ -111,25 +111,11 @@ async function convertHtmlToImage(html: string): Promise<string> {
       throw new Error('HTML inválido - página de bloqueio');
     }
     
-    // Se chegou aqui, é HTML válido da nota fiscal
-    // Criar um SVG simples como placeholder até implementarmos captura real
-    const svgContent = `
-      <svg width="800" height="1200" xmlns="http://www.w3.org/2000/svg">
-        <rect width="800" height="1200" fill="white"/>
-        <text x="50" y="50" font-family="Arial" font-size="16" fill="black">NOTA FISCAL ELETRÔNICA</text>
-        <text x="50" y="80" font-family="Arial" font-size="14" fill="green">✓ Capturada com sucesso!</text>
-        <text x="50" y="110" font-family="Arial" font-size="12" fill="gray">Tamanho: ${html.length} caracteres</text>
-        <text x="50" y="140" font-family="Arial" font-size="12" fill="blue">Processamento em andamento...</text>
-        <rect x="40" y="160" width="720" height="1000" fill="none" stroke="gray" stroke-width="2"/>
-        <text x="50" y="190" font-family="Arial" font-size="10" fill="gray">Preview da nota fiscal estará aqui</text>
-      </svg>
-    `;
+    // Criar uma imagem base64 simples como placeholder
+    // 1x1 pixel transparente PNG
+    const placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
     
-    // Converter SVG para base64
-    const base64Svg = btoa(unescape(encodeURIComponent(svgContent)));
-    const imageData = `data:image/svg+xml;base64,${base64Svg}`;
-    
-    return imageData;
+    return placeholderImage;
     
   } catch (error) {
     console.error('Erro ao converter HTML para imagem:', error);
@@ -149,9 +135,9 @@ async function uploadImageToStorage(imageData: string, userId: string): Promise<
     }
     
     const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'image/svg+xml' });
+    const blob = new Blob([byteArray], { type: 'image/png' });
     
-    const fileName = `nota-externa-${Date.now()}.svg`;
+    const fileName = `nota-externa-${Date.now()}.png`;
     const filePath = `${userId}/${fileName}`;
     
     // Upload para o Supabase Storage
