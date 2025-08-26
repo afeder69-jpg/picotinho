@@ -1,6 +1,21 @@
+import { useState } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
+import QRCodeScanner from "@/components/QRCodeScanner";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const Index = () => {
+  const [showScanner, setShowScanner] = useState(false);
+
+  const handleScanSuccess = (result: string) => {
+    toast.success(`QR Code escaneado: ${result}`);
+    setShowScanner(false);
+  };
+
+  const handleCloseScanner = () => {
+    setShowScanner(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col">
       {/* Main content area */}
@@ -10,15 +25,27 @@ const Index = () => {
             Bem-vindo ao Picotinho, a sua rede compartilhada de preços
           </h1>
           
-          {/* Red circle in center */}
+          {/* QR Scanner Button */}
           <div className="flex justify-center">
-            <div className="w-24 h-24 bg-red-500 rounded-full animate-pulse shadow-lg"></div>
+            <Button 
+              onClick={() => setShowScanner(true)}
+              className="w-24 h-24 bg-red-500 hover:bg-red-600 rounded-full text-white font-bold shadow-lg animate-pulse hover:animate-none transition-all duration-300"
+            >
+              Escanear QR Code
+            </Button>
           </div>
         </div>
       </div>
       
       {/* Bottom navigation */}
       <BottomNavigation />
+      
+      {/* QR Code Scanner */}
+      <QRCodeScanner 
+        isOpen={showScanner}
+        onScanSuccess={handleScanSuccess}
+        onClose={handleCloseScanner}
+      />
       
       {/* Spacer for fixed bottom navigation */}
       <div className="h-20"></div>
