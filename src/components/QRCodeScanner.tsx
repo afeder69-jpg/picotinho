@@ -169,7 +169,12 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       <Card className="w-full max-w-md p-6 relative">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Escanear QR Code</h2>
-          <Button variant="ghost" size="sm" onClick={handleClose}>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleClose}
+            className="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-full w-8 h-8 p-0"
+          >
             <X className="w-4 h-4" />
           </Button>
         </div>
