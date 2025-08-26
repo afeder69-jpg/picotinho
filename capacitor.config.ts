@@ -1,13 +1,10 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34',
-  appName: 'Picotinho',
+  appId: 'app.lovable.FORCELOCAL12345',  // Changed ID to force new app
+  appName: 'PicotinhoNOVO',  // Changed name
   webDir: 'dist',
-  // FORCE LOCAL ASSETS ONLY - NO REMOTE SERVER
-  server: {
-    androidScheme: 'https'
-  },
+  // ABSOLUTELY NO SERVER - FORCE LOCAL ONLY
   plugins: {
     Camera: {
       permissions: ['camera']
