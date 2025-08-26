@@ -18,6 +18,10 @@ interface Receipt {
   created_at: string;
   screenshot_url: string | null;
   processed_data: any;
+  // Campos da tabela notas_imagens
+  imagem_url?: string | null;
+  dados_extraidos?: any;
+  processada?: boolean;
 }
 
 const ReceiptList = () => {
@@ -40,15 +44,50 @@ const ReceiptList = () => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('receipts')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      // Buscar tanto da tabela receipts quanto da notas_imagens
+      const [receiptsResult, notasImagensResult] = await Promise.all([
+        supabase
+          .from('receipts')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('notas_imagens')
+          .select('*')
+          .eq('usuario_id', user.id)
+          .order('created_at', { ascending: false })
+      ]);
 
-      if (error) throw error;
+      if (receiptsResult.error) throw receiptsResult.error;
+      if (notasImagensResult.error) throw notasImagensResult.error;
 
-      setReceipts(data || []);
+      // Mapear notas_imagens para o formato Receipt
+      const mappedNotasImagens = (notasImagensResult.data || []).map(nota => {
+        const dadosExtraidos = nota.dados_extraidos as any;
+        return {
+          id: nota.id,
+          store_name: dadosExtraidos?.mercado || 'Estabelecimento não identificado',
+          store_cnpj: dadosExtraidos?.cnpj || null,
+          total_amount: dadosExtraidos?.valor_total || null,
+          purchase_date: nota.data_criacao,
+          qr_url: dadosExtraidos?.url_original || '',
+          status: nota.processada ? 'processed' : 'pending',
+          created_at: nota.created_at,
+          screenshot_url: nota.imagem_url,
+          processed_data: nota.dados_extraidos,
+          imagem_url: nota.imagem_url,
+          dados_extraidos: nota.dados_extraidos,
+          processada: nota.processada
+        };
+      });
+
+      // Combinar e ordenar por data
+      const allReceipts = [
+        ...(receiptsResult.data || []),
+        ...mappedNotasImagens
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setReceipts(allReceipts);
     } catch (error) {
       console.error('Error loading receipts:', error);
       toast({
@@ -63,12 +102,16 @@ const ReceiptList = () => {
 
   const deleteReceipt = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('receipts')
-        .delete()
-        .eq('id', id);
+      // Tentar deletar de ambas as tabelas (uma falhará, mas não é problema)
+      const [receiptsResult, notasImagensResult] = await Promise.all([
+        supabase.from('receipts').delete().eq('id', id),
+        supabase.from('notas_imagens').delete().eq('id', id)
+      ]);
 
-      if (error) throw error;
+      // Se ambas falharam, throw error
+      if (receiptsResult.error && notasImagensResult.error) {
+        throw receiptsResult.error;
+      }
 
       setReceipts(receipts.filter(r => r.id !== id));
       toast({
