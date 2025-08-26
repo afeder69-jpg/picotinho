@@ -21,12 +21,12 @@ const config: CapacitorConfig = {
   },
   android: {
     adaptiveIcon: {
-      foreground: 'resources/android/icon/foreground.png',
+      foreground: '/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png',
       background: '#FFFFFF'
     }
   },
   ios: {
-    icon: 'resources/ios/icon/icon.png'
+    icon: '/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png'
   }
 };
 
