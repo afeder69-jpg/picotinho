@@ -10,9 +10,10 @@ const Index = () => {
             Bem-vindo ao Picotinho, a sua rede compartilhada de preços
           </h1>
           
-          {/* Bolinha de teste - VERMELHA desta vez */}
-          <div className="w-20 h-20 bg-red-600 rounded-full mx-auto animate-bounce shadow-2xl border-4 border-white"></div>
-          <p className="text-lg font-bold text-red-600 mt-4">TESTE - Bolinha Vermelha</p>
+          {/* Bolinha de teste - VERDE NEON desta vez */}
+          <div className="w-24 h-24 bg-green-400 rounded-full mx-auto animate-spin shadow-2xl border-8 border-yellow-300"></div>
+          <p className="text-xl font-bold text-green-400 mt-4 bg-black p-2 rounded">🟢 NOVA VERSÃO - VERDE NEON 🟢</p>
+          <p className="text-sm text-foreground mt-2">Se você vê isso, a atualização funcionou!</p>
         </div>
       </div>
       
