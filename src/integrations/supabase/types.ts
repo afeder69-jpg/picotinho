@@ -238,6 +238,53 @@ export type Database = {
         }
         Relationships: []
       }
+      receipt_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          line_number: number | null
+          name: string
+          quantity: number | null
+          receipt_id: string
+          total_price: number | null
+          unit: string | null
+          unit_price: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          line_number?: number | null
+          name: string
+          quantity?: number | null
+          receipt_id: string
+          total_price?: number | null
+          unit?: string | null
+          unit_price?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          line_number?: number | null
+          name?: string
+          quantity?: number | null
+          receipt_id?: string
+          total_price?: number | null
+          unit?: string | null
+          unit_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipt_items_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "receipts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       receipt_items_public: {
         Row: {
           brand: string | null
@@ -290,6 +337,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      receipts: {
+        Row: {
+          created_at: string
+          id: string
+          processed_data: Json | null
+          purchase_date: string | null
+          qr_url: string
+          raw_data: Json | null
+          screenshot_path: string | null
+          screenshot_url: string | null
+          status: string | null
+          store_cnpj: string | null
+          store_name: string | null
+          total_amount: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          processed_data?: Json | null
+          purchase_date?: string | null
+          qr_url: string
+          raw_data?: Json | null
+          screenshot_path?: string | null
+          screenshot_url?: string | null
+          status?: string | null
+          store_cnpj?: string | null
+          store_name?: string | null
+          total_amount?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          processed_data?: Json | null
+          purchase_date?: string | null
+          qr_url?: string
+          raw_data?: Json | null
+          screenshot_path?: string | null
+          screenshot_url?: string | null
+          status?: string | null
+          store_cnpj?: string | null
+          store_name?: string | null
+          total_amount?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       receipts_public: {
         Row: {
