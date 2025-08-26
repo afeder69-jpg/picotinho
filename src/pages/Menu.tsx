@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import BottomNavigation from "@/components/BottomNavigation";
-import CameraTest from "@/components/CameraTest";
+
 
 const Menu = () => {
   const navigate = useNavigate();
@@ -120,10 +120,6 @@ const Menu = () => {
             ))}
           </div>
           
-          {/* Teste da câmera */}
-          <div className="mt-6">
-            <CameraTest />
-          </div>
           
           {/* Mensagem informativa */}
           <div className="mt-6 p-4 text-center text-muted-foreground bg-muted/30 rounded-lg">
