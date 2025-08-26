@@ -63,7 +63,7 @@ const Index = () => {
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="text-center max-w-md mx-auto space-y-8">
           <h1 className="text-2xl font-bold text-foreground leading-tight">
-            Bem-vindo ao Notinha, gerencie suas compras de supermercado
+            Bem-vindo ao Picotinho, gerencie suas compras de supermercado
           </h1>
           
           {/* QR Scanner Button */}
@@ -73,7 +73,7 @@ const Index = () => {
                 console.log("Botão clicado - abrindo scanner");
                 setShowScanner(true);
               }}
-              className="w-24 h-24 bg-sky-400 hover:bg-sky-500 rounded-full text-white font-bold shadow-lg animate-pulse hover:animate-none transition-all duration-300"
+              className="px-6 py-3"
             >
               Escanear QR Code
             </Button>

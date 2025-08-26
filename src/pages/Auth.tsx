@@ -142,11 +142,11 @@ const AuthPage = () => {
 
         toast({
           title: "Cadastro realizado!",
-          description: "Sua conta foi criada com sucesso.",
+          description: "Verifique seu e-mail para confirmar sua conta. Um link de confirmação foi enviado para você.",
         });
 
-        // Redirecionar para página principal
-        navigate('/');
+        // Limpar o formulário
+        setFormData({ email: '', password: '', telefone: '' });
       }
     } catch (error) {
       console.error('Erro no cadastro:', error);
@@ -194,6 +194,12 @@ const AuthPage = () => {
             description: "E-mail ou senha incorretos",
             variant: "destructive",
           });
+        } else if (error.message.includes('Email not confirmed')) {
+          toast({
+            title: "E-mail não confirmado",
+            description: "Verifique seu e-mail e clique no link de confirmação antes de fazer login",
+            variant: "destructive",
+          });
         } else {
           toast({
             title: "Erro no login",
@@ -239,7 +245,7 @@ const AuthPage = () => {
 
         <Card>
           <CardHeader className="text-center">
-            <CardTitle>Notinha</CardTitle>
+            <CardTitle>Picotinho</CardTitle>
             <CardDescription>
               Gerencie suas compras de supermercado
             </CardDescription>
