@@ -44,7 +44,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       }
 
       // Verifica permissão atual
-      const status = await BarcodeScanner.checkPermission({ force: false });
+      const status = await BarcodeScanner.checkPermissions();
       
       if (status.granted) {
         setHasPermission(true);
@@ -59,7 +59,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         onClose();
       } else {
         // Solicita permissão
-        const newStatus = await BarcodeScanner.checkPermission({ force: true });
+        const newStatus = await BarcodeScanner.requestPermissions();
         if (newStatus.granted) {
           setHasPermission(true);
           startScanner();
@@ -90,14 +90,12 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
       // Esconde o background do app para mostrar a câmera
       document.body.style.background = "transparent";
       
-      const result = await BarcodeScanner.startScan({
-        targetedFormats: [SupportedFormat.QR_CODE],
-        cameraDirection: 'back' // Força câmera traseira
-      });
+      const result = await BarcodeScanner.startScan();
 
-      if (result.hasContent) {
-        console.log("QR Code detectado:", result.content);
-        onScanSuccess(result.content);
+      if (result && result.barcodes && result.barcodes.length > 0) {
+        const scannedValue = result.barcodes[0].displayValue;
+        console.log("QR Code detectado:", scannedValue);
+        onScanSuccess(scannedValue);
         
         toast({
           title: "QR Code detectado!",
