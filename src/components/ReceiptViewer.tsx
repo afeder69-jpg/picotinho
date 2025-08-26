@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, X, Loader2 } from "lucide-react";
 import html2canvas from "html2canvas";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 interface ReceiptViewerProps {
   url: string;
@@ -13,48 +15,128 @@ interface ReceiptViewerProps {
 
 const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const { user } = useAuth();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const captureFullPage = async (iframe: HTMLIFrameElement): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!iframeDocument) {
+          throw new Error("Não foi possível acessar o conteúdo da página");
+        }
+
+        // Captura a página inteira do iframe, incluindo conteúdo que requer rolagem
+        html2canvas(iframeDocument.body, {
+          useCORS: true,
+          allowTaint: true,
+          height: iframeDocument.body.scrollHeight,
+          width: iframeDocument.body.scrollWidth,
+          scale: 1,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0
+        }).then(canvas => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error("Erro ao converter imagem"));
+              reader.readAsDataURL(blob);
+            } else {
+              reject(new Error("Erro ao gerar imagem"));
+            }
+          }, 'image/jpeg', 0.9);
+        }).catch(reject);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  };
+
+  const uploadImageToSupabase = async (dataUrl: string): Promise<{ path: string; url: string }> => {
+    const base64Data = dataUrl.split(',')[1];
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'image/jpeg' });
+    
+    const fileName = `nota-${Date.now()}.jpg`;
+    const filePath = `${user?.id}/${fileName}`;
+    
+    const { data, error } = await supabase.storage
+      .from('receipts')
+      .upload(filePath, blob);
+    
+    if (error) throw error;
+    
+    const { data: urlData } = supabase.storage
+      .from('receipts')
+      .getPublicUrl(filePath);
+    
+    return { path: filePath, url: urlData.publicUrl };
+  };
 
   const handleConfirmNote = async () => {
+    if (!user) {
+      toast({
+        title: "Erro",
+        description: "Você precisa estar logado para salvar a nota.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsProcessing(true);
 
       // Aguarda um momento para garantir que a página esteja totalmente carregada
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Captura screenshot da página atual
-      const canvas = await html2canvas(document.body, {
-        height: window.innerHeight,
-        width: window.innerWidth,
-        useCORS: true,
-        scale: 0.8,
-        backgroundColor: '#ffffff'
+      if (!iframeRef.current) {
+        throw new Error("Iframe não encontrado");
+      }
+
+      // Captura a página inteira do iframe
+      const imageDataUrl = await captureFullPage(iframeRef.current);
+      
+      // Upload da imagem para o Supabase Storage
+      const { path, url: imageUrl } = await uploadImageToSupabase(imageDataUrl);
+      
+      // Salva a referência da imagem no banco
+      const { data: notaImagem, error: dbError } = await supabase
+        .from('notas_imagens')
+        .insert({
+          usuario_id: user.id,
+          imagem_url: imageUrl,
+          imagem_path: path,
+          processada: false
+        })
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+
+      // Processa a imagem com IA em segundo plano
+      supabase.functions.invoke('process-receipt-full', {
+        body: {
+          notaImagemId: notaImagem.id,
+          imageUrl: imageUrl,
+          qrUrl: url
+        }
+      }).catch(error => {
+        console.error('Erro no processamento em segundo plano:', error);
+      });
+      
+      toast({
+        title: "Nota salva com sucesso!",
+        description: "A nota foi salva e está sendo processada em segundo plano.",
       });
 
-      // Converte para blob
-      canvas.toBlob(async (blob) => {
-        if (blob) {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const dataUrl = reader.result as string;
-            const screenshots = JSON.parse(localStorage.getItem('qr_screenshots') || '[]');
-            screenshots.push({
-              id: Date.now(),
-              url: url,
-              timestamp: new Date().toISOString(),
-              screenshot: dataUrl
-            });
-            localStorage.setItem('qr_screenshots', JSON.stringify(screenshots));
-            
-            toast({
-              title: "Nota salva com sucesso!",
-              description: "A nota foi salva em Minhas Notas Salvas.",
-            });
-
-            onConfirm();
-          };
-          reader.readAsDataURL(blob);
-        }
-      }, 'image/jpeg', 0.9);
+      onConfirm();
 
     } catch (error) {
       console.error('Erro ao capturar nota:', error);
@@ -83,6 +165,7 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
       {/* Iframe container */}
       <div className="flex-1 overflow-hidden">
         <iframe
+          ref={iframeRef}
           src={url}
           className="w-full h-full border-0"
           title="Nota Fiscal - Receita Federal"

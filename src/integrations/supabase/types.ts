@@ -417,6 +417,45 @@ export type Database = {
           },
         ]
       }
+      notas_imagens: {
+        Row: {
+          compra_id: string | null
+          created_at: string | null
+          dados_extraidos: Json | null
+          data_criacao: string
+          id: string
+          imagem_path: string
+          imagem_url: string
+          processada: boolean | null
+          updated_at: string | null
+          usuario_id: string
+        }
+        Insert: {
+          compra_id?: string | null
+          created_at?: string | null
+          dados_extraidos?: Json | null
+          data_criacao?: string
+          id?: string
+          imagem_path: string
+          imagem_url: string
+          processada?: boolean | null
+          updated_at?: string | null
+          usuario_id: string
+        }
+        Update: {
+          compra_id?: string | null
+          created_at?: string | null
+          dados_extraidos?: Json | null
+          data_criacao?: string
+          id?: string
+          imagem_path?: string
+          imagem_url?: string
+          processada?: boolean | null
+          updated_at?: string | null
+          usuario_id?: string
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           created_at: string | null
