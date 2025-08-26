@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { 
   FileImage, 
   ChevronRight, 
@@ -83,11 +84,9 @@ const Menu = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col">
-      {/* Header com botão de login/logout */}
+      {/* Header com logo e botão de login/logout */}
       <div className="flex justify-between items-center p-4">
-        <h1 className="text-2xl font-bold text-foreground">
-          Menu Principal
-        </h1>
+        <PicotinhoLogo />
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
