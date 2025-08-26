@@ -6,14 +6,24 @@ const Index = () => {
       {/* Main content area */}
       <div className="flex-1 flex items-center justify-center pt-16 px-6">
         <div className="text-center max-w-md mx-auto relative">
-          <h1 className="text-2xl font-bold text-foreground leading-tight mb-8">
-            Bem-vindo ao Picotinho, a sua rede compartilhada de preços
+          <h1 className="text-4xl font-bold text-red-500 leading-tight mb-8 animate-pulse">
+            🔴 VERSÃO TESTE ATUALIZADA 🔴
           </h1>
           
-          {/* Bolinha de teste - VERDE NEON desta vez */}
-          <div className="w-24 h-24 bg-green-400 rounded-full mx-auto animate-spin shadow-2xl border-8 border-yellow-300"></div>
-          <p className="text-xl font-bold text-green-400 mt-4 bg-black p-2 rounded">🟢 NOVA VERSÃO - VERDE NEON 🟢</p>
-          <p className="text-sm text-foreground mt-2">Se você vê isso, a atualização funcionou!</p>
+          {/* TRÊS BOLINHAS COLORIDAS PARA GARANTIR QUE VOCÊ VÊ */}
+          <div className="flex justify-center space-x-4 mb-6">
+            <div className="w-16 h-16 bg-red-500 rounded-full animate-bounce"></div>
+            <div className="w-16 h-16 bg-blue-500 rounded-full animate-spin"></div>
+            <div className="w-16 h-16 bg-yellow-500 rounded-full animate-pulse"></div>
+          </div>
+          
+          <div className="bg-red-500 text-white p-6 rounded-lg font-bold text-xl animate-bounce">
+            ⚡ SE VOCÊ VÊ ISSO, FUNCIONOU! ⚡
+          </div>
+          
+          <p className="text-lg text-foreground mt-4 font-bold">
+            Três bolinhas coloridas + texto em destaque
+          </p>
         </div>
       </div>
       
