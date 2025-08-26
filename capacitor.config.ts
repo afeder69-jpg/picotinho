@@ -17,15 +17,22 @@ const config: CapacitorConfig = {
     },
     BarcodeScanning: {
       permissions: ['camera']
+    },
+    Browser: {
+      androidCustomTabs: true,
+      iosCustomTabs: true
     }
   },
   android: {
+    webContentsDebuggingEnabled: true,
+    allowMixedContent: true,
     adaptiveIcon: {
       foreground: '/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png',
       background: '#FFFFFF'
     }
   },
   ios: {
+    contentInset: 'automatic',
     icon: '/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png'
   }
 };

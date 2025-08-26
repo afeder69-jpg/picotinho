@@ -1,10 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, X, Loader2 } from "lucide-react";
+import { Check, X, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import html2canvas from "html2canvas";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 
 interface ReceiptViewerProps {
   url: string;
@@ -15,8 +17,107 @@ interface ReceiptViewerProps {
 
 const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [useExternalBrowser, setUseExternalBrowser] = useState(false);
   const { user } = useAuth();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Configurar User-Agent e outras configurações do iframe
+  useEffect(() => {
+    if (iframeRef.current && !useExternalBrowser) {
+      const iframe = iframeRef.current;
+      
+      // Timeout para detectar se a página travou
+      const loadTimeout = setTimeout(() => {
+        if (isLoading) {
+          console.log('Iframe demorou para carregar, sugerindo navegador externo');
+          setLoadError(true);
+        }
+      }, 15000); // 15 segundos
+
+      const handleLoad = () => {
+        clearTimeout(loadTimeout);
+        setIsLoading(false);
+        setLoadError(false);
+        
+        // Tentar injetar user-agent simulando navegador nativo
+        try {
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (iframeDoc) {
+            // Adicionar meta viewport se não existir
+            if (!iframeDoc.querySelector('meta[name="viewport"]')) {
+              const metaViewport = iframeDoc.createElement('meta');
+              metaViewport.name = 'viewport';
+              metaViewport.content = 'width=device-width, initial-scale=1.0';
+              iframeDoc.head?.appendChild(metaViewport);
+            }
+          }
+        } catch (error) {
+          console.log('Não foi possível modificar o iframe:', error);
+        }
+      };
+
+      const handleError = () => {
+        clearTimeout(loadTimeout);
+        setLoadError(true);
+        setIsLoading(false);
+      };
+
+      iframe.addEventListener('load', handleLoad);
+      iframe.addEventListener('error', handleError);
+
+      return () => {
+        clearTimeout(loadTimeout);
+        iframe.removeEventListener('load', handleLoad);
+        iframe.removeEventListener('error', handleError);
+      };
+    }
+  }, [isLoading, useExternalBrowser]);
+
+  const openInExternalBrowser = async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await Browser.open({
+          url: url,
+          windowName: '_system',
+          presentationStyle: 'fullscreen'
+        });
+        
+        toast({
+          title: "Nota aberta no navegador",
+          description: "A nota foi aberta no navegador nativo. Volte para o app quando terminar.",
+        });
+        
+        // Aguardar um tempo e depois fechar o viewer atual
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+      } else {
+        // No navegador web, abrir em nova aba
+        window.open(url, '_blank');
+        onClose();
+      }
+    } catch (error) {
+      console.error('Erro ao abrir navegador externo:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível abrir o navegador externo.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const retryInIframe = () => {
+    setIsLoading(true);
+    setLoadError(false);
+    setUseExternalBrowser(false);
+    
+    // Forçar recarregamento do iframe
+    if (iframeRef.current) {
+      iframeRef.current.src = url;
+    }
+  };
 
   const captureFullPage = async (iframe: HTMLIFrameElement): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -154,27 +255,73 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
-      {/* Header with close button */}
-      <div className="bg-background border-b p-4 flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Nota Fiscal</h2>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          <X className="w-4 h-4" />
-        </Button>
+      {/* Header with actions */}
+      <div className="bg-background border-b p-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold">Nota Fiscal</h2>
+          <div className="flex items-center gap-2">
+            {loadError && (
+              <>
+                <Button variant="outline" size="sm" onClick={retryInIframe}>
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                  Tentar Novamente
+                </Button>
+                <Button variant="outline" size="sm" onClick={openInExternalBrowser}>
+                  <ExternalLink className="w-4 h-4 mr-1" />
+                  Abrir no Navegador
+                </Button>
+              </>
+            )}
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+        
+        {isLoading && (
+          <div className="mt-2 flex items-center text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Carregando nota fiscal...
+          </div>
+        )}
+        
+        {loadError && (
+          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-sm text-yellow-800">
+              A nota não carregou corretamente no app. Tente recarregar ou abra no navegador externo para uma melhor experiência.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Iframe container */}
       <div className="flex-1 overflow-hidden">
-        <iframe
-          ref={iframeRef}
-          src={url}
-          className="w-full h-full border-0"
-          title="Nota Fiscal - Receita Federal"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-        />
+        {!useExternalBrowser ? (
+          <iframe
+            ref={iframeRef}
+            src={url}
+            className="w-full h-full border-0"
+            title="Nota Fiscal - Receita Federal"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
+            allow="fullscreen"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full p-8">
+            <div className="text-center space-y-4">
+              <p className="text-muted-foreground">
+                A nota foi aberta no navegador externo.
+              </p>
+              <Button onClick={onClose}>
+                Voltar ao App
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Fixed bottom button */}
       <div className="bg-background border-t p-4">
+        {!loadError ? (
         <Button
           onClick={handleConfirmNote}
           disabled={isProcessing}
@@ -191,8 +338,23 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
               <Check className="w-4 h-4 mr-2" />
               Confirmar Nota
             </>
-          )}
-        </Button>
+            )}
+          </Button>
+        ) : (
+          <div className="space-y-2">
+            <Button
+              onClick={openInExternalBrowser}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
+              size="lg"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Abrir no Navegador Nativo
+            </Button>
+            <p className="text-xs text-center text-muted-foreground">
+              Para salvar a nota, abra-a no navegador e volte ao app
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
