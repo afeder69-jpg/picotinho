@@ -23,38 +23,56 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
   const { user } = useAuth();
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Configurar User-Agent e outras configurações do iframe
+  // Configurar WebView otimizado para Receita Federal
   useEffect(() => {
     if (iframeRef.current && !useExternalBrowser) {
       const iframe = iframeRef.current;
       
-      // Timeout para detectar se a página travou
+      // Configurações avançadas do iframe para simular navegador nativo
+      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      iframe.setAttribute('credentialless', 'false');
+      
+      // Timeout mais agressivo para detectar problemas da Receita
       const loadTimeout = setTimeout(() => {
         if (isLoading) {
-          console.log('Iframe demorou para carregar, sugerindo navegador externo');
+          console.log('WebView travou na Receita Federal, forçando navegador externo');
           setLoadError(true);
+          setUseExternalBrowser(false); // Permitir retry
         }
-      }, 15000); // 15 segundos
+      }, 8000); // 8 segundos - mais rápido para Receita
 
       const handleLoad = () => {
         clearTimeout(loadTimeout);
         setIsLoading(false);
         setLoadError(false);
         
-        // Tentar injetar user-agent simulando navegador nativo
+        // Injetar scripts para otimizar página da Receita
         try {
           const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
           if (iframeDoc) {
-            // Adicionar meta viewport se não existir
+            // Meta viewport otimizado
             if (!iframeDoc.querySelector('meta[name="viewport"]')) {
               const metaViewport = iframeDoc.createElement('meta');
               metaViewport.name = 'viewport';
-              metaViewport.content = 'width=device-width, initial-scale=1.0';
+              metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
               iframeDoc.head?.appendChild(metaViewport);
+            }
+            
+            // Forçar cookies e storage
+            try {
+              iframe.contentWindow?.localStorage.setItem('webview_test', 'enabled');
+            } catch (e) {
+              console.log('Storage não disponível no iframe');
             }
           }
         } catch (error) {
-          console.log('Não foi possível modificar o iframe:', error);
+          console.log('Cross-origin restriction no iframe:', error);
+          // Se não conseguir acessar, pode ser problema de CORS da Receita
+          setTimeout(() => {
+            if (isLoading) {
+              setLoadError(true);
+            }
+          }, 3000);
         }
       };
 
@@ -302,8 +320,13 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
             src={url}
             className="w-full h-full border-0"
             title="Nota Fiscal - Receita Federal"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
-            allow="fullscreen"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation allow-downloads allow-modals"
+            allow="fullscreen; camera; microphone; geolocation; payment"
+            referrerPolicy="strict-origin-when-cross-origin"
+            loading="eager"
+            style={{
+              colorScheme: 'normal'
+            }}
           />
         ) : (
           <div className="flex items-center justify-center h-full p-8">

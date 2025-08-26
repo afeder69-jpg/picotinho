@@ -26,6 +26,9 @@ const config: CapacitorConfig = {
   android: {
     webContentsDebuggingEnabled: true,
     allowMixedContent: true,
+    overrideUserAgent: 'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    backgroundColor: '#ffffff',
+    allowNavigation: ['*'],
     adaptiveIcon: {
       foreground: '/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png',
       background: '#FFFFFF'
@@ -33,6 +36,10 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: 'automatic',
+    allowsInlineMediaPlayback: true,
+    allowsBackForwardNavigationGestures: true,
+    backgroundColor: '#ffffff',
+    overrideUserAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
     icon: '/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png'
   }
 };
