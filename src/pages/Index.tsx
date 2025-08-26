@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BottomNavigation from "@/components/BottomNavigation";
 import QRCodeScanner from "@/components/QRCodeScanner";
-import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LogIn, LogOut } from "lucide-react";
@@ -33,10 +32,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col">
-      {/* Header com logo e botão de login/logout */}
-      <div className="flex justify-between items-center p-4">
-        <PicotinhoLogo />
-        <div className="flex-1"></div> {/* Spacer */}
+      {/* Header com botão de login/logout */}
+      <div className="flex justify-end p-4">
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">

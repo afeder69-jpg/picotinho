@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import PicotinhoLogo from '@/components/PicotinhoLogo';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -284,11 +283,16 @@ const AuthPage = () => {
 
         <Card>
           <CardHeader className="text-center">
-            {/* Logo do Picotinho */}
+            {/* Mascote do Picotinho */}
             <div className="flex justify-center mb-4">
-              <PicotinhoLogo size="lg" />
+              <img 
+                src="/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png" 
+                alt="Mascote Picotinho" 
+                className="w-20 h-20 object-contain"
+              />
             </div>
             
+            <CardTitle>Picotinho</CardTitle>
             <CardDescription>
               Gerencie suas compras de supermercado
             </CardDescription>
