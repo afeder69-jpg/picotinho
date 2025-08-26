@@ -95,15 +95,21 @@ const AuthPage = () => {
       if (signUpError) {
         if (signUpError.message.includes('already registered')) {
           toast({
-            title: "Erro no cadastro",
-            description: "Este e-mail já está cadastrado. Tente fazer login.",
-            variant: "destructive",
+            title: "E-mail já cadastrado",
+            description: "Este e-mail já possui uma conta. Por favor, faça login ou use outro e-mail.",
+            variant: "default",
+          });
+        } else if (signUpError.message.includes('rate limit')) {
+          toast({
+            title: "Muitas tentativas",
+            description: "Por favor, aguarde alguns segundos antes de tentar novamente.",
+            variant: "default",
           });
         } else {
           toast({
-            title: "Erro no cadastro",
-            description: signUpError.message,
-            variant: "destructive",
+            title: "Aguarde um momento",
+            description: "Por favor, aguarde alguns segundos antes de tentar novamente.",
+            variant: "default",
           });
         }
         return;
@@ -141,8 +147,9 @@ const AuthPage = () => {
         }
 
         toast({
-          title: "Cadastro realizado!",
-          description: "Verifique seu e-mail para confirmar sua conta. Um link de confirmação foi enviado para você.",
+          title: "Cadastro realizado com sucesso! ✅",
+          description: "Enviamos um e-mail de confirmação para sua caixa de entrada. Acesse seu e-mail e clique no link para ativar sua conta.",
+          variant: "default",
         });
 
         // Limpar o formulário
