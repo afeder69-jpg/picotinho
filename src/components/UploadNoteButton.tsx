@@ -64,24 +64,41 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
         try {
           console.log('=== INICIANDO UPLOAD ===', file.name);
           
-          // Validar tipo de arquivo - incluindo PDFs
-          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+          // Validar tipo de arquivo - incluindo PDFs com tipos MIME alternativos para Android
+          const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+          const allowedPdfTypes = [
+            'application/pdf',
+            'application/x-pdf', 
+            'application/acrobat',
+            'applications/vnd.pdf',
+            'text/pdf',
+            'text/x-pdf'
+          ];
+          const allowedTypes = [...allowedImageTypes, ...allowedPdfTypes];
           const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
           const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
           
           console.log('Validando arquivo:', {
+            fileName: file.name,
             type: file.type,
             extension: fileExtension,
+            size: file.size,
             allowedTypes,
             allowedExtensions
           });
           
-          // Aceitar se o tipo MIME ou extensão for válida (importante para PDFs no Android)
-          const isValidType = allowedTypes.includes(file.type);
-          const isValidExtension = allowedExtensions.includes(fileExtension);
+          // Verificação mais flexível para PDFs no Android
+          const isImage = allowedImageTypes.includes(file.type) || ['.jpg', '.jpeg', '.png', '.webp'].includes(fileExtension);
+          const isPdf = allowedPdfTypes.includes(file.type) || fileExtension === '.pdf' || file.type === '' && fileExtension === '.pdf';
+          const isValidFile = isImage || isPdf;
           
-          if (!isValidType && !isValidExtension) {
-            console.log('ARQUIVO REJEITADO:', file.type, fileExtension);
+          if (!isValidFile) {
+            console.log('ARQUIVO REJEITADO:', {
+              type: file.type,
+              extension: fileExtension,
+              isImage,
+              isPdf
+            });
             toast({
               title: "Erro",
               description: `Tipo de arquivo não suportado: ${file.name}. Use JPG, PNG, WebP ou PDF.`,
@@ -90,7 +107,12 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             continue;
           }
           
-          console.log('Arquivo aceito:', file.name);
+          console.log('Arquivo aceito:', {
+            name: file.name,
+            type: file.type,
+            isImage,
+            isPdf
+          });
 
           // Validar tamanho (máximo 10MB)
           if (file.size > 10 * 1024 * 1024) {
