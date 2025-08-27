@@ -251,13 +251,42 @@ const ReceiptList = () => {
         description: "A IA está analisando os dados da nota...",
       });
 
-      // Verificar se é PDF com conversão - usar imagem convertida
+      // Verificar se é PDF que precisa ser convertido primeiro
+      if (receipt.file_type === 'PDF' && !(receipt.dados_extraidos as any)?.imagens_convertidas) {
+        console.log('🔄 PDF precisa ser convertido primeiro...');
+        
+        const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
+          body: {
+            notaImagemId: receipt.id,
+            pdfUrl: receipt.imagem_url,
+            userId: (await supabase.auth.getUser()).data.user?.id
+          }
+        });
+
+        if (convertResponse.error) {
+          throw new Error(`Erro na conversão do PDF: ${convertResponse.error.message}`);
+        }
+
+        // Recarregar dados da nota para obter imagens convertidas
+        const { data: updatedNote, error: fetchError } = await supabase
+          .from('notas_imagens')
+          .select('*')
+          .eq('id', receipt.id)
+          .single();
+
+        if (fetchError || !(updatedNote?.dados_extraidos as any)?.imagens_convertidas) {
+          throw new Error('Falha ao obter imagens convertidas do PDF');
+        }
+
+        receipt.dados_extraidos = updatedNote.dados_extraidos;
+      }
+
+      // Determinar URL da imagem para processamento
       let imageUrlToProcess = receipt.imagem_url;
       
-      if (receipt.dados_extraidos?.tipo === 'pdf_com_conversao' && 
-          receipt.dados_extraidos?.imagens_convertidas?.length > 0) {
+      if ((receipt.dados_extraidos as any)?.imagens_convertidas?.length > 0) {
         // Usar a primeira imagem convertida
-        imageUrlToProcess = receipt.dados_extraidos.imagens_convertidas[0].url;
+        imageUrlToProcess = (receipt.dados_extraidos as any).imagens_convertidas[0].url;
         console.log('🔄 Usando imagem convertida do PDF:', imageUrlToProcess);
       }
 
@@ -265,16 +294,24 @@ const ReceiptList = () => {
         throw new Error('Nenhuma imagem disponível para processamento');
       }
 
-      console.log('🟡 Preparando chamada para process-receipt-full...');
-      const requestBody = {
+      // Verificar se a URL é de imagem ou PDF para escolher a função correta
+      const isPdfUrl = imageUrlToProcess.toLowerCase().includes('.pdf');
+      const functionName = isPdfUrl ? 'process-receipt-ai' : 'process-receipt-full';
+      
+      console.log(`🟡 Preparando chamada para ${functionName}...`);
+      const requestBody = isPdfUrl ? {
+        notaId: receipt.id,
+        imageUrl: imageUrlToProcess
+      } : {
         notaImagemId: receipt.id,
         imageUrl: imageUrlToProcess,
         qrUrl: null
       };
+      
       console.log('📤 Body da requisição:', requestBody);
 
       console.log('📞 Chamando supabase.functions.invoke...');
-      const { data, error } = await supabase.functions.invoke('process-receipt-full', {
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: requestBody
       });
 
@@ -497,7 +534,7 @@ const ReceiptList = () => {
                   </Button>
                   
                   {/* Botão de processar com IA para notas não processadas */}
-                  {!receipt.processada && (receipt.imagem_url || receipt.dados_extraidos?.imagens_convertidas) && (
+                  {!receipt.processada && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
                     <Button
                       variant="default"
                       size="sm"
