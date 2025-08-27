@@ -75,6 +75,15 @@ serve(async (req) => {
 
     console.log('Found receipt:', nota);
 
+    // Verificar se é um arquivo PDF
+    const isPDF = nota.imagem_url.toLowerCase().includes('.pdf') || 
+                   nota.nome_original?.toLowerCase().includes('.pdf');
+    
+    if (isPDF) {
+      console.error('❌ PDFs não são suportados pela API de visão da OpenAI');
+      throw new Error('Arquivos PDF não são suportados para extração com IA. Por favor, faça upload de uma imagem da nota fiscal (PNG, JPEG, etc.)');
+    }
+
     // Preparar prompt para IA
     const prompt = `
 Analise esta nota fiscal e extraia todas as informações estruturadas. 
