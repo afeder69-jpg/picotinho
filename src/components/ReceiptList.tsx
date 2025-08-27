@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Trash2, FileText, X, Bot, Loader2 } from 'lucide-react';
+import { Eye, Trash2, FileText, X, Bot, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -530,20 +530,60 @@ const ReceiptList = () => {
                   
                   {/* Botão de processar com IA para notas não processadas */}
                   {!receipt.processada && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => processReceiptWithAI(receipt)}
-                      disabled={processingReceipts.has(receipt.id)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {processingReceipts.has(receipt.id) ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Bot className="w-4 h-4 mr-2" />
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => processReceiptWithAI(receipt)}
+                        disabled={processingReceipts.has(receipt.id)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {processingReceipts.has(receipt.id) ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Bot className="w-4 h-4 mr-2" />
+                        )}
+                        {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
+                      </Button>
+                      
+                      {receipt.file_type === 'PDF (convertido)' && (
+                        <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                          ⚠️ PDF convertido - qualidade pode estar comprometida
+                        </div>
                       )}
-                      {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
-                    </Button>
+                    </div>
+                  )}
+                  
+                  {/* Mostrar resultado se processada */}
+                  {receipt.processada && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-sm">
+                          Processada ({(receipt.dados_extraidos as any)?.itens?.length || 0} itens)
+                        </span>
+                      </div>
+                      
+                      {(receipt.dados_extraidos as any)?.itens?.length === 0 && (
+                        <div className="mt-1 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="flex items-center gap-2 text-amber-700 mb-2">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span className="font-medium">Nenhum item extraído</span>
+                          </div>
+                          <p className="text-sm text-amber-600 mb-2">
+                            A IA não conseguiu extrair produtos desta nota.
+                          </p>
+                          <ul className="text-xs text-amber-600 space-y-1 mb-2">
+                            <li>• Imagem muito borrada ou ilegível</li>
+                            <li>• Conversão de PDF com baixa qualidade</li>
+                            <li>• Formato da nota não padrão</li>
+                          </ul>
+                          <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded mt-2">
+                            💡 <strong>Dica:</strong> Tente fazer upload direto de uma foto clara da nota ao invés do PDF
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 
