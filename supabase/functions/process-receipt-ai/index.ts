@@ -16,6 +16,12 @@ serve(async (req) => {
   console.log('📋 Método da requisição:', req.method);
   console.log('📋 Headers:', Object.fromEntries(req.headers.entries()));
   
+  // Verificar variáveis de ambiente no início
+  console.log('🔍 Verificando secrets...');
+  console.log('OPENAI_API_KEY existe:', !!openAIApiKey);
+  console.log('SUPABASE_URL existe:', !!supabaseUrl);
+  console.log('SUPABASE_SERVICE_ROLE_KEY existe:', !!supabaseServiceKey);
+  
   if (req.method === 'OPTIONS') {
     console.log('✅ Retornando resposta OPTIONS para CORS');
     return new Response(null, { headers: corsHeaders });
