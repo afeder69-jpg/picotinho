@@ -22,9 +22,24 @@ serve(async (req) => {
   }
 
   try {
-    const { notaId, imageUrl } = await req.json();
+    console.log('🔍 Verificando variáveis de ambiente...');
+    if (!openAIApiKey) {
+      throw new Error('OPENAI_API_KEY não configurada');
+    }
+    if (!supabaseUrl) {
+      throw new Error('SUPABASE_URL não configurada');
+    }
+    if (!supabaseServiceKey) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY não configurada');
+    }
+
+    console.log('📥 Processando body da requisição...');
+    const body = await req.json();
+    console.log('📦 Body recebido:', body);
     
-    console.log('Processing receipt:', { notaId, imageUrl });
+    const { notaId, imageUrl } = body;
+    
+    console.log('✅ Dados extraídos:', { notaId, imageUrl });
 
     if (!notaId || !imageUrl) {
       throw new Error('notaId e imageUrl são obrigatórios');
@@ -100,7 +115,7 @@ Regras importantes:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4.1-2025-04-14',
         messages: [
           {
             role: 'user',
@@ -110,7 +125,7 @@ Regras importantes:
             ]
           }
         ],
-        max_tokens: 2000,
+        max_completion_tokens: 2000,
         temperature: 0.1
       }),
     });
@@ -325,14 +340,39 @@ Regras importantes:
     );
 
   } catch (error) {
-    console.error('Error in process-receipt-ai:', error);
+    console.error('💥 Error in process-receipt-ai:', error);
+    console.error('💥 Error type:', typeof error);
+    console.error('💥 Error message:', error?.message);
+    console.error('💥 Error stack:', error?.stack);
+    
+    let errorMessage = 'Erro interno do servidor';
+    let statusCode = 500;
+    
+    if (error?.message?.includes('OPENAI_API_KEY')) {
+      errorMessage = 'Chave da OpenAI não configurada';
+      statusCode = 500;
+    } else if (error?.message?.includes('SUPABASE')) {
+      errorMessage = 'Erro de configuração do banco de dados';
+      statusCode = 500;
+    } else if (error?.message?.includes('notaId e imageUrl são obrigatórios')) {
+      errorMessage = 'Dados da requisição inválidos';
+      statusCode = 400;
+    } else if (error?.message?.includes('Nota fiscal não encontrada')) {
+      errorMessage = 'Nota fiscal não encontrada';
+      statusCode = 404;
+    } else if (error?.message?.includes('OpenAI API error')) {
+      errorMessage = 'Erro na API da OpenAI';
+      statusCode = 500;
+    }
+    
     return new Response(
       JSON.stringify({ 
-        error: 'Erro ao processar nota fiscal', 
-        details: error.message 
+        error: errorMessage, 
+        details: error?.message,
+        timestamp: new Date().toISOString()
       }),
       { 
-        status: 500, 
+        status: statusCode, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
