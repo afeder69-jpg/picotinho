@@ -287,7 +287,7 @@ const ReceiptList = () => {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-full overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes da Nota Fiscal</DialogTitle>
           </DialogHeader>
@@ -341,7 +341,7 @@ const ReceiptList = () => {
                     <img 
                       src={selectedReceipt.imagem_url} 
                       alt="Imagem da nota fiscal"
-                      className="w-full rounded-lg border cursor-pointer"
+                      className="w-full max-h-[400px] object-contain rounded-lg border cursor-pointer"
                       onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
                     />
                   )}

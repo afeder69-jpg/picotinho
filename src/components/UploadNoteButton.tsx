@@ -64,16 +64,33 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
         try {
           console.log('=== INICIANDO UPLOAD ===', file.name);
           
-          // Validar tipo de arquivo
-          const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-          if (!allowedTypes.includes(file.type)) {
+          // Validar tipo de arquivo - incluindo PDFs
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+          const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
+          const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+          
+          console.log('Validando arquivo:', {
+            type: file.type,
+            extension: fileExtension,
+            allowedTypes,
+            allowedExtensions
+          });
+          
+          // Aceitar se o tipo MIME ou extensão for válida (importante para PDFs no Android)
+          const isValidType = allowedTypes.includes(file.type);
+          const isValidExtension = allowedExtensions.includes(fileExtension);
+          
+          if (!isValidType && !isValidExtension) {
+            console.log('ARQUIVO REJEITADO:', file.type, fileExtension);
             toast({
               title: "Erro",
-              description: `Tipo de arquivo não suportado: ${file.name}`,
+              description: `Tipo de arquivo não suportado: ${file.name}. Use JPG, PNG, WebP ou PDF.`,
               variant: "destructive",
             });
             continue;
           }
+          
+          console.log('Arquivo aceito:', file.name);
 
           // Validar tamanho (máximo 10MB)
           if (file.size > 10 * 1024 * 1024) {
