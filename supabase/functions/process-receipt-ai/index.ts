@@ -227,25 +227,41 @@ Regras importantes:
       console.log('🟡 Continuando sem supermercado específico');
     }
 
-    // Se não conseguiu encontrar/criar supermercado, criar um padrão
+    // Se não conseguiu encontrar/criar supermercado, FORÇAR criação de um padrão
     if (!supermercadoId) {
-      console.log('🟡 Criando supermercado padrão pois não foi possível extrair da nota');
+      console.log('🟡 FORÇANDO criação de supermercado padrão pois supermercado_id é obrigatório');
+      
+      // Tentar criar com um CNPJ único baseado no timestamp
+      const cnpjPadrao = `99.999.999/${Date.now().toString().slice(-4)}-99`;
+      
       const { data: supermercadoPadrao, error: defaultError } = await supabase
         .from('supermercados')
         .insert({
           nome: 'Supermercado Não Identificado',
-          cnpj: '00.000.000/0000-00',
+          cnpj: cnpjPadrao,
           endereco: 'Endereço não informado'
         })
         .select('id')
         .single();
 
       if (defaultError) {
-        console.error('Erro ao criar supermercado padrão:', defaultError);
-        console.log('🟡 Continuando sem supermercado - será null');
-        supermercadoId = null;
+        console.error('❌ Erro crítico ao criar supermercado padrão:', defaultError);
+        // Como último recurso, buscar qualquer supermercado existente
+        const { data: qualquerSupermercado } = await supabase
+          .from('supermercados')
+          .select('id')
+          .limit(1)
+          .single();
+          
+        if (qualquerSupermercado) {
+          supermercadoId = qualquerSupermercado.id;
+          console.log('🟡 Usando supermercado existente como fallback:', supermercadoId);
+        } else {
+          throw new Error('Erro crítico: Não foi possível garantir um supermercado_id válido');
+        }
       } else {
         supermercadoId = supermercadoPadrao.id;
+        console.log('✅ Supermercado padrão criado com sucesso:', supermercadoId);
       }
     }
 
