@@ -48,8 +48,8 @@ serve(async (req) => {
     
     console.log(`PDF convertido em ${convertedImages.length} imagem(ns)`);
 
-    // Salvar cada imagem convertida no storage
-    const imageRecords = [];
+    // Salvar cada imagem convertida no storage (SEM criar registros na tabela)
+    const convertedImagesPaths = [];
     
     for (let i = 0; i < convertedImages.length; i++) {
       const imageBuffer = convertedImages[i];
@@ -75,42 +75,24 @@ serve(async (req) => {
         .from('receipts')
         .getPublicUrl(filePath);
 
-      // Criar registro da imagem convertida
-      const { data: imageRecord, error: dbError } = await supabase
-        .from('notas_imagens')
-        .insert({
-          usuario_id: userId,
-          imagem_path: filePath,
-          imagem_url: urlData.publicUrl,
-          processada: false,
-          nome_original: `Página ${i + 1} convertida de PDF`,
-          dados_extraidos: {
-            pdf_origem_id: notaImagemId,
-            pagina_numero: i + 1,
-            total_paginas: convertedImages.length
-          }
-        })
-        .select()
-        .single();
+      convertedImagesPaths.push({
+        path: filePath,
+        url: urlData.publicUrl,
+        page: i + 1
+      });
 
-      if (dbError) {
-        console.error('Erro ao salvar registro da imagem:', dbError);
-        continue;
-      }
-
-      imageRecords.push(imageRecord);
-      console.log(`Página ${i + 1} convertida e salva:`, imageRecord.id);
+      console.log(`Página ${i + 1} convertida e salva no storage: ${filePath}`);
     }
 
-    // Marcar o PDF original como processado
+    // Atualizar o PDF original com os caminhos das imagens convertidas
     const { error: updateError } = await supabase
       .from('notas_imagens')
       .update({
-        processada: true,
         dados_extraidos: {
-          tipo: 'pdf_convertido',
-          imagens_geradas: imageRecords.length,
-          imagens_ids: imageRecords.map(r => r.id)
+          tipo: 'pdf_com_conversao',
+          imagens_convertidas: convertedImagesPaths,
+          total_paginas: convertedImages.length,
+          conversao_concluida: true
         }
       })
       .eq('id', notaImagemId);
@@ -123,8 +105,8 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: `PDF convertido em ${imageRecords.length} imagem(ns)`,
-      images: imageRecords
+      message: `PDF convertido em ${convertedImagesPaths.length} imagem(ns)`,
+      convertedImages: convertedImagesPaths
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

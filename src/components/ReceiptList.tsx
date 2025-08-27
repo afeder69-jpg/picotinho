@@ -73,40 +73,47 @@ const ReceiptList = () => {
       if (receiptsResult.error) throw receiptsResult.error;
       if (notasImagensResult.error) throw notasImagensResult.error;
 
-      // Mapear notas_imagens para o formato Receipt
-      const mappedNotasImagens = (notasImagensResult.data || []).map(nota => {
-        const dadosExtraidos = nota.dados_extraidos as any;
-        const fileName = nota.imagem_path ? nota.imagem_path.split('/').pop() : 'Arquivo sem nome';
-        
-        // Extrair dados da loja se processada
-        const lojaNome = dadosExtraidos?.loja?.nome || fileName || 'Nota enviada';
-        const valorTotal = dadosExtraidos?.valorTotal || null;
-        const dataCompra = dadosExtraidos?.dataCompra || null;
-        const horaCompra = dadosExtraidos?.horaCompra || null;
-        
-        // Verificar se é um PDF convertido
-        const isPdfConverted = dadosExtraidos?.tipo === 'pdf_convertido';
-        const isConvertedPage = dadosExtraidos?.pdf_origem_id;
-        
-        return {
-          id: nota.id,
-          store_name: lojaNome,
-          store_cnpj: dadosExtraidos?.loja?.cnpj || null,
-          total_amount: valorTotal,
-          purchase_date: dataCompra || nota.data_criacao,
-          purchase_time: horaCompra,
-          qr_url: dadosExtraidos?.url_original || '',
-          status: nota.processada ? 'processed' : 'pending',
-          created_at: nota.created_at,
-          screenshot_url: nota.imagem_url,
-          processed_data: nota.dados_extraidos,
-          imagem_url: nota.imagem_url,
-          dados_extraidos: nota.dados_extraidos,
-          processada: nota.processada,
-          file_name: fileName,
-          file_type: isPdfConverted ? 'PDF Convertido' : (isConvertedPage ? `Página ${dadosExtraidos.pagina_numero}/${dadosExtraidos.total_paginas}` : (nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem'))
-        };
-      });
+      // Mapear notas_imagens para o formato Receipt, filtrando páginas convertidas
+      const mappedNotasImagens = (notasImagensResult.data || [])
+        .map(nota => {
+          const dadosExtraidos = nota.dados_extraidos as any;
+          const fileName = nota.imagem_path ? nota.imagem_path.split('/').pop() : 'Arquivo sem nome';
+          
+          // Extrair dados da loja se processada
+          const lojaNome = dadosExtraidos?.loja?.nome || fileName || 'Nota enviada';
+          const valorTotal = dadosExtraidos?.valorTotal || null;
+          const dataCompra = dadosExtraidos?.dataCompra || null;
+          const horaCompra = dadosExtraidos?.horaCompra || null;
+          
+          // Verificar se é um PDF com conversão ou uma página convertida (que deve ser filtrada)
+          const isPdfWithConversion = dadosExtraidos?.tipo === 'pdf_com_conversao';
+          const isConvertedPage = dadosExtraidos?.pdf_origem_id;
+          
+          // Pular páginas convertidas - elas não devem aparecer na lista
+          if (isConvertedPage) {
+            return null;
+          }
+          
+          return {
+            id: nota.id,
+            store_name: lojaNome,
+            store_cnpj: dadosExtraidos?.loja?.cnpj || null,
+            total_amount: valorTotal,
+            purchase_date: dataCompra || nota.data_criacao,
+            purchase_time: horaCompra,
+            qr_url: dadosExtraidos?.url_original || '',
+            status: nota.processada ? 'processed' : 'pending',
+            created_at: nota.created_at,
+            screenshot_url: nota.imagem_url,
+            processed_data: nota.dados_extraidos,
+            imagem_url: nota.imagem_url,
+            dados_extraidos: nota.dados_extraidos,
+            processada: nota.processada,
+            file_name: fileName,
+            file_type: isPdfWithConversion ? 'PDF (convertido)' : (nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem')
+          };
+        })
+        .filter(nota => nota !== null); // Remover itens nulos (páginas convertidas)
 
       // Combinar e ordenar por data
       const allReceipts = [
@@ -229,11 +236,8 @@ const ReceiptList = () => {
   const processReceiptWithAI = async (receipt: Receipt) => {
     console.log('🔵 Iniciando processamento da nota:', receipt);
     
-    if (!receipt.imagem_url || processingReceipts.has(receipt.id)) {
-      console.log('❌ Nota rejeitada:', { 
-        hasImageUrl: !!receipt.imagem_url, 
-        isProcessing: processingReceipts.has(receipt.id) 
-      });
+    if (processingReceipts.has(receipt.id)) {
+      console.log('❌ Nota já está sendo processada');
       return;
     }
 
@@ -247,15 +251,30 @@ const ReceiptList = () => {
         description: "A IA está analisando os dados da nota...",
       });
 
-      console.log('🟡 Preparando chamada para process-receipt-ai...');
+      // Verificar se é PDF com conversão - usar imagem convertida
+      let imageUrlToProcess = receipt.imagem_url;
+      
+      if (receipt.dados_extraidos?.tipo === 'pdf_com_conversao' && 
+          receipt.dados_extraidos?.imagens_convertidas?.length > 0) {
+        // Usar a primeira imagem convertida
+        imageUrlToProcess = receipt.dados_extraidos.imagens_convertidas[0].url;
+        console.log('🔄 Usando imagem convertida do PDF:', imageUrlToProcess);
+      }
+
+      if (!imageUrlToProcess) {
+        throw new Error('Nenhuma imagem disponível para processamento');
+      }
+
+      console.log('🟡 Preparando chamada para process-receipt-full...');
       const requestBody = {
-        notaId: receipt.id,
-        imageUrl: receipt.imagem_url
+        notaImagemId: receipt.id,
+        imageUrl: imageUrlToProcess,
+        qrUrl: null
       };
       console.log('📤 Body da requisição:', requestBody);
 
       console.log('📞 Chamando supabase.functions.invoke...');
-      const { data, error } = await supabase.functions.invoke('process-receipt-ai', {
+      const { data, error } = await supabase.functions.invoke('process-receipt-full', {
         body: requestBody
       });
 
@@ -477,8 +496,8 @@ const ReceiptList = () => {
                     }
                   </Button>
                   
-                  {/* Botão de processar com IA para imagens ou PDFs convertidos */}
-                  {!receipt.processada && receipt.imagem_url && receipt.file_type !== 'PDF' && (
+                  {/* Botão de processar com IA para notas não processadas */}
+                  {!receipt.processada && (receipt.imagem_url || receipt.dados_extraidos?.imagens_convertidas) && (
                     <Button
                       variant="default"
                       size="sm"
