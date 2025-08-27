@@ -18,10 +18,34 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
   const { user } = useAuth();
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('=== INICIANDO PROCESSO DE UPLOAD ===');
+    
     const files = event.target.files;
-    if (!files || files.length === 0) return;
+    console.log('Arquivos selecionados:', files);
+    console.log('Quantidade de arquivos:', files?.length || 0);
+    
+    if (!files || files.length === 0) {
+      console.log('ERRO: Nenhum arquivo selecionado');
+      toast({
+        title: "Erro",
+        description: "Nenhum arquivo foi selecionado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Log detalhado de cada arquivo
+    Array.from(files).forEach((file, index) => {
+      console.log(`Arquivo ${index + 1}:`, {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: file.lastModified
+      });
+    });
 
     if (!user) {
+      console.log('ERRO: Usuário não logado');
       toast({
         title: "Erro",
         description: "Você precisa estar logado para enviar notas fiscais",
@@ -30,6 +54,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
       return;
     }
 
+    console.log('Usuário logado:', user.id);
     setUploading(true);
     let successfulUploads = 0;
     
@@ -244,10 +269,11 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           <Input
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/webp,application/pdf"
+            accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf,.pdf"
             onChange={handleFileUpload}
             disabled={uploading}
             className="cursor-pointer"
+            capture={false}
           />
           {uploading && (
             <div className="flex items-center justify-center py-4">

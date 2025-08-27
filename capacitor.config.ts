@@ -22,6 +22,9 @@ const config: CapacitorConfig = {
     Browser: {
       androidCustomTabs: true,
       iosCustomTabs: true
+    },
+    FilePicker: {
+      permissions: ['photos', 'camera']
     }
   },
   android: {
@@ -30,6 +33,14 @@ const config: CapacitorConfig = {
     overrideUserAgent: 'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     backgroundColor: '#ffffff',
     allowNavigation: ['*'],
+    permissions: [
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.MANAGE_EXTERNAL_STORAGE',
+      'android.permission.READ_MEDIA_IMAGES',
+      'android.permission.READ_MEDIA_VIDEO',
+      'android.permission.READ_MEDIA_AUDIO'
+    ],
     adaptiveIcon: {
       foreground: '/lovable-uploads/d0696503-d278-461c-8618-c676ca4fcfb7.png',
       background: '#FFFFFF'
