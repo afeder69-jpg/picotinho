@@ -7,6 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useMemo } from 'react';
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 
 
 interface Receipt {
@@ -149,6 +151,67 @@ const ReceiptList = () => {
   const viewReceipt = (receipt: Receipt) => {
     setSelectedReceipt(receipt);
     setIsDialogOpen(true);
+  };
+
+  const openPDFInNative = async (url: string, fileName: string) => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // No mobile, abrir no navegador nativo
+        await Browser.open({
+          url: url,
+          windowName: '_blank',
+          presentationStyle: 'popover',
+          toolbarColor: '#ffffff'
+        });
+        
+        toast({
+          title: "PDF aberto!",
+          description: "O PDF foi aberto no navegador nativo do dispositivo",
+        });
+      } else {
+        // No web, abrir em nova aba
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error('Erro ao abrir PDF:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível abrir o PDF. Tente baixar o arquivo.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const downloadPDF = async (url: string, fileName: string) => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // No mobile, abrir para visualizar/baixar
+        await Browser.open({
+          url: url,
+          windowName: '_blank'
+        });
+      } else {
+        // No web, fazer download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName || 'nota-fiscal.pdf';
+        link.click();
+      }
+      
+      toast({
+        title: "Arquivo acessado!",
+        description: Capacitor.isNativePlatform() 
+          ? "PDF aberto no navegador para visualizar ou baixar"
+          : "Download iniciado",
+      });
+    } catch (error) {
+      console.error('Erro ao baixar PDF:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível acessar o arquivo",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusBadge = (status: string | null) => {
@@ -328,79 +391,81 @@ const ReceiptList = () => {
                   </h4>
                   {selectedReceipt.file_type === 'PDF' ? (
                     <div className="border rounded-lg overflow-hidden">
-                      {/* PDF Viewer usando iframe */}
+                      {/* Header do PDF */}
                       <div className="bg-muted/50 p-3 border-b flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4" />
                           <span className="text-sm font-medium">Documento PDF</span>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
-                        >
-                          Abrir em Nova Aba
-                        </Button>
+                        <Badge variant="secondary">
+                          {Capacitor.isNativePlatform() ? 'Mobile' : 'Web'}
+                        </Badge>
                       </div>
                       
-                      <div className="relative">
-                        <iframe
-                          src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1`}
-                          className="w-full h-[60vh] border-0"
-                          title="Visualizador de PDF"
-                          onError={() => {
-                            toast({
-                              title: "Erro no PDF",
-                              description: "Não foi possível carregar o PDF. Clique em 'Abrir em Nova Aba'.",
-                              variant: "destructive",
-                            });
-                          }}
-                        />
-                        
-                        {/* Fallback overlay se iframe não carregar */}
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
-                          <div className="text-center">
-                            <FileText className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground">
-                              Se o PDF não aparecer, clique em "Abrir em Nova Aba"
-                            </p>
-                          </div>
+                      {/* Conteúdo principal */}
+                      <div className="p-6 text-center space-y-4">
+                        <FileText className="w-16 h-16 mx-auto text-primary" />
+                        <div>
+                          <h3 className="font-semibold text-lg mb-2">
+                            {selectedReceipt.file_name || 'Documento PDF'}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {Capacitor.isNativePlatform() 
+                              ? 'Toque nos botões abaixo para visualizar o PDF no navegador nativo ou baixar'
+                              : 'Use os botões abaixo para visualizar ou baixar o arquivo PDF'
+                            }
+                          </p>
                         </div>
-                      </div>
-                      
-                      {/* Controles alternativos */}
-                      <div className="bg-muted/30 p-2 border-t text-center">
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Problemas para visualizar? Tente estas opções:
-                        </p>
-                        <div className="flex gap-2 justify-center">
+                        
+                        {/* Botões de ação */}
+                        <div className="space-y-3">
                           <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const link = document.createElement('a');
-                              link.href = selectedReceipt.imagem_url!;
-                              link.download = selectedReceipt.file_name || 'nota-fiscal.pdf';
-                              link.click();
-                            }}
+                            onClick={() => openPDFInNative(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
+                            className="w-full"
+                            size="lg"
                           >
-                            Baixar PDF
+                            <Eye className="w-4 h-4 mr-2" />
+                            {Capacitor.isNativePlatform() ? 'Abrir no Navegador' : 'Visualizar PDF'}
                           </Button>
+                          
                           <Button
                             variant="outline"
+                            onClick={() => downloadPDF(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
+                            className="w-full"
+                          >
+                            <FileText className="w-4 h-4 mr-2" />
+                            {Capacitor.isNativePlatform() ? 'Baixar/Compartilhar' : 'Baixar PDF'}
+                          </Button>
+                          
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => {
                               navigator.clipboard.writeText(selectedReceipt.imagem_url!);
                               toast({
                                 title: "Link copiado!",
-                                description: "Cole o link no seu navegador para abrir o PDF",
+                                description: "Cole o link em qualquer navegador para abrir o PDF",
                               });
                             }}
+                            className="w-full"
                           >
-                            Copiar Link
+                            Copiar Link do PDF
                           </Button>
                         </div>
                       </div>
+                      
+                      {/* Preview iframe apenas no web */}
+                      {!Capacitor.isNativePlatform() && (
+                        <div className="border-t">
+                          <div className="relative">
+                            <iframe
+                              src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1`}
+                              className="w-full h-[40vh] border-0"
+                              title="Preview do PDF"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <img 
