@@ -6,15 +6,7 @@ import { Eye, Trash2, FileText, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
-
-// Configurar worker do PDF com URL mais confiável
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.js',
-  import.meta.url,
-).toString();
+import { useMemo } from 'react';
 
 
 interface Receipt {
@@ -41,9 +33,6 @@ const ReceiptList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
-  const [scale, setScale] = useState<number>(1.2);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -159,17 +148,8 @@ const ReceiptList = () => {
 
   const viewReceipt = (receipt: Receipt) => {
     setSelectedReceipt(receipt);
-    setPageNumber(1);
-    setScale(1.2);
     setIsDialogOpen(true);
   };
-
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-  };
-
-  const zoomIn = () => setScale(prev => Math.min(prev + 0.2, 3));
-  const zoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
 
   const getStatusBadge = (status: string | null) => {
     switch (status) {
@@ -348,121 +328,78 @@ const ReceiptList = () => {
                   </h4>
                   {selectedReceipt.file_type === 'PDF' ? (
                     <div className="border rounded-lg overflow-hidden">
-                      {/* Controles do PDF */}
-                      <div className="bg-muted/50 p-3 border-b flex items-center justify-between flex-wrap gap-2">
+                      {/* PDF Viewer usando iframe */}
+                      <div className="bg-muted/50 p-3 border-b flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={zoomOut}
-                            disabled={scale <= 0.5}
-                          >
-                            -
-                          </Button>
-                          <span className="text-sm px-2 min-w-[60px] text-center">{Math.round(scale * 100)}%</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={zoomIn}
-                            disabled={scale >= 3}
-                          >
-                            +
-                          </Button>
+                          <FileText className="w-4 h-4" />
+                          <span className="text-sm font-medium">Documento PDF</span>
                         </div>
-                        {numPages > 1 && (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPageNumber(prev => Math.max(prev - 1, 1))}
-                              disabled={pageNumber <= 1}
-                            >
-                              ‹
-                            </Button>
-                            <span className="text-sm px-2 min-w-[80px] text-center">
-                              {pageNumber} de {numPages}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPageNumber(prev => Math.min(prev + 1, numPages))}
-                              disabled={pageNumber >= numPages}
-                            >
-                              ›
-                            </Button>
-                          </div>
-                        )}
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
                         >
-                          Abrir Externo
+                          Abrir em Nova Aba
                         </Button>
                       </div>
                       
-                      {/* Visualizador do PDF */}
-                      <div className="max-h-[60vh] overflow-auto bg-gray-50 p-4 flex justify-center">
-                        <Document
-                          file={selectedReceipt.imagem_url}
-                          onLoadSuccess={onDocumentLoadSuccess}
-                          onLoadError={(error) => {
-                            console.error('Erro ao carregar PDF:', error);
+                      <div className="relative">
+                        <iframe
+                          src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1`}
+                          className="w-full h-[60vh] border-0"
+                          title="Visualizador de PDF"
+                          onError={() => {
                             toast({
                               title: "Erro no PDF",
-                              description: "Não foi possível carregar o PDF. Tente abrir no navegador.",
+                              description: "Não foi possível carregar o PDF. Clique em 'Abrir em Nova Aba'.",
                               variant: "destructive",
                             });
                           }}
-                          loading={
-                            <div className="flex flex-col items-center justify-center p-8 min-h-[200px]">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
-                              <p className="text-sm text-muted-foreground">Carregando PDF...</p>
-                            </div>
-                          }
-                          error={
-                            <div className="text-center p-8 min-h-[200px] flex flex-col items-center justify-center">
-                              <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                              <p className="text-sm text-muted-foreground mb-2">Erro ao carregar PDF</p>
-                              <p className="text-xs text-muted-foreground mb-4 max-w-sm">
-                                O PDF pode estar corrompido ou em um formato não suportado
-                              </p>
-                              <div className="space-y-2">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
-                                >
-                                  Abrir no navegador
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    // Força recarregamento
-                                    setPageNumber(1);
-                                    setScale(1.2);
-                                  }}
-                                >
-                                  Tentar novamente
-                                </Button>
-                              </div>
-                            </div>
-                          }
-                          options={{
-                            cMapUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/cmaps/',
-                            cMapPacked: true,
-                          }}
-                        >
-                          <Page
-                            pageNumber={pageNumber}
-                            scale={scale}
-                            renderTextLayer={false}
-                            renderAnnotationLayer={false}
-                            onRenderError={(error) => {
-                              console.error('Erro ao renderizar página:', error);
+                        />
+                        
+                        {/* Fallback overlay se iframe não carregar */}
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+                          <div className="text-center">
+                            <FileText className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">
+                              Se o PDF não aparecer, clique em "Abrir em Nova Aba"
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Controles alternativos */}
+                      <div className="bg-muted/30 p-2 border-t text-center">
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Problemas para visualizar? Tente estas opções:
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = selectedReceipt.imagem_url!;
+                              link.download = selectedReceipt.file_name || 'nota-fiscal.pdf';
+                              link.click();
                             }}
-                          />
-                        </Document>
+                          >
+                            Baixar PDF
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedReceipt.imagem_url!);
+                              toast({
+                                title: "Link copiado!",
+                                description: "Cole o link no seu navegador para abrir o PDF",
+                              });
+                            }}
+                          >
+                            Copiar Link
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
