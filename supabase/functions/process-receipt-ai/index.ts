@@ -269,8 +269,12 @@ Regras importantes:
       .single();
 
     if (compraError) {
-      console.error('Erro ao criar compra:', compraError);
-      throw new Error('Erro ao salvar compra no banco');
+      console.error('❌ Erro DETALHADO ao criar compra:', JSON.stringify(compraError, null, 2));
+      console.error('❌ Dados enviados:', JSON.stringify(compraData, null, 2));
+      console.error('❌ Tipo do erro:', typeof compraError);
+      console.error('❌ Código do erro:', compraError.code);
+      console.error('❌ Mensagem do erro:', compraError.message);
+      throw new Error(`Erro ao salvar compra: ${compraError.message} | Código: ${compraError.code}`);
     }
 
     console.log('Created purchase:', compra);
