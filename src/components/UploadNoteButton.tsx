@@ -249,8 +249,9 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           console.log('=== REGISTRO SALVO COM SUCESSO ===', notaData);
           successfulUploads++;
 
-          // Processar com IA se for imagem
+          // Processar arquivo baseado no tipo
           if (file.type.startsWith('image/')) {
+            // Para imagens, processar diretamente com IA
             try {
               const response = await supabase.functions.invoke('process-receipt-full', {
                 body: {
@@ -273,6 +274,40 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               toast({
                 title: "Aviso",
                 description: `${file.name} foi salvo, mas houve erro no processamento automático`,
+                variant: "default",
+              });
+            }
+          } else if (isPdf) {
+            // Para PDFs, converter primeiro em JPG
+            try {
+              console.log('Iniciando conversão PDF para JPG...');
+              const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
+                body: {
+                  notaImagemId: notaData.id,
+                  pdfUrl: urlData.publicUrl,
+                  userId: currentUser.id
+                }
+              });
+
+              if (convertResponse.error) {
+                console.error('Erro na conversão PDF:', convertResponse.error);
+                toast({
+                  title: "Aviso",
+                  description: `PDF ${file.name} foi salvo, mas houve erro na conversão para JPG`,
+                  variant: "default",
+                });
+              } else {
+                console.log('PDF convertido com sucesso:', convertResponse.data);
+                toast({
+                  title: "PDF Convertido",
+                  description: `PDF convertido em ${convertResponse.data?.images?.length || 0} imagem(ns)`,
+                });
+              }
+            } catch (convertError) {
+              console.error('Erro na conversão PDF:', convertError);
+              toast({
+                title: "Aviso",
+                description: `PDF ${file.name} foi salvo, mas houve erro na conversão`,
                 variant: "default",
               });
             }

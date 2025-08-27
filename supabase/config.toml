@@ -5,3 +5,12 @@ verify_jwt = false
 
 [functions.process-receipt-ai]
 verify_jwt = false
+
+[functions.process-receipt-full]
+verify_jwt = false
+
+[functions.capture-receipt-external]
+verify_jwt = false
+
+[functions.convert-pdf-to-jpg]
+verify_jwt = false

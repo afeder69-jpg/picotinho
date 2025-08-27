@@ -84,6 +84,10 @@ const ReceiptList = () => {
         const dataCompra = dadosExtraidos?.dataCompra || null;
         const horaCompra = dadosExtraidos?.horaCompra || null;
         
+        // Verificar se é um PDF convertido
+        const isPdfConverted = dadosExtraidos?.tipo === 'pdf_convertido';
+        const isConvertedPage = dadosExtraidos?.pdf_origem_id;
+        
         return {
           id: nota.id,
           store_name: lojaNome,
@@ -100,7 +104,7 @@ const ReceiptList = () => {
           dados_extraidos: nota.dados_extraidos,
           processada: nota.processada,
           file_name: fileName,
-          file_type: nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem'
+          file_type: isPdfConverted ? 'PDF Convertido' : (isConvertedPage ? `Página ${dadosExtraidos.pagina_numero}/${dadosExtraidos.total_paginas}` : (nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem'))
         };
       });
 
@@ -473,8 +477,8 @@ const ReceiptList = () => {
                     }
                   </Button>
                   
-                  {/* Botão de processar com IA apenas para notas não processadas */}
-                  {!receipt.processada && receipt.imagem_url && (
+                  {/* Botão de processar com IA para imagens ou PDFs convertidos */}
+                  {!receipt.processada && receipt.imagem_url && receipt.file_type !== 'PDF' && (
                     <Button
                       variant="default"
                       size="sm"
