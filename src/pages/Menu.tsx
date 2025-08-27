@@ -45,8 +45,8 @@ const Menu = () => {
       title: 'Estoque Atual',
       description: 'Consultar produtos em estoque',
       icon: Package,
-      onClick: () => {},
-      isActive: false
+      onClick: () => navigate('/estoque'),
+      isActive: true
     },
     {
       id: 'stock-out',

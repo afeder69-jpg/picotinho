@@ -137,6 +137,42 @@ export type Database = {
           },
         ]
       }
+      estoque_app: {
+        Row: {
+          categoria: string
+          created_at: string
+          id: string
+          preco_unitario_ultimo: number | null
+          produto_nome: string
+          quantidade: number
+          unidade_medida: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          categoria: string
+          created_at?: string
+          id?: string
+          preco_unitario_ultimo?: number | null
+          produto_nome: string
+          quantidade?: number
+          unidade_medida?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          id?: string
+          preco_unitario_ultimo?: number | null
+          produto_nome?: string
+          quantidade?: number
+          unidade_medida?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       historico_precos_app: {
         Row: {
           created_at: string | null

@@ -380,6 +380,52 @@ Regras importantes:
       }
     }
 
+    // NOVO: Atualizar estoque automaticamente
+    console.log('📦 Atualizando estoque...');
+    for (const item of dadosExtraidos.itens || []) {
+      try {
+        // Buscar se o produto já existe no estoque
+        const { data: estoqueExistente } = await supabase
+          .from('estoque_app')
+          .select('*')
+          .eq('user_id', nota.usuario_id)
+          .eq('produto_nome', item.descricao)
+          .single();
+
+        if (estoqueExistente) {
+          // Produto já existe - somar quantidade
+          const novaQuantidade = parseFloat(estoqueExistente.quantidade) + parseFloat(item.quantidade || 0);
+          
+          await supabase
+            .from('estoque_app')
+            .update({
+              quantidade: novaQuantidade,
+              preco_unitario_ultimo: item.valorUnitario,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', estoqueExistente.id);
+            
+          console.log(`✅ Estoque atualizado: ${item.descricao} (${estoqueExistente.quantidade} + ${item.quantidade} = ${novaQuantidade})`);
+        } else {
+          // Produto novo - criar entrada no estoque
+          await supabase
+            .from('estoque_app')
+            .insert({
+              user_id: nota.usuario_id,
+              produto_nome: item.descricao,
+              categoria: item.categoria || 'Outros',
+              unidade_medida: item.unidadeMedida || 'UN',
+              quantidade: item.quantidade || 0,
+              preco_unitario_ultimo: item.valorUnitario
+            });
+            
+          console.log(`✅ Produto adicionado ao estoque: ${item.descricao} (${item.quantidade})`);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao atualizar estoque para:', item.descricao, error);
+      }
+    }
+
     // Atualizar nota como processada
     const { error: updateError } = await supabase
       .from('notas_imagens')
