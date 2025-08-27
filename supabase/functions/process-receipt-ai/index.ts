@@ -242,7 +242,8 @@ Regras importantes:
 
       if (defaultError) {
         console.error('Erro ao criar supermercado padrão:', defaultError);
-        throw new Error('Não foi possível criar registro de supermercado');
+        console.log('🟡 Continuando sem supermercado - será null');
+        supermercadoId = null;
       } else {
         supermercadoId = supermercadoPadrao.id;
       }
