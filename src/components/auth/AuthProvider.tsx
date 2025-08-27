@@ -8,6 +8,7 @@ interface AuthContextType {
   loading: boolean;
   signInAnonymously: () => Promise<void>;
   signOut: () => Promise<void>;
+  isTestMode: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isTestMode, setIsTestMode] = useState(false);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -84,8 +86,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInAnonymously = async () => {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) throw error;
+    // Simula login anônimo para modo de teste
+    setIsTestMode(true);
+    const mockUser = {
+      id: 'test-user-123',
+      aud: 'authenticated',
+      role: 'authenticated',
+      email: 'teste@picotinho.app',
+      email_confirmed_at: new Date().toISOString(),
+      phone: '',
+      confirmed_at: new Date().toISOString(),
+      last_sign_in_at: new Date().toISOString(),
+      app_metadata: { provider: 'test', providers: ['test'] },
+      user_metadata: { name: 'Usuário de Teste' },
+      identities: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    } as User;
+    setUser(mockUser);
+    console.log('Modo de teste ativado');
   };
 
   const signOut = async () => {
@@ -99,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     signInAnonymously,
     signOut,
+    isTestMode,
   };
 
   return (
