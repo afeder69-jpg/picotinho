@@ -918,7 +918,10 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      consolidar_estoque_duplicado: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
