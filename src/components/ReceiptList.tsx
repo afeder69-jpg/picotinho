@@ -16,6 +16,7 @@ interface Receipt {
   store_cnpj: string | null;
   total_amount: number | null;
   purchase_date: string | null;
+  purchase_time?: string | null;
   qr_url: string;
   status: string | null;
   created_at: string;
@@ -77,12 +78,19 @@ const ReceiptList = () => {
         const dadosExtraidos = nota.dados_extraidos as any;
         const fileName = nota.imagem_path ? nota.imagem_path.split('/').pop() : 'Arquivo sem nome';
         
+        // Extrair dados da loja se processada
+        const lojaNome = dadosExtraidos?.loja?.nome || fileName || 'Nota enviada';
+        const valorTotal = dadosExtraidos?.valorTotal || null;
+        const dataCompra = dadosExtraidos?.dataCompra || null;
+        const horaCompra = dadosExtraidos?.horaCompra || null;
+        
         return {
           id: nota.id,
-          store_name: dadosExtraidos?.mercado || fileName || 'Nota enviada',
-          store_cnpj: dadosExtraidos?.cnpj || null,
-          total_amount: dadosExtraidos?.valor_total || null,
-          purchase_date: nota.data_criacao,
+          store_name: lojaNome,
+          store_cnpj: dadosExtraidos?.loja?.cnpj || null,
+          total_amount: valorTotal,
+          purchase_date: dataCompra || nota.data_criacao,
+          purchase_time: horaCompra,
           qr_url: dadosExtraidos?.url_original || '',
           status: nota.processada ? 'processed' : 'pending',
           created_at: nota.created_at,
@@ -380,32 +388,67 @@ const ReceiptList = () => {
             
             <CardContent>
               <div className="space-y-2">
-                {receipt.file_name && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Arquivo:</span>
-                    <span className="text-sm font-mono truncate max-w-[200px]">{receipt.file_name}</span>
-                  </div>
-                )}
-                
-                {receipt.file_type && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Tipo:</span>
-                    <span className="text-sm">{receipt.file_type}</span>
-                  </div>
-                )}
-                
-                {receipt.total_amount && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Total:</span>
-                    <span className="font-semibold">{formatCurrency(receipt.total_amount)}</span>
-                  </div>
-                )}
-                
-                {receipt.purchase_date && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Data da compra:</span>
-                    <span className="text-sm">{new Date(receipt.purchase_date).toLocaleDateString('pt-BR')}</span>
-                  </div>
+                {/* Mostrar dados extraídos pela IA quando processada */}
+                {receipt.processada && receipt.dados_extraidos ? (
+                  <>
+                    {/* Mercado */}
+                    {receipt.dados_extraidos.loja?.nome && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Mercado:</span>
+                        <span className="text-sm font-medium truncate max-w-[200px]">{receipt.dados_extraidos.loja.nome}</span>
+                      </div>
+                    )}
+                    
+                    {/* Valor Total */}
+                    {receipt.dados_extraidos.valorTotal && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Valor Total:</span>
+                        <span className="font-semibold">{formatCurrency(receipt.dados_extraidos.valorTotal)}</span>
+                      </div>
+                    )}
+                    
+                    {/* Data */}
+                    {receipt.dados_extraidos.dataCompra && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Data:</span>
+                        <span className="text-sm">
+                          {new Date(receipt.dados_extraidos.dataCompra).toLocaleDateString('pt-BR')}
+                          {receipt.dados_extraidos.horaCompra && ` às ${receipt.dados_extraidos.horaCompra}`}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* Mostrar dados básicos quando não processada */
+                  <>
+                    {receipt.file_name && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Arquivo:</span>
+                        <span className="text-sm font-mono truncate max-w-[200px]">{receipt.file_name}</span>
+                      </div>
+                    )}
+                    
+                    {receipt.file_type && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Tipo:</span>
+                        <span className="text-sm">{receipt.file_type}</span>
+                      </div>
+                    )}
+                    
+                    {receipt.total_amount && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Total:</span>
+                        <span className="font-semibold">{formatCurrency(receipt.total_amount)}</span>
+                      </div>
+                    )}
+                    
+                    {receipt.purchase_date && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Data da compra:</span>
+                        <span className="text-sm">{new Date(receipt.purchase_date).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {receipt.store_cnpj && (
