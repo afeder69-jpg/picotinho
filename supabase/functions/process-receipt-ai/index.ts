@@ -380,49 +380,93 @@ Regras importantes:
       }
     }
 
-    // NOVO: Atualizar estoque automaticamente
-    console.log('📦 Atualizando estoque...');
+    // 📦 Atualizar estoque automaticamente
+    console.log('📦 Atualizando estoque...\n');
+    
+    // Função para normalizar nomes de produtos
+    const normalizarNomeProduto = (nome: string): string => {
+      return nome
+        .toUpperCase()
+        .replace(/\s+/g, ' ') // Múltiplos espaços para um só
+        .replace(/\bGRAENC\b/g, 'GRANEL') // Padronizar GRAENC para GRANEL
+        .replace(/\bGRANEL\s*KG\b/g, 'KG GRANEL') // Padronizar posição do GRANEL
+        .replace(/\bKG\s*GRANEL\b/g, 'GRANEL KG') // Padronizar ordem
+        .replace(/\bREQUEIJAO\s*$/, 'REQUEIJAO') // Remove especificações extras no final
+        .replace(/\bFATIADO\b/g, '') // Remove FATIADO
+        .replace(/\bMINI\s*LANCHE\b/g, '') // Remove MINI LANCHE
+        .replace(/\b170G\s*AMEIXA\b/g, '') // Remove especificações específicas
+        .replace(/\b380G\b/g, '') // Remove peso específico
+        .replace(/\b450G\s*100\s*NUTRICAO\b/g, '') // Remove especificações
+        .replace(/\b480G\b/g, '') // Remove peso
+        .replace(/\b450G\b/g, '') // Remove peso
+        .replace(/\b180G\s*REQUEIJAO\b/g, '') // Remove especificação extra
+        .replace(/\b3\.0\b/g, '') // Remove versão
+        .replace(/\s+/g, ' ') // Limpar espaços novamente
+        .trim();
+    };
+    
     for (const item of dadosExtraidos.itens || []) {
       try {
-        // Buscar se o produto já existe no estoque
-        const { data: estoqueExistente } = await supabase
+        const nomeNormalizado = normalizarNomeProduto(item.descricao);
+        
+        // Verificar se já existe um produto similar no estoque
+        const { data: estoqueLista, error: estoqueListaError } = await supabase
           .from('estoque_app')
           .select('*')
-          .eq('user_id', nota.usuario_id)
-          .eq('produto_nome', item.descricao)
-          .single();
+          .eq('user_id', nota.usuario_id);
 
-        if (estoqueExistente) {
-          // Produto já existe - somar quantidade
-          const novaQuantidade = parseFloat(estoqueExistente.quantidade) + parseFloat(item.quantidade || 0);
+        if (estoqueListaError) {
+          console.error('Erro ao buscar lista de estoque:', estoqueListaError);
+          continue;
+        }
+
+        // Procurar produto similar
+        let produtoSimilar = null;
+        if (estoqueLista) {
+          produtoSimilar = estoqueLista.find(prod => 
+            normalizarNomeProduto(prod.produto_nome) === nomeNormalizado
+          );
+        }
+
+        if (produtoSimilar) {
+          // Atualizar quantidade existente
+          const novaQuantidade = parseFloat(produtoSimilar.quantidade) + parseFloat(item.quantidade || 0);
           
-          await supabase
+          const { error: updateError } = await supabase
             .from('estoque_app')
             .update({
               quantidade: novaQuantidade,
               preco_unitario_ultimo: item.valorUnitario,
               updated_at: new Date().toISOString()
             })
-            .eq('id', estoqueExistente.id);
-            
-          console.log(`✅ Estoque atualizado: ${item.descricao} (${estoqueExistente.quantidade} + ${item.quantidade} = ${novaQuantidade})`);
+            .eq('id', produtoSimilar.id);
+
+          if (updateError) {
+            console.error('Erro ao atualizar estoque:', updateError);
+          } else {
+            console.log(`✅ Estoque atualizado: ${produtoSimilar.produto_nome} (${produtoSimilar.quantidade} + ${item.quantidade} = ${novaQuantidade})\n`);
+          }
         } else {
-          // Produto novo - criar entrada no estoque
-          await supabase
+          // Criar novo item no estoque com nome normalizado
+          const { error: insertError } = await supabase
             .from('estoque_app')
             .insert({
               user_id: nota.usuario_id,
-              produto_nome: item.descricao,
-              categoria: item.categoria || 'Outros',
+              produto_nome: nomeNormalizado,
+              categoria: item.categoria || 'outros',
               unidade_medida: item.unidadeMedida || 'UN',
               quantidade: item.quantidade || 0,
               preco_unitario_ultimo: item.valorUnitario
             });
-            
-          console.log(`✅ Produto adicionado ao estoque: ${item.descricao} (${item.quantidade})`);
+
+          if (insertError) {
+            console.error('Erro ao inserir no estoque:', insertError);
+          } else {
+            console.log(`✅ Produto adicionado ao estoque: ${nomeNormalizado} (${item.quantidade})\n`);
+          }
         }
       } catch (error) {
-        console.error('❌ Erro ao atualizar estoque para:', item.descricao, error);
+        console.error('Erro ao processar item do estoque:', error);
       }
     }
 
