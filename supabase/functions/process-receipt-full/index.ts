@@ -24,48 +24,9 @@ serve(async (req) => {
 
     console.log('Processando nota fiscal:', { notaImagemId, imageUrl, qrUrl });
 
-    // Processa a imagem com OpenAI Vision
-    const prompt = `
-Analise esta imagem de nota fiscal brasileira e extraia TODOS os dados estruturados em JSON válido.
-
-Retorne um JSON com esta estrutura exata:
-{
-  "supermercado": {
-    "nome": "Nome completo do estabelecimento",
-    "cnpj": "CNPJ formatado (XX.XXX.XXX/XXXX-XX)",
-    "endereco": "Endereço completo"
-  },
-  "compra": {
-    "data": "YYYY-MM-DD",
-    "hora": "HH:MM:SS",
-    "valorTotal": 99.99,
-    "formaPagamento": "Tipo de pagamento",
-    "numeroNotaFiscal": "Número da NF-e",
-    "chaveAcesso": "Chave de acesso da NFe (44 dígitos)"
-  },
-  "produtos": [
-    {
-      "nome": "Nome do produto",
-      "marca": "Marca se identificável",
-      "categoria": "Categoria inferida",
-      "quantidade": 1.5,
-      "unidadeMedida": "UN/KG/LT/etc",
-      "precoUnitario": 10.50,
-      "precoTotal": 15.75,
-      "desconto": 0.00
-    }
-  ]
-}
-
-IMPORTANTE:
-- Extraia TODOS os produtos da nota, linha por linha
-- Calcule categorias baseadas no nome do produto (ex: Refrigerantes, Carnes, Laticínios, etc.)
-- Valores devem ser numéricos, não strings
-- Se algum dado não estiver visível, use null
-- Mantenha a formatação JSON válida
-`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // 🔍 Primeiro passo: OCR para extrair texto bruto da imagem
+    console.log('Executando OCR na imagem...');
+    const ocrResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiApiKey}`,
@@ -77,24 +38,164 @@ IMPORTANTE:
           {
             role: 'user',
             content: [
-              { type: 'text', text: prompt },
+              { 
+                type: 'text', 
+                text: 'Extraia APENAS o texto desta nota fiscal brasileira. Retorne o texto exato como aparece na imagem, linha por linha, sem interpretação ou formatação adicional.' 
+              },
               { type: 'image_url', image_url: { url: imageUrl } }
             ]
           }
         ],
-        max_tokens: 2000,
+        max_tokens: 3000,
       }),
     });
 
-    const openaiData = await response.json();
-    console.log('Resposta OpenAI:', openaiData);
-
-    if (!openaiData.choices?.[0]?.message?.content) {
-      throw new Error('Resposta inválida da OpenAI');
+    const ocrData = await ocrResponse.json();
+    
+    if (!ocrData.choices?.[0]?.message?.content) {
+      throw new Error('Falha no OCR da imagem');
     }
 
-    const extractedData = JSON.parse(openaiData.choices[0].message.content);
-    console.log('Dados extraídos:', extractedData);
+    const textoOCR = ocrData.choices[0].message.content;
+    console.log('Texto extraído por OCR:', textoOCR);
+
+    // 🧠 Segundo passo: Parsing estruturado do texto OCR
+    const parseNotaFiscal = (texto: string) => {
+      const linhas = texto.split('\n').map(linha => linha.trim()).filter(linha => linha.length > 0);
+      
+      let supermercado = { nome: '', cnpj: '', endereco: '' };
+      let compra = { data: '', hora: '', valorTotal: 0, formaPagamento: '', numeroNotaFiscal: '', chaveAcesso: '' };
+      let produtos = [];
+      
+      // Regex patterns para parsing estruturado
+      const cnpjRegex = /(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/;
+      const dataRegex = /(\d{2}\/\d{2}\/\d{4})/;
+      const horaRegex = /(\d{2}:\d{2}:\d{2})/;
+      const valorTotalRegex = /TOTAL.*?(\d+[,\.]\d{2})/i;
+      const chaveAcessoRegex = /(\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4})/;
+      
+      // Extrair dados do cabeçalho
+      for (let i = 0; i < Math.min(20, linhas.length); i++) {
+        const linha = linhas[i];
+        
+        // CNPJ
+        const cnpjMatch = linha.match(cnpjRegex);
+        if (cnpjMatch && !supermercado.cnpj) {
+          supermercado.cnpj = cnpjMatch[1];
+        }
+        
+        // Nome do estabelecimento (geralmente nas primeiras linhas)
+        if (!supermercado.nome && linha.length > 10 && !linha.match(/\d/) && i < 5) {
+          supermercado.nome = linha;
+        }
+        
+        // Data
+        const dataMatch = linha.match(dataRegex);
+        if (dataMatch && !compra.data) {
+          const [dia, mes, ano] = dataMatch[1].split('/');
+          compra.data = `${ano}-${mes}-${dia}`;
+        }
+        
+        // Hora
+        const horaMatch = linha.match(horaRegex);
+        if (horaMatch && !compra.hora) {
+          compra.hora = horaMatch[1];
+        }
+      }
+      
+      // Buscar valor total nas últimas linhas
+      for (let i = Math.max(0, linhas.length - 10); i < linhas.length; i++) {
+        const linha = linhas[i];
+        const valorMatch = linha.match(valorTotalRegex);
+        if (valorMatch) {
+          compra.valorTotal = parseFloat(valorMatch[1].replace(',', '.'));
+          break;
+        }
+      }
+      
+      // Buscar chave de acesso
+      const textoCompleto = linhas.join(' ');
+      const chaveMatch = textoCompleto.match(chaveAcessoRegex);
+      if (chaveMatch) {
+        compra.chaveAcesso = chaveMatch[1].replace(/\s/g, '');
+      }
+      
+      // 📋 Parsing dos produtos (seção de itens)
+      let dentroSecaoProdutos = false;
+      const produtoRegex = /^(\d+)\s+(.+?)\s+(\d+[,\.]\d*)\s+(UN|KG|LT|ML|G|PC|PCT|CX|DZ)\s+(\d+[,\.]\d{2})\s+(\d+[,\.]\d{2})$/;
+      
+      for (const linha of linhas) {
+        // Detectar início da seção de produtos
+        if (linha.match(/ITEM|PRODUTO|DESCRI[CÇ]ÃO|QTD|UN|VL\s*UNIT|VL\s*TOTAL/i)) {
+          dentroSecaoProdutos = true;
+          continue;
+        }
+        
+        // Detectar fim da seção de produtos
+        if (linha.match(/SUBTOTAL|DESCONTO|TOTAL|FORMA.*PAGAMENTO/i)) {
+          dentroSecaoProdutos = false;
+          continue;
+        }
+        
+        if (dentroSecaoProdutos) {
+          // Tentar match com regex estruturado
+          const match = linha.match(produtoRegex);
+          if (match) {
+            const [, item, nome, quantidade, unidade, precoUnitario, precoTotal] = match;
+            
+            produtos.push({
+              nome: nome.trim(),
+              quantidade: parseFloat(quantidade.replace(',', '.')),
+              unidadeMedida: unidade,
+              precoUnitario: parseFloat(precoUnitario.replace(',', '.')),
+              precoTotal: parseFloat(precoTotal.replace(',', '.')),
+              desconto: 0
+            });
+          } else {
+            // Fallback: parsing mais flexível
+            const partes = linha.split(/\s+/);
+            if (partes.length >= 4) {
+              const ultimasParts = partes.slice(-3);
+              const penultimasParts = partes.slice(-6, -3);
+              
+              // Verificar se temos números que parecem ser preços
+              const possivelTotal = ultimasParts[ultimasParts.length - 1];
+              const possivelUnitario = ultimasParts[ultimasParts.length - 2] || penultimasParts[penultimasParts.length - 1];
+              
+              if (possivelTotal.match(/\d+[,\.]\d{2}/) && possivelUnitario.match(/\d+[,\.]\d{2}/)) {
+                const nome = partes.slice(1, -4).join(' ');
+                const quantidade = 1; // Default quando não conseguir extrair
+                
+                produtos.push({
+                  nome: nome.trim(),
+                  quantidade: quantidade,
+                  unidadeMedida: 'UN',
+                  precoUnitario: parseFloat(possivelUnitario.replace(',', '.')),
+                  precoTotal: parseFloat(possivelTotal.replace(',', '.')),
+                  desconto: 0
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      return { supermercado, compra, produtos };
+    };
+
+    const extractedData = parseNotaFiscal(textoOCR);
+    
+    // 🔍 Validação: soma dos subtotais deve bater com o total
+    const somaSubtotais = extractedData.produtos.reduce((acc, produto) => acc + produto.precoTotal, 0);
+    const diferencaPercentual = Math.abs(somaSubtotais - extractedData.compra.valorTotal) / extractedData.compra.valorTotal;
+    
+    console.log(`Validação: Soma subtotais: ${somaSubtotais.toFixed(2)}, Total nota: ${extractedData.compra.valorTotal.toFixed(2)}, Diferença: ${(diferencaPercentual * 100).toFixed(2)}%`);
+    
+    if (diferencaPercentual > 0.05) { // 5% de tolerância
+      throw new Error(`Validação falhou: Soma dos subtotais (${somaSubtotais.toFixed(2)}) não confere com total da nota (${extractedData.compra.valorTotal.toFixed(2)})`);
+    }
+
+    console.log('Dados extraídos e validados:', extractedData);
 
     // Busca ou cria supermercado
     let supermercado;
