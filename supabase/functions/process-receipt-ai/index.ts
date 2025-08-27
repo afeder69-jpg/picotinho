@@ -250,17 +250,21 @@ Regras importantes:
     }
 
     // Criar compra
+    const compraData = {
+      user_id: nota.usuario_id,
+      supermercado_id: supermercadoId,
+      data_compra: dadosExtraidos.dataCompra || new Date().toISOString().split('T')[0],
+      hora_compra: dadosExtraidos.horaCompra || null,
+      preco_total: parseFloat(dadosExtraidos.valorTotal || 0),
+      forma_pagamento: dadosExtraidos.formaPagamento || 'Não informado',
+      observacoes: `Processada automaticamente da nota: ${nota.nome_original || nota.id}`
+    };
+
+    console.log('📝 Dados da compra:', compraData);
+
     const { data: compra, error: compraError } = await supabase
       .from('compras_app')
-      .insert({
-        user_id: nota.usuario_id,
-        supermercado_id: supermercadoId,
-        data_compra: dadosExtraidos.dataCompra,
-        hora_compra: dadosExtraidos.horaCompra,
-        preco_total: dadosExtraidos.valorTotal,
-        forma_pagamento: dadosExtraidos.formaPagamento,
-        observacoes: `Processada automaticamente da nota: ${nota.nome_original || nota.id}`
-      })
+      .insert(compraData)
       .select('id')
       .single();
 
