@@ -81,6 +81,13 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           .getPublicUrl(filePath);
 
         // Salvar no banco de dados
+        console.log('Tentando inserir no banco:', {
+          usuario_id: user.id,
+          imagem_path: filePath,
+          imagem_url: urlData.publicUrl,
+          processada: false
+        });
+
         const { data: notaData, error: dbError } = await supabase
           .from('notas_imagens')
           .insert({
@@ -92,6 +99,8 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           .select()
           .single();
 
+        console.log('Resultado do insert:', { notaData, dbError });
+
         if (dbError) {
           console.error('Erro ao salvar no banco:', dbError);
           toast({
@@ -101,6 +110,8 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           });
           continue;
         }
+
+        console.log('Registro salvo com sucesso:', notaData);
 
         // Processar com IA se for imagem
         if (file.type.startsWith('image/')) {
