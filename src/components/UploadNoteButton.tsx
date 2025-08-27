@@ -31,134 +31,181 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
     }
 
     setUploading(true);
-
+    let successfulUploads = 0;
+    
     try {
-
       // Processar cada arquivo
       for (const file of Array.from(files)) {
-        // Validar tipo de arquivo
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-        if (!allowedTypes.includes(file.type)) {
-          toast({
-            title: "Erro",
-            description: `Tipo de arquivo não suportado: ${file.name}`,
-            variant: "destructive",
-          });
-          continue;
-        }
+        try {
+          console.log('=== INICIANDO UPLOAD ===', file.name);
+          
+          // Validar tipo de arquivo
+          const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+          if (!allowedTypes.includes(file.type)) {
+            toast({
+              title: "Erro",
+              description: `Tipo de arquivo não suportado: ${file.name}`,
+              variant: "destructive",
+            });
+            continue;
+          }
 
-        // Validar tamanho (máximo 10MB)
-        if (file.size > 10 * 1024 * 1024) {
-          toast({
-            title: "Erro",
-            description: `Arquivo muito grande: ${file.name}. Máximo 10MB.`,
-            variant: "destructive",
-          });
-          continue;
-        }
+          // Validar tamanho (máximo 10MB)
+          if (file.size > 10 * 1024 * 1024) {
+            toast({
+              title: "Erro",
+              description: `Arquivo muito grande: ${file.name}. Máximo 10MB.`,
+              variant: "destructive",
+            });
+            continue;
+          }
 
-        // Upload para o storage
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}-${file.name}`;
-        const filePath = `${user.id}/${fileName}`;
+          // Upload para o storage
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}-${file.name}`;
+          const filePath = `${user.id}/${fileName}`;
+          
+          console.log('Fazendo upload para storage:', filePath);
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('receipts')
-          .upload(filePath, file);
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('receipts')
+            .upload(filePath, file);
 
-        if (uploadError) {
-          console.error('Erro no upload:', uploadError);
-          toast({
-            title: "Erro",
-            description: `Erro ao fazer upload de ${file.name}`,
-            variant: "destructive",
-          });
-          continue;
-        }
+          if (uploadError) {
+            console.error('ERRO NO UPLOAD STORAGE:', uploadError);
+            toast({
+              title: "Erro",
+              description: `Erro ao fazer upload de ${file.name}: ${uploadError.message}`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          
+          console.log('Upload storage SUCESSO:', uploadData);
 
-        // Obter URL pública do arquivo
-        const { data: urlData } = supabase.storage
-          .from('receipts')
-          .getPublicUrl(filePath);
+          // Obter URL pública do arquivo
+          const { data: urlData } = supabase.storage
+            .from('receipts')
+            .getPublicUrl(filePath);
+            
+          console.log('URL pública gerada:', urlData.publicUrl);
 
-        // Salvar no banco de dados
-        console.log('Tentando inserir no banco:', {
-          usuario_id: user.id,
-          imagem_path: filePath,
-          imagem_url: urlData.publicUrl,
-          processada: false
-        });
+          // Verificar autenticação antes de inserir
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (!currentUser) {
+            console.error('USUÁRIO NÃO AUTENTICADO');
+            toast({
+              title: "Erro",
+              description: "Usuário não autenticado. Faça login novamente.",
+              variant: "destructive",
+            });
+            continue;
+          }
+          
+          console.log('Usuário autenticado:', currentUser.id);
 
-        const { data: notaData, error: dbError } = await supabase
-          .from('notas_imagens')
-          .insert({
-            usuario_id: user.id,
+          // Salvar no banco de dados
+          const insertData = {
+            usuario_id: currentUser.id,
             imagem_path: filePath,
             imagem_url: urlData.publicUrl,
             processada: false
-          })
-          .select()
-          .single();
+          };
+          
+          console.log('=== INSERINDO NO BANCO ===', insertData);
 
-        console.log('Resultado do insert:', { notaData, dbError });
+          const { data: notaData, error: dbError } = await supabase
+            .from('notas_imagens')
+            .insert(insertData)
+            .select()
+            .maybeSingle();
 
-        if (dbError) {
-          console.error('Erro ao salvar no banco:', dbError);
-          toast({
-            title: "Erro",
-            description: `Erro ao salvar ${file.name} no banco de dados`,
-            variant: "destructive",
-          });
-          continue;
-        }
+          console.log('=== RESULTADO INSERT ===', { notaData, dbError });
 
-        console.log('Registro salvo com sucesso:', notaData);
-
-        // Processar com IA se for imagem
-        if (file.type.startsWith('image/')) {
-          try {
-            const response = await supabase.functions.invoke('process-receipt-full', {
-              body: {
-                notaImagemId: notaData.id,
-                imageUrl: urlData.publicUrl,
-                qrUrl: null
-              }
+          if (dbError) {
+            console.error('ERRO NO BANCO:', dbError);
+            toast({
+              title: "Erro de Banco",
+              description: `Erro ao salvar ${file.name}: ${dbError.message}`,
+              variant: "destructive",
             });
+            continue;
+          }
 
-            if (response.error) {
-              console.error('Erro no processamento:', response.error);
+          if (!notaData) {
+            console.error('NENHUM DADO RETORNADO DO BANCO');
+            toast({
+              title: "Erro",
+              description: `Falha ao salvar ${file.name}: nenhum dado retornado`,
+              variant: "destructive",
+            });
+            continue;
+          }
+
+          console.log('=== REGISTRO SALVO COM SUCESSO ===', notaData);
+          successfulUploads++;
+
+          // Processar com IA se for imagem
+          if (file.type.startsWith('image/')) {
+            try {
+              const response = await supabase.functions.invoke('process-receipt-full', {
+                body: {
+                  notaImagemId: notaData.id,
+                  imageUrl: urlData.publicUrl,
+                  qrUrl: null
+                }
+              });
+
+              if (response.error) {
+                console.error('Erro no processamento IA:', response.error);
+                toast({
+                  title: "Aviso",
+                  description: `${file.name} foi salvo, mas houve erro no processamento automático`,
+                  variant: "default",
+                });
+              }
+            } catch (processError) {
+              console.error('Erro no processamento IA:', processError);
               toast({
                 title: "Aviso",
                 description: `${file.name} foi salvo, mas houve erro no processamento automático`,
                 variant: "default",
               });
             }
-          } catch (processError) {
-            console.error('Erro no processamento:', processError);
-            toast({
-              title: "Aviso",
-              description: `${file.name} foi salvo, mas houve erro no processamento automático`,
-              variant: "default",
-            });
           }
+        } catch (fileError) {
+          console.error(`ERRO GERAL NO ARQUIVO ${file.name}:`, fileError);
+          toast({
+            title: "Erro",
+            description: `Erro ao processar ${file.name}: ${fileError.message}`,
+            variant: "destructive",
+          });
         }
       }
 
-      toast({
-        title: "Sucesso",
-        description: `${files.length} arquivo(s) enviado(s) com sucesso`,
-      });
-
-      onUploadSuccess();
-      setIsDialogOpen(false);
+      // Só mostrar sucesso se pelo menos um arquivo foi salvo
+      if (successfulUploads > 0) {
+        toast({
+          title: "Sucesso",
+          description: `${successfulUploads} arquivo(s) enviado(s) com sucesso`,
+        });
+        onUploadSuccess();
+        setIsDialogOpen(false);
+      } else {
+        toast({
+          title: "Erro",
+          description: "Nenhum arquivo foi enviado com sucesso",
+          variant: "destructive",
+        });
+      }
       
       // Limpar input
       event.target.value = '';
 
     } catch (error) {
-      console.error('Erro geral:', error);
+      console.error('ERRO GERAL DO PROCESSO:', error);
       toast({
         title: "Erro",
-        description: "Erro ao processar arquivos",
+        description: `Erro ao processar arquivos: ${error.message}`,
         variant: "destructive",
       });
     } finally {
