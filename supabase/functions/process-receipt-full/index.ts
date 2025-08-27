@@ -253,53 +253,64 @@ serve(async (req) => {
 
     if (compraError) throw compraError;
 
-    // 🧠 Função avançada para normalizar nomes de produtos
-    const normalizarNomeProduto = (nome: string): string => {
-      return nome
+    // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
+    const normalizarNomeProduto = async (nome: string): Promise<string> => {
+      let nomeNormalizado = nome
         .toUpperCase()
-        .trim()
-        // Primeiro passo: correções de OCR comuns e acentos
-        .replace(/\bGRAENC\b/gi, 'GRANEL')
-        .replace(/\bGRANEL\b/gi, 'GRANEL')
-        .replace(/\bREQUEIJAO\b/gi, 'REQUEIJAO')
-        .replace(/\bBISC0IT0\b/gi, 'BISCOITO')
-        .replace(/\bL3IT3\b/gi, 'LEITE')
-        .replace(/\bÇUCAR\b/gi, 'AÇUCAR')
-        .replace(/\bARR0Z\b/gi, 'ARROZ')
-        .replace(/\bFEIJÃ0\b/gi, 'FEIJAO')
-        .replace(/\b(MARACUJ[AÁ]?)\b/gi, 'MARACUJA')
-        .replace(/\b(LIM[AÃ]O)\b/gi, 'LIMAO')
-        .replace(/\b(MAM[AÃ]O)\b/gi, 'MAMAO')
-        .replace(/\bMAMO\b/gi, 'MAMÃO') // Nova regra: MAMO → MAMÃO
-        .replace(/\b(MU[CÇ]ARELA)\b/gi, 'MUCARELA')
-        .replace(/\b(A[CÇ]UCAR)\b/gi, 'ACUCAR')
-        
-        // Segundo passo: padronizar formatos de pães
+        .trim();
+      
+      // Buscar todas as normalizações ativas da tabela
+      const { data: normalizacoes, error: normalizacoesError } = await supabase
+        .from('normalizacoes_nomes')
+        .select('termo_errado, termo_correto')
+        .eq('ativo', true);
+      
+      if (normalizacoesError) {
+        console.error('Erro ao buscar normalizações:', normalizacoesError);
+        // Fallback para normalizações básicas hardcoded se a tabela falhar
+        nomeNormalizado = nomeNormalizado
+          .replace(/\bGRAENC\b/gi, 'GRANEL')
+          .replace(/\bMAMO\b/gi, 'MAMÃO')
+          .replace(/\bMUARELA\b/gi, 'MUÇARELA')
+          .replace(/\bTOMY\b/gi, 'TOMMY');
+      } else {
+        // Aplicar todas as normalizações da tabela
+        for (const normalizacao of normalizacoes || []) {
+          const regex = new RegExp(`\\b${normalizacao.termo_errado}\\b`, 'gi');
+          nomeNormalizado = nomeNormalizado.replace(regex, normalizacao.termo_correto);
+        }
+      }
+      
+      // Aplicar normalizações de padrões específicos (mantidas do código original)
+      nomeNormalizado = nomeNormalizado
+        // Padronizar formatos de pães
         .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO|INTEGRAL|10\s*GRAOS|ORIGINAL)?\b/gi, 'PAO DE FORMA')
         
         // Padronizar achocolatado
         .replace(/\b(ACHOCOLATADO EM PO NESCAU)\s*(380G|3\.0|30KG|\d+G)?\b/gi, 'ACHOCOLATADO EM PO')
         
-        // Terceiro passo: remover especificações de peso/tamanho que variam
+        // Remover especificações de peso/tamanho que variam
         .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|INTEGRAL|10\s*GRAOS|ORIGINAL)\b/gi, '')
         .replace(/\b\d+G\b/gi, '') // Remove qualquer especificação de gramagem
         .replace(/\b\d+ML\b/gi, '') // Remove especificação de volume
         .replace(/\b\d+L\b/gi, '') // Remove especificação de litros
         .replace(/\b\d+KG\b/gi, '') // Remove especificação de quilogramas
         
-        // Quarto passo: padronizar ordem das palavras para frutas
+        // Padronizar ordem das palavras para frutas
         .replace(/\b(KG\s+AZEDO)\b/gi, 'AZEDO KG')
         .replace(/\b(AZEDO\s+KG)\b/gi, 'AZEDO KG')
         .replace(/\bGRANEL\s*KG\b/gi, 'KG GRANEL')
         .replace(/\bKG\s*GRANEL\b/gi, 'GRANEL KG')
         
-        // Quinto passo: remover marcas específicas para produtos genéricos
+        // Remover marcas específicas para produtos genéricos
         .replace(/\b(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA|NESTLE|COCA|PEPSI|NESCAU|DOMILAC|LAC\s*FREE|ZILAC|GRAN\s*MESTRE|BATAVO|ELEFANTE|GRANFINO)\b/gi, '')
         
-        // Sexto passo: limpar espaços múltiplos e caracteres especiais
+        // Limpar espaços múltiplos e caracteres especiais
         .replace(/\s+/g, ' ')
         .replace(/[^\w\s]/g, '')
         .trim();
+        
+      return nomeNormalizado;
     };
 
     // 🎯 Função para calcular similaridade entre strings (Algoritmo de Jaro-Winkler simplificado)
@@ -338,7 +349,7 @@ serve(async (req) => {
       
       for (const produtoData of extractedData.produtos) {
         try {
-          const nomeNormalizado = normalizarNomeProduto(produtoData.nome);
+          const nomeNormalizado = await normalizarNomeProduto(produtoData.nome);
           console.log(`🏷️ Produto original: "${produtoData.nome}" -> Normalizado: "${nomeNormalizado}"`);
           
           // Verificar se já existe um produto similar no estoque
@@ -356,15 +367,19 @@ serve(async (req) => {
           let produtoSimilar = null;
           if (estoqueLista && estoqueLista.length > 0) {
             // Primeiro: tentar match exato com o nome normalizado
-            produtoSimilar = estoqueLista.find(prod => 
-              normalizarNomeProduto(prod.produto_nome) === nomeNormalizado
-            );
+            for (const prod of estoqueLista) {
+              const produtoNomeNormalizado = await normalizarNomeProduto(prod.produto_nome);
+              if (produtoNomeNormalizado === nomeNormalizado) {
+                produtoSimilar = prod;
+                break;
+              }
+            }
             
             // Segundo: se não achou exato, buscar por similaridade alta (>85%)
             if (!produtoSimilar) {
               let melhorSimilaridade = 0;
               for (const item of estoqueLista) {
-                const nomeExistente = normalizarNomeProduto(item.produto_nome);
+                const nomeExistente = await normalizarNomeProduto(item.produto_nome);
                 const similaridade = calcularSimilaridade(nomeNormalizado, nomeExistente);
                 
                 if (similaridade >= 0.85 && similaridade > melhorSimilaridade) {

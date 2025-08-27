@@ -361,6 +361,30 @@ export type Database = {
         }
         Relationships: []
       }
+      normalizacoes_nomes: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          id: string
+          termo_correto: string
+          termo_errado: string
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          termo_correto: string
+          termo_errado: string
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          termo_correto?: string
+          termo_errado?: string
+        }
+        Relationships: []
+      }
       notas: {
         Row: {
           cnpj: string | null
