@@ -202,24 +202,12 @@ const EstoqueAtual = () => {
               </p>
             </div>
             
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                onClick={loadEstoque}
-                disabled={loading}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Atualizar
-              </Button>
-              
-              {ultimaAtualizacao && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4" />
-                  <span>Última atualização: {formatDate(ultimaAtualizacao)}</span>
-                </div>
-              )}
-            </div>
+            {ultimaAtualizacao && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="w-4 h-4" />
+                <span>Última atualização: {formatDate(ultimaAtualizacao)}</span>
+              </div>
+            )}
           </div>
 
           {/* Cards de resumo */}
