@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, Calendar, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Package, Calendar, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -178,12 +178,24 @@ const EstoqueAtual = () => {
             </p>
           </div>
           
-          {ultimaAtualizacao && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="w-4 h-4" />
-              <span>Última atualização: {formatDate(ultimaAtualizacao)}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={loadEstoque}
+              disabled={loading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+            
+            {ultimaAtualizacao && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="w-4 h-4" />
+                <span>Última atualização: {formatDate(ultimaAtualizacao)}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Valor Total do Estoque */}
