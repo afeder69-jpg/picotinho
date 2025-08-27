@@ -152,71 +152,221 @@ IMPORTANTE:
 
     if (compraError) throw compraError;
 
-    // Processa produtos
+    // 🧠 Função avançada para normalizar nomes de produtos
+    const normalizarNomeProduto = (nome: string): string => {
+      return nome
+        .toUpperCase()
+        .trim()
+        // Primeiro passo: correções de OCR comuns
+        .replace(/\bGRAENC\b/gi, 'GRANEL')
+        .replace(/\bGRANEL\b/gi, 'GRANEL')
+        .replace(/\bREQUEIJAO\b/gi, 'REQUEIJAO')
+        .replace(/\bBISC0IT0\b/gi, 'BISCOITO')
+        .replace(/\bL3IT3\b/gi, 'LEITE')
+        .replace(/\bÇUCAR\b/gi, 'AÇUCAR')
+        .replace(/\bARR0Z\b/gi, 'ARROZ')
+        .replace(/\bFEIJÃ0\b/gi, 'FEIJAO')
+        
+        // Segundo passo: padronizar formatos de pães
+        .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO)?\b/gi, 'PAO DE FORMA')
+        
+        // Terceiro passo: remover especificações de peso/tamanho que variam
+        .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0)\b/gi, '')
+        .replace(/\b\d+G\b/gi, '') // Remove qualquer especificação de gramagem
+        .replace(/\b\d+ML\b/gi, '') // Remove especificação de volume
+        .replace(/\b\d+L\b/gi, '') // Remove especificação de litros
+        .replace(/\b\d+KG\b/gi, '') // Remove especificação de quilogramas
+        
+        // Quarto passo: padronizar ordem das palavras
+        .replace(/\bGRANEL\s*KG\b/gi, 'KG GRANEL')
+        .replace(/\bKG\s*GRANEL\b/gi, 'GRANEL KG')
+        
+        // Quinto passo: remover marcas específicas para produtos genéricos
+        .replace(/\b(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA|NESTLE|COCA|PEPSI|NESCAU)\b/gi, '')
+        
+        // Sexto passo: limpar espaços múltiplos e caracteres especiais
+        .replace(/\s+/g, ' ')
+        .replace(/[^\w\s]/g, '')
+        .trim();
+    };
+
+    // 🎯 Função para calcular similaridade entre strings (Algoritmo de Jaro-Winkler simplificado)
+    const calcularSimilaridade = (str1: string, str2: string): number => {
+      if (str1 === str2) return 1.0;
+      
+      const len1 = str1.length;
+      const len2 = str2.length;
+      
+      if (len1 === 0 || len2 === 0) return 0.0;
+      
+      // Distância de Levenshtein simplificada
+      const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(null));
+      
+      for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+      for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+      
+      for (let i = 1; i <= len1; i++) {
+        for (let j = 1; j <= len2; j++) {
+          const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j] + 1,     // deletar
+            matrix[i][j - 1] + 1,     // inserir
+            matrix[i - 1][j - 1] + cost // substituir
+          );
+        }
+      }
+      
+      const maxLen = Math.max(len1, len2);
+      return (maxLen - matrix[len1][len2]) / maxLen;
+    };
+
+    // Processa produtos e atualiza estoque automaticamente
     if (extractedData.produtos && Array.isArray(extractedData.produtos)) {
+      console.log('📦 Atualizando estoque automaticamente...');
+      
       for (const produtoData of extractedData.produtos) {
-        // Busca ou cria categoria
-        let categoria;
-        if (produtoData.categoria) {
-          const { data: existingCategoria } = await supabase
-            .from('categorias')
+        try {
+          const nomeNormalizado = normalizarNomeProduto(produtoData.nome);
+          console.log(`🏷️ Produto original: "${produtoData.nome}" -> Normalizado: "${nomeNormalizado}"`);
+          
+          // Verificar se já existe um produto similar no estoque
+          const { data: estoqueLista, error: estoqueListaError } = await supabase
+            .from('estoque_app')
             .select('*')
-            .eq('nome', produtoData.categoria)
-            .eq('user_id', notaImagem.usuario_id)
+            .eq('user_id', notaImagem.usuario_id);
+
+          if (estoqueListaError) {
+            console.error('Erro ao buscar lista de estoque:', estoqueListaError);
+            continue;
+          }
+
+          // 🎯 Procurar produto similar usando algoritmo inteligente
+          let produtoSimilar = null;
+          if (estoqueLista && estoqueLista.length > 0) {
+            // Primeiro: tentar match exato com o nome normalizado
+            produtoSimilar = estoqueLista.find(prod => 
+              normalizarNomeProduto(prod.produto_nome) === nomeNormalizado
+            );
+            
+            // Segundo: se não achou exato, buscar por similaridade alta (>85%)
+            if (!produtoSimilar) {
+              let melhorSimilaridade = 0;
+              for (const item of estoqueLista) {
+                const nomeExistente = normalizarNomeProduto(item.produto_nome);
+                const similaridade = calcularSimilaridade(nomeNormalizado, nomeExistente);
+                
+                if (similaridade >= 0.85 && similaridade > melhorSimilaridade) {
+                  melhorSimilaridade = similaridade;
+                  produtoSimilar = item;
+                }
+              }
+            }
+          }
+
+          if (produtoSimilar) {
+            // 📈 Atualizar produto existente
+            const novaQuantidade = produtoSimilar.quantidade + (produtoData.quantidade || 1);
+            
+            const { error: updateError } = await supabase
+              .from('estoque_app')
+              .update({
+                quantidade: novaQuantidade,
+                preco_unitario_ultimo: produtoData.precoUnitario || produtoSimilar.preco_unitario_ultimo,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', produtoSimilar.id);
+
+            if (updateError) {
+              console.error('Erro ao atualizar estoque:', updateError);
+            } else {
+              console.log(`✅ Estoque atualizado: ${produtoSimilar.produto_nome} (${produtoSimilar.quantidade} + ${produtoData.quantidade || 1} = ${novaQuantidade})`);
+            }
+          } else {
+            // 🆕 Criar novo item no estoque
+            const { error: insertError } = await supabase
+              .from('estoque_app')
+              .insert({
+                user_id: notaImagem.usuario_id,
+                produto_nome: nomeNormalizado, // Usar nome normalizado
+                categoria: produtoData.categoria || 'outros',
+                quantidade: produtoData.quantidade || 1,
+                unidade_medida: produtoData.unidadeMedida || 'UN',
+                preco_unitario_ultimo: produtoData.precoUnitario || 0
+              });
+
+            if (insertError) {
+              console.error('Erro ao inserir no estoque:', insertError);
+            } else {
+              console.log(`🆕 Novo item no estoque: ${nomeNormalizado} (${produtoData.quantidade || 1} ${produtoData.unidadeMedida || 'UN'})`);
+            }
+          }
+
+          // Busca ou cria categoria
+          let categoria;
+          if (produtoData.categoria) {
+            const { data: existingCategoria } = await supabase
+              .from('categorias')
+              .select('*')
+              .eq('nome', produtoData.categoria)
+              .eq('user_id', notaImagem.usuario_id)
+              .single();
+
+            if (existingCategoria) {
+              categoria = existingCategoria;
+            } else {
+              const { data: newCategoria } = await supabase
+                .from('categorias')
+                .insert({
+                  nome: produtoData.categoria,
+                  user_id: notaImagem.usuario_id,
+                  cor: '#6366f1',
+                  icone: 'Package'
+                })
+                .select()
+                .single();
+              categoria = newCategoria;
+            }
+          }
+
+          // Busca ou cria produto
+          let produto;
+          const { data: existingProduto } = await supabase
+            .from('produtos_app')
+            .select('*')
+            .eq('nome', nomeNormalizado) // Usar nome normalizado para busca
             .single();
 
-          if (existingCategoria) {
-            categoria = existingCategoria;
+          if (existingProduto) {
+            produto = existingProduto;
           } else {
-            const { data: newCategoria } = await supabase
-              .from('categorias')
+            const { data: newProduto } = await supabase
+              .from('produtos_app')
               .insert({
-                nome: produtoData.categoria,
-                user_id: notaImagem.usuario_id,
-                cor: '#6366f1',
-                icone: 'Package'
+                nome: nomeNormalizado, // Usar nome normalizado
+                marca: produtoData.marca,
+                categoria_id: categoria?.id,
+                unidade_medida: produtoData.unidadeMedida || 'unidade'
               })
               .select()
               .single();
-            categoria = newCategoria;
+            produto = newProduto;
           }
-        }
 
-        // Busca ou cria produto
-        let produto;
-        const { data: existingProduto } = await supabase
-          .from('produtos_app')
-          .select('*')
-          .eq('nome', produtoData.nome)
-          .single();
-
-        if (existingProduto) {
-          produto = existingProduto;
-        } else {
-          const { data: newProduto } = await supabase
-            .from('produtos_app')
+          // Cria item da compra
+          await supabase
+            .from('itens_compra_app')
             .insert({
-              nome: produtoData.nome,
-              marca: produtoData.marca,
-              categoria_id: categoria?.id,
-              unidade_medida: produtoData.unidadeMedida || 'unidade'
-            })
-            .select()
-            .single();
-          produto = newProduto;
-        }
+              compra_id: compra.id,
+              produto_id: produto.id,
+              quantidade: produtoData.quantidade || 1,
+              preco_unitario: produtoData.precoUnitario || 0,
+              preco_total: produtoData.precoTotal || 0,
+              desconto_item: produtoData.desconto || 0
+            });
 
-        // Cria item da compra
-        await supabase
-          .from('itens_compra_app')
-          .insert({
-            compra_id: compra.id,
-            produto_id: produto.id,
-            quantidade: produtoData.quantidade || 1,
-            preco_unitario: produtoData.precoUnitario || 0,
-            preco_total: produtoData.precoTotal || 0,
-            desconto_item: produtoData.desconto || 0
-          });
+        } catch (produtoError) {
+          console.error('Erro ao processar produto:', produtoData.nome, produtoError);
+        }
       }
     }
 
