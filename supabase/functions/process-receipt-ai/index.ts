@@ -114,6 +114,9 @@ Regras importantes:
 `;
 
     // Chamar OpenAI Vision API
+    console.log('🤖 Preparando chamada para OpenAI...');
+    console.log('🔑 OpenAI Key prefix:', openAIApiKey?.substring(0, 7) + '...');
+    
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -136,14 +139,25 @@ Regras importantes:
       }),
     });
 
+    console.log('📡 OpenAI Response Status:', openAIResponse.status);
+    console.log('📡 OpenAI Response Headers:', Object.fromEntries(openAIResponse.headers.entries()));
+
     if (!openAIResponse.ok) {
-      throw new Error(`OpenAI API error: ${openAIResponse.statusText}`);
+      const errorText = await openAIResponse.text();
+      console.error('❌ OpenAI API Error Response:', errorText);
+      throw new Error(`OpenAI API error: ${openAIResponse.status} - ${errorText}`);
     }
 
     const aiResult = await openAIResponse.json();
-    const extractedText = aiResult.choices[0].message.content;
+    console.log('🎯 OpenAI Result:', JSON.stringify(aiResult, null, 2));
     
-    console.log('AI Response:', extractedText);
+    const extractedText = aiResult.choices?.[0]?.message?.content;
+    
+    console.log('📝 AI Response Text:', extractedText);
+
+    if (!extractedText) {
+      throw new Error('Resposta vazia da OpenAI');
+    }
 
     // Parse JSON da resposta da IA
     let dadosExtraidos;
