@@ -192,33 +192,39 @@ Regras importantes:
     // Verificar se já existe supermercado
     let supermercadoId = null;
     
-    if (dadosExtraidos.loja?.cnpj) {
-      const { data: supermercadoExistente } = await supabase
-        .from('supermercados')
-        .select('id')
-        .eq('cnpj', dadosExtraidos.loja.cnpj)
-        .single();
-
-      if (supermercadoExistente) {
-        supermercadoId = supermercadoExistente.id;
-      } else {
-        // Criar novo supermercado
-        const { data: novoSupermercado, error: supermercadoError } = await supabase
+    try {
+      if (dadosExtraidos.loja?.cnpj) {
+        const { data: supermercadoExistente } = await supabase
           .from('supermercados')
-          .insert({
-            nome: dadosExtraidos.loja.nome || 'Supermercado Desconhecido',
-            cnpj: dadosExtraidos.loja.cnpj,
-            endereco: dadosExtraidos.loja.endereco || ''
-          })
           .select('id')
+          .eq('cnpj', dadosExtraidos.loja.cnpj)
           .single();
 
-        if (supermercadoError) {
-          console.error('Erro ao criar supermercado:', supermercadoError);
+        if (supermercadoExistente) {
+          supermercadoId = supermercadoExistente.id;
         } else {
-          supermercadoId = novoSupermercado.id;
+          // Criar novo supermercado
+          const { data: novoSupermercado, error: supermercadoError } = await supabase
+            .from('supermercados')
+            .insert({
+              nome: dadosExtraidos.loja?.nome || 'Supermercado Desconhecido',
+              cnpj: dadosExtraidos.loja?.cnpj || '00.000.000/0000-00',
+              endereco: dadosExtraidos.loja?.endereco || 'Endereço não informado'
+            })
+            .select('id')
+            .single();
+
+          if (supermercadoError) {
+            console.error('Erro ao criar supermercado:', supermercadoError);
+            console.log('🟡 Continuando sem supermercado específico');
+          } else {
+            supermercadoId = novoSupermercado.id;
+          }
         }
       }
+    } catch (error) {
+      console.error('Erro ao processar supermercado:', error);
+      console.log('🟡 Continuando sem supermercado específico');
     }
 
     // Se não conseguiu encontrar/criar supermercado, criar um padrão
