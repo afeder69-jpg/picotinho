@@ -7,6 +7,40 @@ import { Upload, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/components/auth/AuthProvider';
 
+// Função para normalizar nomes de arquivos
+const normalizeFileName = (fileName: string): string => {
+  // Extrair nome e extensão
+  const lastDotIndex = fileName.lastIndexOf('.');
+  const name = fileName.substring(0, lastDotIndex);
+  const extension = fileName.substring(lastDotIndex);
+  
+  // Normalizar o nome
+  let normalizedName = name
+    // Remover acentos e caracteres especiais
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    // Substituir espaços e caracteres especiais por underscore
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    // Remover underscores múltiplos
+    .replace(/_+/g, '_')
+    // Remover underscores no início e fim
+    .replace(/^_|_$/g, '')
+    // Converter para minúsculas
+    .toLowerCase();
+  
+  // Limitar tamanho (máximo 50 caracteres)
+  if (normalizedName.length > 50) {
+    normalizedName = normalizedName.substring(0, 50);
+  }
+  
+  // Se o nome ficou vazio, usar um padrão
+  if (!normalizedName) {
+    normalizedName = 'arquivo';
+  }
+  
+  return normalizedName + extension.toLowerCase();
+};
+
 interface UploadNoteButtonProps {
   onUploadSuccess: () => void;
 }
@@ -124,9 +158,15 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             continue;
           }
 
-          // Upload para o storage
-          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}-${file.name}`;
+          // Normalizar nome do arquivo
+          const normalizedFileName = normalizeFileName(file.name);
+          const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          const fileName = `${uniqueId}-${normalizedFileName}`;
           const filePath = `${user.id}/${fileName}`;
+          
+          console.log('Nome original:', file.name);
+          console.log('Nome normalizado:', normalizedFileName);
+          console.log('Nome final:', fileName);
           
           console.log('Fazendo upload para storage:', filePath);
 
@@ -167,12 +207,13 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           
           console.log('Usuário autenticado:', currentUser.id);
 
-          // Salvar no banco de dados
+          // Salvar no banco de dados com nome original como metadado
           const insertData = {
             usuario_id: currentUser.id,
             imagem_path: filePath,
             imagem_url: urlData.publicUrl,
-            processada: false
+            processada: false,
+            nome_original: file.name // Salvar nome original como metadado
           };
           
           console.log('=== INSERINDO NO BANCO ===', insertData);
