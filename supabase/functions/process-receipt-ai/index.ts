@@ -146,7 +146,7 @@ Regras importantes:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4.1-2025-04-14', // Usar modelo mais recente
         messages: [
           {
             role: 'user',
@@ -156,8 +156,7 @@ Regras importantes:
             ]
           }
         ],
-        max_completion_tokens: 2000,
-        temperature: 0.1
+        max_completion_tokens: 2000 // Usar max_completion_tokens para modelos novos
       }),
     });
 
@@ -596,8 +595,13 @@ Regras importantes:
       errorMessage = 'Nota fiscal não encontrada';
       statusCode = 404;
     } else if (error?.message?.includes('OpenAI API error')) {
-      errorMessage = 'Erro na API da OpenAI';
+      errorMessage = 'Erro na API da OpenAI - ' + error.message;
       statusCode = 500;
+    } else if (error?.message?.includes('PDFs não são suportados')) {
+      errorMessage = 'Arquivo PDF detectado - use uma imagem JPG';
+      statusCode = 400;
+    } else if (error?.message) {
+      errorMessage = error.message;
     }
     
     return new Response(
