@@ -148,6 +148,11 @@ const EstoqueAtual = () => {
 
   const groupedEstoque = groupByCategory(estoque);
   const totalItens = estoque.reduce((sum, item) => sum + parseFloat(item.quantidade.toString()), 0);
+  const valorTotalEstoque = estoque.reduce((sum, item) => {
+    const preco = item.preco_unitario_ultimo || 0;
+    const quantidade = parseFloat(item.quantidade.toString());
+    return sum + (preco * quantidade);
+  }, 0);
 
   return (
     <div className="container mx-auto p-6">
@@ -180,6 +185,19 @@ const EstoqueAtual = () => {
             </div>
           )}
         </div>
+
+        {/* Valor Total do Estoque */}
+        <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-lg text-green-700 font-medium mb-2">Valor Total do Estoque</p>
+              <p className="text-4xl font-bold text-green-800">{formatCurrency(valorTotalEstoque)}</p>
+              <p className="text-sm text-green-600 mt-2">
+                Baseado nos últimos preços registrados
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
