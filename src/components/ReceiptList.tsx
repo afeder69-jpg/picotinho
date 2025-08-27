@@ -36,6 +36,11 @@ const ReceiptList = () => {
 
   useEffect(() => {
     loadReceipts();
+    
+    // Auto-refresh a cada 5 segundos para capturar novas notas
+    const interval = setInterval(loadReceipts, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const loadReceipts = async () => {
@@ -109,20 +114,25 @@ const ReceiptList = () => {
 
   const deleteReceipt = async (id: string) => {
     try {
-      // Tentar deletar de ambas as tabelas (uma falhará, mas não é problema)
+      // Tentar deletar de ambas as tabelas
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').delete().eq('id', id),
         supabase.from('notas_imagens').delete().eq('id', id)
       ]);
 
-      // Se ambas falharam, throw error
-      if (receiptsResult.error && notasImagensResult.error) {
-        throw receiptsResult.error;
+      // Verificar se houve algum sucesso (quando não há erro, significa que a operação foi executada)
+      const receiptsSuccess = !receiptsResult.error;
+      const notasSuccess = !notasImagensResult.error;
+      
+      if (!receiptsSuccess && !notasSuccess) {
+        throw new Error('Erro ao excluir nota fiscal de ambas as tabelas');
       }
 
-      setReceipts(receipts.filter(r => r.id !== id));
+      // Recarregar a lista após exclusão
+      await loadReceipts();
+      
       toast({
-        title: "Sucesso",
+        title: "Sucesso", 
         description: "Nota fiscal excluída com sucesso",
       });
     } catch (error) {
