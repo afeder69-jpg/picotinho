@@ -188,11 +188,11 @@ const EstoqueAtual = () => {
 
         {/* Valor Total do Estoque */}
         <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="text-center">
-              <p className="text-lg text-green-700 font-medium mb-2">Valor Total do Estoque</p>
-              <p className="text-4xl font-bold text-green-800">{formatCurrency(valorTotalEstoque)}</p>
-              <p className="text-sm text-green-600 mt-2">
+              <p className="text-sm text-green-700 font-medium mb-1">Valor Total em Estoque</p>
+              <p className="text-2xl font-bold text-green-800">{formatCurrency(valorTotalEstoque)}</p>
+              <p className="text-xs text-green-600 mt-1">
                 Baseado nos últimos preços registrados
               </p>
             </div>
