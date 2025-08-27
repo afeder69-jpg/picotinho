@@ -23,6 +23,8 @@ interface Receipt {
   imagem_url?: string | null;
   dados_extraidos?: any;
   processada?: boolean;
+  file_name?: string;
+  file_type?: string;
 }
 
 const ReceiptList = () => {
@@ -65,9 +67,11 @@ const ReceiptList = () => {
       // Mapear notas_imagens para o formato Receipt
       const mappedNotasImagens = (notasImagensResult.data || []).map(nota => {
         const dadosExtraidos = nota.dados_extraidos as any;
+        const fileName = nota.imagem_path ? nota.imagem_path.split('/').pop() : 'Arquivo sem nome';
+        
         return {
           id: nota.id,
-          store_name: dadosExtraidos?.mercado || 'Estabelecimento não identificado',
+          store_name: dadosExtraidos?.mercado || fileName || 'Nota enviada',
           store_cnpj: dadosExtraidos?.cnpj || null,
           total_amount: dadosExtraidos?.valor_total || null,
           purchase_date: nota.data_criacao,
@@ -78,7 +82,9 @@ const ReceiptList = () => {
           processed_data: nota.dados_extraidos,
           imagem_url: nota.imagem_url,
           dados_extraidos: nota.dados_extraidos,
-          processada: nota.processada
+          processada: nota.processada,
+          file_name: fileName,
+          file_type: nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem'
         };
       });
 
@@ -209,6 +215,20 @@ const ReceiptList = () => {
             
             <CardContent>
               <div className="space-y-2">
+                {receipt.file_name && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Arquivo:</span>
+                    <span className="text-sm font-mono truncate max-w-[200px]">{receipt.file_name}</span>
+                  </div>
+                )}
+                
+                {receipt.file_type && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Tipo:</span>
+                    <span className="text-sm">{receipt.file_type}</span>
+                  </div>
+                )}
+                
                 {receipt.total_amount && (
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Total:</span>
@@ -290,25 +310,53 @@ const ReceiptList = () => {
                 </div>
               </div>
 
-              {selectedReceipt.screenshot_url && (
+              {selectedReceipt.imagem_url && (
                 <div>
-                  <h4 className="font-semibold mb-2">Screenshot</h4>
-                  <img 
-                    src={selectedReceipt.screenshot_url} 
-                    alt="Screenshot da nota fiscal"
-                    className="w-full rounded-lg border"
-                  />
+                  <h4 className="font-semibold mb-2">
+                    {selectedReceipt.file_type === 'PDF' ? 'Arquivo PDF' : 'Imagem da Nota'}
+                  </h4>
+                  {selectedReceipt.file_type === 'PDF' ? (
+                    <div className="border rounded-lg p-4 text-center">
+                      <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground mb-2">Arquivo PDF</p>
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                        className="w-full"
+                      >
+                        Abrir PDF
+                      </Button>
+                    </div>
+                  ) : (
+                    <img 
+                      src={selectedReceipt.imagem_url} 
+                      alt="Imagem da nota fiscal"
+                      className="w-full rounded-lg border cursor-pointer"
+                      onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                    />
+                  )}
                 </div>
               )}
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => window.open(selectedReceipt.qr_url, '_blank')}
-                  className="flex-1"
-                >
-                  Abrir QR Original
-                </Button>
+                {selectedReceipt.qr_url && (
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(selectedReceipt.qr_url, '_blank')}
+                    className="flex-1"
+                  >
+                    Abrir QR Original
+                  </Button>
+                )}
+                {selectedReceipt.imagem_url && (
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                    className="flex-1"
+                  >
+                    Abrir Arquivo
+                  </Button>
+                )}
               </div>
             </div>
           )}
