@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, Calendar, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Package, Calendar, AlertCircle, ArrowLeft, RefreshCw, Home } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -122,14 +122,24 @@ const EstoqueAtual = () => {
         <div className="bg-card border-b border-border">
           <div className="flex justify-between items-center p-4">
             <PicotinhoLogo />
-            <Button
-              variant="outline"
-              onClick={() => navigate('/menu')}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Voltar ao Menu
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/')}
+                className="flex items-center gap-2"
+              >
+                <Home className="w-4 h-4" />
+                Início
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate('/menu')}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Voltar ao Menu
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -160,14 +170,24 @@ const EstoqueAtual = () => {
       <div className="bg-card border-b border-border">
         <div className="flex justify-between items-center p-4">
           <PicotinhoLogo />
-          <Button
-            variant="outline"
-            onClick={() => navigate('/menu')}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar ao Menu
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2"
+            >
+              <Home className="w-4 h-4" />
+              Início
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/menu')}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar ao Menu
+            </Button>
+          </div>
         </div>
       </div>
       
