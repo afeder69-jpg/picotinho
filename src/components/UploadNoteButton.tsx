@@ -300,7 +300,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 console.log('PDF convertido com sucesso:', convertResponse.data);
                 toast({
                   title: "PDF Convertido",
-                  description: `PDF convertido em ${convertResponse.data?.images?.length || 0} imagem(ns)`,
+                  description: `PDF pronto para processamento com IA (${convertResponse.data?.convertedImages?.length || 0} página(s))`,
                 });
               }
             } catch (convertError) {
