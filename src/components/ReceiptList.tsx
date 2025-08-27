@@ -294,18 +294,14 @@ const ReceiptList = () => {
         throw new Error('Nenhuma imagem disponível para processamento');
       }
 
-      // Verificar se a URL é de imagem ou PDF para escolher a função correta
+      // Para PDFs, usar o PDF original diretamente (OpenAI suporta PDFs)
       const isPdfUrl = imageUrlToProcess.toLowerCase().includes('.pdf');
-      const functionName = isPdfUrl ? 'process-receipt-ai' : 'process-receipt-full';
+      const functionName = 'process-receipt-ai'; // Sempre usar esta função que suporta PDFs
       
       console.log(`🟡 Preparando chamada para ${functionName}...`);
-      const requestBody = isPdfUrl ? {
+      const requestBody = {
         notaId: receipt.id,
-        imageUrl: imageUrlToProcess
-      } : {
-        notaImagemId: receipt.id,
-        imageUrl: imageUrlToProcess,
-        qrUrl: null
+        imageUrl: isPdfUrl ? receipt.imagem_url : imageUrlToProcess // Usar PDF original se disponível
       };
       
       console.log('📤 Body da requisição:', requestBody);
