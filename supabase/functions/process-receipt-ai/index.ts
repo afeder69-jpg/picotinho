@@ -383,26 +383,92 @@ Regras importantes:
     // 📦 Atualizar estoque automaticamente
     console.log('📦 Atualizando estoque...\n');
     
-    // Função para normalizar nomes de produtos
+    // 🧠 Função avançada para normalizar nomes de produtos
     const normalizarNomeProduto = (nome: string): string => {
       return nome
         .toUpperCase()
-        .replace(/\s+/g, ' ') // Múltiplos espaços para um só
-        .replace(/\bGRAENC\b/g, 'GRANEL') // Padronizar GRAENC para GRANEL
-        .replace(/\bGRANEL\s*KG\b/g, 'KG GRANEL') // Padronizar posição do GRANEL
-        .replace(/\bKG\s*GRANEL\b/g, 'GRANEL KG') // Padronizar ordem
-        .replace(/\bREQUEIJAO\s*$/, 'REQUEIJAO') // Remove especificações extras no final
-        .replace(/\bFATIADO\b/g, '') // Remove FATIADO
-        .replace(/\bMINI\s*LANCHE\b/g, '') // Remove MINI LANCHE
-        .replace(/\b170G\s*AMEIXA\b/g, '') // Remove especificações específicas
-        .replace(/\b380G\b/g, '') // Remove peso específico
-        .replace(/\b450G\s*100\s*NUTRICAO\b/g, '') // Remove especificações
-        .replace(/\b480G\b/g, '') // Remove peso
-        .replace(/\b450G\b/g, '') // Remove peso
-        .replace(/\b180G\s*REQUEIJAO\b/g, '') // Remove especificação extra
-        .replace(/\b3\.0\b/g, '') // Remove versão
-        .replace(/\s+/g, ' ') // Limpar espaços novamente
+        .trim()
+        // Primeiro passo: correções de OCR comuns
+        .replace(/\bGRAENC\b/gi, 'GRANEL')
+        .replace(/\bGRANEL\b/gi, 'GRANEL')
+        .replace(/\bREQUEIJAO\b/gi, 'REQUEIJAO')
+        .replace(/\bBISC0IT0\b/gi, 'BISCOITO')
+        .replace(/\bL3IT3\b/gi, 'LEITE')
+        .replace(/\bÇUCAR\b/gi, 'AÇUCAR')
+        .replace(/\bARR0Z\b/gi, 'ARROZ')
+        .replace(/\bFEIJÃ0\b/gi, 'FEIJAO')
+        
+        // Segundo passo: padronizar formatos de pães
+        .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO)?\b/gi, 'PAO DE FORMA')
+        
+        // Terceiro passo: remover especificações de peso/tamanho que variam
+        .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0)\b/gi, '')
+        .replace(/\b\d+G\b/gi, '') // Remove qualquer especificação de gramagem
+        .replace(/\b\d+ML\b/gi, '') // Remove especificação de volume
+        .replace(/\b\d+L\b/gi, '') // Remove especificação de litros
+        
+        // Quarto passo: padronizar ordem das palavras
+        .replace(/\bGRANEL\s*KG\b/gi, 'KG GRANEL')
+        .replace(/\bKG\s*GRANEL\b/gi, 'GRANEL KG')
+        
+        // Quinto passo: remover marcas específicas para produtos genéricos
+        .replace(/\b(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA|NESTLE|COCA|PEPSI)\b/gi, '')
+        
+        // Sexto passo: limpar espaços múltiplos e caracteres especiais
+        .replace(/\s+/g, ' ')
+        .replace(/[^\w\s]/g, '')
         .trim();
+    };
+
+    // 🎯 Função para calcular similaridade entre strings (Algoritmo de Jaro-Winkler simplificado)
+    const calcularSimilaridade = (str1: string, str2: string): number => {
+      if (str1 === str2) return 1.0;
+      
+      const len1 = str1.length;
+      const len2 = str2.length;
+      
+      if (len1 === 0 || len2 === 0) return 0.0;
+      
+      // Distância de Levenshtein simplificada
+      const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(null));
+      
+      for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+      for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+      
+      for (let i = 1; i <= len1; i++) {
+        for (let j = 1; j <= len2; j++) {
+          const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j] + 1,     // deletar
+            matrix[i][j - 1] + 1,     // inserir
+            matrix[i - 1][j - 1] + cost // substituir
+          );
+        }
+      }
+      
+      const maxLen = Math.max(len1, len2);
+      return (maxLen - matrix[len1][len2]) / maxLen;
+    };
+
+    // 🔍 Função para encontrar produto mais similar no estoque
+    const encontrarProdutoSimilar = (nomeNovo: string, estoqueUsuario: any[]): any => {
+      let melhorMatch = null;
+      let melhorSimilaridade = 0;
+      
+      for (const item of estoqueUsuario) {
+        const nomeExistente = normalizarNomeProduto(item.produto_nome);
+        const similaridade = calcularSimilaridade(nomeNovo, nomeExistente);
+        
+        // Se a similaridade for >= 85%, considerar como mesmo produto
+        if (similaridade >= 0.85 && similaridade > melhorSimilaridade) {
+          melhorSimilaridade = similaridade;
+          melhorMatch = item;
+        }
+      }
+      
+      console.log(`🔍 Procurando similar para "${nomeNovo}":`, melhorMatch ? `${melhorMatch.produto_nome} (${(melhorSimilaridade * 100).toFixed(1)}%)` : 'Nenhum similar encontrado');
+      
+      return melhorMatch;
     };
     
     for (const item of dadosExtraidos.itens || []) {
@@ -420,12 +486,18 @@ Regras importantes:
           continue;
         }
 
-        // Procurar produto similar
+        // 🎯 Procurar produto similar usando algoritmo inteligente
         let produtoSimilar = null;
-        if (estoqueLista) {
+        if (estoqueLista && estoqueLista.length > 0) {
+          // Primeiro: tentar match exato com o nome normalizado
           produtoSimilar = estoqueLista.find(prod => 
             normalizarNomeProduto(prod.produto_nome) === nomeNormalizado
           );
+          
+          // Se não encontrou match exato, usar algoritmo de similaridade
+          if (!produtoSimilar) {
+            produtoSimilar = encontrarProdutoSimilar(nomeNormalizado, estoqueLista);
+          }
         }
 
         if (produtoSimilar) {
