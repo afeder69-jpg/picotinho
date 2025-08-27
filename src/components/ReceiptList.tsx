@@ -354,55 +354,77 @@ const ReceiptList = () => {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className={`${Capacitor.isNativePlatform() ? 'max-w-full max-h-full w-full h-full m-0 rounded-none' : 'max-w-[95vw] max-h-[95vh] w-full'} overflow-hidden flex flex-col`}>
-          <DialogHeader className="flex-shrink-0 p-4 border-b">
-            <DialogTitle>Detalhes da Nota Fiscal</DialogTitle>
+        <DialogContent className={`${Capacitor.isNativePlatform() ? 'fixed inset-0 max-w-none max-h-none w-screen h-screen m-0 p-0 rounded-none border-0' : 'max-w-[95vw] max-h-[95vh] w-full'} overflow-hidden flex flex-col`}>
+          <DialogHeader className={`flex-shrink-0 ${Capacitor.isNativePlatform() ? 'p-2' : 'p-4'} border-b bg-background`}>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base">Detalhes da Nota Fiscal</DialogTitle>
+              {Capacitor.isNativePlatform() && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsDialogOpen(false)}
+                  className="p-1"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           
           {selectedReceipt && (
-            <div className="flex-1 overflow-y-auto">
-              {/* Para PDFs, exibir o iframe em tela cheia */}
+            <div className="flex-1 overflow-hidden">
+              {/* Para PDFs, exibir diretamente */}
               {selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url ? (
                 <div className="h-full flex flex-col">
-                  {/* Header compacto com info */}
-                  <div className="flex-shrink-0 bg-muted/50 p-3 border-b">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        <span className="text-sm font-medium truncate">
-                          {selectedReceipt.file_name || 'Documento PDF'}
-                        </span>
+                  {/* Visualizador PDF otimizado para mobile */}
+                  <div className="flex-1 relative">
+                    {Capacitor.isNativePlatform() ? (
+                      // Para mobile: usar embed ou object para melhor compatibilidade
+                      <div className="w-full h-full bg-white">
+                        <embed
+                          src={selectedReceipt.imagem_url}
+                          type="application/pdf"
+                          className="w-full h-full"
+                          style={{ minHeight: '100%' }}
+                        />
+                        {/* Fallback se embed não funcionar */}
+                        <div className="absolute inset-0 flex items-center justify-center bg-muted/90 backdrop-blur-sm">
+                          <div className="text-center space-y-4 p-6">
+                            <FileText className="w-12 h-12 mx-auto text-muted-foreground" />
+                            <div>
+                              <h3 className="font-semibold mb-2">Visualizar PDF</h3>
+                              <p className="text-sm text-muted-foreground mb-4">
+                                Toque para abrir o arquivo PDF
+                              </p>
+                              <div className="space-y-2">
+                                <Button
+                                  onClick={() => openPDFInNative(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
+                                  className="w-full"
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Abrir PDF
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => downloadPDF(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
+                                  className="w-full"
+                                >
+                                  Baixar PDF
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openPDFInNative(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
-                          className="text-xs px-2"
-                        >
-                          <Eye className="w-3 h-3 mr-1" />
-                          {Capacitor.isNativePlatform() ? 'Abrir Externo' : 'Nova Aba'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => downloadPDF(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
-                          className="text-xs px-2"
-                        >
-                          Baixar
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Visualizador PDF em tela cheia */}
-                  <div className="flex-1 bg-gray-100 dark:bg-gray-900">
-                    <iframe
-                      src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1&zoom=page-fit`}
-                      className="w-full h-full border-0"
-                      title="Visualizador de PDF"
-                      style={{ minHeight: Capacitor.isNativePlatform() ? 'calc(100vh - 160px)' : '70vh' }}
-                    />
+                    ) : (
+                      // Para web: iframe funciona bem
+                      <iframe
+                        src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1&zoom=page-width`}
+                        className="w-full h-full border-0"
+                        title="Visualizador de PDF"
+                        style={{ minHeight: '70vh' }}
+                      />
+                    )}
                   </div>
                 </div>
               ) : (
