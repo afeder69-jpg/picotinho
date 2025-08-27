@@ -942,8 +942,16 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      limpar_estoque_usuario: {
+        Args: { usuario_uuid: string }
+        Returns: undefined
+      }
       recalcular_estoque_completo: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      recalcular_estoque_usuario: {
+        Args: { usuario_uuid: string }
         Returns: undefined
       }
       set_limit: {

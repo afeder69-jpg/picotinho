@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, Calendar, AlertCircle, ArrowLeft, RefreshCw, Home } from 'lucide-react';
+import { Package, Calendar, AlertCircle, ArrowLeft, RefreshCw, Home, Trash2, RotateCcw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -66,6 +66,76 @@ const EstoqueAtual = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const limparEstoque = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Usuário não autenticado.",
+        });
+        return;
+      }
+
+      const { error } = await supabase.rpc('limpar_estoque_usuario', {
+        usuario_uuid: user.id
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Estoque limpo completamente.",
+      });
+
+      loadEstoque();
+    } catch (error) {
+      console.error('Erro ao limpar estoque:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível limpar o estoque.",
+      });
+    }
+  };
+
+  const recalcularEstoque = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Usuário não autenticado.",
+        });
+        return;
+      }
+
+      const { error } = await supabase.rpc('recalcular_estoque_usuario', {
+        usuario_uuid: user.id
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Estoque recalculado baseado nas compras existentes.",
+      });
+
+      loadEstoque();
+    } catch (error) {
+      console.error('Erro ao recalcular estoque:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível recalcular o estoque.",
+      });
     }
   };
 
@@ -263,6 +333,27 @@ const EstoqueAtual = () => {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Botões de ação para administração do estoque */}
+          <div className="flex flex-wrap gap-4 justify-center">
+            <Button
+              variant="destructive"
+              onClick={limparEstoque}
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Limpar Estoque Completamente
+            </Button>
+            
+            <Button
+              variant="outline"
+              onClick={recalcularEstoque}
+              className="flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Recalcular Baseado nas Compras
+            </Button>
           </div>
 
           {/* Lista de produtos por categoria */}
