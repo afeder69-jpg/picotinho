@@ -95,7 +95,7 @@ async function convertHtmlToImage(html: string, url: string): Promise<string> {
     console.log('Usando fallback: criando imagem com dados da nota');
     
     // Extrair informações básicas do HTML
-    const titleMatch = html.match(/<title[^>]*>([^<]+)</title>/i);
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     const title = titleMatch ? titleMatch[1] : 'Nota Fiscal';
     
     // Criar uma imagem PNG simples mas válida
