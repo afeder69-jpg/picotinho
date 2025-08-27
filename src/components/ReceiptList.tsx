@@ -149,13 +149,6 @@ const ReceiptList = () => {
   };
 
   const viewReceipt = (receipt: Receipt) => {
-    // Para PDFs no mobile, abrir diretamente no navegador em vez do modal
-    if (receipt.file_type === 'PDF' && Capacitor.isNativePlatform()) {
-      openPDFInNative(receipt.imagem_url!, receipt.file_name || 'nota-fiscal.pdf');
-      return;
-    }
-    
-    // Para outros casos, abrir o modal normalmente
     setSelectedReceipt(receipt);
     setIsDialogOpen(true);
   };
@@ -361,153 +354,130 @@ const ReceiptList = () => {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] w-full overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className={`${Capacitor.isNativePlatform() ? 'max-w-full max-h-full w-full h-full m-0 rounded-none' : 'max-w-[95vw] max-h-[95vh] w-full'} overflow-hidden flex flex-col`}>
+          <DialogHeader className="flex-shrink-0 p-4 border-b">
             <DialogTitle>Detalhes da Nota Fiscal</DialogTitle>
           </DialogHeader>
           
           {selectedReceipt && (
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-semibold mb-2">Informações Gerais</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Estabelecimento:</span>
-                    <span>{selectedReceipt.store_name || 'N/A'}</span>
+            <div className="flex-1 overflow-y-auto">
+              {/* Para PDFs, exibir o iframe em tela cheia */}
+              {selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url ? (
+                <div className="h-full flex flex-col">
+                  {/* Header compacto com info */}
+                  <div className="flex-shrink-0 bg-muted/50 p-3 border-b">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        <span className="text-sm font-medium truncate">
+                          {selectedReceipt.file_name || 'Documento PDF'}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openPDFInNative(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
+                          className="text-xs px-2"
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          {Capacitor.isNativePlatform() ? 'Abrir Externo' : 'Nova Aba'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => downloadPDF(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
+                          className="text-xs px-2"
+                        >
+                          Baixar
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">CNPJ:</span>
-                    <span className="font-mono">{selectedReceipt.store_cnpj || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total:</span>
-                    <span className="font-semibold">{formatCurrency(selectedReceipt.total_amount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Data da compra:</span>
-                    <span>{selectedReceipt.purchase_date ? new Date(selectedReceipt.purchase_date).toLocaleDateString('pt-BR') : 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Status:</span>
-                    <span>{getStatusBadge(selectedReceipt.status)}</span>
+                  
+                  {/* Visualizador PDF em tela cheia */}
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-900">
+                    <iframe
+                      src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1&zoom=page-fit`}
+                      className="w-full h-full border-0"
+                      title="Visualizador de PDF"
+                      style={{ minHeight: Capacitor.isNativePlatform() ? 'calc(100vh - 160px)' : '70vh' }}
+                    />
                   </div>
                 </div>
-              </div>
-
-              {selectedReceipt.imagem_url && (
-                <div>
-                  <h4 className="font-semibold mb-2">
-                    {selectedReceipt.file_type === 'PDF' ? 'Visualizar PDF' : 'Imagem da Nota'}
-                  </h4>
-                  {selectedReceipt.file_type === 'PDF' ? (
-                    <div className="border rounded-lg overflow-hidden">
-                      {/* Header do PDF */}
-                      <div className="bg-muted/50 p-3 border-b flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4" />
-                          <span className="text-sm font-medium">Documento PDF</span>
-                        </div>
-                        <Badge variant="secondary">
-                          {Capacitor.isNativePlatform() ? 'Mobile' : 'Web'}
-                        </Badge>
+              ) : (
+                /* Para imagens e outras informações */
+                <div className="p-4 space-y-6 h-full overflow-y-auto">
+                  <div>
+                    <h4 className="font-semibold mb-3">Informações Gerais</h4>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-muted-foreground">Estabelecimento:</span>
+                        <span className="font-medium">{selectedReceipt.store_name || 'N/A'}</span>
                       </div>
-                      
-                      {/* Conteúdo principal */}
-                      <div className="p-6 text-center space-y-4">
-                        <FileText className="w-16 h-16 mx-auto text-primary" />
-                        <div>
-                          <h3 className="font-semibold text-lg mb-2">
-                            {selectedReceipt.file_name || 'Documento PDF'}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {Capacitor.isNativePlatform() 
-                              ? 'Toque nos botões abaixo para visualizar o PDF no navegador nativo ou baixar'
-                              : 'Use os botões abaixo para visualizar ou baixar o arquivo PDF'
-                            }
-                          </p>
-                        </div>
-                        
-                        {/* Botões de ação */}
-                        <div className="space-y-3">
-                          <Button
-                            onClick={() => openPDFInNative(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
-                            className="w-full"
-                            size="lg"
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            {Capacitor.isNativePlatform() ? 'Abrir no Navegador' : 'Visualizar PDF'}
-                          </Button>
-                          
-                          <Button
-                            variant="outline"
-                            onClick={() => downloadPDF(selectedReceipt.imagem_url!, selectedReceipt.file_name || 'nota-fiscal.pdf')}
-                            className="w-full"
-                          >
-                            <FileText className="w-4 h-4 mr-2" />
-                            {Capacitor.isNativePlatform() ? 'Baixar/Compartilhar' : 'Baixar PDF'}
-                          </Button>
-                          
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              navigator.clipboard.writeText(selectedReceipt.imagem_url!);
-                              toast({
-                                title: "Link copiado!",
-                                description: "Cole o link em qualquer navegador para abrir o PDF",
-                              });
-                            }}
-                            className="w-full"
-                          >
-                            Copiar Link do PDF
-                          </Button>
-                        </div>
+                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-muted-foreground">Total:</span>
+                        <span className="font-semibold text-green-600 dark:text-green-400">
+                          {formatCurrency(selectedReceipt.total_amount)}
+                        </span>
                       </div>
-                      
-                      {/* Preview iframe apenas no web */}
-                      {!Capacitor.isNativePlatform() && (
-                        <div className="border-t">
-                          <div className="relative">
-                            <iframe
-                              src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1`}
-                              className="w-full h-[40vh] border-0"
-                              title="Preview do PDF"
-                            />
-                          </div>
+                      {selectedReceipt.store_cnpj && (
+                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                          <span className="text-muted-foreground">CNPJ:</span>
+                          <span className="font-mono text-xs">{selectedReceipt.store_cnpj}</span>
                         </div>
                       )}
+                      {selectedReceipt.purchase_date && (
+                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                          <span className="text-muted-foreground">Data da compra:</span>
+                          <span>{new Date(selectedReceipt.purchase_date).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-muted-foreground">Status:</span>
+                        <span>{getStatusBadge(selectedReceipt.status)}</span>
+                      </div>
                     </div>
-                  ) : (
-                    <img 
-                      src={selectedReceipt.imagem_url} 
-                      alt="Imagem da nota fiscal"
-                      className="w-full max-h-[400px] object-contain rounded-lg border cursor-pointer"
-                      onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
-                    />
+                  </div>
+
+                  {selectedReceipt.imagem_url && selectedReceipt.file_type !== 'PDF' && (
+                    <div>
+                      <h4 className="font-semibold mb-3">Imagem da Nota</h4>
+                      <div className="border rounded-lg overflow-hidden">
+                        <img 
+                          src={selectedReceipt.imagem_url} 
+                          alt="Imagem da nota fiscal"
+                          className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer"
+                          onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                        />
+                      </div>
+                    </div>
                   )}
+
+                  <div className="space-y-3">
+                    {selectedReceipt.qr_url && (
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(selectedReceipt.qr_url, '_blank')}
+                        className="w-full"
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        Abrir QR Original
+                      </Button>
+                    )}
+                    {selectedReceipt.imagem_url && (
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                        className="w-full"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Abrir Arquivo Completo
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
-
-              <div className="flex gap-2">
-                {selectedReceipt.qr_url && (
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(selectedReceipt.qr_url, '_blank')}
-                    className="flex-1"
-                  >
-                    Abrir QR Original
-                  </Button>
-                )}
-                {selectedReceipt.imagem_url && (
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
-                    className="flex-1"
-                  >
-                    Abrir Arquivo
-                  </Button>
-                )}
-              </div>
             </div>
           )}
         </DialogContent>
