@@ -149,6 +149,13 @@ const ReceiptList = () => {
   };
 
   const viewReceipt = (receipt: Receipt) => {
+    // Para PDFs no mobile, abrir diretamente no navegador em vez do modal
+    if (receipt.file_type === 'PDF' && Capacitor.isNativePlatform()) {
+      openPDFInNative(receipt.imagem_url!, receipt.file_name || 'nota-fiscal.pdf');
+      return;
+    }
+    
+    // Para outros casos, abrir o modal normalmente
     setSelectedReceipt(receipt);
     setIsDialogOpen(true);
   };
@@ -332,7 +339,10 @@ const ReceiptList = () => {
                   onClick={() => viewReceipt(receipt)}
                 >
                   <Eye className="w-4 h-4 mr-2" />
-                  Ver Detalhes
+                  {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() 
+                    ? 'Abrir PDF' 
+                    : 'Ver Detalhes'
+                  }
                 </Button>
                 
                 <Button
