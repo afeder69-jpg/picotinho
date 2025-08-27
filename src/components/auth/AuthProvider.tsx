@@ -28,17 +28,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isTestMode, setIsTestMode] = useState(false);
 
   useEffect(() => {
-    let isInitialized = false;
-    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (!isInitialized) {
-          isInitialized = true;
-          setLoading(false);
-        }
         setSession(session);
         setUser(session?.user ?? null);
+        setLoading(false);
         
         // Handle Google OAuth sign-in profile creation
         if (event === 'SIGNED_IN' && session?.user) {
@@ -51,12 +46,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isInitialized) {
-        isInitialized = true;
-        setLoading(false);
-      }
       setSession(session);
       setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
