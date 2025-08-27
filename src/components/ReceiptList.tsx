@@ -7,9 +7,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 
-// Configurar worker do PDF
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+// Configurar worker do PDF com URL mais confiável
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url,
+).toString();
 
 
 interface Receipt {
@@ -344,7 +349,7 @@ const ReceiptList = () => {
                   {selectedReceipt.file_type === 'PDF' ? (
                     <div className="border rounded-lg overflow-hidden">
                       {/* Controles do PDF */}
-                      <div className="bg-muted/50 p-3 border-b flex items-center justify-between">
+                      <div className="bg-muted/50 p-3 border-b flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
@@ -354,7 +359,7 @@ const ReceiptList = () => {
                           >
                             -
                           </Button>
-                          <span className="text-sm px-2">{Math.round(scale * 100)}%</span>
+                          <span className="text-sm px-2 min-w-[60px] text-center">{Math.round(scale * 100)}%</span>
                           <Button
                             variant="outline"
                             size="sm"
@@ -372,9 +377,9 @@ const ReceiptList = () => {
                               onClick={() => setPageNumber(prev => Math.max(prev - 1, 1))}
                               disabled={pageNumber <= 1}
                             >
-                              Anterior
+                              ‹
                             </Button>
-                            <span className="text-sm px-2">
+                            <span className="text-sm px-2 min-w-[80px] text-center">
                               {pageNumber} de {numPages}
                             </span>
                             <Button
@@ -383,40 +388,79 @@ const ReceiptList = () => {
                               onClick={() => setPageNumber(prev => Math.min(prev + 1, numPages))}
                               disabled={pageNumber >= numPages}
                             >
-                              Próxima
+                              ›
                             </Button>
                           </div>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                        >
+                          Abrir Externo
+                        </Button>
                       </div>
                       
                       {/* Visualizador do PDF */}
-                      <div className="max-h-[500px] overflow-auto bg-gray-50 p-4 flex justify-center">
+                      <div className="max-h-[60vh] overflow-auto bg-gray-50 p-4 flex justify-center">
                         <Document
                           file={selectedReceipt.imagem_url}
                           onLoadSuccess={onDocumentLoadSuccess}
+                          onLoadError={(error) => {
+                            console.error('Erro ao carregar PDF:', error);
+                            toast({
+                              title: "Erro no PDF",
+                              description: "Não foi possível carregar o PDF. Tente abrir no navegador.",
+                              variant: "destructive",
+                            });
+                          }}
                           loading={
-                            <div className="flex items-center justify-center p-8">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            <div className="flex flex-col items-center justify-center p-8 min-h-[200px]">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+                              <p className="text-sm text-muted-foreground">Carregando PDF...</p>
                             </div>
                           }
                           error={
-                            <div className="text-center p-8">
+                            <div className="text-center p-8 min-h-[200px] flex flex-col items-center justify-center">
                               <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
                               <p className="text-sm text-muted-foreground mb-2">Erro ao carregar PDF</p>
-                              <Button
-                                variant="outline"
-                                onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
-                              >
-                                Abrir no navegador
-                              </Button>
+                              <p className="text-xs text-muted-foreground mb-4 max-w-sm">
+                                O PDF pode estar corrompido ou em um formato não suportado
+                              </p>
+                              <div className="space-y-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                                >
+                                  Abrir no navegador
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Força recarregamento
+                                    setPageNumber(1);
+                                    setScale(1.2);
+                                  }}
+                                >
+                                  Tentar novamente
+                                </Button>
+                              </div>
                             </div>
                           }
+                          options={{
+                            cMapUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/cmaps/',
+                            cMapPacked: true,
+                          }}
                         >
                           <Page
                             pageNumber={pageNumber}
                             scale={scale}
                             renderTextLayer={false}
                             renderAnnotationLayer={false}
+                            onRenderError={(error) => {
+                              console.error('Erro ao renderizar página:', error);
+                            }}
                           />
                         </Document>
                       </div>
