@@ -30,8 +30,16 @@ serve(async (req) => {
       throw new Error('notaId e imageUrl são obrigatórios');
     }
 
-    // Criar cliente Supabase
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+    // Criar cliente Supabase com Service Role (bypassa RLS)
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      },
+      db: {
+        schema: 'public'
+      }
+    });
 
     // Buscar a nota fiscal
     const { data: nota, error: notaError } = await supabase
