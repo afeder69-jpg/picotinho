@@ -6,6 +6,7 @@ import { Package, Calendar, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-rea
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import PicotinhoLogo from '@/components/PicotinhoLogo';
 
 interface EstoqueItem {
   id: string;
@@ -121,29 +122,32 @@ const EstoqueAtual = () => {
   }
 
   if (estoque.length === 0) {
-  return (
-    <div className="container mx-auto p-6">
-      {/* Botão Voltar */}
-      <div className="mb-4">
-        <Button
-          variant="outline"
-          onClick={() => navigate('/menu')}
-          className="flex items-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar ao Menu
-        </Button>
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex flex-col">
+        {/* Header com logo e navegação */}
+        <div className="flex justify-between items-center p-4">
+          <PicotinhoLogo />
+          <Button
+            variant="outline"
+            onClick={() => navigate('/menu')}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar ao Menu
+          </Button>
+        </div>
+        
+        <div className="container mx-auto p-6 flex-1">
+          <div className="text-center p-8">
+            <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-bold mb-2">Estoque Vazio</h2>
+            <p className="text-muted-foreground">
+              Seu estoque será preenchido automaticamente quando você processar notas fiscais com IA
+            </p>
+          </div>
+        </div>
       </div>
-      
-      <div className="text-center p-8">
-        <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-        <h2 className="text-2xl font-bold mb-2">Estoque Vazio</h2>
-        <p className="text-muted-foreground">
-          Seu estoque será preenchido automaticamente quando você processar notas fiscais com IA
-        </p>
-      </div>
-    </div>
-  );
+    );
   }
 
   const groupedEstoque = groupByCategory(estoque);
@@ -155,9 +159,10 @@ const EstoqueAtual = () => {
   }, 0);
 
   return (
-    <div className="container mx-auto p-6">
-      {/* Botão Voltar */}
-      <div className="mb-4">
+    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+      {/* Header com logo e navegação */}
+      <div className="flex justify-between items-center p-4">
+        <PicotinhoLogo />
         <Button
           variant="outline"
           onClick={() => navigate('/menu')}
@@ -168,7 +173,8 @@ const EstoqueAtual = () => {
         </Button>
       </div>
       
-      <div className="space-y-6">
+      <div className="container mx-auto p-6 flex-1">
+        <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -295,6 +301,7 @@ const EstoqueAtual = () => {
               </CardContent>
             </Card>
           ))}
+        </div>
         </div>
       </div>
     </div>
