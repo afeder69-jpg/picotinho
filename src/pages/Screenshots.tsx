@@ -1,6 +1,7 @@
 import React from "react";
 import BottomNavigation from "@/components/BottomNavigation";
 import ReceiptList from "@/components/ReceiptList";
+import UploadNoteButton from "@/components/UploadNoteButton";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,11 @@ import { LogIn } from "lucide-react";
 
 const ScreenshotsContent = () => {
   const { user, loading, signInAnonymously } = useAuth();
+  const [refreshKey, setRefreshKey] = React.useState(0);
+
+  const handleUploadSuccess = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   if (loading) {
     return (
@@ -42,7 +48,10 @@ const ScreenshotsContent = () => {
     <div className="min-h-screen bg-background pb-20">
       <div className="container mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-6">Minhas Notas Fiscais</h1>
-        <ReceiptList />
+        <div className="mb-6">
+          <UploadNoteButton onUploadSuccess={handleUploadSuccess} />
+        </div>
+        <ReceiptList key={refreshKey} />
       </div>
       <BottomNavigation />
     </div>
