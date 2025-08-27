@@ -270,6 +270,7 @@ serve(async (req) => {
         .replace(/\b(MARACUJ[AÁ]?)\b/gi, 'MARACUJA')
         .replace(/\b(LIM[AÃ]O)\b/gi, 'LIMAO')
         .replace(/\b(MAM[AÃ]O)\b/gi, 'MAMAO')
+        .replace(/\bMAMO\b/gi, 'MAMÃO') // Nova regra: MAMO → MAMÃO
         .replace(/\b(MU[CÇ]ARELA)\b/gi, 'MUCARELA')
         .replace(/\b(A[CÇ]UCAR)\b/gi, 'ACUCAR')
         
