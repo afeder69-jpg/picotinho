@@ -12,7 +12,12 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 serve(async (req) => {
+  console.log('🚀 Edge function process-receipt-ai iniciada');
+  console.log('📋 Método da requisição:', req.method);
+  console.log('📋 Headers:', Object.fromEntries(req.headers.entries()));
+  
   if (req.method === 'OPTIONS') {
+    console.log('✅ Retornando resposta OPTIONS para CORS');
     return new Response(null, { headers: corsHeaders });
   }
 

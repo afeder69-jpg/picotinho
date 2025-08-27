@@ -215,62 +215,79 @@ const ReceiptList = () => {
   };
 
   const processReceiptWithAI = async (receipt: Receipt) => {
+    console.log('🔵 Iniciando processamento da nota:', receipt);
+    
     if (!receipt.imagem_url || processingReceipts.has(receipt.id)) {
+      console.log('❌ Nota rejeitada:', { 
+        hasImageUrl: !!receipt.imagem_url, 
+        isProcessing: processingReceipts.has(receipt.id) 
+      });
       return;
     }
 
     try {
+      console.log('🟡 Definindo estado de processamento...');
       setProcessingReceipts(prev => new Set(prev).add(receipt.id));
       
+      console.log('🟡 Mostrando toast...');
       toast({
         title: "Processando nota fiscal",
         description: "A IA está analisando os dados da nota...",
       });
 
-      console.log('Chamando process-receipt-ai com:', {
+      console.log('🟡 Preparando chamada para process-receipt-ai...');
+      const requestBody = {
         notaId: receipt.id,
         imageUrl: receipt.imagem_url
-      });
+      };
+      console.log('📤 Body da requisição:', requestBody);
 
+      console.log('📞 Chamando supabase.functions.invoke...');
       const { data, error } = await supabase.functions.invoke('process-receipt-ai', {
-        body: {
-          notaId: receipt.id,
-          imageUrl: receipt.imagem_url
-        }
+        body: requestBody
       });
 
-      console.log('Resposta da função:', { data, error });
+      console.log('📨 Resposta recebida:', { data, error });
 
       if (error) {
-        console.error('Erro da edge function:', error);
+        console.error('❌ Erro da edge function:', error);
         throw error;
       }
 
       if (data?.success) {
+        console.log('✅ Processamento bem-sucedido:', data);
         toast({
           title: "Nota processada com sucesso!",
           description: `${data.itensProcessados || 0} itens foram extraídos e salvos.`,
         });
         
-        // Recarregar a lista para mostrar os dados atualizados
+        console.log('🔄 Recarregando lista de notas...');
         await loadReceipts();
       } else {
+        console.error('❌ Dados inválidos retornados:', data);
         throw new Error(data?.error || 'Erro desconhecido ao processar nota');
       }
 
     } catch (error) {
-      console.error('Erro ao processar nota:', error);
+      console.error('💥 Erro capturado:', error);
+      console.error('💥 Tipo do erro:', typeof error);
+      console.error('💥 Message:', error.message);
+      console.error('💥 Stack:', error.stack);
       
       let errorMessage = "Não foi possível processar a nota fiscal";
       
       if (error.message?.includes('Failed to send a request')) {
         errorMessage = "Erro de conectividade com o servidor. Tente novamente.";
+        console.error('🔴 Erro de conectividade detectado');
       } else if (error.message?.includes('Function not found')) {
         errorMessage = "Serviço de processamento não encontrado.";
+        console.error('🔴 Função não encontrada');
       } else if (error.details) {
         errorMessage = error.details;
+        console.error('🔴 Erro com detalhes:', error.details);
       } else if (error.message) {
         errorMessage = error.message;
+        console.error('🔴 Erro com mensagem:', error.message);
       }
       
       toast({
@@ -279,6 +296,7 @@ const ReceiptList = () => {
         variant: "destructive",
       });
     } finally {
+      console.log('🔚 Finalizando processamento...');
       setProcessingReceipts(prev => {
         const newSet = new Set(prev);
         newSet.delete(receipt.id);
