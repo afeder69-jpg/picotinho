@@ -76,8 +76,13 @@ serve(async (req) => {
     console.log('Found receipt:', nota);
 
     // Verificar se é um arquivo PDF
-    const isPDF = nota.imagem_url.toLowerCase().includes('.pdf') || 
-                   nota.nome_original?.toLowerCase().includes('.pdf');
+    const fileExtension = nota.imagem_url.toLowerCase().split('.').pop();
+    const originalExtension = nota.nome_original?.toLowerCase().split('.').pop();
+    
+    console.log('🔍 Extensão do arquivo:', fileExtension);
+    console.log('🔍 Nome original:', nota.nome_original);
+    
+    const isPDF = fileExtension === 'pdf';
     
     if (isPDF) {
       console.error('❌ PDFs não são suportados pela API de visão da OpenAI');
