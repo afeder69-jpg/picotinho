@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Upload, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 interface UploadNoteButtonProps {
   onUploadSuccess: () => void;
@@ -14,18 +15,24 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
   const [uploading, setUploading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    if (!user) {
+      toast({
+        title: "Erro",
+        description: "Você precisa estar logado para enviar notas fiscais",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setUploading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('Usuário não autenticado');
-      }
 
       // Processar cada arquivo
       for (const file of Array.from(files)) {
@@ -151,9 +158,13 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
-        <Button variant="default" className="w-full">
+        <Button 
+          variant="default" 
+          className="w-full"
+          disabled={!user}
+        >
           <Upload className="w-4 h-4 mr-2" />
-          Enviar Nota
+          {user ? 'Enviar Nota' : 'Faça login para enviar'}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
