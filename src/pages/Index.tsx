@@ -34,9 +34,11 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col">
       {/* Header com logo e botão de login/logout */}
-      <div className="flex justify-between items-center p-4">
+      <div className="flex justify-between items-center p-4 relative">
         <PicotinhoLogo />
         <div className="flex-1"></div> {/* Spacer */}
+        {/* Indicador de versão APK */}
+        <div className="absolute top-2 right-2 w-2 h-2 bg-yellow-400 rounded-full"></div>
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
