@@ -157,7 +157,7 @@ IMPORTANTE:
       return nome
         .toUpperCase()
         .trim()
-        // Primeiro passo: correções de OCR comuns
+        // Primeiro passo: correções de OCR comuns e acentos
         .replace(/\bGRAENC\b/gi, 'GRANEL')
         .replace(/\bGRANEL\b/gi, 'GRANEL')
         .replace(/\bREQUEIJAO\b/gi, 'REQUEIJAO')
@@ -166,23 +166,33 @@ IMPORTANTE:
         .replace(/\bÇUCAR\b/gi, 'AÇUCAR')
         .replace(/\bARR0Z\b/gi, 'ARROZ')
         .replace(/\bFEIJÃ0\b/gi, 'FEIJAO')
+        .replace(/\b(MARACUJ[AÁ]?)\b/gi, 'MARACUJA')
+        .replace(/\b(LIM[AÃ]O)\b/gi, 'LIMAO')
+        .replace(/\b(MAM[AÃ]O)\b/gi, 'MAMAO')
+        .replace(/\b(MU[CÇ]ARELA)\b/gi, 'MUCARELA')
+        .replace(/\b(A[CÇ]UCAR)\b/gi, 'ACUCAR')
         
         // Segundo passo: padronizar formatos de pães
-        .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO)?\b/gi, 'PAO DE FORMA')
+        .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO|INTEGRAL|10\s*GRAOS|ORIGINAL)?\b/gi, 'PAO DE FORMA')
+        
+        // Padronizar achocolatado
+        .replace(/\b(ACHOCOLATADO EM PO NESCAU)\s*(380G|3\.0|30KG|\d+G)?\b/gi, 'ACHOCOLATADO EM PO')
         
         // Terceiro passo: remover especificações de peso/tamanho que variam
-        .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0)\b/gi, '')
+        .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|INTEGRAL|10\s*GRAOS|ORIGINAL)\b/gi, '')
         .replace(/\b\d+G\b/gi, '') // Remove qualquer especificação de gramagem
         .replace(/\b\d+ML\b/gi, '') // Remove especificação de volume
         .replace(/\b\d+L\b/gi, '') // Remove especificação de litros
         .replace(/\b\d+KG\b/gi, '') // Remove especificação de quilogramas
         
-        // Quarto passo: padronizar ordem das palavras
+        // Quarto passo: padronizar ordem das palavras para frutas
+        .replace(/\b(KG\s+AZEDO)\b/gi, 'AZEDO KG')
+        .replace(/\b(AZEDO\s+KG)\b/gi, 'AZEDO KG')
         .replace(/\bGRANEL\s*KG\b/gi, 'KG GRANEL')
         .replace(/\bKG\s*GRANEL\b/gi, 'GRANEL KG')
         
         // Quinto passo: remover marcas específicas para produtos genéricos
-        .replace(/\b(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA|NESTLE|COCA|PEPSI|NESCAU)\b/gi, '')
+        .replace(/\b(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA|NESTLE|COCA|PEPSI|NESCAU|DOMILAC|LAC\s*FREE|ZILAC|GRAN\s*MESTRE|BATAVO|ELEFANTE|GRANFINO)\b/gi, '')
         
         // Sexto passo: limpar espaços múltiplos e caracteres especiais
         .replace(/\s+/g, ' ')
