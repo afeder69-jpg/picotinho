@@ -99,8 +99,11 @@ serve(async (req) => {
 
     // Preparar prompt para IA
     const prompt = `
-Analise esta nota fiscal e extraia todas as informações estruturadas. 
-Retorne APENAS um JSON válido com esta estrutura:
+Você é um especialista em análise de notas fiscais brasileiras. Analise cuidadosamente esta imagem de nota fiscal/cupom fiscal eletrônico e extraia TODAS as informações visíveis.
+
+IMPORTANTE: Esta pode ser uma imagem convertida de PDF, então olhe com atenção para todos os detalhes, mesmo que a qualidade não seja perfeita.
+
+Retorne APENAS um JSON válido com esta estrutura exata:
 
 {
   "dataCompra": "YYYY-MM-DD",
@@ -124,15 +127,36 @@ Retorne APENAS um JSON válido com esta estrutura:
   ]
 }
 
-Regras importantes:
-- Use apenas números para valores (sem símbolos de moeda)
-- Data no formato YYYY-MM-DD
-- Hora no formato HH:MM
-- CNPJ formatado com pontos e barras
-- Categorias comuns: laticínios, bebidas, frutas, verduras, carnes, aves, peixes, grãos, cereais, pães, doces, limpeza, higiene, outros
-- Unidades comuns: UN (unidade), KG, G, L, ML, PC (peça), CX (caixa)
-- Seja preciso nos valores e quantidades
-- Se algum campo não estiver visível, use null
+INSTRUÇÕES ESPECÍFICAS:
+1. Procure por: "CUPOM FISCAL ELETRÔNICO", "NOTA FISCAL", "DANFE", ou cabeçalhos similares
+2. Data: Procure por "DATA" ou formato dd/mm/yyyy
+3. Hora: Procure por "HORA" ou formato hh:mm
+4. Loja: Nome da empresa no topo
+5. CNPJ: Procure por "CNPJ:" seguido de números
+6. Endereço: Abaixo do nome da empresa
+7. Itens: Lista de produtos com códigos, descrições, quantidades e valores
+8. Total: "TOTAL", "VALOR TOTAL" ou "R$" no final
+9. Pagamento: "PIX", "CARTÃO", "DINHEIRO", "DÉBITO", "CRÉDITO"
+
+CATEGORIZAÇÃO:
+- laticínios: leite, queijo, iogurte, manteiga, cream cheese
+- bebidas: refrigerante, suco, água, cerveja, vinho
+- frutas: maçã, banana, laranja, uva, etc.
+- verduras: alface, tomate, cebola, cenoura, etc.
+- carnes: bovina, suína, frango, peixe
+- pães: pão, biscoito, bolo, torrada
+- limpeza: detergente, sabão, desinfetante
+- higiene: shampoo, sabonete, pasta de dente
+- outros: para itens que não se encaixam
+
+VALORES E UNIDADES:
+- Remova "R$", vírgulas como separadores de milhar
+- Use ponto como separador decimal (ex: 15.99)
+- Unidades: UN, KG, G, L, ML, PC, CX, PCT
+- Multiplique quantidade × valor unitário = valor total do item
+
+Se a imagem estiver muito borrada ou ilegível, tente extrair o que conseguir ver e use null para campos não visíveis.
+SEMPRE retorne um JSON válido, mesmo que com campos null.
 `;
 
     // Chamar OpenAI Vision API
