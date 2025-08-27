@@ -134,6 +134,7 @@ Regras importantes:
 
     // Verificar se já existe supermercado
     let supermercadoId = null;
+    
     if (dadosExtraidos.loja?.cnpj) {
       const { data: supermercadoExistente } = await supabase
         .from('supermercados')
@@ -148,9 +149,9 @@ Regras importantes:
         const { data: novoSupermercado, error: supermercadoError } = await supabase
           .from('supermercados')
           .insert({
-            nome: dadosExtraidos.loja.nome,
+            nome: dadosExtraidos.loja.nome || 'Supermercado Desconhecido',
             cnpj: dadosExtraidos.loja.cnpj,
-            endereco: dadosExtraidos.loja.endereco
+            endereco: dadosExtraidos.loja.endereco || ''
           })
           .select('id')
           .single();
@@ -160,6 +161,27 @@ Regras importantes:
         } else {
           supermercadoId = novoSupermercado.id;
         }
+      }
+    }
+
+    // Se não conseguiu encontrar/criar supermercado, criar um padrão
+    if (!supermercadoId) {
+      console.log('🟡 Criando supermercado padrão pois não foi possível extrair da nota');
+      const { data: supermercadoPadrao, error: defaultError } = await supabase
+        .from('supermercados')
+        .insert({
+          nome: 'Supermercado Não Identificado',
+          cnpj: '00.000.000/0000-00',
+          endereco: 'Endereço não informado'
+        })
+        .select('id')
+        .single();
+
+      if (defaultError) {
+        console.error('Erro ao criar supermercado padrão:', defaultError);
+        throw new Error('Não foi possível criar registro de supermercado');
+      } else {
+        supermercadoId = supermercadoPadrao.id;
       }
     }
 
