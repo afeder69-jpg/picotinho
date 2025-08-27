@@ -283,6 +283,9 @@ serve(async (req) => {
       
       // Aplicar normalizações de padrões específicos (mantidas do código original)
       nomeNormalizado = nomeNormalizado
+        // NOVA REGRA: Separar "PAO DE FORMA" quando colado a outras palavras
+        .replace(/\b(PAO\s+DE\s+FORMA)([A-Z0-9])/gi, '$1 $2')
+        
         // Padronizar formatos de pães
         .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO|INTEGRAL|10\s*GRAOS|ORIGINAL)?\b/gi, 'PAO DE FORMA')
         
