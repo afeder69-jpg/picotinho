@@ -114,11 +114,11 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             isPdf
           });
 
-          // Validar tamanho (máximo 10MB)
-          if (file.size > 10 * 1024 * 1024) {
+          // Validar tamanho (máximo 5MB - aumentado para aceitar PDFs de nota fiscal)
+          if (file.size > 5 * 1024 * 1024) {
             toast({
               title: "Erro",
-              description: `Arquivo muito grande: ${file.name}. Máximo 10MB.`,
+              description: `Arquivo muito grande: ${file.name}. Máximo 5MB.`,
               variant: "destructive",
             });
             continue;
@@ -300,8 +300,8 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           <div className="space-y-2">
             <label className="block text-sm font-medium">Arquivos aceitos:</label>
             <ul className="text-xs text-muted-foreground list-disc list-inside">
-              <li>Imagens: JPEG, PNG, WebP (máx. 10MB cada)</li>
-              <li>PDF gerado pelo navegador (máx. 10MB)</li>
+              <li>Imagens: JPEG, PNG, WebP (máx. 5MB cada)</li>
+              <li>PDF de nota fiscal (máx. 5MB)</li>
               <li>Múltiplos arquivos da mesma nota</li>
             </ul>
           </div>

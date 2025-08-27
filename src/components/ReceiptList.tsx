@@ -2,10 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Trash2, FileText } from 'lucide-react';
+import { Eye, Trash2, FileText, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Document, Page, pdfjs } from 'react-pdf';
+
+// Configurar worker do PDF
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 
 interface Receipt {
@@ -32,6 +36,9 @@ const ReceiptList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [scale, setScale] = useState<number>(1.2);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -147,8 +154,17 @@ const ReceiptList = () => {
 
   const viewReceipt = (receipt: Receipt) => {
     setSelectedReceipt(receipt);
+    setPageNumber(1);
+    setScale(1.2);
     setIsDialogOpen(true);
   };
+
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+  };
+
+  const zoomIn = () => setScale(prev => Math.min(prev + 0.2, 3));
+  const zoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
 
   const getStatusBadge = (status: string | null) => {
     switch (status) {
@@ -287,7 +303,7 @@ const ReceiptList = () => {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] w-full overflow-y-auto">
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-full overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes da Nota Fiscal</DialogTitle>
           </DialogHeader>
@@ -323,19 +339,87 @@ const ReceiptList = () => {
               {selectedReceipt.imagem_url && (
                 <div>
                   <h4 className="font-semibold mb-2">
-                    {selectedReceipt.file_type === 'PDF' ? 'Arquivo PDF' : 'Imagem da Nota'}
+                    {selectedReceipt.file_type === 'PDF' ? 'Visualizar PDF' : 'Imagem da Nota'}
                   </h4>
                   {selectedReceipt.file_type === 'PDF' ? (
-                    <div className="border rounded-lg p-4 text-center">
-                      <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground mb-2">Arquivo PDF</p>
-                      <Button
-                        variant="outline"
-                        onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
-                        className="w-full"
-                      >
-                        Abrir PDF
-                      </Button>
+                    <div className="border rounded-lg overflow-hidden">
+                      {/* Controles do PDF */}
+                      <div className="bg-muted/50 p-3 border-b flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={zoomOut}
+                            disabled={scale <= 0.5}
+                          >
+                            -
+                          </Button>
+                          <span className="text-sm px-2">{Math.round(scale * 100)}%</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={zoomIn}
+                            disabled={scale >= 3}
+                          >
+                            +
+                          </Button>
+                        </div>
+                        {numPages > 1 && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPageNumber(prev => Math.max(prev - 1, 1))}
+                              disabled={pageNumber <= 1}
+                            >
+                              Anterior
+                            </Button>
+                            <span className="text-sm px-2">
+                              {pageNumber} de {numPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPageNumber(prev => Math.min(prev + 1, numPages))}
+                              disabled={pageNumber >= numPages}
+                            >
+                              Próxima
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Visualizador do PDF */}
+                      <div className="max-h-[500px] overflow-auto bg-gray-50 p-4 flex justify-center">
+                        <Document
+                          file={selectedReceipt.imagem_url}
+                          onLoadSuccess={onDocumentLoadSuccess}
+                          loading={
+                            <div className="flex items-center justify-center p-8">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            </div>
+                          }
+                          error={
+                            <div className="text-center p-8">
+                              <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
+                              <p className="text-sm text-muted-foreground mb-2">Erro ao carregar PDF</p>
+                              <Button
+                                variant="outline"
+                                onClick={() => window.open(selectedReceipt.imagem_url, '_blank')}
+                              >
+                                Abrir no navegador
+                              </Button>
+                            </div>
+                          }
+                        >
+                          <Page
+                            pageNumber={pageNumber}
+                            scale={scale}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                          />
+                        </Document>
+                      </div>
                     </div>
                   ) : (
                     <img 
