@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogIn } from "lucide-react";
 
-const ScreenshotsContent = () => {
+const Screenshots = () => {
   const { user, loading, signInAnonymously } = useAuth();
   const [refreshKey, setRefreshKey] = React.useState(0);
 
@@ -58,12 +58,12 @@ const ScreenshotsContent = () => {
   );
 };
 
-const Screenshots = () => {
+const ScreenshotsWithProvider = () => {
   return (
     <AuthProvider>
-      <ScreenshotsContent />
+      <Screenshots />
     </AuthProvider>
   );
 };
 
-export default Screenshots;
+export default ScreenshotsWithProvider;
