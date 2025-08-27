@@ -20,6 +20,7 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
+  console.log('App component renderizando...');
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

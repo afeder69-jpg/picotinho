@@ -28,9 +28,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isTestMode, setIsTestMode] = useState(false);
 
   useEffect(() => {
+    console.log('AuthProvider useEffect iniciando...');
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log('Auth state change:', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -47,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Session inicial:', session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
