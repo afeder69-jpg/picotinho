@@ -38,7 +38,7 @@ const Index = () => {
         <PicotinhoLogo />
         <div className="flex-1"></div> {/* Spacer */}
         {/* Indicador de versão APK */}
-        <div className="absolute top-2 right-2 w-2 h-2 bg-yellow-400 rounded-full"></div>
+        <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full"></div>
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">

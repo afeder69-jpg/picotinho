@@ -286,7 +286,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           <Input
             type="file"
             multiple
-            accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf,.pdf"
+            accept="image/*,.pdf,application/pdf"
             onChange={handleFileUpload}
             disabled={uploading}
             className="cursor-pointer"
