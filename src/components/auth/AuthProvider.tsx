@@ -28,11 +28,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isTestMode, setIsTestMode] = useState(false);
 
   useEffect(() => {
-    console.log('AuthProvider useEffect iniciando...');
+    let isInitialized = false;
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('Auth state change:', event, session?.user?.id);
+        if (!isInitialized) {
+          isInitialized = true;
+          setLoading(false);
+        }
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -42,17 +46,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             handleGoogleProfileCreation(session.user);
           }, 0);
         }
-        
-        setLoading(false);
       }
     );
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Session inicial:', session?.user?.id);
+      if (!isInitialized) {
+        isInitialized = true;
+        setLoading(false);
+      }
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -107,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: new Date().toISOString()
     } as User;
     setUser(mockUser);
-    console.log('Modo de teste ativado');
+    setLoading(false);
   };
 
   const signOut = async () => {

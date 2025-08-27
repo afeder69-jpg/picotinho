@@ -9,11 +9,8 @@ import { LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 const Index = () => {
-  console.log('Index component renderizando...');
   const [showScanner, setShowScanner] = useState(false);
-  console.log('Tentando usar useAuth...');
   const { user, signOut } = useAuth();
-  console.log('useAuth funcionou, user:', user?.id);
   const navigate = useNavigate();
 
   const handleScanSuccess = (result: string) => {
