@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Trash2, FileText, X } from 'lucide-react';
+import { Eye, Trash2, FileText, X, Bot, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -35,6 +35,7 @@ const ReceiptList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -214,6 +215,58 @@ const ReceiptList = () => {
     }
   };
 
+  const processReceiptWithAI = async (receipt: Receipt) => {
+    if (!receipt.imagem_url || processingReceipts.has(receipt.id)) {
+      return;
+    }
+
+    try {
+      setProcessingReceipts(prev => new Set(prev).add(receipt.id));
+      
+      toast({
+        title: "Processando nota fiscal",
+        description: "A IA está analisando os dados da nota...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('process-receipt-ai', {
+        body: {
+          notaId: receipt.id,
+          imageUrl: receipt.imagem_url
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.success) {
+        toast({
+          title: "Nota processada com sucesso!",
+          description: `${data.itensProcessados} itens foram extraídos e salvos.`,
+        });
+        
+        // Recarregar a lista para mostrar os dados atualizados
+        await loadReceipts();
+      } else {
+        throw new Error(data.error || 'Erro desconhecido');
+      }
+
+    } catch (error) {
+      console.error('Erro ao processar nota:', error);
+      toast({
+        title: "Erro ao processar nota",
+        description: error.message || "Não foi possível processar a nota fiscal",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingReceipts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(receipt.id);
+        return newSet;
+      });
+    }
+  };
+
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'processed':
@@ -325,18 +378,38 @@ const ReceiptList = () => {
                 )}
               </div>
               
-              <div className="flex justify-between items-center mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => viewReceipt(receipt)}
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() 
-                    ? 'Abrir PDF' 
-                    : 'Ver Detalhes'
-                  }
-                </Button>
+              <div className="flex justify-between items-center mt-4 gap-2">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => viewReceipt(receipt)}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() 
+                      ? 'Abrir PDF' 
+                      : 'Ver Detalhes'
+                    }
+                  </Button>
+                  
+                  {/* Botão de processar com IA apenas para notas não processadas */}
+                  {!receipt.processada && receipt.imagem_url && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => processReceiptWithAI(receipt)}
+                      disabled={processingReceipts.has(receipt.id)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {processingReceipts.has(receipt.id) ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Bot className="w-4 h-4 mr-2" />
+                      )}
+                      {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
+                    </Button>
+                  )}
+                </div>
                 
                 <Button
                   variant="ghost"
