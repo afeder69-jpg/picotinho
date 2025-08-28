@@ -87,14 +87,13 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Você é um especialista em processar notas fiscais brasileiras (DANFE NFC-e).
-
-Analise este texto de uma nota fiscal brasileira e extraia as informações em JSON:
+            content: `Você é especialista em processar DANFE NFC-e (nota fiscal eletrônica do consumidor).
+IMPORTANTE: Sempre responda com JSON válido no formato abaixo, sem texto adicional:
 
 {
   "estabelecimento": {
     "nome_fantasia": "string",
-    "cnpj": "string (formato XX.XXX.XXX/XXXX-XX)",
+    "cnpj": "string",
     "endereco": "string"
   },
   "compra": {
@@ -114,11 +113,9 @@ Analise este texto de uma nota fiscal brasileira e extraia as informações em J
   ]
 }
 
-IMPORTANTE: 
-- Extraia APENAS informações que estão claramente no texto
-- Quantidade deve ser número, não string
-- Preços devem ser números sem formatação
-- Responda APENAS com JSON válido`
+Extraia os dados exatamente como aparecem no texto, sem inventar nada.
+Mesmo que não consiga todos os campos, sempre retorne pelo menos 1 item no array "itens".
+Se não encontrar produtos específicos, crie um item genérico com as informações disponíveis.`
           },
           {
             role: 'user',
@@ -148,7 +145,10 @@ IMPORTANTE:
       throw new Error('IA não retornou resposta válida');
     }
 
-    console.log('🎯 Conteúdo da resposta da IA:', aiContent);
+    console.log('🎯 Conteúdo JSON da resposta da IA:');
+    console.log("=".repeat(80));
+    console.log(aiContent);
+    console.log("=".repeat(80));
 
     let dadosExtraidos;
     try {
