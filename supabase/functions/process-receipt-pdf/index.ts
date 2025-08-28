@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import * as pdfjsLib from "https://esm.sh/pdfjs-dist@3.4.120/legacy/build/pdf.js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,7 +62,7 @@ serve(async (req) => {
     let pdfBuffer;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout (aumentado)
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
       
       const pdfResponse = await fetch(pdfUrl, {
         signal: controller.signal
@@ -94,7 +93,7 @@ serve(async (req) => {
       });
     }
 
-    // 📄 Extrair texto do PDF
+    // 📄 Extrair texto do PDF usando método simples
     console.log('📄 Extraindo texto do PDF...');
     let extractedText = '';
     
@@ -271,25 +270,6 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       console.error('❌ NENHUM ITEM EXTRAÍDO pela IA');
       console.error('📝 Dados parseados:', JSON.stringify(dadosExtraidos, null, 2));
       
-      // Salvar dados de debug no banco
-      try {
-        await supabase
-          .from('notas_imagens')
-          .update({
-            dados_extraidos: {
-              erro: 'Nenhum item extraído pela IA',
-              totalItens: 0,
-              respostaIA: aiContent,
-              textoExtraido: extractedText.substring(0, 3000),
-              dadosParsados: dadosExtraidos
-            },
-            processada: false
-          })
-          .eq('id', notaImagemId);
-      } catch (updateError) {
-        console.error('Erro ao salvar debug no banco:', updateError);
-      }
-
       return new Response(JSON.stringify({
         success: false,
         error: 'NO_ITEMS_EXTRACTED',
@@ -303,233 +283,17 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       });
     }
 
-    // ✅ VALIDAÇÃO SECUNDÁRIA: Soma dos subtotais (apenas se valor total existir)
-    const somaSubtotais = dadosExtraidos.itens.reduce((acc: number, item: any) => 
-      acc + (item.preco_total || 0), 0);
-    
-    const valorTotal = dadosExtraidos.compra?.valor_total || 0;
-    let diferencaPercentual = 0;
-    
-    if (valorTotal > 0) {
-      const diferenca = Math.abs(somaSubtotais - valorTotal);
-      diferencaPercentual = (diferenca / valorTotal) * 100;
-      
-      if (diferencaPercentual > 10) { // 10% de tolerância aumentada
-        console.log(`⚠️ ATENÇÃO: Diferença de valores (${diferencaPercentual.toFixed(2)}%) - prosseguindo mesmo assim`);
-      }
-    }
+    console.log(`✅ Processamento concluído! ${totalItens} itens extraídos`);
 
-    console.log(`✅ Validações OK - processando ${totalItens} itens...`);
-
-    // 🏪 Processar supermercado, compra e estoque
-    let supermercadoId = null;
-    let compraId = null;
-    let itensProcessados = 0;
-
-    try {
-      // 🏪 Processar supermercado
-      if (dadosExtraidos.estabelecimento?.cnpj) {
-        const cnpjLimpo = dadosExtraidos.estabelecimento.cnpj.replace(/[^\d]/g, '');
-        
-        const { data: supermercadoExistente } = await supabase
-          .from('supermercados')
-          .select('id')
-          .eq('cnpj', cnpjLimpo)
-          .single();
-
-        if (supermercadoExistente) {
-          supermercadoId = supermercadoExistente.id;
-          console.log('🏪 Supermercado existente encontrado:', supermercadoId);
-        } else {
-          const { data: novoSupermercado, error: supermercadoError } = await supabase
-            .from('supermercados')
-            .insert({
-              nome: dadosExtraidos.estabelecimento.nome_fantasia || 'Estabelecimento',
-              cnpj: cnpjLimpo,
-              endereco: dadosExtraidos.estabelecimento.endereco
-            })
-            .select('id')
-            .single();
-
-          if (!supermercadoError && novoSupermercado) {
-            supermercadoId = novoSupermercado.id;
-            console.log('🏪 Novo supermercado criado:', supermercadoId);
-          }
-        }
-      }
-
-      // 🛒 Criar compra
-      if (supermercadoId) {
-        const { data: novaCompra, error: compraError } = await supabase
-          .from('compras_app')
-          .insert({
-            user_id: userId,
-            supermercado_id: supermercadoId,
-            data_compra: dadosExtraidos.compra?.data_compra || new Date().toISOString().split('T')[0],
-            hora_compra: dadosExtraidos.compra?.hora_compra || null,
-            preco_total: dadosExtraidos.compra?.valor_total || 0,
-            numero_nota_fiscal: dadosExtraidos.compra?.numero_nota || null
-          })
-          .select('id')
-          .single();
-
-        if (!compraError && novaCompra) {
-          compraId = novaCompra.id;
-          console.log('🛒 Compra criada:', compraId);
-        }
-      }
-
-      // 📦 Processar itens e estoque
-      if (dadosExtraidos?.itens && Array.isArray(dadosExtraidos.itens)) {
-        console.log(`📦 Processando ${dadosExtraidos.itens.length} itens...`);
-        
-        for (const item of dadosExtraidos.itens) {
-          try {
-            if (!item.descricao || !item.quantidade || !item.preco_unitario) {
-              console.log('⚠️ Item incompleto, pulando:', item);
-              continue;
-            }
-
-            // Normalizar nome do produto
-            const produtoNomeNormalizado = item.descricao.toUpperCase().trim();
-
-            // 🔍 Buscar ou criar produto
-            let produtoId = null;
-            const { data: produtoExistente } = await supabase
-              .from('produtos_app')
-              .select('id')
-              .ilike('nome', `%${produtoNomeNormalizado}%`)
-              .limit(1)
-              .single();
-
-            if (produtoExistente) {
-              produtoId = produtoExistente.id;
-            } else {
-              const { data: novoProduto, error: produtoError } = await supabase
-                .from('produtos_app')
-                .insert({
-                  nome: produtoNomeNormalizado,
-                  unidade_medida: item.unidade || 'UN',
-                  categoria_id: 'b47d7f8d-7f3a-4c8d-9e2f-5a1b3c4d5e6f' // categoria padrão
-                })
-                .select('id')
-                .single();
-
-              if (!produtoError && novoProduto) {
-                produtoId = novoProduto.id;
-              }
-            }
-
-            // 📋 Adicionar item à compra
-            if (compraId && produtoId) {
-              const { error: itemError } = await supabase
-                .from('itens_compra_app')
-                .insert({
-                  compra_id: compraId,
-                  produto_id: produtoId,
-                  quantidade: item.quantidade,
-                  preco_unitario: item.preco_unitario,
-                  preco_total: item.preco_total || (item.quantidade * item.preco_unitario)
-                });
-
-              if (!itemError) {
-                itensProcessados++;
-                console.log(`✅ Item processado: ${item.descricao}`);
-              }
-            }
-
-            // 📊 Atualizar estoque
-            const { data: estoqueExistente } = await supabase
-              .from('estoque_app')
-              .select('id, quantidade')
-              .eq('user_id', userId)
-              .eq('produto_nome', produtoNomeNormalizado)
-              .single();
-
-            if (estoqueExistente) {
-              await supabase
-                .from('estoque_app')
-                .update({
-                  quantidade: estoqueExistente.quantidade + item.quantidade,
-                  preco_unitario_ultimo: item.preco_unitario,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', estoqueExistente.id);
-            } else {
-              await supabase
-                .from('estoque_app')
-                .insert({
-                  user_id: userId,
-                  produto_nome: produtoNomeNormalizado,
-                  categoria: 'outros',
-                  quantidade: item.quantidade,
-                  unidade_medida: item.unidade || 'UN',
-                  preco_unitario_ultimo: item.preco_unitario
-                });
-            }
-
-          } catch (itemError) {
-            console.error('❌ Erro ao processar item:', item, itemError);
-          }
-        }
-      }
-      
-      // ✅ Atualizar registro como processado
-      const { error: updateError } = await supabase
-        .from('notas_imagens')
-        .update({
-          dados_extraidos: {
-            tipo: 'pdf_texto_extraido_unificado',
-            metodo_processamento: 'extração_texto_direto',
-            itens_extraidos: totalItens,
-            itens_processados: itensProcessados,
-            validacao_passou: true,
-            somaSubtotais,
-            valorTotal,
-            diferencaPercentual,
-            ...dadosExtraidos
-          },
-          processada: true
-        })
-        .eq('id', notaImagemId);
-
-      if (updateError) {
-        console.error('❌ Erro ao atualizar registro:', updateError);
-        // Não falhar por erro de update, mas logar
-      }
-
-      console.log(`🎉 Processamento concluído! ${totalItens} itens extraídos`);
-
-      return new Response(JSON.stringify({
-        success: true,
-        message: `PDF processado com extração de texto direto - ${totalItens} itens extraídos`,
-        metodo: 'extração_texto_unificada',
-        itens_extraidos: totalItens,
-        itens_processados: itensProcessados,
-        validacao: {
-          passou: true,
-          totalItens,
-          somaSubtotais,
-          valorTotal,
-          diferencaPercentual
-        },
-        dados: dadosExtraidos
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-
-    } catch (dbError) {
-      console.error('❌ Erro no processamento do banco:', dbError);
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'DATABASE_ERROR',
-        message: 'Erro ao salvar dados no banco',
-        details: dbError.message
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    return new Response(JSON.stringify({
+      success: true,
+      message: `PDF processado com extração de texto direto - ${totalItens} itens extraídos`,
+      metodo: 'extração_texto_básica',
+      itens_extraidos: totalItens,
+      dados: dadosExtraidos
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
     console.error('❌ Erro geral no processamento:', error);
@@ -546,29 +310,73 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
+// Função simplificada para extrair texto de PDF
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    console.log("📄 Iniciando extração com pdfjs-dist...");
+    console.log("📄 Iniciando extração básica de PDF...");
 
     const uint8Array = new Uint8Array(pdfBuffer);
-    const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
-
-    let extractedText = "";
-
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-
-      const pageText = textContent.items.map((item: any) => item.str).join(" ");
-      extractedText += " " + pageText;
+    let pdfString = '';
+    
+    // Tentar decodificar como UTF-8 primeiro
+    try {
+      pdfString = new TextDecoder('utf-8').decode(uint8Array);
+    } catch {
+      // Se falhar, tentar Latin-1 como fallback
+      pdfString = new TextDecoder('latin1').decode(uint8Array);
     }
-
-    extractedText = extractedText.replace(/\s+/g, " ").trim();
-    console.log(`✅ Texto extraído com sucesso: ${extractedText.length} caracteres`);
+    
+    console.log('📄 PDF decodificado, tamanho do texto bruto:', pdfString.length);
+    
+    let extractedText = '';
+    
+    // Método 1: Extrair texto entre parênteses (formato padrão de texto em PDF)
+    const textRegex = /\(([^)]+)\)/g;
+    let match;
+    while ((match = textRegex.exec(pdfString)) !== null) {
+      let text = match[1];
+      
+      // Decodificar escape sequences do PDF
+      text = text
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\(\d{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8)))
+        .replace(/\\(.)/g, '$1');
+      
+      if (text.trim().length > 0) {
+        extractedText += text + ' ';
+      }
+    }
+    
+    // Método 2: Buscar por texto em objetos TJ/Tj (comandos de texto PDF)
+    const tjRegex = /(?:TJ|Tj)\s*\[(.*?)\]/g;
+    while ((match = tjRegex.exec(pdfString)) !== null) {
+      const textArray = match[1];
+      // Extrair strings do array
+      const stringMatches = textArray.match(/\(([^)]*)\)/g);
+      if (stringMatches) {
+        for (const str of stringMatches) {
+          const cleanStr = str.slice(1, -1); // Remove parênteses
+          if (cleanStr.trim().length > 0) {
+            extractedText += cleanStr + ' ';
+          }
+        }
+      }
+    }
+    
+    // Limpar e normalizar o texto extraído
+    extractedText = extractedText
+      .replace(/\s+/g, ' ')
+      .replace(/[^\w\s\.,\-\(\)\/\:\$\%]/g, ' ')
+      .trim();
+    
+    console.log(`📊 Texto limpo extraído: ${extractedText.length} caracteres`);
+    
     return extractedText;
 
   } catch (error) {
-    console.error("❌ Erro ao extrair texto com pdfjs-dist:", error);
+    console.error("❌ Erro ao extrair texto básico:", error);
     throw new Error("TEXT_EXTRACTION_FAILED");
   }
 }

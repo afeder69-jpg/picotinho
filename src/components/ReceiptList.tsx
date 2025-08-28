@@ -258,13 +258,26 @@ const ReceiptList = () => {
         console.log('🔄 PDF detectado, chamando process-receipt-pdf para:', receipt.id);
         
         // Chamar a nova função unificada que faz extração de texto
-        const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
-          body: {
-            notaImagemId: receipt.id,
-            pdfUrl: receipt.imagem_url,
-            userId: (await supabase.auth.getUser()).data.user?.id
-          }
+        console.log('📡 ANTES DA CHAMADA - Parâmetros:', {
+          notaImagemId: receipt.id,
+          pdfUrl: receipt.imagem_url,
+          userId: (await supabase.auth.getUser()).data.user?.id
         });
+
+        let pdfResponse;
+        try {
+          pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
+            body: {
+              notaImagemId: receipt.id,
+              pdfUrl: receipt.imagem_url,
+              userId: (await supabase.auth.getUser()).data.user?.id
+            }
+          });
+          console.log('📡 RESPOSTA RECEBIDA:', pdfResponse);
+        } catch (invokeError) {
+          console.error('❌ ERRO NA INVOCAÇÃO:', invokeError);
+          throw invokeError;
+        }
         
         console.log('📡 Chamando function process-receipt-pdf com params:', {
           notaImagemId: receipt.id,
