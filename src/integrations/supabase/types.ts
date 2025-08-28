@@ -399,6 +399,7 @@ export type Database = {
           total: number | null
           updated_at: string
           url: string
+          user_id: string
         }
         Insert: {
           cnpj?: string | null
@@ -413,6 +414,7 @@ export type Database = {
           total?: number | null
           updated_at?: string
           url: string
+          user_id: string
         }
         Update: {
           cnpj?: string | null
@@ -427,6 +429,7 @@ export type Database = {
           total?: number | null
           updated_at?: string
           url?: string
+          user_id?: string
         }
         Relationships: []
       }
