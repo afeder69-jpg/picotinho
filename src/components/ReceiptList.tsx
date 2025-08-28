@@ -53,7 +53,7 @@ const ReceiptList = () => {
 
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('notas_imagens').select('*').eq('usuario_id', user.id).order('created_at', { ascending: false })
+        supabase.from('notas_imagens').select('*, debug_texto').eq('usuario_id', user.id).order('created_at', { ascending: false })
       ]);
 
       if (receiptsResult.error) throw receiptsResult.error;
@@ -145,6 +145,11 @@ const ReceiptList = () => {
 
       if (isPDF) {
         console.log("📄 PDF detectado - usando process-danfe-pdf");
+        console.log("🔍 Dados enviados:", { 
+          pdfUrl: receipt.imagem_url, 
+          notaImagemId: receipt.id, 
+          userId: (await supabase.auth.getUser()).data.user?.id 
+        });
         
         // Sempre usar process-danfe-pdf para PDFs
         const pdfResponse = await supabase.functions.invoke('process-danfe-pdf', {
@@ -154,6 +159,8 @@ const ReceiptList = () => {
             userId: (await supabase.auth.getUser()).data.user?.id 
           }
         });
+
+        console.log("📋 Resposta da função:", pdfResponse);
 
         if (pdfResponse.error) {
           console.error("❌ Erro na função process-danfe-pdf:", pdfResponse.error);
