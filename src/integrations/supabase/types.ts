@@ -945,6 +945,10 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_old_ingestion_jobs: {
+        Args: { days_old?: number }
+        Returns: number
+      }
       consolidar_estoque_duplicado: {
         Args: Record<PropertyKey, never>
         Returns: undefined
