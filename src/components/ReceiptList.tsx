@@ -184,8 +184,8 @@ const ReceiptList = () => {
 
         console.log("✅ PDF processado com sucesso:", pdfResponse.data);
         toast({ 
-          title: "PDF processado com sucesso!", 
-          description: `${pdfResponse.data.itens_extraidos || 0} itens salvos.` 
+          title: "Texto extraído com sucesso!", 
+          description: "Use o botão 'Ver Texto Extraído' para visualizar o conteúdo." 
         });
         processedSuccessfully = true;
 
@@ -324,8 +324,22 @@ const ReceiptList = () => {
                 <div className="flex justify-between items-center mt-4 gap-2">
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}>
-                      <Eye className="w-4 h-4 mr-2" /> {receipt.debug_texto ? 'Ver Texto Extraído' : (receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes')}
+                      <Eye className="w-4 h-4 mr-2" /> {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes'}
                     </Button>
+                    {receipt.debug_texto && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedReceipt(receipt);
+                          setIsDialogOpen(true);
+                        }}
+                        className="bg-green-100 hover:bg-green-200 text-green-800"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Ver Texto Extraído
+                      </Button>
+                    )}
                     {(!receipt.processada || (receipt.processada && (!receipt.dados_extraidos?.itens || receipt.dados_extraidos?.itens?.length === 0))) && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
                       <Button
                         variant="default"
