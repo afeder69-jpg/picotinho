@@ -34,6 +34,22 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   }
 }
 
+function normalizarTextoDanfe(texto: string): string {
+  return texto
+    .replace(/C digo/g, "Código")
+    .replace(/Emiss o/g, "Emissão")
+    .replace(/Cart o/g, "Cartão")
+    .replace(/Informa o/g, "Informação")
+    .replace(/Informa es/g, "Informações")
+    .replace(/n o/g, "não")
+    .replace(/fi cado/g, "ficado")
+    .replace(/Autorizacao/g, "Autorização")
+    .replace(/Serie/g, "Série")
+    .replace(/Valor pago R\$/g, "Valor pago: R$")
+    .replace(/\s{2,}/g, " ") // remove espaços duplos
+    .trim();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -61,12 +77,13 @@ serve(async (req) => {
     // 📄 Extrair texto do PDF usando pdfjs-dist
     console.log("📄 Extraindo texto do PDF...");
     const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
+    const textoLimpo = normalizarTextoDanfe(extractedText);
 
-    console.log("📝 Texto extraído do PDF:");
-    console.log(extractedText.slice(0, 2000)); // primeiras 2000 chars
+    console.log("📝 Texto limpo DANFE:");
+    console.log(textoLimpo.slice(0, 2000)); // primeiras 2000 chars
     console.log("=".repeat(80));
 
-    if (!extractedText || extractedText.length < 50) {
+    if (!textoLimpo || textoLimpo.length < 50) {
       return new Response(JSON.stringify({
         success: false,
         error: "INSUFFICIENT_TEXT",
@@ -84,20 +101,20 @@ serve(async (req) => {
       const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Texto simples para teste - apenas ASCII básico
-      const textoLimpo = "TESTE: " + extractedText
+      // Texto normalizado para salvar no banco
+      const textoParaSalvar = "TESTE: " + textoLimpo
         .replace(/[^\x20-\x7E]/g, ' ') // Apenas ASCII imprimível
         .replace(/\s+/g, ' ')
         .trim()
         .substring(0, 10000); // Máximo 10k chars
 
-      console.log("🧹 Tentando salvar texto (tamanho):", textoLimpo.length);
-      console.log("🧹 Primeiros 200 chars:", textoLimpo.substring(0, 200));
+      console.log("🧹 Tentando salvar texto (tamanho):", textoParaSalvar.length);
+      console.log("🧹 Primeiros 200 chars:", textoParaSalvar.substring(0, 200));
 
       const { data, error: updateError } = await supabase
         .from("notas_imagens")
         .update({
-          debug_texto: textoLimpo
+          debug_texto: textoParaSalvar
         })
         .eq("id", notaImagemId)
         .select();
@@ -106,7 +123,7 @@ serve(async (req) => {
         console.error("❌ ERRO BANCO:", updateError);
         
         // Tentar com texto ainda mais simples
-        const textoMinimo = "FUNCIONOU! Produtos encontrados: " + extractedText.length + " caracteres extraidos";
+        const textoMinimo = "FUNCIONOU! Produtos encontrados: " + textoLimpo.length + " caracteres extraidos";
         const { error: fallbackError } = await supabase
           .from("notas_imagens")
           .update({ debug_texto: textoMinimo })
@@ -125,8 +142,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       message: "Texto extraído com sucesso",
-      texto: extractedText.slice(0, 2000), // preview
-      textoCompleto: extractedText // texto completo na resposta
+      texto: textoLimpo.slice(0, 2000), // preview
+      textoCompleto: textoLimpo // texto completo na resposta
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
