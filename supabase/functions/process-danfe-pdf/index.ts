@@ -132,9 +132,13 @@ serve(async (req) => {
    - Corrija ortografia e acentuação em nomes de produtos e campos.
    - Não altere números, quantidades, CNPJs ou chaves de acesso.
    - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
-   - Categorize cada item **usando apenas as categorias abaixo**:
+   - Categorize cada item **usando apenas estas categorias fixas**:
      [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados, Outros]
-   - Se não souber em qual categoria colocar, use **"Outros"**.
+   - Use **"Outros" somente em último caso**, quando o produto realmente não pertence a nenhuma dessas categorias.
+   - Produtos comuns de mercado devem sempre ser classificados corretamente (ex.:
+     • Achocolatado → Bebidas ou Mercearia
+     • Extrato de tomate → Mercearia
+     • Frutas, verduras, legumes → Hortifruti).
    - Sempre retornar JSON válido.
 
 3. Estrutura do retorno:
