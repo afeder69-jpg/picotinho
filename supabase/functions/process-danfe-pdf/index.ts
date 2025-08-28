@@ -101,7 +101,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       message: "Texto extraído com sucesso",
-      texto: extractedText.slice(0, 2000) // apenas preview
+      texto: extractedText.slice(0, 2000), // preview
+      textoCompleto: extractedText // texto completo na resposta
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

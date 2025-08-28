@@ -168,7 +168,14 @@ const ReceiptList = () => {
 
         console.log("📋 Resposta da função:", pdfResponse);
 
-        if (pdfResponse.error) {
+        if (pdfResponse.data?.success && pdfResponse.data?.textoCompleto) {
+          console.log("✅ PDF processado com sucesso:", pdfResponse.data);
+          
+          // Mostrar o texto extraído imediatamente
+          alert("TEXTO EXTRAÍDO DO PDF:\n\n" + pdfResponse.data.textoCompleto);
+          
+          processedSuccessfully = true;
+        } else if (pdfResponse.error) {
           console.error("❌ Erro na função process-danfe-pdf:", pdfResponse.error);
           
           // Se for erro INSUFFICIENT_TEXT, fazer fallback para OCR
