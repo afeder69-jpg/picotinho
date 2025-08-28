@@ -170,10 +170,6 @@ const ReceiptList = () => {
 
         if (pdfResponse.data?.success && pdfResponse.data?.textoCompleto) {
           console.log("✅ PDF processado com sucesso:", pdfResponse.data);
-          
-          // Mostrar o texto extraído imediatamente
-          alert("TEXTO EXTRAÍDO DO PDF:\n\n" + pdfResponse.data.textoCompleto);
-          
           processedSuccessfully = true;
         } else if (pdfResponse.error) {
           console.error("❌ Erro na função process-danfe-pdf:", pdfResponse.error);
@@ -197,8 +193,8 @@ const ReceiptList = () => {
 
         console.log("✅ PDF processado com sucesso:", pdfResponse.data);
         toast({ 
-          title: "Texto extraído com sucesso!", 
-          description: "Use o botão 'Ver Texto Extraído' para visualizar o conteúdo." 
+          title: "Nota fiscal processada com sucesso!", 
+          description: "Use o botão 'Ver Detalhes' para visualizar o cupom fiscal digital." 
         });
         processedSuccessfully = true;
 
@@ -339,19 +335,6 @@ const ReceiptList = () => {
                     <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}>
                       <Eye className="w-4 h-4 mr-2" /> {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes'}
                     </Button>
-                    {(receipt as any).debug_texto && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          alert((receipt as any).debug_texto);
-                        }}
-                        className="bg-green-100 hover:bg-green-200 text-green-800"
-                      >
-                        <FileText className="w-4 h-4 mr-2" />
-                        Ver Texto Extraído
-                      </Button>
-                    )}
                     {(!receipt.processada || (receipt.processada && (!receipt.dados_extraidos?.itens || receipt.dados_extraidos?.itens?.length === 0))) && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
                       <Button
                         variant="default"
@@ -385,8 +368,7 @@ const ReceiptList = () => {
           <DialogHeader className={`flex-shrink-0 ${Capacitor.isNativePlatform() ? 'p-2' : 'p-4'} border-b bg-background`}>
             <div className="flex items-center justify-between">
               <DialogTitle className="text-base">
-                {selectedReceipt?.debug_texto ? 'Texto Extraído do PDF' : 
-                 (selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal')}
+                {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
               </DialogTitle>
               {Capacitor.isNativePlatform() && (
                 <Button variant="ghost" size="sm" onClick={() => setIsDialogOpen(false)} className="p-1">
@@ -397,11 +379,7 @@ const ReceiptList = () => {
           </DialogHeader>
           {selectedReceipt && (
             <div className="flex-1 overflow-hidden">
-              {selectedReceipt.debug_texto ? (
-                <div className="p-4 bg-gray-100 rounded overflow-y-auto max-h-[70vh] text-sm whitespace-pre-wrap font-mono m-4">
-                  {selectedReceipt.debug_texto}
-                </div>
-              ) : selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url ? (
+              {selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url && !selectedReceipt.processada ? (
                 <div className="h-full flex flex-col">
                   <div className="flex-1 relative">
                     {Capacitor.isNativePlatform() ? (
