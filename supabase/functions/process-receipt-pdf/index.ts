@@ -545,81 +545,42 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
-// 📄 Função para extrair texto de PDF
+// 📄 Função para extrair texto de PDF usando pdf-lib (mais robusto)
+import { PDFDocument } from "https://cdn.skypack.dev/pdf-lib?dts";
+
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  const uint8Array = new Uint8Array(pdfBuffer);
-  
-  // Tentar decodificar como UTF-8 primeiro
-  let pdfString = '';
   try {
-    pdfString = new TextDecoder('utf-8').decode(uint8Array);
-  } catch {
-    // Se falhar, tentar Latin-1 como fallback
-    pdfString = new TextDecoder('latin1').decode(uint8Array);
-  }
-  
-  console.log('📄 PDF decodificado, tamanho do texto bruto:', pdfString.length);
-  
-  let extractedText = '';
-  
-  // Método 1: Extrair texto entre parênteses (formato padrão de texto em PDF)
-  const textRegex = /\(([^)]+)\)/g;
-  let match;
-  while ((match = textRegex.exec(pdfString)) !== null) {
-    let text = match[1];
-    
-    // Decodificar escape sequences do PDF
-    text = text
-      .replace(/\\n/g, '\n')
-      .replace(/\\r/g, '\r')
-      .replace(/\\t/g, '\t')
-      .replace(/\\(\d{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8)))
-      .replace(/\\(.)/g, '$1');
-    
-    if (text.trim().length > 0) {
-      extractedText += text + ' ';
-    }
-  }
-  
-  // Método 2: Buscar por texto em objetos TJ/Tj (comandos de texto PDF)
-  const tjRegex = /(?:TJ|Tj)\s*\[(.*?)\]/g;
-  while ((match = tjRegex.exec(pdfString)) !== null) {
-    const textArray = match[1];
-    // Extrair strings do array
-    const stringMatches = textArray.match(/\(([^)]*)\)/g);
-    if (stringMatches) {
-      for (const str of stringMatches) {
-        const cleanStr = str.slice(1, -1); // Remove parênteses
-        if (cleanStr.trim().length > 0) {
-          extractedText += cleanStr + ' ';
-        }
+    console.log("📄 Iniciando extração com pdf-lib...");
+
+    const uint8Array = new Uint8Array(pdfBuffer);
+    const pdfDoc = await PDFDocument.load(uint8Array);
+
+    let extractedText = "";
+
+    const pages = pdfDoc.getPages();
+    console.log(`📑 Total de páginas no PDF: ${pages.length}`);
+
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      // ⚠️ pdf-lib não tem um método direto para texto, mas podemos pegar o "contentStream"
+      const raw = page.node.get("Contents");
+      if (raw) {
+        const str = raw.toString();
+        extractedText += " " + str;
       }
     }
+
+    // Limpeza básica
+    extractedText = extractedText
+      .replace(/\s+/g, " ")
+      .replace(/[^\w\s\.,\-\(\)\/\:\$\%]/g, " ")
+      .trim();
+
+    console.log(`✅ Texto extraído com sucesso: ${extractedText.length} caracteres`);
+    return extractedText;
+
+  } catch (error) {
+    console.error("❌ Erro ao extrair texto com pdf-lib:", error);
+    throw new Error("TEXT_EXTRACTION_FAILED");
   }
-  
-  // Método 3: Buscar padrões específicos de DANFE
-  const danfePatterns = [
-    /DOCUMENTO\s+AUXILIAR[\s\S]{0,50}NOTA\s+FISCAL/i,
-    /DANFE[\s\S]{0,100}NFC-?e/i,
-    /CUPOM\s+FISCAL[\s\S]{0,50}ELETR[ÔO]NICO/i,
-    /CNPJ:?\s*\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/i,
-    /TOTAL\s+R\$[\s\d,\.]+/i
-  ];
-  
-  for (const pattern of danfePatterns) {
-    const matches = pdfString.match(pattern);
-    if (matches) {
-      extractedText += ' ' + matches[0];
-    }
-  }
-  
-  // Limpar e normalizar o texto extraído
-  extractedText = extractedText
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s\.,\-\(\)\/\:\$\%]/g, ' ')
-    .trim();
-  
-  console.log(`📊 Texto limpo extraído: ${extractedText.length} caracteres`);
-  
-  return extractedText;
 }
