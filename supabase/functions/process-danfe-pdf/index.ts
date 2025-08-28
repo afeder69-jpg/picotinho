@@ -36,18 +36,16 @@ function normalizarTextoNota(extractedText: string): string {
 }
 
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  // Converter o binário em string Latin1 para poder aplicar regex
   let pdfString = new TextDecoder("latin1").decode(new Uint8Array(pdfBuffer));
 
-  // Usar regex para capturar SOMENTE os trechos de texto do PDF (entre parênteses)
   const textRegex = /\(([^)]+)\)/g;
   let extractedText = "";
   let match;
   while ((match = textRegex.exec(pdfString)) !== null) {
-    extractedText += match[1] + "\n"; // manter quebra de linha
+    extractedText += match[1] + "\n";
   }
 
-  // Corrigir caracteres quebrados comuns
+  // Correções de acento e palavras quebradas
   extractedText = extractedText
     .replace(/C digo/g, "Código")
     .replace(/Emiss o/g, "Emissão")
@@ -59,13 +57,6 @@ async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
     .replace(/ç/g, "ç")
     .replace(/Ç/g, "Ç");
 
-  // Corrigir colagem de "Qtd. total de itens" com valor
-  extractedText = extractedText.replace(
-    /(\d+)\s+(\d+,\d{2})/g,
-    "\nQtd. total de itens: $1\nValor Total: R$ $2"
-  );
-
-  // Limpeza final
   extractedText = extractedText
     .replace(/\s{2,}/g, " ")
     .replace(/\n{2,}/g, "\n")
