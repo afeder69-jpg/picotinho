@@ -276,11 +276,16 @@ const ReceiptList = () => {
         } else {
           console.error('❌ Erro no processamento de PDF:', pdfResponse.error);
           
-          // Só fazer fallback para OCR se for erro específico de PDF escaneado
-          if (pdfResponse.error?.message?.includes('texto suficiente') || 
-              pdfResponse.error?.message?.includes('escaneado') ||
-              pdfResponse.data?.error === 'NENHUM_ITEM_EXTRAIDO') {
-            console.log('⚠️ PDF escaneado detectado ou falha na extração, fazendo fallback para OCR...');
+          // Verificar se é PDF escaneado (baseado em imagem)
+          const isScannedPDF = 
+            pdfResponse.data?.error === 'NO_ITEMS_EXTRACTED' ||
+            pdfResponse.error?.message?.includes('texto suficiente') || 
+            pdfResponse.error?.message?.includes('escaneado') ||
+            pdfResponse.data?.message?.includes('escaneado') ||
+            pdfResponse.data?.message?.includes('baseado em imagem');
+            
+          if (isScannedPDF) {
+            console.log('⚠️ PDF escaneado detectado, fazendo fallback para OCR...');
             
             // Converter PDF para imagem primeiro
             const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
