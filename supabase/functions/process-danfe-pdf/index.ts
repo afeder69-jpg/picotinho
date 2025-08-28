@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.js';
+import pdf from "npm:pdf-parse";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,7 +47,8 @@ serve(async (req) => {
     const pdfBuffer = await pdfResponse.arrayBuffer();
 
     console.log('📄 Extraindo texto do PDF...');
-    const extractedText = await extractTextFromPDF(pdfBuffer);
+    const data = await pdf(Buffer.from(pdfBuffer));
+    const extractedText = data.text;
     
     console.log('🔍 =================================================================');
     console.log('📝 TEXTO BRUTO EXTRAÍDO DO PDF (COMPLETO):');
@@ -328,21 +329,3 @@ IMPORTANTE:
     });
   }
 });
-
-async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  try {
-    const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
-    let extractedText = '';
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      extractedText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
-    }
-
-    return extractedText.trim();
-  } catch (err) {
-    console.error('❌ Erro ao extrair texto do PDF:', err);
-    throw new Error('TEXT_EXTRACTION_FAILED');
-  }
-}
