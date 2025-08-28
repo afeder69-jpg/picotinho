@@ -37,17 +37,17 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
 function normalizarTextoDanfe(texto: string): string {
   return texto
     .replace(/C digo/g, "Código")
-    .replace(/Emiss o/g, "Emissão")
     .replace(/Cart o/g, "Cartão")
+    .replace(/D bito/g, "Débito")
     .replace(/Informa o/g, "Informação")
     .replace(/Informa es/g, "Informações")
+    .replace(/Emiss o/g, "Emissão")
+    .replace(/N mero/g, "Número")
+    .replace(/S rie/g, "Série")
+    .replace(/Autoriza o/g, "Autorização")
     .replace(/n o/g, "não")
     .replace(/fi cado/g, "ficado")
-    .replace(/Autorizacao/g, "Autorização")
-    .replace(/Serie/g, "Série")
-    .replace(/Valor pago R\$/g, "Valor pago: R$")
-    .replace(/\s{2,}/g, " ") // remove espaços duplos
-    .trim();
+    .replace(/\s{2,}/g, " "); // remove espaços duplos
 }
 
 serve(async (req) => {
