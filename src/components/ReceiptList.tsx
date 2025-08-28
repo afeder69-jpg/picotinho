@@ -253,9 +253,9 @@ const ReceiptList = () => {
 
       let processedSuccessfully = false;
       
-      // ✅ SEMPRE usar process-receipt-pdf para PDFs
+      // ✅ SEMPRE usar process-receipt-pdf para PDFs (sem OCR automático)
       if (receipt.file_type === 'PDF' || receipt.imagem_url?.toLowerCase().includes('.pdf')) {
-        console.log('🔄 PDF detectado, chamando process-receipt-pdf para:', receipt.id);
+        console.log('🔄 PDF detectado, tentando extração de texto direta via process-receipt-pdf para:', receipt.id);
         
         try {
           const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
@@ -267,7 +267,7 @@ const ReceiptList = () => {
           });
           
           if (pdfResponse.data?.success) {
-            console.log('✅ PDF processado com extração de texto');
+            console.log('✅ PDF processado com extração de texto direta');
             processedSuccessfully = true;
             
             toast({
@@ -275,7 +275,7 @@ const ReceiptList = () => {
               description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos via EXTRAÇÃO DE TEXTO.`,
             });
           } else if (pdfResponse.data?.requiresOCR) {
-            console.log('⚠️ PDF escaneado detectado, fazendo fallback para OCR...');
+            console.log('⚠️ PDF escaneado detectado (texto < 50 chars), fazendo fallback para OCR...');
             
             // Converter PDF para imagem primeiro  
             const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {

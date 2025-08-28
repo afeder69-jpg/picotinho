@@ -362,9 +362,13 @@ async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
       .replace(/[^\w\s\.,\-\(\)\/\:\$R\%\+\=\@\#]/g, ' ')
       .trim();
     
-    console.log('📝 TEXTO EXTRAÍDO DO PDF (primeiros 500 caracteres):');
-    console.log(extractedText.substring(0, 500));
-    console.log('================================================================================');
+    console.log('🔍 =================================================================');
+    console.log('📝 TEXTO BRUTO EXTRAÍDO DO PDF (COMPLETO):');
+    console.log('🔍 =================================================================');
+    console.log(extractedText);
+    console.log('🔍 =================================================================');
+    console.log(`📊 Total de caracteres extraídos: ${extractedText.length}`);
+    console.log('🔍 =================================================================');
     
     if (!extractedText || extractedText.trim().length < 50) {
       console.error('❌ Texto insuficiente extraído. PDF provavelmente é baseado em imagem (escaneado).');
