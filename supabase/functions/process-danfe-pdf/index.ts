@@ -136,14 +136,15 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
 2. Regras OBRIGATÓRIAS:
    - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
    - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
+     • JAMAIS altere marcas ou nomes originais (ex: se estiver "Nescau" não pode virar "Nesquik", se estiver "Plusvita" não pode virar "Pullman")
+     • NUNCA inclua quantidade comprada na descrição (a quantidade vai no campo separado "quantidade")
      • Remova espaços duplicados entre palavras
      • Organize na ordem: Nome + Marca/Variedade + Peso/Volume + Extra (Granel, Corte, etc.)
-     • Exemplos: "Mamão Formosa Granel 1.135kg" ou "Manga Palmer Granel 1.545kg"
-     • Padronize siglas e abreviações (ex: sempre "Z Lac" ou sempre "Z.Lac." - seja consistente)
-     • SEMPRE preserve peso/volume/medidas da embalagem (350g, 535g, 1L, 2kg, 170g, etc.)
-     • Peso/volume é parte da identidade única do produto e NÃO pode ser removido
-     • Corrija ortografia, acentuação e capitalização
-     • NÃO invente nomes, apenas limpe e organize
+     • Exemplos: "Mamão Formosa Granel" ou "Manga Palmer Granel" (sem incluir o peso comprado 1.135kg na descrição)
+     • SEMPRE preserve peso/volume/medidas DA EMBALAGEM (350g, 535g, 1L, 2kg, 170g, etc.)
+     • Peso/volume da embalagem é parte da identidade única do produto e NÃO pode ser removido
+     • Corrija apenas ortografia, acentuação e capitalização de erros de extração (ex: "Cart o" → "Cartão")
+     • NÃO invente ou troque nomes/marcas, apenas limpe e organize o que está no texto original
    - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
    - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
    - Categorize cada item usando APENAS estas categorias fixas:
