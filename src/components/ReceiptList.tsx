@@ -379,33 +379,7 @@ const ReceiptList = () => {
           </DialogHeader>
           {selectedReceipt && (
             <div className="flex-1 overflow-hidden">
-              {selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url && !selectedReceipt.processada ? (
-                <div className="h-full flex flex-col">
-                  <div className="flex-1 relative">
-                    {Capacitor.isNativePlatform() ? (
-                      <div className="w-full h-full bg-white">
-                        <embed src={selectedReceipt.imagem_url} type="application/pdf" className="w-full h-full" style={{ minHeight: '100%' }} />
-                        <div className="absolute inset-0 flex items-center justify-center bg-muted/90 backdrop-blur-sm">
-                          <div className="text-center space-y-4 p-6">
-                            <FileText className="w-12 h-12 mx-auto text-muted-foreground" />
-                            <div>
-                              <h3 className="font-semibold mb-2">Visualizar PDF</h3>
-                              <p className="text-sm text-muted-foreground mb-4">Toque para abrir o arquivo PDF</p>
-                              <div className="space-y-2">
-                                <Button onClick={() => Browser.open({ url: selectedReceipt.imagem_url!, windowName: '_blank' })} className="w-full">
-                                  <Eye className="w-4 h-4 mr-2" /> Abrir PDF
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <iframe src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1&zoom=page-width`} className="w-full h-full border-0" title="Visualizador de PDF" style={{ minHeight: '70vh' }} />
-                    )}
-                  </div>
-                </div>
-              ) : selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
+              {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
                 <div className="h-full overflow-y-auto flex justify-center items-start p-4">
                   <div className="bg-white border rounded-lg p-6 font-mono text-sm space-y-4 w-full max-w-md min-h-fit">
                     {/* Cabeçalho do Estabelecimento */}
