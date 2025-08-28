@@ -1,20 +1,37 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import * as pdfjsLib from "npm:pdfjs-dist/legacy/build/pdf.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function extractTextFromPDF(pdfBuffer) {
-  const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
-  let extractedText = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    extractedText += textContent.items.map(item => item.str).join(" ") + "\n";
+async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
+  try {
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
+    
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
+    let extractedText = "";
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      extractedText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
+    }
+    
+    return extractedText.trim();
+  } catch (error) {
+    console.error("❌ Erro ao extrair texto do PDF:", error);
+    // Fallback: tentar extrair texto simples usando regex
+    const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
+    const regex = /\(([^)]+)\)/g;
+    let extractedText = "";
+    let match;
+    while ((match = regex.exec(pdfString)) !== null) {
+      extractedText += match[1] + " ";
+    }
+    return extractedText.trim();
   }
-  return extractedText.trim();
 }
 
 serve(async (req) => {
