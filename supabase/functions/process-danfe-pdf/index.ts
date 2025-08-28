@@ -36,6 +36,7 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
 
 function normalizarTextoDanfe(texto: string): string {
   return texto
+    // Correções de acentuação e cedilha
     .replace(/C digo/g, "Código")
     .replace(/Cart o/g, "Cartão")
     .replace(/D bito/g, "Débito")
@@ -47,7 +48,19 @@ function normalizarTextoDanfe(texto: string): string {
     .replace(/Autoriza o/g, "Autorização")
     .replace(/n o/g, "não")
     .replace(/fi cado/g, "ficado")
-    .replace(/\s{2,}/g, " "); // remove espaços duplos
+
+    // Expansão de abreviações mais comuns em DANFE
+    .replace(/\bQtde\./g, "Quantidade")
+    .replace(/\bVl\. Unit\./g, "Valor Unitário")
+    .replace(/\bVl\. Total/g, "Valor Total")
+    .replace(/\bUN\b/g, "Unidade")
+    .replace(/\bkg\b/gi, "Kg")
+    .replace(/\bg\b/gi, "Gramas")
+    .replace(/\bLT\b/gi, "Litros")
+
+    // Limpeza de espaços duplicados
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 serve(async (req) => {
