@@ -125,15 +125,36 @@ serve(async (req) => {
 
 1. Estruture em JSON os dados da compra:
    • Estabelecimento (nome, CNPJ, endereço)
-   • Compra (valor_total, forma_pagamento, número, série, data_emissão)
+   • Compra (valor_total, forma_pagamento, número, série, data_emissao)
    • Itens (descrição corrigida, código, quantidade, unidade, valor_unitario, valor_total, categoria)
 
 2. Regras:
    - Corrija ortografia e acentuação em nomes de produtos e campos.
    - Não altere números, quantidades, CNPJs ou chaves de acesso.
    - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
-   - Categorize cada item conforme categorias padrão: [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados].
+   - Categorize cada item **usando apenas as categorias abaixo**:
+     [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados, Outros]
+   - Se não souber em qual categoria colocar, use **"Outros"**.
    - Sempre retornar JSON válido.
+
+3. Estrutura do retorno:
+\`\`\`json
+{
+  "estabelecimento": { ... },
+  "compra": { ... },
+  "itens": [
+    {
+      "descricao": "...",
+      "codigo": "...",
+      "quantidade": 1,
+      "unidade": "...",
+      "valor_unitario": 0.00,
+      "valor_total": 0.00,
+      "categoria": "..."
+    }
+  ]
+}
+\`\`\`
 
 Texto da DANFE:
 ${textoLimpo}
