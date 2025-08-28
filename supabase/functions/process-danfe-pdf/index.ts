@@ -60,16 +60,60 @@ serve(async (req) => {
     if (!resp.ok) throw new Error(`Falha ao baixar PDF: ${resp.status}`);
     const buffer = await resp.arrayBuffer();
 
-    // 📄 Decodificar PDF em texto bruto
-    let pdfString = new TextDecoder("latin1").decode(new Uint8Array(buffer));
-
-    // 📝 Extrair apenas trechos de texto entre parênteses
-    const regex = /\(([^)]+)\)/g;
-    let extractedText = "";
-    let match;
-    while ((match = regex.exec(pdfString)) !== null) {
-      extractedText += match[1] + " ";
+    // 📄 Melhor extração de texto do PDF
+    let pdfString = new TextDecoder("utf-8").decode(new Uint8Array(buffer));
+    
+    // Tentar diferentes decodificações se UTF-8 não funcionar
+    if (!pdfString || pdfString.length < 100) {
+      pdfString = new TextDecoder("latin1").decode(new Uint8Array(buffer));
     }
+
+    // 📝 Extrair texto de streams de PDF
+    let extractedText = "";
+    
+    // Método 1: Extrair texto entre parênteses (conteúdo textual)
+    const textRegex = /\(([^)]+)\)/g;
+    let match;
+    while ((match = textRegex.exec(pdfString)) !== null) {
+      const content = match[1];
+      // Filtrar apenas texto legível (não binário)
+      if (content && /[a-zA-Z0-9\s]/.test(content) && content.length > 1) {
+        extractedText += content + " ";
+      }
+    }
+    
+    // Método 2: Extrair texto entre colchetes [texto]
+    const bracketRegex = /\[([^\]]+)\]/g;
+    while ((match = bracketRegex.exec(pdfString)) !== null) {
+      const content = match[1];
+      if (content && /[a-zA-Z0-9\s]/.test(content) && content.length > 1) {
+        extractedText += content + " ";
+      }
+    }
+    
+    // Método 3: Buscar por padrões típicos de DANFE
+    const danfePatterns = [
+      /DANFE[^a-zA-Z0-9]*([a-zA-Z0-9\s,.-]+)/gi,
+      /NFC-e[^a-zA-Z0-9]*([a-zA-Z0-9\s,.-]+)/gi,
+      /CNPJ[^0-9]*([0-9.,\s/-]+)/gi,
+      /Qtde[^a-zA-Z0-9]*([a-zA-Z0-9\s,.-]+)/gi,
+      /Total[^a-zA-Z0-9]*([0-9,.\s]+)/gi,
+      /Vl\.Unit[^a-zA-Z0-9]*([0-9,.\s]+)/gi
+    ];
+    
+    for (const pattern of danfePatterns) {
+      while ((match = pattern.exec(pdfString)) !== null) {
+        if (match[1] && match[1].trim().length > 0) {
+          extractedText += match[1].trim() + " ";
+        }
+      }
+    }
+
+    // Limpar e normalizar o texto extraído
+    extractedText = extractedText
+      .replace(/[^\w\s\d.,:-]/g, ' ') // Remove caracteres especiais
+      .replace(/\s+/g, ' ') // Normaliza espaços
+      .trim();
 
     // 🔍 LOG COMPLETO DO TEXTO EXTRAÍDO
     console.log("=".repeat(80));
@@ -131,49 +175,43 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-5-2025-08-07',
         messages: [
           {
             role: 'system',
-            content: `Você é especialista em processar DANFE NFC-e (nota fiscal eletrônica do consumidor).
+            content: `Você é um especialista em extrair dados de DANFE NFC-e (Nota Fiscal Eletrônica do Consumidor).
 
 INSTRUÇÕES CRÍTICAS:
-1. **SEMPRE responda com JSON válido** - nunca adicione texto extra fora do JSON
-2. **PROCURE POR TODOS OS PRODUTOS** - analise cada linha do texto buscando por itens de compra
-3. **PADRÕES COMUNS de produtos em DANFE:**
-   - Nome do produto seguido de Qtde, UN, Vl.Unit, Vl.Total
-   - Produtos podem estar separados por números de sequência (001, 002, etc.)
-   - Valores podem ter formato brasileiro (vírgula para decimal)
-   - Produtos podem estar em linhas quebradas ou concatenadas
+1. SEMPRE responda APENAS com JSON válido - sem texto adicional
+2. PROCURE MINUCIOSAMENTE por todos os produtos no texto
+3. Produtos em DANFE seguem padrões como:
+   - Nome do produto + Qtde + UN + Vl.Unit + Vl.Total
+   - Podem ter códigos de sequência (001, 002, etc.)
+   - Valores em formato brasileiro (vírgula decimal)
 
-4. **EXTRAÇÃO OBRIGATÓRIA:**
-   - Nome/descrição do produto (sempre obrigatório)
-   - Quantidade (se não encontrar, use 1.0)
-   - Unidade (se não encontrar, use "UN")
-   - Preço unitário (procure por "Vl.Unit", "Vl.Unitário", "Unit", etc.)
-   - Preço total (procure por "Vl.Total", "Total", etc.)
+4. CAMPOS OBRIGATÓRIOS por item:
+   - descricao: Nome do produto (obrigatório)
+   - quantidade: Número (padrão: 1.0)
+   - unidade: String (padrão: "UN")
+   - preco_unitario: Valor em reais (converta vírgula em ponto)
+   - preco_total: Valor total em reais
 
-5. **CONVERSÃO DE VALORES:**
-   - Converta vírgulas em pontos para valores decimais
-   - Remova pontos de milhares (ex: 1.234,56 → 1234.56)
+5. CONVERSÃO DE VALORES:
+   - "12,50" → 12.50
+   - "1.234,56" → 1234.56
 
-FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
-{
-  "estabelecimento": { "nome_fantasia": "string", "cnpj": "string", "endereco": "string" },
-  "compra": { "data_compra": "YYYY-MM-DD", "hora_compra": "HH:MM:SS", "valor_total": number, "numero_nota": "string" },
-  "itens": [
-    { "descricao": "string", "quantidade": number, "unidade": "string", "preco_unitario": number, "preco_total": number }
-  ]
-}`
+EXTRAIA TAMBÉM: nome do estabelecimento, CNPJ, data/hora da compra, valor total da nota.
+
+Responda SOMENTE com este JSON:`
           },
           {
             role: 'user',
-            content: `Extraia os dados desta nota fiscal processando linha por linha para capturar todos os produtos:
+            content: `Analise esta nota fiscal e extraia TODOS os produtos encontrados:
 
 ${textoProcessado}`
           }
         ],
-        max_tokens: 4000
+        max_completion_tokens: 4000
       }),
     });
 
@@ -429,14 +467,20 @@ ${textoProcessado}`
       }
     }
 
-    // Atualizar nota como processada (mesmo sem itens)
-    await supabase
+    // Atualizar nota como processada (independente dos itens encontrados)
+    const { error: updateError } = await supabase
       .from('notas_imagens')
       .update({
         processada: true,
         dados_extraidos: dadosCompletos
       })
       .eq('id', notaImagemId);
+
+    if (updateError) {
+      console.error('❌ Erro ao atualizar nota como processada:', updateError);
+    } else {
+      console.log('✅ Nota marcada como processada no banco');
+    }
 
     console.log(`✅ Processamento concluído! ${itensExtraidos.length} itens extraídos`);
 
