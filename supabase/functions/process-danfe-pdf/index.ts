@@ -88,34 +88,22 @@ serve(async (req) => {
           {
             role: 'system',
             content: `Você é especialista em processar DANFE NFC-e (nota fiscal eletrônica do consumidor).
-IMPORTANTE: Sempre responda com JSON válido no formato abaixo, sem texto adicional:
+IMPORTANTE:
+- Sempre responda com JSON válido no formato abaixo.
+- Extraia **todos os produtos listados** no cupom, cada um como um objeto no array "itens".
+- Não resuma e não ignore linhas de produto.
+- Mesmo que algum campo esteja incompleto, preencha o que conseguir (ex.: descricao e preco_total).
+- Se não encontrar unidade, use "UN".
+- Se não encontrar quantidade, use 1.
 
+Formato de resposta:
 {
-  "estabelecimento": {
-    "nome_fantasia": "string",
-    "cnpj": "string",
-    "endereco": "string"
-  },
-  "compra": {
-    "data_compra": "YYYY-MM-DD",
-    "hora_compra": "HH:MM:SS",
-    "valor_total": number,
-    "numero_nota": "string"
-  },
+  "estabelecimento": { "nome_fantasia": "string", "cnpj": "string", "endereco": "string" },
+  "compra": { "data_compra": "YYYY-MM-DD", "hora_compra": "HH:MM:SS", "valor_total": number, "numero_nota": "string" },
   "itens": [
-    {
-      "descricao": "string",
-      "quantidade": number,
-      "unidade": "string",
-      "preco_unitario": number,
-      "preco_total": number
-    }
+    { "descricao": "string", "quantidade": number, "unidade": "string", "preco_unitario": number, "preco_total": number }
   ]
-}
-
-Extraia os dados exatamente como aparecem no texto, sem inventar nada.
-Mesmo que não consiga todos os campos, sempre retorne pelo menos 1 item no array "itens".
-Se não encontrar produtos específicos, crie um item genérico com as informações disponíveis.`
+}`
           },
           {
             role: 'user',
