@@ -486,6 +486,7 @@ export type Database = {
           created_at: string | null
           dados_extraidos: Json | null
           data_criacao: string
+          debug_texto: string | null
           id: string
           imagem_path: string
           imagem_url: string
@@ -499,6 +500,7 @@ export type Database = {
           created_at?: string | null
           dados_extraidos?: Json | null
           data_criacao?: string
+          debug_texto?: string | null
           id?: string
           imagem_path: string
           imagem_url: string
@@ -512,6 +514,7 @@ export type Database = {
           created_at?: string | null
           dados_extraidos?: Json | null
           data_criacao?: string
+          debug_texto?: string | null
           id?: string
           imagem_path?: string
           imagem_url?: string

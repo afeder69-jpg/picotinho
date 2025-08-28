@@ -26,6 +26,7 @@ interface Receipt {
   processada?: boolean;
   file_name?: string;
   file_type?: string;
+  debug_texto?: string;
 }
 
 const ReceiptList = () => {
@@ -86,7 +87,8 @@ const ReceiptList = () => {
             dados_extraidos: nota.dados_extraidos,
             processada: nota.processada,
             file_name: fileName,
-            file_type: isPdfWithConversion ? 'PDF (convertido)' : (nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem')
+            file_type: isPdfWithConversion ? 'PDF (convertido)' : (nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem'),
+            debug_texto: (nota as any).debug_texto
           };
         })
         .filter(nota => nota !== null);
@@ -315,7 +317,7 @@ const ReceiptList = () => {
                 <div className="flex justify-between items-center mt-4 gap-2">
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}>
-                      <Eye className="w-4 h-4 mr-2" /> {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes'}
+                      <Eye className="w-4 h-4 mr-2" /> {receipt.debug_texto ? 'Ver Texto Extraído' : (receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes')}
                     </Button>
                     {(!receipt.processada || (receipt.processada && (!receipt.dados_extraidos?.itens || receipt.dados_extraidos?.itens?.length === 0))) && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
                       <Button
@@ -349,7 +351,9 @@ const ReceiptList = () => {
         <DialogContent className={`${Capacitor.isNativePlatform() ? 'fixed inset-0 max-w-none max-h-none w-screen h-screen m-0 p-0 rounded-none border-0' : 'max-w-[95vw] max-h-[95vh] w-full'} overflow-hidden flex flex-col`}>
           <DialogHeader className={`flex-shrink-0 ${Capacitor.isNativePlatform() ? 'p-2' : 'p-4'} border-b bg-background`}>
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-base">Detalhes da Nota Fiscal</DialogTitle>
+              <DialogTitle className="text-base">
+                {selectedReceipt?.debug_texto ? 'Texto Extraído do PDF' : 'Detalhes da Nota Fiscal'}
+              </DialogTitle>
               {Capacitor.isNativePlatform() && (
                 <Button variant="ghost" size="sm" onClick={() => setIsDialogOpen(false)} className="p-1">
                   <X className="w-4 h-4" />
@@ -359,7 +363,11 @@ const ReceiptList = () => {
           </DialogHeader>
           {selectedReceipt && (
             <div className="flex-1 overflow-hidden">
-              {selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url ? (
+              {selectedReceipt.debug_texto ? (
+                <div className="p-4 bg-gray-100 rounded overflow-y-auto max-h-[70vh] text-sm whitespace-pre-wrap font-mono m-4">
+                  {selectedReceipt.debug_texto}
+                </div>
+              ) : selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url ? (
                 <div className="h-full flex flex-col">
                   <div className="flex-1 relative">
                     {Capacitor.isNativePlatform() ? (
