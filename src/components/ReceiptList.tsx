@@ -255,7 +255,7 @@ const ReceiptList = () => {
       
       // ✅ FLUXO UNIFICADO: PDF sempre usa extração de texto primeiro
       if (receipt.file_type === 'PDF' || receipt.imagem_url?.toLowerCase().includes('.pdf')) {
-        console.log('🔄 PDF detectado, usando extração de texto unificada...');
+        console.log('🔄 PDF detectado, chamando process-receipt-pdf para:', receipt.id);
         
         // Chamar a nova função unificada que faz extração de texto
         const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
@@ -266,6 +266,11 @@ const ReceiptList = () => {
           }
         });
         
+        console.log('📡 Chamando function process-receipt-pdf com params:', {
+          notaImagemId: receipt.id,
+          pdfUrl: receipt.imagem_url,
+          userId: (await supabase.auth.getUser()).data.user?.id
+        });
         if (pdfResponse.data?.success) {
           console.log('✅ PDF processado com extração de texto');
           processedSuccessfully = true;
@@ -321,6 +326,7 @@ const ReceiptList = () => {
               description: `${aiResponse.data.itens_extraidos || 0} itens extraídos via OCR (fallback).`,
             });
           } else {
+            console.error('❌ Erro na resposta process-receipt-pdf:', pdfResponse);
             throw new Error(pdfResponse.error?.message || 'Erro no processamento do PDF');
           }
         }
