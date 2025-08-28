@@ -134,7 +134,12 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
    • Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
 
 2. Regras OBRIGATÓRIAS:
-   - Corrija ortografia e acentuação em nomes de produtos e campos.
+   - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
+   - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
+     • Corrija ortografia, acentuação e capitalização
+     • Organize informações de forma lógica (ex: "Bebida Láctea Batavo Pense Zero Ameixa 170g")
+     • Mantenha a grafia original correta dos produtos, apenas organizando melhor
+     • NÃO invente nomes, apenas limpe e organize
    - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
    - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
    - Categorize cada item usando APENAS estas categorias fixas:
