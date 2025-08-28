@@ -253,11 +253,12 @@ const ReceiptList = () => {
 
       let processedSuccessfully = false;
       
-      // Se for PDF, primeiro tentar extração de texto
+      // ✅ FLUXO UNIFICADO: PDF sempre usa extração de texto primeiro
       if (receipt.file_type === 'PDF' || receipt.imagem_url?.toLowerCase().includes('.pdf')) {
-        console.log('🔄 PDF detectado, tentando extração de texto...');
+        console.log('🔄 PDF detectado, usando extração de texto unificada...');
         
-        const textResponse = await supabase.functions.invoke('process-pdf-text', {
+        // Chamar a nova função unificada que faz extração de texto
+        const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
           body: {
             notaImagemId: receipt.id,
             pdfUrl: receipt.imagem_url,
@@ -265,54 +266,63 @@ const ReceiptList = () => {
           }
         });
         
-        if (textResponse.data?.success) {
+        if (pdfResponse.data?.success) {
           console.log('✅ PDF processado com extração de texto');
           processedSuccessfully = true;
           
           toast({
             title: "PDF processado com sucesso!",
-            description: `${textResponse.data.itens_extraidos || 0} itens extraídos diretamente do texto.`,
+            description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos via EXTRAÇÃO DE TEXTO.`,
           });
-        } else if (textResponse.data?.requer_conversao_imagem) {
-          console.log('🔄 PDF requer conversão para imagem, convertendo...');
+        } else {
+          console.error('❌ Erro no processamento de PDF:', pdfResponse.error);
           
-          // Converter para JPG alta qualidade
-          const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
-            body: {
-              notaImagemId: receipt.id,
-              pdfUrl: receipt.imagem_url,
-              userId: (await supabase.auth.getUser()).data.user?.id
+          // Só fazer fallback para OCR se for erro específico de PDF escaneado
+          if (pdfResponse.error?.message?.includes('texto suficiente') || 
+              pdfResponse.error?.message?.includes('escaneado') ||
+              pdfResponse.data?.error === 'NENHUM_ITEM_EXTRAIDO') {
+            console.log('⚠️ PDF escaneado detectado ou falha na extração, fazendo fallback para OCR...');
+            
+            // Converter PDF para imagem primeiro
+            const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
+              body: {
+                notaImagemId: receipt.id,
+                pdfUrl: receipt.imagem_url,
+                userId: (await supabase.auth.getUser()).data.user?.id
+              }
+            });
+            
+            if (convertResponse.error) {
+              throw new Error(`Erro na conversão: ${convertResponse.error.message}`);
             }
-          });
-          
-          if (convertResponse.error) {
-            throw new Error(`Erro na conversão: ${convertResponse.error.message}`);
-          }
-          
-          // Usar as imagens convertidas se disponível
-          let imageUrl = receipt.imagem_url;
-          if (convertResponse.data?.convertedImages?.length > 0) {
-            imageUrl = convertResponse.data.convertedImages[0].url;
-            console.log('🔄 PDF convertido, usando imagem HD:', imageUrl);
-          }
-          
-          // Processar com IA usando OCR
-          const aiResponse = await supabase.functions.invoke('process-receipt-ai', {
-            body: {
-              notaId: receipt.id,
-              imageUrl: imageUrl
+            
+            // Usar as imagens convertidas
+            let imageUrl = receipt.imagem_url;
+            if (convertResponse.data?.convertedImages?.length > 0) {
+              imageUrl = convertResponse.data.convertedImages[0].url;
+              console.log('🔄 PDF convertido, usando imagem HD:', imageUrl);
             }
-          });
-          
-          if (aiResponse.error) {
-            throw new Error(aiResponse.error.message);
+            
+            // Processar com IA usando OCR como fallback
+            const aiResponse = await supabase.functions.invoke('process-receipt-ai', {
+              body: {
+                notaId: receipt.id,
+                imageUrl: imageUrl
+              }
+            });
+            
+            if (aiResponse.error) {
+              throw new Error(aiResponse.error.message);
+            }
+            
+            processedSuccessfully = true;
+            toast({
+              title: "PDF escaneado processado!",
+              description: `${aiResponse.data.itens_extraidos || 0} itens extraídos via OCR (fallback).`,
+            });
+          } else {
+            throw new Error(pdfResponse.error?.message || 'Erro no processamento do PDF');
           }
-          
-          processedSuccessfully = true;
-          toast({
-            title: "PDF convertido e processado!",
-            description: `${aiResponse.data.itens_extraidos || 0} itens extraídos via OCR.`,
-          });
         }
       } else {
         // Para imagens, usar processamento direto
