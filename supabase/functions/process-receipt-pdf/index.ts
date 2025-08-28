@@ -145,15 +145,15 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-5-2025-08-07',
+          model: 'gpt-4o',
           messages: [
             {
               role: 'system',
               content: `Você é um especialista em processar notas fiscais brasileiras (DANFE NFC-e).
 
-IMPORTANTE: Extraia EXATAMENTE as informações como aparecem no texto.
+IMPORTANTE: Extraia EXATAMENTE as informações como aparecem no texto. Ignore texto corrupto ou códigos de formatação PDF.
 
-Analise o texto da nota fiscal e extraia:
+Analise este texto de uma nota fiscal brasileira (DANFE NFC-e) e extraia:
 
 1. DADOS DO ESTABELECIMENTO:
 - nome_fantasia (nome do supermercado/loja)
@@ -368,7 +368,9 @@ async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
     // Limpar e normalizar o texto extraído
     extractedText = extractedText
       .replace(/\s+/g, ' ')
-      .replace(/[^\w\s\.,\-\(\)\/\:\$\%]/g, ' ')
+      .replace(/[^\w\s\.,\-\(\)\/\:\$\%\+\=\@\#]/g, ' ')
+      .replace(/\b[A-Z]{5,}\b/g, '') // Remove sequências longas de maiúsculas
+      .replace(/\b\d{10,}\b/g, '') // Remove números muito longos
       .trim();
     
     console.log(`📊 Texto limpo extraído: ${extractedText.length} caracteres`);
