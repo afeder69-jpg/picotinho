@@ -273,10 +273,11 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       return new Response(JSON.stringify({
         success: false,
         error: 'NO_ITEMS_EXTRACTED',
-        message: 'Falha na extração de texto – verifique se o PDF é baseado em imagem (escaneado)',
+        message: 'PDF baseado em imagem detectado - use o botão "Extrair com IA" para processar via OCR',
         totalItens: 0,
         textoExtraido: extractedText.substring(0, 500),
-        dadosExtraidos
+        dadosExtraidos,
+        sugestao: 'Este PDF parece ser escaneado. Use OCR para melhor extração.'
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -365,7 +366,8 @@ async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
     console.log('================================================================================');
     
     if (!extractedText || extractedText.trim().length < 50) {
-      throw new Error('Texto insuficiente extraído - PDF pode estar baseado em imagem (escaneado)');
+      console.error('❌ Texto insuficiente extraído. PDF provavelmente é baseado em imagem (escaneado).');
+      throw new Error('PDF_SCAN_DETECTED: Texto insuficiente extraído - PDF pode estar baseado em imagem (escaneado)');
     }
     
     console.log(`✅ Extração concluída. Texto extraído: ${extractedText.length} caracteres`);
