@@ -5,81 +5,33 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function normalizarTextoNota(extractedText: string): string {
-  let texto = extractedText;
-
-  // 1. Corrigir acentuação básica (parser vem quebrado)
-  const mapaAcentos: Record<string, string> = {
-    "Emiss o": "Emissão",
-    "S rie": "Série",
-    "Cart o de D bito": "Cartão de Débito",
-    "Informa o": "Informação",
-    "Informa es": "Informações",
-    "identifi cado": "identificado"
-  };
-
-  for (const [errado, certo] of Object.entries(mapaAcentos)) {
-    const regex = new RegExp(errado, "gi");
-    texto = texto.replace(regex, certo);
-  }
-
-  // 2. Inserir quebra de linha sempre que encontrar "Vl. Total"
-  texto = texto.replace(/(Vl\. Total [0-9]+,[0-9]{2})/g, "$1\n");
-
-  // 3. Inserir quebra de linha antes de "Qtd. total de itens"
-  texto = texto.replace(/Qtd\. total de itens:/g, "\nQtd. total de itens:");
-
-  // 4. Remover espaços duplos e normalizar
-  texto = texto.replace(/\s+/g, " ").trim();
-
-  return texto;
-}
-
-// 📄 Função para extrair texto de DANFE PDF com acentuação corrigida
-async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  const uint8Array = new Uint8Array(pdfBuffer);
-
-  // 1️⃣ Tentar decodificar primeiro em UTF-8, fallback para Latin1
-  let pdfString = '';
+async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    pdfString = new TextDecoder('utf-8').decode(uint8Array);
-  } catch {
-    pdfString = new TextDecoder('latin1').decode(uint8Array);
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
+    
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
+    let extractedText = "";
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      extractedText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
+    }
+    
+    return extractedText.trim();
+  } catch (error) {
+    console.error("❌ Erro ao extrair texto do PDF:", error);
+    // Fallback: tentar extrair texto simples usando regex
+    const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
+    const regex = /\(([^)]+)\)/g;
+    let extractedText = "";
+    let match;
+    while ((match = regex.exec(pdfString)) !== null) {
+      extractedText += match[1] + " ";
+    }
+    return extractedText.trim();
   }
-
-  // 2️⃣ Extrair texto entre parênteses (trechos das strings no PDF)
-  const textRegex = /\(([^)]+)\)/g;
-  let extractedText = '';
-  let match;
-  while ((match = textRegex.exec(pdfString)) !== null) {
-    extractedText += match[1] + '\n'; // 🔹 Mantém quebra de linha após cada trecho
-  }
-
-  // 3️⃣ Normalizar acentuação quebrada
-  extractedText = extractedText
-    .replace(/C digo/g, "Código")
-    .replace(/Emiss o/g, "Emissão")
-    .replace(/Cart o/g, "Cartão")
-    .replace(/Informa o/g, "Informação")
-    .replace(/Informa es/g, "Informações")
-    .replace(/n o/g, "não")
-    .replace(/fi cado/g, "ficado")
-    .replace(/ç/g, "ç") // reforço do cedilha
-    .replace(/Ç/g, "Ç");
-
-  // 4️⃣ Corrigir grude de "Qtd. total de itens" com o valor
-  extractedText = extractedText.replace(/(\d+)\s+(\d+,\d{2})/g, "\nQtd. total de itens: $1\nValor Total: R$ $2");
-
-  // 5️⃣ Limpeza final
-  extractedText = extractedText
-    .replace(/\s{2,}/g, ' ')   // remove espaços múltiplos
-    .replace(/\n{2,}/g, '\n') // remove linhas em branco extras
-    .trim();
-
-  console.log("📝 Texto extraído (primeiros 500 caracteres):");
-  console.log(extractedText.slice(0, 500));
-
-  return extractedText;
 }
 
 serve(async (req) => {
@@ -108,12 +60,9 @@ serve(async (req) => {
 
     // 📄 Extrair texto do PDF usando pdfjs-dist
     console.log("📄 Extraindo texto do PDF...");
-    let extractedText = await extractTextFromPDF(new Uint8Array(buffer));
+    const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
 
-    // Normalizar o texto antes de salvar
-    extractedText = normalizarTextoNota(extractedText);
-
-    console.log("📝 Texto normalizado da DANFE:");
+    console.log("📝 Texto extraído do PDF:");
     console.log(extractedText.slice(0, 2000)); // primeiras 2000 chars
     console.log("=".repeat(80));
 
