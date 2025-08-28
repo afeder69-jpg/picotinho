@@ -99,8 +99,11 @@ serve(async (req) => {
     const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
     const textoLimpo = normalizarTextoDanfe(extractedText);
 
-    console.log("📝 Texto limpo DANFE:");
-    console.log(textoLimpo.slice(0, 2000)); // primeiras 2000 chars
+    console.log("📝 TEXTO_BRUTO completo da DANFE:");
+    console.log(extractedText); // TEXTO COMPLETO, sem cortar
+    console.log("=".repeat(80));
+    console.log("📝 Texto normalizado DANFE:");
+    console.log(textoLimpo); // TEXTO NORMALIZADO COMPLETO, sem cortar
     console.log("=".repeat(80));
 
     if (!textoLimpo || textoLimpo.length < 50) {
@@ -123,29 +126,43 @@ serve(async (req) => {
 
     const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
 
+IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
+
 1. Estruture em JSON os dados da compra:
-   • Estabelecimento (nome, CNPJ, endereço)
-   • Compra (valor_total, forma_pagamento, número, série, data_emissao)
-   • Itens (descrição corrigida, código, quantidade, unidade, valor_unitario, valor_total, categoria)
+   • Estabelecimento (nome, cnpj, endereco)
+   • Compra (valor_total, forma_pagamento, numero, serie, data_emissao)
+   • Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
 
-2. Regras:
+2. Regras OBRIGATÓRIAS:
    - Corrija ortografia e acentuação em nomes de produtos e campos.
-   - Não altere números, quantidades, CNPJs ou chaves de acesso.
+   - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
    - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
-   - Categorize cada item **usando apenas estas categorias fixas**:
+   - Categorize cada item usando APENAS estas categorias fixas:
      [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados, Outros]
-   - Use **"Outros" somente em último caso**, quando o produto realmente não pertence a nenhuma dessas categorias.
-   - Produtos comuns de mercado devem sempre ser classificados corretamente (ex.:
+   - Use "Outros" somente em último caso, quando o produto realmente não pertence a nenhuma dessas categorias.
+   - Produtos comuns de mercado devem sempre ser classificados corretamente:
      • Achocolatado → Bebidas ou Mercearia
-     • Extrato de tomate → Mercearia
-     • Frutas, verduras, legumes → Hortifruti).
-   - Sempre retornar JSON válido.
+     • Extrato de tomate → Mercearia  
+     • Frutas, verduras, legumes → Hortifruti
+   - TODOS os itens DEVEM ter uma categoria obrigatoriamente.
+   - O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
+   - NUNCA truncar ou cortar no meio - incluir TODOS os itens da nota.
 
-3. Estrutura do retorno:
+3. Estrutura OBRIGATÓRIA do retorno:
 \`\`\`json
 {
-  "estabelecimento": { ... },
-  "compra": { ... },
+  "estabelecimento": {
+    "nome": "...",
+    "cnpj": "...", 
+    "endereco": "..."
+  },
+  "compra": {
+    "valor_total": 0.00,
+    "forma_pagamento": "...",
+    "numero": "...",
+    "serie": "...",
+    "data_emissao": "..."
+  },
   "itens": [
     {
       "descricao": "...",
@@ -163,7 +180,7 @@ serve(async (req) => {
 Texto da DANFE:
 ${textoLimpo}
 
-Retorne APENAS o JSON estruturado, sem explicações adicionais.`;
+Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANTA que o JSON seja válido e contenha TODOS os itens da nota.`;
 
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -177,7 +194,7 @@ Retorne APENAS o JSON estruturado, sem explicações adicionais.`;
           { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
           { role: 'user', content: aiPrompt }
         ],
-        max_tokens: 2000,
+        max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
         temperature: 0.1
       }),
     });
@@ -189,8 +206,8 @@ Retorne APENAS o JSON estruturado, sem explicações adicionais.`;
     const aiData = await aiResponse.json();
     const respostaIA = aiData.choices[0]?.message?.content || '';
     
-    console.log("📝 Resposta da IA:");
-    console.log(respostaIA.slice(0, 1000));
+    console.log("📝 RESPOSTA_BRUTA da IA (completa):");
+    console.log(respostaIA); // RESPOSTA COMPLETA da IA, sem cortar
     console.log("=".repeat(80));
 
     // 💾 Configurar Supabase
@@ -413,27 +430,29 @@ Retorne APENAS o JSON estruturado, sem explicações adicionais.`;
       console.log("📝 Resposta bruta da IA:", respostaIA);
     }
 
-    // 💾 Sempre salvar dados de debug
+    // 💾 Sempre salvar dados de debug COMPLETOS
     try {
-      const textoParaDebug = extractedText.replace(/[^\x20-\x7E\u00C0-\u017F]/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
-      const respostaParaDebug = respostaIA.substring(0, 2000);
+      // Salvar texto completo sem truncar
+      const textoParaDebug = extractedText.replace(/[^\x20-\x7E\u00C0-\u017F]/g, ' ').replace(/\s+/g, ' ').trim();
+      const respostaParaDebug = respostaIA; // Resposta completa da IA
 
       await supabase
         .from("notas_imagens")
         .update({
-          debug_texto: `TEXTO_BRUTO: ${textoParaDebug}\n\n===RESPOSTA_IA===\n${respostaParaDebug}`
+          debug_texto: `TEXTO_BRUTO_COMPLETO: ${textoParaDebug}\n\n===RESPOSTA_IA_COMPLETA===\n${respostaParaDebug}`
         })
         .eq("id", notaImagemId);
 
-      console.log("✅ Dados de debug salvos com sucesso");
+      console.log("✅ Dados de debug COMPLETOS salvos com sucesso");
     } catch (debugError) {
       console.error("❌ Erro ao salvar debug:", debugError);
     }
 
     return new Response(JSON.stringify({
       success: true,
-      message: "Texto extraído com sucesso",
-      texto: textoLimpo.slice(0, 2000), // preview
+      message: "Processamento concluído - TODOS os itens extraídos e categorizados",
+      totalItens: dadosEstruturados?.itens?.length || 0,
+      texto: textoLimpo.slice(0, 1000), // preview
       textoCompleto: textoLimpo // texto completo na resposta
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
