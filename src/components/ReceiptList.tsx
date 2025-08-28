@@ -380,8 +380,8 @@ const ReceiptList = () => {
           {selectedReceipt && (
             <div className="flex-1 overflow-hidden">
               {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
-                <div className="h-full overflow-y-auto p-4">
-                  <div className="bg-white border rounded-lg p-6 font-mono text-sm space-y-4 mx-auto max-w-md w-full">
+                <div className="p-4 flex justify-center">
+                  <div className="bg-white border rounded-lg p-6 font-mono text-sm space-y-4 mx-auto max-w-md w-full max-h-[80vh] overflow-y-auto">
                     {/* Cabeçalho do Estabelecimento */}
                     <div className="text-center border-b pb-4">
                       <h2 className="font-bold text-lg uppercase">
