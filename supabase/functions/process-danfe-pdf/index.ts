@@ -1,6 +1,16 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
   try {
     const { pdfUrl } = await req.json();
 
@@ -11,7 +21,7 @@ serve(async (req) => {
         message: "O parâmetro pdfUrl é obrigatório"
       }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -38,7 +48,7 @@ serve(async (req) => {
         message: "PDF não contém texto suficiente — provavelmente é PDF escaneado",
       }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -50,7 +60,7 @@ serve(async (req) => {
       length: extractedText.length,
       texto: extractedText.slice(0, 2000) // debug parcial
     }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err) {
@@ -61,7 +71,7 @@ serve(async (req) => {
       message: err.message,
     }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
