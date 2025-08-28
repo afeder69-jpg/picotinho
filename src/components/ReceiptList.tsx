@@ -107,10 +107,17 @@ const ReceiptList = () => {
 
   const deleteReceipt = async (id: string) => {
     try {
-      await Promise.all([
+      const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').delete().eq('id', id),
         supabase.from('notas_imagens').delete().eq('id', id)
       ]);
+
+      const receiptsSuccess = !receiptsResult.error;
+      const notasSuccess = !notasImagensResult.error;
+      if (!receiptsSuccess && !notasSuccess) {
+        throw new Error('Erro ao excluir nota fiscal');
+      }
+
       await loadReceipts();
       toast({ title: "Sucesso", description: "Nota fiscal excluída com sucesso" });
     } catch (error) {
@@ -124,22 +131,9 @@ const ReceiptList = () => {
     setIsDialogOpen(true);
   };
 
-  const openPDFInNative = async (url: string, fileName: string) => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        await Browser.open({ url, windowName: '_blank', presentationStyle: 'popover', toolbarColor: '#ffffff' });
-        toast({ title: "PDF aberto!", description: "O PDF foi aberto no navegador nativo do dispositivo" });
-      } else {
-        window.open(url, '_blank');
-      }
-    } catch (error) {
-      console.error('Erro ao abrir PDF:', error);
-      toast({ title: "Erro", description: "Não foi possível abrir o PDF. Tente baixar o arquivo.", variant: "destructive" });
-    }
-  };
-
   const processReceiptWithAI = async (receipt: Receipt) => {
     if (processingReceipts.has(receipt.id)) return;
+
     try {
       setProcessingReceipts(prev => new Set(prev).add(receipt.id));
       toast({ title: "Processando nota fiscal", description: "A IA está analisando os dados da nota..." });
@@ -152,38 +146,39 @@ const ReceiptList = () => {
           body: { notaImagemId: receipt.id, pdfUrl: receipt.imagem_url, userId: (await supabase.auth.getUser()).data.user?.id }
         });
 
-        if (pdfResponse.data?.success) {
-          processedSuccessfully = true;
-          toast({ title: "PDF processado com sucesso!", description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos via EXTRAÇÃO DE TEXTO.` });
-        } else if (pdfResponse.data?.requiredOCR) {
-          const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
-            body: { notaImagemId: receipt.id, pdfUrl: receipt.imagem_url, userId: (await supabase.auth.getUser()).data.user?.id }
-          });
+        if (pdfResponse.error) throw new Error(pdfResponse.error.message || "Erro no Supabase");
+        if (!pdfResponse.data?.success) throw new Error(pdfResponse.data?.message || "Falha no processamento do PDF");
 
-          let imageUrl = receipt.imagem_url;
-          if (convertResponse.data?.convertedImages?.length > 0) imageUrl = convertResponse.data.convertedImages[0].url;
+        toast({ title: "PDF processado com sucesso!", description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos.` });
+        processedSuccessfully = true;
 
-          const aiResponse = await supabase.functions.invoke('process-receipt-ai', {
-            body: { notaId: receipt.id, imageUrl }
-          });
-
-          processedSuccessfully = true;
-          toast({ title: "PDF escaneado processado!", description: `${aiResponse.data.itens_extraidos || 0} itens extraídos via OCR.` });
-        }
       } else {
         const response = await supabase.functions.invoke('process-receipt-ai', {
           body: { notaId: receipt.id, imageUrl: receipt.imagem_url }
         });
-        processedSuccessfully = true;
+
+        if (response.error) throw new Error(response.error.message || "Erro no Supabase");
+        if (!response.data?.success) throw new Error(response.data?.message || "Falha no processamento da imagem");
+
         toast({ title: "Imagem processada com sucesso!", description: `${response.data.itens_extraidos || 0} itens extraídos.` });
+        processedSuccessfully = true;
       }
 
       if (processedSuccessfully) await loadReceipts();
-    } catch (error) {
-      console.error('Erro ao processar nota:', error);
-      toast({ title: "Erro ao processar nota", description: error.message || "Falha no processamento", variant: "destructive" });
+
+    } catch (error: any) {
+      console.error('💥 Erro ao processar nota:', error);
+      toast({
+        title: "Erro ao processar nota",
+        description: error.message || "Falha inesperada no processamento",
+        variant: "destructive"
+      });
     } finally {
-      setProcessingReceipts(prev => { const newSet = new Set(prev); newSet.delete(receipt.id); return newSet; });
+      setProcessingReceipts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(receipt.id);
+        return newSet;
+      });
     }
   };
 
@@ -200,87 +195,210 @@ const ReceiptList = () => {
     new Date(dateString).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const formatCurrency = (amount: number | null) =>
-    amount ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount) : 'N/A';
+    !amount ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
 
-  if (loading) return <div className="flex justify-center items-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
+  if (loading) {
+    return <div className="flex justify-center items-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
+  }
 
-  if (receipts.length === 0) return (
-    <div className="text-center p-8">
-      <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-      <p className="text-muted-foreground">Nenhuma nota fiscal encontrada</p>
-      <p className="text-sm text-muted-foreground mt-2">Escaneie QR codes de notas fiscais para começar</p>
-    </div>
-  );
+  if (receipts.length === 0) {
+    return (
+      <div className="text-center p-8">
+        <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+        <p className="text-muted-foreground">Nenhuma nota fiscal encontrada</p>
+        <p className="text-sm text-muted-foreground mt-2">Escaneie QR codes de notas fiscais para começar</p>
+      </div>
+    );
+  }
 
   return (
     <>
       <div className="space-y-6">
-        {receipts.map((receipt) => (
-          <Card key={receipt.id}>
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{receipt.store_name || 'Estabelecimento não identificado'}</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">{formatDate(receipt.created_at)}</p>
+        <div className="space-y-4">
+          {receipts.map((receipt) => (
+            <Card key={receipt.id}>
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg">{receipt.store_name || 'Estabelecimento não identificado'}</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">{formatDate(receipt.created_at)}</p>
+                  </div>
+                  {getStatusBadge(receipt.status)}
                 </div>
-                {getStatusBadge(receipt.status)}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {receipt.processada && receipt.dados_extraidos ? (
-                  <>
-                    {receipt.dados_extraidos.loja?.nome && (
-                      <div className="flex justify-between"><span className="text-sm text-muted-foreground">Mercado:</span><span className="text-sm font-medium">{receipt.dados_extraidos.loja.nome}</span></div>
-                    )}
-                    {receipt.dados_extraidos.valorTotal && (
-                      <div className="flex justify-between"><span className="text-sm text-muted-foreground">Valor Total:</span><span className="font-semibold">{formatCurrency(receipt.dados_extraidos.valorTotal)}</span></div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {receipt.file_name && (
-                      <div className="flex justify-between"><span className="text-sm text-muted-foreground">Arquivo:</span><span className="text-sm font-mono">{receipt.file_name}</span></div>
-                    )}
-                    {receipt.file_type && (
-                      <div className="flex justify-between"><span className="text-sm text-muted-foreground">Tipo:</span><span className="text-sm">{receipt.file_type}</span></div>
-                    )}
-                  </>
-                )}
-                {receipt.store_cnpj && (
-                  <div className="flex justify-between"><span className="text-sm text-muted-foreground">CNPJ:</span><span className="text-sm font-mono">{receipt.store_cnpj}</span></div>
-                )}
-              </div>
-              <div className="flex justify-between items-center mt-4 gap-2">
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}><Eye className="w-4 h-4 mr-2" />Ver Detalhes</Button>
-                  {!receipt.processada && (
-                    <Button variant="default" size="sm" onClick={() => processReceiptWithAI(receipt)} disabled={processingReceipts.has(receipt.id)} className="bg-blue-600 hover:bg-blue-700 text-white">
-                      {processingReceipts.has(receipt.id) ? (<Loader2 className="w-4 h-4 mr-2 animate-spin" />) : (<Bot className="w-4 h-4 mr-2" />)}
-                      {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {receipt.processada && receipt.dados_extraidos ? (
+                    <>
+                      {receipt.dados_extraidos.loja?.nome && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Mercado:</span>
+                          <span className="text-sm font-medium truncate max-w-[200px]">{receipt.dados_extraidos.loja.nome}</span>
+                        </div>
+                      )}
+                      {receipt.dados_extraidos.valorTotal && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Valor Total:</span>
+                          <span className="font-semibold">{formatCurrency(receipt.dados_extraidos.valorTotal)}</span>
+                        </div>
+                      )}
+                      {receipt.dados_extraidos.dataCompra && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Data:</span>
+                          <span className="text-sm">
+                            {new Date(receipt.dados_extraidos.dataCompra).toLocaleDateString('pt-BR')}
+                            {receipt.dados_extraidos.horaCompra && ` às ${receipt.dados_extraidos.horaCompra}`}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {receipt.file_name && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Arquivo:</span>
+                          <span className="text-sm font-mono truncate max-w-[200px]">{receipt.file_name}</span>
+                        </div>
+                      )}
+                      {receipt.file_type && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Tipo:</span>
+                          <span className="text-sm">{receipt.file_type}</span>
+                        </div>
+                      )}
+                      {receipt.total_amount && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Total:</span>
+                          <span className="font-semibold">{formatCurrency(receipt.total_amount)}</span>
+                        </div>
+                      )}
+                      {receipt.purchase_date && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Data da compra:</span>
+                          <span className="text-sm">{new Date(receipt.purchase_date).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {receipt.store_cnpj && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">CNPJ:</span>
+                      <span className="text-sm font-mono">{receipt.store_cnpj}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between items-center mt-4 gap-2">
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}>
+                      <Eye className="w-4 h-4 mr-2" /> {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes'}
                     </Button>
-                  )}
-                  {receipt.processada && (
-                    <div className="flex items-center gap-2 text-green-600"><CheckCircle className="h-4 w-4" /><span className="text-sm">Processada ({receipt.dados_extraidos?.itens?.length || 0} itens)</span></div>
-                  )}
+                    {!receipt.processada && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => processReceiptWithAI(receipt)}
+                        disabled={processingReceipts.has(receipt.id)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {processingReceipts.has(receipt.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bot className="w-4 h-4 mr-2" />}
+                        {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
+                      </Button>
+                    )}
+                    {receipt.processada && (
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-sm">Processada ({(receipt.dados_extraidos as any)?.itens?.length || 0} itens)</span>
+                      </div>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => deleteReceipt(receipt.id)} className="text-destructive hover:text-destructive">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => deleteReceipt(receipt.id)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className={`${Capacitor.isNativePlatform() ? 'fixed inset-0 w-screen h-screen m-0 p-0 rounded-none border-0' : 'max-w-[95vw] max-h-[95vh] w-full'} overflow-hidden flex flex-col`}>
-          <DialogHeader className="flex-shrink-0 p-4 border-b bg-background"><DialogTitle className="text-base">Detalhes da Nota Fiscal</DialogTitle></DialogHeader>
+        <DialogContent className={`${Capacitor.isNativePlatform() ? 'fixed inset-0 max-w-none max-h-none w-screen h-screen m-0 p-0 rounded-none border-0' : 'max-w-[95vw] max-h-[95vh] w-full'} overflow-hidden flex flex-col`}>
+          <DialogHeader className={`flex-shrink-0 ${Capacitor.isNativePlatform() ? 'p-2' : 'p-4'} border-b bg-background`}>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base">Detalhes da Nota Fiscal</DialogTitle>
+              {Capacitor.isNativePlatform() && (
+                <Button variant="ghost" size="sm" onClick={() => setIsDialogOpen(false)} className="p-1">
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
           {selectedReceipt && (
             <div className="flex-1 overflow-hidden">
               {selectedReceipt.file_type === 'PDF' && selectedReceipt.imagem_url ? (
-                <iframe src={selectedReceipt.imagem_url} className="w-full h-full border-0" title="Visualizador de PDF" style={{ minHeight: '70vh' }} />
+                <div className="h-full flex flex-col">
+                  <div className="flex-1 relative">
+                    {Capacitor.isNativePlatform() ? (
+                      <div className="w-full h-full bg-white">
+                        <embed src={selectedReceipt.imagem_url} type="application/pdf" className="w-full h-full" style={{ minHeight: '100%' }} />
+                        <div className="absolute inset-0 flex items-center justify-center bg-muted/90 backdrop-blur-sm">
+                          <div className="text-center space-y-4 p-6">
+                            <FileText className="w-12 h-12 mx-auto text-muted-foreground" />
+                            <div>
+                              <h3 className="font-semibold mb-2">Visualizar PDF</h3>
+                              <p className="text-sm text-muted-foreground mb-4">Toque para abrir o arquivo PDF</p>
+                              <div className="space-y-2">
+                                <Button onClick={() => Browser.open({ url: selectedReceipt.imagem_url!, windowName: '_blank' })} className="w-full">
+                                  <Eye className="w-4 h-4 mr-2" /> Abrir PDF
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <iframe src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1&zoom=page-width`} className="w-full h-full border-0" title="Visualizador de PDF" style={{ minHeight: '70vh' }} />
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="p-4 space-y-6 h-full overflow-y-auto">
-                  <div><h4 className="font-semibold mb-3">Informações Gerais</h4></div>
-                  {selectedReceipt.imagem_url && <img src={selectedReceipt.imagem_url} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain" />}
+                  <div>
+                    <h4 className="font-semibold mb-3">Informações Gerais</h4>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-muted-foreground">Estabelecimento:</span>
+                        <span className="font-medium">{selectedReceipt.store_name || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-muted-foreground">Total:</span>
+                        <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(selectedReceipt.total_amount)}</span>
+                      </div>
+                      {selectedReceipt.store_cnpj && (
+                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                          <span className="text-muted-foreground">CNPJ:</span>
+                          <span className="font-mono text-xs">{selectedReceipt.store_cnpj}</span>
+                        </div>
+                      )}
+                      {selectedReceipt.purchase_date && (
+                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                          <span className="text-muted-foreground">Data da compra:</span>
+                          <span>{new Date(selectedReceipt.purchase_date).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-muted-foreground">Status:</span>
+                        <span>{getStatusBadge(selectedReceipt.status)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {selectedReceipt.imagem_url && selectedReceipt.file_type !== 'PDF' && (
+                    <div>
+                      <h4 className="font-semibold mb-3">Imagem da Nota</h4>
+                      <div className="border rounded-lg overflow-hidden">
+                        <img src={selectedReceipt.imagem_url} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer" onClick={() => window.open(selectedReceipt.imagem_url!, '_blank')} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
