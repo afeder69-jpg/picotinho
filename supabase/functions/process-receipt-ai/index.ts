@@ -170,7 +170,7 @@ SEMPRE retorne um JSON válido, mesmo que com campos null.
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5-2025-08-07', // Usar modelo mais recente e potente
+        model: 'gpt-4o', // Usar modelo mais estável e confiável
         messages: [
           {
             role: 'user',
@@ -180,7 +180,7 @@ SEMPRE retorne um JSON válido, mesmo que com campos null.
             ]
           }
         ],
-        max_completion_tokens: 3000 // Aumentar limite para respostas mais completas
+        max_tokens: 3000, // Para gpt-4o, usar max_tokens ao invés de max_completion_tokens
       }),
     });
 
@@ -223,13 +223,18 @@ SEMPRE retorne um JSON válido, mesmo que com campos null.
     // Verificar se extraiu dados válidos
     if (!dadosExtraidos.itens || dadosExtraidos.itens.length === 0) {
       console.log('⚠️ ATENÇÃO: Nenhum item foi extraído da nota fiscal');
+      console.log('📄 Dados extraídos completos:', JSON.stringify(dadosExtraidos, null, 2));
+      console.log('📄 URL da imagem processada:', imageUrl);
       console.log('📄 Possíveis causas:');
-      console.log('   - Imagem com qualidade ruim');
+      console.log('   - Imagem com qualidade ruim ou muito pequena');
       console.log('   - Conversão de PDF prejudicou a legibilidade');
       console.log('   - Formato não é uma nota fiscal padrão');
       console.log('   - Texto ilegível na imagem');
+      console.log('   - Modelo IA teve dificuldade com esta imagem específica');
       
       // Mesmo assim, vamos continuar o processamento para registrar a tentativa
+    } else {
+      console.log('✅ Extraiu', dadosExtraidos.itens.length, 'itens da nota fiscal');
     }
 
     // Verificar se já existe supermercado
