@@ -385,7 +385,8 @@ const ReceiptList = () => {
           <DialogHeader className={`flex-shrink-0 ${Capacitor.isNativePlatform() ? 'p-2' : 'p-4'} border-b bg-background`}>
             <div className="flex items-center justify-between">
               <DialogTitle className="text-base">
-                {selectedReceipt?.debug_texto ? 'Texto Extraído do PDF' : 'Detalhes da Nota Fiscal'}
+                {selectedReceipt?.debug_texto ? 'Texto Extraído do PDF' : 
+                 (selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal')}
               </DialogTitle>
               {Capacitor.isNativePlatform() && (
                 <Button variant="ghost" size="sm" onClick={() => setIsDialogOpen(false)} className="p-1">
@@ -424,6 +425,77 @@ const ReceiptList = () => {
                     ) : (
                       <iframe src={`${selectedReceipt.imagem_url}#toolbar=1&navpanes=1&scrollbar=1&zoom=page-width`} className="w-full h-full border-0" title="Visualizador de PDF" style={{ minHeight: '70vh' }} />
                     )}
+                  </div>
+                </div>
+              ) : selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
+                <div className="p-4 h-full overflow-y-auto">
+                  <div className="bg-white border rounded-lg p-6 font-mono text-sm space-y-4 mx-auto max-w-md">
+                    {/* Cabeçalho do Estabelecimento */}
+                    <div className="text-center border-b pb-4">
+                      <h2 className="font-bold text-lg uppercase">
+                        {selectedReceipt.dados_extraidos.estabelecimento?.nome || selectedReceipt.dados_extraidos.loja?.nome || 'ESTABELECIMENTO'}
+                      </h2>
+                      <p className="text-xs">
+                        CNPJ: {selectedReceipt.dados_extraidos.estabelecimento?.cnpj || selectedReceipt.dados_extraidos.loja?.cnpj || 'N/A'}
+                      </p>
+                      <p className="text-xs">
+                        {selectedReceipt.dados_extraidos.estabelecimento?.endereco || selectedReceipt.dados_extraidos.loja?.endereco || 'Endereço não informado'}
+                      </p>
+                    </div>
+
+                    {/* Informações da Nota */}
+                    <div className="text-center border-b pb-4 space-y-1">
+                      <p><strong>Nota Fiscal de Consumidor Eletrônica</strong></p>
+                      <div className="flex justify-between text-xs">
+                        <span>Número: {selectedReceipt.dados_extraidos.compra?.numero || selectedReceipt.dados_extraidos.numeroNota || 'N/A'}</span>
+                        <span>Série: {selectedReceipt.dados_extraidos.compra?.serie || selectedReceipt.dados_extraidos.serie || 'N/A'}</span>
+                      </div>
+                      <p className="text-xs">
+                        Data: {selectedReceipt.dados_extraidos.compra?.data_emissao || selectedReceipt.dados_extraidos.dataCompra || 'N/A'}
+                      </p>
+                    </div>
+
+                    {/* Itens da Compra */}
+                    <div className="space-y-2">
+                      <p className="font-bold text-center">ITENS</p>
+                      <div className="border-b">
+                        {selectedReceipt.dados_extraidos.itens?.map((item: any, index: number) => (
+                          <div key={index} className="py-2 border-b border-dashed last:border-0">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1 pr-2">
+                                <p className="font-medium text-xs uppercase leading-tight">
+                                  {item.descricao || item.nome}
+                                </p>
+                                {item.codigo && (
+                                  <p className="text-xs text-gray-600">Cód: {item.codigo}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex justify-between text-xs mt-1">
+                              <span>Qtd: {item.quantidade} {item.unidade}</span>
+                              <span>Unit: {formatCurrency(item.valor_unitario || item.preco)}</span>
+                              <span className="font-bold">Total: {formatCurrency(item.valor_total || item.preco)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Rodapé */}
+                    <div className="border-t pt-4 space-y-2">
+                      <div className="flex justify-between text-lg font-bold">
+                        <span>TOTAL:</span>
+                        <span>{formatCurrency(selectedReceipt.dados_extraidos.compra?.valor_total || selectedReceipt.dados_extraidos.valorTotal || selectedReceipt.total_amount)}</span>
+                      </div>
+                      <div className="text-center text-xs">
+                        <p>Forma de Pagamento: {selectedReceipt.dados_extraidos.compra?.forma_pagamento || selectedReceipt.dados_extraidos.formaPagamento || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    {/* Linha final */}
+                    <div className="text-center text-xs border-t pt-2">
+                      <p>Via do Consumidor</p>
+                    </div>
                   </div>
                 </div>
               ) : (
