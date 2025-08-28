@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
+import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -313,17 +313,38 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
-// Função para extrair texto de PDF usando pdf-parse
+// Função para extrair texto de PDF usando pdfjs-dist
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    console.log("📄 Iniciando extração de texto do PDF com pdf-parse...");
+    console.log("📄 Iniciando extração de texto do PDF com pdfjs-dist...");
     
-    // Usar pdf-parse para extrair texto
-    const data = await pdfParse(pdfBuffer);
-    const extractedText = data.text;
+    // Carregar o PDF com pdfjs-dist
+    const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
+    let fullText = '';
+    
+    console.log(`📄 PDF carregado com ${pdf.numPages} página(s)`);
+    
+    // Extrair texto de todas as páginas
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      // Concatenar todos os item.str
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      
+      fullText += pageText + ' ';
+      console.log(`📄 Página ${pageNum}: ${pageText.length} caracteres extraídos`);
+    }
+    
+    // Limpar e normalizar o texto
+    const extractedText = fullText
+      .replace(/\s+/g, ' ')
+      .trim();
     
     console.log('🔍 =================================================================');
-    console.log('📝 TEXTO BRUTO EXTRAÍDO DO PDF (pdf-parse):');
+    console.log('📝 TEXTO BRUTO EXTRAÍDO DO PDF (pdfjs-dist):');
     console.log('🔍 =================================================================');
     console.log(extractedText);
     console.log('🔍 =================================================================');
@@ -331,15 +352,15 @@ async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
     console.log('🔍 =================================================================');
     
     if (!extractedText || extractedText.trim().length < 50) {
-      console.log('⚠️ Texto insuficiente extraído com pdf-parse. PDF pode ser baseado em imagem.');
+      console.log('⚠️ Texto insuficiente extraído com pdfjs-dist. PDF pode ser baseado em imagem.');
       throw new Error('PDF_SCAN_DETECTED: Texto insuficiente extraído - PDF pode estar baseado em imagem (escaneado)');
     }
     
-    console.log(`✅ Extração concluída com pdf-parse. Texto extraído: ${extractedText.length} caracteres`);
+    console.log(`✅ Extração concluída com pdfjs-dist. Texto extraído: ${extractedText.length} caracteres`);
     
-    return extractedText.trim();
+    return extractedText;
   } catch (error) {
-    console.error("❌ Erro ao extrair texto do PDF com pdf-parse:", error);
+    console.error("❌ Erro ao extrair texto do PDF com pdfjs-dist:", error);
     throw new Error(`TEXT_EXTRACTION_FAILED: ${error.message}`);
   }
 }
