@@ -253,37 +253,18 @@ const ReceiptList = () => {
 
       let processedSuccessfully = false;
       
-      // ✅ FLUXO UNIFICADO: PDF sempre usa extração de texto primeiro
+      // ✅ SEMPRE usar process-receipt-pdf para PDFs
       if (receipt.file_type === 'PDF' || receipt.imagem_url?.toLowerCase().includes('.pdf')) {
         console.log('🔄 PDF detectado, chamando process-receipt-pdf para:', receipt.id);
         
-        // Chamar a nova função unificada que faz extração de texto
-        console.log('📡 ANTES DA CHAMADA - Parâmetros:', {
-          notaImagemId: receipt.id,
-          pdfUrl: receipt.imagem_url,
-          userId: (await supabase.auth.getUser()).data.user?.id
+        const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
+          body: {
+            notaImagemId: receipt.id,
+            pdfUrl: receipt.imagem_url,
+            userId: (await supabase.auth.getUser()).data.user?.id
+          }
         });
-
-        let pdfResponse;
-        try {
-          pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
-            body: {
-              notaImagemId: receipt.id,
-              pdfUrl: receipt.imagem_url,
-              userId: (await supabase.auth.getUser()).data.user?.id
-            }
-          });
-          console.log('📡 RESPOSTA RECEBIDA:', pdfResponse);
-        } catch (invokeError) {
-          console.error('❌ ERRO NA INVOCAÇÃO:', invokeError);
-          throw invokeError;
-        }
         
-        console.log('📡 Chamando function process-receipt-pdf com params:', {
-          notaImagemId: receipt.id,
-          pdfUrl: receipt.imagem_url,
-          userId: (await supabase.auth.getUser()).data.user?.id
-        });
         if (pdfResponse.data?.success) {
           console.log('✅ PDF processado com extração de texto');
           processedSuccessfully = true;

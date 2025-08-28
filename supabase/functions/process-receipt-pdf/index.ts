@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import pdf from 'npm:pdf-parse@1.1.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -273,7 +274,7 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       return new Response(JSON.stringify({
         success: false,
         error: 'NO_ITEMS_EXTRACTED',
-        message: 'A IA não conseguiu extrair nenhum item da nota fiscal',
+        message: 'Falha na extração de texto – verifique se o PDF é baseado em imagem (escaneado)',
         totalItens: 0,
         textoExtraido: extractedText.substring(0, 500),
         dadosExtraidos
@@ -310,75 +311,26 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
-// Função simplificada para extrair texto de PDF
+// Função para extrair texto de PDF usando pdf-parse
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    console.log("📄 Iniciando extração básica de PDF...");
-
-    const uint8Array = new Uint8Array(pdfBuffer);
-    let pdfString = '';
+    console.log("📄 Extraindo texto do PDF...");
     
-    // Tentar decodificar como UTF-8 primeiro
-    try {
-      pdfString = new TextDecoder('utf-8').decode(uint8Array);
-    } catch {
-      // Se falhar, tentar Latin-1 como fallback
-      pdfString = new TextDecoder('latin1').decode(uint8Array);
+    const data = await pdf(Buffer.from(pdfBuffer));
+    
+    console.log('📝 TEXTO EXTRAÍDO DO PDF (primeiros 500 caracteres):');
+    console.log(data.text.substring(0, 500));
+    console.log('================================================================================');
+    
+    if (!data.text || data.text.trim().length < 50) {
+      throw new Error('Texto insuficiente extraído - PDF pode estar baseado em imagem (escaneado)');
     }
     
-    console.log('📄 PDF decodificado, tamanho do texto bruto:', pdfString.length);
+    console.log(`✅ Extração concluída. Texto extraído: ${data.text.length} caracteres`);
     
-    let extractedText = '';
-    
-    // Método 1: Extrair texto entre parênteses (formato padrão de texto em PDF)
-    const textRegex = /\(([^)]+)\)/g;
-    let match;
-    while ((match = textRegex.exec(pdfString)) !== null) {
-      let text = match[1];
-      
-      // Decodificar escape sequences do PDF
-      text = text
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '\r')
-        .replace(/\\t/g, '\t')
-        .replace(/\\(\d{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8)))
-        .replace(/\\(.)/g, '$1');
-      
-      if (text.trim().length > 0) {
-        extractedText += text + ' ';
-      }
-    }
-    
-    // Método 2: Buscar por texto em objetos TJ/Tj (comandos de texto PDF)
-    const tjRegex = /(?:TJ|Tj)\s*\[(.*?)\]/g;
-    while ((match = tjRegex.exec(pdfString)) !== null) {
-      const textArray = match[1];
-      // Extrair strings do array
-      const stringMatches = textArray.match(/\(([^)]*)\)/g);
-      if (stringMatches) {
-        for (const str of stringMatches) {
-          const cleanStr = str.slice(1, -1); // Remove parênteses
-          if (cleanStr.trim().length > 0) {
-            extractedText += cleanStr + ' ';
-          }
-        }
-      }
-    }
-    
-    // Limpar e normalizar o texto extraído
-    extractedText = extractedText
-      .replace(/\s+/g, ' ')
-      .replace(/[^\w\s\.,\-\(\)\/\:\$\%\+\=\@\#]/g, ' ')
-      .replace(/\b[A-Z]{5,}\b/g, '') // Remove sequências longas de maiúsculas
-      .replace(/\b\d{10,}\b/g, '') // Remove números muito longos
-      .trim();
-    
-    console.log(`📊 Texto limpo extraído: ${extractedText.length} caracteres`);
-    
-    return extractedText;
-
+    return data.text;
   } catch (error) {
-    console.error("❌ Erro ao extrair texto básico:", error);
-    throw new Error("TEXT_EXTRACTION_FAILED");
+    console.error("❌ Erro ao extrair texto do PDF:", error);
+    throw new Error(`TEXT_EXTRACTION_FAILED: ${error.message}`);
   }
 }
