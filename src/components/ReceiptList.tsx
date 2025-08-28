@@ -407,7 +407,7 @@ const ReceiptList = () => {
                 </div>
               ) : selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
                 <div className="p-4 h-full overflow-y-auto">
-                  <div className="bg-white border rounded-lg p-6 font-mono text-sm space-y-4 mx-auto max-w-md">
+                  <div className="bg-white border rounded-lg p-6 font-mono text-sm space-y-4 mx-auto max-w-md min-h-fit">
                     {/* Cabeçalho do Estabelecimento */}
                     <div className="text-center border-b pb-4">
                       <h2 className="font-bold text-lg uppercase">
