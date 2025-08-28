@@ -20,9 +20,69 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { notaImagemId, imageUrl, qrUrl } = await req.json();
+    const { notaImagemId, pdfUrl, userId } = await req.json();
 
-    console.log('Processando nota fiscal:', { notaImagemId, imageUrl, qrUrl });
+    console.log('Processando nota fiscal:', { notaImagemId, pdfUrl, userId });
+
+    // Verificar se é PDF e tentar extração direta de texto primeiro
+    if (pdfUrl && pdfUrl.toLowerCase().includes('.pdf')) {
+      console.log('🔄 Detectado PDF - tentando extração direta de texto...');
+      
+      try {
+        // Chamar a função de processamento de PDF
+        const pdfProcessResponse = await fetch(`${supabaseUrl}/functions/v1/process-pdf-text`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            notaImagemId,
+            pdfUrl,
+            userId
+          })
+        });
+
+        const pdfResult = await pdfProcessResponse.json();
+        
+        if (pdfResult.success) {
+          console.log('✅ PDF processado com sucesso via extração de texto');
+          return new Response(JSON.stringify(pdfResult), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } else if (pdfResult.error === 'PDF_REQUER_OCR') {
+          console.log('⚠️ PDF necessita conversão para imagem, continuando com OCR...');
+        } else {
+          throw new Error(`Erro no processamento de PDF: ${pdfResult.error}`);
+        }
+      } catch (pdfError) {
+        console.error('Erro na extração de texto do PDF:', pdfError);
+        console.log('🔄 Continuando com processamento por imagem...');
+      }
+    }
+
+    // Buscar dados da nota fiscal
+    const { data: notaImagem, error: notaError } = await supabase
+      .from('notas_imagens')
+      .select('*')
+      .eq('id', notaImagemId)
+      .single();
+
+    if (notaError) throw notaError;
+
+    // Verificar se existe imagem convertida nos dados extraídos
+    let imageUrl = null;
+    if (notaImagem.dados_extraidos?.imagens_convertidas?.[0]?.url) {
+      imageUrl = notaImagem.dados_extraidos.imagens_convertidas[0].url;
+    } else if (pdfUrl) {
+      imageUrl = pdfUrl; // Fallback para URL original
+    }
+
+    if (!imageUrl) {
+      throw new Error('Nenhuma imagem ou URL disponível para processamento');
+    }
+
+    console.log('🔍 Processando imagem via OCR:', imageUrl);
 
     // 🔍 Primeiro passo: OCR para extrair texto bruto da imagem
     console.log('Executando OCR na imagem...');
@@ -58,8 +118,6 @@ serve(async (req) => {
 
     const textoOCR = ocrData.choices[0].message.content;
     console.log('Texto extraído por OCR:', textoOCR);
-
-    // 🧠 Segundo passo: Parsing estruturado do texto OCR
     const parseNotaFiscal = (texto: string) => {
       const linhas = texto.split('\n').map(linha => linha.trim()).filter(linha => linha.length > 0);
       
@@ -224,14 +282,6 @@ serve(async (req) => {
       }
     }
 
-    // Busca dados da imagem da nota
-    const { data: notaImagem, error: notaError } = await supabase
-      .from('notas_imagens')
-      .select('*')
-      .eq('id', notaImagemId)
-      .single();
-
-    if (notaError) throw notaError;
 
     // Cria compra
     const { data: compra, error: compraError } = await supabase
