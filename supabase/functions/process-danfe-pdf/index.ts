@@ -64,6 +64,22 @@ serve(async (req) => {
     console.log(`📊 Total de caracteres extraídos: ${extractedText.length}`);
     console.log("=".repeat(80));
 
+    // Sempre salvar o texto bruto, mesmo se a validação falhar
+    try {
+      await supabase
+        .from('notas_imagens')
+        .update({
+          dados_extraidos: {
+            textoBruto: extractedText,
+            timestamp: new Date().toISOString(),
+            tamanho_texto: extractedText.length
+          }
+        })
+        .eq('id', notaImagemId);
+    } catch (saveError) {
+      console.error('Erro ao salvar texto bruto:', saveError);
+    }
+
     if (!extractedText || extractedText.length < 50) {
       return new Response(JSON.stringify({
         success: false,
@@ -74,6 +90,12 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // 📝 PRÉ-PROCESSAMENTO: Dividir texto em linhas
+    const linhasTexto = extractedText.split(/\n|\s{2,}/).filter(linha => linha.trim().length > 0);
+    console.log(`📋 Texto dividido em ${linhasTexto.length} linhas`);
+    
+    const textoProcessado = linhasTexto.join('\n');
 
     console.log('🤖 Processando texto com GPT...');
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -91,10 +113,12 @@ serve(async (req) => {
 IMPORTANTE:
 - Sempre responda com JSON válido no formato abaixo.
 - Extraia **todos os produtos listados** no cupom, cada um como um objeto no array "itens".
-- Não resuma e não ignore linhas de produto.
+- Percorra linha por linha do texto fornecido para encontrar todos os produtos.
+- Não resuma e não ignore linhas de produto - capture TODOS os itens.
 - Mesmo que algum campo esteja incompleto, preencha o que conseguir (ex.: descricao e preco_total).
 - Se não encontrar unidade, use "UN".
 - Se não encontrar quantidade, use 1.
+- Procure por padrões como: nome do produto + quantidade + preço unitário + preço total.
 
 Formato de resposta:
 {
@@ -107,7 +131,9 @@ Formato de resposta:
           },
           {
             role: 'user',
-            content: `Extraia os dados desta nota fiscal:\n\n${extractedText}`
+            content: `Extraia os dados desta nota fiscal processando linha por linha para capturar todos os produtos:
+
+${textoProcessado}`
           }
         ],
         max_tokens: 4000
