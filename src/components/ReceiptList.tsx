@@ -332,13 +332,12 @@ const ReceiptList = () => {
                     <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}>
                       <Eye className="w-4 h-4 mr-2" /> {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes'}
                     </Button>
-                    {receipt.debug_texto && (
+                    {(receipt as any).debug_texto && (
                       <Button
                         variant="secondary"
                         size="sm"
                         onClick={() => {
-                          setSelectedReceipt(receipt);
-                          setIsDialogOpen(true);
+                          alert((receipt as any).debug_texto);
                         }}
                         className="bg-green-100 hover:bg-green-200 text-green-800"
                       >
