@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -312,58 +313,17 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
-// Função robusta para extrair texto de PDF no Deno
+// Função para extrair texto de PDF usando pdf-parse
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    console.log("📄 Extraindo texto do PDF...");
+    console.log("📄 Iniciando extração de texto do PDF com pdf-parse...");
     
-    const uint8Array = new Uint8Array(pdfBuffer);
-    let pdfString = '';
-    
-    // Decodificar PDF como string para análise
-    try {
-      pdfString = new TextDecoder('utf-8').decode(uint8Array);
-    } catch {
-      pdfString = new TextDecoder('latin1').decode(uint8Array);
-    }
-    
-    console.log('📄 PDF decodificado, tamanho do texto bruto:', pdfString.length);
-    
-    let extractedText = '';
-    
-    // Extrair texto de objetos de texto PDF (TJ/Tj commands)
-    const textObjectRegex = /\((.*?)\)\s*(?:TJ|Tj)/g;
-    let match;
-    while ((match = textObjectRegex.exec(pdfString)) !== null) {
-      const text = match[1]
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '\r')
-        .replace(/\\t/g, '\t')
-        .replace(/\\(\d{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8)))
-        .replace(/\\(.)/g, '$1');
-      
-      if (text.trim().length > 0) {
-        extractedText += text + ' ';
-      }
-    }
-    
-    // Extrair texto entre parênteses (formato comum)
-    const parenthesesRegex = /\(([^)]+)\)/g;
-    while ((match = parenthesesRegex.exec(pdfString)) !== null) {
-      const text = match[1];
-      if (text.length > 0 && text.length < 200) { // Filtrar textos muito longos
-        extractedText += text + ' ';
-      }
-    }
-    
-    // Normalizar e limpar texto
-    extractedText = extractedText
-      .replace(/\s+/g, ' ')
-      .replace(/[^\w\s\.,\-\(\)\/\:\$R\%\+\=\@\#]/g, ' ')
-      .trim();
+    // Usar pdf-parse para extrair texto
+    const data = await pdfParse(pdfBuffer);
+    const extractedText = data.text;
     
     console.log('🔍 =================================================================');
-    console.log('📝 TEXTO BRUTO EXTRAÍDO DO PDF (COMPLETO):');
+    console.log('📝 TEXTO BRUTO EXTRAÍDO DO PDF (pdf-parse):');
     console.log('🔍 =================================================================');
     console.log(extractedText);
     console.log('🔍 =================================================================');
@@ -371,15 +331,15 @@ async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
     console.log('🔍 =================================================================');
     
     if (!extractedText || extractedText.trim().length < 50) {
-      console.error('❌ Texto insuficiente extraído. PDF provavelmente é baseado em imagem (escaneado).');
+      console.log('⚠️ Texto insuficiente extraído com pdf-parse. PDF pode ser baseado em imagem.');
       throw new Error('PDF_SCAN_DETECTED: Texto insuficiente extraído - PDF pode estar baseado em imagem (escaneado)');
     }
     
-    console.log(`✅ Extração concluída. Texto extraído: ${extractedText.length} caracteres`);
+    console.log(`✅ Extração concluída com pdf-parse. Texto extraído: ${extractedText.length} caracteres`);
     
-    return extractedText;
+    return extractedText.trim();
   } catch (error) {
-    console.error("❌ Erro ao extrair texto do PDF:", error);
+    console.error("❌ Erro ao extrair texto do PDF com pdf-parse:", error);
     throw new Error(`TEXT_EXTRACTION_FAILED: ${error.message}`);
   }
 }
