@@ -24,13 +24,13 @@ serve(async (req) => {
 
     console.log('Processando nota fiscal:', { notaImagemId, pdfUrl, userId });
 
-    // Verificar se é PDF e tentar extração direta de texto primeiro
+    // ✅ FLUXO UNIFICADO: Tentar PDF primeiro, depois fallback para imagem
     if (pdfUrl && pdfUrl.toLowerCase().includes('.pdf')) {
-      console.log('🔄 Detectado PDF - tentando extração direta de texto...');
+      console.log('🔄 Detectado PDF - usando processamento unificado...');
       
       try {
-        // Chamar a função de processamento de PDF
-        const pdfProcessResponse = await fetch(`${supabaseUrl}/functions/v1/process-pdf-text`, {
+        // Chamar a nova função unificada de processamento de PDF
+        const pdfProcessResponse = await fetch(`${supabaseUrl}/functions/v1/process-receipt-pdf`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${supabaseServiceKey}`,
@@ -46,43 +46,22 @@ serve(async (req) => {
         const pdfResult = await pdfProcessResponse.json();
         
         if (pdfResult.success) {
-          console.log('✅ PDF processado com sucesso via extração de texto');
+          console.log('✅ PDF processado com sucesso via função unificada');
           return new Response(JSON.stringify(pdfResult), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
-        } else if (pdfResult.error === 'PDF_REQUER_OCR') {
-          console.log('⚠️ PDF necessita conversão para imagem, continuando com OCR...');
         } else {
-          throw new Error(`Erro no processamento de PDF: ${pdfResult.error}`);
+          console.log('⚠️ PDF falhou, tentando fallback para imagem...');
+          // Continuar com processamento por imagem abaixo
         }
       } catch (pdfError) {
-        console.error('Erro na extração de texto do PDF:', pdfError);
+        console.error('❌ Erro no processamento unificado de PDF:', pdfError);
         console.log('🔄 Continuando com processamento por imagem...');
       }
     }
 
-    // Buscar dados da nota fiscal
-    const { data: notaImagem, error: notaError } = await supabase
-      .from('notas_imagens')
-      .select('*')
-      .eq('id', notaImagemId)
-      .single();
-
-    if (notaError) throw notaError;
-
-    // Verificar se existe imagem convertida nos dados extraídos
-    let imageUrl = null;
-    if (notaImagem.dados_extraidos?.imagens_convertidas?.[0]?.url) {
-      imageUrl = notaImagem.dados_extraidos.imagens_convertidas[0].url;
-    } else if (pdfUrl) {
-      imageUrl = pdfUrl; // Fallback para URL original
-    }
-
-    if (!imageUrl) {
-      throw new Error('Nenhuma imagem ou URL disponível para processamento');
-    }
-
-    console.log('🔍 Processando imagem via OCR:', imageUrl);
+    // 🖼️ FALLBACK: Processamento por imagem (para PDFs escaneados ou quando extração de texto falha)
+    console.log('🖼️ Iniciando processamento por imagem...');
 
     // 🔍 Primeiro passo: OCR para extrair texto bruto da imagem
     console.log('Executando OCR na imagem...');

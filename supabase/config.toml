@@ -12,5 +12,5 @@ verify_jwt = false
 [functions.capture-receipt-external]
 verify_jwt = false
 
-[functions.convert-pdf-to-jpg]
+[functions.process-receipt-pdf]
 verify_jwt = false
