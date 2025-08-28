@@ -142,26 +142,51 @@ const ReceiptList = () => {
       const isPDF = receipt.file_type?.toLowerCase().includes('pdf') || receipt.imagem_url?.toLowerCase().endsWith('.pdf');
 
       if (isPDF) {
-        const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
-          body: { notaImagemId: receipt.id, pdfUrl: receipt.imagem_url, userId: (await supabase.auth.getUser()).data.user?.id }
+        console.log("📄 PDF detectado - usando process-danfe-pdf");
+        
+        // Sempre usar process-danfe-pdf para PDFs
+        const pdfResponse = await supabase.functions.invoke('process-danfe-pdf', {
+          body: { 
+            pdfUrl: receipt.imagem_url, 
+            notaImagemId: receipt.id, 
+            userId: (await supabase.auth.getUser()).data.user?.id 
+          }
         });
 
-        if (pdfResponse.error) throw new Error(pdfResponse.error.message || "Erro no Supabase");
-        if (!pdfResponse.data?.success) throw new Error(pdfResponse.data?.message || "Falha no processamento do PDF");
+        if (pdfResponse.error) {
+          console.error("❌ Erro na função process-danfe-pdf:", pdfResponse.error);
+          
+          // Se for erro INSUFFICIENT_TEXT, fazer fallback para OCR
+          if (pdfResponse.error.message?.includes('INSUFFICIENT_TEXT')) {
+            toast({ 
+              title: "PDF escaneado detectado", 
+              description: "Texto insuficiente - OCR não implementado ainda",
+              variant: "destructive" 
+            });
+            return;
+          }
+          
+          throw new Error(pdfResponse.error.message || "Erro no processamento do PDF");
+        }
 
-        toast({ title: "PDF processado com sucesso!", description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos.` });
+        if (!pdfResponse.data?.success) {
+          throw new Error(pdfResponse.data?.message || "Falha no processamento do PDF");
+        }
+
+        console.log("✅ PDF processado com sucesso:", pdfResponse.data);
+        toast({ 
+          title: "PDF processado com sucesso!", 
+          description: `${pdfResponse.data.itens_extraidos || 0} itens salvos.` 
+        });
         processedSuccessfully = true;
 
       } else {
-        const response = await supabase.functions.invoke('process-receipt-ai', {
-          body: { notaId: receipt.id, imageUrl: receipt.imagem_url }
+        toast({
+          title: "Processamento de imagens não implementado",
+          description: "Apenas PDFs são suportados no momento",
+          variant: "destructive"
         });
-
-        if (response.error) throw new Error(response.error.message || "Erro no Supabase");
-        if (!response.data?.success) throw new Error(response.data?.message || "Falha no processamento da imagem");
-
-        toast({ title: "Imagem processada com sucesso!", description: `${response.data.itens_extraidos || 0} itens extraídos.` });
-        processedSuccessfully = true;
+        return;
       }
 
       if (processedSuccessfully) await loadReceipts();
