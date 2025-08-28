@@ -7,6 +7,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 📄 Função para extrair texto dos itens da DANFE
+function extractItemsFromDanfe(text: string): string[] {
+  // Cada linha da DANFE segue o padrão: 
+  // DESCRICAO ... Qtde.:X UN: Y Vl. Unit.: Z Vl. Total W
+  const itemRegex = /(.*?)(Qtde\.\:\s*[\d,\.]+)\s*UN\:\s*(\w+)\s*Vl\. Unit\.\:\s*([\d,]+)\s*Vl\. Total\s*([\d,]+)/gi;
+
+  const items: string[] = [];
+  let match;
+  while ((match = itemRegex.exec(text)) !== null) {
+    const linha = match[0].replace(/\s+/g, ' ').trim();
+    items.push(linha);
+  }
+
+  return items;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -89,6 +105,16 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Extrair itens da DANFE usando regex específico
+    const itensExtraidosBrutos = extractItemsFromDanfe(extractedText);
+    console.log("📝 Itens extraídos do texto da DANFE:");
+    console.log(itensExtraidosBrutos);
+
+    // Se não extrair nenhum item, forçar fallback para IA tentar estruturar
+    if (itensExtraidosBrutos.length === 0) {
+      console.warn("⚠️ Nenhum item detectado pelo regex, enviando texto bruto para IA.");
     }
 
     // 📝 PRÉ-PROCESSAMENTO: Dividir texto em linhas
@@ -215,6 +241,169 @@ ${textoProcessado}`
         processamento_timestamp: new Date().toISOString()
       }
     };
+
+    // 💾 PERSISTIR DADOS NO BANCO
+    if (itensExtraidos.length > 0) {
+      console.log("💾 Iniciando persistência no banco...");
+      
+      // 1. Criar supermercado se não existir
+      let supermercadoId;
+      const { data: supermercadoExistente } = await supabase
+        .from('supermercados')
+        .select('id')
+        .eq('cnpj', dadosExtraidos.estabelecimento?.cnpj || 'DESCONHECIDO')
+        .single();
+
+      if (supermercadoExistente) {
+        supermercadoId = supermercadoExistente.id;
+      } else {
+        console.log("💾 Criando supermercado...");
+        const { data: novoSupermercado, error: supermercadoError } = await supabase
+          .from('supermercados')
+          .insert({
+            nome: dadosExtraidos.estabelecimento?.nome_fantasia || 'Supermercado',
+            cnpj: dadosExtraidos.estabelecimento?.cnpj || 'DESCONHECIDO',
+            endereco: dadosExtraidos.estabelecimento?.endereco || '',
+            ativo: true
+          })
+          .select('id')
+          .single();
+
+        if (supermercadoError) {
+          console.error("❌ Erro ao criar supermercado:", supermercadoError);
+        } else {
+          supermercadoId = novoSupermercado?.id;
+          console.log("✅ Supermercado criado:", supermercadoId);
+        }
+      }
+
+      // 2. Criar compra
+      console.log("💾 Gravando compra:", dadosExtraidos.compra);
+      const { data: novaCompra, error: compraError } = await supabase
+        .from('compras_app')
+        .insert({
+          user_id: userId,
+          supermercado_id: supermercadoId,
+          data_compra: dadosExtraidos.compra?.data_compra || new Date().toISOString().split('T')[0],
+          hora_compra: dadosExtraidos.compra?.hora_compra || '00:00:00',
+          preco_total: dadosExtraidos.compra?.valor_total || 0,
+          numero_nota_fiscal: dadosExtraidos.compra?.numero_nota || '',
+          status: 'processada'
+        })
+        .select('id')
+        .single();
+
+      if (compraError) {
+        console.error("❌ Erro ao salvar compra:", compraError);
+      } else {
+        console.log("✅ Compra salva:", novaCompra?.id);
+
+        // 3. Criar/buscar produtos e salvar itens
+        console.log("💾 Gravando itens:", dadosExtraidos.itens);
+        for (const [index, item] of itensExtraidos.entries()) {
+          try {
+            // Buscar/criar produto
+            let produtoId;
+            const { data: produtoExistente } = await supabase
+              .from('produtos_app')
+              .select('id')
+              .eq('nome', item.descricao)
+              .single();
+
+            if (produtoExistente) {
+              produtoId = produtoExistente.id;
+            } else {
+              const { data: novoProduto, error: produtoError } = await supabase
+                .from('produtos_app')
+                .insert({
+                  nome: item.descricao,
+                  categoria_id: '00000000-0000-0000-0000-000000000000', // categoria padrão
+                  unidade_medida: item.unidade || 'UN',
+                  ativo: true
+                })
+                .select('id')
+                .single();
+
+              if (produtoError) {
+                console.error(`❌ Erro ao criar produto ${item.descricao}:`, produtoError);
+                continue;
+              }
+              produtoId = novoProduto?.id;
+            }
+
+            // Salvar item da compra
+            const { error: itemError } = await supabase
+              .from('itens_compra_app')
+              .insert({
+                compra_id: novaCompra.id,
+                produto_id: produtoId,
+                quantidade: item.quantidade || 1,
+                preco_unitario: item.preco_unitario || 0,
+                preco_total: item.preco_total || 0
+              });
+
+            if (itemError) {
+              console.error(`❌ Erro ao salvar item ${item.descricao}:`, itemError);
+            } else {
+              console.log(`✅ Item salvo: ${item.descricao}`);
+            }
+
+            // Atualizar estoque
+            const { data: estoqueExistente } = await supabase
+              .from('estoque_app')
+              .select('*')
+              .eq('user_id', userId)
+              .eq('produto_nome', item.descricao)
+              .single();
+
+            if (estoqueExistente) {
+              // Atualizar quantidade existente
+              const { error: estoqueUpdateError } = await supabase
+                .from('estoque_app')
+                .update({
+                  quantidade: (estoqueExistente.quantidade || 0) + (item.quantidade || 1),
+                  preco_unitario_ultimo: item.preco_unitario || 0,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', estoqueExistente.id);
+
+              if (estoqueUpdateError) {
+                console.error(`❌ Erro ao atualizar estoque ${item.descricao}:`, estoqueUpdateError);
+              } else {
+                console.log(`✅ Estoque atualizado: ${item.descricao}`);
+              }
+            } else {
+              // Criar novo item no estoque
+              const { error: estoqueInsertError } = await supabase
+                .from('estoque_app')
+                .insert({
+                  user_id: userId,
+                  produto_nome: item.descricao,
+                  categoria: 'outros',
+                  quantidade: item.quantidade || 1,
+                  unidade_medida: item.unidade || 'UN',
+                  preco_unitario_ultimo: item.preco_unitario || 0
+                });
+
+              if (estoqueInsertError) {
+                console.error(`❌ Erro ao criar estoque ${item.descricao}:`, estoqueInsertError);
+              } else {
+                console.log(`✅ Estoque criado: ${item.descricao}`);
+              }
+            }
+
+          } catch (itemProcessError) {
+            console.error(`❌ Erro ao processar item ${index + 1}:`, itemProcessError);
+          }
+        }
+
+        // Atualizar referência da compra na nota
+        await supabase
+          .from('notas_imagens')
+          .update({ compra_id: novaCompra.id })
+          .eq('id', notaImagemId);
+      }
+    }
 
     // Atualizar nota como processada (mesmo sem itens)
     await supabase
