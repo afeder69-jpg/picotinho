@@ -114,49 +114,291 @@ serve(async (req) => {
       });
     }
 
-    // 🛢️ SALVAR TEXTO EXTRAÍDO NO BANCO (versão ultra simples)
+    // 🤖 Processar com IA para estruturar dados
+    console.log("🤖 Enviando para IA estruturar dados...");
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      throw new Error('OPENAI_API_KEY não configurada');
+    }
+
+    const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
+- Estruture em JSON os dados da compra:
+  • Estabelecimento (nome, CNPJ, endereço)
+  • Valor total da compra
+  • Forma de pagamento
+  • Itens da compra (cada item deve conter: descrição, código, quantidade, unidade, valor unitário, valor total e CATEGORIA)
+- Corrija apenas erros simples de acentuação ou caracteres quebrados (ex.: 'C digo' → 'Código', 'Cart o de D bito' → 'Cartão de Débito').
+- Não altere valores numéricos, quantidades, CNPJs ou chaves de acesso.
+- Preserve a integridade dos dados.
+
+Texto da DANFE:
+${textoLimpo}
+
+Retorne APENAS o JSON estruturado, sem explicações adicionais.`;
+
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
+          { role: 'user', content: aiPrompt }
+        ],
+        max_tokens: 2000,
+        temperature: 0.1
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      throw new Error(`Erro na API OpenAI: ${aiResponse.status}`);
+    }
+
+    const aiData = await aiResponse.json();
+    const respostaIA = aiData.choices[0]?.message?.content || '';
+    
+    console.log("📝 Resposta da IA:");
+    console.log(respostaIA.slice(0, 1000));
+    console.log("=".repeat(80));
+
+    // 💾 Configurar Supabase
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    let dadosEstruturados = null;
+    let compraId = null;
+
+    // 📊 Tentar processar JSON da IA
     try {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL");
-      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      // Limpar resposta da IA para extrair apenas o JSON
+      const jsonMatch = respostaIA.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : respostaIA;
+      
+      dadosEstruturados = JSON.parse(jsonString);
+      console.log("✅ JSON parseado com sucesso");
 
-      // Texto normalizado para salvar no banco
-      const textoParaSalvar = "TESTE: " + textoLimpo
-        .replace(/[^\x20-\x7E]/g, ' ') // Apenas ASCII imprimível
-        .replace(/\s+/g, ' ')
-        .trim()
-        .substring(0, 10000); // Máximo 10k chars
+      // 🏪 Criar/buscar supermercado
+      let supermercadoId = null;
+      if (dadosEstruturados.estabelecimento) {
+        const { nome, cnpj, endereco } = dadosEstruturados.estabelecimento;
+        
+        // Buscar supermercado existente
+        let { data: supermercadoExistente } = await supabase
+          .from('supermercados')
+          .select('id')
+          .eq('cnpj', cnpj)
+          .single();
 
-      console.log("🧹 Tentando salvar texto (tamanho):", textoParaSalvar.length);
-      console.log("🧹 Primeiros 200 chars:", textoParaSalvar.substring(0, 200));
+        if (!supermercadoExistente) {
+          // Criar novo supermercado
+          const { data: novoSupermercado, error: errorSupermercado } = await supabase
+            .from('supermercados')
+            .insert({
+              nome: nome || 'Supermercado',
+              cnpj: cnpj || '',
+              endereco: endereco || ''
+            })
+            .select('id')
+            .single();
 
-      const { data, error: updateError } = await supabase
+          if (errorSupermercado) {
+            console.error("❌ Erro ao criar supermercado:", errorSupermercado);
+          } else {
+            supermercadoId = novoSupermercado.id;
+            console.log("✅ Supermercado criado:", supermercadoId);
+          }
+        } else {
+          supermercadoId = supermercadoExistente.id;
+          console.log("✅ Supermercado encontrado:", supermercadoId);
+        }
+      }
+
+      // 🛒 Criar compra
+      if (dadosEstruturados.compra && supermercadoId) {
+        const { valor_total, forma_pagamento, data_emissao, numero, serie } = dadosEstruturados.compra;
+        
+        // Parse da data (formato brasileiro)
+        let dataCompra = new Date().toISOString().split('T')[0]; // fallback para hoje
+        if (data_emissao) {
+          try {
+            const [dataParte] = data_emissao.split(' ');
+            const [dia, mes, ano] = dataParte.split('/');
+            dataCompra = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+          } catch (e) {
+            console.warn("⚠️ Erro ao parsear data, usando data atual");
+          }
+        }
+
+        const { data: novaCompra, error: errorCompra } = await supabase
+          .from('compras_app')
+          .insert({
+            user_id: userId,
+            supermercado_id: supermercadoId,
+            data_compra: dataCompra,
+            preco_total: valor_total || 0,
+            forma_pagamento: forma_pagamento || null,
+            numero_nota_fiscal: numero || null,
+            status: 'processada'
+          })
+          .select('id')
+          .single();
+
+        if (errorCompra) {
+          console.error("❌ Erro ao criar compra:", errorCompra);
+        } else {
+          compraId = novaCompra.id;
+          console.log("✅ Compra criada:", compraId);
+        }
+      }
+
+      // 🛍️ Processar itens da compra
+      if (dadosEstruturados.itens && compraId) {
+        for (const item of dadosEstruturados.itens) {
+          try {
+            const { descricao, codigo, quantidade, unidade, valor_unitario, valor_total, categoria } = item;
+
+            // Buscar ou criar produto
+            let produtoId = null;
+            let { data: produtoExistente } = await supabase
+              .from('produtos_app')
+              .select('id')
+              .eq('nome', descricao)
+              .single();
+
+            if (!produtoExistente) {
+              // Buscar categoria ou usar padrão
+              let categoriaId = null;
+              if (categoria) {
+                const { data: categoriaExistente } = await supabase
+                  .from('categorias_predefinidas')
+                  .select('id')
+                  .ilike('nome', `%${categoria}%`)
+                  .single();
+
+                if (categoriaExistente) {
+                  categoriaId = categoriaExistente.id;
+                } else {
+                  // Criar categoria se não existir
+                  const { data: novaCategoria } = await supabase
+                    .from('categorias_predefinidas')
+                    .insert({ nome: categoria })
+                    .select('id')
+                    .single();
+                  
+                  if (novaCategoria) categoriaId = novaCategoria.id;
+                }
+              }
+
+              // Criar produto
+              const { data: novoProduto, error: errorProduto } = await supabase
+                .from('produtos_app')
+                .insert({
+                  nome: descricao || 'Produto',
+                  codigo_barras: codigo || null,
+                  unidade_medida: unidade || 'unidade',
+                  categoria_id: categoriaId || null
+                })
+                .select('id')
+                .single();
+
+              if (errorProduto) {
+                console.error("❌ Erro ao criar produto:", errorProduto);
+                continue;
+              } else {
+                produtoId = novoProduto.id;
+                console.log("✅ Produto criado:", descricao);
+              }
+            } else {
+              produtoId = produtoExistente.id;
+            }
+
+            // Criar item da compra
+            const { error: errorItem } = await supabase
+              .from('itens_compra_app')
+              .insert({
+                compra_id: compraId,
+                produto_id: produtoId,
+                quantidade: quantidade || 0,
+                preco_unitario: valor_unitario || 0,
+                preco_total: valor_total || 0
+              });
+
+            if (errorItem) {
+              console.error("❌ Erro ao criar item:", errorItem);
+            }
+
+            // Atualizar estoque
+            const { data: estoqueExistente, error: errorBuscarEstoque } = await supabase
+              .from('estoque_app')
+              .select('id, quantidade')
+              .eq('user_id', userId)
+              .eq('produto_nome', descricao)
+              .single();
+
+            if (estoqueExistente) {
+              // Atualizar quantidade existente
+              await supabase
+                .from('estoque_app')
+                .update({
+                  quantidade: estoqueExistente.quantidade + (quantidade || 0),
+                  preco_unitario_ultimo: valor_unitario || 0
+                })
+                .eq('id', estoqueExistente.id);
+            } else {
+              // Criar novo item no estoque
+              await supabase
+                .from('estoque_app')
+                .insert({
+                  user_id: userId,
+                  produto_nome: descricao || 'Produto',
+                  categoria: categoria || 'outros',
+                  quantidade: quantidade || 0,
+                  unidade_medida: unidade || 'unidade',
+                  preco_unitario_ultimo: valor_unitario || 0
+                });
+            }
+
+          } catch (itemError) {
+            console.error("❌ Erro ao processar item:", item, itemError);
+          }
+        }
+      }
+
+      // Marcar nota como processada
+      await supabase
         .from("notas_imagens")
         .update({
-          debug_texto: textoParaSalvar
+          processada: true,
+          compra_id: compraId,
+          dados_extraidos: dadosEstruturados
         })
-        .eq("id", notaImagemId)
-        .select();
+        .eq("id", notaImagemId);
 
-      if (updateError) {
-        console.error("❌ ERRO BANCO:", updateError);
-        
-        // Tentar com texto ainda mais simples
-        const textoMinimo = "FUNCIONOU! Produtos encontrados: " + textoLimpo.length + " caracteres extraidos";
-        const { error: fallbackError } = await supabase
-          .from("notas_imagens")
-          .update({ debug_texto: textoMinimo })
-          .eq("id", notaImagemId);
-        
-        if (!fallbackError) {
-          console.log("✅ Salvou texto mínimo");
-        }
-      } else {
-        console.log("✅ SUCESSO! Texto salvo:", data);
-      }
-    } catch (dbErr) {
-      console.error("❌ Erro geral:", dbErr);
+    } catch (parseError) {
+      console.error("❌ Erro ao processar JSON da IA:", parseError);
+      console.log("📝 Resposta bruta da IA:", respostaIA);
+    }
+
+    // 💾 Sempre salvar dados de debug
+    try {
+      const textoParaDebug = extractedText.replace(/[^\x20-\x7E\u00C0-\u017F]/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
+      const respostaParaDebug = respostaIA.substring(0, 2000);
+
+      await supabase
+        .from("notas_imagens")
+        .update({
+          debug_texto: `TEXTO_BRUTO: ${textoParaDebug}\n\n===RESPOSTA_IA===\n${respostaParaDebug}`
+        })
+        .eq("id", notaImagemId);
+
+      console.log("✅ Dados de debug salvos com sucesso");
+    } catch (debugError) {
+      console.error("❌ Erro ao salvar debug:", debugError);
     }
 
     return new Response(JSON.stringify({
