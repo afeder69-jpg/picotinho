@@ -147,6 +147,158 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
         throw new Error('Falha ao processar resposta da IA');
       }
 
+      console.log('Dados extraídos estruturados:', JSON.stringify(dadosExtraidos, null, 2));
+
+      // Processar os dados extraídos e salvar no banco
+      let itensProcessados = 0;
+      
+      if (dadosExtraidos && dadosExtraidos.itens && Array.isArray(dadosExtraidos.itens)) {
+        console.log(`Processando ${dadosExtraidos.itens.length} itens encontrados...`);
+        
+        // Buscar ou criar supermercado
+        let supermercadoId = null;
+        if (dadosExtraidos.estabelecimento?.cnpj) {
+          const cnpjLimpo = dadosExtraidos.estabelecimento.cnpj.replace(/[^\d]/g, '');
+          
+          const { data: supermercadoExistente } = await supabase
+            .from('supermercados')
+            .select('id')
+            .eq('cnpj', cnpjLimpo)
+            .single();
+
+          if (supermercadoExistente) {
+            supermercadoId = supermercadoExistente.id;
+          } else {
+            const { data: novoSupermercado, error: supermercadoError } = await supabase
+              .from('supermercados')
+              .insert({
+                nome: dadosExtraidos.estabelecimento.nome_fantasia || 'Estabelecimento',
+                cnpj: cnpjLimpo,
+                endereco: dadosExtraidos.estabelecimento.endereco
+              })
+              .select('id')
+              .single();
+
+            if (!supermercadoError && novoSupermercado) {
+              supermercadoId = novoSupermercado.id;
+            }
+          }
+        }
+
+        // Criar compra
+        let compraId = null;
+        if (supermercadoId) {
+          const { data: novaCompra, error: compraError } = await supabase
+            .from('compras_app')
+            .insert({
+              user_id: userId,
+              supermercado_id: supermercadoId,
+              data_compra: dadosExtraidos.compra?.data_compra || new Date().toISOString().split('T')[0],
+              hora_compra: dadosExtraidos.compra?.hora_compra || null,
+              preco_total: dadosExtraidos.compra?.valor_total || 0,
+              numero_nota_fiscal: dadosExtraidos.compra?.numero_nota || null
+            })
+            .select('id')
+            .single();
+
+          if (!compraError && novaCompra) {
+            compraId = novaCompra.id;
+            console.log('Compra criada:', compraId);
+          }
+        }
+
+        // Processar cada item
+        for (const item of dadosExtraidos.itens) {
+          try {
+            if (!item.descricao || !item.quantidade || !item.preco_unitario) {
+              console.log('Item incompleto, pulando:', item);
+              continue;
+            }
+
+            // Normalizar nome do produto
+            const produtoNomeNormalizado = item.descricao.toUpperCase().trim();
+
+            // Buscar ou criar produto
+            let produtoId = null;
+            const { data: produtoExistente } = await supabase
+              .from('produtos_app')
+              .select('id')
+              .ilike('nome', `%${produtoNomeNormalizado}%`)
+              .limit(1)
+              .single();
+
+            if (produtoExistente) {
+              produtoId = produtoExistente.id;
+            } else {
+              const { data: novoProduto, error: produtoError } = await supabase
+                .from('produtos_app')
+                .insert({
+                  nome: produtoNomeNormalizado,
+                  unidade_medida: item.unidade || 'UN',
+                  categoria_id: 'b47d7f8d-7f3a-4c8d-9e2f-5a1b3c4d5e6f' // categoria padrão
+                })
+                .select('id')
+                .single();
+
+              if (!produtoError && novoProduto) {
+                produtoId = novoProduto.id;
+              }
+            }
+
+            // Adicionar item à compra se temos compra e produto
+            if (compraId && produtoId) {
+              const { error: itemError } = await supabase
+                .from('itens_compra_app')
+                .insert({
+                  compra_id: compraId,
+                  produto_id: produtoId,
+                  quantidade: item.quantidade,
+                  preco_unitario: item.preco_unitario,
+                  preco_total: item.preco_total || (item.quantidade * item.preco_unitario)
+                });
+
+              if (!itemError) {
+                itensProcessados++;
+                console.log(`Item processado: ${item.descricao}`);
+              }
+            }
+
+            // Atualizar estoque
+            const { data: estoqueExistente } = await supabase
+              .from('estoque_app')
+              .select('id, quantidade')
+              .eq('user_id', userId)
+              .eq('produto_nome', produtoNomeNormalizado)
+              .single();
+
+            if (estoqueExistente) {
+              await supabase
+                .from('estoque_app')
+                .update({
+                  quantidade: estoqueExistente.quantidade + item.quantidade,
+                  preco_unitario_ultimo: item.preco_unitario,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', estoqueExistente.id);
+            } else {
+              await supabase
+                .from('estoque_app')
+                .insert({
+                  user_id: userId,
+                  produto_nome: produtoNomeNormalizado,
+                  categoria: 'outros',
+                  quantidade: item.quantidade,
+                  unidade_medida: item.unidade || 'UN',
+                  preco_unitario_ultimo: item.preco_unitario
+                });
+            }
+
+          } catch (itemError) {
+            console.error('Erro ao processar item:', item, itemError);
+          }
+        }
+      }
+
       // Atualizar o registro com os dados extraídos
       const { error: updateError } = await supabase
         .from('notas_imagens')
@@ -154,6 +306,8 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
           dados_extraidos: {
             tipo: 'pdf_texto_extraido',
             metodo_processamento: 'extração_texto_direto',
+            itens_extraidos: dadosExtraidos.itens?.length || 0,
+            itens_processados: itensProcessados,
             ...dadosExtraidos
           },
           processada: true
@@ -172,6 +326,7 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
         message: 'PDF processado com extração de texto direto',
         metodo: 'extração_texto',
         itens_extraidos: dadosExtraidos.itens?.length || 0,
+        itens_processados: itensProcessados,
         dados: dadosExtraidos
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
