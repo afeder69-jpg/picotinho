@@ -276,17 +276,35 @@ const ReceiptList = () => {
             });
           } else {
             console.error('❌ Erro no processamento de PDF:', pdfResponse.error);
+            console.log('🔍 DEBUG - pdfResponse completo:', JSON.stringify(pdfResponse, null, 2));
+            console.log('🔍 DEBUG - pdfResponse.data:', JSON.stringify(pdfResponse.data, null, 2));
             
-            // Verificar se é PDF escaneado (via dados ou erro)
+            // Verificar se é PDF escaneado 
+            // IMPORTANTE: Quando status é 400, os dados ficam no erro, não em data
+            let responseBody = null;
+            try {
+              // Tentar extrair o body da resposta do erro
+              if (pdfResponse.error && typeof pdfResponse.error === 'object') {
+                responseBody = pdfResponse.error;
+              }
+            } catch (e) {
+              console.log('❌ Não foi possível extrair resposta do erro');
+            }
+            
             const isScannedPDF = 
-              pdfResponse.data?.error === 'NO_ITEMS_EXTRACTED' ||
+              responseBody?.error === 'NO_ITEMS_EXTRACTED' ||
               pdfResponse.error?.message?.includes('NO_ITEMS_EXTRACTED') ||
               pdfResponse.error?.message?.includes('escaneado') ||
-              pdfResponse.data?.message?.includes('escaneado');
+              responseBody?.message?.includes('escaneado') ||
+              responseBody?.message?.includes('baseado em imagem');
+              
+            console.log('🔍 DEBUG - responseBody:', responseBody);
+            console.log('🔍 DEBUG - isScannedPDF:', isScannedPDF);
               
             if (isScannedPDF) {
               console.log('⚠️ PDF escaneado detectado, fazendo fallback para OCR...');
             } else {
+              console.log('❌ Erro diferente de PDF escaneado, relançando erro...');
               // Erro diferente, relançar
               throw new Error(pdfResponse.error?.message || 'Erro desconhecido no processamento de PDF');
             }
