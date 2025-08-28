@@ -98,6 +98,12 @@ const ReceiptList = () => {
         ...mappedNotasImagens
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+      console.log('🔍 Debug texto check:', allReceipts.map(r => ({ 
+        id: r.id, 
+        file_name: (r as any).file_name || 'sem nome',
+        debug_texto: (r as any).debug_texto ? `PRESENTE (${(r as any).debug_texto.length} chars)` : 'AUSENTE' 
+      })));
+
       setReceipts(allReceipts);
     } catch (error) {
       console.error('Error loading receipts:', error);
