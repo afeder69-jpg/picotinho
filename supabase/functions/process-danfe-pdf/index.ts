@@ -53,21 +53,22 @@ serve(async (req) => {
       });
     }
 
-    // 🛢️ SALVAR TEXTO EXTRAÍDO NO BANCO (com limpeza de caracteres inválidos)
+    // 🛢️ SALVAR TEXTO EXTRAÍDO NO BANCO (com limpeza simples)
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Limpar caracteres Unicode problemáticos
+      // Limpar caracteres problemáticos de forma mais simples
       const cleanedText = extractedText
-        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove caracteres de controle
-        .replace(/\\x[0-9a-fA-F]{2}/g, '') // Remove sequências de escape hexadecimal
-        .replace(/\\u[0-9a-fA-F]{4}/g, '') // Remove sequências de escape Unicode
-        .normalize('NFD'); // Normaliza caracteres acentuados
+        .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ') // Remove caracteres de controle
+        .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, ' ') // Mantém apenas caracteres ASCII estendidos
+        .replace(/\s+/g, ' ') // Normaliza espaços
+        .trim()
+        .substring(0, 50000); // Limita a 50k caracteres
 
-      console.log("🧹 Texto limpo (primeiros 500 chars):", cleanedText.slice(0, 500));
+      console.log("🧹 Texto limpo salvo (tamanho final):", cleanedText.length);
 
       const { error: updateError } = await supabase
         .from("notas_imagens")
@@ -78,11 +79,13 @@ serve(async (req) => {
 
       if (updateError) {
         console.error("❌ Erro ao salvar texto no banco:", updateError.message);
+        console.error("❌ Detalhes do erro:", updateError);
       } else {
         console.log("✅ Texto extraído salvo no banco com sucesso");
       }
     } catch (dbErr) {
       console.error("❌ Erro de banco:", dbErr.message);
+      console.error("❌ Stack trace:", dbErr);
     }
 
     return new Response(JSON.stringify({
