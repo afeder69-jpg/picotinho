@@ -136,17 +136,28 @@ serve(async (req) => {
           {
             role: 'system',
             content: `Você é especialista em processar DANFE NFC-e (nota fiscal eletrônica do consumidor).
-IMPORTANTE:
-- Sempre responda com JSON válido no formato abaixo.
-- Extraia **todos os produtos listados** no cupom, cada um como um objeto no array "itens".
-- Percorra linha por linha do texto fornecido para encontrar todos os produtos.
-- Não resuma e não ignore linhas de produto - capture TODOS os itens.
-- Mesmo que algum campo esteja incompleto, preencha o que conseguir (ex.: descricao e preco_total).
-- Se não encontrar unidade, use "UN".
-- Se não encontrar quantidade, use 1.
-- Procure por padrões como: nome do produto + quantidade + preço unitário + preço total.
 
-Formato de resposta:
+INSTRUÇÕES CRÍTICAS:
+1. **SEMPRE responda com JSON válido** - nunca adicione texto extra fora do JSON
+2. **PROCURE POR TODOS OS PRODUTOS** - analise cada linha do texto buscando por itens de compra
+3. **PADRÕES COMUNS de produtos em DANFE:**
+   - Nome do produto seguido de Qtde, UN, Vl.Unit, Vl.Total
+   - Produtos podem estar separados por números de sequência (001, 002, etc.)
+   - Valores podem ter formato brasileiro (vírgula para decimal)
+   - Produtos podem estar em linhas quebradas ou concatenadas
+
+4. **EXTRAÇÃO OBRIGATÓRIA:**
+   - Nome/descrição do produto (sempre obrigatório)
+   - Quantidade (se não encontrar, use 1.0)
+   - Unidade (se não encontrar, use "UN")
+   - Preço unitário (procure por "Vl.Unit", "Vl.Unitário", "Unit", etc.)
+   - Preço total (procure por "Vl.Total", "Total", etc.)
+
+5. **CONVERSÃO DE VALORES:**
+   - Converta vírgulas em pontos para valores decimais
+   - Remova pontos de milhares (ex: 1.234,56 → 1234.56)
+
+FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
 {
   "estabelecimento": { "nome_fantasia": "string", "cnpj": "string", "endereco": "string" },
   "compra": { "data_compra": "YYYY-MM-DD", "hora_compra": "HH:MM:SS", "valor_total": number, "numero_nota": "string" },
@@ -313,11 +324,24 @@ ${textoProcessado}`
             if (produtoExistente) {
               produtoId = produtoExistente.id;
             } else {
+              // Buscar primeira categoria disponível para usar como padrão
+              const { data: categoriasPadrao } = await supabase
+                .from('categorias')
+                .select('id')
+                .limit(1);
+              
+              const categoriaId = categoriasPadrao?.[0]?.id || null;
+              
+              if (!categoriaId) {
+                console.error(`❌ Nenhuma categoria disponível para produto ${item.descricao}`);
+                continue;
+              }
+
               const { data: novoProduto, error: produtoError } = await supabase
                 .from('produtos_app')
                 .insert({
                   nome: item.descricao,
-                  categoria_id: '00000000-0000-0000-0000-000000000000', // categoria padrão
+                  categoria_id: categoriaId,
                   unidade_medida: item.unidade || 'UN',
                   ativo: true
                 })

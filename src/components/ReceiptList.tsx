@@ -317,7 +317,7 @@ const ReceiptList = () => {
                     <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}>
                       <Eye className="w-4 h-4 mr-2" /> {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes'}
                     </Button>
-                    {!receipt.processada && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
+                    {(!receipt.processada || (receipt.processada && (!receipt.dados_extraidos?.itens || receipt.dados_extraidos?.itens?.length === 0))) && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
                       <Button
                         variant="default"
                         size="sm"
@@ -326,7 +326,7 @@ const ReceiptList = () => {
                         className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         {processingReceipts.has(receipt.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bot className="w-4 h-4 mr-2" />}
-                        {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
+                        {processingReceipts.has(receipt.id) ? 'Processando...' : (receipt.processada ? 'Reprocessar' : 'Extrair com IA')}
                       </Button>
                     )}
                     {receipt.processada && (
