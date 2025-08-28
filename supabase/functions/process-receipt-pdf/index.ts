@@ -545,42 +545,31 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
-// 📄 Função para extrair texto de PDF usando pdf-lib (mais robusto)
-import { PDFDocument } from "https://cdn.skypack.dev/pdf-lib?dts";
+import * as pdfjsLib from "https://esm.sh/pdfjs-dist@3.4.120/legacy/build/pdf.js";
 
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    console.log("📄 Iniciando extração com pdf-lib...");
+    console.log("📄 Iniciando extração com pdfjs-dist...");
 
     const uint8Array = new Uint8Array(pdfBuffer);
-    const pdfDoc = await PDFDocument.load(uint8Array);
+    const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
 
     let extractedText = "";
 
-    const pages = pdfDoc.getPages();
-    console.log(`📑 Total de páginas no PDF: ${pages.length}`);
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
 
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
-      // ⚠️ pdf-lib não tem um método direto para texto, mas podemos pegar o "contentStream"
-      const raw = page.node.get("Contents");
-      if (raw) {
-        const str = raw.toString();
-        extractedText += " " + str;
-      }
+      const pageText = textContent.items.map((item: any) => item.str).join(" ");
+      extractedText += " " + pageText;
     }
 
-    // Limpeza básica
-    extractedText = extractedText
-      .replace(/\s+/g, " ")
-      .replace(/[^\w\s\.,\-\(\)\/\:\$\%]/g, " ")
-      .trim();
-
+    extractedText = extractedText.replace(/\s+/g, " ").trim();
     console.log(`✅ Texto extraído com sucesso: ${extractedText.length} caracteres`);
     return extractedText;
 
   } catch (error) {
-    console.error("❌ Erro ao extrair texto com pdf-lib:", error);
+    console.error("❌ Erro ao extrair texto com pdfjs-dist:", error);
     throw new Error("TEXT_EXTRACTION_FAILED");
   }
 }
