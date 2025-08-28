@@ -84,6 +84,34 @@ Responda APENAS em JSON válido.`
     });
 
     const aiResult = await aiResponse.json();
+    
+    console.log("📝 Texto bruto extraído do PDF:");
+    console.log(extractedText.slice(0, 2000)); // até 2000 caracteres p/ debug
+
+    console.log("🤖 Resposta bruta da IA:", JSON.stringify(aiResult, null, 2));
+
+    // Salvar debug no banco mesmo que não tenha itens
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
+      await supabase
+        .from("notas_imagens")
+        .update({
+          dados_extraidos: {
+            debugTextoExtraido: extractedText.slice(0, 3000),
+            debugRespostaIA: aiResult,
+          },
+          processada: false
+        })
+        .eq("id", notaImagemId);
+        
+      console.log("✅ Debug data saved to database");
+    } catch (dbErr) {
+      console.error("❌ Erro ao salvar debug:", dbErr.message);
+    }
     console.log("🤖 Resposta bruta da IA:", JSON.stringify(aiResult, null, 2));
 
     const aiContent = aiResult.choices?.[0]?.message?.content;
