@@ -207,109 +207,128 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
 // Função para extrair texto de PDF
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    // Usar API externa para extração de texto (exemplo: ILovePDF Text Extraction)
-    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
+    // Primeiro, tentar extração de texto usando uma abordagem mais robusta
+    const extractedText = await extractTextRobust(pdfBuffer);
     
-    // Tentar ILovePDF para extração de texto
-    const textExtractionResponse = await fetch('https://api.ilovepdf.com/v1/start/extract', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (Deno.env.get('ILOVEPDF_API_KEY') || 'public_key')
-      },
-      body: JSON.stringify({
-        task: 'extract'
-      })
-    });
-
-    if (textExtractionResponse.ok) {
-      const task = await textExtractionResponse.json();
-      
-      // Upload do PDF
-      const uploadForm = new FormData();
-      uploadForm.append('task', task.task);
-      uploadForm.append('file', new Blob([pdfBuffer], { type: 'application/pdf' }), 'document.pdf');
-      
-      const uploadResponse = await fetch('https://api.ilovepdf.com/v1/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + (Deno.env.get('ILOVEPDF_API_KEY') || 'public_key')
-        },
-        body: uploadForm
-      });
-
-      if (uploadResponse.ok) {
-        const uploadResult = await uploadResponse.json();
-        
-        // Processar extração
-        const processResponse = await fetch('https://api.ilovepdf.com/v1/process', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + (Deno.env.get('ILOVEPDF_API_KEY') || 'public_key'),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            task: task.task,
-            tool: 'extract',
-            files: [uploadResult.server_filename]
-          })
-        });
-
-        if (processResponse.ok) {
-          // Baixar resultado
-          const downloadResponse = await fetch(`https://api.ilovepdf.com/v1/download/${task.task}`, {
-            headers: {
-              'Authorization': 'Bearer ' + (Deno.env.get('ILOVEPDF_API_KEY') || 'public_key')
-            }
-          });
-
-          if (downloadResponse.ok) {
-            const textResult = await downloadResponse.text();
-            return textResult;
-          }
-        }
-      }
+    if (extractedText.length > 50) {
+      console.log('Texto extraído com sucesso usando método robusto');
+      return extractedText;
     }
-
-    // Fallback: usar uma implementação simples de extração
-    return await extractTextSimple(pdfBuffer);
+    
+    // Se não conseguiu texto suficiente, retornar vazio para forçar conversão para imagem
+    console.log('Não foi possível extrair texto suficiente do PDF');
+    return '';
     
   } catch (error) {
     console.error('Erro na extração de texto:', error);
-    return await extractTextSimple(pdfBuffer);
+    return '';
   }
 }
 
-// Implementação simples de extração de texto
-async function extractTextSimple(pdfBuffer: ArrayBuffer): Promise<string> {
-  // Converter para string e procurar por padrões de texto comuns em PDFs
+// Implementação robusta de extração de texto
+async function extractTextRobust(pdfBuffer: ArrayBuffer): Promise<string> {
   const uint8Array = new Uint8Array(pdfBuffer);
-  const pdfString = new TextDecoder('latin1').decode(uint8Array);
+  const pdfString = new TextDecoder('utf-8', { ignoreBOM: true, fatal: false }).decode(uint8Array);
   
-  // Extrair strings entre parênteses que geralmente contêm texto em PDFs
-  const textMatches = pdfString.match(/\((.*?)\)/g);
   let extractedText = '';
   
-  if (textMatches) {
-    extractedText = textMatches
-      .map(match => match.slice(1, -1)) // Remove ( )
-      .filter(text => text.length > 1 && /[a-zA-Z0-9]/.test(text)) // Filtra texto válido
-      .join(' ');
+  // Método 1: Buscar por objetos de texto em PDFs
+  const textObjectRegex = /BT\s+(.*?)\s+ET/g;
+  let match;
+  while ((match = textObjectRegex.exec(pdfString)) !== null) {
+    const textBlock = match[1];
+    if (textBlock) {
+      extractedText += ' ' + textBlock;
+    }
   }
   
-  // Se não encontrou texto suficiente, tentar extrair de streams
-  if (extractedText.length < 100) {
-    const streamMatches = pdfString.match(/stream\s*([\s\S]*?)\s*endstream/g);
-    if (streamMatches) {
-      for (const stream of streamMatches) {
-        const streamContent = stream.replace(/^stream\s*/, '').replace(/\s*endstream$/, '');
-        const decodedStream = new TextDecoder('latin1').decode(
-          new Uint8Array(streamContent.split('').map(c => c.charCodeAt(0)))
-        );
-        extractedText += ' ' + decodedStream;
+  // Método 2: Buscar por strings entre parênteses (formato PDF padrão)
+  const stringRegex = /\(((?:[^()\\]|\\.|\\[0-9]{1,3})*)\)/g;
+  while ((match = stringRegex.exec(pdfString)) !== null) {
+    let text = match[1];
+    if (text && text.length > 1) {
+      // Decodificar caracteres especiais do PDF
+      text = text
+        .replace(/\\n/g, ' ')
+        .replace(/\\r/g, ' ')
+        .replace(/\\t/g, ' ')
+        .replace(/\\[0-9]{3}/g, ' ')
+        .replace(/\\./g, ' ')
+        .trim();
+      
+      if (text.length > 2 && /[a-zA-Z0-9]/.test(text)) {
+        extractedText += ' ' + text;
       }
     }
   }
   
-  return extractedText.replace(/\s+/g, ' ').trim();
+  // Método 3: Buscar por streams de texto decodificados
+  const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
+  while ((match = streamRegex.exec(pdfString)) !== null) {
+    const streamContent = match[1];
+    if (streamContent) {
+      // Tentar extrair texto de streams
+      const decodedText = decodeStreamText(streamContent);
+      if (decodedText.length > 10) {
+        extractedText += ' ' + decodedText;
+      }
+    }
+  }
+  
+  // Método 4: Buscar por padrões específicos de DANFE/Nota Fiscal
+  const danfePatterns = [
+    /DANFE[\s\S]{0,100}DOCUMENTO AUXILIAR/i,
+    /NOTA FISCAL[\s\S]{0,100}ELETR[ÔO]NICA/i,
+    /CUPOM FISCAL[\s\S]{0,100}ELETR[ÔO]NICO/i,
+    /CNPJ[\s\S]{0,50}\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/i
+  ];
+  
+  for (const pattern of danfePatterns) {
+    const matches = pdfString.match(pattern);
+    if (matches) {
+      extractedText += ' ' + matches[0];
+    }
+  }
+  
+  // Limpar e normalizar o texto extraído
+  extractedText = extractedText
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s\.,\-\(\)\/]/g, ' ')
+    .trim();
+  
+  console.log(`Texto extraído (${extractedText.length} caracteres):`, extractedText.substring(0, 200));
+  
+  return extractedText;
+}
+
+// Função auxiliar para decodificar texto de streams
+function decodeStreamText(streamContent: string): string {
+  try {
+    // Remover caracteres de controle e tentar extrair texto legível
+    let decoded = streamContent
+      .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ') // Remove caracteres de controle
+      .replace(/[^\x20-\x7E\u00A0-\uFFFF]/g, ' ') // Mantém apenas caracteres imprimíveis
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Buscar por padrões de texto em português/português
+    const textPatterns = [
+      /[A-ZÁÊÔÇÃÜ][A-Za-záêôçãü\s]{3,}/g, // Palavras em português
+      /\d{2}\/\d{2}\/\d{4}/g, // Datas
+      /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, // CNPJ
+      /R\$\s*\d+[,\.]\d{2}/g, // Valores monetários
+    ];
+    
+    let result = '';
+    for (const pattern of textPatterns) {
+      const matches = decoded.match(pattern);
+      if (matches) {
+        result += ' ' + matches.join(' ');
+      }
+    }
+    
+    return result.trim();
+  } catch (error) {
+    return '';
+  }
 }
