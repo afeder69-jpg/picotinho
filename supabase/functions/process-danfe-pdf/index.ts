@@ -1,9 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import * as pdfjsLib from "npm:pdfjs-dist/legacy/build/pdf.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+async function extractTextFromPDF(pdfBuffer) {
+  const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
+  let extractedText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    extractedText += textContent.items.map(item => item.str).join(" ") + "\n";
+  }
+  return extractedText.trim();
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -29,16 +41,11 @@ serve(async (req) => {
     if (!resp.ok) throw new Error(`Falha ao baixar PDF: ${resp.status}`);
     const buffer = await resp.arrayBuffer();
 
-    // 📄 Extrair texto bruto do PDF
-    const pdfString = new TextDecoder("latin1").decode(new Uint8Array(buffer));
-    const regex = /\(([^)]+)\)/g;
-    let extractedText = "";
-    let match;
-    while ((match = regex.exec(pdfString)) !== null) {
-      extractedText += match[1] + " ";
-    }
+    // 📄 Extrair texto do PDF usando pdfjs-dist
+    console.log("📄 Extraindo texto do PDF...");
+    const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
 
-    console.log("📝 Texto bruto extraído do PDF:");
+    console.log("📝 Texto extraído do PDF:");
     console.log(extractedText.slice(0, 2000)); // primeiras 2000 chars
     console.log("=".repeat(80));
 
