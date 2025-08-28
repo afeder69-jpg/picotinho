@@ -5,6 +5,36 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function normalizarTextoNota(extractedText: string): string {
+  let texto = extractedText;
+
+  // 1. Corrigir acentuação básica (parser vem quebrado)
+  const mapaAcentos: Record<string, string> = {
+    "Emiss o": "Emissão",
+    "S rie": "Série",
+    "Cart o de D bito": "Cartão de Débito",
+    "Informa o": "Informação",
+    "Informa es": "Informações",
+    "identifi cado": "identificado"
+  };
+
+  for (const [errado, certo] of Object.entries(mapaAcentos)) {
+    const regex = new RegExp(errado, "gi");
+    texto = texto.replace(regex, certo);
+  }
+
+  // 2. Inserir quebra de linha sempre que encontrar "Vl. Total"
+  texto = texto.replace(/(Vl\. Total [0-9]+,[0-9]{2})/g, "$1\n");
+
+  // 3. Inserir quebra de linha antes de "Qtd. total de itens"
+  texto = texto.replace(/Qtd\. total de itens:/g, "\nQtd. total de itens:");
+
+  // 4. Remover espaços duplos e normalizar
+  texto = texto.replace(/\s+/g, " ").trim();
+
+  return texto;
+}
+
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
     // Import pdfjs-dist usando uma abordagem compatível com Deno
@@ -60,9 +90,12 @@ serve(async (req) => {
 
     // 📄 Extrair texto do PDF usando pdfjs-dist
     console.log("📄 Extraindo texto do PDF...");
-    const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
+    let extractedText = await extractTextFromPDF(new Uint8Array(buffer));
 
-    console.log("📝 Texto extraído do PDF:");
+    // Normalizar o texto antes de salvar
+    extractedText = normalizarTextoNota(extractedText);
+
+    console.log("📝 Texto normalizado da DANFE:");
     console.log(extractedText.slice(0, 2000)); // primeiras 2000 chars
     console.log("=".repeat(80));
 
