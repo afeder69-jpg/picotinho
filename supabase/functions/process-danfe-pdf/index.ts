@@ -35,19 +35,26 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
 }
 
 function normalizarTextoDanfe(texto: string): string {
+  if (!texto) return texto;
+
   return texto
-    // Correções de acentuação e cedilha
+    // Correções de acentuação
     .replace(/C digo/g, "Código")
     .replace(/Cart o/g, "Cartão")
     .replace(/D bito/g, "Débito")
-    .replace(/Informa o/g, "Informação")
-    .replace(/Informa es/g, "Informações")
+    .replace(/Valor Unit rio/g, "Valor Unitário")
     .replace(/Emiss o/g, "Emissão")
-    .replace(/N mero/g, "Número")
-    .replace(/S rie/g, "Série")
+    .replace(/Informa es/g, "Informações")
     .replace(/Autoriza o/g, "Autorização")
-    .replace(/n o/g, "não")
-    .replace(/fi cado/g, "ficado")
+    .replace(/n o identi ficado/g, "não identificado")
+
+    // Correções de espaços indevidos
+    .replace(/identi ficado/g, "identificado")
+    .replace(/Consu midor/g, "Consumidor")
+
+    // Normalização de unidades
+    .replace(/Unidade: Unidade/g, "Unidade")
+    .replace(/Unidade: Kg/g, "Kg")
 
     // Expansão de abreviações mais comuns em DANFE
     .replace(/\bQtde\./g, "Quantidade")
