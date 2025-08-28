@@ -122,14 +122,18 @@ serve(async (req) => {
     }
 
     const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
-- Estruture em JSON os dados da compra:
-  • Estabelecimento (nome, CNPJ, endereço)
-  • Valor total da compra
-  • Forma de pagamento
-  • Itens da compra (cada item deve conter: descrição, código, quantidade, unidade, valor unitário, valor total e CATEGORIA)
-- Corrija apenas erros simples de acentuação ou caracteres quebrados (ex.: 'C digo' → 'Código', 'Cart o de D bito' → 'Cartão de Débito').
-- Não altere valores numéricos, quantidades, CNPJs ou chaves de acesso.
-- Preserve a integridade dos dados.
+
+1. Estruture em JSON os dados da compra:
+   • Estabelecimento (nome, CNPJ, endereço)
+   • Compra (valor_total, forma_pagamento, número, série, data_emissão)
+   • Itens (descrição corrigida, código, quantidade, unidade, valor_unitario, valor_total, categoria)
+
+2. Regras:
+   - Corrija ortografia e acentuação em nomes de produtos e campos.
+   - Não altere números, quantidades, CNPJs ou chaves de acesso.
+   - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
+   - Categorize cada item conforme categorias padrão: [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados].
+   - Sempre retornar JSON válido.
 
 Texto da DANFE:
 ${textoLimpo}
