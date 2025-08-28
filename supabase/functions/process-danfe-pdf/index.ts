@@ -138,6 +138,8 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
    - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
      • Corrija ortografia, acentuação e capitalização
      • Organize informações de forma lógica (ex: "Bebida Láctea Batavo Pense Zero Ameixa 170g")
+     • SEMPRE preserve peso/volume/medidas da embalagem (350g, 535g, 1L, 2kg, 170g, etc.)
+     • Peso/volume é parte da identidade única do produto e NÃO pode ser removido
      • Mantenha a grafia original correta dos produtos, apenas organizando melhor
      • NÃO invente nomes, apenas limpe e organize
    - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
