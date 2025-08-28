@@ -251,84 +251,92 @@ const ReceiptList = () => {
         description: "A IA está analisando os dados da nota...",
       });
 
-      // Verificar se é PDF que precisa ser convertido primeiro
-      if (receipt.file_type === 'PDF' && !(receipt.dados_extraidos as any)?.imagens_convertidas) {
-        console.log('🔄 PDF precisa ser convertido primeiro...');
+      let processedSuccessfully = false;
+      
+      // Se for PDF, primeiro tentar extração de texto
+      if (receipt.file_type === 'PDF' || receipt.imagem_url?.toLowerCase().includes('.pdf')) {
+        console.log('🔄 PDF detectado, tentando extração de texto...');
         
-        const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
+        const textResponse = await supabase.functions.invoke('process-pdf-text', {
           body: {
             notaImagemId: receipt.id,
             pdfUrl: receipt.imagem_url,
             userId: (await supabase.auth.getUser()).data.user?.id
           }
         });
-
-        if (convertResponse.error) {
-          throw new Error(`Erro na conversão do PDF: ${convertResponse.error.message}`);
+        
+        if (textResponse.data?.success) {
+          console.log('✅ PDF processado com extração de texto');
+          processedSuccessfully = true;
+          
+          toast({
+            title: "PDF processado com sucesso!",
+            description: `${textResponse.data.itens_extraidos || 0} itens extraídos diretamente do texto.`,
+          });
+        } else if (textResponse.data?.requer_conversao_imagem) {
+          console.log('🔄 PDF requer conversão para imagem, convertendo...');
+          
+          // Converter para JPG alta qualidade
+          const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
+            body: {
+              notaImagemId: receipt.id,
+              pdfUrl: receipt.imagem_url,
+              userId: (await supabase.auth.getUser()).data.user?.id
+            }
+          });
+          
+          if (convertResponse.error) {
+            throw new Error(`Erro na conversão: ${convertResponse.error.message}`);
+          }
+          
+          // Usar as imagens convertidas se disponível
+          let imageUrl = receipt.imagem_url;
+          if (convertResponse.data?.convertedImages?.length > 0) {
+            imageUrl = convertResponse.data.convertedImages[0].url;
+            console.log('🔄 PDF convertido, usando imagem HD:', imageUrl);
+          }
+          
+          // Processar com IA usando OCR
+          const aiResponse = await supabase.functions.invoke('process-receipt-ai', {
+            body: {
+              notaId: receipt.id,
+              imageUrl: imageUrl
+            }
+          });
+          
+          if (aiResponse.error) {
+            throw new Error(aiResponse.error.message);
+          }
+          
+          processedSuccessfully = true;
+          toast({
+            title: "PDF convertido e processado!",
+            description: `${aiResponse.data.itens_extraidos || 0} itens extraídos via OCR.`,
+          });
         }
-
-        // Recarregar dados da nota para obter imagens convertidas
-        const { data: updatedNote, error: fetchError } = await supabase
-          .from('notas_imagens')
-          .select('*')
-          .eq('id', receipt.id)
-          .single();
-
-        if (fetchError || !(updatedNote?.dados_extraidos as any)?.imagens_convertidas) {
-          throw new Error('Falha ao obter imagens convertidas do PDF');
-        }
-
-        receipt.dados_extraidos = updatedNote.dados_extraidos;
-      }
-
-      // Determinar URL da imagem para processamento
-      let imageUrlToProcess = receipt.imagem_url;
-      
-      if ((receipt.dados_extraidos as any)?.imagens_convertidas?.length > 0) {
-        // Usar a primeira imagem convertida
-        imageUrlToProcess = (receipt.dados_extraidos as any).imagens_convertidas[0].url;
-        console.log('🔄 Usando imagem convertida do PDF:', imageUrlToProcess);
-      }
-
-      if (!imageUrlToProcess) {
-        throw new Error('Nenhuma imagem disponível para processamento');
-      }
-
-      // Sempre usar a imagem convertida para evitar erro com PDFs no OpenAI
-      const functionName = 'process-receipt-ai';
-      
-      console.log(`🟡 Preparando chamada para ${functionName}...`);
-      const requestBody = {
-        notaId: receipt.id,
-        imageUrl: imageUrlToProcess // Sempre usar a imagem (JPG convertida)
-      };
-      
-      console.log('📤 Body da requisição:', requestBody);
-
-      console.log('📞 Chamando supabase.functions.invoke...');
-      const { data, error } = await supabase.functions.invoke(functionName, {
-        body: requestBody
-      });
-
-      console.log('📨 Resposta recebida:', { data, error });
-
-      if (error) {
-        console.error('❌ Erro da edge function:', error);
-        throw error;
-      }
-
-      if (data?.success) {
-        console.log('✅ Processamento bem-sucedido:', data);
-        toast({
-          title: "Nota processada com sucesso!",
-          description: `${data.itensProcessados || 0} itens foram extraídos e salvos.`,
+      } else {
+        // Para imagens, usar processamento direto
+        const response = await supabase.functions.invoke('process-receipt-ai', {
+          body: {
+            notaId: receipt.id,
+            imageUrl: receipt.imagem_url
+          }
         });
         
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+        
+        processedSuccessfully = true;
+        toast({
+          title: "Imagem processada com sucesso!",
+          description: `${response.data.itens_extraidos || 0} itens extraídos.`,
+        });
+      }
+      
+      if (processedSuccessfully) {
         console.log('🔄 Recarregando lista de notas...');
         await loadReceipts();
-      } else {
-        console.error('❌ Dados inválidos retornados:', data);
-        throw new Error(data?.error || 'Erro desconhecido ao processar nota');
       }
 
     } catch (error) {
