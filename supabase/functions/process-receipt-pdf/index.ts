@@ -273,13 +273,14 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       return new Response(JSON.stringify({
         success: false,
         error: 'NO_ITEMS_EXTRACTED',
-        message: 'PDF baseado em imagem detectado - use o botão "Extrair com IA" para processar via OCR',
+        requiresOCR: true,
+        message: 'PDF baseado em imagem detectado - processando automaticamente via OCR',
         totalItens: 0,
         textoExtraido: extractedText.substring(0, 500),
         dadosExtraidos,
-        sugestao: 'Este PDF parece ser escaneado. Use OCR para melhor extração.'
+        sugestao: 'Este PDF parece ser escaneado. Fazendo fallback para OCR automaticamente.'
       }), {
-        status: 400,
+        status: 200, // ← MUDANÇA: Status 200 para permitir acesso aos dados
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

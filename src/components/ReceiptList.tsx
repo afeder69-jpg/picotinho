@@ -274,42 +274,10 @@ const ReceiptList = () => {
               title: "PDF processado com sucesso!",
               description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos via EXTRAÇÃO DE TEXTO.`,
             });
-          } else {
-            console.error('❌ Erro no processamento de PDF:', pdfResponse.error);
-            console.log('🔍 DEBUG - pdfResponse completo:', JSON.stringify(pdfResponse, null, 2));
-            console.log('🔍 DEBUG - pdfResponse.data:', JSON.stringify(pdfResponse.data, null, 2));
+          } else if (pdfResponse.data?.requiresOCR) {
+            console.log('⚠️ PDF escaneado detectado, fazendo fallback para OCR...');
             
-            // Verificar se é PDF escaneado 
-            // IMPORTANTE: Quando status é 400, os dados ficam no erro, não em data
-            let responseBody = null;
-            try {
-              // Tentar extrair o body da resposta do erro
-              if (pdfResponse.error && typeof pdfResponse.error === 'object') {
-                responseBody = pdfResponse.error;
-              }
-            } catch (e) {
-              console.log('❌ Não foi possível extrair resposta do erro');
-            }
-            
-            const isScannedPDF = 
-              responseBody?.error === 'NO_ITEMS_EXTRACTED' ||
-              pdfResponse.error?.message?.includes('NO_ITEMS_EXTRACTED') ||
-              pdfResponse.error?.message?.includes('escaneado') ||
-              responseBody?.message?.includes('escaneado') ||
-              responseBody?.message?.includes('baseado em imagem');
-              
-            console.log('🔍 DEBUG - responseBody:', responseBody);
-            console.log('🔍 DEBUG - isScannedPDF:', isScannedPDF);
-              
-            if (isScannedPDF) {
-              console.log('⚠️ PDF escaneado detectado, fazendo fallback para OCR...');
-            } else {
-              console.log('❌ Erro diferente de PDF escaneado, relançando erro...');
-              // Erro diferente, relançar
-              throw new Error(pdfResponse.error?.message || 'Erro desconhecido no processamento de PDF');
-            }
-            
-            // Converter PDF para imagem primeiro
+            // Converter PDF para imagem primeiro  
             const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
               body: {
                 notaImagemId: receipt.id,
@@ -346,6 +314,8 @@ const ReceiptList = () => {
               title: "PDF escaneado processado!",
               description: `${aiResponse.data.itens_extraidos || 0} itens extraídos via OCR (fallback).`,
             });
+          } else {
+            console.error('❌ Erro no processamento de PDF:', pdfResponse);
           }
         } catch (pdfError) {
           console.error('❌ Erro crítico no processamento de PDF:', pdfError);
