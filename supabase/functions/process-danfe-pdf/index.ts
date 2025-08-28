@@ -38,8 +38,8 @@ serve(async (req) => {
       extractedText += match[1] + " ";
     }
 
-    console.log("📝 TEXTO BRUTO EXTRAÍDO (primeiros 1000 chars):");
-    console.log(extractedText.slice(0, 1000));
+    console.log("📝 Texto bruto extraído do PDF:");
+    console.log(extractedText.slice(0, 2000)); // primeiras 2000 chars
     console.log("=".repeat(80));
 
     if (!extractedText || extractedText.length < 50) {
@@ -84,9 +84,7 @@ Responda APENAS em JSON válido.`
     });
 
     const aiResult = await aiResponse.json();
-    console.log("🤖 RESPOSTA BRUTA DA IA:");
-    console.log(JSON.stringify(aiResult, null, 2));
-    console.log("=".repeat(80));
+    console.log("🤖 Resposta bruta da IA:", JSON.stringify(aiResult, null, 2));
 
     const aiContent = aiResult.choices?.[0]?.message?.content;
     if (!aiContent) {
@@ -117,11 +115,11 @@ Responda APENAS em JSON válido.`
         .from("notas_imagens")
         .update({
           dados_extraidos: {
-            debugTexto: extractedText.slice(0, 2000),
-            debugRespostaIA: aiContent,
+            debugTextoExtraido: extractedText.slice(0, 3000),
+            debugRespostaIA: aiResult,
             parsed: dadosExtraidos
           },
-          processada: true
+          processada: dadosExtraidos?.itens?.length > 0
         })
         .eq("id", notaImagemId);
 
