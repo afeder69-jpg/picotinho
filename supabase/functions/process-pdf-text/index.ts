@@ -359,131 +359,103 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
-// Função para extrair texto de PDF
+// Função para extrair texto de PDF usando abordagem direta
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    // Primeiro, tentar extração de texto usando uma abordagem mais robusta
-    const extractedText = await extractTextRobust(pdfBuffer);
+    const uint8Array = new Uint8Array(pdfBuffer);
     
-    if (extractedText.length > 50) {
-      console.log('Texto extraído com sucesso usando método robusto');
-      return extractedText;
+    // Tentar decodificar como UTF-8 primeiro
+    let pdfString = '';
+    try {
+      pdfString = new TextDecoder('utf-8').decode(uint8Array);
+    } catch {
+      // Se falhar, tentar Latin-1 como fallback
+      pdfString = new TextDecoder('latin1').decode(uint8Array);
     }
     
-    // Se não conseguiu texto suficiente, retornar vazio para forçar conversão para imagem
-    console.log('Não foi possível extrair texto suficiente do PDF');
-    return '';
+    console.log('PDF decodificado, tamanho do texto:', pdfString.length);
+    
+    let extractedText = '';
+    
+    // Método 1: Extrair texto entre parênteses (formato padrão de texto em PDF)
+    const textRegex = /\(([^)]+)\)/g;
+    let match;
+    while ((match = textRegex.exec(pdfString)) !== null) {
+      let text = match[1];
+      
+      // Decodificar escape sequences do PDF
+      text = text
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\(\d{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8)))
+        .replace(/\\(.)/g, '$1');
+      
+      if (text.trim().length > 0) {
+        extractedText += text + ' ';
+      }
+    }
+    
+    // Método 2: Buscar por texto em objetos TJ/Tj (comandos de texto PDF)
+    const tjRegex = /(?:TJ|Tj)\s*\[(.*?)\]/g;
+    while ((match = tjRegex.exec(pdfString)) !== null) {
+      const textArray = match[1];
+      // Extrair strings do array
+      const stringMatches = textArray.match(/\(([^)]*)\)/g);
+      if (stringMatches) {
+        for (const str of stringMatches) {
+          const cleanStr = str.slice(1, -1); // Remove parênteses
+          if (cleanStr.trim().length > 0) {
+            extractedText += cleanStr + ' ';
+          }
+        }
+      }
+    }
+    
+    // Método 3: Buscar padrões específicos de DANFE
+    const danfePatterns = [
+      /DOCUMENTO\s+AUXILIAR[\s\S]{0,50}NOTA\s+FISCAL/i,
+      /DANFE[\s\S]{0,100}NFC-?e/i,
+      /CUPOM\s+FISCAL[\s\S]{0,50}ELETR[ÔO]NICO/i,
+      /CNPJ:?\s*\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/i,
+      /TOTAL\s+R\$[\s\d,\.]+/i
+    ];
+    
+    for (const pattern of danfePatterns) {
+      const matches = pdfString.match(pattern);
+      if (matches) {
+        extractedText += ' ' + matches[0];
+      }
+    }
+    
+    // Limpar e normalizar o texto extraído
+    extractedText = extractedText
+      .replace(/\s+/g, ' ')
+      .replace(/[^\w\s\.,\-\(\)\/\:\$\%]/g, ' ')
+      .trim();
+    
+    console.log(`Texto extraído (${extractedText.length} caracteres):`, extractedText.substring(0, 300));
+    
+    // Verificar se o texto extraído tem conteúdo relevante para nota fiscal
+    const hasRelevantContent = 
+      extractedText.length > 100 &&
+      (extractedText.match(/\d{2}\/\d{2}\/\d{4}/) || // Data
+       extractedText.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/) || // CNPJ
+       extractedText.match(/R\$\s*\d+[,\.]\d{2}/) || // Valor
+       extractedText.toLowerCase().includes('danfe') ||
+       extractedText.toLowerCase().includes('cupom') ||
+       extractedText.toLowerCase().includes('nota fiscal'));
+    
+    if (hasRelevantContent) {
+      console.log('Texto relevante extraído com sucesso');
+      return extractedText;
+    } else {
+      console.log('Texto extraído não contém dados relevantes de nota fiscal');
+      return '';
+    }
     
   } catch (error) {
     console.error('Erro na extração de texto:', error);
-    return '';
-  }
-}
-
-// Implementação robusta de extração de texto
-async function extractTextRobust(pdfBuffer: ArrayBuffer): Promise<string> {
-  const uint8Array = new Uint8Array(pdfBuffer);
-  const pdfString = new TextDecoder('utf-8', { ignoreBOM: true, fatal: false }).decode(uint8Array);
-  
-  let extractedText = '';
-  
-  // Método 1: Buscar por objetos de texto em PDFs
-  const textObjectRegex = /BT\s+(.*?)\s+ET/g;
-  let match;
-  while ((match = textObjectRegex.exec(pdfString)) !== null) {
-    const textBlock = match[1];
-    if (textBlock) {
-      extractedText += ' ' + textBlock;
-    }
-  }
-  
-  // Método 2: Buscar por strings entre parênteses (formato PDF padrão)
-  const stringRegex = /\(((?:[^()\\]|\\.|\\[0-9]{1,3})*)\)/g;
-  while ((match = stringRegex.exec(pdfString)) !== null) {
-    let text = match[1];
-    if (text && text.length > 1) {
-      // Decodificar caracteres especiais do PDF
-      text = text
-        .replace(/\\n/g, ' ')
-        .replace(/\\r/g, ' ')
-        .replace(/\\t/g, ' ')
-        .replace(/\\[0-9]{3}/g, ' ')
-        .replace(/\\./g, ' ')
-        .trim();
-      
-      if (text.length > 2 && /[a-zA-Z0-9]/.test(text)) {
-        extractedText += ' ' + text;
-      }
-    }
-  }
-  
-  // Método 3: Buscar por streams de texto decodificados
-  const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
-  while ((match = streamRegex.exec(pdfString)) !== null) {
-    const streamContent = match[1];
-    if (streamContent) {
-      // Tentar extrair texto de streams
-      const decodedText = decodeStreamText(streamContent);
-      if (decodedText.length > 10) {
-        extractedText += ' ' + decodedText;
-      }
-    }
-  }
-  
-  // Método 4: Buscar por padrões específicos de DANFE/Nota Fiscal
-  const danfePatterns = [
-    /DANFE[\s\S]{0,100}DOCUMENTO AUXILIAR/i,
-    /NOTA FISCAL[\s\S]{0,100}ELETR[ÔO]NICA/i,
-    /CUPOM FISCAL[\s\S]{0,100}ELETR[ÔO]NICO/i,
-    /CNPJ[\s\S]{0,50}\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/i
-  ];
-  
-  for (const pattern of danfePatterns) {
-    const matches = pdfString.match(pattern);
-    if (matches) {
-      extractedText += ' ' + matches[0];
-    }
-  }
-  
-  // Limpar e normalizar o texto extraído
-  extractedText = extractedText
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s\.,\-\(\)\/]/g, ' ')
-    .trim();
-  
-  console.log(`Texto extraído (${extractedText.length} caracteres):`, extractedText.substring(0, 200));
-  
-  return extractedText;
-}
-
-// Função auxiliar para decodificar texto de streams
-function decodeStreamText(streamContent: string): string {
-  try {
-    // Remover caracteres de controle e tentar extrair texto legível
-    let decoded = streamContent
-      .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ') // Remove caracteres de controle
-      .replace(/[^\x20-\x7E\u00A0-\uFFFF]/g, ' ') // Mantém apenas caracteres imprimíveis
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    // Buscar por padrões de texto em português/português
-    const textPatterns = [
-      /[A-ZÁÊÔÇÃÜ][A-Za-záêôçãü\s]{3,}/g, // Palavras em português
-      /\d{2}\/\d{2}\/\d{4}/g, // Datas
-      /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, // CNPJ
-      /R\$\s*\d+[,\.]\d{2}/g, // Valores monetários
-    ];
-    
-    let result = '';
-    for (const pattern of textPatterns) {
-      const matches = decoded.match(pattern);
-      if (matches) {
-        result += ' ' + matches.join(' ');
-      }
-    }
-    
-    return result.trim();
-  } catch (error) {
     return '';
   }
 }
