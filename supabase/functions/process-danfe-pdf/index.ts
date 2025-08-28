@@ -44,7 +44,10 @@ serve(async (req) => {
     
     const { pdfUrl, notaImagemId, userId } = await req.json();
 
+    console.log('📊 Parâmetros recebidos:', { pdfUrl, notaImagemId, userId });
+
     if (!pdfUrl || !notaImagemId || !userId) {
+      console.error('❌ Parâmetros obrigatórios faltando:', { pdfUrl, notaImagemId, userId });
       return new Response(JSON.stringify({
         success: false,
         error: 'MISSING_PARAMETERS',
@@ -57,8 +60,12 @@ serve(async (req) => {
 
     console.log("📥 Baixando PDF:", pdfUrl);
     const resp = await fetch(pdfUrl);
-    if (!resp.ok) throw new Error(`Falha ao baixar PDF: ${resp.status}`);
+    if (!resp.ok) {
+      console.error(`❌ Falha ao baixar PDF: ${resp.status} - ${resp.statusText}`);
+      throw new Error(`Falha ao baixar PDF: ${resp.status} - ${resp.statusText}`);
+    }
     const buffer = await resp.arrayBuffer();
+    console.log(`📊 PDF baixado com sucesso: ${buffer.byteLength} bytes`);
 
     // 📄 Melhor extração de texto do PDF
     let pdfString = new TextDecoder("utf-8").decode(new Uint8Array(buffer));
@@ -499,10 +506,31 @@ ${textoProcessado}`
 
   } catch (error) {
     console.error('❌ Erro no processamento:', error);
+    console.error('❌ Stack trace:', error.stack);
+    
+    // Tentar marcar a nota como processada mesmo com erro para debug
+    try {
+      await supabase
+        .from('notas_imagens')
+        .update({
+          processada: false,
+          dados_extraidos: {
+            erro_geral: true,
+            erro_mensagem: error.message,
+            erro_stack: error.stack,
+            timestamp_erro: new Date().toISOString()
+          }
+        })
+        .eq('id', notaImagemId);
+    } catch (updateError) {
+      console.error('❌ Erro ao salvar informações do erro:', updateError);
+    }
+    
     return new Response(JSON.stringify({
       success: false,
       error: "GENERAL_ERROR",
       message: error.message,
+      stack: error.stack
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
