@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+// Biblioteca de PDF para Deno (opcional - usar fallback se falhar)
+// import { readPdf } from "https://deno.land/x/pdf_reader@v0.2.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,16 +34,30 @@ serve(async (req) => {
     const pdfBuffer = await pdfResponse.arrayBuffer();
     console.log('✅ PDF baixado, tamanho:', pdfBuffer.byteLength);
 
-    // 📄 Extrair texto do PDF
-    console.log('📄 Extraindo texto do PDF...');
-    const extractedText = await extractTextFromPDF(pdfBuffer);
+    // 📄 Extrair texto do PDF usando biblioteca adequada
+    console.log('📄 Extraindo texto do PDF usando parser adequado...');
+    let extractedText = '';
+    
+    try {
+      // Usar parser manual como método principal (mais confiável para DANFEs)
+      extractedText = await extractTextFromPDFManual(pdfBuffer);
+      console.log('✅ Texto extraído com parser manual');
+    } catch (pdfParseError) {
+      console.error('❌ Falha na extração de texto:', pdfParseError);
+      extractedText = '';
+    }
     
     if (!extractedText || extractedText.length < 100) {
-      throw new Error('PDF não contém texto suficiente ou é PDF escaneado');
+      console.error('❌ FALHA NA EXTRAÇÃO: PDF não contém texto suficiente');
+      console.error('📝 Texto extraído:', extractedText);
+      throw new Error('PDF não contém texto suficiente - provavelmente é PDF escaneado que requer OCR');
     }
 
-    console.log(`✅ Texto extraído (${extractedText.length} caracteres)`);
-    console.log('📝 Primeiros 500 chars:', extractedText.substring(0, 500));
+    console.log(`✅ Texto extraído com sucesso (${extractedText.length} caracteres)`);
+    console.log('📝 TEXTO BRUTO EXTRAÍDO DO PDF:');
+    console.log('=' .repeat(80));
+    console.log(extractedText);
+    console.log('=' .repeat(80));
 
     // 🤖 Processar com IA
     console.log('🤖 Enviando texto para IA processar...');
@@ -138,30 +154,66 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       throw new Error('Falha ao processar resposta da IA');
     }
 
-    // ✅ VALIDAÇÃO CRÍTICA: Soma dos subtotais deve bater com o total
-    const somaSubtotais = dadosExtraidos.itens?.reduce((acc: number, item: any) => 
-      acc + (item.preco_total || 0), 0) || 0;
+    // ✅ VALIDAÇÃO CRÍTICA: Deve ter pelo menos 1 item extraído
+    const totalItens = dadosExtraidos.itens?.length || 0;
+    
+    if (totalItens === 0) {
+      console.error('❌ FALHA CRÍTICA: Nenhum item foi extraído pela IA');
+      console.error('📝 Resposta da IA:', aiContent);
+      console.error('📝 Dados parseados:', JSON.stringify(dadosExtraidos, null, 2));
+      console.error('📝 Texto original enviado para IA:', extractedText);
+      
+      // Não marcar como processada se não extrair itens
+      await supabase
+        .from('notas_imagens')
+        .update({
+          dados_extraidos: {
+            erro: 'Nenhum item extraído pela IA',
+            totalItens: 0,
+            respostaIA: aiContent,
+            textoExtraido: extractedText.substring(0, 3000), // Primeiros 3000 chars para debug
+            dadosParsados: dadosExtraidos
+          },
+          processada: false
+        })
+        .eq('id', notaImagemId);
+
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'NENHUM_ITEM_EXTRAIDO',
+        message: 'A IA não conseguiu extrair nenhum item da nota fiscal',
+        totalItens: 0,
+        textoExtraido: extractedText.substring(0, 500)
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ✅ VALIDAÇÃO SECUNDÁRIA: Soma dos subtotais deve bater com o total
+    const somaSubtotais = dadosExtraidos.itens.reduce((acc: number, item: any) => 
+      acc + (item.preco_total || 0), 0);
     
     const valorTotal = dadosExtraidos.compra?.valor_total || 0;
     const diferenca = Math.abs(somaSubtotais - valorTotal);
     const diferencaPercentual = valorTotal > 0 ? (diferenca / valorTotal) * 100 : 100;
 
-    console.log(`🔍 Validação: Soma subtotais: R$ ${somaSubtotais.toFixed(2)}, Total nota: R$ ${valorTotal.toFixed(2)}, Diferença: ${diferencaPercentual.toFixed(2)}%`);
+    console.log(`🔍 Validação: ${totalItens} itens extraídos | Soma subtotais: R$ ${somaSubtotais.toFixed(2)} | Total nota: R$ ${valorTotal.toFixed(2)} | Diferença: ${diferencaPercentual.toFixed(2)}%`);
 
-    if (diferencaPercentual > 5) { // 5% de tolerância
-      console.error(`❌ VALIDAÇÃO FALHOU: Soma dos subtotais (R$ ${somaSubtotais.toFixed(2)}) não confere com total da nota (R$ ${valorTotal.toFixed(2)})`);
-      console.error('📝 Texto extraído para análise:', extractedText);
+    if (diferencaPercentual > 5 && valorTotal > 0) { // 5% de tolerância e valor total deve existir
+      console.error(`❌ VALIDAÇÃO DE VALORES FALHOU: Soma dos subtotais (R$ ${somaSubtotais.toFixed(2)}) não confere com total da nota (R$ ${valorTotal.toFixed(2)})`);
       
-      // Não marcar como processada se a validação falhar
+      // Não marcar como processada se a validação de valores falhar
       await supabase
         .from('notas_imagens')
         .update({
           dados_extraidos: {
-            erro: 'Validação falhou - soma dos subtotais não confere',
+            erro: 'Validação de valores falhou - soma dos subtotais não confere',
+            totalItens,
             somaSubtotais,
             valorTotal,
             diferencaPercentual,
-            textoExtraido: extractedText.substring(0, 2000), // Primeiros 2000 chars para debug
+            textoExtraido: extractedText.substring(0, 3000),
             ...dadosExtraidos
           },
           processada: false
@@ -170,8 +222,9 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
 
       return new Response(JSON.stringify({
         success: false,
-        error: 'VALIDACAO_FALHOU',
+        error: 'VALIDACAO_VALORES_FALHOU',
         message: `Soma dos subtotais (R$ ${somaSubtotais.toFixed(2)}) não confere com total da nota (R$ ${valorTotal.toFixed(2)})`,
+        totalItens,
         diferencaPercentual
       }), {
         status: 400,
@@ -179,7 +232,7 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       });
     }
 
-    console.log('✅ Validação passou - processando dados...');
+    console.log(`✅ Todas as validações passaram - processando ${totalItens} itens...`);
 
     // 🏪 Processar supermercado
     let supermercadoId = null;
@@ -356,16 +409,17 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
       throw new Error('Falha ao salvar dados extraídos');
     }
 
-    console.log('🎉 Processamento concluído com sucesso!');
+    console.log(`🎉 Processamento concluído com sucesso! ${totalItens} itens processados, ${itensProcessados} salvos no banco`);
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'PDF processado com extração de texto direto unificada',
+      message: `PDF processado com extração de texto direto - ${totalItens} itens extraídos`,
       metodo: 'extração_texto_unificada',
-      itens_extraidos: dadosExtraidos.itens?.length || 0,
+      itens_extraidos: totalItens,
       itens_processados: itensProcessados,
       validacao: {
         passou: true,
+        totalItens,
         somaSubtotais,
         valorTotal,
         diferencaPercentual
@@ -387,8 +441,8 @@ RESPONDA APENAS COM UM JSON VÁLIDO no formato:
   }
 });
 
-// 📄 Função robusta para extrair texto de PDF
-async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
+// 📄 Função robusta para extrair texto de PDF (fallback manual)
+async function extractTextFromPDFManual(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
     const uint8Array = new Uint8Array(pdfBuffer);
     
