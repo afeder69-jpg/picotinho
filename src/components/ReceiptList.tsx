@@ -257,35 +257,39 @@ const ReceiptList = () => {
       if (receipt.file_type === 'PDF' || receipt.imagem_url?.toLowerCase().includes('.pdf')) {
         console.log('🔄 PDF detectado, chamando process-receipt-pdf para:', receipt.id);
         
-        const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
-          body: {
-            notaImagemId: receipt.id,
-            pdfUrl: receipt.imagem_url,
-            userId: (await supabase.auth.getUser()).data.user?.id
-          }
-        });
-        
-        if (pdfResponse.data?.success) {
-          console.log('✅ PDF processado com extração de texto');
-          processedSuccessfully = true;
-          
-          toast({
-            title: "PDF processado com sucesso!",
-            description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos via EXTRAÇÃO DE TEXTO.`,
+        try {
+          const pdfResponse = await supabase.functions.invoke('process-receipt-pdf', {
+            body: {
+              notaImagemId: receipt.id,
+              pdfUrl: receipt.imagem_url,
+              userId: (await supabase.auth.getUser()).data.user?.id
+            }
           });
-        } else {
-          console.error('❌ Erro no processamento de PDF:', pdfResponse.error);
           
-          // Verificar se é PDF escaneado (baseado em imagem)
-          const isScannedPDF = 
-            pdfResponse.data?.error === 'NO_ITEMS_EXTRACTED' ||
-            pdfResponse.error?.message?.includes('texto suficiente') || 
-            pdfResponse.error?.message?.includes('escaneado') ||
-            pdfResponse.data?.message?.includes('escaneado') ||
-            pdfResponse.data?.message?.includes('baseado em imagem');
+          if (pdfResponse.data?.success) {
+            console.log('✅ PDF processado com extração de texto');
+            processedSuccessfully = true;
             
-          if (isScannedPDF) {
-            console.log('⚠️ PDF escaneado detectado, fazendo fallback para OCR...');
+            toast({
+              title: "PDF processado com sucesso!",
+              description: `${pdfResponse.data.itens_extraidos || 0} itens extraídos via EXTRAÇÃO DE TEXTO.`,
+            });
+          } else {
+            console.error('❌ Erro no processamento de PDF:', pdfResponse.error);
+            
+            // Verificar se é PDF escaneado (via dados ou erro)
+            const isScannedPDF = 
+              pdfResponse.data?.error === 'NO_ITEMS_EXTRACTED' ||
+              pdfResponse.error?.message?.includes('NO_ITEMS_EXTRACTED') ||
+              pdfResponse.error?.message?.includes('escaneado') ||
+              pdfResponse.data?.message?.includes('escaneado');
+              
+            if (isScannedPDF) {
+              console.log('⚠️ PDF escaneado detectado, fazendo fallback para OCR...');
+            } else {
+              // Erro diferente, relançar
+              throw new Error(pdfResponse.error?.message || 'Erro desconhecido no processamento de PDF');
+            }
             
             // Converter PDF para imagem primeiro
             const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
@@ -324,10 +328,10 @@ const ReceiptList = () => {
               title: "PDF escaneado processado!",
               description: `${aiResponse.data.itens_extraidos || 0} itens extraídos via OCR (fallback).`,
             });
-          } else {
-            console.error('❌ Erro na resposta process-receipt-pdf:', pdfResponse);
-            throw new Error(pdfResponse.error?.message || 'Erro no processamento do PDF');
           }
+        } catch (pdfError) {
+          console.error('❌ Erro crítico no processamento de PDF:', pdfError);
+          throw pdfError;
         }
       } else {
         // Para imagens, usar processamento direto
