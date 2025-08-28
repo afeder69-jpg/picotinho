@@ -35,17 +35,27 @@ function normalizarTextoNota(extractedText: string): string {
   return texto;
 }
 
+// 📄 Função para extrair texto de DANFE PDF com acentuação corrigida
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  let pdfString = new TextDecoder("latin1").decode(new Uint8Array(pdfBuffer));
+  const uint8Array = new Uint8Array(pdfBuffer);
 
-  const textRegex = /\(([^)]+)\)/g;
-  let extractedText = "";
-  let match;
-  while ((match = textRegex.exec(pdfString)) !== null) {
-    extractedText += match[1] + "\n";
+  // 1️⃣ Tentar decodificar primeiro em UTF-8, fallback para Latin1
+  let pdfString = '';
+  try {
+    pdfString = new TextDecoder('utf-8').decode(uint8Array);
+  } catch {
+    pdfString = new TextDecoder('latin1').decode(uint8Array);
   }
 
-  // Correções de acento e palavras quebradas
+  // 2️⃣ Extrair texto entre parênteses (trechos das strings no PDF)
+  const textRegex = /\(([^)]+)\)/g;
+  let extractedText = '';
+  let match;
+  while ((match = textRegex.exec(pdfString)) !== null) {
+    extractedText += match[1] + '\n'; // 🔹 Mantém quebra de linha após cada trecho
+  }
+
+  // 3️⃣ Normalizar acentuação quebrada
   extractedText = extractedText
     .replace(/C digo/g, "Código")
     .replace(/Emiss o/g, "Emissão")
@@ -54,12 +64,16 @@ async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
     .replace(/Informa es/g, "Informações")
     .replace(/n o/g, "não")
     .replace(/fi cado/g, "ficado")
-    .replace(/ç/g, "ç")
+    .replace(/ç/g, "ç") // reforço do cedilha
     .replace(/Ç/g, "Ç");
 
+  // 4️⃣ Corrigir grude de "Qtd. total de itens" com o valor
+  extractedText = extractedText.replace(/(\d+)\s+(\d+,\d{2})/g, "\nQtd. total de itens: $1\nValor Total: R$ $2");
+
+  // 5️⃣ Limpeza final
   extractedText = extractedText
-    .replace(/\s{2,}/g, " ")
-    .replace(/\n{2,}/g, "\n")
+    .replace(/\s{2,}/g, ' ')   // remove espaços múltiplos
+    .replace(/\n{2,}/g, '\n') // remove linhas em branco extras
     .trim();
 
   console.log("📝 Texto extraído (primeiros 500 caracteres):");
