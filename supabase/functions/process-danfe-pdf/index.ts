@@ -136,11 +136,13 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
 2. Regras OBRIGATÓRIAS:
    - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
    - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
-     • Corrija ortografia, acentuação e capitalização
-     • Organize informações de forma lógica (ex: "Bebida Láctea Batavo Pense Zero Ameixa 170g")
+     • Remova espaços duplicados entre palavras
+     • Organize na ordem: Nome + Marca/Variedade + Peso/Volume + Extra (Granel, Corte, etc.)
+     • Exemplos: "Mamão Formosa Granel 1.135kg" ou "Manga Palmer Granel 1.545kg"
+     • Padronize siglas e abreviações (ex: sempre "Z Lac" ou sempre "Z.Lac." - seja consistente)
      • SEMPRE preserve peso/volume/medidas da embalagem (350g, 535g, 1L, 2kg, 170g, etc.)
      • Peso/volume é parte da identidade única do produto e NÃO pode ser removido
-     • Mantenha a grafia original correta dos produtos, apenas organizando melhor
+     • Corrija ortografia, acentuação e capitalização
      • NÃO invente nomes, apenas limpe e organize
    - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
    - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
