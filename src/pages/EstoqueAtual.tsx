@@ -378,8 +378,8 @@ const EstoqueAtual = () => {
                 <CardContent className="py-3">
                   <div className="space-y-1">
                     {itens.map((item) => (
-                      <div key={item.id} className="flex items-center py-1 border-b border-border last:border-0 gap-1">
-                        <div className="flex-1 min-w-0">
+                      <div key={item.id} className="flex items-center py-1 border-b border-border last:border-0">
+                        <div className="flex-1 overflow-hidden">
                           <h3 className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                             {item.produto_nome}
                           </h3>
@@ -394,7 +394,7 @@ const EstoqueAtual = () => {
                           </p>
                         </div>
                         
-                        <div className="text-right flex-shrink-0">
+                        <div className="text-right ml-2 flex-shrink-0">
                           <p className="text-xs sm:text-sm font-bold text-foreground">
                             {parseFloat(item.quantidade.toString()).toFixed(2)} {item.unidade_medida}
                           </p>
