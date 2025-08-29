@@ -193,15 +193,21 @@ const EstoqueAtual = () => {
   }
 
   const groupedEstoque = groupByCategory(estoque);
-  const totalItens = estoque.reduce((sum, item) => sum + parseFloat(item.quantidade.toString()), 0);
-  const valorTotalEstoque = estoque.reduce((sum, item) => {
-    const preco = item.preco_unitario_ultimo || 0;
-    const quantidade = parseFloat(item.quantidade.toString());
-    return sum + (preco * quantidade);
-  }, 0);
   
   // Contagem real de produtos únicos considerando todas as categorias
   const totalProdutosUnicos = Object.values(groupedEstoque).reduce((total, itens) => total + itens.length, 0);
+  
+  // Calcular subtotais por categoria
+  const subtotaisPorCategoria = Object.entries(groupedEstoque).map(([categoria, itens]) => {
+    const subtotal = itens.reduce((sum, item) => {
+      const preco = item.preco_unitario_ultimo || 0;
+      const quantidade = parseFloat(item.quantidade.toString());
+      return sum + (preco * quantidade);
+    }, 0);
+    return { categoria, subtotal };
+  }).sort((a, b) => b.subtotal - a.subtotal);
+  
+  const valorTotalEstoque = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotal, 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -250,16 +256,27 @@ const EstoqueAtual = () => {
           </div>
 
           {/* Cards de resumo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Card className="md:col-span-2 lg:col-span-1">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Valor Total do Estoque
+                  Valores por Categoria
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {formatCurrency(valorTotalEstoque)}
+                <div className="space-y-2">
+                  {subtotaisPorCategoria.map(({ categoria, subtotal }) => (
+                    <div key={categoria} className="flex justify-between items-center text-sm">
+                      <span className="capitalize text-muted-foreground">{categoria}</span>
+                      <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
+                    </div>
+                  ))}
+                  <div className="border-t pt-2 mt-2">
+                    <div className="flex justify-between items-center font-bold">
+                      <span className="text-foreground">Total</span>
+                      <span className="text-lg text-foreground">{formatCurrency(valorTotalEstoque)}</span>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -276,22 +293,6 @@ const EstoqueAtual = () => {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Tipos diferentes de produtos
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Quantidade Total
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {totalItens.toFixed(2)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Soma de todas as quantidades
                 </p>
               </CardContent>
             </Card>
