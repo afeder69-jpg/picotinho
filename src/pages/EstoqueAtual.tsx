@@ -134,7 +134,21 @@ const EstoqueAtual = () => {
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
-    return items.reduce((groups, item) => {
+    // Primeiro, remover duplicatas baseado no nome do produto
+    const uniqueItems = items.reduce((unique, item) => {
+      const existingIndex = unique.findIndex(u => u.produto_nome === item.produto_nome);
+      if (existingIndex >= 0) {
+        // Se encontrou duplicata, manter apenas o mais recente
+        if (new Date(item.updated_at) > new Date(unique[existingIndex].updated_at)) {
+          unique[existingIndex] = item;
+        }
+      } else {
+        unique.push(item);
+      }
+      return unique;
+    }, [] as EstoqueItem[]);
+
+    return uniqueItems.reduce((groups, item) => {
       const categoria = item.categoria || 'outros';
       if (!groups[categoria]) {
         groups[categoria] = [];
