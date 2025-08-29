@@ -364,8 +364,8 @@ const ReceiptList = () => {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="p-0 m-0 w-full h-screen max-w-full rounded-none md:max-w-md md:rounded-lg md:p-6">
-          <div className="w-full h-full overflow-y-auto text-xs md:text-base">
+        <DialogContent className="fixed inset-0 w-full h-full max-w-full p-0 m-0 rounded-none md:relative md:max-w-md md:h-auto md:rounded-lg md:p-6">
+          <div className="w-full h-full overflow-y-scroll text-xs md:text-base">
             {selectedReceipt && (
               <>
                 {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
