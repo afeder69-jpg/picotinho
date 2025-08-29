@@ -364,16 +364,12 @@ const ReceiptList = () => {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="p-0 m-0 w-full h-full max-w-full rounded-none flex justify-center items-start">
-          <div 
-            className="w-full h-full overflow-y-auto px-2 py-2 text-xs md:max-w-md md:mx-auto md:rounded-lg md:p-6 md:text-base md:overflow-y-auto"
-            style={{ maxWidth: "100%", overflowX: "hidden" }}
-          >
-            <div className="max-w-sm mx-auto w-full">
+        <DialogContent className="bg-transparent shadow-none border-none p-0 m-0 flex justify-center items-start">
+          <div className="bg-white w-full md:max-w-md h-screen md:h-auto overflow-y-auto text-xs md:text-base px-2 md:px-6 py-4 rounded-none md:rounded-lg">
             {selectedReceipt && (
               <>
                 {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
-                  <div className="bg-white font-mono space-y-4 p-4">
+                  <div className="font-mono space-y-4">
                     {/* Cabeçalho do Estabelecimento */}
                     <div className="text-center border-b pb-4">
                       <h2 className="font-bold text-lg uppercase">
@@ -484,7 +480,6 @@ const ReceiptList = () => {
                 )}
               </>
             )}
-            </div>
           </div>
         </DialogContent>
       </Dialog>
