@@ -309,7 +309,7 @@ const EstoqueAtual = () => {
           </div>
 
           {/* Botões de ação para administração do estoque */}
-          <div className="flex flex-wrap gap-4 justify-center">
+          <div className="flex flex-wrap gap-4 justify-end">
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
