@@ -407,6 +407,93 @@ const ReceiptList = () => {
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  const formatPurchaseDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    
+    // Tenta diferentes formatos de data que podem vir da IA
+    let date: Date;
+    
+    // Se contém "T", é formato ISO
+    if (dateString.includes('T')) {
+      date = new Date(dateString);
+    }
+    // Se está no formato DD/MM/YYYY HH:MM:SS-03:00
+    else if (dateString.includes('/') && dateString.includes(':')) {
+      // Extrai a parte da data e hora
+      const [datePart, timePart] = dateString.split(' ');
+      const [day, month, year] = datePart.split('/');
+      const timeWithOffset = timePart.split('-')[0]; // Remove o offset
+      date = new Date(`${year}-${month}-${day}T${timeWithOffset}-03:00`);
+    }
+    // Se está no formato DD/MM/YYYY
+    else if (dateString.includes('/')) {
+      const [day, month, year] = dateString.split('/');
+      date = new Date(`${year}-${month}-${day}`);
+    }
+    // Fallback para outros formatos
+    else {
+      date = new Date(dateString);
+    }
+    
+    // Verifica se a data é válida
+    if (isNaN(date.getTime())) {
+      return dateString; // Retorna a string original se não conseguir converter
+    }
+    
+    return date.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    });
+  };
+
+  const formatPurchaseDateTime = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    
+    // Tenta diferentes formatos de data que podem vir da IA
+    let date: Date;
+    
+    // Se contém "T", é formato ISO
+    if (dateString.includes('T')) {
+      date = new Date(dateString);
+    }
+    // Se está no formato DD/MM/YYYY HH:MM:SS-03:00
+    else if (dateString.includes('/') && dateString.includes(':')) {
+      // Extrai a parte da data e hora
+      const [datePart, timePart] = dateString.split(' ');
+      const [day, month, year] = datePart.split('/');
+      const timeWithOffset = timePart.split('-')[0]; // Remove o offset
+      date = new Date(`${year}-${month}-${day}T${timeWithOffset}-03:00`);
+    }
+    // Se está no formato DD/MM/YYYY
+    else if (dateString.includes('/')) {
+      const [day, month, year] = dateString.split('/');
+      date = new Date(`${year}-${month}-${day}`);
+    }
+    // Fallback para outros formatos
+    else {
+      date = new Date(dateString);
+    }
+    
+    // Verifica se a data é válida
+    if (isNaN(date.getTime())) {
+      return dateString; // Retorna a string original se não conseguir converter
+    }
+    
+    const formattedDate = date.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    });
+    
+    const formattedTime = date.toLocaleTimeString('pt-BR', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    
+    return `${formattedDate} às ${formattedTime}`;
+  };
+
   const formatCurrency = (amount: number | null) =>
     !amount ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
 
@@ -432,9 +519,14 @@ const ReceiptList = () => {
             <Card key={receipt.id}>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg">{receipt.store_name || 'Estabelecimento não identificado'}</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">{formatDate(receipt.created_at)}</p>
+                  <div className="flex-1">
+                    {/* Só mostra o nome se for nota não processada */}
+                    {!receipt.processada && (
+                      <>
+                        <CardTitle className="text-lg">{receipt.store_name || 'Estabelecimento não identificado'}</CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">{formatDate(receipt.created_at)}</p>
+                      </>
+                    )}
                   </div>
                   {getStatusBadge(receipt.status)}
                 </div>
@@ -470,17 +562,7 @@ const ReceiptList = () => {
                             <div className="flex justify-between">
                               <span className="text-sm text-muted-foreground">Data e Hora:</span>
                               <span className="text-sm">
-                                {new Date(receipt.purchase_date).toLocaleDateString('pt-BR', { 
-                                  day: '2-digit', 
-                                  month: '2-digit', 
-                                  year: 'numeric' 
-                                })}
-                                {receipt.purchase_date.includes('T') && 
-                                  ` às ${new Date(receipt.purchase_date).toLocaleTimeString('pt-BR', { 
-                                    hour: '2-digit', 
-                                    minute: '2-digit' 
-                                  })}`
-                                }
+                                {formatPurchaseDateTime(receipt.purchase_date)}
                               </span>
                             </div>
                           )}
@@ -541,13 +623,7 @@ const ReceiptList = () => {
                         </div>
                       )}
                     </>
-                  )}
-                  {receipt.store_cnpj && (
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">CNPJ:</span>
-                      <span className="text-sm font-mono">{receipt.store_cnpj}</span>
-                    </div>
-                  )}
+                   )}
                 </div>
                 <div className="flex justify-between items-center mt-4 gap-2">
                   <div className="flex gap-2">
