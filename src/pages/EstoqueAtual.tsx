@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, ArrowLeft, Home, Trash2 } from 'lucide-react';
+import { Package, Calendar, ArrowLeft, Home, Trash2, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -308,10 +308,11 @@ const EstoqueAtual = () => {
               <CardContent>
                 <div className="space-y-1">
                   {/* Cabeçalho das colunas */}
-                   <div className="grid grid-cols-3 gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
+                   <div className="grid grid-cols-4 gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
                      <span>Categoria</span>
                      <span className="text-center">Valor Pago</span>
                      <span className="text-center">Valor Atual</span>
+                     <span className="text-center">Tendência</span>
                    </div>
                   
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => {
@@ -324,32 +325,65 @@ const EstoqueAtual = () => {
                       return sum + (preco * quantidade);
                     }, 0);
                     
-                    return (
-                      <div key={categoria} className="grid grid-cols-3 gap-1 text-xs sm:text-sm items-center py-1">
-                        <span className="capitalize text-muted-foreground">{categoria}</span>
-                        <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
-                        <span className="font-medium text-blue-600 text-center">
-                          {formatCurrency(subtotalPrecoAtual)}
-                        </span>
-                      </div>
-                    );
+                     // Função para determinar o ícone de tendência
+                     const getTrendIcon = () => {
+                       if (subtotalPrecoAtual > subtotal) {
+                         return <ArrowUp className="w-3 h-3 text-green-600" />;
+                       } else if (subtotalPrecoAtual < subtotal) {
+                         return <ArrowDown className="w-3 h-3 text-red-600" />;
+                       } else {
+                         return <Minus className="w-3 h-3 text-gray-400" />;
+                       }
+                     };
+
+                     return (
+                       <div key={categoria} className="grid grid-cols-4 gap-1 text-xs sm:text-sm items-center py-1">
+                         <span className="capitalize text-muted-foreground">{categoria}</span>
+                         <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
+                         <span className="font-medium text-blue-600 text-center">
+                           {formatCurrency(subtotalPrecoAtual)}
+                         </span>
+                         <div className="flex justify-center">
+                           {getTrendIcon()}
+                         </div>
+                       </div>
+                     );
                   })}
                   
                   <div className="border-t pt-2 mt-2">
-                    <div className="grid grid-cols-3 gap-1 font-bold text-sm">
-                      <span className="text-foreground">Total</span>
-                      <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
-                      <span className="text-blue-600 text-center">
-                        {formatCurrency(
-                          Object.values(groupedEstoque).flat().reduce((total, item) => {
-                            const precoAtual = encontrarPrecoAtual(item.produto_nome);
-                            const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
-                            const quantidade = parseFloat(item.quantidade.toString());
-                            return total + (preco * quantidade);
-                          }, 0)
-                        )}
-                      </span>
-                    </div>
+                     <div className="grid grid-cols-4 gap-1 font-bold text-sm">
+                       <span className="text-foreground">Total</span>
+                       <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
+                       <span className="text-blue-600 text-center">
+                         {formatCurrency(
+                           Object.values(groupedEstoque).flat().reduce((total, item) => {
+                             const precoAtual = encontrarPrecoAtual(item.produto_nome);
+                             const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
+                             const quantidade = parseFloat(item.quantidade.toString());
+                             return total + (preco * quantidade);
+                           }, 0)
+                         )}
+                       </span>
+                       <div className="flex justify-center">
+                         {/* Ícone de tendência total */}
+                         {(() => {
+                           const totalAtual = Object.values(groupedEstoque).flat().reduce((total, item) => {
+                             const precoAtual = encontrarPrecoAtual(item.produto_nome);
+                             const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
+                             const quantidade = parseFloat(item.quantidade.toString());
+                             return total + (preco * quantidade);
+                           }, 0);
+                           
+                           if (totalAtual > valorTotalEstoque) {
+                             return <ArrowUp className="w-3 h-3 text-green-600" />;
+                           } else if (totalAtual < valorTotalEstoque) {
+                             return <ArrowDown className="w-3 h-3 text-red-600" />;
+                           } else {
+                             return <Minus className="w-3 h-3 text-gray-400" />;
+                           }
+                         })()}
+                       </div>
+                     </div>
                   </div>
                 </div>
               </CardContent>
