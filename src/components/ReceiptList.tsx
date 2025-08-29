@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Trash2, FileText, X, Bot, Loader2, CheckCircle } from 'lucide-react';
+import { Eye, Trash2, FileText, X, Bot, Loader2, CheckCircle, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -36,6 +36,7 @@ const ReceiptList = () => {
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
+  const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -497,6 +498,94 @@ const ReceiptList = () => {
   const formatCurrency = (amount: number | null) =>
     !amount ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
 
+  const launchToStock = async (receipt: Receipt) => {
+    if (!receipt.dados_extraidos?.itens) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Dados insuficientes para lançar no estoque.",
+      });
+      return;
+    }
+
+    try {
+      setLaunchingToStock(receipt.id);
+
+      // Para cada item da nota, adicionar/atualizar no estoque
+      for (const item of receipt.dados_extraidos.itens) {
+        if (!item.descricao || !item.quantidade) continue;
+
+        // Normalizar nome do produto (mesma lógica da edge function)
+        let produtoNome = item.descricao.toString().toUpperCase().trim();
+        
+        // Aplicar normalizações básicas
+        produtoNome = produtoNome
+          .replace(/\b(GRAENC|GRANEL)\b/gi, 'GRANEL')
+          .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO|INTEGRAL|10\s*GRAOS|ORIGINAL)?\b/gi, 'PAO DE FORMA')
+          .replace(/\b(ACHOCOLATADO EM PO NESCAU)\s*(380G|3\.0|30KG|\d+G)?\b/gi, 'ACHOCOLATADO EM PO')
+          .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|INTEGRAL|10\s*GRAOS|ORIGINAL|\d+G|\d+ML|\d+L|\d+KG)\b/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const quantidade = parseFloat(item.quantidade.toString()) || 0;
+        const precoUnitario = parseFloat(item.valor_unitario?.toString() || '0') || 0;
+        const categoria = item.categoria?.toString().toLowerCase() || 'outros';
+        const unidadeMedida = item.unidade?.toString().toLowerCase() || 'unidade';
+
+        // Verificar se produto já existe no estoque
+        const { data: estoqueExistente } = await supabase
+          .from('estoque_app')
+          .select('*')
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .eq('produto_nome', produtoNome)
+          .single();
+
+        if (estoqueExistente) {
+          // Atualizar quantidade existente
+          const { error: updateError } = await supabase
+            .from('estoque_app')
+            .update({
+              quantidade: estoqueExistente.quantidade + quantidade,
+              preco_unitario_ultimo: precoUnitario,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', estoqueExistente.id);
+
+          if (updateError) throw updateError;
+        } else {
+          // Criar novo item no estoque
+          const { error: insertError } = await supabase
+            .from('estoque_app')
+            .insert({
+              user_id: (await supabase.auth.getUser()).data.user?.id,
+              produto_nome: produtoNome,
+              categoria: categoria,
+              quantidade: quantidade,
+              unidade_medida: unidadeMedida,
+              preco_unitario_ultimo: precoUnitario
+            });
+
+          if (insertError) throw insertError;
+        }
+      }
+
+      toast({
+        title: "✅ Lançado no estoque!",
+        description: `${receipt.dados_extraidos.itens.length} itens foram adicionados ao estoque.`,
+      });
+
+    } catch (error) {
+      console.error('Erro ao lançar no estoque:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível lançar os itens no estoque.",
+      });
+    } finally {
+      setLaunchingToStock(null);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
   }
@@ -605,12 +694,34 @@ const ReceiptList = () => {
                             )}
                           </div>
                           
-                          {/* Quarta linha: Botão Ver Detalhes */}
-                          <div className="pt-2">
+                          {/* Quarta linha: Botões de ação */}
+                          <div className="pt-2 flex gap-2">
                             <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-8 px-3">
                               <Eye className="w-4 h-4 mr-2" /> 
                               Ver Detalhes
                             </Button>
+                            
+                            {receipt.dados_extraidos?.itens && (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => launchToStock(receipt)}
+                                disabled={launchingToStock === receipt.id}
+                                className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
+                              >
+                                {launchingToStock === receipt.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Lançando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Lançar no Estoque
+                                  </>
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </>
                       )}
