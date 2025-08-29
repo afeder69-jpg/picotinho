@@ -498,9 +498,21 @@ const EstoqueAtual = () => {
               size="sm"
               onClick={() => setModoEdicao(!modoEdicao)}
               className="flex items-center gap-1 text-xs px-3 py-1 h-7"
+              title="Ajuste de Estoque"
             >
-              <Edit3 className="w-3 h-3" />
-              {modoEdicao ? "Sair da Edição" : "Ajuste de Estoque"}
+              {modoEdicao ? (
+                <>
+                  <Edit3 className="w-3 h-3" />
+                  Sair da Edição
+                </>
+              ) : (
+                <>
+                  <span className="text-sm">👉</span>
+                  <span className="text-red-500 font-bold">+</span>
+                  <span>/</span>
+                  <span className="text-red-500 font-bold">−</span>
+                </>
+              )}
             </Button>
             
             <AlertDialog>
