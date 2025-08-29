@@ -256,7 +256,7 @@ const EstoqueAtual = () => {
           </div>
 
           {/* Cards de resumo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Card className="md:col-span-2 lg:col-span-1">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -288,36 +288,21 @@ const EstoqueAtual = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">
+                <div className="text-2xl font-bold text-foreground mb-4">
                   {totalProdutosUnicos}
+                </div>
+                <div className="border-t pt-3">
+                  <div className="text-sm text-muted-foreground mb-1">Categorias</div>
+                  <div className="text-xl font-bold text-foreground">
+                    {Object.keys(groupedEstoque).length}
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Categorias
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {Object.keys(groupedEstoque).length}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Espaço reservado para futuras informações */}
-            <Card className="opacity-50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Em breve
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-muted-foreground">
-                  ---
-                </div>
+              <CardContent className="p-6">
+                {/* Espaço vazio para futuras informações */}
               </CardContent>
             </Card>
           </div>
