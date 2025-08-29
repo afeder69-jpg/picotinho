@@ -146,10 +146,24 @@ const ReceiptList = () => {
 
   const openReceiptInNewWindow = (receipt: Receipt) => {
     const cupomHtml = generateCupomHtml(receipt);
-    const newWindow = window.open('', '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
-    if (newWindow) {
-      newWindow.document.write(cupomHtml);
-      newWindow.document.close();
+    
+    if (Capacitor.isNativePlatform()) {
+      // No mobile, criar blob e abrir no navegador interno
+      const blob = new Blob([cupomHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      
+      Browser.open({
+        url: url,
+        windowName: '_self',
+        presentationStyle: 'fullscreen'
+      });
+    } else {
+      // No desktop, manter comportamento atual
+      const newWindow = window.open('', '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
+      if (newWindow) {
+        newWindow.document.write(cupomHtml);
+        newWindow.document.close();
+      }
     }
   };
 
@@ -172,22 +186,34 @@ const ReceiptList = () => {
             }
             .close-btn {
               position: fixed;
-              top: 60px;
+              top: 10px;
               right: 10px;
               background: #f44336;
               color: white;
               border: none;
               border-radius: 50%;
-              width: 40px;
-              height: 40px;
-              font-size: 20px;
+              width: 50px;
+              height: 50px;
+              font-size: 24px;
               font-weight: bold;
               cursor: pointer;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              box-shadow: 0 4px 12px rgba(0,0,0,0.4);
               z-index: 1000;
+              touch-action: manipulation;
             }
-            .close-btn:hover {
+            .close-btn:hover, .close-btn:active {
               background: #d32f2f;
+              transform: scale(1.1);
+            }
+            
+            @media (max-width: 768px) {
+              .close-btn {
+                width: 60px;
+                height: 60px;
+                font-size: 28px;
+                top: 20px;
+                right: 20px;
+              }
             }
             .center { text-align: center; }
             .bold { font-weight: bold; }
@@ -200,7 +226,7 @@ const ReceiptList = () => {
           </style>
         </head>
         <body>
-          <button class="close-btn" onclick="window.close()" title="Fechar">×</button>
+          <button class="close-btn" onclick="if(window.Capacitor){window.Capacitor.Plugins.Browser.close()}else{window.close()}" title="Fechar">×</button>
           
           <div class="center border-bottom">
             <h2 class="bold">${receipt.dados_extraidos.estabelecimento?.nome || receipt.dados_extraidos.loja?.nome || 'ESTABELECIMENTO'}</h2>

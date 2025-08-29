@@ -20,8 +20,9 @@ const config: CapacitorConfig = {
       permissions: ['camera']
     },
     Browser: {
-      androidCustomTabs: true,
-      iosCustomTabs: true
+      androidCustomTabs: false,
+      iosCustomTabs: false,
+      presentationStyle: 'fullscreen'
     },
     FilePicker: {
       permissions: ['photos', 'camera']
