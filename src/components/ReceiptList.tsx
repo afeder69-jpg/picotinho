@@ -364,11 +364,11 @@ const ReceiptList = () => {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-4/5 md:max-w-2xl h-screen md:h-auto p-0 flex flex-col">
+        <DialogContent className="fixed inset-0 w-full h-full max-w-full p-0 m-0 rounded-none border-0 md:relative md:w-auto md:max-w-2xl md:h-auto md:rounded-lg md:border">
           <DialogTitle className="sr-only">
             {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
           </DialogTitle>
-          <div className="flex-1 overflow-y-auto px-2 md:px-6 py-4 text-xs md:text-base"
+          <div className="w-full h-full overflow-y-auto px-4 py-4 text-xs md:text-base md:px-6"
                style={{ maxHeight: "100vh" }}>
             {selectedReceipt && (
               <>
