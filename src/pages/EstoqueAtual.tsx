@@ -264,13 +264,16 @@ const EstoqueAtual = () => {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total de Produtos
+                  Produtos Únicos
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-foreground">
                   {estoque.length}
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tipos diferentes de produtos
+                </p>
               </CardContent>
             </Card>
 
@@ -284,6 +287,9 @@ const EstoqueAtual = () => {
                 <div className="text-2xl font-bold text-foreground">
                   {totalItens.toFixed(2)}
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Soma de todas as quantidades
+                </p>
               </CardContent>
             </Card>
 
