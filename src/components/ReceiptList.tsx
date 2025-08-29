@@ -368,7 +368,7 @@ const ReceiptList = () => {
           <DialogTitle className="sr-only">
             {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
           </DialogTitle>
-          <div className="inline-block w-4/5 md:max-w-sm text-xs md:text-base px-2 md:px-6 py-4 rounded-none md:rounded-lg">
+          <div className="inline-block w-4/5 md:max-w-sm text-xs md:text-base px-2 md:px-6 py-4 rounded-none md:rounded-lg h-full overflow-y-scroll scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
             {selectedReceipt && (
               <>
                 {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
