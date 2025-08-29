@@ -312,6 +312,76 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         }
       }
 
+      // 📊 Salvar dados na estrutura de notas_fiscais e itens_nota
+      let notaFiscalId = null;
+      if (dadosEstruturados.estabelecimento && dadosEstruturados.compra) {
+        try {
+          // Parse da data para o formato correto
+          let dataCompra = null;
+          if (dadosEstruturados.compra.data_emissao) {
+            try {
+              const [dataParte] = dadosEstruturados.compra.data_emissao.split(' ');
+              const [dia, mes, ano] = dataParte.split('/');
+              dataCompra = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+            } catch (e) {
+              console.warn("⚠️ Erro ao parsear data para nota fiscal");
+            }
+          }
+
+          // Criar registro na tabela notas_fiscais
+          const { data: notaFiscal, error: errorNotaFiscal } = await supabase
+            .from('notas_fiscais')
+            .insert({
+              user_id: userId,
+              mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
+              cnpj: dadosEstruturados.estabelecimento.cnpj || '',
+              bairro: null, // Extrair do endereço se necessário
+              data_compra: dataCompra,
+              valor_total: dadosEstruturados.compra.valor_total || 0,
+              qtd_itens: dadosEstruturados.itens?.length || 0,
+              chave_acesso: null // Adicionar se disponível na nota
+            })
+            .select('id')
+            .single();
+
+          if (errorNotaFiscal) {
+            console.error("❌ Erro ao criar nota fiscal:", errorNotaFiscal);
+          } else {
+            notaFiscalId = notaFiscal.id;
+            console.log("✅ Nota fiscal criada:", notaFiscalId);
+          }
+        } catch (notaError) {
+          console.error("❌ Erro ao processar nota fiscal:", notaError);
+        }
+      }
+
+      // 📊 Salvar itens da nota
+      if (dadosEstruturados.itens && notaFiscalId) {
+        for (const item of dadosEstruturados.itens) {
+          try {
+            const { descricao, codigo, quantidade, unidade, valor_unitario, valor_total, categoria } = item;
+
+            // Salvar item da nota
+            await supabase
+              .from('itens_nota')
+              .insert({
+                nota_id: notaFiscalId,
+                descricao: descricao || 'Item não identificado',
+                codigo: codigo || null,
+                quantidade: quantidade || 0,
+                unidade: unidade || 'unidade',
+                valor_unitario: valor_unitario || 0,
+                valor_total: valor_total || 0,
+                categoria: categoria || 'outros'
+              });
+
+            console.log(`✅ Item da nota salvo: ${descricao}`);
+          } catch (itemError) {
+            console.error("❌ Erro ao salvar item da nota:", item, itemError);
+          }
+        }
+      }
+
       // 🛍️ Processar itens da compra
       if (dadosEstruturados.itens && compraId) {
         for (const item of dadosEstruturados.itens) {
