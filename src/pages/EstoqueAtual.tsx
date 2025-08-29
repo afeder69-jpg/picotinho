@@ -494,25 +494,13 @@ const EstoqueAtual = () => {
           {/* Botões de ação para administração do estoque */}
           <div className="flex flex-wrap gap-4 justify-end">
             <Button
-              variant={modoEdicao ? "default" : "outline"}
+              variant={modoEdicao ? "default" : "secondary"}
               size="sm"
               onClick={() => setModoEdicao(!modoEdicao)}
-              className="flex items-center gap-1 text-xs px-3 py-1 h-7"
-              title="Ajuste de Estoque"
+              className="flex items-center gap-1 text-xs px-3 py-1 h-7 bg-green-600 hover:bg-green-700 text-white"
             >
-              {modoEdicao ? (
-                <>
-                  <Edit3 className="w-3 h-3" />
-                  Sair da Edição
-                </>
-              ) : (
-                <>
-                  <span className="text-sm">👉</span>
-                  <span className="text-red-500 font-bold">+</span>
-                  <span>/</span>
-                  <span className="text-red-500 font-bold">−</span>
-                </>
-              )}
+              <Edit3 className="w-3 h-3" />
+              {modoEdicao ? "Sair da Edição" : "Ajustar o Estoque"}
             </Button>
             
             <AlertDialog>
