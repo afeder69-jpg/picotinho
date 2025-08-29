@@ -513,147 +513,121 @@ const ReceiptList = () => {
 
   return (
     <>
-      <div className="space-y-6">
-        <div className="space-y-4">
+      <div className="space-y-3">
+        <div className="space-y-3">
           {receipts.map((receipt) => (
-            <Card key={receipt.id}>
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    {/* Só mostra o nome se for nota não processada */}
-                    {!receipt.processada && (
-                      <>
-                        <CardTitle className="text-lg">{receipt.store_name || 'Estabelecimento não identificado'}</CardTitle>
-                        <p className="text-sm text-muted-foreground mt-1">{formatDate(receipt.created_at)}</p>
-                      </>
-                    )}
-                  </div>
-                  {getStatusBadge(receipt.status)}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
+            <Card key={receipt.id} className="p-3">
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex-1 min-w-0">
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
                       {/* Para notas processadas com dados estruturados da IA */}
                       {receipt.dados_extraidos.estabelecimento ? (
-                        <>
-                          {/* Nome do mercado em destaque */}
-                          <div className="mb-3">
-                            <h3 className="text-lg font-bold text-primary">{receipt.dados_extraidos.estabelecimento.nome}</h3>
+                        <div className="space-y-1">
+                          {/* Linha 1: Nome do mercado + Bairro */}
+                          <div className="flex items-baseline gap-2">
+                            <h3 className="font-semibold text-primary text-base leading-tight truncate">
+                              {receipt.dados_extraidos.estabelecimento.nome}
+                            </h3>
                             {receipt.store_address && (
-                              <p className="text-sm text-muted-foreground">
-                                {/* Extrair bairro do endereço */}
-                                {receipt.store_address.split(',').slice(-3, -2)[0]?.trim() || 'Bairro não identificado'}
-                              </p>
+                              <span className="text-xs text-muted-foreground flex-shrink-0">
+                                {receipt.store_address.split(',').slice(-3, -2)[0]?.trim() || 'Bairro N/A'}
+                              </span>
                             )}
                           </div>
                           
-                          {/* Valor total */}
-                          {receipt.total_amount && (
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Valor Total:</span>
-                              <span className="font-semibold text-lg">{formatCurrency(receipt.total_amount)}</span>
-                            </div>
-                          )}
-                          
-                          {/* Data e hora */}
-                          {receipt.purchase_date && (
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Data e Hora:</span>
-                              <span className="text-sm">
-                                {formatPurchaseDateTime(receipt.purchase_date)}
-                              </span>
-                            </div>
-                          )}
-                        </>
+                          {/* Linha 2: Valor + Data e Hora */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="font-medium text-green-600">
+                              {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
                       ) : (
                         /* Fallback para formato antigo */
-                        <>
-                          {receipt.dados_extraidos.loja?.nome && (
-                            <div className="mb-3">
-                              <h3 className="text-lg font-bold text-primary">{receipt.dados_extraidos.loja.nome}</h3>
-                              {receipt.dados_extraidos.loja?.endereco && (
-                                <p className="text-sm text-muted-foreground">
-                                  {receipt.dados_extraidos.loja.endereco.split(',').slice(-2, -1)[0]?.trim() || 'Bairro não identificado'}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {receipt.dados_extraidos.valorTotal && (
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Valor Total:</span>
-                              <span className="font-semibold text-lg">{formatCurrency(receipt.dados_extraidos.valorTotal)}</span>
-                            </div>
-                          )}
-                          {receipt.dados_extraidos.dataCompra && (
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Data e Hora:</span>
-                              <span className="text-sm">
-                                {new Date(receipt.dados_extraidos.dataCompra).toLocaleDateString('pt-BR')}
-                                {receipt.dados_extraidos.horaCompra && ` às ${receipt.dados_extraidos.horaCompra}`}
+                        <div className="space-y-1">
+                          <div className="flex items-baseline gap-2">
+                            <h3 className="font-semibold text-primary text-base leading-tight truncate">
+                              {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
+                            </h3>
+                            {receipt.dados_extraidos.loja?.endereco && (
+                              <span className="text-xs text-muted-foreground flex-shrink-0">
+                                {receipt.dados_extraidos.loja.endereco.split(',').slice(-2, -1)[0]?.trim() || 'Bairro N/A'}
                               </span>
-                            </div>
-                          )}
-                        </>
+                            )}
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="font-medium text-green-600">
+                              {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
                       )}
                     </>
                   ) : (
                     <>
-                      {/* Para notas não processadas - mostrar nome do arquivo */}
-                      {receipt.store_name && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Arquivo:</span>
-                          <span className="text-sm font-medium truncate max-w-[200px]">{receipt.store_name}</span>
-                        </div>
-                      )}
-                      {receipt.total_amount && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Valor Total:</span>
-                          <span className="font-semibold">{formatCurrency(receipt.total_amount)}</span>
-                        </div>
-                      )}
-                      {receipt.purchase_date && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Data e Hora:</span>
-                          <span className="text-sm">
-                            {new Date(receipt.purchase_date).toLocaleDateString('pt-BR')}
-                            {receipt.purchase_time && ` às ${receipt.purchase_time}`}
+                      {/* Para notas não processadas */}
+                      <div className="space-y-1">
+                        <h3 className="font-semibold text-foreground text-base leading-tight truncate">
+                          {receipt.store_name || 'Estabelecimento não identificado'}
+                        </h3>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(receipt.created_at)}
                           </span>
+                          {receipt.total_amount && (
+                            <span className="font-medium text-green-600">
+                              {formatCurrency(receipt.total_amount)}
+                            </span>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </>
-                   )}
+                  )}
                 </div>
-                <div className="flex justify-between items-center mt-4 gap-2">
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)}>
-                      <Eye className="w-4 h-4 mr-2" /> {receipt.file_type === 'PDF' && Capacitor.isNativePlatform() ? 'Abrir PDF' : 'Ver Detalhes'}
+                
+                {/* Status e Botões */}
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  {getStatusBadge(receipt.status)}
+                  
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
+                      <Eye className="w-3 h-3 mr-1" /> 
+                      Ver Detalhes
                     </Button>
+                    
                     {(!receipt.processada || (receipt.processada && (!receipt.dados_extraidos?.itens || receipt.dados_extraidos?.itens?.length === 0))) && (receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
                       <Button
                         variant="default"
                         size="sm"
                         onClick={() => processReceiptWithAI(receipt)}
                         disabled={processingReceipts.has(receipt.id)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        className="bg-blue-600 hover:bg-blue-700 text-white h-7 px-2 text-xs"
                       >
-                        {processingReceipts.has(receipt.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bot className="w-4 h-4 mr-2" />}
-                        {processingReceipts.has(receipt.id) ? 'Processando...' : (receipt.processada ? 'Reprocessar' : 'Extrair com IA')}
+                        {processingReceipts.has(receipt.id) ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Bot className="w-3 h-3 mr-1" />}
+                        {processingReceipts.has(receipt.id) ? 'Processando...' : (receipt.processada ? 'Reprocessar' : 'Extrair IA')}
                       </Button>
                     )}
-                    {receipt.processada && (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="h-4 w-4" />
-                        <span className="text-sm">Processada ({(receipt.dados_extraidos as any)?.itens?.length || 0} itens)</span>
-                      </div>
-                    )}
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => deleteReceipt(receipt.id)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="w-4 h-4" />
+                  
+                  {receipt.processada && (
+                    <div className="flex items-center gap-1 text-green-600 mt-1">
+                      <CheckCircle className="h-3 w-3" />
+                      <span className="text-xs">{(receipt.dados_extraidos as any)?.itens?.length || 0} itens</span>
+                    </div>
+                  )}
+                  
+                  <Button variant="ghost" size="sm" onClick={() => deleteReceipt(receipt.id)} className="text-destructive hover:text-destructive h-7 px-2 mt-1">
+                    <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>
