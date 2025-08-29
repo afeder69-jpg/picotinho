@@ -203,9 +203,9 @@ const EstoqueAtual = () => {
     const subtotal = itens.reduce((sum, item) => {
       const preco = item.preco_unitario_ultimo || 0;
       const quantidade = parseFloat(item.quantidade.toString());
-      return sum + (preco * quantidade);
+      return sum + parseFloat((preco * quantidade).toFixed(2));
     }, 0);
-    return { categoria, subtotal };
+    return { categoria, subtotal: parseFloat(subtotal.toFixed(2)) };
   }).sort((a, b) => b.subtotal - a.subtotal);
   
   const valorTotalEstoque = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotal, 0);
