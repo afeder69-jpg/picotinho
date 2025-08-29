@@ -449,15 +449,15 @@ const EstoqueAtual = () => {
                               {item.preco_unitario_ultimo && (
                                 <>
                                   <div>
-                                    Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                    Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                   </div>
                                   {precoAtual ? (
                                     <div className="text-blue-600 font-medium">
-                                      Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida} - Subtotal: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                      Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subtotal: {formatCurrency((precoAtual.valor_unitario * quantidade))}
                                     </div>
                                   ) : (
                                     <div className="text-blue-600 font-medium">
-                                      Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                      Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                     </div>
                                   )}
                                 </>
