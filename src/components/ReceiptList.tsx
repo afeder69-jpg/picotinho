@@ -135,14 +135,10 @@ const ReceiptList = () => {
   };
 
   const viewReceipt = (receipt: Receipt) => {
-    // Detectar se é mobile
-    const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    // Se for cupom fiscal processado E não for mobile, abrir em nova janela
-    if (receipt.dados_extraidos && receipt.processada && !isMobile) {
+    // Se for cupom fiscal processado, abrir em nova janela
+    if (receipt.dados_extraidos && receipt.processada) {
       openReceiptInNewWindow(receipt);
     } else {
-      // Para mobile ou notas não processadas, usar modal normal
       setSelectedReceipt(receipt);
       setIsDialogOpen(true);
     }
