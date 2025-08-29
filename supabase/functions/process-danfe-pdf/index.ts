@@ -280,13 +280,50 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         
         // Parse da data (formato brasileiro)
         let dataCompra = new Date().toISOString().split('T')[0]; // fallback para hoje
+        let horaCompra = null;
         if (data_emissao) {
           try {
-            const [dataParte] = data_emissao.split(' ');
+            const [dataParte, horaParte] = data_emissao.split(' ');
             const [dia, mes, ano] = dataParte.split('/');
             dataCompra = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+            if (horaParte) {
+              horaCompra = horaParte;
+            }
           } catch (e) {
             console.warn("⚠️ Erro ao parsear data, usando data atual");
+          }
+        }
+
+        // Buscar ou criar mercado (tabela mercados do usuário)
+        let mercadoId = null;
+        if (dadosEstruturados.estabelecimento?.nome) {
+          const { data: mercadoExistente } = await supabase
+            .from('mercados')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('nome', dadosEstruturados.estabelecimento.nome)
+            .single();
+
+          if (mercadoExistente) {
+            mercadoId = mercadoExistente.id;
+          } else {
+            // Criar novo mercado
+            const { data: novoMercado, error: errorMercado } = await supabase
+              .from('mercados')
+              .insert({
+                user_id: userId,
+                nome: dadosEstruturados.estabelecimento.nome,
+                bairro: null // Extrair do endereço se necessário
+              })
+              .select('id')
+              .single();
+
+            if (errorMercado) {
+              console.error("❌ Erro ao criar mercado:", errorMercado);
+            } else {
+              mercadoId = novoMercado.id;
+              console.log("✅ Mercado criado:", dadosEstruturados.estabelecimento.nome);
+            }
           }
         }
 
@@ -309,6 +346,67 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         } else {
           compraId = novaCompra.id;
           console.log("✅ Compra criada:", compraId);
+
+          // 📄 Criar nota fiscal no banco compartilhado
+          const { data: notaFiscal, error: errorNotaFiscal } = await supabase
+            .from('notas_fiscais')
+            .insert({
+              user_id: userId,
+              mercado_id: mercadoId,
+              data_compra: dataCompra,
+              hora_compra: horaCompra,
+              valor_total: valor_total || 0,
+              status_processamento: 'processada',
+              mercado: dadosEstruturados.estabelecimento?.nome || null,
+              cnpj: dadosEstruturados.estabelecimento?.cnpj || null,
+              chave_acesso: null, // Pode ser extraído do texto se disponível
+              qtd_itens: dadosEstruturados.itens?.length || 0,
+              bairro: null // Extrair do endereço se necessário
+            })
+            .select('id')
+            .single();
+
+          if (errorNotaFiscal) {
+            console.error("❌ Erro ao criar nota fiscal:", errorNotaFiscal);
+          } else {
+            console.log("✅ Nota fiscal criada:", notaFiscal.id);
+
+            // 📝 Criar itens da nota fiscal
+            if (dadosEstruturados.itens && dadosEstruturados.itens.length > 0) {
+              const itensNotaFiscal = dadosEstruturados.itens.map(item => {
+                // Normalizar nome (mesma lógica do estoque)
+                let nomeNormalizado = item.descricao.toUpperCase().trim();
+                
+                // Aplicar normalizações básicas
+                nomeNormalizado = nomeNormalizado
+                  .replace(/\b(GRAENC|GRANEL)\b/g, 'GRANEL')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+
+                return {
+                  nota_id: notaFiscal.id,
+                  descricao: item.descricao || 'Produto não identificado',
+                  descricao_normalizada: nomeNormalizado,
+                  codigo: item.codigo || null,
+                  quantidade: item.quantidade || 1,
+                  unidade: item.unidade || 'unidade',
+                  valor_unitario: item.valor_unitario || 0,
+                  valor_total: item.valor_total || 0,
+                  categoria: item.categoria || 'outros'
+                };
+              });
+
+              const { error: errorItensNota } = await supabase
+                .from('itens_nota')
+                .insert(itensNotaFiscal);
+
+              if (errorItensNota) {
+                console.error("❌ Erro ao criar itens da nota:", errorItensNota);
+              } else {
+                console.log(`✅ ${itensNotaFiscal.length} itens da nota fiscal criados`);
+              }
+            }
+          }
         }
       }
 

@@ -137,6 +137,30 @@ export type Database = {
           },
         ]
       }
+      configuracoes_usuario: {
+        Row: {
+          created_at: string
+          id: string
+          raio_busca_km: number
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          raio_busca_km?: number
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          raio_busca_km?: number
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: []
+      }
       estoque_app: {
         Row: {
           categoria: string
@@ -340,8 +364,10 @@ export type Database = {
           codigo: string | null
           created_at: string
           descricao: string
+          descricao_normalizada: string | null
           id: string
           nota_id: string
+          produto_normalizado_id: string | null
           quantidade: number | null
           unidade: string | null
           valor_total: number | null
@@ -352,8 +378,10 @@ export type Database = {
           codigo?: string | null
           created_at?: string
           descricao: string
+          descricao_normalizada?: string | null
           id?: string
           nota_id: string
+          produto_normalizado_id?: string | null
           quantidade?: number | null
           unidade?: string | null
           valor_total?: number | null
@@ -364,8 +392,10 @@ export type Database = {
           codigo?: string | null
           created_at?: string
           descricao?: string
+          descricao_normalizada?: string | null
           id?: string
           nota_id?: string
+          produto_normalizado_id?: string | null
           quantidade?: number | null
           unidade?: string | null
           valor_total?: number | null
@@ -383,26 +413,35 @@ export type Database = {
       }
       mercados: {
         Row: {
+          bairro: string | null
           cidade: string | null
           created_at: string | null
           estado: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           nome: string | null
           user_id: string
         }
         Insert: {
+          bairro?: string | null
           cidade?: string | null
           created_at?: string | null
           estado?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           nome?: string | null
           user_id: string
         }
         Update: {
+          bairro?: string | null
           cidade?: string | null
           created_at?: string | null
           estado?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           nome?: string | null
           user_id?: string
         }
@@ -488,11 +527,14 @@ export type Database = {
           created_at: string | null
           criado_em: string
           data_compra: string | null
+          hora_compra: string | null
           id: string
           imagem_url: string | null
           mercado: string | null
+          mercado_id: string | null
           qr_url: string | null
           qtd_itens: number | null
+          status_processamento: string | null
           updated_at: string | null
           user_id: string | null
           valor_total: number | null
@@ -504,11 +546,14 @@ export type Database = {
           created_at?: string | null
           criado_em?: string
           data_compra?: string | null
+          hora_compra?: string | null
           id?: string
           imagem_url?: string | null
           mercado?: string | null
+          mercado_id?: string | null
           qr_url?: string | null
           qtd_itens?: number | null
+          status_processamento?: string | null
           updated_at?: string | null
           user_id?: string | null
           valor_total?: number | null
@@ -520,11 +565,14 @@ export type Database = {
           created_at?: string | null
           criado_em?: string
           data_compra?: string | null
+          hora_compra?: string | null
           id?: string
           imagem_url?: string | null
           mercado?: string | null
+          mercado_id?: string | null
           qr_url?: string | null
           qtd_itens?: number | null
+          status_processamento?: string | null
           updated_at?: string | null
           user_id?: string | null
           valor_total?: number | null
@@ -659,6 +707,36 @@ export type Database = {
             referencedColumns: ["categoria_id"]
           },
         ]
+      }
+      produtos_normalizados: {
+        Row: {
+          ativo: boolean
+          categoria: string
+          created_at: string
+          id: string
+          nome_padrao: string
+          unidade_medida: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria: string
+          created_at?: string
+          id?: string
+          nome_padrao: string
+          unidade_medida?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string
+          created_at?: string
+          id?: string
+          nome_padrao?: string
+          unidade_medida?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
