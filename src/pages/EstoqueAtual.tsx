@@ -46,6 +46,15 @@ const EstoqueAtual = () => {
     }
   };
 
+  // Função para encontrar preço atual de um produto
+  const encontrarPrecoAtual = (nomeProduto: string) => {
+    return precosAtuais.find(preco => 
+      preco.produto_nome && 
+      (preco.produto_nome.toLowerCase().includes(nomeProduto.toLowerCase()) ||
+       nomeProduto.toLowerCase().includes(preco.produto_nome.toLowerCase()))
+    );
+  };
+
   const loadEstoque = async () => {
     try {
       setLoading(true);
@@ -301,29 +310,26 @@ const EstoqueAtual = () => {
                   {/* Cabeçalho das colunas */}
                   <div className="grid grid-cols-3 gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
                     <span>Categoria</span>
-                    <span className="text-center">Estoque</span>
-                    <span className="text-center">Mercado</span>
+                    <span className="text-center">Valor Comprado</span>
+                    <span className="text-center">Valor no Mercado</span>
                   </div>
                   
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => {
-                    // Buscar preços atuais para esta categoria
-                    const precosCategoria = precosAtuais.filter(preco => 
-                      preco.produto_nome && estoque.some(item => 
-                        item.categoria === categoria && 
-                        item.produto_nome.toLowerCase().includes(preco.produto_nome.toLowerCase())
-                      )
-                    );
-                    
-                    const precoMedioCategoria = precosCategoria.length > 0 
-                      ? precosCategoria.reduce((sum, p) => sum + (p.valor_unitario || 0), 0) / precosCategoria.length
-                      : 0;
+                    // Calcular subtotal com preços atuais para esta categoria
+                    const itensCategoria = groupedEstoque[categoria] || [];
+                    const subtotalPrecoAtual = itensCategoria.reduce((sum, item) => {
+                      const precoAtual = encontrarPrecoAtual(item.produto_nome);
+                      const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
+                      const quantidade = parseFloat(item.quantidade.toString());
+                      return sum + (preco * quantidade);
+                    }, 0);
                     
                     return (
                       <div key={categoria} className="grid grid-cols-3 gap-1 text-xs sm:text-sm items-center py-1">
                         <span className="capitalize text-muted-foreground">{categoria}</span>
                         <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
                         <span className="font-medium text-blue-600 text-center">
-                          {precoMedioCategoria > 0 ? formatCurrency(precoMedioCategoria) : '-'}
+                          {formatCurrency(subtotalPrecoAtual)}
                         </span>
                       </div>
                     );
@@ -334,10 +340,14 @@ const EstoqueAtual = () => {
                       <span className="text-foreground">Total</span>
                       <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
                       <span className="text-blue-600 text-center">
-                        {precosAtuais.length > 0 
-                          ? formatCurrency(precosAtuais.reduce((sum, p) => sum + (p.valor_unitario || 0), 0) / precosAtuais.length)
-                          : '-'
-                        }
+                        {formatCurrency(
+                          Object.values(groupedEstoque).flat().reduce((total, item) => {
+                            const precoAtual = encontrarPrecoAtual(item.produto_nome);
+                            const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
+                            const quantidade = parseFloat(item.quantidade.toString());
+                            return total + (preco * quantidade);
+                          }, 0)
+                        )}
                       </span>
                     </div>
                   </div>
@@ -424,34 +434,52 @@ const EstoqueAtual = () => {
                 </CardHeader>
                 <CardContent className="py-3">
                   <div className="space-y-1">
-                    {itens.map((item) => (
-                      <div key={item.id} className="flex items-center py-1 border-b border-border last:border-0">
-                        <div className="flex-1 overflow-hidden">
-                          <h3 className="text-xs font-medium text-foreground leading-tight">
-                            {item.produto_nome}
-                          </h3>
-                          <p className="text-xs text-muted-foreground">
-                            {item.preco_unitario_ultimo && (
-                              <>
-                                <div>{formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida}</div>
-                                <div>Subtotal: {formatCurrency((item.preco_unitario_ultimo * parseFloat(item.quantidade.toString())))}</div>
-                              </>
-                            )}
-                          </p>
-                        </div>
-                        
-                        <div className="text-right ml-2 flex-shrink-0">
-                          <p className="text-xs sm:text-sm font-bold text-foreground">
-                            {parseFloat(item.quantidade.toString()).toFixed(2)} {item.unidade_medida}
-                          </p>
-                          <div className="text-xs text-muted-foreground">
-                            <p>ATUALIZADO</p>
-                            <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
-                            <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                    {itens.map((item) => {
+                      const precoAtual = encontrarPrecoAtual(item.produto_nome);
+                      const precoParaExibir = precoAtual?.valor_unitario || item.preco_unitario_ultimo;
+                      const quantidade = parseFloat(item.quantidade.toString());
+                      
+                      return (
+                        <div key={item.id} className="flex items-center py-1 border-b border-border last:border-0">
+                          <div className="flex-1 overflow-hidden">
+                            <h3 className="text-xs font-medium text-foreground leading-tight">
+                              {item.produto_nome}
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              {item.preco_unitario_ultimo && (
+                                <>
+                                  <div className="flex gap-2">
+                                    <span>{formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida}</span>
+                                    {precoAtual && (
+                                      <span className="text-blue-600 font-medium">
+                                        {formatCurrency(precoAtual.valor_unitario)} (atual)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div>Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}</div>
+                                  {precoAtual && (
+                                    <div className="text-blue-600">
+                                      Subtotal (Preço Atual): {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </p>
+                          </div>
+                          
+                          <div className="text-right ml-2 flex-shrink-0">
+                            <p className="text-xs sm:text-sm font-bold text-foreground">
+                              {quantidade.toFixed(2)} {item.unidade_medida}
+                            </p>
+                            <div className="text-xs text-muted-foreground">
+                              <p>ATUALIZADO</p>
+                              <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
+                              <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
