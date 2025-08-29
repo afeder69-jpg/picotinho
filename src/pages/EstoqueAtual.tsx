@@ -259,9 +259,6 @@ const EstoqueAtual = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <h1 className="text-xl sm:text-3xl font-bold text-foreground">Estoque Atual</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Controle automático baseado nas suas notas fiscais
-              </p>
             </div>
             
             {ultimaAtualizacao && (
@@ -276,6 +273,9 @@ const EstoqueAtual = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <Card className="md:col-span-2 lg:col-span-1">
               <CardHeader className="pb-2">
+                <div className="text-center mb-3">
+                  <p className="text-xs font-bold text-green-600">PREÇOS BASEADOS EM SUAS COMPRAS</p>
+                </div>
                 <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                   Valores por Categoria
                 </CardTitle>
