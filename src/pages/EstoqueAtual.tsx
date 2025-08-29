@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Package, Calendar, ArrowLeft, Home, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -309,14 +310,39 @@ const EstoqueAtual = () => {
 
           {/* Botões de ação para administração do estoque */}
           <div className="flex flex-wrap gap-4 justify-center">
-            <Button
-              variant="destructive"
-              onClick={limparEstoque}
-              className="flex items-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Limpar Estoque Completamente
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="flex items-center gap-1 text-xs px-3 py-1 h-7"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Limpar Estoque
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar Limpeza do Estoque</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação irá remover TODOS os produtos do seu estoque permanentemente. 
+                    <br /><br />
+                    <strong>⚠️ Esta ação é irreversível!</strong>
+                    <br /><br />
+                    Você terá que processar suas notas fiscais novamente para recriar o estoque. Tem certeza que deseja continuar?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={limparEstoque}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Sim, limpar tudo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           {/* Lista de produtos por categoria */}
