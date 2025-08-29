@@ -494,12 +494,12 @@ const EstoqueAtual = () => {
                               {item.preco_unitario_ultimo && (
                                 <>
                                   <div>
-                                    Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                    Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                   </div>
                                   {precoAtual ? (
                                     <div className="text-blue-600 font-medium flex items-center gap-1">
                                       <span>
-                                        Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subtotal: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                        Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
                                       </span>
                                       {(() => {
                                         const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
@@ -517,7 +517,7 @@ const EstoqueAtual = () => {
                                   ) : (
                                     <div className="text-blue-600 font-medium flex items-center gap-1">
                                       <span>
-                                        Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                        Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                       </span>
                                       <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
                                     </div>
