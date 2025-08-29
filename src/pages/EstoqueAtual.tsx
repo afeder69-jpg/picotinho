@@ -308,11 +308,11 @@ const EstoqueAtual = () => {
               <CardContent>
                 <div className="space-y-1">
                   {/* Cabeçalho das colunas */}
-                  <div className="grid grid-cols-3 gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
-                    <span>Categoria</span>
-                    <span className="text-center">Valor Comprado</span>
-                    <span className="text-center">Valor no Mercado</span>
-                  </div>
+                   <div className="grid grid-cols-3 gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
+                     <span>Categoria</span>
+                     <span className="text-center">Valor Pago</span>
+                     <span className="text-center">Valor Atual</span>
+                   </div>
                   
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => {
                     // Calcular subtotal com preços atuais para esta categoria
