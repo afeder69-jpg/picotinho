@@ -291,9 +291,6 @@ const EstoqueAtual = () => {
                 <div className="text-2xl font-bold text-foreground">
                   {totalProdutosUnicos}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Tipos diferentes de produtos
-                </p>
               </CardContent>
             </Card>
 
