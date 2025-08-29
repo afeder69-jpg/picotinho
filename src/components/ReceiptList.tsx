@@ -444,28 +444,25 @@ const ReceiptList = () => {
                     </>
                   ) : (
                     <>
-                      {receipt.file_name && (
+                      {receipt.store_name && (
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Arquivo:</span>
-                          <span className="text-sm font-mono truncate max-w-[200px]">{receipt.file_name}</span>
-                        </div>
-                      )}
-                      {receipt.file_type && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Tipo:</span>
-                          <span className="text-sm">{receipt.file_type}</span>
+                          <span className="text-sm text-muted-foreground">Nome do Mercado:</span>
+                          <span className="text-sm font-medium truncate max-w-[200px]">{receipt.store_name}</span>
                         </div>
                       )}
                       {receipt.total_amount && (
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Total:</span>
+                          <span className="text-sm text-muted-foreground">Valor Total:</span>
                           <span className="font-semibold">{formatCurrency(receipt.total_amount)}</span>
                         </div>
                       )}
                       {receipt.purchase_date && (
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Data da compra:</span>
-                          <span className="text-sm">{new Date(receipt.purchase_date).toLocaleDateString('pt-BR')}</span>
+                          <span className="text-sm text-muted-foreground">Data e Hora:</span>
+                          <span className="text-sm">
+                            {new Date(receipt.purchase_date).toLocaleDateString('pt-BR')}
+                            {receipt.purchase_time && ` às ${receipt.purchase_time}`}
+                          </span>
                         </div>
                       )}
                     </>
