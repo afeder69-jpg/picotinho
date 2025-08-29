@@ -380,10 +380,10 @@ const EstoqueAtual = () => {
                     {itens.map((item) => (
                       <div key={item.id} className="flex justify-between items-center py-2 border-b border-border last:border-0">
                         <div className="flex-1">
-                          <h3 className="text-sm sm:text-base font-medium text-foreground">
+                          <h3 className="text-xs sm:text-sm font-medium text-foreground">
                             {item.produto_nome}
                           </h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             {item.preco_unitario_ultimo && (
                               <>
                                 {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida}
@@ -395,7 +395,7 @@ const EstoqueAtual = () => {
                         </div>
                         
                         <div className="text-right">
-                          <p className="text-sm sm:text-lg font-bold text-foreground">
+                          <p className="text-xs sm:text-sm font-bold text-foreground">
                             {parseFloat(item.quantidade.toString()).toFixed(2)} {item.unidade_medida}
                           </p>
                           <p className="text-xs text-muted-foreground">
