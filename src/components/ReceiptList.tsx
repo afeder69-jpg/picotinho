@@ -170,6 +170,25 @@ const ReceiptList = () => {
               color: black;
               line-height: 1.4;
             }
+            .close-btn {
+              position: fixed;
+              top: 10px;
+              right: 10px;
+              background: #f44336;
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 40px;
+              height: 40px;
+              font-size: 20px;
+              font-weight: bold;
+              cursor: pointer;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              z-index: 1000;
+            }
+            .close-btn:hover {
+              background: #d32f2f;
+            }
             .center { text-align: center; }
             .bold { font-weight: bold; }
             .border-bottom { border-bottom: 1px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
@@ -181,6 +200,8 @@ const ReceiptList = () => {
           </style>
         </head>
         <body>
+          <button class="close-btn" onclick="window.close()" title="Fechar">×</button>
+          
           <div class="center border-bottom">
             <h2 class="bold">${receipt.dados_extraidos.estabelecimento?.nome || receipt.dados_extraidos.loja?.nome || 'ESTABELECIMENTO'}</h2>
             <p>CNPJ: ${receipt.dados_extraidos.estabelecimento?.cnpj || receipt.dados_extraidos.loja?.cnpj || 'N/A'}</p>
