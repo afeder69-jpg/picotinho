@@ -380,7 +380,7 @@ const EstoqueAtual = () => {
                     {itens.map((item) => (
                       <div key={item.id} className="flex items-center py-1 border-b border-border last:border-0">
                         <div className="flex-1 overflow-hidden">
-                          <h3 className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                          <h3 className="text-xs font-medium text-foreground leading-tight">
                             {item.produto_nome}
                           </h3>
                           <p className="text-xs text-muted-foreground">
