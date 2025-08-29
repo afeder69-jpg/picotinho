@@ -445,21 +445,19 @@ const EstoqueAtual = () => {
                             <h3 className="text-xs font-medium text-foreground leading-tight">
                               {item.produto_nome}
                             </h3>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-muted-foreground space-y-1">
                               {item.preco_unitario_ultimo && (
                                 <>
-                                  <div className="flex gap-2">
-                                    <span>{formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida}</span>
-                                    {precoAtual && (
-                                      <span className="text-blue-600 font-medium">
-                                        {formatCurrency(precoAtual.valor_unitario)} (atual)
-                                      </span>
-                                    )}
+                                  <div>
+                                    Valor Comprado {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                   </div>
-                                  <div>Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}</div>
-                                  {precoAtual && (
-                                    <div className="text-blue-600">
-                                      Subtotal (Preço Atual): {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                  {precoAtual ? (
+                                    <div className="text-blue-600 font-medium">
+                                      Valor Atual&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida} - Subtotal: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-blue-600 font-medium">
+                                      Valor Atual&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida} - Subtotal: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                     </div>
                                   )}
                                 </>
