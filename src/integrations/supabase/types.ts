@@ -529,15 +529,7 @@ export type Database = {
           user_id?: string | null
           valor_total?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "notas_fiscais_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       notas_imagens: {
         Row: {

@@ -382,6 +382,64 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         }
       }
 
+      // 📦 Atualizar estoque do usuário
+      if (dadosEstruturados.itens && userId) {
+        console.log("📦 Iniciando atualização do estoque...");
+        for (const item of dadosEstruturados.itens) {
+          try {
+            const { descricao, quantidade, unidade, valor_unitario, categoria } = item;
+
+            // 📦 Normalizar nome do produto
+            const nomeNormalizado = descricao
+              ?.replace(/\b(GRAENC|GRANEL)\b/gi, 'GRANEL')
+              ?.replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO)?\b/gi, 'PAO DE FORMA')
+              ?.replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|\d+G|\d+ML|\d+L)\b/gi, '')
+              ?.replace(/\s+/g, ' ')
+              ?.trim()
+              ?.toUpperCase() || 'PRODUTO';
+
+            // 📊 Verificar se produto já existe no estoque
+            const { data: estoqueExistente } = await supabase
+              .from('estoque_app')
+              .select('id, quantidade')
+              .eq('user_id', userId)
+              .eq('produto_nome', nomeNormalizado)
+              .single();
+
+            if (estoqueExistente) {
+              // Atualizar quantidade existente
+              await supabase
+                .from('estoque_app')
+                .update({
+                  quantidade: estoqueExistente.quantidade + (quantidade || 0),
+                  preco_unitario_ultimo: valor_unitario || 0
+                })
+                .eq('id', estoqueExistente.id);
+
+              console.log(`📦 Estoque atualizado: ${nomeNormalizado} (${estoqueExistente.quantidade} + ${quantidade} = ${estoqueExistente.quantidade + (quantidade || 0)})`);
+            } else {
+              // Criar novo item no estoque
+              await supabase
+                .from('estoque_app')
+                .insert({
+                  user_id: userId,
+                  produto_nome: nomeNormalizado,
+                  categoria: categoria || 'outros',
+                  quantidade: quantidade || 0,
+                  unidade_medida: unidade || 'unidade',
+                  preco_unitario_ultimo: valor_unitario || 0
+                });
+
+              console.log(`📦 Novo item no estoque: ${nomeNormalizado} (${quantidade})`);
+            }
+
+          } catch (estoqueError) {
+            console.error("❌ Erro ao atualizar estoque:", item, estoqueError);
+          }
+        }
+        console.log("✅ Atualização do estoque concluída");
+      }
+
       // 🛍️ Processar itens da compra
       if (dadosEstruturados.itens && compraId) {
         for (const item of dadosEstruturados.itens) {
