@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, ArrowLeft, Home, Trash2, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Package, Calendar, ArrowLeft, Home, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +25,9 @@ const EstoqueAtual = () => {
   const [precosAtuais, setPrecosAtuais] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>('');
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
+  const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -126,6 +130,67 @@ const EstoqueAtual = () => {
         variant: "destructive",
         title: "Erro",
         description: "Não foi possível limpar o estoque.",
+      });
+    }
+  };
+
+  const abrirModalEdicao = (item: EstoqueItem) => {
+    setItemEditando(item);
+    setNovaQuantidade(item.quantidade);
+  };
+
+  const fecharModalEdicao = () => {
+    setItemEditando(null);
+    setNovaQuantidade(0);
+  };
+
+  const ajustarQuantidade = (operacao: 'aumentar' | 'diminuir' | 'zerar') => {
+    if (!itemEditando) return;
+
+    let novoValor = novaQuantidade;
+    
+    if (operacao === 'zerar') {
+      novoValor = 0;
+    } else {
+      const incremento = itemEditando.unidade_medida.toLowerCase().includes('kg') ? 0.01 : 1;
+      
+      if (operacao === 'aumentar') {
+        novoValor += incremento;
+      } else if (operacao === 'diminuir') {
+        novoValor = Math.max(0, novoValor - incremento);
+      }
+    }
+    
+    setNovaQuantidade(Math.round(novoValor * 100) / 100);
+  };
+
+  const salvarAjuste = async () => {
+    if (!itemEditando) return;
+
+    try {
+      const { error } = await supabase
+        .from('estoque_app')
+        .update({ 
+          quantidade: novaQuantidade,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', itemEditando.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: `Quantidade atualizada para ${novaQuantidade} ${itemEditando.unidade_medida}`,
+      });
+
+      fecharModalEdicao();
+      loadEstoque();
+    } catch (error) {
+      console.error('Erro ao atualizar estoque:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível atualizar a quantidade.",
       });
     }
   };
@@ -428,6 +493,16 @@ const EstoqueAtual = () => {
 
           {/* Botões de ação para administração do estoque */}
           <div className="flex flex-wrap gap-4 justify-end">
+            <Button
+              variant={modoEdicao ? "default" : "outline"}
+              size="sm"
+              onClick={() => setModoEdicao(!modoEdicao)}
+              className="flex items-center gap-1 text-xs px-3 py-1 h-7"
+            >
+              <Edit3 className="w-3 h-3" />
+              {modoEdicao ? "Sair da Edição" : "Ajuste de Estoque"}
+            </Button>
+            
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -484,12 +559,19 @@ const EstoqueAtual = () => {
                       const precoParaExibir = precoAtual?.valor_unitario || item.preco_unitario_ultimo;
                       const quantidade = parseFloat(item.quantidade.toString());
                       
-                      return (
-                        <div key={item.id} className="flex items-center py-1 border-b border-border last:border-0">
-                          <div className="flex-1 overflow-hidden">
-                            <h3 className="text-xs font-medium text-foreground leading-tight">
-                              {item.produto_nome}
-                            </h3>
+                       return (
+                         <div 
+                           key={item.id} 
+                           className={`flex items-center py-1 border-b border-border last:border-0 ${
+                             modoEdicao ? 'cursor-pointer hover:bg-muted/50' : ''
+                           }`}
+                           onClick={() => modoEdicao && abrirModalEdicao(item)}
+                         >
+                           <div className="flex-1 overflow-hidden">
+                             <h3 className="text-xs font-medium text-foreground leading-tight">
+                               {item.produto_nome}
+                               {modoEdicao && <span className="ml-2 text-blue-600 text-xs">(clique para editar)</span>}
+                             </h3>
                             <p className="text-xs text-muted-foreground space-y-1">
                               {item.preco_unitario_ultimo && (
                                 <>
@@ -547,6 +629,77 @@ const EstoqueAtual = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal de Edição */}
+      <Dialog open={!!itemEditando} onOpenChange={fecharModalEdicao}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajustar Quantidade</DialogTitle>
+          </DialogHeader>
+          
+          {itemEditando && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="font-semibold text-lg">{itemEditando.produto_nome}</h3>
+                <p className="text-sm text-muted-foreground">
+                  Quantidade atual: {itemEditando.quantidade} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-600">
+                  {novaQuantidade.toFixed(2)} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
+                </p>
+              </div>
+              
+              <div className="flex justify-center gap-3">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => ajustarQuantidade('diminuir')}
+                  className="h-12 w-12 p-0"
+                >
+                  <Minus className="w-6 h-6" />
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => ajustarQuantidade('zerar')}
+                  className="h-12 px-4"
+                >
+                  Zerar
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => ajustarQuantidade('aumentar')}
+                  className="h-12 w-12 p-0"
+                >
+                  <Plus className="w-6 h-6" />
+                </Button>
+              </div>
+              
+              <div className="text-center text-xs text-muted-foreground">
+                {itemEditando.unidade_medida.toLowerCase().includes('kg') 
+                  ? 'Cada clique ajusta 0,01 Kg (10 gramas)'
+                  : 'Cada clique ajusta 1 unidade'
+                }
+              </div>
+              
+              <div className="flex gap-2 mt-6">
+                <Button variant="outline" onClick={fecharModalEdicao} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={salvarAjuste} className="flex-1">
+                  Confirmar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
