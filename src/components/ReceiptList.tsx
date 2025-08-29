@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core';
 interface Receipt {
   id: string;
   store_name: string | null;
+  store_address?: string | null;
   store_cnpj: string | null;
   total_amount: number | null;
   purchase_date: string | null;
@@ -63,10 +64,36 @@ const ReceiptList = () => {
         .map(nota => {
           const dadosExtraidos = nota.dados_extraidos as any;
           const fileName = nota.imagem_path ? nota.imagem_path.split('/').pop() : 'Arquivo sem nome';
-          // Se estiver processada, usar nome da loja; caso contrário, usar fileName
-          const lojaNome = nota.processada && dadosExtraidos?.loja?.nome 
-            ? dadosExtraidos.loja.nome 
-            : (dadosExtraidos?.loja?.nome || fileName || 'Nota enviada');
+          
+          // Se estiver processada e tiver dados da IA, usar dados estruturados
+          if (nota.processada && dadosExtraidos?.estabelecimento) {
+            const estabelecimento = dadosExtraidos.estabelecimento || {};
+            const compra = dadosExtraidos.compra || {};
+            
+            return {
+              id: nota.id,
+              store_name: estabelecimento.nome || 'Estabelecimento não identificado',
+              store_address: estabelecimento.endereco || '',
+              store_cnpj: estabelecimento.cnpj || null,
+              total_amount: compra.valor_total || dadosExtraidos.valorTotal || null,
+              purchase_date: compra.data_emissao || dadosExtraidos.dataCompra || nota.data_criacao,
+              purchase_time: null,
+              qr_url: dadosExtraidos?.url_original || '',
+              status: 'processed',
+              created_at: nota.created_at,
+              screenshot_url: nota.imagem_url,
+              processed_data: nota.dados_extraidos,
+              imagem_url: nota.imagem_url,
+              dados_extraidos: nota.dados_extraidos,
+              processada: nota.processada,
+              file_name: fileName,
+              file_type: 'PDF',
+              debug_texto: (nota as any).debug_texto
+            };
+          }
+          
+          // Se não estiver processada ou não tiver dados da IA, usar dados antigos ou nome do arquivo
+          const lojaNome = dadosExtraidos?.loja?.nome || fileName || 'Nota enviada';
           const valorTotal = dadosExtraidos?.valorTotal || null;
           const dataCompra = dadosExtraidos?.dataCompra || null;
           const horaCompra = dadosExtraidos?.horaCompra || null;
@@ -77,6 +104,7 @@ const ReceiptList = () => {
           return {
             id: nota.id,
             store_name: lojaNome,
+            store_address: '',
             store_cnpj: dadosExtraidos?.loja?.cnpj || null,
             total_amount: valorTotal,
             purchase_date: dataCompra || nota.data_criacao,
@@ -415,41 +443,85 @@ const ReceiptList = () => {
                 <div className="space-y-2">
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
-                      {receipt.dados_extraidos.loja?.nome && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Nome do Mercado:</span>
-                          <span className="text-sm font-medium truncate max-w-[200px]">{receipt.dados_extraidos.loja.nome}</span>
-                        </div>
-                      )}
-                      {receipt.dados_extraidos.loja?.endereco && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Bairro:</span>
-                          <span className="text-sm truncate max-w-[200px]">
-                            {receipt.dados_extraidos.loja.endereco.split(',').slice(-2, -1)[0]?.trim() || 'N/A'}
-                          </span>
-                        </div>
-                      )}
-                      {receipt.dados_extraidos.valorTotal && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Valor Total:</span>
-                          <span className="font-semibold">{formatCurrency(receipt.dados_extraidos.valorTotal)}</span>
-                        </div>
-                      )}
-                      {receipt.dados_extraidos.dataCompra && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Data e Hora:</span>
-                          <span className="text-sm">
-                            {new Date(receipt.dados_extraidos.dataCompra).toLocaleDateString('pt-BR')}
-                            {receipt.dados_extraidos.horaCompra && ` às ${receipt.dados_extraidos.horaCompra}`}
-                          </span>
-                        </div>
+                      {/* Para notas processadas com dados estruturados da IA */}
+                      {receipt.dados_extraidos.estabelecimento ? (
+                        <>
+                          {/* Nome do mercado em destaque */}
+                          <div className="mb-3">
+                            <h3 className="text-lg font-bold text-primary">{receipt.dados_extraidos.estabelecimento.nome}</h3>
+                            {receipt.store_address && (
+                              <p className="text-sm text-muted-foreground">
+                                {/* Extrair bairro do endereço */}
+                                {receipt.store_address.split(',').slice(-3, -2)[0]?.trim() || 'Bairro não identificado'}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* Valor total */}
+                          {receipt.total_amount && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Valor Total:</span>
+                              <span className="font-semibold text-lg">{formatCurrency(receipt.total_amount)}</span>
+                            </div>
+                          )}
+                          
+                          {/* Data e hora */}
+                          {receipt.purchase_date && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Data e Hora:</span>
+                              <span className="text-sm">
+                                {new Date(receipt.purchase_date).toLocaleDateString('pt-BR', { 
+                                  day: '2-digit', 
+                                  month: '2-digit', 
+                                  year: 'numeric' 
+                                })}
+                                {receipt.purchase_date.includes('T') && 
+                                  ` às ${new Date(receipt.purchase_date).toLocaleTimeString('pt-BR', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}`
+                                }
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        /* Fallback para formato antigo */
+                        <>
+                          {receipt.dados_extraidos.loja?.nome && (
+                            <div className="mb-3">
+                              <h3 className="text-lg font-bold text-primary">{receipt.dados_extraidos.loja.nome}</h3>
+                              {receipt.dados_extraidos.loja?.endereco && (
+                                <p className="text-sm text-muted-foreground">
+                                  {receipt.dados_extraidos.loja.endereco.split(',').slice(-2, -1)[0]?.trim() || 'Bairro não identificado'}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {receipt.dados_extraidos.valorTotal && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Valor Total:</span>
+                              <span className="font-semibold text-lg">{formatCurrency(receipt.dados_extraidos.valorTotal)}</span>
+                            </div>
+                          )}
+                          {receipt.dados_extraidos.dataCompra && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Data e Hora:</span>
+                              <span className="text-sm">
+                                {new Date(receipt.dados_extraidos.dataCompra).toLocaleDateString('pt-BR')}
+                                {receipt.dados_extraidos.horaCompra && ` às ${receipt.dados_extraidos.horaCompra}`}
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   ) : (
                     <>
+                      {/* Para notas não processadas - mostrar nome do arquivo */}
                       {receipt.store_name && (
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Nome do Mercado:</span>
+                          <span className="text-sm text-muted-foreground">Arquivo:</span>
                           <span className="text-sm font-medium truncate max-w-[200px]">{receipt.store_name}</span>
                         </div>
                       )}
