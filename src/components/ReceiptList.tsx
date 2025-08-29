@@ -172,7 +172,7 @@ const ReceiptList = () => {
             }
             .close-btn {
               position: fixed;
-              top: 10px;
+              top: 60px;
               right: 10px;
               background: #f44336;
               color: white;
