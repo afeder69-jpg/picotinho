@@ -414,8 +414,16 @@ const ReceiptList = () => {
                     <>
                       {receipt.dados_extraidos.loja?.nome && (
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Mercado:</span>
+                          <span className="text-sm text-muted-foreground">Nome do Mercado:</span>
                           <span className="text-sm font-medium truncate max-w-[200px]">{receipt.dados_extraidos.loja.nome}</span>
+                        </div>
+                      )}
+                      {receipt.dados_extraidos.loja?.endereco && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Bairro:</span>
+                          <span className="text-sm truncate max-w-[200px]">
+                            {receipt.dados_extraidos.loja.endereco.split(',').slice(-2, -1)[0]?.trim() || 'N/A'}
+                          </span>
                         </div>
                       )}
                       {receipt.dados_extraidos.valorTotal && (
@@ -426,7 +434,7 @@ const ReceiptList = () => {
                       )}
                       {receipt.dados_extraidos.dataCompra && (
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Data:</span>
+                          <span className="text-sm text-muted-foreground">Data e Hora:</span>
                           <span className="text-sm">
                             {new Date(receipt.dados_extraidos.dataCompra).toLocaleDateString('pt-BR')}
                             {receipt.dados_extraidos.horaCompra && ` às ${receipt.dados_extraidos.horaCompra}`}
