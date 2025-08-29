@@ -398,9 +398,11 @@ const EstoqueAtual = () => {
                           <p className="text-xs sm:text-sm font-bold text-foreground">
                             {parseFloat(item.quantidade.toString()).toFixed(2)} {item.unidade_medida}
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            Atualizado: {formatDate(item.updated_at)}
-                          </p>
+                          <div className="text-xs text-muted-foreground">
+                            <p>ATUALIZADO</p>
+                            <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
+                            <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
                         </div>
                       </div>
                     ))}
