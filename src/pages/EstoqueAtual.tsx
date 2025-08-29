@@ -199,6 +199,9 @@ const EstoqueAtual = () => {
     const quantidade = parseFloat(item.quantidade.toString());
     return sum + (preco * quantidade);
   }, 0);
+  
+  // Contagem real de produtos únicos considerando todas as categorias
+  const totalProdutosUnicos = Object.values(groupedEstoque).reduce((total, itens) => total + itens.length, 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -269,7 +272,7 @@ const EstoqueAtual = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-foreground">
-                  {estoque.length}
+                  {totalProdutosUnicos}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Tipos diferentes de produtos
