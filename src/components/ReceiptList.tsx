@@ -364,24 +364,12 @@ const ReceiptList = () => {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className={`${Capacitor.isNativePlatform() ? 'fixed inset-0 max-w-none max-h-none w-screen h-screen m-0 p-0 rounded-none border-0' : 'w-full h-screen sm:h-auto sm:max-w-2xl sm:max-h-[95vh]'} overflow-hidden flex flex-col`}>
-          <DialogHeader className={`flex-shrink-0 ${Capacitor.isNativePlatform() ? 'p-2' : 'p-4'} border-b bg-background`}>
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-base">
-                {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
-              </DialogTitle>
-              {Capacitor.isNativePlatform() && (
-                <Button variant="ghost" size="sm" onClick={() => setIsDialogOpen(false)} className="p-1">
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          </DialogHeader>
-          {selectedReceipt && (
-            <div className="flex-1 overflow-hidden">
-              {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
-                <div className="w-full h-full md:p-4 md:flex md:justify-center">
-                  <div className="w-full h-screen overflow-y-auto text-xs px-2 py-4 bg-white font-mono space-y-4 md:max-w-md md:mx-auto md:text-base md:border md:rounded-lg md:p-6 md:max-h-[80vh]">
+        <DialogContent className="p-0 m-0 w-full h-screen max-w-full rounded-none md:max-w-md md:rounded-lg md:p-6">
+          <div className="w-full h-full overflow-y-auto text-xs md:text-base">
+            {selectedReceipt && (
+              <>
+                {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
+                  <div className="bg-white font-mono space-y-4 p-4">
                     {/* Cabeçalho do Estabelecimento */}
                     <div className="text-center border-b pb-4">
                       <h2 className="font-bold text-lg uppercase">
@@ -449,50 +437,50 @@ const ReceiptList = () => {
                       <p>Via do Consumidor</p>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="p-4 space-y-6 h-full overflow-y-auto">
-                  <div>
-                    <h4 className="font-semibold mb-3">Informações Gerais</h4>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                        <span className="text-muted-foreground">Estabelecimento:</span>
-                        <span className="font-medium">{selectedReceipt.store_name || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                        <span className="text-muted-foreground">Total:</span>
-                        <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(selectedReceipt.total_amount)}</span>
-                      </div>
-                      {selectedReceipt.store_cnpj && (
-                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                          <span className="text-muted-foreground">CNPJ:</span>
-                          <span className="font-mono text-xs">{selectedReceipt.store_cnpj}</span>
-                        </div>
-                      )}
-                      {selectedReceipt.purchase_date && (
-                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                          <span className="text-muted-foreground">Data da compra:</span>
-                          <span>{new Date(selectedReceipt.purchase_date).toLocaleDateString('pt-BR')}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                        <span className="text-muted-foreground">Status:</span>
-                        <span>{getStatusBadge(selectedReceipt.status)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  {selectedReceipt.imagem_url && selectedReceipt.file_type !== 'PDF' && (
+                ) : (
+                  <div className="p-4 space-y-6 h-full overflow-y-auto">
                     <div>
-                      <h4 className="font-semibold mb-3">Imagem da Nota</h4>
-                      <div className="border rounded-lg overflow-hidden">
-                        <img src={selectedReceipt.imagem_url} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer" onClick={() => window.open(selectedReceipt.imagem_url!, '_blank')} />
+                      <h4 className="font-semibold mb-3">Informações Gerais</h4>
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                          <span className="text-muted-foreground">Estabelecimento:</span>
+                          <span className="font-medium">{selectedReceipt.store_name || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                          <span className="text-muted-foreground">Total:</span>
+                          <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(selectedReceipt.total_amount)}</span>
+                        </div>
+                        {selectedReceipt.store_cnpj && (
+                          <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                            <span className="text-muted-foreground">CNPJ:</span>
+                            <span className="font-mono text-xs">{selectedReceipt.store_cnpj}</span>
+                          </div>
+                        )}
+                        {selectedReceipt.purchase_date && (
+                          <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                            <span className="text-muted-foreground">Data da compra:</span>
+                            <span>{new Date(selectedReceipt.purchase_date).toLocaleDateString('pt-BR')}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                          <span className="text-muted-foreground">Status:</span>
+                          <span>{getStatusBadge(selectedReceipt.status)}</span>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                    {selectedReceipt.imagem_url && selectedReceipt.file_type !== 'PDF' && (
+                      <div>
+                        <h4 className="font-semibold mb-3">Imagem da Nota</h4>
+                        <div className="border rounded-lg overflow-hidden">
+                          <img src={selectedReceipt.imagem_url} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer" onClick={() => window.open(selectedReceipt.imagem_url!, '_blank')} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
