@@ -237,9 +237,9 @@ const EstoqueAtual = () => {
       </div>
       
       <div className="container mx-auto p-6">
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Header da página */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <h1 className="text-3xl font-bold text-foreground">Estoque Atual</h1>
               <p className="text-muted-foreground mt-1">
@@ -256,7 +256,7 @@ const EstoqueAtual = () => {
           </div>
 
           {/* Cards de resumo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <Card className="md:col-span-2 lg:col-span-1">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -264,7 +264,7 @@ const EstoqueAtual = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => (
                     <div key={categoria} className="flex justify-between items-center text-sm">
                       <span className="capitalize text-muted-foreground">{categoria}</span>
@@ -320,7 +320,7 @@ const EstoqueAtual = () => {
           </div>
 
           {/* Lista de produtos por categoria */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {Object.entries(groupedEstoque).map(([categoria, itens]) => (
               <Card key={categoria}>
                 <CardHeader>
@@ -334,9 +334,9 @@ const EstoqueAtual = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {itens.map((item) => (
-                      <div key={item.id} className="flex justify-between items-center py-3 border-b border-border last:border-0">
+                      <div key={item.id} className="flex justify-between items-center py-2 border-b border-border last:border-0">
                         <div className="flex-1">
                           <h3 className="font-medium text-foreground">
                             {item.produto_nome}
