@@ -580,10 +580,17 @@ const EstoqueAtual = () => {
                            onClick={() => modoEdicao && abrirModalEdicao(item)}
                          >
                            <div className="flex-1 overflow-hidden">
-                             <h3 className="text-xs font-medium text-foreground leading-tight">
-                               {item.produto_nome}
-                               {modoEdicao && <span className="ml-2 text-blue-600 text-xs">(clique para editar)</span>}
-                             </h3>
+                              <h3 className="text-xs font-medium text-foreground leading-tight">
+                                {item.produto_nome}
+                                {modoEdicao && (
+                                  <span className="ml-2 text-xs inline-flex items-center gap-0.5">
+                                    <span>👉</span>
+                                    <span className="text-red-500 font-bold">+</span>
+                                    <span>/</span>
+                                    <span className="text-red-500 font-bold">−</span>
+                                  </span>
+                                )}
+                              </h3>
                             <p className="text-xs text-muted-foreground space-y-1">
                               {item.preco_unitario_ultimo && (
                                 <>
