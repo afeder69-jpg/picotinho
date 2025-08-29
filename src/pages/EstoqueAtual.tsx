@@ -21,6 +21,7 @@ interface EstoqueItem {
 
 const EstoqueAtual = () => {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  const [precosAtuais, setPrecosAtuais] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>('');
   const { toast } = useToast();
@@ -28,7 +29,22 @@ const EstoqueAtual = () => {
 
   useEffect(() => {
     loadEstoque();
+    loadPrecosAtuais();
   }, []);
+
+  const loadPrecosAtuais = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('precos_atuais')
+        .select('*')
+        .order('produto_nome', { ascending: true });
+
+      if (error) throw error;
+      setPrecosAtuais(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar preços atuais:', error);
+    }
+  };
 
   const loadEstoque = async () => {
     try {
@@ -282,16 +298,47 @@ const EstoqueAtual = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
-                  {subtotaisPorCategoria.map(({ categoria, subtotal }) => (
-                    <div key={categoria} className="flex justify-between items-center text-xs sm:text-sm gap-1">
-                      <span className="capitalize text-muted-foreground flex-1">{categoria}</span>
-                      <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
-                    </div>
-                  ))}
+                  {/* Cabeçalho das colunas */}
+                  <div className="grid grid-cols-3 gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
+                    <span>Categoria</span>
+                    <span className="text-center">Estoque</span>
+                    <span className="text-center">Mercado</span>
+                  </div>
+                  
+                  {subtotaisPorCategoria.map(({ categoria, subtotal }) => {
+                    // Buscar preços atuais para esta categoria
+                    const precosCategoria = precosAtuais.filter(preco => 
+                      preco.produto_nome && estoque.some(item => 
+                        item.categoria === categoria && 
+                        item.produto_nome.toLowerCase().includes(preco.produto_nome.toLowerCase())
+                      )
+                    );
+                    
+                    const precoMedioCategoria = precosCategoria.length > 0 
+                      ? precosCategoria.reduce((sum, p) => sum + (p.valor_unitario || 0), 0) / precosCategoria.length
+                      : 0;
+                    
+                    return (
+                      <div key={categoria} className="grid grid-cols-3 gap-1 text-xs sm:text-sm items-center py-1">
+                        <span className="capitalize text-muted-foreground">{categoria}</span>
+                        <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
+                        <span className="font-medium text-blue-600 text-center">
+                          {precoMedioCategoria > 0 ? formatCurrency(precoMedioCategoria) : '-'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  
                   <div className="border-t pt-2 mt-2">
-                    <div className="flex justify-between items-center font-bold">
-                      <span className="text-sm text-foreground">Total</span>
-                      <span className="text-sm sm:text-lg text-foreground">{formatCurrency(valorTotalEstoque)}</span>
+                    <div className="grid grid-cols-3 gap-1 font-bold text-sm">
+                      <span className="text-foreground">Total</span>
+                      <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
+                      <span className="text-blue-600 text-center">
+                        {precosAtuais.length > 0 
+                          ? formatCurrency(precosAtuais.reduce((sum, p) => sum + (p.valor_unitario || 0), 0) / precosAtuais.length)
+                          : '-'
+                        }
+                      </span>
                     </div>
                   </div>
                 </div>
