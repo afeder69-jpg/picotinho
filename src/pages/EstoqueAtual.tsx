@@ -197,8 +197,8 @@ const EstoqueAtual = () => {
         <div className="container mx-auto p-6">
           <div className="text-center p-8">
             <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-2xl font-bold mb-2 text-foreground">Estoque Vazio</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-lg sm:text-2xl font-bold mb-2 text-foreground">Estoque Vazio</h2>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Seu estoque será preenchido automaticamente quando você processar notas fiscais com IA
             </p>
           </div>
@@ -258,8 +258,8 @@ const EstoqueAtual = () => {
           {/* Header da página */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Estoque Atual</h1>
-              <p className="text-muted-foreground mt-1">
+              <h1 className="text-xl sm:text-3xl font-bold text-foreground">Estoque Atual</h1>
+              <p className="text-sm text-muted-foreground mt-1">
                 Controle automático baseado nas suas notas fiscais
               </p>
             </div>
@@ -276,22 +276,22 @@ const EstoqueAtual = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <Card className="md:col-span-2 lg:col-span-1">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                   Valores por Categoria
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => (
-                    <div key={categoria} className="flex justify-between items-center text-sm">
+                    <div key={categoria} className="flex justify-between items-center text-xs sm:text-sm">
                       <span className="capitalize text-muted-foreground">{categoria}</span>
                       <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
                     </div>
                   ))}
                   <div className="border-t pt-2 mt-2">
                     <div className="flex justify-between items-center font-bold">
-                      <span className="text-foreground">Total</span>
-                      <span className="text-lg text-foreground">{formatCurrency(valorTotalEstoque)}</span>
+                      <span className="text-sm text-foreground">Total</span>
+                      <span className="text-sm sm:text-lg text-foreground">{formatCurrency(valorTotalEstoque)}</span>
                     </div>
                   </div>
                 </div>
@@ -300,17 +300,17 @@ const EstoqueAtual = () => {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                   Itens no Estoque
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground mb-4">
+                <div className="text-lg sm:text-2xl font-bold text-foreground mb-4">
                   {totalProdutosUnicos}
                 </div>
                 <div className="border-t pt-3">
-                  <div className="text-sm text-muted-foreground mb-1">Categorias</div>
-                  <div className="text-xl font-bold text-foreground">
+                  <div className="text-xs sm:text-sm text-muted-foreground mb-1">Categorias</div>
+                  <div className="text-base sm:text-xl font-bold text-foreground">
                     {Object.keys(groupedEstoque).length}
                   </div>
                 </div>
@@ -370,7 +370,7 @@ const EstoqueAtual = () => {
                     <Badge variant="outline" className={getCategoriaColor(categoria)}>
                       {categoria.charAt(0).toUpperCase() + categoria.slice(1)}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs sm:text-sm text-muted-foreground">
                       {itens.length} {itens.length === 1 ? 'produto' : 'produtos'}
                     </span>
                   </div>
@@ -380,10 +380,10 @@ const EstoqueAtual = () => {
                     {itens.map((item) => (
                       <div key={item.id} className="flex justify-between items-center py-2 border-b border-border last:border-0">
                         <div className="flex-1">
-                          <h3 className="font-medium text-foreground">
+                          <h3 className="text-sm sm:text-base font-medium text-foreground">
                             {item.produto_nome}
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs sm:text-sm text-muted-foreground">
                             {item.preco_unitario_ultimo && (
                               <>
                                 {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida}
@@ -395,7 +395,7 @@ const EstoqueAtual = () => {
                         </div>
                         
                         <div className="text-right">
-                          <p className="text-lg font-bold text-foreground">
+                          <p className="text-sm sm:text-lg font-bold text-foreground">
                             {parseFloat(item.quantidade.toString()).toFixed(2)} {item.unidade_medida}
                           </p>
                           <p className="text-xs text-muted-foreground">
