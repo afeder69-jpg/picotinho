@@ -11,6 +11,8 @@ import Auth from "./pages/Auth";
 import EstoqueAtual from "./pages/EstoqueAtual";
 import NotFound from "./pages/NotFound";
 
+console.log("App.tsx carregando...");
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -20,28 +22,36 @@ const queryClient = new QueryClient({
   },
 });
 
+console.log("QueryClient criado");
+
 const App = () => {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/menu" element={<Menu />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/screenshots" element={<Screenshots />} />
-              <Route path="/estoque" element={<EstoqueAtual />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
+  console.log("App renderizando...");
+  
+  try {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/menu" element={<Menu />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/screenshots" element={<Screenshots />} />
+                <Route path="/estoque" element={<EstoqueAtual />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+  } catch (error) {
+    console.error("Erro no App:", error);
+    return <div>Erro na aplicação: {error.message}</div>;
+  }
 };
 
 export default App;
