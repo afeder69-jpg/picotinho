@@ -63,7 +63,10 @@ const ReceiptList = () => {
         .map(nota => {
           const dadosExtraidos = nota.dados_extraidos as any;
           const fileName = nota.imagem_path ? nota.imagem_path.split('/').pop() : 'Arquivo sem nome';
-          const lojaNome = dadosExtraidos?.loja?.nome || fileName || 'Nota enviada';
+          // Se estiver processada, usar nome da loja; caso contrário, usar fileName
+          const lojaNome = nota.processada && dadosExtraidos?.loja?.nome 
+            ? dadosExtraidos.loja.nome 
+            : (dadosExtraidos?.loja?.nome || fileName || 'Nota enviada');
           const valorTotal = dadosExtraidos?.valorTotal || null;
           const dataCompra = dadosExtraidos?.dataCompra || null;
           const horaCompra = dadosExtraidos?.horaCompra || null;
