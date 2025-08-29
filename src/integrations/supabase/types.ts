@@ -624,6 +624,39 @@ export type Database = {
         }
         Relationships: []
       }
+      precos_atuais: {
+        Row: {
+          created_at: string
+          data_atualizacao: string
+          estabelecimento_cnpj: string
+          estabelecimento_nome: string
+          id: string
+          produto_codigo: string | null
+          produto_nome: string
+          valor_unitario: number
+        }
+        Insert: {
+          created_at?: string
+          data_atualizacao?: string
+          estabelecimento_cnpj: string
+          estabelecimento_nome: string
+          id?: string
+          produto_codigo?: string | null
+          produto_nome: string
+          valor_unitario: number
+        }
+        Update: {
+          created_at?: string
+          data_atualizacao?: string
+          estabelecimento_cnpj?: string
+          estabelecimento_nome?: string
+          id?: string
+          produto_codigo?: string | null
+          produto_nome?: string
+          valor_unitario?: number
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           created_at: string | null

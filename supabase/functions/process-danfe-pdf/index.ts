@@ -473,6 +473,26 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 categoria: categoria || 'outros'
               });
 
+            // Atualizar tabela precos_atuais
+            if (descricao && valor_unitario && dadosEstruturados.estabelecimento?.cnpj) {
+              try {
+                await supabase
+                  .from('precos_atuais')
+                  .upsert({
+                    produto_codigo: codigo || null,
+                    produto_nome: descricao,
+                    estabelecimento_cnpj: dadosEstruturados.estabelecimento.cnpj,
+                    estabelecimento_nome: dadosEstruturados.estabelecimento.nome || 'Não informado',
+                    valor_unitario: valor_unitario,
+                    data_atualizacao: new Date().toISOString()
+                  }, {
+                    onConflict: 'produto_codigo,estabelecimento_cnpj'
+                  });
+              } catch (precoError) {
+                console.error('Erro ao atualizar preços atuais:', precoError);
+              }
+            }
+
             console.log(`✅ Item da nota salvo: ${descricao}`);
           } catch (itemError) {
             console.error("❌ Erro ao salvar item da nota:", item, itemError);

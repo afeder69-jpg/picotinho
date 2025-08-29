@@ -560,6 +560,28 @@ serve(async (req) => {
       await supabase
         .from('itens_nota')
         .insert(itensParaSalvar);
+
+      // Atualizar tabela precos_atuais para cada produto
+      for (const produto of extractedData.produtos) {
+        if (produto.nome && produto.precoUnitario && extractedData.estabelecimento?.cnpj) {
+          try {
+            await supabase
+              .from('precos_atuais')
+              .upsert({
+                produto_codigo: produto.codigo || null,
+                produto_nome: produto.nome || produto.descricao || 'Produto não identificado',
+                estabelecimento_cnpj: extractedData.estabelecimento.cnpj,
+                estabelecimento_nome: extractedData.estabelecimento.nome || 'Não informado',
+                valor_unitario: produto.precoUnitario,
+                data_atualizacao: new Date().toISOString()
+              }, {
+                onConflict: 'produto_codigo,estabelecimento_cnpj'
+              });
+          } catch (precoError) {
+            console.error('Erro ao atualizar preços atuais:', precoError);
+          }
+        }
+      }
     }
 
     // Atualiza compra_id na nota de imagem e marca como processada
