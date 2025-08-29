@@ -529,6 +529,39 @@ serve(async (req) => {
       }
     }
 
+    // Salva na tabela notas_fiscais
+    const { data: notaFiscal } = await supabase
+      .from('notas_fiscais')
+      .insert({
+        user_id: notaImagem.usuario_id,
+        mercado: extractedData.estabelecimento?.nome || null,
+        bairro: extractedData.estabelecimento?.endereco || null,
+        cnpj: extractedData.estabelecimento?.cnpj || null,
+        data_compra: extractedData.compra?.dataCompra || new Date().toISOString(),
+        valor_total: extractedData.compra?.precoTotal || 0,
+        qtd_itens: extractedData.produtos?.length || 0
+      })
+      .select()
+      .single();
+
+    // Salva itens na tabela itens_nota
+    if (notaFiscal && extractedData.produtos?.length > 0) {
+      const itensParaSalvar = extractedData.produtos.map(produto => ({
+        nota_id: notaFiscal.id,
+        descricao: produto.nome || produto.descricao || 'Produto não identificado',
+        codigo: produto.codigo || null,
+        quantidade: produto.quantidade || 1,
+        unidade: produto.unidadeMedida || 'UN',
+        valor_unitario: produto.precoUnitario || 0,
+        valor_total: produto.precoTotal || 0,
+        categoria: produto.categoria || 'outros'
+      }));
+
+      await supabase
+        .from('itens_nota')
+        .insert(itensParaSalvar);
+    }
+
     // Atualiza compra_id na nota de imagem e marca como processada
     await supabase
       .from('notas_imagens')
@@ -545,6 +578,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         compraId: compra.id,
+        notaFiscalId: notaFiscal?.id,
         produtosProcessados: extractedData.produtos?.length || 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

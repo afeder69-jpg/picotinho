@@ -334,6 +334,53 @@ export type Database = {
           },
         ]
       }
+      itens_nota: {
+        Row: {
+          categoria: string | null
+          codigo: string | null
+          created_at: string
+          descricao: string
+          id: string
+          nota_id: string
+          quantidade: number | null
+          unidade: string | null
+          valor_total: number | null
+          valor_unitario: number | null
+        }
+        Insert: {
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          descricao: string
+          id?: string
+          nota_id: string
+          quantidade?: number | null
+          unidade?: string | null
+          valor_total?: number | null
+          valor_unitario?: number | null
+        }
+        Update: {
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          descricao?: string
+          id?: string
+          nota_id?: string
+          quantidade?: number | null
+          unidade?: string | null
+          valor_total?: number | null
+          valor_unitario?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "itens_nota_nota_id_fkey"
+            columns: ["nota_id"]
+            isOneToOne: false
+            referencedRelation: "notas_fiscais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mercados: {
         Row: {
           cidade: string | null
@@ -435,7 +482,9 @@ export type Database = {
       }
       notas_fiscais: {
         Row: {
+          bairro: string | null
           chave_acesso: string | null
+          cnpj: string | null
           created_at: string | null
           criado_em: string
           data_compra: string | null
@@ -443,11 +492,15 @@ export type Database = {
           imagem_url: string | null
           mercado: string | null
           qr_url: string | null
+          qtd_itens: number | null
+          updated_at: string | null
           user_id: string | null
           valor_total: number | null
         }
         Insert: {
+          bairro?: string | null
           chave_acesso?: string | null
+          cnpj?: string | null
           created_at?: string | null
           criado_em?: string
           data_compra?: string | null
@@ -455,11 +508,15 @@ export type Database = {
           imagem_url?: string | null
           mercado?: string | null
           qr_url?: string | null
+          qtd_itens?: number | null
+          updated_at?: string | null
           user_id?: string | null
           valor_total?: number | null
         }
         Update: {
+          bairro?: string | null
           chave_acesso?: string | null
+          cnpj?: string | null
           created_at?: string | null
           criado_em?: string
           data_compra?: string | null
@@ -467,6 +524,8 @@ export type Database = {
           imagem_url?: string | null
           mercado?: string | null
           qr_url?: string | null
+          qtd_itens?: number | null
+          updated_at?: string | null
           user_id?: string | null
           valor_total?: number | null
         }
