@@ -135,8 +135,100 @@ const ReceiptList = () => {
   };
 
   const viewReceipt = (receipt: Receipt) => {
-    setSelectedReceipt(receipt);
-    setIsDialogOpen(true);
+    // Se for cupom fiscal processado, abrir em nova janela
+    if (receipt.dados_extraidos && receipt.processada) {
+      openReceiptInNewWindow(receipt);
+    } else {
+      setSelectedReceipt(receipt);
+      setIsDialogOpen(true);
+    }
+  };
+
+  const openReceiptInNewWindow = (receipt: Receipt) => {
+    const cupomHtml = generateCupomHtml(receipt);
+    const newWindow = window.open('', '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
+    if (newWindow) {
+      newWindow.document.write(cupomHtml);
+      newWindow.document.close();
+    }
+  };
+
+  const generateCupomHtml = (receipt: Receipt) => {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cupom Fiscal Digital</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { 
+              font-family: 'Courier New', monospace; 
+              font-size: 12px; 
+              margin: 10px; 
+              background: white; 
+              color: black;
+              line-height: 1.4;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .border-bottom { border-bottom: 1px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
+            .border-top { border-top: 1px solid #000; padding-top: 8px; margin-top: 8px; }
+            .item { margin: 8px 0; padding: 4px 0; border-bottom: 1px dashed #ccc; }
+            .item:last-child { border-bottom: none; }
+            .flex { display: flex; justify-content: space-between; }
+            .total { font-size: 16px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="center border-bottom">
+            <h2 class="bold">${receipt.dados_extraidos.estabelecimento?.nome || receipt.dados_extraidos.loja?.nome || 'ESTABELECIMENTO'}</h2>
+            <p>CNPJ: ${receipt.dados_extraidos.estabelecimento?.cnpj || receipt.dados_extraidos.loja?.cnpj || 'N/A'}</p>
+            <p>${receipt.dados_extraidos.estabelecimento?.endereco || receipt.dados_extraidos.loja?.endereco || 'Endereço não informado'}</p>
+          </div>
+          
+          <div class="center border-bottom">
+            <p class="bold">Nota Fiscal de Consumidor Eletrônica</p>
+            <div class="flex">
+              <span>Número: ${receipt.dados_extraidos.compra?.numero || receipt.dados_extraidos.numeroNota || 'N/A'}</span>
+              <span>Série: ${receipt.dados_extraidos.compra?.serie || receipt.dados_extraidos.serie || 'N/A'}</span>
+            </div>
+            <p>Data: ${receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || 'N/A'}</p>
+          </div>
+          
+          <div>
+            <p class="bold center">ITENS</p>
+            ${receipt.dados_extraidos.itens?.map((item: any, index: number) => `
+              <div class="item">
+                <div>
+                  <p class="bold">${item.descricao || item.nome}</p>
+                  ${item.codigo ? `<p>Cód: ${item.codigo}</p>` : ''}
+                </div>
+                <div class="flex">
+                  <span>Qtd: ${item.quantidade} ${item.unidade || ''}</span>
+                  <span>Unit: ${formatCurrency(item.valor_unitario || item.preco)}</span>
+                  <span class="bold">Total: ${formatCurrency(item.valor_total || item.preco)}</span>
+                </div>
+              </div>
+            `).join('') || ''}
+          </div>
+          
+          <div class="border-top">
+            <div class="flex total">
+              <span>TOTAL:</span>
+              <span>${formatCurrency(receipt.dados_extraidos.compra?.valor_total || receipt.dados_extraidos.valorTotal || receipt.total_amount)}</span>
+            </div>
+            <div class="center">
+              <p>Forma de Pagamento: ${receipt.dados_extraidos.compra?.forma_pagamento || receipt.dados_extraidos.formaPagamento || 'N/A'}</p>
+            </div>
+          </div>
+          
+          <div class="center border-top">
+            <p>Via do Consumidor</p>
+          </div>
+        </body>
+      </html>
+    `;
   };
 
   const processReceiptWithAI = async (receipt: Receipt) => {
@@ -364,12 +456,11 @@ const ReceiptList = () => {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="fixed inset-0 w-full h-full max-w-full p-0 m-0 rounded-none border-0 md:relative md:w-auto md:max-w-2xl md:h-auto md:rounded-lg md:border">
+        <DialogContent className="p-0 m-0 w-full h-full max-w-full rounded-none overflow-hidden text-xs md:relative md:max-w-md md:rounded-lg md:p-6 md:text-base">
           <DialogTitle className="sr-only">
             {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
           </DialogTitle>
-          <div className="w-full h-full overflow-y-auto px-4 py-4 text-xs md:text-base md:px-6"
-               style={{ maxHeight: "100vh" }}>
+          <div className="w-full h-full overflow-y-auto px-2 py-2 md:px-6 md:py-4">
             {selectedReceipt && (
               <>
                 {selectedReceipt.dados_extraidos && selectedReceipt.processada ? (
