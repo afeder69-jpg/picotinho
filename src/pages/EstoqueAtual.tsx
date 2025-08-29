@@ -274,7 +274,7 @@ const EstoqueAtual = () => {
             <Card className="md:col-span-2 lg:col-span-1">
               <CardHeader className="pb-2">
                 <div className="text-center mb-3">
-                  <p className="text-xs font-bold text-green-600">Valores em Estoque</p>
+                  <p className="text-sm font-bold text-green-600">Valores em Estoque</p>
                 </div>
                 <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                   Valores por Categoria
@@ -283,9 +283,9 @@ const EstoqueAtual = () => {
               <CardContent>
                 <div className="space-y-1">
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => (
-                    <div key={categoria} className="flex justify-between items-center text-xs sm:text-sm gap-4">
+                    <div key={categoria} className="flex justify-between items-center text-xs sm:text-sm gap-1">
                       <span className="capitalize text-muted-foreground flex-1">{categoria}</span>
-                      <span className="font-medium text-foreground ml-2">{formatCurrency(subtotal)}</span>
+                      <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
                     </div>
                   ))}
                   <div className="border-t pt-2 mt-2">
