@@ -386,9 +386,8 @@ const EstoqueAtual = () => {
                           <p className="text-xs text-muted-foreground">
                             {item.preco_unitario_ultimo && (
                               <>
-                                {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida}
-                                {' • '}
-                                Subtotal: {formatCurrency((item.preco_unitario_ultimo * parseFloat(item.quantidade.toString())))}
+                                <div>{formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida}</div>
+                                <div>Subtotal: {formatCurrency((item.preco_unitario_ultimo * parseFloat(item.quantidade.toString())))}</div>
                               </>
                             )}
                           </p>
