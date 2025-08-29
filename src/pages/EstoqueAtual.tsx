@@ -379,8 +379,8 @@ const EstoqueAtual = () => {
                   <div className="space-y-1">
                     {itens.map((item) => (
                       <div key={item.id} className="flex justify-between items-center py-1 border-b border-border last:border-0">
-                        <div className="flex-1">
-                          <h3 className="text-xs sm:text-sm font-medium text-foreground">
+                        <div className="flex-1 min-w-0 pr-2">
+                          <h3 className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                             {item.produto_nome}
                           </h3>
                           <p className="text-xs text-muted-foreground">
@@ -394,7 +394,7 @@ const EstoqueAtual = () => {
                           </p>
                         </div>
                         
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0">
                           <p className="text-xs sm:text-sm font-bold text-foreground">
                             {parseFloat(item.quantidade.toString()).toFixed(2)} {item.unidade_medida}
                           </p>
