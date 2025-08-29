@@ -375,10 +375,10 @@ const EstoqueAtual = () => {
                     </span>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
+                <CardContent className="py-3">
+                  <div className="space-y-1">
                     {itens.map((item) => (
-                      <div key={item.id} className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                      <div key={item.id} className="flex justify-between items-center py-1 border-b border-border last:border-0">
                         <div className="flex-1">
                           <h3 className="text-xs sm:text-sm font-medium text-foreground">
                             {item.produto_nome}
