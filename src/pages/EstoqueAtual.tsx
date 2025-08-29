@@ -467,7 +467,7 @@ const EstoqueAtual = () => {
                           
                           <div className="text-right ml-2 flex-shrink-0">
                             <p className="text-xs sm:text-sm font-bold text-foreground">
-                              {quantidade.toFixed(2)} {item.unidade_medida}
+                              {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
                             </p>
                             <div className="text-xs text-muted-foreground">
                               <p>ATUALIZADO</p>
