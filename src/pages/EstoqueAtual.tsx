@@ -198,14 +198,16 @@ const EstoqueAtual = () => {
   // Contagem real de produtos únicos considerando todas as categorias
   const totalProdutosUnicos = Object.values(groupedEstoque).reduce((total, itens) => total + itens.length, 0);
   
-  // Calcular subtotais por categoria
+  // Calcular subtotais por categoria com arredondamento correto
   const subtotaisPorCategoria = Object.entries(groupedEstoque).map(([categoria, itens]) => {
     const subtotal = itens.reduce((sum, item) => {
       const preco = item.preco_unitario_ultimo || 0;
       const quantidade = parseFloat(item.quantidade.toString());
-      return sum + parseFloat((preco * quantidade).toFixed(2));
+      // Arredondar cada produto individualmente para 2 casas decimais
+      const subtotalItem = Math.round((preco * quantidade) * 100) / 100;
+      return sum + subtotalItem;
     }, 0);
-    return { categoria, subtotal: parseFloat(subtotal.toFixed(2)) };
+    return { categoria, subtotal: Math.round(subtotal * 100) / 100 };
   }).sort((a, b) => b.subtotal - a.subtotal);
   
   const valorTotalEstoque = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotal, 0);
