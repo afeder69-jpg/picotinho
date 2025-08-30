@@ -41,6 +41,8 @@ Deno.serve(async (req) => {
       throw new Error('Token da API do WhatsApp não configurado')
     }
 
+    console.log('🔑 Token configurado, comprimento:', whatsappToken.length)
+
     // Formatar número para envio (assumindo formato brasileiro)
     const numeroFormatado = formatPhoneNumber(numeroWhatsApp)
     
