@@ -632,9 +632,17 @@ const EstoqueAtual = () => {
                                 )}
                               </div>
                               
-                              <div className="text-xs text-blue-600 font-medium text-right ml-2 flex-shrink-0">
-                                <div>{new Date(item.updated_at).toLocaleDateString('pt-BR')} {new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
-                              </div>
+                               <div className="text-xs text-muted-foreground text-right ml-2 flex-shrink-0">
+                                 {precoAtual ? (
+                                   <div>
+                                     {new Date(precoAtual.data_atualizacao).toLocaleDateString('pt-BR')} {new Date(precoAtual.data_atualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                   </div>
+                                 ) : (
+                                   <div>
+                                     {new Date(item.updated_at).toLocaleDateString('pt-BR')} {new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                   </div>
+                                 )}
+                               </div>
                             </div>
                           </div>
                         );
