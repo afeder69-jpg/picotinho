@@ -57,6 +57,15 @@ export default function WhatsAppConfig() {
     
     setLoading(true);
     try {
+      // Verificar se é a primeira vez que o usuário cadastra o número
+      const { data: configExistente } = await supabase
+        .from('whatsapp_configuracoes')
+        .select('id')
+        .eq('usuario_id', user.id)
+        .maybeSingle();
+
+      const ehPrimeiroSalvamento = !configExistente;
+
       const dadosConfig = {
         usuario_id: user.id,
         numero_whatsapp: numeroWhatsApp.trim(),
@@ -70,6 +79,31 @@ export default function WhatsAppConfig() {
       if (error) throw error;
 
       toast.success("Número do WhatsApp salvo com sucesso!");
+      
+      // Se é o primeiro salvamento, enviar mensagem de boas-vindas
+      if (ehPrimeiroSalvamento) {
+        try {
+          console.log('📱 Enviando mensagem de boas-vindas...');
+          
+          const { error: errorBoasVindas } = await supabase.functions.invoke('send-welcome-whatsapp', {
+            body: {
+              numeroWhatsApp: numeroWhatsApp.trim(),
+              nomeUsuario: user.user_metadata?.nome || user.email?.split('@')[0]
+            }
+          });
+
+          if (errorBoasVindas) {
+            console.error('Erro ao enviar boas-vindas:', errorBoasVindas);
+            toast.success("Número salvo! Mensagem de boas-vindas será enviada em breve.");
+          } else {
+            toast.success("Número salvo e mensagem de boas-vindas enviada! 🎉");
+          }
+        } catch (boasVindasError) {
+          console.error('Erro na mensagem de boas-vindas:', boasVindasError);
+          toast.success("Número salvo! Mensagem de boas-vindas será enviada em breve.");
+        }
+      }
+      
       loadConfig();
     } catch (error) {
       console.error('Erro ao salvar configuração:', error);
