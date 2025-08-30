@@ -248,53 +248,100 @@ serve(async (req) => {
 
     console.log('Dados extraídos e validados:', extractedData);
 
-    // Busca ou cria supermercado
+    // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
+    // Busca ou cria supermercado automaticamente com dados completos
     let supermercado;
-    if (extractedData.supermercado?.cnpj) {
-      const { data: existingSupermercado } = await supabase
-        .from('supermercados')
-        .select('*')
-        .eq('cnpj', extractedData.supermercado.cnpj)
-        .single();
-
-      if (existingSupermercado) {
-        supermercado = existingSupermercado;
-      } else {
-        const { data: newSupermercado, error: supermercadoError } = await supabase
+    
+    // Extrair dados do supermercado das diferentes estruturas possíveis
+    const estabelecimentoData = extractedData.supermercado || 
+                               extractedData.estabelecimento || 
+                               extractedData.emitente || 
+                               {};
+    
+    const cnpjOriginal = estabelecimentoData.cnpj;
+    
+    if (cnpjOriginal) {
+      // Normalizar CNPJ (remover pontuação)
+      const cnpjLimpo = cnpjOriginal.replace(/[^\d]/g, '');
+      
+      console.log(`🔍 Processando supermercado - CNPJ: ${cnpjLimpo} (original: ${cnpjOriginal})`);
+      
+      if (cnpjLimpo.length >= 14) {
+        // Buscar supermercado existente por CNPJ normalizado
+        const { data: existingSupermercado } = await supabase
           .from('supermercados')
-          .insert({
-            nome: extractedData.supermercado.nome,
-            cnpj: extractedData.supermercado.cnpj,
-            endereco: extractedData.supermercado.endereco
-          })
-          .select()
+          .select('*')
+          .eq('cnpj', cnpjLimpo)
           .single();
 
-        if (supermercadoError) throw supermercadoError;
-        supermercado = newSupermercado;
-        
-        // Geocodificar endereço do novo supermercado em background
-        try {
-          await fetch(`${supabaseUrl}/functions/v1/geocodificar-endereco`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              supermercadoId: newSupermercado.id,
-              endereco: extractedData.supermercado.endereco,
-              cidade: extractedData.supermercado.cidade,
-              estado: extractedData.supermercado.estado,
-              cep: extractedData.supermercado.cep
-            })
-          });
-          console.log('✅ Geocodificação iniciada para novo supermercado');
-        } catch (geoError) {
-          console.error('⚠️ Erro ao iniciar geocodificação:', geoError);
-          // Não bloquear o processamento por erro de geocodificação
+        if (existingSupermercado) {
+          console.log(`✅ Supermercado encontrado: ${existingSupermercado.nome}`);
+          supermercado = existingSupermercado;
+        } else {
+          // Criar novo supermercado automaticamente
+          console.log(`🆕 Criando novo supermercado: ${estabelecimentoData.nome}`);
+          
+          const novoSupermercadoData = {
+            nome: estabelecimentoData.nome || 'Estabelecimento',
+            cnpj: cnpjLimpo, // CNPJ normalizado
+            endereco: estabelecimentoData.endereco || null,
+            cidade: estabelecimentoData.cidade || null,
+            estado: estabelecimentoData.estado || null,
+            cep: estabelecimentoData.cep || null,
+            ativo: true
+          };
+          
+          const { data: newSupermercado, error: supermercadoError } = await supabase
+            .from('supermercados')
+            .insert(novoSupermercadoData)
+            .select()
+            .single();
+
+          if (supermercadoError) {
+            console.error('❌ Erro ao criar supermercado:', supermercadoError);
+            throw supermercadoError;
+          }
+          
+          supermercado = newSupermercado;
+          console.log(`✅ Supermercado criado: ID=${newSupermercado.id}, Nome=${newSupermercado.nome}`);
+          
+          // Geocodificar endereço do novo supermercado em background
+          try {
+            const enderecoCompleto = [
+              estabelecimentoData.endereco,
+              estabelecimentoData.cidade,
+              estabelecimentoData.estado,
+              estabelecimentoData.cep
+            ].filter(Boolean).join(', ');
+            
+            if (enderecoCompleto.trim()) {
+              console.log(`🌍 Iniciando geocodificação para: ${enderecoCompleto}`);
+              
+              await fetch(`${supabaseUrl}/functions/v1/geocodificar-endereco`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${supabaseServiceKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  supermercadoId: newSupermercado.id,
+                  endereco: enderecoCompleto
+                })
+              });
+              console.log('✅ Geocodificação iniciada para novo supermercado');
+            } else {
+              console.log('⚠️ Endereço insuficiente para geocodificação');
+            }
+          } catch (geoError) {
+            console.error('⚠️ Erro ao iniciar geocodificação:', geoError);
+            // Não bloquear o processamento por erro de geocodificação
+          }
         }
+      } else {
+        console.log(`❌ CNPJ inválido: ${cnpjLimpo} (length: ${cnpjLimpo.length})`);
       }
+    } else {
+      console.log('⚠️ Nenhum CNPJ encontrado nos dados extraídos');
     }
 
 

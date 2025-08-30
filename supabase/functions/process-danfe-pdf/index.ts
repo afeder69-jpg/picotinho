@@ -238,39 +238,75 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
 
-      // 🏪 Criar/buscar supermercado
+      // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
       if (dadosEstruturados.estabelecimento) {
-        const { nome, cnpj, endereco } = dadosEstruturados.estabelecimento;
+        const { nome, cnpj: cnpjOriginal, endereco } = dadosEstruturados.estabelecimento;
         
-        // Buscar supermercado existente
-        let { data: supermercadoExistente } = await supabase
-          .from('supermercados')
-          .select('id')
-          .eq('cnpj', cnpj)
-          .single();
+        if (cnpjOriginal) {
+          // Normalizar CNPJ (remover pontuação)
+          const cnpjLimpo = cnpjOriginal.replace(/[^\d]/g, '');
+          
+          console.log(`🔍 Processando supermercado PDF - CNPJ: ${cnpjLimpo} (original: ${cnpjOriginal})`);
+          
+          if (cnpjLimpo.length >= 14) {
+            // Buscar supermercado existente por CNPJ normalizado
+            let { data: supermercadoExistente } = await supabase
+              .from('supermercados')
+              .select('id')
+              .eq('cnpj', cnpjLimpo)
+              .single();
 
-        if (!supermercadoExistente) {
-          // Criar novo supermercado
-          const { data: novoSupermercado, error: errorSupermercado } = await supabase
-            .from('supermercados')
-            .insert({
-              nome: nome || 'Supermercado',
-              cnpj: cnpj || '',
-              endereco: endereco || ''
-            })
-            .select('id')
-            .single();
+            if (!supermercadoExistente) {
+              // Criar novo supermercado automaticamente
+              console.log(`🆕 Criando novo supermercado PDF: ${nome}`);
+              
+              const { data: novoSupermercado, error: errorSupermercado } = await supabase
+                .from('supermercados')
+                .insert({
+                  nome: nome || 'Supermercado',
+                  cnpj: cnpjLimpo, // CNPJ normalizado
+                  endereco: endereco || null,
+                  ativo: true
+                })
+                .select('id')
+                .single();
 
-          if (errorSupermercado) {
-            console.error("❌ Erro ao criar supermercado:", errorSupermercado);
+              if (errorSupermercado) {
+                console.error("❌ Erro ao criar supermercado:", errorSupermercado);
+              } else {
+                supermercadoId = novoSupermercado.id;
+                console.log(`✅ Supermercado criado: ID=${supermercadoId}, Nome=${nome}`);
+                
+                // Geocodificar endereço em background
+                if (endereco) {
+                  try {
+                    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocodificar-endereco`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        supermercadoId: novoSupermercado.id,
+                        endereco: endereco
+                      })
+                    });
+                    console.log('✅ Geocodificação iniciada para novo supermercado PDF');
+                  } catch (geoError) {
+                    console.error('⚠️ Erro ao iniciar geocodificação:', geoError);
+                  }
+                }
+              }
+            } else {
+              supermercadoId = supermercadoExistente.id;
+              console.log(`✅ Supermercado encontrado: ID=${supermercadoId}`);
+            }
           } else {
-            supermercadoId = novoSupermercado.id;
-            console.log("✅ Supermercado criado:", supermercadoId);
+            console.log(`❌ CNPJ inválido em PDF: ${cnpjLimpo} (length: ${cnpjLimpo.length})`);
           }
         } else {
-          supermercadoId = supermercadoExistente.id;
-          console.log("✅ Supermercado encontrado:", supermercadoId);
+          console.log('⚠️ Nenhum CNPJ encontrado nos dados do PDF');
         }
       }
 
@@ -327,11 +363,12 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               // Também criar/atualizar na tabela global de supermercados
               if (dadosEstruturados.estabelecimento.cnpj) {
                 try {
+                  const cnpjLimpoGlobal = dadosEstruturados.estabelecimento.cnpj.replace(/[^\d]/g, '');
                   const { data: supermercadoGlobal, error: supermercadoError } = await supabase
                     .from('supermercados')
                     .upsert({
                       nome: dadosEstruturados.estabelecimento.nome,
-                      cnpj: dadosEstruturados.estabelecimento.cnpj,
+                      cnpj: cnpjLimpoGlobal, // CNPJ normalizado
                       endereco: dadosEstruturados.estabelecimento.endereco || null,
                       ativo: true
                     }, {
@@ -469,13 +506,15 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
             }
           }
 
-          // Criar registro na tabela notas_fiscais
-          const { data: notaFiscal, error: errorNotaFiscal } = await supabase
-            .from('notas_fiscais')
-            .insert({
-              user_id: userId,
-              mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
-              cnpj: dadosEstruturados.estabelecimento.cnpj || '',
+           // Criar registro na tabela notas_fiscais
+           const cnpjNotaFiscal = dadosEstruturados.estabelecimento.cnpj ? 
+             dadosEstruturados.estabelecimento.cnpj.replace(/[^\d]/g, '') : '';
+           const { data: notaFiscal, error: errorNotaFiscal } = await supabase
+             .from('notas_fiscais')
+             .insert({
+               user_id: userId,
+               mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
+               cnpj: cnpjNotaFiscal,
               bairro: null, // Extrair do endereço se necessário
               data_compra: dataCompra,
               valor_total: dadosEstruturados.compra.valor_total || 0,
@@ -530,7 +569,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                     compraId: compra?.id,
                     produtoNome: descricao,
                     precoUnitario: valor_unitario,
-                    estabelecimentoCnpj: dadosEstruturados.estabelecimento.cnpj,
+                    estabelecimentoCnpj: dadosEstruturados.estabelecimento.cnpj?.replace(/[^\d]/g, '') || '',
                     estabelecimentoNome: dadosEstruturados.estabelecimento.nome || 'Não informado',
                     dataCompra: dadosEstruturados.compra?.data_emissao,
                     horaCompra: dadosEstruturados.compra?.hora_emissao,
