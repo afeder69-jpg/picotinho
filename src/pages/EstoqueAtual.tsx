@@ -409,9 +409,21 @@ const EstoqueAtual = () => {
                       }
                     };
 
+                     const scrollToCategory = () => {
+                       const element = document.getElementById(`categoria-${categoria.toLowerCase()}`);
+                       if (element) {
+                         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                       }
+                     };
+
                      return (
                        <div key={categoria} className="grid grid-cols-4 gap-1 text-xs sm:text-sm items-center py-1">
-                         <span className="capitalize text-muted-foreground">{categoria}</span>
+                         <button 
+                           onClick={scrollToCategory}
+                           className="capitalize text-muted-foreground hover:text-primary underline-offset-2 hover:underline cursor-pointer text-left"
+                         >
+                           {categoria}
+                         </button>
                          <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
                          <span className="font-medium text-blue-600 text-center">
                            {formatCurrency(subtotalPrecoAtual)}
@@ -541,7 +553,7 @@ const EstoqueAtual = () => {
           {/* Lista de produtos por categoria */}
           <div className="space-y-4">
             {Object.entries(groupedEstoque).map(([categoria, itens]) => (
-              <Card key={categoria}>
+              <Card key={categoria} id={`categoria-${categoria.toLowerCase()}`}>
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className={getCategoriaColor(categoria)}>
