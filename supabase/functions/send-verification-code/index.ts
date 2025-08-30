@@ -17,167 +17,72 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('📱 Enviando código de verificação WhatsApp...')
+    console.log('📱 INÍCIO: Processando envio de código')
     
     const { numeroWhatsApp, nomeUsuario }: SendVerificationRequest = await req.json()
+    console.log('📞 Número recebido:', numeroWhatsApp)
     
     if (!numeroWhatsApp) {
+      console.log('❌ Número não fornecido')
       throw new Error('Número do WhatsApp é obrigatório')
     }
 
     // Inicializar cliente Supabase
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      console.error('❌ Variáveis de ambiente Supabase não configuradas')
+      throw new Error('Configuração do Supabase incompleta')
+    }
+    
+    console.log('🔧 Criando cliente Supabase...')
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 
     // Gerar código de verificação de 6 dígitos
     const codigoVerificacao = Math.floor(100000 + Math.random() * 900000).toString()
+    console.log('🔢 Código gerado:', codigoVerificacao)
     
-    // Buscar token da API do WhatsApp
-    const whatsappToken = Deno.env.get('WHATSAPP_API_TOKEN')
+    // VERSÃO SIMPLIFICADA: Apenas salvar no banco (sem enviar WhatsApp)
+    console.log('💾 Salvando código no banco de dados...')
     
-    if (!whatsappToken) {
-      console.error('❌ Token da API do WhatsApp não configurado')
-      throw new Error('Token da API do WhatsApp não configurado')
-    }
-
-    console.log('🔑 Token configurado, comprimento:', whatsappToken.length)
-
-    // Formatar número para envio (assumindo formato brasileiro)
-    const numeroFormatado = formatPhoneNumber(numeroWhatsApp)
-    
-    // Mensagem com código de verificação
-    const mensagemVerificacao = `🔐 Picotinho - Código de Verificação
-
-Olá${nomeUsuario ? `, ${nomeUsuario}` : ''}!
-
-Seu código de verificação é: *${codigoVerificacao}*
-
-Por favor, digite este código no aplicativo para confirmar seu número do WhatsApp.
-
-⏱️ Este código expira em 10 minutos.`
-
-    // VERSÃO TEMPORÁRIA - simulando envio para testar o fluxo
-    console.log('🧪 MODO TESTE: Simulando envio do WhatsApp')
-    console.log('📱 Número:', numeroFormatado)
-    console.log('💬 Código que seria enviado:', codigoVerificacao)
-    
-    // Simular sucesso temporariamente
-    const sucesso = true // await enviarMensagemWhatsApp(numeroFormatado, mensagemVerificacao, whatsappToken)
-    
-    if (sucesso) {
-      // Salvar código na base de dados
-      const { error: dbError } = await supabase
-        .from('whatsapp_configuracoes')
-        .update({ 
-          codigo_verificacao: codigoVerificacao,
-          data_codigo: new Date().toISOString(),
-          verificado: false
-        })
-        .eq('numero_whatsapp', numeroWhatsApp)
-        
-      if (dbError) {
-        console.error('❌ Erro ao salvar código no banco:', dbError)
-        throw new Error('Erro ao salvar código de verificação')
-      }
-        
-      console.log('✅ Código de verificação enviado com sucesso')
-      
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Código de verificação enviado com sucesso'
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    const { error: dbError } = await supabase
+      .from('whatsapp_configuracoes')
+      .update({ 
+        codigo_verificacao: codigoVerificacao,
+        data_codigo: new Date().toISOString(),
+        verificado: false
       })
-    } else {
-      throw new Error('Falha ao enviar código de verificação')
+      .eq('numero_whatsapp', numeroWhatsApp)
+      
+    if (dbError) {
+      console.error('❌ Erro no banco:', dbError)
+      throw new Error(`Erro ao salvar código: ${dbError.message}`)
     }
+      
+    console.log('✅ Código salvo com sucesso no banco')
+    console.log('📝 IMPORTANTE: Use o código', codigoVerificacao, 'para testar')
+    
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Código de verificação gerado com sucesso',
+      // TEMPORÁRIO para debug - remover em produção
+      debug_codigo: codigoVerificacao
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
 
   } catch (error) {
-    console.error('❌ Erro completo ao enviar código de verificação:', {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      cause: error.cause
-    })
+    console.error('❌ ERRO COMPLETO:', error)
     
     return new Response(JSON.stringify({
       success: false,
-      error: error.message,
-      details: error.name
+      error: error.message || 'Erro desconhecido',
+      type: error.name || 'Error'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
 })
-
-/**
- * Envia mensagem via WhatsApp API (Z-API como exemplo)
- */
-async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, token: string): Promise<boolean> {
-  try {
-    console.log('📤 Iniciando envio para:', numeroDestino)
-    console.log('🔑 Token (primeiros 10 chars):', token.substring(0, 10))
-    
-    // Verificar se o token tem formato correto (deve ter pelo menos 10 caracteres)
-    if (!token || token.length < 10) {
-      console.error('❌ Token inválido - muito curto:', token.length)
-      return false
-    }
-
-    // Para Z-API - versão simplificada
-    const apiUrl = `https://api.z-api.io/instances/${token}/token/send-text`
-    
-    const payload = {
-      phone: numeroDestino,
-      message: mensagem
-    }
-
-    console.log('🌐 URL da API:', apiUrl)
-    console.log('📋 Payload:', JSON.stringify(payload, null, 2))
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    })
-
-    console.log('📊 Status da resposta:', response.status)
-    const result = await response.json()
-    console.log('📋 Resposta completa:', JSON.stringify(result, null, 2))
-
-    if (response.ok) {
-      console.log('✅ Mensagem enviada com sucesso!')
-      return true
-    } else {
-      console.error('❌ Erro na API do WhatsApp:', result)
-      return false
-    }
-
-  } catch (error) {
-    console.error('❌ Erro crítico ao chamar API do WhatsApp:', {
-      message: error.message,
-      stack: error.stack
-    })
-    return false
-  }
-}
-
-/**
- * Formata número de telefone para padrão internacional
- */
-function formatPhoneNumber(numero: string): string {
-  // Remove todos os caracteres não numéricos
-  let cleaned = numero.replace(/\D/g, '')
-  
-  // Se não tem código do país, adiciona o do Brasil (55)
-  if (cleaned.length === 11 && !cleaned.startsWith('55')) {
-    cleaned = '55' + cleaned
-  }
-  
-  return cleaned
-}
