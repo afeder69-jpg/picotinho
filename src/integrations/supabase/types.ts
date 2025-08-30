@@ -1167,6 +1167,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_user_safe_info: {
+        Args: { target_user_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          nome: string
+        }[]
+      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown
