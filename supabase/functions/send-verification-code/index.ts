@@ -90,11 +90,17 @@ Por favor, digite este código no aplicativo para confirmar seu número do Whats
     }
 
   } catch (error) {
-    console.error('❌ Erro ao enviar código de verificação:', error)
+    console.error('❌ Erro completo ao enviar código de verificação:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      cause: error.cause
+    })
     
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: error.message,
+      details: error.name
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
