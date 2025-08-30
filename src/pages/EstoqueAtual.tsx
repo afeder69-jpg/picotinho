@@ -536,10 +536,10 @@ const EstoqueAtual = () => {
               <Card key={categoria} id={`categoria-${categoria.toLowerCase()}`}>
                 <CardHeader>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={getCategoriaColor(categoria)}>
+                    <Badge variant="outline" className={`${getCategoriaColor(categoria)} text-sm font-bold`}>
                       {categoria.charAt(0).toUpperCase() + categoria.slice(1)}
                     </Badge>
-                    <span className="text-xs sm:text-sm text-muted-foreground">
+                    <span className="text-sm font-medium text-primary">
                       {itens.length} {itens.length === 1 ? 'produto' : 'produtos'}
                     </span>
                   </div>
