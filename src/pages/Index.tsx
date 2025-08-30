@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import BottomNavigation from "@/components/BottomNavigation";
+
 import QRCodeScanner from "@/components/QRCodeScanner";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+    <div className="min-h-screen bg-gradient-subtle flex flex-col pb-32">
       {/* Header com logo e botão de login/logout */}
       <div className="flex justify-between items-center p-4 relative">
         <PicotinhoLogo />
@@ -98,18 +98,12 @@ const Index = () => {
         </div>
       </div>
       
-      {/* Bottom navigation */}
-      <BottomNavigation />
-      
       {/* QR Code Scanner */}
       <QRCodeScanner 
         isOpen={showScanner}
         onScanSuccess={handleScanSuccess}
         onClose={handleCloseScanner}
       />
-      
-      {/* Spacer for fixed bottom navigation */}
-      <div className="h-20"></div>
     </div>
   );
 };

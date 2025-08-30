@@ -17,7 +17,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
-import BottomNavigation from "@/components/BottomNavigation";
 
 
 const Menu = () => {
@@ -93,7 +92,7 @@ const Menu = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+    <div className="min-h-screen bg-gradient-subtle flex flex-col pb-32">
       {/* Header com logo e botão de login/logout */}
       <div className="flex justify-between items-center p-4">
         <PicotinhoLogo />
@@ -123,7 +122,7 @@ const Menu = () => {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 px-6 pb-24">
+      <div className="flex-1 px-6 pb-8">
         <div className="max-w-md mx-auto">
           
           <div className="space-y-3">
@@ -179,9 +178,6 @@ const Menu = () => {
           </div>
         </div>
       </div>
-      
-      {/* Bottom navigation */}
-      <BottomNavigation />
     </div>
   );
 };

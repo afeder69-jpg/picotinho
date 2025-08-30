@@ -205,7 +205,7 @@ const AreaAtuacao = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle p-4">
+    <div className="min-h-screen bg-gradient-subtle p-4 pb-32">
       <div className="max-w-2xl mx-auto space-y-6">
         
         {/* Header */}

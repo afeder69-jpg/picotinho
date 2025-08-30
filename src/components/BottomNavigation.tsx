@@ -23,7 +23,7 @@ const BottomNavigation = () => {
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border p-4 safe-area-inset-bottom">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border p-4 safe-area-inset-bottom">
         <div className="flex justify-between items-end w-full max-w-screen-lg mx-auto gap-2 px-2">
           {/* Botão Início - menor, verde claro */}
           <Button

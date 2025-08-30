@@ -8,7 +8,6 @@ import {
   Settings
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import BottomNavigation from "@/components/BottomNavigation";
 
 const ConfiguracoesUsuario = () => {
   const navigate = useNavigate();
@@ -25,7 +24,7 @@ const ConfiguracoesUsuario = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+    <div className="min-h-screen bg-gradient-subtle flex flex-col pb-32">
       {/* Header com logo e botão de voltar */}
       <div className="flex justify-between items-center p-4">
         <Button 
@@ -41,7 +40,7 @@ const ConfiguracoesUsuario = () => {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 px-6 pb-24">
+      <div className="flex-1 px-6 pb-8">
         <div className="max-w-md mx-auto">
           {/* Título da página */}
           <div className="text-center mb-6">
@@ -108,9 +107,6 @@ const ConfiguracoesUsuario = () => {
           </div>
         </div>
       </div>
-      
-      {/* Bottom navigation */}
-      <BottomNavigation />
     </div>
   );
 };

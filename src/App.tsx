@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import EstoqueAtual from "./pages/EstoqueAtual";
 import AreaAtuacao from "./pages/AreaAtuacao";
 import ConfiguracoesUsuario from "./pages/ConfiguracoesUsuario";
+import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
 
 console.log("App.tsx carregando...");
@@ -47,6 +48,7 @@ const App = () => {
                 <Route path="/configuracoes" element={<ConfiguracoesUsuario />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              <BottomNavigation />
             </BrowserRouter>
           </TooltipProvider>
         </AuthProvider>
