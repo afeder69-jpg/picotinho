@@ -583,11 +583,20 @@ const EstoqueAtual = () => {
                                    <div>
                                      Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                    </div>
-                                   {precoAtual ? (
-                                     <div className="text-blue-600 font-medium flex items-center gap-1">
-                                       <span>
-                                         Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
-                                       </span>
+                                    {precoAtual ? (
+                                      <div className="text-blue-600 font-medium flex items-center gap-1">
+                                        <span>
+                                          Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground ml-2">
+                                          Última Atualização: {new Date(item.updated_at).toLocaleString('pt-BR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </span>
                                        {(() => {
                                          const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
                                          const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
