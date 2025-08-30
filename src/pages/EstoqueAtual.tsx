@@ -214,20 +214,24 @@ const EstoqueAtual = () => {
 
   const getCategoriaColor = (categoria: string) => {
     const colors: { [key: string]: string } = {
-      'frutas': 'bg-gradient-to-r from-red-500 to-orange-500 text-white border-red-300',
-      'verduras': 'bg-gradient-to-r from-green-500 to-emerald-600 text-white border-green-300',
-      'legumes': 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white border-orange-300',
-      'laticínios': 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-blue-300',
-      'bebidas': 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-purple-300',
-      'carnes': 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-400',
-      'cereais': 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white border-yellow-300',
-      'pães': 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border-amber-300',
-      'condimentos': 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white border-indigo-300',
-      'higiene': 'bg-gradient-to-r from-teal-500 to-cyan-600 text-white border-teal-300',
-      'limpeza': 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-400',
-      'outros': 'bg-gradient-to-r from-gray-500 to-slate-600 text-white border-gray-400'
+      'laticínios': 'text-[#FFEB3B] font-bold text-lg',
+      'outros': 'text-[#9E9E9E] font-bold text-lg',
+      'hortifruti': 'text-[#4CAF50] font-bold text-lg',
+      'bebidas': 'text-[#2196F3] font-bold text-lg',
+      'mercearia': 'text-[#FF5722] font-bold text-lg',
+      'limpeza': 'text-[#00BCD4] font-bold text-lg',
+      'padaria': 'text-[#FF9800] font-bold text-lg',
+      'carnes': 'text-[#D32F2F] font-bold text-lg',
+      'higiene': 'text-[#8BC34A] font-bold text-lg',
+      // Categorias existentes que não foram especificadas
+      'frutas': 'text-[#4CAF50] font-bold text-lg',
+      'verduras': 'text-[#4CAF50] font-bold text-lg',
+      'legumes': 'text-[#4CAF50] font-bold text-lg',
+      'cereais': 'text-[#FF5722] font-bold text-lg',
+      'pães': 'text-[#FF9800] font-bold text-lg',
+      'condimentos': 'text-[#FF5722] font-bold text-lg'
     };
-    return colors[categoria.toLowerCase()] || 'bg-gradient-to-r from-gray-500 to-slate-600 text-white border-gray-400';
+    return colors[categoria.toLowerCase()] || 'text-[#9E9E9E] font-bold text-lg';
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
