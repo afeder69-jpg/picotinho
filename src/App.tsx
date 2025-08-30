@@ -10,6 +10,7 @@ import Menu from "./pages/Menu";
 import Auth from "./pages/Auth";
 import EstoqueAtual from "./pages/EstoqueAtual";
 import AreaAtuacao from "./pages/AreaAtuacao";
+import ConfiguracoesUsuario from "./pages/ConfiguracoesUsuario";
 import NotFound from "./pages/NotFound";
 
 console.log("App.tsx carregando...");
@@ -43,6 +44,7 @@ const App = () => {
                 <Route path="/screenshots" element={<Screenshots />} />
                 <Route path="/estoque" element={<EstoqueAtual />} />
                 <Route path="/area-atuacao" element={<AreaAtuacao />} />
+                <Route path="/configuracoes" element={<ConfiguracoesUsuario />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

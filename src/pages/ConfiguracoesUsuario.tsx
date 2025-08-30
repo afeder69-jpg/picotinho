@@ -2,132 +2,62 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { 
-  FileImage, 
   ChevronRight, 
-  Package, 
-  TrendingDown, 
-  BarChart3, 
-  ChefHat, 
-  ShoppingCart,
-  LogIn,
-  LogOut,
   MapPin,
+  ArrowLeft,
   Settings
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/components/auth/AuthProvider";
-import { toast } from "sonner";
 import BottomNavigation from "@/components/BottomNavigation";
 
-
-const Menu = () => {
+const ConfiguracoesUsuario = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      toast.success("Logout realizado com sucesso!");
-    } catch (error) {
-      toast.error("Erro ao fazer logout");
-    }
-  };
-
-  const menuOptions = [
+  const configOptions = [
     {
-      id: 'saved-pages',
-      title: 'Minhas Notas Salvas',
-      description: 'Visualizar screenshots capturados via QR Code',
-      icon: FileImage,
-      onClick: () => navigate('/screenshots'),
+      id: 'area-atuacao',
+      title: 'Área de Atuação',
+      description: 'Configurar raio geográfico dos supermercados',
+      icon: MapPin,
+      onClick: () => navigate('/area-atuacao'),
       isActive: true
-    },
-    {
-      id: 'current-stock',
-      title: 'Estoque Atual',
-      description: 'Consultar produtos em estoque',
-      icon: Package,
-      onClick: () => navigate('/estoque'),
-      isActive: true
-    },
-    {
-      id: 'stock-out',
-      title: 'Baixa de Estoque',
-      description: 'Registrar saída de produtos',
-      icon: TrendingDown,
-      onClick: () => {},
-      isActive: false
-    },
-    {
-      id: 'reports',
-      title: 'Relatórios',
-      description: 'Visualizar relatórios de vendas e estoque',
-      icon: BarChart3,
-      onClick: () => {},
-      isActive: false
-    },
-    {
-      id: 'recipes',
-      title: 'Receitas',
-      description: 'Gerenciar receitas e ingredientes',
-      icon: ChefHat,
-      onClick: () => {},
-      isActive: false
-    },
-    {
-      id: 'user-settings',
-      title: 'Configurações do Usuário',
-      description: 'Gerenciar configurações pessoais',
-      icon: Settings,
-      onClick: () => navigate('/configuracoes'),
-      isActive: true
-    },
-    {
-      id: 'shopping-list',
-      title: 'Lista de Compras',
-      description: 'Organizar próximas compras',
-      icon: ShoppingCart,
-      onClick: () => {},
-      isActive: false
     }
   ];
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col">
-      {/* Header com logo e botão de login/logout */}
+      {/* Header com logo e botão de voltar */}
       <div className="flex justify-between items-center p-4">
+        <Button 
+          variant="ghost" 
+          onClick={() => navigate('/menu')}
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar
+        </Button>
         <PicotinhoLogo />
-        {user ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {user.email}
-            </span>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleSignOut}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
-          </div>
-        ) : (
-          <Button 
-            variant="outline" 
-            onClick={() => navigate('/auth')}
-          >
-            <LogIn className="w-4 h-4 mr-2" />
-            Entrar
-          </Button>
-        )}
+        <div className="w-16" /> {/* Spacer para centralizar o logo */}
       </div>
 
       {/* Main content area */}
       <div className="flex-1 px-6 pb-24">
         <div className="max-w-md mx-auto">
+          {/* Título da página */}
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Settings className="w-6 h-6 text-primary" />
+              <h1 className="text-2xl font-bold text-foreground">
+                Configurações do Usuário
+              </h1>
+            </div>
+            <p className="text-muted-foreground">
+              Gerencie suas configurações pessoais
+            </p>
+          </div>
           
           <div className="space-y-3">
-            {menuOptions.map((option) => (
+            {configOptions.map((option) => (
               <Card 
                 key={option.id}
                 className={`transition-all duration-200 hover:shadow-md ${
@@ -170,11 +100,10 @@ const Menu = () => {
             ))}
           </div>
           
-          
           {/* Mensagem informativa */}
           <div className="mt-6 p-4 text-center text-muted-foreground bg-muted/30 rounded-lg">
             <p className="text-sm">
-              Novas funcionalidades serão adicionadas em breve
+              Mais opções de configuração serão adicionadas em breve
             </p>
           </div>
         </div>
@@ -186,4 +115,4 @@ const Menu = () => {
   );
 };
 
-export default Menu;
+export default ConfiguracoesUsuario;
