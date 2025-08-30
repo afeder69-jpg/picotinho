@@ -1253,6 +1253,15 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_profile_summary: {
+        Args: { target_user_id: string }
+        Returns: {
+          avatar_url: string
+          created_at: string
+          nome: string
+          user_id: string
+        }[]
+      }
       get_public_profile_info: {
         Args: { target_user_id: string }
         Returns: {
@@ -1344,6 +1353,17 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
+      }
+      update_my_profile: {
+        Args: { p_avatar_url?: string; p_nome?: string; p_telefone?: string }
+        Returns: {
+          avatar_url: string
+          id: string
+          nome: string
+          telefone: string
+          updated_at: string
+          user_id: string
+        }[]
       }
       validate_user_access: {
         Args: { user_uuid: string }
