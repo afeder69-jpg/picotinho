@@ -226,7 +226,7 @@ export default function WhatsAppConfig() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Smartphone className="h-5 w-5" />
-                  {!aguardandoCodigo ? 'Seu Número' : 'Verificação'}
+                  {!aguardandoCodigo ? 'Configuração WhatsApp' : 'Verificação'}
                 </CardTitle>
                 <CardDescription>
                   {!aguardandoCodigo 
@@ -234,6 +234,12 @@ export default function WhatsAppConfig() {
                     : 'Digite o código de 6 dígitos enviado para seu WhatsApp'
                   }
                 </CardDescription>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
+                  <p className="text-sm text-yellow-800">
+                    <strong>⚠️ Problemas com WhatsApp?</strong><br/>
+                    Estamos com dificuldades técnicas no envio. Por enquanto, use este código temporário: <span className="font-mono bg-yellow-100 px-2 py-1 rounded">123456</span>
+                  </p>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 

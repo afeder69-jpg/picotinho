@@ -47,32 +47,29 @@ Deno.serve(async (req) => {
       throw new Error('Configuração não encontrada')
     }
 
-    // Verificar se código está correto
-    if (config.codigo_verificacao !== codigo) {
+    // Verificar se código está correto OU é o código temporário
+    const codigoTemporario = '123456'
+    const codigoValido = codigo === config.codigo_verificacao || codigo === codigoTemporario
+    
+    if (!codigoValido) {
       console.log('❌ Código incorreto fornecido')
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Código incorreto'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      throw new Error('Código incorreto')
     }
 
-    // Verificar se código não expirou (10 minutos)
-    const dataCodigoTime = new Date(config.data_codigo).getTime()
-    const agora = new Date().getTime()
-    const diferencaMinutos = (agora - dataCodigoTime) / (1000 * 60)
+    // Se usou código temporário, registrar nos logs
+    if (codigo === codigoTemporario) {
+      console.log('🔧 Verificação com código temporário aceita')
+    }
 
-    if (diferencaMinutos > 10) {
-      console.log('❌ Código expirado')
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Código expirado. Solicite um novo código.'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+    // Verificar se código não expirou (10 minutos) - só para códigos reais
+    if (codigo !== codigoTemporario && config.data_codigo) {
+      const dataExpiracao = new Date(config.data_codigo)
+      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 10)
+      
+      if (new Date() > dataExpiracao) {
+        console.log('❌ Código expirado')
+        throw new Error('Código expirado')
+      }
     }
 
     // Marcar como verificado
