@@ -113,7 +113,16 @@ Por favor, digite este código no aplicativo para confirmar seu número do Whats
  */
 async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, token: string): Promise<boolean> {
   try {
-    // Para Z-API - URL corrigida sem placeholder
+    console.log('📤 Iniciando envio para:', numeroDestino)
+    console.log('🔑 Token (primeiros 10 chars):', token.substring(0, 10))
+    
+    // Verificar se o token tem formato correto (deve ter pelo menos 10 caracteres)
+    if (!token || token.length < 10) {
+      console.error('❌ Token inválido - muito curto:', token.length)
+      return false
+    }
+
+    // Para Z-API - versão simplificada
     const apiUrl = `https://api.z-api.io/instances/${token}/token/send-text`
     
     const payload = {
@@ -121,7 +130,8 @@ async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, t
       message: mensagem
     }
 
-    console.log('📤 Enviando código para:', numeroDestino)
+    console.log('🌐 URL da API:', apiUrl)
+    console.log('📋 Payload:', JSON.stringify(payload, null, 2))
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -131,11 +141,12 @@ async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, t
       body: JSON.stringify(payload)
     })
 
+    console.log('📊 Status da resposta:', response.status)
     const result = await response.json()
-    console.log('📋 Resposta da API:', result)
+    console.log('📋 Resposta completa:', JSON.stringify(result, null, 2))
 
-    // Z-API retorna success: true quando bem sucedida
-    if (response.ok && !result.error) {
+    if (response.ok) {
+      console.log('✅ Mensagem enviada com sucesso!')
       return true
     } else {
       console.error('❌ Erro na API do WhatsApp:', result)
@@ -143,7 +154,10 @@ async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, t
     }
 
   } catch (error) {
-    console.error('❌ Erro ao chamar API do WhatsApp:', error)
+    console.error('❌ Erro crítico ao chamar API do WhatsApp:', {
+      message: error.message,
+      stack: error.stack
+    })
     return false
   }
 }
