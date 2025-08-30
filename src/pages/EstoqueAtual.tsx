@@ -480,24 +480,6 @@ const EstoqueAtual = () => {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                  Itens no Estoque
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-lg sm:text-2xl font-bold text-foreground mb-4">
-                  {totalProdutosUnicos}
-                </div>
-                <div className="border-t pt-3">
-                  <div className="text-xs sm:text-sm text-muted-foreground mb-1">Categorias</div>
-                  <div className="text-base sm:text-xl font-bold text-foreground">
-                    {Object.keys(groupedEstoque).length}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             <Card>
               <CardContent className="p-6">
