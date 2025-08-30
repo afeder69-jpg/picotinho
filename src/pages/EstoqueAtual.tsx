@@ -135,11 +135,59 @@ const EstoqueAtual = () => {
 
   // Função para encontrar preço atual de um produto
   const encontrarPrecoAtual = (nomeProduto: string) => {
-    return precosAtuais.find(preco => 
+    if (!nomeProduto || precosAtuais.length === 0) return null;
+    
+    const nomeProdutoNormalizado = nomeProduto.toLowerCase().trim();
+    
+    // 1. Busca exata
+    const buscaExata = precosAtuais.find(preco => 
       preco.produto_nome && 
-      (preco.produto_nome.toLowerCase().includes(nomeProduto.toLowerCase()) ||
-       nomeProduto.toLowerCase().includes(preco.produto_nome.toLowerCase()))
+      preco.produto_nome.toLowerCase().trim() === nomeProdutoNormalizado
     );
+    if (buscaExata) return buscaExata;
+    
+    // 2. Busca por palavras-chave principais (remover tamanhos, marcas específicas)
+    const palavrasChave = nomeProdutoNormalizado
+      .replace(/\b(kg|g|ml|l|un|unidade|lata|pacote|caixa|frasco|100g|200g|300g|400g|500g|1kg|2kg)\b/g, '')
+      .replace(/\b(\d+g|\d+ml|\d+l|\d+kg)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    const buscaPorPalavrasChave = precosAtuais.find(preco => {
+      if (!preco.produto_nome) return false;
+      
+      const precoNormalizado = preco.produto_nome.toLowerCase()
+        .replace(/\b(kg|g|ml|l|un|unidade|lata|pacote|caixa|frasco|100g|200g|300g|400g|500g|1kg|2kg)\b/g, '')
+        .replace(/\b(\d+g|\d+ml|\d+l|\d+kg)\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      return palavrasChave.includes(precoNormalizado) || precoNormalizado.includes(palavrasChave);
+    });
+    if (buscaPorPalavrasChave) return buscaPorPalavrasChave;
+    
+    // 3. Busca por similaridade (contém partes do nome)
+    const buscaSimilaridade = precosAtuais.find(preco => {
+      if (!preco.produto_nome) return false;
+      
+      const precoLower = preco.produto_nome.toLowerCase();
+      const produtoLower = nomeProdutoNormalizado;
+      
+      // Dividir em palavras e verificar se pelo menos 2 palavras coincidem
+      const palavrasPreco = precoLower.split(/\s+/).filter(p => p.length > 2);
+      const palavrasProduto = produtoLower.split(/\s+/).filter(p => p.length > 2);
+      
+      let coincidencias = 0;
+      palavrasProduto.forEach(palavra => {
+        if (palavrasPreco.some(p => p.includes(palavra) || palavra.includes(p))) {
+          coincidencias++;
+        }
+      });
+      
+      return coincidencias >= 2;
+    });
+    
+    return buscaSimilaridade;
   };
 
   const loadEstoque = async () => {
