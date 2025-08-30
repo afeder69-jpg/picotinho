@@ -1365,6 +1365,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      validate_security_setup: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       validate_user_access: {
         Args: { user_uuid: string }
         Returns: boolean
