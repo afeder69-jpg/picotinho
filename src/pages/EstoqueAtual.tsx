@@ -560,72 +560,85 @@ const EstoqueAtual = () => {
                         return (
                           <div 
                             key={item.id} 
-                            className="flex items-center py-2 border-b border-border last:border-0"
+                            className="flex flex-col py-2 border-b border-border last:border-0"
                           >
-                            <div className="flex-1 overflow-hidden relative">
-                               <h3 className="text-xs font-medium text-foreground leading-tight relative">
-                                 {item.produto_nome}
-                                 {/* Botão de ajuste sobreposto ao título do produto */}
-                                 {modoEdicao && (
-                                   <Button
-                                     onClick={() => abrirModalEdicao(item)}
-                                     className="absolute -top-1 -right-2 h-6 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md border border-blue-300 shadow-sm transform hover:scale-105 transition-all duration-200 flex items-center gap-1"
-                                     size="sm"
-                                   >
-                                     <Edit3 className="w-3 h-3" />
-                                     Ajustar
-                                   </Button>
-                                 )}
-                               </h3>
-                             <p className="text-xs text-muted-foreground space-y-1">
-                               {item.preco_unitario_ultimo && (
-                                 <>
-                                   <div>
-                                     Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
-                                   </div>
-                                     {precoAtual ? (
-                                       <div className="text-blue-600 font-medium flex items-center gap-1">
-                                         <span>
-                                           Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
-                                         </span>
-                                       {(() => {
-                                         const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
-                                         const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
-                                         
-                                         if (subtotalAtual > subtotalPago) {
-                                           return <ArrowUp className="w-3 h-3 text-green-600 flex-shrink-0" />;
-                                         } else if (subtotalAtual < subtotalPago) {
-                                           return <ArrowDown className="w-3 h-3 text-red-600 flex-shrink-0" />;
-                                         } else {
-                                           return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
-                                         }
-                                       })()}
-                                     </div>
-                                   ) : (
-                                     <div className="text-blue-600 font-medium flex items-center gap-1">
-                                       <span>
-                                         Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
-                                       </span>
-                                       <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                     </div>
-                                   )}
-                                 </>
-                               )}
-                             </p>
-                           </div>
-                           
-                           <div className="text-right ml-2 flex-shrink-0">
-                             <p className="text-xs sm:text-sm font-bold text-foreground">
-                               {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
-                             </p>
-                               <div className="text-xs text-blue-600 font-medium">
-                                 <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
-                                 <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                               </div>
-                           </div>
-                         </div>
-                      );
-                    })}
+                            {/* Primeira linha: Nome do produto + Quantidade */}
+                            <div className="flex justify-between items-center mb-1">
+                              <div className="flex-1 overflow-hidden relative">
+                                <h3 className="text-xs font-medium text-foreground leading-tight relative">
+                                  {item.produto_nome}
+                                  {/* Botão de ajuste sobreposto ao título do produto */}
+                                  {modoEdicao && (
+                                    <Button
+                                      onClick={() => abrirModalEdicao(item)}
+                                      className="absolute -top-1 -right-2 h-6 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md border border-blue-300 shadow-sm transform hover:scale-105 transition-all duration-200 flex items-center gap-1"
+                                      size="sm"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                      Ajustar
+                                    </Button>
+                                  )}
+                                </h3>
+                              </div>
+                              
+                              <div className="text-right ml-2 flex-shrink-0">
+                                <p className="text-xs sm:text-sm font-bold text-foreground">
+                                  {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Segunda linha: Valores pagos */}
+                            <div className="text-xs text-muted-foreground">
+                              {item.preco_unitario_ultimo && (
+                                <div>
+                                  Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Terceira linha: Preços atuais + Data/Hora */}
+                            <div className="flex justify-between items-center mt-1">
+                              <div className="flex-1">
+                                {item.preco_unitario_ultimo && (
+                                  <>
+                                    {precoAtual ? (
+                                      <div className="text-blue-600 font-medium flex items-center gap-1 text-xs">
+                                        <span>
+                                          Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                        </span>
+                                        {(() => {
+                                          const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
+                                          const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
+                                          
+                                          if (subtotalAtual > subtotalPago) {
+                                            return <ArrowUp className="w-3 h-3 text-green-600 flex-shrink-0" />;
+                                          } else if (subtotalAtual < subtotalPago) {
+                                            return <ArrowDown className="w-3 h-3 text-red-600 flex-shrink-0" />;
+                                          } else {
+                                            return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
+                                          }
+                                        })()}
+                                      </div>
+                                    ) : (
+                                      <div className="text-blue-600 font-medium flex items-center gap-1 text-xs">
+                                        <span>
+                                          Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                        </span>
+                                        <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              
+                              <div className="text-xs text-blue-600 font-medium text-right ml-2 flex-shrink-0">
+                                <div>{new Date(item.updated_at).toLocaleDateString('pt-BR')} {new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                     })}
                   </div>
                 </CardContent>
               </Card>
