@@ -28,7 +28,6 @@ const EstoqueAtual = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
   const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
-  const [datasNotasFiscais, setDatasNotasFiscais] = useState<{ [produto: string]: string }>({});
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -36,76 +35,6 @@ const EstoqueAtual = () => {
     loadEstoque();
     loadPrecosAtuais();
   }, []);
-
-  useEffect(() => {
-    if (estoque.length > 0) {
-      loadDatasNotasFiscais();
-    }
-  }, [estoque]);
-
-  // Função para carregar todas as datas das notas fiscais dos produtos
-  const loadDatasNotasFiscais = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const datasMap: { [produto: string]: string } = {};
-      
-      for (const item of estoque) {
-        const dataNotaFiscal = await buscarDataNotaFiscal(item.produto_nome);
-        if (dataNotaFiscal) {
-          datasMap[item.produto_nome] = dataNotaFiscal;
-        }
-      }
-      
-      setDatasNotasFiscais(datasMap);
-    } catch (error) {
-      console.error('Erro ao carregar datas das notas fiscais:', error);
-    }
-  };
-
-  // Função para buscar a data da nota fiscal mais recente que contém o produto
-  const buscarDataNotaFiscal = async (nomeProduto: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const { data, error } = await supabase
-        .from('notas_imagens')
-        .select('data_criacao, dados_extraidos')
-        .eq('usuario_id', user.id)
-        .eq('processada', true)
-        .not('dados_extraidos', 'is', null)
-        .order('data_criacao', { ascending: false });
-
-      if (error) throw error;
-
-      // Procurar nas notas fiscais pela mais recente que contém o produto
-      for (const nota of data || []) {
-        if (nota.dados_extraidos && typeof nota.dados_extraidos === 'object') {
-          const dadosExtraidos = nota.dados_extraidos as any;
-          if (dadosExtraidos.itens && Array.isArray(dadosExtraidos.itens)) {
-            const produtoEncontrado = dadosExtraidos.itens.find((item: any) => {
-              const descricaoNormalizada = item.descricao?.toUpperCase().trim();
-              const nomeNormalizado = nomeProduto.toUpperCase().trim();
-              return descricaoNormalizada && (
-                descricaoNormalizada.includes(nomeNormalizado) ||
-                nomeNormalizado.includes(descricaoNormalizada)
-              );
-            });
-            
-            if (produtoEncontrado) {
-              return nota.data_criacao;
-            }
-          }
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Erro ao buscar data da nota fiscal:', error);
-      return null;
-    }
-  };
 
   const loadPrecosAtuais = async () => {
     try {
@@ -631,106 +560,72 @@ const EstoqueAtual = () => {
                         return (
                           <div 
                             key={item.id} 
-                            className="flex flex-col py-2 border-b border-border last:border-0"
+                            className="flex items-center py-2 border-b border-border last:border-0"
                           >
-                            {/* Primeira linha: Nome do produto + Quantidade */}
-                            <div className="flex justify-between items-center mb-1">
-                              <div className="flex-1 overflow-hidden relative">
-                                <h3 className="text-xs font-medium text-foreground leading-tight relative">
-                                  {item.produto_nome}
-                                  {/* Botão de ajuste sobreposto ao título do produto */}
-                                  {modoEdicao && (
-                                    <Button
-                                      onClick={() => abrirModalEdicao(item)}
-                                      className="absolute -top-1 -right-2 h-6 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md border border-blue-300 shadow-sm transform hover:scale-105 transition-all duration-200 flex items-center gap-1"
-                                      size="sm"
-                                    >
-                                      <Edit3 className="w-3 h-3" />
-                                      Ajustar
-                                    </Button>
-                                  )}
-                                </h3>
-                              </div>
-                              
-                              <div className="text-right ml-2 flex-shrink-0">
-                                <p className="text-xs sm:text-sm font-bold text-foreground">
-                                  {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            {/* Segunda linha: Valores pagos */}
-                            <div className="text-xs text-muted-foreground">
-                              {item.preco_unitario_ultimo && (
-                                <div>
-                                  Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
-                                </div>
-                              )}
-                            </div>
-                            
-                            {/* Terceira linha: Preços atuais + Data/Hora */}
-                            <div className="flex justify-between items-center mt-1">
-                              <div className="flex-1">
-                                {item.preco_unitario_ultimo && (
-                                  <>
-                                    {precoAtual ? (
-                                      <div className="text-blue-600 font-medium flex items-center gap-1 text-xs">
-                                        <span>
-                                          Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
-                                        </span>
-                                        {(() => {
-                                          const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
-                                          const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
-                                          
-                                          if (subtotalAtual > subtotalPago) {
-                                            return <ArrowUp className="w-3 h-3 text-green-600 flex-shrink-0" />;
-                                          } else if (subtotalAtual < subtotalPago) {
-                                            return <ArrowDown className="w-3 h-3 text-red-600 flex-shrink-0" />;
-                                          } else {
-                                            return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
-                                          }
-                                        })()}
-                                      </div>
-                                    ) : (
-                                      <div className="text-blue-600 font-medium flex items-center gap-1 text-xs">
-                                        <span>
-                                          Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
-                                        </span>
-                                        <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                              
-                               <div className="text-xs text-muted-foreground text-right ml-2 flex-shrink-0">
-                                 {(() => {
-                                   const dataNotaFiscal = datasNotasFiscais[item.produto_nome];
-                                   if (dataNotaFiscal) {
-                                     return (
-                                       <div>
-                                         {new Date(dataNotaFiscal).toLocaleDateString('pt-BR')} {new Date(dataNotaFiscal).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                       </div>
-                                     );
-                                   } else if (precoAtual) {
-                                     return (
-                                       <div>
-                                         {new Date(precoAtual.data_atualizacao).toLocaleDateString('pt-BR')} {new Date(precoAtual.data_atualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                       </div>
-                                     );
-                                   } else {
-                                     return (
-                                       <div>
-                                         {new Date(item.updated_at).toLocaleDateString('pt-BR')} {new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                       </div>
-                                     );
-                                   }
-                                 })()}
+                            <div className="flex-1 overflow-hidden relative">
+                               <h3 className="text-xs font-medium text-foreground leading-tight relative">
+                                 {item.produto_nome}
+                                 {/* Botão de ajuste sobreposto ao título do produto */}
+                                 {modoEdicao && (
+                                   <Button
+                                     onClick={() => abrirModalEdicao(item)}
+                                     className="absolute -top-1 -right-2 h-6 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md border border-blue-300 shadow-sm transform hover:scale-105 transition-all duration-200 flex items-center gap-1"
+                                     size="sm"
+                                   >
+                                     <Edit3 className="w-3 h-3" />
+                                     Ajustar
+                                   </Button>
+                                 )}
+                               </h3>
+                             <p className="text-xs text-muted-foreground space-y-1">
+                               {item.preco_unitario_ultimo && (
+                                 <>
+                                   <div>
+                                     Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                   </div>
+                                     {precoAtual ? (
+                                       <div className="text-blue-600 font-medium flex items-center gap-1">
+                                         <span>
+                                           Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                         </span>
+                                       {(() => {
+                                         const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
+                                         const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
+                                         
+                                         if (subtotalAtual > subtotalPago) {
+                                           return <ArrowUp className="w-3 h-3 text-green-600 flex-shrink-0" />;
+                                         } else if (subtotalAtual < subtotalPago) {
+                                           return <ArrowDown className="w-3 h-3 text-red-600 flex-shrink-0" />;
+                                         } else {
+                                           return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
+                                         }
+                                       })()}
+                                     </div>
+                                   ) : (
+                                     <div className="text-blue-600 font-medium flex items-center gap-1">
+                                       <span>
+                                         Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                       </span>
+                                       <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                     </div>
+                                   )}
+                                 </>
+                               )}
+                             </p>
+                           </div>
+                           
+                           <div className="text-right ml-2 flex-shrink-0">
+                             <p className="text-xs sm:text-sm font-bold text-foreground">
+                               {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
+                             </p>
+                               <div className="text-xs text-blue-600 font-medium">
+                                 <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
+                                 <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                                </div>
-                            </div>
-                          </div>
-                        );
-                     })}
+                           </div>
+                         </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
