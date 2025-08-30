@@ -4,26 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { ArrowLeft, Smartphone, MessageSquare, Minus, Shield, CheckCircle, Trash2 } from "lucide-react";
+import { ArrowLeft, Smartphone, MessageSquare, Shield, CheckCircle } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
-
-// Estados da verificação
-type EstadoVerificacao = 'inicial' | 'aguardando_codigo' | 'verificado';
 
 export default function WhatsAppConfig() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [numeroWhatsApp, setNumeroWhatsApp] = useState("");
   const [codigoVerificacao, setCodigoVerificacao] = useState("");
-  const [estadoVerificacao, setEstadoVerificacao] = useState<EstadoVerificacao>('inicial');
+  const [aguardandoCodigo, setAguardandoCodigo] = useState(false);
+  const [numeroVerificado, setNumeroVerificado] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingVerificacao, setLoadingVerificacao] = useState(false);
-  const [loadingDescadastro, setLoadingDescadastro] = useState(false);
 
-  // Configuração global do sistema (administrador)
+  // Configuração global do sistema
   const SYSTEM_CONFIG = {
     api_provider: "z-api",
     webhook_token: "",
@@ -50,7 +47,7 @@ export default function WhatsAppConfig() {
       if (data) {
         setNumeroWhatsApp(data.numero_whatsapp || "");
         if (data.verificado) {
-          setEstadoVerificacao('verificado');
+          setNumeroVerificado(data.numero_whatsapp || "");
         }
       }
     } catch (error) {
@@ -66,11 +63,13 @@ export default function WhatsAppConfig() {
     
     setLoading(true);
     try {
-      // Salvar número no banco (ainda não verificado)
+      // Sempre gerar novo código - substitui configuração anterior
       const dadosConfig = {
         usuario_id: user.id,
         numero_whatsapp: numeroWhatsApp.trim(),
         verificado: false,
+        codigo_verificacao: null, // Força novo código
+        data_codigo: null,
         ...SYSTEM_CONFIG
       };
 
@@ -95,7 +94,8 @@ export default function WhatsAppConfig() {
       }
 
       toast.success("Código de verificação enviado via WhatsApp! 📱");
-      setEstadoVerificacao('aguardando_codigo');
+      setAguardandoCodigo(true);
+      setCodigoVerificacao("");
       
     } catch (error) {
       console.error('Erro ao enviar código:', error);
@@ -126,7 +126,7 @@ export default function WhatsAppConfig() {
           toast.error("Código incorreto. Tente novamente.");
         } else if (error.message?.includes('expirado')) {
           toast.error("Código expirado. Solicite um novo código.");
-          setEstadoVerificacao('inicial');
+          setAguardandoCodigo(false);
         } else {
           toast.error("Erro ao verificar código");
         }
@@ -135,7 +135,8 @@ export default function WhatsAppConfig() {
 
       if (data?.success) {
         toast.success("🎉 Integração WhatsApp ativada com sucesso!");
-        setEstadoVerificacao('verificado');
+        setNumeroVerificado(numeroWhatsApp);
+        setAguardandoCodigo(false);
         setCodigoVerificacao("");
       } else {
         toast.error("Erro na verificação do código");
@@ -163,49 +164,11 @@ export default function WhatsAppConfig() {
       .replace(/(\d{5})(\d)/, '$1-$2');
   };
 
-  const resetarVerificacao = () => {
-    setEstadoVerificacao('inicial');
+  const trocarNumero = () => {
+    setNumeroVerificado("");
+    setAguardandoCodigo(false);
     setCodigoVerificacao("");
-  };
-
-  const descadastrarNumero = async () => {
-    if (!numeroWhatsApp) return;
-
-    const confirmacao = window.confirm(
-      `Tem certeza que deseja descadastrar o número ${formatarNumero(numeroWhatsApp)}?\n\nEsta ação removerá a integração com o WhatsApp e você precisará refazer todo o processo de verificação caso queira cadastrar novamente.`
-    );
-
-    if (!confirmacao) return;
-
-    setLoadingDescadastro(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('unregister-whatsapp', {
-        body: {
-          numeroWhatsApp: numeroWhatsApp.trim(),
-          nomeUsuario: user?.user_metadata?.nome || user?.email?.split('@')[0]
-        }
-      });
-
-      if (error) {
-        console.error('Erro ao descadastrar:', error);
-        toast.error("Erro ao descadastrar número");
-        return;
-      }
-
-      if (data?.success) {
-        toast.success("👋 Número descadastrado com sucesso!");
-        setNumeroWhatsApp("");
-        setEstadoVerificacao('inicial');
-        setCodigoVerificacao("");
-      } else {
-        toast.error("Erro ao descadastrar número");
-      }
-      
-    } catch (error) {
-      console.error('Erro ao descadastrar:', error);
-      toast.error("Erro ao descadastrar número");
-    }
-    setLoadingDescadastro(false);
+    setNumeroWhatsApp("");
   };
 
   return (
@@ -228,8 +191,8 @@ export default function WhatsAppConfig() {
         </div>
 
         <div className="space-y-6">
-          {/* Status da Integração */}
-          {estadoVerificacao === 'verificado' && (
+          {/* Status da Integração - Número Verificado */}
+          {numeroVerificado && (
             <Card className="border-green-200 bg-green-50">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -237,50 +200,40 @@ export default function WhatsAppConfig() {
                     <CheckCircle className="h-6 w-6" />
                     <div>
                       <h3 className="font-semibold">WhatsApp Integrado</h3>
-                      <p className="text-sm">Número {formatarNumero(numeroWhatsApp)} verificado e ativo</p>
+                      <p className="text-sm">Número {formatarNumero(numeroVerificado)} verificado e ativo</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={resetarVerificacao}
-                    >
-                      Alterar número
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      onClick={descadastrarNumero}
-                      disabled={loadingDescadastro}
-                      className="flex items-center gap-2"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {loadingDescadastro ? "Descadastrando..." : "Descadastrar"}
-                    </Button>
-                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={trocarNumero}
+                  >
+                    Trocar número
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
           {/* Configuração do Número */}
-          {estadoVerificacao !== 'verificado' && (
+          {!numeroVerificado && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Smartphone className="h-5 w-5" />
-                  {estadoVerificacao === 'inicial' ? 'Seu Número' : 'Verificação'}
+                  {!aguardandoCodigo ? 'Seu Número' : 'Verificação'}
                 </CardTitle>
                 <CardDescription>
-                  {estadoVerificacao === 'inicial' 
+                  {!aguardandoCodigo 
                     ? 'Digite seu número do WhatsApp para receber comandos do Picotinho'
                     : 'Digite o código de 6 dígitos enviado para seu WhatsApp'
                   }
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {estadoVerificacao === 'inicial' && (
+                
+                {/* Campo do Número */}
+                {!aguardandoCodigo && (
                   <>
                     <div>
                       <label className="block text-sm font-medium mb-2">
@@ -311,7 +264,8 @@ export default function WhatsAppConfig() {
                   </>
                 )}
 
-                {estadoVerificacao === 'aguardando_codigo' && (
+                {/* Campo do Código */}
+                {aguardandoCodigo && (
                   <>
                     <div className="text-center space-y-4">
                       <div className="flex items-center justify-center gap-2 text-blue-600">
@@ -353,58 +307,20 @@ export default function WhatsAppConfig() {
                           {loadingVerificacao ? "Verificando..." : "Verificar código"}
                         </Button>
                         
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="outline" 
-                            onClick={resetarVerificacao}
-                            className="flex-1"
-                          >
-                            Alterar número
-                          </Button>
-                          
-                          <Button 
-                            variant="destructive" 
-                            size="sm"
-                            onClick={descadastrarNumero}
-                            disabled={loadingDescadastro}
-                            className="flex items-center gap-1"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            {loadingDescadastro ? "..." : "Limpar"}
-                          </Button>
-                        </div>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            setAguardandoCodigo(false);
+                            setCodigoVerificacao("");
+                          }}
+                          className="w-full"
+                        >
+                          Alterar número
+                        </Button>
                       </div>
                     </div>
                   </>
                 )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Seção de Debug para Testes */}
-          {process.env.NODE_ENV === 'development' && (
-            <Card className="border-orange-200 bg-orange-50">
-              <CardHeader>
-                <CardTitle className="text-sm text-orange-800">🛠️ Ferramentas de Teste</CardTitle>
-                <CardDescription className="text-xs text-orange-600">
-                  Visível apenas em desenvolvimento
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={descadastrarNumero}
-                    disabled={loadingDescadastro || !numeroWhatsApp}
-                    className="w-full text-xs"
-                  >
-                    {loadingDescadastro ? "Removendo..." : "🗑️ Remover configuração atual"}
-                  </Button>
-                  <p className="text-xs text-orange-600">
-                    Remove a configuração atual para testar o fluxo completo
-                  </p>
-                </div>
               </CardContent>
             </Card>
           )}
@@ -423,9 +339,8 @@ export default function WhatsAppConfig() {
             <CardContent>
               <div className="space-y-4">
                 <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
-                    <Minus className="h-4 w-4" />
-                    Baixa de Estoque
+                  <h4 className="font-medium text-blue-900 mb-3">
+                    📝 Baixa de Estoque
                   </h4>
                   <div className="space-y-2 text-sm text-blue-800">
                     <div className="bg-white/50 p-2 rounded">
