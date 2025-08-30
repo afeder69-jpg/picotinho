@@ -40,36 +40,63 @@ serve(async (req) => {
       return R * c; // Distância em km
     }
 
-    // Buscar apenas supermercados que realmente têm notas fiscais processadas
-    const { data: notasProcessadas, error: notasError } = await supabase
+    // REGRA PRINCIPAL: Apenas supermercados com notas fiscais ativas podem aparecer
+    // Buscar todas as notas fiscais processadas que ainda existem no sistema
+    const { data: notasAtivas, error: notasError } = await supabase
       .from('notas_imagens')
-      .select('dados_extraidos')
+      .select('dados_extraidos, id')
       .eq('processada', true)
       .not('dados_extraidos', 'is', null);
 
     if (notasError) {
-      console.error('Erro ao buscar notas processadas:', notasError);
+      console.error('Erro ao buscar notas ativas:', notasError);
       throw notasError;
     }
 
-    // Extrair CNPJs únicos das notas fiscais processadas
-    const cnpjsComNotas = new Set();
-    notasProcessadas?.forEach(nota => {
+    console.log(`📄 Total de notas fiscais ativas no sistema: ${notasAtivas?.length || 0}`);
+
+    // Verificação dinâmica: extrair CNPJs únicos apenas das notas que ainda existem
+    const cnpjsComNotasAtivas = new Set<string>();
+    const notasPorCnpj = new Map<string, number>();
+
+    notasAtivas?.forEach(nota => {
       const dadosExtraidos = nota.dados_extraidos;
       const cnpjNota = dadosExtraidos?.supermercado?.cnpj || dadosExtraidos?.cnpj;
+      
       if (cnpjNota) {
-        // Normalizar CNPJ removendo caracteres especiais para comparação
+        // Normalizar CNPJ para comparação consistente
         const cnpjLimpo = cnpjNota.replace(/[^\d]/g, '');
         if (cnpjLimpo.length >= 14) {
-          cnpjsComNotas.add(cnpjLimpo);
+          cnpjsComNotasAtivas.add(cnpjLimpo);
+          notasPorCnpj.set(cnpjLimpo, (notasPorCnpj.get(cnpjLimpo) || 0) + 1);
         }
       }
     });
 
-    console.log(`📄 Encontrados ${cnpjsComNotas.size} CNPJs únicos com notas processadas`);
+    console.log(`🏪 CNPJs únicos com notas ativas: ${cnpjsComNotasAtivas.size}`);
+    
+    // Log detalhado de quantas notas cada CNPJ possui
+    notasPorCnpj.forEach((quantidade, cnpj) => {
+      console.log(`  CNPJ ${cnpj}: ${quantidade} notas ativas`);
+    });
 
-    // Buscar supermercados que correspondem aos CNPJs das notas
-    const { data: supermercados, error: supermercadosError } = await supabase
+    // Se não há notas ativas, retornar lista vazia
+    if (cnpjsComNotasAtivas.size === 0) {
+      console.log('⚠️ Nenhuma nota fiscal ativa encontrada - retornando lista vazia');
+      return new Response(JSON.stringify({
+        success: true,
+        supermercados: [],
+        totalEncontrados: 0,
+        raioConsultado: raio,
+        coordenadas: { latitude, longitude },
+        motivo: 'Nenhum supermercado possui notas fiscais ativas'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Buscar supermercados cadastrados com coordenadas válidas
+    const { data: todosSupermercados, error: supermercadosError } = await supabase
       .from('supermercados')
       .select('*')
       .not('latitude', 'is', null)
@@ -81,16 +108,23 @@ serve(async (req) => {
       throw supermercadosError;
     }
 
-    // Filtrar apenas supermercados que têm notas processadas
-    const supermercadosComNotas = supermercados?.filter(supermercado => {
+    // FILTRO CRÍTICO: Apenas supermercados que têm notas fiscais ativas
+    const supermercadosComNotasAtivas = todosSupermercados?.filter(supermercado => {
       const cnpjSupermercado = supermercado.cnpj?.replace(/[^\d]/g, '');
-      return cnpjSupermercado && cnpjsComNotas.has(cnpjSupermercado);
+      const temNotasAtivas = cnpjSupermercado && cnpjsComNotasAtivas.has(cnpjSupermercado);
+      
+      if (temNotasAtivas) {
+        const quantidadeNotas = notasPorCnpj.get(cnpjSupermercado) || 0;
+        console.log(`✅ ${supermercado.nome} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas`);
+      }
+      
+      return temNotasAtivas;
     }) || [];
 
-    console.log(`📍 Encontrados ${supermercadosComNotas.length} supermercados com notas fiscais`);
+    console.log(`📍 Encontrados ${supermercadosComNotasAtivas.length} supermercados com notas fiscais ativas`);
 
     // Filtrar supermercados dentro do raio especificado
-    const supermercadosNoRaio = supermercadosComNotas.filter(supermercado => {
+    const supermercadosNoRaio = supermercadosComNotasAtivas.filter(supermercado => {
       const distancia = calcularDistancia(
         latitude,
         longitude,
