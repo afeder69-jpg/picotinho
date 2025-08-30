@@ -37,24 +37,47 @@ serve(async (req) => {
             role: 'system',
             content: `Você é um especialista em produtos de supermercado. Sua tarefa é:
             
-            1. Categorizar o produto em uma das categorias EXATAS:
-            - hortifruti
-            - laticínios  
-            - mercearia
-            - bebidas
-            - limpeza
-            - higiene
-            - padaria
-            - carnes
-            - outros
+            1. Categorizar o produto em uma das categorias EXATAS seguindo estas regras:
             
-            2. Sugerir um nome padronizado no estilo de nota fiscal de supermercado.
+            HORTIFRUTI: frutas, verduras, legumes, ervas, temperos naturais
+            - Exemplos: banana, maçã, alface, tomate, cebola, batata, limão, fruta de conde, pinha, mamão, abacaxi, cenoura, beterraba, abobrinha, etc.
             
-            Regras para o nome padronizado:
-            - Primeira letra de cada palavra importante maiúscula
+            MERCEARIA: grãos, cereais, massas, conservas, condimentos, óleos, vinagres, açúcar, sal, farinha
+            - Exemplos: arroz, feijão, macarrão, óleo, açúcar, café, farinha, molho de tomate, extrato de tomate, vinagre, etc.
+            
+            LATICÍNIOS: leite e derivados
+            - Exemplos: leite, queijo, manteiga, margarina, iogurte, requeijão, creme de leite, etc.
+            
+            BEBIDAS: todas as bebidas exceto leite
+            - Exemplos: refrigerante, suco, cerveja, água, energético, vinho, cachaça, etc.
+            
+            PADARIA: pães, bolos, biscoitos, salgados
+            - Exemplos: pão de forma, pão francês, bolo, biscoito, torrada, rosquinha, etc.
+            
+            LIMPEZA: produtos de limpeza doméstica
+            - Exemplos: detergente, sabão em pó, desinfetante, água sanitária, amaciante, etc.
+            
+            HIGIENE: produtos de higiene pessoal
+            - Exemplos: sabonete, shampoo, pasta de dente, desodorante, papel higiênico, etc.
+            
+            CARNES: carnes, aves, peixes, embutidos
+            - Exemplos: carne bovina, frango, peixe, linguiça, salsicha, presunto, etc.
+            
+            OUTROS: apenas se não se encaixar em NENHUMA das categorias acima
+            
+            2. Sugerir um nome padronizado no estilo de supermercado com estas regras:
+            - Primeira letra de cada palavra importante em maiúscula
+            - Unidades sempre abreviadas: Kg, L, Un, Pct, G, ML
             - Manter hífens em palavras compostas (ex: Pimenta-do-Reino)
-            - Preservar marcas e especificações técnicas
-            - Formato limpo e profissional
+            - Padronizar tipos conhecidos (ex: "agulhinha" → "Tipo 1", "cinco quilos" → "5Kg")
+            - Formato profissional de supermercado
+            - SEMPRE sugerir melhorias mesmo que o nome pareça correto
+            
+            Exemplos de padronização:
+            - "arroz agulhinha cinco quilos" → "Arroz Tipo 1 5Kg"
+            - "fruta de conde" → "Fruta-de-Conde"
+            - "detergente liquido clear" → "Detergente Líquido Clear"
+            - "pao de forma wickbold" → "Pão de Forma Wickbold"
             
             Responda EXATAMENTE neste formato JSON:
             {"category": "categoria", "suggestedName": "Nome Padronizado"}`
