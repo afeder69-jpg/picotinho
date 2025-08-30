@@ -1036,15 +1036,11 @@ const EstoqueAtual = () => {
                     <SelectValue placeholder="Selecione a categoria" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="hortifruti">Hortifruti</SelectItem>
-                    <SelectItem value="laticínios">Laticínios</SelectItem>
-                    <SelectItem value="mercearia">Mercearia</SelectItem>
-                    <SelectItem value="bebidas">Bebidas</SelectItem>
-                    <SelectItem value="limpeza">Limpeza</SelectItem>
-                    <SelectItem value="higiene">Higiene</SelectItem>
-                    <SelectItem value="padaria">Padaria</SelectItem>
-                    <SelectItem value="carnes">Carnes</SelectItem>
-                    <SelectItem value="outros">Outros</SelectItem>
+                    {Array.from(new Set(estoque.map(item => item.categoria))).sort().map(categoria => (
+                      <SelectItem key={categoria} value={categoria}>
+                        {categoria.charAt(0).toUpperCase() + categoria.slice(1)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
