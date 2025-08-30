@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.send-welcome-whatsapp]
 verify_jwt = false
+
+[functions.send-verification-code]
+verify_jwt = false
+
+[functions.verify-whatsapp-code]
+verify_jwt = false
