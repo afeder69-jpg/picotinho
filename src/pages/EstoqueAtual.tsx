@@ -618,8 +618,7 @@ const EstoqueAtual = () => {
                              <p className="text-xs sm:text-sm font-bold text-foreground">
                                {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
                              </p>
-                              <div className="text-xs text-muted-foreground">
-                                <p>Última Atualização:</p>
+                              <div className="text-xs text-blue-600">
                                 <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
                                 <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                               </div>
