@@ -52,6 +52,8 @@ const EstoqueAtual = () => {
     unidadeMedida: 'Unidade',
     valor: ''
   });
+  const [sugestaoNome, setSugestaoNome] = useState<string>('');
+  const [mostrarSugestao, setMostrarSugestao] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -298,6 +300,8 @@ const EstoqueAtual = () => {
       unidadeMedida: 'Unidade',
       valor: ''
     });
+    setSugestaoNome('');
+    setMostrarSugestao(false);
   };
 
   const fecharModalInserir = () => {
@@ -320,8 +324,8 @@ const EstoqueAtual = () => {
     });
   };
 
-  // Função para categorizar produto automaticamente com IA
-  const categorizarProdutoIA = async (nomeProduto: string): Promise<string> => {
+  // Função para categorizar produto e sugerir nome com IA
+  const categorizarProdutoIA = async (nomeProduto: string): Promise<{category: string, suggestedName?: string}> => {
     try {
       const response = await supabase.functions.invoke('categorize-product', {
         body: { productName: nomeProduto }
@@ -329,13 +333,83 @@ const EstoqueAtual = () => {
       
       if (response.error) {
         console.error('Erro na categorização:', response.error);
-        return 'outros';
+        return { category: 'outros', suggestedName: nomeProduto };
       }
       
-      return response.data?.category || 'outros';
+      return {
+        category: response.data?.category || 'outros',
+        suggestedName: response.data?.suggestedName || nomeProduto
+      };
     } catch (error) {
       console.error('Erro ao categorizar produto:', error);
-      return 'outros';
+      return { category: 'outros', suggestedName: nomeProduto };
+    }
+  };
+
+  // Função auxiliar que continua o processo de inserção após escolha do nome
+  const continuarInsercaoProduto = async (nomeEscolhido: string, categoriaEscolhida: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const quantidade = parseFloat(novoProduto.quantidade);
+      const valor = parseFloat(novoProduto.valor);
+
+      // Verificar se o produto já existe no estoque do usuário
+      const { data: produtoExistente, error: erroVerificacao } = await supabase
+        .from('estoque_app')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('produto_nome', nomeEscolhido.toUpperCase())
+        .single();
+
+      if (produtoExistente) {
+        // Atualizar quantidade existente
+        const { error: erroUpdate } = await supabase
+          .from('estoque_app')
+          .update({
+            quantidade: produtoExistente.quantidade + quantidade,
+            preco_unitario_ultimo: valor,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', produtoExistente.id);
+
+        if (erroUpdate) throw erroUpdate;
+
+        toast({
+          title: "Sucesso",
+          description: `Quantidade atualizada: +${quantidade} ${novoProduto.unidadeMedida}`,
+        });
+      } else {
+        // Inserir novo produto no estoque
+         const { error: erroInsert } = await supabase
+           .from('estoque_app')
+           .insert({
+             user_id: user.id,
+             produto_nome: nomeEscolhido.toUpperCase(),
+             categoria: categoriaEscolhida || 'outros',
+             unidade_medida: novoProduto.unidadeMedida,
+             quantidade: quantidade,
+             preco_unitario_ultimo: valor
+           });
+
+        if (erroInsert) throw erroInsert;
+
+        toast({
+          title: "Sucesso",
+          description: `Produto "${nomeEscolhido}" adicionado ao estoque`,
+        });
+      }
+
+      fecharModalInserir();
+      loadEstoque();
+    } catch (error) {
+      console.error('Erro ao inserir produto:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível adicionar o produto ao estoque.",
+      });
     }
   };
 
@@ -392,12 +466,22 @@ const EstoqueAtual = () => {
 
       // Categorizar automaticamente com IA se não for produto existente
       let categoria = novoProduto.categoria;
+      let nomeParaSalvar = novoProduto.nome.trim();
+      
       if (!produtoSelecionado && novoProduto.nome.trim()) {
         toast({
           title: "Categorizando...",
           description: "Aguarde enquanto categorizamos o produto automaticamente.",
         });
-        categoria = await categorizarProdutoIA(novoProduto.nome.trim());
+        const resultado = await categorizarProdutoIA(novoProduto.nome.trim());
+        categoria = resultado.category;
+        
+        // Se há uma sugestão diferente do nome original, mostrar para o usuário
+        if (resultado.suggestedName && resultado.suggestedName !== novoProduto.nome.trim()) {
+          setSugestaoNome(resultado.suggestedName);
+          setMostrarSugestao(true);
+          return; // Para aqui para mostrar a sugestão
+        }
       }
 
       // Verificar se o produto já existe no estoque do usuário
@@ -405,7 +489,7 @@ const EstoqueAtual = () => {
         .from('estoque_app')
         .select('*')
         .eq('user_id', user.id)
-        .eq('produto_nome', novoProduto.nome.toUpperCase().trim())
+        .eq('produto_nome', nomeParaSalvar.toUpperCase())
         .single();
 
       if (produtoExistente) {
@@ -431,7 +515,7 @@ const EstoqueAtual = () => {
            .from('estoque_app')
            .insert({
              user_id: user.id,
-             produto_nome: novoProduto.nome.toUpperCase().trim(),
+             produto_nome: nomeParaSalvar.toUpperCase(),
              categoria: categoria || 'outros',
              unidade_medida: novoProduto.unidadeMedida,
              quantidade: quantidade,
@@ -442,7 +526,7 @@ const EstoqueAtual = () => {
 
         toast({
           title: "Sucesso",
-          description: `Produto "${novoProduto.nome}" adicionado ao estoque`,
+          description: `Produto "${nomeParaSalvar}" adicionado ao estoque`,
         });
       }
 
@@ -1160,6 +1244,43 @@ const EstoqueAtual = () => {
                 </div>
               )}
             </div>
+
+            {/* Sugestão de Nome (se disponível) */}
+            {mostrarSugestao && (
+              <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="text-sm">
+                  <div className="font-medium text-blue-900">Sugestão de nome padronizado:</div>
+                  <div className="text-gray-600 mt-1">Você digitou: <span className="font-mono bg-gray-100 px-1 rounded">{novoProduto.nome}</span></div>
+                  <div className="text-blue-700 mt-1">Sugerido: <span className="font-mono bg-blue-100 px-1 rounded">{sugestaoNome}</span></div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={async () => {
+                      setMostrarSugestao(false);
+                      // Continuar inserção com nome sugerido
+                      await continuarInsercaoProduto(sugestaoNome, 'outros');
+                    }}
+                    className="flex-1"
+                  >
+                    Usar sugestão
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={async () => {
+                      setMostrarSugestao(false);
+                      // Continuar inserção com nome original
+                      await continuarInsercaoProduto(novoProduto.nome.trim(), 'outros');
+                    }}
+                    className="flex-1"
+                  >
+                    Manter original
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Campos do produto */}
             <div className="space-y-3">
