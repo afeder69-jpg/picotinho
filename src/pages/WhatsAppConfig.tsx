@@ -56,8 +56,11 @@ export default function WhatsAppConfig() {
   };
 
   const enviarCodigoVerificacao = async () => {
-    if (!user || !numeroWhatsApp.trim()) {
-      toast.error("Por favor, informe seu número do WhatsApp");
+    // Remove formatação para validar apenas números
+    const numeroLimpo = numeroWhatsApp.replace(/\D/g, '');
+    
+    if (!user || !numeroLimpo || numeroLimpo.length < 10) {
+      toast.error("Por favor, informe um número válido do WhatsApp");
       return;
     }
     
