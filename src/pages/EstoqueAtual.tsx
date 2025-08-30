@@ -438,7 +438,7 @@ const EstoqueAtual = () => {
                   })}
                   
                     <div className="border-t pt-2 mt-2">
-                      <div className="grid grid-cols-[2fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 font-bold text-sm">
+                      <div className="grid grid-cols-[2fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 font-bold text-xs">
                         <span className="text-foreground">Total</span>
                         <span className="text-muted-foreground text-center">{totalProdutosUnicos}</span>
                        <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
