@@ -28,6 +28,7 @@ const EstoqueAtual = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
   const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
+  const [datasNotasFiscais, setDatasNotasFiscais] = useState<{ [produto: string]: string }>({});
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -35,6 +36,76 @@ const EstoqueAtual = () => {
     loadEstoque();
     loadPrecosAtuais();
   }, []);
+
+  useEffect(() => {
+    if (estoque.length > 0) {
+      loadDatasNotasFiscais();
+    }
+  }, [estoque]);
+
+  // Função para carregar todas as datas das notas fiscais dos produtos
+  const loadDatasNotasFiscais = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const datasMap: { [produto: string]: string } = {};
+      
+      for (const item of estoque) {
+        const dataNotaFiscal = await buscarDataNotaFiscal(item.produto_nome);
+        if (dataNotaFiscal) {
+          datasMap[item.produto_nome] = dataNotaFiscal;
+        }
+      }
+      
+      setDatasNotasFiscais(datasMap);
+    } catch (error) {
+      console.error('Erro ao carregar datas das notas fiscais:', error);
+    }
+  };
+
+  // Função para buscar a data da nota fiscal mais recente que contém o produto
+  const buscarDataNotaFiscal = async (nomeProduto: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const { data, error } = await supabase
+        .from('notas_imagens')
+        .select('data_criacao, dados_extraidos')
+        .eq('usuario_id', user.id)
+        .eq('processada', true)
+        .not('dados_extraidos', 'is', null)
+        .order('data_criacao', { ascending: false });
+
+      if (error) throw error;
+
+      // Procurar nas notas fiscais pela mais recente que contém o produto
+      for (const nota of data || []) {
+        if (nota.dados_extraidos && typeof nota.dados_extraidos === 'object') {
+          const dadosExtraidos = nota.dados_extraidos as any;
+          if (dadosExtraidos.itens && Array.isArray(dadosExtraidos.itens)) {
+            const produtoEncontrado = dadosExtraidos.itens.find((item: any) => {
+              const descricaoNormalizada = item.descricao?.toUpperCase().trim();
+              const nomeNormalizado = nomeProduto.toUpperCase().trim();
+              return descricaoNormalizada && (
+                descricaoNormalizada.includes(nomeNormalizado) ||
+                nomeNormalizado.includes(descricaoNormalizada)
+              );
+            });
+            
+            if (produtoEncontrado) {
+              return nota.data_criacao;
+            }
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Erro ao buscar data da nota fiscal:', error);
+      return null;
+    }
+  };
 
   const loadPrecosAtuais = async () => {
     try {
@@ -633,15 +704,28 @@ const EstoqueAtual = () => {
                               </div>
                               
                                <div className="text-xs text-muted-foreground text-right ml-2 flex-shrink-0">
-                                 {precoAtual ? (
-                                   <div>
-                                     {new Date(precoAtual.data_atualizacao).toLocaleDateString('pt-BR')} {new Date(precoAtual.data_atualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                   </div>
-                                 ) : (
-                                   <div>
-                                     {new Date(item.updated_at).toLocaleDateString('pt-BR')} {new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                   </div>
-                                 )}
+                                 {(() => {
+                                   const dataNotaFiscal = datasNotasFiscais[item.produto_nome];
+                                   if (dataNotaFiscal) {
+                                     return (
+                                       <div>
+                                         {new Date(dataNotaFiscal).toLocaleDateString('pt-BR')} {new Date(dataNotaFiscal).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                       </div>
+                                     );
+                                   } else if (precoAtual) {
+                                     return (
+                                       <div>
+                                         {new Date(precoAtual.data_atualizacao).toLocaleDateString('pt-BR')} {new Date(precoAtual.data_atualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                       </div>
+                                     );
+                                   } else {
+                                     return (
+                                       <div>
+                                         {new Date(item.updated_at).toLocaleDateString('pt-BR')} {new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                       </div>
+                                     );
+                                   }
+                                 })()}
                                </div>
                             </div>
                           </div>
