@@ -105,8 +105,8 @@ Por favor, digite este código no aplicativo para confirmar seu número do Whats
  */
 async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, token: string): Promise<boolean> {
   try {
-    // Para Z-API - adapte conforme seu provedor
-    const apiUrl = `https://api.z-api.io/instances/YOUR_INSTANCE/token/${token}/send-text`
+    // Para Z-API - URL corrigida sem placeholder
+    const apiUrl = `https://api.z-api.io/instances/${token}/token/send-text`
     
     const payload = {
       phone: numeroDestino,
@@ -126,7 +126,8 @@ async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, t
     const result = await response.json()
     console.log('📋 Resposta da API:', result)
 
-    if (response.ok && result.success !== false) {
+    // Z-API retorna success: true quando bem sucedida
+    if (response.ok && !result.error) {
       return true
     } else {
       console.error('❌ Erro na API do WhatsApp:', result)
