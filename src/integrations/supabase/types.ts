@@ -1241,6 +1241,18 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_profile_safe: {
+        Args: { target_user_id: string }
+        Returns: {
+          avatar_url: string
+          created_at: string
+          id: string
+          nome: string
+          telefone_display: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
       get_public_profile_info: {
         Args: { target_user_id: string }
         Returns: {
