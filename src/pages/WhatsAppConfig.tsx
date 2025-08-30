@@ -353,17 +353,58 @@ export default function WhatsAppConfig() {
                           {loadingVerificacao ? "Verificando..." : "Verificar código"}
                         </Button>
                         
-                        <Button 
-                          variant="outline" 
-                          onClick={resetarVerificacao}
-                          className="w-full"
-                        >
-                          Voltar e alterar número
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            onClick={resetarVerificacao}
+                            className="flex-1"
+                          >
+                            Alterar número
+                          </Button>
+                          
+                          <Button 
+                            variant="destructive" 
+                            size="sm"
+                            onClick={descadastrarNumero}
+                            disabled={loadingDescadastro}
+                            className="flex items-center gap-1"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            {loadingDescadastro ? "..." : "Limpar"}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Seção de Debug para Testes */}
+          {process.env.NODE_ENV === 'development' && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardHeader>
+                <CardTitle className="text-sm text-orange-800">🛠️ Ferramentas de Teste</CardTitle>
+                <CardDescription className="text-xs text-orange-600">
+                  Visível apenas em desenvolvimento
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={descadastrarNumero}
+                    disabled={loadingDescadastro || !numeroWhatsApp}
+                    className="w-full text-xs"
+                  >
+                    {loadingDescadastro ? "Removendo..." : "🗑️ Remover configuração atual"}
+                  </Button>
+                  <p className="text-xs text-orange-600">
+                    Remove a configuração atual para testar o fluxo completo
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}
