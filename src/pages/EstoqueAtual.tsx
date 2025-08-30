@@ -23,6 +23,7 @@ interface EstoqueItem {
 const EstoqueAtual = () => {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [precosAtuais, setPrecosAtuais] = useState<any[]>([]);
+  const [datasNotasFiscais, setDatasNotasFiscais] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState(true);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>('');
   const [modoEdicao, setModoEdicao] = useState(false);
@@ -34,6 +35,7 @@ const EstoqueAtual = () => {
   useEffect(() => {
     loadEstoque();
     loadPrecosAtuais();
+    loadDatasNotasFiscais();
   }, []);
 
   const loadPrecosAtuais = async () => {
@@ -48,6 +50,64 @@ const EstoqueAtual = () => {
     } catch (error) {
       console.error('Erro ao carregar preços atuais:', error);
     }
+  };
+
+  const loadDatasNotasFiscais = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Buscar todas as notas fiscais processadas do usuário
+      const { data: notasImagens, error } = await supabase
+        .from('notas_imagens')
+        .select('dados_extraidos')
+        .eq('usuario_id', user.id)
+        .eq('processada', true)
+        .not('dados_extraidos', 'is', null);
+
+      if (error) throw error;
+
+      const datasMap: {[key: string]: string} = {};
+      
+      notasImagens?.forEach(nota => {
+        const dadosExtraidos = nota.dados_extraidos as any;
+        if (dadosExtraidos?.itens) {
+          const dataCompra = dadosExtraidos.compra?.data_emissao || dadosExtraidos.dataCompra;
+          
+          dadosExtraidos.itens.forEach((item: any) => {
+            const nomeProduto = item.descricao || item.nome;
+            if (nomeProduto && dataCompra) {
+              // Manter apenas a data mais recente para cada produto
+              if (!datasMap[nomeProduto] || new Date(dataCompra) > new Date(datasMap[nomeProduto])) {
+                datasMap[nomeProduto] = dataCompra;
+              }
+            }
+          });
+        }
+      });
+
+      setDatasNotasFiscais(datasMap);
+    } catch (error) {
+      console.error('Erro ao carregar datas das notas fiscais:', error);
+    }
+  };
+
+  // Função para encontrar a data da nota fiscal de um produto
+  const encontrarDataNotaFiscal = (nomeProduto: string) => {
+    // Buscar correspondência exata primeiro
+    if (datasNotasFiscais[nomeProduto]) {
+      return datasNotasFiscais[nomeProduto];
+    }
+    
+    // Buscar por correspondência parcial
+    for (const [produto, data] of Object.entries(datasNotasFiscais)) {
+      if (produto.toLowerCase().includes(nomeProduto.toLowerCase()) ||
+          nomeProduto.toLowerCase().includes(produto.toLowerCase())) {
+        return data;
+      }
+    }
+    
+    return null;
   };
 
   // Função para encontrar preço atual de um produto
@@ -618,10 +678,27 @@ const EstoqueAtual = () => {
                              <p className="text-xs sm:text-sm font-bold text-foreground">
                                {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
                              </p>
-                               <div className="text-xs text-blue-600 font-medium">
-                                 <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
-                                 <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                               </div>
+                                <div className="text-xs text-blue-600 font-medium">
+                                  {(() => {
+                                    const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
+                                    if (dataNotaFiscal) {
+                                      const date = new Date(dataNotaFiscal);
+                                      return (
+                                        <>
+                                          <p>{date.toLocaleDateString('pt-BR')}</p>
+                                          <p>{date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                        </>
+                                      );
+                                    } else {
+                                      return (
+                                        <>
+                                          <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
+                                          <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                        </>
+                                      );
+                                    }
+                                  })()}
+                                </div>
                            </div>
                          </div>
                       );
