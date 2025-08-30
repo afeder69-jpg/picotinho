@@ -172,15 +172,35 @@ const AreaAtuacao = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
+      // Primeiro tentar atualizar a configuração existente
+      const { data: configuracaoExistente } = await supabase
         .from('configuracoes_usuario')
-        .upsert({
-          usuario_id: user.id,
-          raio_busca_km: novoRaio,
-          updated_at: new Date().toISOString()
-        });
+        .select('id')
+        .eq('usuario_id', user.id)
+        .single();
 
-      if (error) throw error;
+      if (configuracaoExistente) {
+        // Atualizar configuração existente
+        const { error } = await supabase
+          .from('configuracoes_usuario')
+          .update({
+            raio_busca_km: novoRaio,
+            updated_at: new Date().toISOString()
+          })
+          .eq('usuario_id', user.id);
+
+        if (error) throw error;
+      } else {
+        // Criar nova configuração
+        const { error } = await supabase
+          .from('configuracoes_usuario')
+          .insert({
+            usuario_id: user.id,
+            raio_busca_km: novoRaio
+          });
+
+        if (error) throw error;
+      }
 
       toast({
         title: "Configuração atualizada",
@@ -207,9 +227,12 @@ const AreaAtuacao = () => {
   };
 
   const formatarDistancia = (distancia: number) => {
-    return distancia < 1 
-      ? `${Math.round(distancia * 1000)}m`
-      : `${distancia.toFixed(1)}km`;
+    // Padronizar exibição: <1km em metros, ≥1km em quilômetros
+    if (distancia < 1) {
+      return `${Math.round(distancia * 1000)}m`;
+    } else {
+      return `${distancia.toFixed(1)}km`;
+    }
   };
 
   return (

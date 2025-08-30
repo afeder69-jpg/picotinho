@@ -170,7 +170,11 @@ serve(async (req) => {
         const cnpjSupermercadoLimpo = supermercado.cnpj?.replace(/[^\d]/g, '');
         const notasDoSupermercado = notasSupermercado?.filter(nota => {
           const dadosExtraidos = nota.dados_extraidos;
-          const cnpjNota = dadosExtraidos?.supermercado?.cnpj || dadosExtraidos?.cnpj;
+          // Verificar múltiplas possibilidades de onde o CNPJ pode estar
+          const cnpjNota = dadosExtraidos?.supermercado?.cnpj || 
+                           dadosExtraidos?.cnpj || 
+                           dadosExtraidos?.estabelecimento?.cnpj ||
+                           dadosExtraidos?.emitente?.cnpj;
           const cnpjNotaLimpo = cnpjNota?.replace(/[^\d]/g, '');
           return cnpjNotaLimpo === cnpjSupermercadoLimpo;
         }) || [];
@@ -200,7 +204,7 @@ serve(async (req) => {
           });
         });
 
-        console.log(`🛒 ${supermercado.nome}: ${produtosUnicos.size} produtos únicos de ${notasDoSupermercado.length} notas`);
+        console.log(`🛒 ${supermercado.nome}: ${produtosUnicos.size} produtos únicos de ${notasDoSupermercado.length} notas (CNPJ: ${cnpjSupermercadoLimpo})`);
 
         return {
           ...supermercado,
