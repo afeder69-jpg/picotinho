@@ -5,6 +5,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { formatarDistancia } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   MapPin, 
@@ -226,14 +227,6 @@ const AreaAtuacao = () => {
     salvarConfiguracaoAutomaticamente(novoRaio);
   };
 
-  const formatarDistancia = (distancia: number) => {
-    // Padronizar exibição: <1km em metros, ≥1km em quilômetros
-    if (distancia < 1) {
-      return `${Math.round(distancia * 1000)}m`;
-    } else {
-      return `${distancia.toFixed(1)}km`;
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-subtle p-4 pb-32">
