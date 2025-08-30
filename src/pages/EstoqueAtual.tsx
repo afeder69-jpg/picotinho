@@ -214,18 +214,20 @@ const EstoqueAtual = () => {
 
   const getCategoriaColor = (categoria: string) => {
     const colors: { [key: string]: string } = {
-      'frutas': 'bg-green-100 text-green-800 border-green-200',
-      'verduras': 'bg-green-100 text-green-800 border-green-200',
-      'legumes': 'bg-orange-100 text-orange-800 border-orange-200',
-      'laticínios': 'bg-blue-100 text-blue-800 border-blue-200',
-      'bebidas': 'bg-purple-100 text-purple-800 border-purple-200',
-      'carnes': 'bg-red-100 text-red-800 border-red-200',
-      'cereais': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      'pães': 'bg-amber-100 text-amber-800 border-amber-200',
-      'condimentos': 'bg-gray-100 text-gray-800 border-gray-200',
-      'outros': 'bg-gray-100 text-gray-800 border-gray-200'
+      'frutas': 'bg-gradient-to-r from-red-500 to-orange-500 text-white border-red-300',
+      'verduras': 'bg-gradient-to-r from-green-500 to-emerald-600 text-white border-green-300',
+      'legumes': 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white border-orange-300',
+      'laticínios': 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-blue-300',
+      'bebidas': 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-purple-300',
+      'carnes': 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-400',
+      'cereais': 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white border-yellow-300',
+      'pães': 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border-amber-300',
+      'condimentos': 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white border-indigo-300',
+      'higiene': 'bg-gradient-to-r from-teal-500 to-cyan-600 text-white border-teal-300',
+      'limpeza': 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-400',
+      'outros': 'bg-gradient-to-r from-gray-500 to-slate-600 text-white border-gray-400'
     };
-    return colors[categoria.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
+    return colors[categoria.toLowerCase()] || 'bg-gradient-to-r from-gray-500 to-slate-600 text-white border-gray-400';
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
