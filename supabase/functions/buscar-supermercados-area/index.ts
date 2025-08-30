@@ -68,12 +68,12 @@ serve(async (req) => {
                        dadosExtraidos?.emitente?.cnpj;
       
       if (cnpjNota) {
-        // Normalizar CNPJ para comparação consistente
+        // Normalizar CNPJ para comparação consistente (remover pontuação)
         const cnpjLimpo = cnpjNota.replace(/[^\d]/g, '');
         if (cnpjLimpo.length >= 14) {
           cnpjsComNotasAtivas.add(cnpjLimpo);
           notasPorCnpj.set(cnpjLimpo, (notasPorCnpj.get(cnpjLimpo) || 0) + 1);
-          console.log(`🔍 CNPJ encontrado na nota: ${cnpjLimpo}`);
+          console.log(`🔍 CNPJ encontrado na nota: ${cnpjLimpo} (original: ${cnpjNota})`);
         } else {
           console.log(`⚠️ CNPJ inválido encontrado: ${cnpjLimpo} (length: ${cnpjLimpo.length})`);
         }
