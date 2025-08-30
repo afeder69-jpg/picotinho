@@ -869,41 +869,43 @@ const EstoqueAtual = () => {
                                    </Button>
                                  )}
                                </h3>
-                             <p className="text-xs text-muted-foreground space-y-1">
-                               {item.preco_unitario_ultimo && (
-                                 <>
-                                   <div>
-                                     Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
-                                   </div>
-                                     {precoAtual ? (
-                                       <div className="text-blue-600 font-medium flex items-center gap-1">
-                                         <span>
-                                           Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
-                                         </span>
-                                       {(() => {
-                                         const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
-                                         const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
-                                         
-                                         if (subtotalAtual > subtotalPago) {
-                                           return <ArrowUp className="w-3 h-3 text-green-600 flex-shrink-0" />;
-                                         } else if (subtotalAtual < subtotalPago) {
-                                           return <ArrowDown className="w-3 h-3 text-red-600 flex-shrink-0" />;
-                                         } else {
-                                           return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
-                                         }
-                                       })()}
-                                     </div>
-                                   ) : (
-                                     <div className="text-blue-600 font-medium flex items-center gap-1">
-                                       <span>
-                                         Atual- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
-                                       </span>
-                                       <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                     </div>
-                                   )}
-                                 </>
-                               )}
-                             </p>
+                              <p className="text-xs text-muted-foreground space-y-1">
+                                {item.preco_unitario_ultimo && (
+                                  <>
+                                    <div>
+                                      Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
+                                    </div>
+                                    <div className="text-blue-600 font-medium flex items-center gap-1">
+                                      {precoAtual ? (
+                                        <>
+                                          <span>
+                                            Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                          </span>
+                                          {(() => {
+                                            const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
+                                            const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
+                                            
+                                            if (subtotalAtual > subtotalPago) {
+                                              return <ArrowUp className="w-3 h-3 text-green-600 flex-shrink-0" />;
+                                            } else if (subtotalAtual < subtotalPago) {
+                                              return <ArrowDown className="w-3 h-3 text-red-600 flex-shrink-0" />;
+                                            } else {
+                                              return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
+                                            }
+                                          })()}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span>
+                                            Atual- {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
+                                          </span>
+                                          <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                        </>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </p>
                            </div>
                            
                            <div className="text-right ml-2 flex-shrink-0">
