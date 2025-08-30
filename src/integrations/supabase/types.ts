@@ -132,6 +132,13 @@ export type Database = {
             foreignKeyName: "compras_app_supermercado_id_fkey"
             columns: ["supermercado_id"]
             isOneToOne: false
+            referencedRelation: "supermercados_publicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compras_app_supermercado_id_fkey"
+            columns: ["supermercado_id"]
+            isOneToOne: false
             referencedRelation: "view_comparacao_supermercados_app"
             referencedColumns: ["supermercado_id"]
           },
@@ -249,6 +256,13 @@ export type Database = {
             columns: ["supermercado_id"]
             isOneToOne: false
             referencedRelation: "supermercados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_precos_app_supermercado_id_fkey"
+            columns: ["supermercado_id"]
+            isOneToOne: false
+            referencedRelation: "supermercados_publicos"
             referencedColumns: ["id"]
           },
           {
@@ -1077,6 +1091,51 @@ export type Database = {
       }
     }
     Views: {
+      supermercados_publicos: {
+        Row: {
+          ativo: boolean | null
+          cep: string | null
+          cidade: string | null
+          cnpj: string | null
+          created_at: string | null
+          endereco: string | null
+          estado: string | null
+          id: string | null
+          latitude: number | null
+          longitude: number | null
+          nome: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          created_at?: string | null
+          endereco?: string | null
+          estado?: string | null
+          id?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          nome?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          created_at?: string | null
+          endereco?: string | null
+          estado?: string | null
+          id?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          nome?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       users_safe: {
         Row: {
           created_at: string | null
