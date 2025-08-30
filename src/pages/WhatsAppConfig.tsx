@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
 
+// Fixed: WhatsApp Config simplified for end users
+
 export default function WhatsAppConfig() {
   const navigate = useNavigate();
   const { user } = useAuth();
