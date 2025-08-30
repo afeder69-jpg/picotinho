@@ -560,25 +560,22 @@ const EstoqueAtual = () => {
                         return (
                           <div 
                             key={item.id} 
-                            className="flex items-center py-2 border-b border-border last:border-0 relative"
+                            className="flex items-center py-2 border-b border-border last:border-0"
                           >
-                            {/* Botão de ajuste grande quando no modo edição */}
-                            {modoEdicao && (
-                              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm rounded-lg border-2 border-dashed border-blue-500">
-                                <Button
-                                  onClick={() => abrirModalEdicao(item)}
-                                  className="h-12 px-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-lg shadow-lg transform hover:scale-105 transition-all duration-200 flex items-center gap-2"
-                                  size="lg"
-                                >
-                                  <Edit3 className="w-5 h-5" />
-                                  Ajustar Estoque
-                                </Button>
-                              </div>
-                            )}
-                            
-                            <div className="flex-1 overflow-hidden">
-                               <h3 className="text-xs font-medium text-foreground leading-tight">
+                            <div className="flex-1 overflow-hidden relative">
+                               <h3 className="text-xs font-medium text-foreground leading-tight relative">
                                  {item.produto_nome}
+                                 {/* Botão de ajuste sobreposto ao título do produto */}
+                                 {modoEdicao && (
+                                   <Button
+                                     onClick={() => abrirModalEdicao(item)}
+                                     className="absolute -top-1 -right-2 h-6 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md border border-blue-300 shadow-sm transform hover:scale-105 transition-all duration-200 flex items-center gap-1"
+                                     size="sm"
+                                   >
+                                     <Edit3 className="w-3 h-3" />
+                                     Ajustar
+                                   </Button>
+                                 )}
                                </h3>
                              <p className="text-xs text-muted-foreground space-y-1">
                                {item.preco_unitario_ultimo && (
