@@ -896,19 +896,21 @@ const EstoqueAtual = () => {
                                           })()}
                                         </>
                                       ) : (
-                                        <>
-                                          <span>
-                                            Atual- {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
-                                          </span>
-                                          <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                        </>
+                                        <span className="text-red-600">
+                                          Atual- {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
+                                        </span>
                                       )}
                                     </div>
                                   </>
                                 ) : (
-                                  <div className="text-muted-foreground">
-                                    Produto inserido manualmente - aguardando compra para definir preços
-                                  </div>
+                                  <>
+                                    <div>
+                                      Produto inserido manualmente - sem valor definido
+                                    </div>
+                                    <div className="text-red-600 font-medium">
+                                      Atual- {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
+                                    </div>
+                                  </>
                                 )}
                               </p>
                            </div>
