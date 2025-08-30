@@ -1149,6 +1149,15 @@ export type Database = {
           quantidade: number
         }[]
       }
+      diagnosticar_e_corrigir_estoque: {
+        Args: { usuario_uuid: string }
+        Returns: {
+          acao_realizada: string
+          detalhes: string
+          tipo_problema: string
+          valor_encontrado: number
+        }[]
+      }
       get_public_profile_info: {
         Args: { target_user_id: string }
         Returns: {

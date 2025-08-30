@@ -543,6 +543,85 @@ const EstoqueAtual = () => {
     }
   };
 
+  // Função para diagnosticar inconsistências entre notas fiscais e estoque
+  const diagnosticarInconsistencias = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Usuário não autenticado.",
+        });
+        return;
+      }
+
+      toast({
+        title: "Diagnóstico em andamento",
+        description: "Verificando consistência entre notas fiscais e estoque...",
+      });
+
+      const { data, error } = await supabase.rpc('diagnosticar_e_corrigir_estoque', {
+        usuario_uuid: user.id
+      });
+
+      if (error) {
+        console.error('Erro no diagnóstico:', error);
+        toast({
+          variant: "destructive",
+          title: "Erro no Diagnóstico",
+          description: error.message || "Erro ao executar diagnóstico.",
+        });
+        return;
+      }
+
+      // Mostrar resultados do diagnóstico
+      let mensagem = "Diagnóstico concluído:\n\n";
+      let problemaDetectado = false;
+
+      data?.forEach((resultado: any) => {
+        if (resultado.tipo_problema === 'DIFERENCA_CALCULADA') {
+          const diferenca = Math.abs(parseFloat(resultado.valor_encontrado || '0'));
+          if (diferenca > 0.01) {
+            problemaDetectado = true;
+            mensagem += `⚠️ Diferença detectada: R$ ${diferenca.toFixed(2)}\n`;
+            mensagem += `${resultado.acao_realizada}\n\n`;
+          } else {
+            mensagem += `✅ Valores consistentes entre notas e estoque\n\n`;
+          }
+        } else if (resultado.tipo_problema === 'ESTOQUE_RECALCULADO') {
+          mensagem += `🔄 Estoque recalculado automaticamente\n`;
+          mensagem += `${resultado.acao_realizada}\n\n`;
+        } else if (resultado.tipo_problema === 'PRODUTOS_ZERADOS' || 
+                   resultado.tipo_problema === 'LIMPEZA_ZERADOS') {
+          mensagem += `🧹 ${resultado.detalhes}\n`;
+        }
+      });
+
+      if (problemaDetectado) {
+        toast({
+          title: "Inconsistências Corrigidas",
+          description: "O estoque foi recalculado automaticamente baseado nas notas fiscais ativas.",
+        });
+        // Recarregar estoque após correção
+        await loadEstoque();
+      } else {
+        toast({
+          title: "Diagnóstico Concluído",
+          description: "Não foram encontradas inconsistências no estoque.",
+        });
+      }
+
+    } catch (error) {
+      console.error('Erro ao diagnosticar:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro inesperado ao executar diagnóstico.",
+      });
+    }
+  };
+
   const limparEstoque = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -718,24 +797,33 @@ const EstoqueAtual = () => {
         <div className="bg-card border-b border-border">
           <div className="flex justify-between items-center p-4">
             <PicotinhoLogo />
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2"
-              >
-                <Home className="w-4 h-4" />
-                Início
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => navigate('/menu')}
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Voltar ao Menu
-              </Button>
-            </div>
+           <div className="flex items-center gap-2">
+             <Button
+               variant="ghost"
+               onClick={() => navigate('/')}
+               className="flex items-center gap-2"
+             >
+               <Home className="w-4 h-4" />
+               Início
+             </Button>
+             <Button
+               variant="outline"
+               onClick={() => navigate('/menu')}
+               className="flex items-center gap-2"
+             >
+               <ArrowLeft className="w-4 h-4" />
+               Voltar ao Menu
+             </Button>
+             <Button
+               variant="outline"
+               size="sm"
+               onClick={diagnosticarInconsistencias}
+               className="flex items-center gap-2 text-yellow-600 border-yellow-200 hover:bg-yellow-50"
+             >
+               <Search className="w-4 h-4" />
+               Diagnosticar
+             </Button>
+           </div>
           </div>
         </div>
         
