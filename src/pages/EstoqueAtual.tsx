@@ -371,19 +371,16 @@ const EstoqueAtual = () => {
                 <div className="text-center mb-3">
                   <p className="text-sm font-bold text-green-600">Valores em Estoque</p>
                 </div>
-                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                  Valores por Categoria
-                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
-                  {/* Cabeçalho das colunas */}
-                   <div className="grid grid-cols-4 gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
-                     <span>Categoria</span>
-                     <span className="text-center">Valor Pago</span>
-                     <span className="text-center">Valor Atual</span>
-                     <span className="text-center">Tendência</span>
-                   </div>
+                   {/* Cabeçalho das colunas */}
+                    <div className="grid grid-cols-4 gap-2 sm:gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
+                      <span>Categoria</span>
+                      <span className="text-center">Valor Pago</span>
+                      <span className="text-center">Valor Atual</span>
+                      <span className="text-center">Tendência</span>
+                    </div>
                   
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => {
                     // Calcular subtotal com preços atuais para esta categoria
@@ -416,14 +413,14 @@ const EstoqueAtual = () => {
                        }
                      };
 
-                     return (
-                       <div key={categoria} className="grid grid-cols-4 gap-1 text-xs sm:text-sm items-center py-1">
-                         <button 
-                           onClick={scrollToCategory}
-                           className="capitalize text-muted-foreground hover:text-primary underline-offset-2 hover:underline cursor-pointer text-left"
-                         >
-                           {categoria}
-                         </button>
+                      return (
+                        <div key={categoria} className="grid grid-cols-4 gap-2 sm:gap-1 text-xs sm:text-sm items-center py-1">
+                          <button 
+                            onClick={scrollToCategory}
+                            className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium"
+                          >
+                            {categoria}
+                          </button>
                          <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
                          <span className="font-medium text-blue-600 text-center">
                            {formatCurrency(subtotalPrecoAtual)}
@@ -435,9 +432,9 @@ const EstoqueAtual = () => {
                      );
                   })}
                   
-                  <div className="border-t pt-2 mt-2">
-                     <div className="grid grid-cols-4 gap-1 font-bold text-sm">
-                       <span className="text-foreground">Total</span>
+                   <div className="border-t pt-2 mt-2">
+                      <div className="grid grid-cols-4 gap-2 sm:gap-1 font-bold text-sm">
+                        <span className="text-foreground">Total</span>
                        <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
                        <span className="text-blue-600 text-center">
                          {formatCurrency(
