@@ -375,9 +375,9 @@ const EstoqueAtual = () => {
               <CardContent>
                 <div className="space-y-1">
                    {/* Cabeçalho das colunas */}
-                    <div className="grid grid-cols-[2fr_1fr_2fr_1.5fr_1fr] gap-2 pb-1 border-b text-xs text-muted-foreground font-medium">
+                    <div className="grid grid-cols-[2fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
                       <span>Categoria</span>
-                      <span className="text-center">Qtd</span>
+                      <span className="text-center">Itens</span>
                       <span className="text-center">Valor Pago</span>
                       <span className="text-right">Valor Atual</span>
                       <span className="text-right"></span>
@@ -418,7 +418,7 @@ const EstoqueAtual = () => {
                      const quantidadeItens = itensCategoria.length;
 
                       return (
-                        <div key={categoria} className="grid grid-cols-[2fr_1fr_2fr_1.5fr_1fr] gap-2 text-xs sm:text-sm items-center py-1">
+                        <div key={categoria} className="grid grid-cols-[2fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 text-xs sm:text-sm items-center py-1">
                           <button 
                             onClick={scrollToCategory}
                             className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium"
@@ -437,8 +437,8 @@ const EstoqueAtual = () => {
                      );
                   })}
                   
-                   <div className="border-t pt-2 mt-2">
-                      <div className="grid grid-cols-[2fr_1fr_2fr_1.5fr_1fr] gap-2 font-bold text-sm">
+                    <div className="border-t pt-2 mt-2">
+                      <div className="grid grid-cols-[2fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 font-bold text-sm">
                         <span className="text-foreground">Total</span>
                         <span className="text-muted-foreground text-center">{totalProdutosUnicos}</span>
                        <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
