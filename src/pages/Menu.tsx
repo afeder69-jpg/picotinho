@@ -11,7 +11,8 @@ import {
   ShoppingCart,
   LogIn,
   LogOut,
-  MapPin
+  MapPin,
+  Settings
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -32,7 +33,7 @@ const Menu = () => {
     }
   };
 
-  const menuOptions = [
+  const mainMenuOptions = [
     {
       id: 'saved-pages',
       title: 'Minhas Notas Salvas',
@@ -74,20 +75,23 @@ const Menu = () => {
       isActive: false
     },
     {
-      id: 'area-atuacao',
-      title: 'Área de Atuação',
-      description: 'Configurar raio geográfico dos supermercados',
-      icon: MapPin,
-      onClick: () => navigate('/area-atuacao'),
-      isActive: true
-    },
-    {
       id: 'shopping-list',
       title: 'Lista de Compras',
       description: 'Organizar próximas compras',
       icon: ShoppingCart,
       onClick: () => {},
       isActive: false
+    }
+  ];
+
+  const userConfigOptions = [
+    {
+      id: 'area-atuacao',
+      title: 'Área de Atuação',
+      description: 'Configurar raio geográfico dos supermercados',
+      icon: MapPin,
+      onClick: () => navigate('/area-atuacao'),
+      isActive: true
     }
   ];
 
@@ -125,8 +129,10 @@ const Menu = () => {
       <div className="flex-1 px-6 pb-24">
         <div className="max-w-md mx-auto">
           
-          <div className="space-y-3">
-            {menuOptions.map((option) => (
+          <div className="space-y-6">
+            {/* Opções principais */}
+            <div className="space-y-3">
+              {mainMenuOptions.map((option) => (
               <Card 
                 key={option.id}
                 className={`transition-all duration-200 hover:shadow-md ${
@@ -166,7 +172,57 @@ const Menu = () => {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              ))}
+            </div>
+
+            {/* Configurações do Usuário */}
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Configurações do Usuário
+              </h2>
+              {userConfigOptions.map((option) => (
+                <Card 
+                  key={option.id}
+                  className={`transition-all duration-200 hover:shadow-md ${
+                    option.isActive ? 'cursor-pointer' : 'cursor-default opacity-75'
+                  }`}
+                  onClick={option.isActive ? option.onClick : undefined}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-full ${
+                          option.isActive ? 'bg-primary/10' : 'bg-muted'
+                        }`}>
+                          <option.icon className={`w-6 h-6 ${
+                            option.isActive ? 'text-primary' : 'text-muted-foreground'
+                          }`} />
+                        </div>
+                        <div>
+                          <h3 className={`font-semibold ${
+                            option.isActive ? 'text-foreground' : 'text-muted-foreground'
+                          }`}>
+                            {option.title}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {option.description}
+                          </p>
+                          {!option.isActive && (
+                            <p className="text-xs text-muted-foreground/70 mt-1">
+                              Em breve
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {option.isActive && (
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
           
           
