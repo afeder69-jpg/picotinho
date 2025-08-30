@@ -93,6 +93,7 @@ export default function WhatsAppConfig() {
       if (errorCodigo) {
         console.error('Erro ao enviar código:', errorCodigo);
         toast.error("Erro ao enviar código de verificação");
+        setLoading(false); // ← CORREÇÃO: Resetar loading no erro
         return;
       }
 
@@ -103,8 +104,9 @@ export default function WhatsAppConfig() {
     } catch (error) {
       console.error('Erro ao enviar código:', error);
       toast.error("Erro ao enviar código de verificação");
+    } finally {
+      setLoading(false); // ← CORREÇÃO: Sempre resetar loading
     }
-    setLoading(false);
   };
 
   const verificarCodigo = async () => {
