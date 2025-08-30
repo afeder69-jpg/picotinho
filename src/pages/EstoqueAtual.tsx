@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, ArrowLeft, Home, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search } from 'lucide-react';
+import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -547,94 +548,46 @@ const EstoqueAtual = () => {
   // Função para diagnosticar inconsistências entre notas fiscais e estoque
   const diagnosticarInconsistencias = async () => {
     try {
+      setDiagnosticando(true);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: "Usuário não autenticado.",
-        });
-        return;
-      }
+      if (!user) return;
 
       toast({
-        title: "Diagnóstico em andamento",
-        description: "Verificando consistência entre notas fiscais e estoque...",
+        title: "Diagnóstico iniciado",
+        description: "Verificando inconsistências no estoque...",
       });
 
       const { data, error } = await supabase.rpc('diagnosticar_e_corrigir_estoque', {
         usuario_uuid: user.id
       });
 
-      if (error) {
-        console.error('Erro no diagnóstico:', error);
-        toast({
-          variant: "destructive",
-          title: "Erro no Diagnóstico",
-          description: error.message || "Erro ao executar diagnóstico.",
-        });
-        return;
-      }
+      if (error) throw error;
 
-      // Mostrar resultados do diagnóstico
-      let mensagem = "Diagnóstico concluído:\n\n";
-      let problemaDetectado = false;
+      // Atualizar o estoque após o diagnóstico
+      await loadEstoque();
 
-      data?.forEach((resultado: any) => {
-        if (resultado.tipo_problema === 'DIFERENCA_CALCULADA') {
-          const diferenca = Math.abs(parseFloat(resultado.valor_encontrado || '0'));
-          if (diferenca > 0.01) {
-            problemaDetectado = true;
-            mensagem += `⚠️ Diferença detectada: R$ ${diferenca.toFixed(2)}\n`;
-            mensagem += `${resultado.acao_realizada}\n\n`;
-          } else {
-            mensagem += `✅ Valores consistentes entre notas e estoque\n\n`;
-          }
-        } else if (resultado.tipo_problema === 'ESTOQUE_RECALCULADO') {
-          mensagem += `🔄 Estoque recalculado automaticamente\n`;
-          mensagem += `${resultado.acao_realizada}\n\n`;
-        } else if (resultado.tipo_problema === 'PRODUTOS_ZERADOS' || 
-                   resultado.tipo_problema === 'LIMPEZA_ZERADOS') {
-          mensagem += `🧹 ${resultado.detalhes}\n`;
-        }
+      // Mostrar resultado detalhado
+      toast({
+        title: "Diagnóstico concluído ✅",
+        description: typeof data === 'string' ? data : "Estoque verificado e corrigido com sucesso",
       });
-
-      if (problemaDetectado) {
-        toast({
-          title: "Inconsistências Corrigidas",
-          description: "O estoque foi recalculado automaticamente baseado nas notas fiscais ativas.",
-        });
-        // Recarregar estoque após correção
-        await loadEstoque();
-      } else {
-        toast({
-          title: "Diagnóstico Concluído",
-          description: "Não foram encontradas inconsistências no estoque.",
-        });
-      }
 
     } catch (error) {
-      console.error('Erro ao diagnosticar:', error);
+      console.error('Erro ao diagnosticar inconsistências:', error);
       toast({
         variant: "destructive",
-        title: "Erro",
-        description: "Erro inesperado ao executar diagnóstico.",
+        title: "Erro no diagnóstico",
+        description: "Não foi possível completar o diagnóstico do estoque.",
       });
+    } finally {
+      setDiagnosticando(false);
     }
   };
 
   const limparEstoque = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: "Usuário não autenticado.",
-        });
-        return;
-      }
+      if (!user) return;
 
       const { error } = await supabase.rpc('limpar_estoque_usuario', {
         usuario_uuid: user.id
@@ -642,12 +595,12 @@ const EstoqueAtual = () => {
 
       if (error) throw error;
 
+      await loadEstoque();
+      
       toast({
-        title: "Sucesso",
-        description: "Estoque limpo completamente.",
+        title: "Estoque limpo",
+        description: "Todo o estoque foi removido com sucesso.",
       });
-
-      loadEstoque();
     } catch (error) {
       console.error('Erro ao limpar estoque:', error);
       toast({
@@ -658,6 +611,7 @@ const EstoqueAtual = () => {
     }
   };
 
+  // Funções para edição e ajuste de quantidade
   const abrirModalEdicao = (item: EstoqueItem) => {
     setItemEditando(item);
     setNovaQuantidade(item.quantidade);
@@ -668,24 +622,23 @@ const EstoqueAtual = () => {
     setNovaQuantidade(0);
   };
 
-  const ajustarQuantidade = (operacao: 'aumentar' | 'diminuir' | 'zerar') => {
+  const ajustarQuantidade = (acao: 'aumentar' | 'diminuir' | 'zerar') => {
     if (!itemEditando) return;
-
-    let novoValor = novaQuantidade;
     
-    if (operacao === 'zerar') {
-      novoValor = 0;
-    } else {
-      const incremento = itemEditando.unidade_medida.toLowerCase().includes('kg') ? 0.01 : 1;
-      
-      if (operacao === 'aumentar') {
-        novoValor += incremento;
-      } else if (operacao === 'diminuir') {
-        novoValor = Math.max(0, novoValor - incremento);
+    const increment = itemEditando.unidade_medida.toLowerCase().includes('kg') ? 0.01 : 1;
+    
+    setNovaQuantidade(prev => {
+      switch (acao) {
+        case 'aumentar':
+          return prev + increment;
+        case 'diminuir':
+          return Math.max(0, prev - increment);
+        case 'zerar':
+          return 0;
+        default:
+          return prev;
       }
-    }
-    
-    setNovaQuantidade(Math.round(novoValor * 100) / 100);
+    });
   };
 
   const salvarAjuste = async () => {
@@ -694,7 +647,7 @@ const EstoqueAtual = () => {
     try {
       const { error } = await supabase
         .from('estoque_app')
-        .update({ 
+        .update({
           quantidade: novaQuantidade,
           updated_at: new Date().toISOString()
         })
@@ -702,26 +655,32 @@ const EstoqueAtual = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Sucesso",
-        description: `Quantidade atualizada para ${novaQuantidade} ${itemEditando.unidade_medida}`,
-      });
-
+      await loadEstoque();
       fecharModalEdicao();
-      loadEstoque();
+      
+      toast({
+        title: "Quantidade atualizada",
+        description: `${itemEditando.produto_nome}: ${novaQuantidade} ${itemEditando.unidade_medida}`,
+      });
     } catch (error) {
-      console.error('Erro ao atualizar estoque:', error);
+      console.error('Erro ao salvar ajuste:', error);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Não foi possível atualizar a quantidade.",
+        description: "Não foi possível salvar o ajuste.",
       });
     }
   };
 
-
+  // Funções utilitárias
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('pt-BR');
+    return new Date(dateString).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const formatCurrency = (value: number) => {
@@ -731,31 +690,23 @@ const EstoqueAtual = () => {
     }).format(value);
   };
 
-  // Função para normalizar valores para 2 casas decimais
   const normalizeValue = (value: number) => {
     return Math.round(value * 100) / 100;
   };
 
   const getCategoriaColor = (categoria: string) => {
     const colors: { [key: string]: string } = {
-      'laticínios': 'bg-[#FFEB3B] text-black font-bold text-lg px-4 py-2 rounded-lg',
-      'outros': 'bg-[#9E9E9E] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'hortifruti': 'bg-[#4CAF50] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'bebidas': 'bg-[#2196F3] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'mercearia': 'bg-[#FF5722] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'limpeza': 'bg-[#00BCD4] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'padaria': 'bg-[#FF9800] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'carnes': 'bg-[#D32F2F] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'higiene': 'bg-[#8BC34A] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      // Categorias existentes que não foram especificadas
-      'frutas': 'bg-[#4CAF50] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'verduras': 'bg-[#4CAF50] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'legumes': 'bg-[#4CAF50] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'cereais': 'bg-[#FF5722] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'pães': 'bg-[#FF9800] text-white font-bold text-lg px-4 py-2 rounded-lg',
-      'condimentos': 'bg-[#FF5722] text-white font-bold text-lg px-4 py-2 rounded-lg'
+      'açougue': 'bg-red-100 text-red-800 border-red-200',
+      'frutas e verduras': 'bg-green-100 text-green-800 border-green-200',
+      'padaria': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'lacticínios': 'bg-blue-100 text-blue-800 border-blue-200',
+      'limpeza': 'bg-purple-100 text-purple-800 border-purple-200',
+      'higiene': 'bg-pink-100 text-pink-800 border-pink-200',
+      'bebidas': 'bg-orange-100 text-orange-800 border-orange-200',
+      'congelados': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+      'outros': 'bg-gray-100 text-gray-800 border-gray-200'
     };
-    return colors[categoria.toLowerCase()] || 'bg-[#9E9E9E] text-white font-bold text-lg px-4 py-2 rounded-lg';
+    return colors[categoria.toLowerCase()] || colors['outros'];
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
@@ -794,47 +745,10 @@ const EstoqueAtual = () => {
   if (estoque.length === 0) {
     return (
       <div className="min-h-screen bg-background text-foreground">
-        {/* Header com logo e navegação */}
+        {/* Header com logo */}
         <div className="bg-card border-b border-border">
-          <div className="flex justify-between items-center p-4">
+          <div className="flex justify-center items-center p-4">
             <PicotinhoLogo />
-           <div className="flex items-center gap-2">
-             <Button
-               variant="ghost"
-               onClick={() => navigate('/')}
-               className="flex items-center gap-2"
-             >
-               <Home className="w-4 h-4" />
-               Início
-             </Button>
-             <Button
-               variant="outline"
-               onClick={() => navigate('/menu')}
-               className="flex items-center gap-2"
-             >
-               <ArrowLeft className="w-4 h-4" />
-               Voltar ao Menu
-             </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={diagnosticarInconsistencias}
-                disabled={diagnosticando}
-                className="flex items-center gap-2 text-yellow-600 border-yellow-200 hover:bg-yellow-50 disabled:opacity-50"
-              >
-                {diagnosticando ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
-                    Diagnosticando...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" />
-                    Diagnosticar
-                  </>
-                )}
-              </Button>
-           </div>
           </div>
         </div>
         
@@ -872,47 +786,10 @@ const EstoqueAtual = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header com logo e navegação */}
+      {/* Header com logo */}
       <div className="bg-card border-b border-border">
-        <div className="flex justify-between items-center p-4">
+        <div className="flex justify-center items-center p-4">
           <PicotinhoLogo />
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/')}
-              className="flex items-center gap-2"
-            >
-              <Home className="w-4 h-4" />
-              Início
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/menu')}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Voltar ao Menu
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={diagnosticarInconsistencias}
-              disabled={diagnosticando}
-              className="flex items-center gap-2 text-yellow-600 border-yellow-200 hover:bg-yellow-50 disabled:opacity-50"
-            >
-              {diagnosticando ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
-                  Diagnosticando...
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4" />
-                  Diagnosticar
-                </>
-              )}
-            </Button>
-          </div>
         </div>
       </div>
       
@@ -925,20 +802,47 @@ const EstoqueAtual = () => {
             </div>
             
             <div className="flex items-center gap-3">
-              <Button
-                onClick={abrirModalInserir}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Inserir Produto
-              </Button>
-              
-              {ultimaAtualizacao && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4" />
-                  <span>Última atualização: {formatDate(ultimaAtualizacao)}</span>
-                </div>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="bg-green-600 hover:bg-green-700 text-white">
+                    <MoreVertical className="w-4 h-4 mr-2" />
+                    Ações
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={abrirModalInserir}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Inserir Produto
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setModoEdicao(!modoEdicao)}>
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    {modoEdicao ? "Sair da Edição" : "Ajustar Estoque"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={diagnosticarInconsistencias}
+                    disabled={diagnosticando}
+                  >
+                    {diagnosticando ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+                        Diagnosticando...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-2" />
+                        Diagnosticar
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Limpar Estoque
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
@@ -1057,55 +961,35 @@ const EstoqueAtual = () => {
                 </div>
               </CardContent>
             </Card>
-
-
           </div>
 
-          {/* Botões de ação para administração do estoque */}
-          <div className="flex flex-wrap gap-4 justify-end">
-            <Button
-              variant={modoEdicao ? "default" : "secondary"}
-              size="sm"
-              onClick={() => setModoEdicao(!modoEdicao)}
-              className="flex items-center gap-1 text-xs px-3 py-1 h-7 bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Edit3 className="w-3 h-3" />
-              {modoEdicao ? "Sair da Edição" : "Ajustar o Estoque"}
-            </Button>
-            
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="flex items-center gap-1 text-xs px-3 py-1 h-7"
+          {/* Modal de confirmação para limpar estoque (invisível, acionado pelo dropdown) */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button id="trigger-limpar-estoque" className="hidden"></button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar Limpeza do Estoque</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação irá remover TODOS os produtos do seu estoque permanentemente. 
+                  <br /><br />
+                  <strong>⚠️ Esta ação é irreversível!</strong>
+                  <br /><br />
+                  Você terá que processar suas notas fiscais novamente para recriar o estoque. Tem certeza que deseja continuar?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={limparEstoque}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
-                  <Trash2 className="w-3 h-3" />
-                  Limpar Estoque
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmar Limpeza do Estoque</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação irá remover TODOS os produtos do seu estoque permanentemente. 
-                    <br /><br />
-                    <strong>⚠️ Esta ação é irreversível!</strong>
-                    <br /><br />
-                    Você terá que processar suas notas fiscais novamente para recriar o estoque. Tem certeza que deseja continuar?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={limparEstoque}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Sim, limpar tudo
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                  Sim, limpar tudo
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           </div>
 
           {/* Lista de produtos por categoria */}
@@ -1194,58 +1078,35 @@ const EstoqueAtual = () => {
                               </p>
                            </div>
                            
-                           <div className="text-right ml-2 flex-shrink-0">
-                             <p className="text-xs sm:text-sm font-bold text-foreground">
-                               {quantidade.toFixed(2)} {item.unidade_medida.replace('Unidade', 'Un')}
-                             </p>
-                                <div className="text-xs text-blue-600 font-medium">
-                                  {(() => {
-                                    const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
-                                    if (dataNotaFiscal) {
-                                      // Converter formato DD/MM/YYYY HH:MM:SS-03:00 para Date
-                                      let date: Date;
-                                      try {
-                                        if (dataNotaFiscal.includes('/') && dataNotaFiscal.includes(':')) {
-                                          // Formato: "25/08/2025 15:13:00-03:00"
-                                          const [datePart, timePart] = dataNotaFiscal.split(' ');
-                                          const [day, month, year] = datePart.split('/');
-                                          const timeWithoutOffset = timePart.split('-')[0];
-                                          date = new Date(`${year}-${month}-${day}T${timeWithoutOffset}`);
-                                        } else {
-                                          date = new Date(dataNotaFiscal);
-                                        }
-                                        
-                                        if (!isNaN(date.getTime())) {
-                                          return (
-                                            <>
-                                              <p>{date.toLocaleDateString('pt-BR')}</p>
-                                              <p>{date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                            </>
-                                          );
-                                        }
-                                      } catch (error) {
-                                        console.error('Erro ao converter data:', dataNotaFiscal, error);
-                                      }
-                                    }
-                                    
-                                    // Fallback para data de atualização do item
-                                    return (
-                                      <>
-                                        <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
-                                        <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                      </>
-                                    );
-                                  })()}
-                                </div>
-                           </div>
-                         </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                           <div className="text-right flex-shrink-0 ml-2">
+                             <div className="text-lg font-bold text-foreground">
+                               {quantidade} {item.unidade_medida.replace('Unidade', 'Un')}
+                             </div>
+                             <div className="text-xs text-muted-foreground">
+                               {(() => {
+                                 const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
+                                 return dataNotaFiscal ? (
+                                   <>
+                                     <p>Comprado:</p>
+                                     <p>{new Date(dataNotaFiscal).toLocaleDateString('pt-BR')}</p>
+                                   </>
+                                 ) : (
+                                   <>
+                                     <p>Adicionado:</p>
+                                     <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
+                                     <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                   </>
+                                 );
+                               })()}
+                             </div>
+                        </div>
+                       </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
 
