@@ -1136,13 +1136,13 @@ const EstoqueAtual = () => {
             {/* Campos do produto */}
             <div className="space-y-3">
               <div>
-                <Label htmlFor="valor">Valor por Unidade *</Label>
+                <Label htmlFor="valor">Preço Pago por Unidade *</Label>
                 <Input
                   id="valor"
                   type="number"
                   step="0.01"
                   min="0.01"
-                  placeholder="Digite o valor em R$"
+                  placeholder="Digite o preço que você pagou em R$"
                   value={novoProduto.valor}
                   onChange={(e) => setNovoProduto({ ...novoProduto, valor: e.target.value })}
                 />
@@ -1181,6 +1181,18 @@ const EstoqueAtual = () => {
                   onChange={(e) => setNovoProduto({ ...novoProduto, quantidade: e.target.value })}
                 />
               </div>
+
+              {/* Mostrar preço total calculado */}
+              {novoProduto.valor && novoProduto.quantidade && (
+                <div className="bg-muted p-3 rounded-md">
+                  <div className="text-sm font-medium text-foreground">
+                    💰 Valor Total: {formatCurrency(parseFloat(novoProduto.valor) * parseFloat(novoProduto.quantidade))}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {novoProduto.quantidade} {novoProduto.unidadeMedida} × {formatCurrency(parseFloat(novoProduto.valor))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Botões */}
