@@ -87,8 +87,12 @@ Deno.serve(async (req) => {
       throw new Error('Erro ao confirmar verificação')
     }
 
-    // Enviar mensagem de boas-vindas
-    await enviarBoasVindas(numeroWhatsApp, nomeUsuario)
+    // VERSÃO TEMPORÁRIA: Simular envio de boas-vindas
+    console.log('🎉 MENSAGEM DE BOAS-VINDAS (simulada):')
+    console.log(`📱 Para: ${numeroWhatsApp}`)
+    console.log('💬 Mensagem: Número confirmado! Eu sou o Picotinho, seu assistente de compras. Use "Picotinho, baixa do estoque [produto]" para começar!')
+    
+    // await enviarBoasVindas(numeroWhatsApp, nomeUsuario) // Desabilitado temporariamente
 
     console.log('✅ Código verificado com sucesso')
     
