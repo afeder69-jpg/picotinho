@@ -23,7 +23,15 @@ serve(async (req) => {
     console.log('Geocodificando endereço:', { supermercadoId, endereco, cidade, estado, cep });
 
     // Construir endereço completo para geocodificação
-    const enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, ${cep || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
+    let enderecoCompleto;
+    
+    // Se apenas 'endereco' foi fornecido (novo uso para estabelecimentos das notas)
+    if (endereco && !supermercadoId && !cidade && !estado && !cep) {
+      enderecoCompleto = `${endereco}, Brasil`;
+    } else {
+      // Lógica original para supermercados cadastrados
+      enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, ${cep || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
+    }
     
     console.log('Endereço para geocodificação:', enderecoCompleto);
 
@@ -66,27 +74,31 @@ serve(async (req) => {
     const coordenadas = await geocodificarEndereco(enderecoCompleto);
     
     if (coordenadas) {
-      // Atualizar supermercado com coordenadas
-      const { error: updateError } = await supabase
-        .from('supermercados')
-        .update({
-          latitude: coordenadas.latitude,
-          longitude: coordenadas.longitude,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', supermercadoId);
+      // Atualizar supermercado com coordenadas apenas se supermercadoId foi fornecido
+      if (supermercadoId) {
+        const { error: updateError } = await supabase
+          .from('supermercados')
+          .update({
+            latitude: coordenadas.latitude,
+            longitude: coordenadas.longitude,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', supermercadoId);
 
-      if (updateError) {
-        console.error('Erro ao atualizar coordenadas:', updateError);
-        throw updateError;
+        if (updateError) {
+          console.error('Erro ao atualizar coordenadas:', updateError);
+          throw updateError;
+        }
+
+        console.log(`✅ Coordenadas atualizadas no BD: ${coordenadas.latitude}, ${coordenadas.longitude}`);
+      } else {
+        console.log(`✅ Coordenadas obtidas (sem atualização no BD): ${coordenadas.latitude}, ${coordenadas.longitude}`);
       }
-
-      console.log(`✅ Coordenadas atualizadas: ${coordenadas.latitude}, ${coordenadas.longitude}`);
 
       return new Response(JSON.stringify({
         success: true,
         coordenadas,
-        message: 'Endereço geocodificado com sucesso'
+        message: supermercadoId ? 'Endereço geocodificado e atualizado com sucesso' : 'Endereço geocodificado com sucesso'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -100,27 +112,31 @@ serve(async (req) => {
       }
 
       if (coordenadasAproximadas) {
-        // Atualizar com coordenadas aproximadas
-        const { error: updateError } = await supabase
-          .from('supermercados')
-          .update({
-            latitude: coordenadasAproximadas.latitude,
-            longitude: coordenadasAproximadas.longitude,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', supermercadoId);
+        // Atualizar com coordenadas aproximadas apenas se supermercadoId foi fornecido
+        if (supermercadoId) {
+          const { error: updateError } = await supabase
+            .from('supermercados')
+            .update({
+              latitude: coordenadasAproximadas.latitude,
+              longitude: coordenadasAproximadas.longitude,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', supermercadoId);
 
-        if (updateError) {
-          console.error('Erro ao atualizar coordenadas aproximadas:', updateError);
-          throw updateError;
+          if (updateError) {
+            console.error('Erro ao atualizar coordenadas aproximadas:', updateError);
+            throw updateError;
+          }
+
+          console.log(`⚠️ Coordenadas aproximadas atualizadas no BD (cidade): ${coordenadasAproximadas.latitude}, ${coordenadasAproximadas.longitude}`);
+        } else {
+          console.log(`⚠️ Coordenadas aproximadas obtidas (sem atualização no BD): ${coordenadasAproximadas.latitude}, ${coordenadasAproximadas.longitude}`);
         }
-
-        console.log(`⚠️ Coordenadas aproximadas (cidade): ${coordenadasAproximadas.latitude}, ${coordenadasAproximadas.longitude}`);
 
         return new Response(JSON.stringify({
           success: true,
           coordenadas: coordenadasAproximadas,
-          message: 'Endereço geocodificado aproximadamente (por cidade)',
+          message: supermercadoId ? 'Endereço geocodificado aproximadamente e atualizado (por cidade)' : 'Endereço geocodificado aproximadamente (por cidade)',
           aproximado: true
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

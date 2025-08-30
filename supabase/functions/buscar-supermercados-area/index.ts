@@ -105,6 +105,45 @@ serve(async (req) => {
       });
     }
 
+    // NOVA LÓGICA: Extrair estabelecimentos únicos das notas fiscais para garantir cobertura completa
+    const estabelecimentosComNotasAtivas = new Map();
+    
+    notasAtivas?.forEach(nota => {
+      const dadosExtraidos = nota.dados_extraidos;
+      const cnpjNota = dadosExtraidos?.supermercado?.cnpj || 
+                       dadosExtraidos?.cnpj || 
+                       dadosExtraidos?.estabelecimento?.cnpj ||
+                       dadosExtraidos?.emitente?.cnpj;
+      
+      if (cnpjNota) {
+        const cnpjLimpo = cnpjNota.replace(/[^\d]/g, '');
+        if (cnpjLimpo.length >= 14 && cnpjsComNotasAtivas.has(cnpjLimpo)) {
+          // Capturar informações do estabelecimento das notas
+          const nomeEstabelecimento = dadosExtraidos?.supermercado?.nome || 
+                                      dadosExtraidos?.estabelecimento?.nome ||
+                                      dadosExtraidos?.emitente?.nome ||
+                                      'Estabelecimento';
+          
+          const enderecoEstabelecimento = dadosExtraidos?.supermercado?.endereco || 
+                                          dadosExtraidos?.estabelecimento?.endereco ||
+                                          dadosExtraidos?.emitente?.endereco ||
+                                          '';
+
+          if (!estabelecimentosComNotasAtivas.has(cnpjLimpo)) {
+            estabelecimentosComNotasAtivas.set(cnpjLimpo, {
+              cnpj: cnpjLimpo,
+              nome: nomeEstabelecimento,
+              endereco: enderecoEstabelecimento,
+              quantidadeNotas: 0
+            });
+          }
+          
+          const estabelecimento = estabelecimentosComNotasAtivas.get(cnpjLimpo);
+          estabelecimento.quantidadeNotas++;
+        }
+      }
+    });
+
     // Buscar supermercados cadastrados com coordenadas válidas
     const { data: todosSupermercados, error: supermercadosError } = await supabase
       .from('supermercados')
@@ -118,18 +157,56 @@ serve(async (req) => {
       throw supermercadosError;
     }
 
-    // FILTRO CRÍTICO: Apenas supermercados que têm notas fiscais ativas
-    const supermercadosComNotasAtivas = todosSupermercados?.filter(supermercado => {
+    // NOVA LÓGICA: Combinar supermercados cadastrados com estabelecimentos das notas
+    const supermercadosComNotasAtivas = [];
+    
+    // 1. Primeiro, adicionar supermercados já cadastrados que têm notas ativas
+    todosSupermercados?.forEach(supermercado => {
       const cnpjSupermercado = supermercado.cnpj?.replace(/[^\d]/g, '');
-      const temNotasAtivas = cnpjSupermercado && cnpjsComNotasAtivas.has(cnpjSupermercado);
-      
-      if (temNotasAtivas) {
+      if (cnpjSupermercado && cnpjsComNotasAtivas.has(cnpjSupermercado)) {
         const quantidadeNotas = notasPorCnpj.get(cnpjSupermercado) || 0;
-        console.log(`✅ ${supermercado.nome} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas`);
+        console.log(`✅ ${supermercado.nome} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas (CADASTRADO)`);
+        supermercadosComNotasAtivas.push({
+          ...supermercado,
+          fonte: 'cadastrado'
+        });
+        // Remover da lista de estabelecimentos das notas para evitar duplicatas
+        estabelecimentosComNotasAtivas.delete(cnpjSupermercado);
       }
+    });
+
+    // 2. Usar geocodificação para estabelecimentos não cadastrados, mas que têm notas ativas
+    for (const [cnpjLimpo, estabelecimento] of estabelecimentosComNotasAtivas) {
+      console.log(`🔍 Tentando geocodificar: ${estabelecimento.nome} - CNPJ: ${cnpjLimpo} - ${estabelecimento.quantidadeNotas} notas ativas (NÃO CADASTRADO)`);
       
-      return temNotasAtivas;
-    }) || [];
+      // Tentar geocodificar o endereço do estabelecimento
+      try {
+        const { data: geocodificacao, error: geoError } = await supabase.functions.invoke('geocodificar-endereco', {
+          body: { endereco: estabelecimento.endereco }
+        });
+
+        if (!geoError && geocodificacao?.latitude && geocodificacao?.longitude) {
+          console.log(`📍 Geocodificação bem-sucedida para ${estabelecimento.nome}: ${geocodificacao.latitude}, ${geocodificacao.longitude}`);
+          
+          supermercadosComNotasAtivas.push({
+            id: `temp_${cnpjLimpo}`, // ID temporário
+            nome: estabelecimento.nome,
+            cnpj: cnpjLimpo,
+            endereco: estabelecimento.endereco,
+            latitude: geocodificacao.latitude,
+            longitude: geocodificacao.longitude,
+            ativo: true,
+            fonte: 'nota_fiscal',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        } else {
+          console.log(`❌ Falha na geocodificação para ${estabelecimento.nome}: ${geoError?.message || 'Coordenadas não encontradas'}`);
+        }
+      } catch (error) {
+        console.log(`❌ Erro ao geocodificar ${estabelecimento.nome}: ${error.message}`);
+      }
+    }
 
     console.log(`📍 Encontrados ${supermercadosComNotasAtivas.length} supermercados com notas fiscais ativas`);
 
