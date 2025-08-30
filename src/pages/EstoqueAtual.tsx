@@ -682,21 +682,39 @@ const EstoqueAtual = () => {
                                   {(() => {
                                     const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
                                     if (dataNotaFiscal) {
-                                      const date = new Date(dataNotaFiscal);
-                                      return (
-                                        <>
-                                          <p>{date.toLocaleDateString('pt-BR')}</p>
-                                          <p>{date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                        </>
-                                      );
-                                    } else {
-                                      return (
-                                        <>
-                                          <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
-                                          <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                        </>
-                                      );
+                                      // Converter formato DD/MM/YYYY HH:MM:SS-03:00 para Date
+                                      let date: Date;
+                                      try {
+                                        if (dataNotaFiscal.includes('/') && dataNotaFiscal.includes(':')) {
+                                          // Formato: "25/08/2025 15:13:00-03:00"
+                                          const [datePart, timePart] = dataNotaFiscal.split(' ');
+                                          const [day, month, year] = datePart.split('/');
+                                          const timeWithoutOffset = timePart.split('-')[0];
+                                          date = new Date(`${year}-${month}-${day}T${timeWithoutOffset}`);
+                                        } else {
+                                          date = new Date(dataNotaFiscal);
+                                        }
+                                        
+                                        if (!isNaN(date.getTime())) {
+                                          return (
+                                            <>
+                                              <p>{date.toLocaleDateString('pt-BR')}</p>
+                                              <p>{date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                            </>
+                                          );
+                                        }
+                                      } catch (error) {
+                                        console.error('Erro ao converter data:', dataNotaFiscal, error);
+                                      }
                                     }
+                                    
+                                    // Fallback para data de atualização do item
+                                    return (
+                                      <>
+                                        <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
+                                        <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                      </>
+                                    );
                                   })()}
                                 </div>
                            </div>
