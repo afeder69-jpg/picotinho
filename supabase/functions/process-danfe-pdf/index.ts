@@ -323,6 +323,49 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
             } else {
               mercadoId = novoMercado.id;
               console.log("✅ Mercado criado:", dadosEstruturados.estabelecimento.nome);
+              
+              // Também criar/atualizar na tabela global de supermercados
+              if (dadosEstruturados.estabelecimento.cnpj) {
+                try {
+                  const { data: supermercadoGlobal, error: supermercadoError } = await supabase
+                    .from('supermercados')
+                    .upsert({
+                      nome: dadosEstruturados.estabelecimento.nome,
+                      cnpj: dadosEstruturados.estabelecimento.cnpj,
+                      endereco: dadosEstruturados.estabelecimento.endereco || null,
+                      ativo: true
+                    }, {
+                      onConflict: 'cnpj'
+                    })
+                    .select('id')
+                    .single();
+
+                  if (!supermercadoError && supermercadoGlobal) {
+                    // Geocodificar endereço do supermercado em background
+                    try {
+                      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocodificar-endereco`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          supermercadoId: supermercadoGlobal.id,
+                          endereco: dadosEstruturados.estabelecimento.endereco,
+                          cidade: null, // Extrair do endereço se disponível
+                          estado: null, // Extrair do endereço se disponível
+                          cep: null // Extrair do endereço se disponível
+                        })
+                      });
+                      console.log('✅ Geocodificação iniciada para supermercado');
+                    } catch (geoError) {
+                      console.error('⚠️ Erro ao iniciar geocodificação:', geoError);
+                    }
+                  }
+                } catch (globalError) {
+                  console.error('⚠️ Erro ao criar supermercado global:', globalError);
+                }
+              }
             }
           }
         }

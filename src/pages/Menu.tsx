@@ -10,7 +10,8 @@ import {
   ChefHat, 
   ShoppingCart,
   LogIn,
-  LogOut
+  LogOut,
+  MapPin
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -71,6 +72,14 @@ const Menu = () => {
       icon: ChefHat,
       onClick: () => {},
       isActive: false
+    },
+    {
+      id: 'area-atuacao',
+      title: 'Área de Atuação',
+      description: 'Configurar raio geográfico dos supermercados',
+      icon: MapPin,
+      onClick: () => navigate('/area-atuacao'),
+      isActive: true
     },
     {
       id: 'shopping-list',

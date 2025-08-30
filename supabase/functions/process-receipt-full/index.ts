@@ -272,6 +272,28 @@ serve(async (req) => {
 
         if (supermercadoError) throw supermercadoError;
         supermercado = newSupermercado;
+        
+        // Geocodificar endereço do novo supermercado em background
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/geocodificar-endereco`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              supermercadoId: newSupermercado.id,
+              endereco: extractedData.supermercado.endereco,
+              cidade: extractedData.supermercado.cidade,
+              estado: extractedData.supermercado.estado,
+              cep: extractedData.supermercado.cep
+            })
+          });
+          console.log('✅ Geocodificação iniciada para novo supermercado');
+        } catch (geoError) {
+          console.error('⚠️ Erro ao iniciar geocodificação:', geoError);
+          // Não bloquear o processamento por erro de geocodificação
+        }
       }
     }
 

@@ -1,0 +1,381 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { 
+  MapPin, 
+  Store, 
+  ArrowLeft, 
+  Navigation,
+  CheckCircle,
+  AlertCircle,
+  Package
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+interface Supermercado {
+  id: string;
+  nome: string;
+  cnpj: string;
+  endereco: string;
+  cidade: string;
+  estado: string;
+  latitude: number;
+  longitude: number;
+  distancia: number;
+  produtos_disponiveis: number;
+}
+
+interface ConfiguracaoUsuario {
+  raio_busca_km: number;
+}
+
+const AreaAtuacao = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [raioAtual, setRaioAtual] = useState<number>(5);
+  const [localizacaoUsuario, setLocalizacaoUsuario] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [supermercados, setSupermercados] = useState<Supermercado[]>([]);
+  const [carregandoLocalizacao, setCarregandoLocalizacao] = useState(false);
+  const [carregandoSupermercados, setCarregandoSupermercados] = useState(false);
+  const [configuracaoCarregada, setConfiguracaoCarregada] = useState(false);
+
+  // Carregar configuração atual do usuário
+  useEffect(() => {
+    carregarConfiguracaoUsuario();
+  }, []);
+
+  // Buscar supermercados quando raio ou localização mudarem
+  useEffect(() => {
+    if (localizacaoUsuario && configuracaoCarregada) {
+      buscarSupermercados();
+    }
+  }, [raioAtual, localizacaoUsuario, configuracaoCarregada]);
+
+  const carregarConfiguracaoUsuario = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: configuracao } = await supabase
+        .from('configuracoes_usuario')
+        .select('raio_busca_km')
+        .eq('usuario_id', user.id)
+        .single();
+
+      if (configuracao) {
+        setRaioAtual(configuracao.raio_busca_km || 5);
+      }
+      
+      setConfiguracaoCarregada(true);
+      
+      // Obter localização automaticamente
+      obterLocalizacao();
+    } catch (error) {
+      console.error('Erro ao carregar configuração:', error);
+      setConfiguracaoCarregada(true);
+      obterLocalizacao();
+    }
+  };
+
+  const obterLocalizacao = () => {
+    setCarregandoLocalizacao(true);
+    
+    if (!navigator.geolocation) {
+      toast({
+        variant: "destructive",
+        title: "Geolocalização não suportada",
+        description: "Seu navegador não suporta geolocalização.",
+      });
+      setCarregandoLocalizacao(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocalizacaoUsuario({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        });
+        setCarregandoLocalizacao(false);
+        
+        toast({
+          title: "Localização obtida",
+          description: "Sua localização foi detectada com sucesso!",
+        });
+      },
+      (error) => {
+        console.error('Erro ao obter localização:', error);
+        setCarregandoLocalizacao(false);
+        
+        // Usar localização padrão (São Paulo) como fallback
+        setLocalizacaoUsuario({
+          latitude: -23.5505,
+          longitude: -46.6333
+        });
+        
+        toast({
+          variant: "destructive",
+          title: "Erro de localização",
+          description: "Não foi possível obter sua localização. Usando localização padrão (São Paulo).",
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000 // 5 minutos
+      }
+    );
+  };
+
+  const buscarSupermercados = async () => {
+    if (!localizacaoUsuario) return;
+    
+    setCarregandoSupermercados(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase.functions.invoke('buscar-supermercados-area', {
+        body: {
+          latitude: localizacaoUsuario.latitude,
+          longitude: localizacaoUsuario.longitude,
+          raio: raioAtual,
+          userId: user.id
+        }
+      });
+
+      if (error) throw error;
+
+      setSupermercados(data.supermercados || []);
+      
+    } catch (error) {
+      console.error('Erro ao buscar supermercados:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao buscar supermercados",
+        description: "Não foi possível carregar os supermercados da área.",
+      });
+    } finally {
+      setCarregandoSupermercados(false);
+    }
+  };
+
+  const salvarConfiguracao = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('configuracoes_usuario')
+        .upsert({
+          usuario_id: user.id,
+          raio_busca_km: raioAtual,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Configuração salva",
+        description: `Área de atuação definida para ${raioAtual}km de raio.`,
+      });
+      
+      navigate('/menu');
+    } catch (error) {
+      console.error('Erro ao salvar configuração:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: "Não foi possível salvar a configuração.",
+      });
+    }
+  };
+
+  const formatarDistancia = (distancia: number) => {
+    return distancia < 1 
+      ? `${Math.round(distancia * 1000)}m`
+      : `${distancia.toFixed(1)}km`;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-subtle p-4">
+      <div className="max-w-2xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => navigate('/menu')}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Área de Atuação</h1>
+            <p className="text-sm text-muted-foreground">Configure o raio geográfico dos seus supermercados</p>
+          </div>
+        </div>
+
+        {/* Configuração de Raio */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" />
+              Configurar Raio de Busca
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            
+            {/* Status da Localização */}
+            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+              {carregandoLocalizacao ? (
+                <>
+                  <Navigation className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm">Obtendo sua localização...</span>
+                </>
+              ) : localizacaoUsuario ? (
+                <>
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-sm">Localização detectada</span>
+                  <Badge variant="outline" className="text-xs">
+                    {localizacaoUsuario.latitude.toFixed(4)}, {localizacaoUsuario.longitude.toFixed(4)}
+                  </Badge>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-4 h-4 text-yellow-600" />
+                  <span className="text-sm">Localização não disponível</span>
+                  <Button size="sm" variant="outline" onClick={obterLocalizacao}>
+                    Tentar novamente
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {/* Slider de Raio */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium">Raio de Atuação</label>
+                <Badge variant="secondary" className="text-lg font-bold">
+                  {raioAtual} km
+                </Badge>
+              </div>
+              
+              <Slider
+                value={[raioAtual]}
+                onValueChange={(values) => setRaioAtual(values[0])}
+                max={50}
+                min={1}
+                step={1}
+                className="w-full"
+              />
+              
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>1 km</span>
+                <span>25 km</span>
+                <span>50 km</span>
+              </div>
+            </div>
+
+            <Button 
+              onClick={salvarConfiguracao} 
+              className="w-full"
+              disabled={!localizacaoUsuario}
+            >
+              Salvar Configuração
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Lista de Supermercados */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Store className="w-5 h-5 text-primary" />
+              Supermercados na Área
+              {!carregandoSupermercados && (
+                <Badge variant="outline">
+                  {supermercados.length} encontrados
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {carregandoSupermercados ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <span className="ml-2">Buscando supermercados...</span>
+              </div>
+            ) : supermercados.length === 0 ? (
+              <div className="text-center py-8">
+                <Store className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  Nenhum supermercado encontrado nesta área.
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Tente aumentar o raio de busca.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {supermercados.map((supermercado, index) => (
+                  <div key={supermercado.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-medium text-foreground">{supermercado.nome}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {supermercado.endereco}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {supermercado.cidade}, {supermercado.estado}
+                        </p>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <Badge variant="outline">
+                          {formatarDistancia(supermercado.distancia)}
+                        </Badge>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Package className="w-3 h-3" />
+                          {supermercado.produtos_disponiveis} produtos
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Informações Adicionais */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-muted-foreground space-y-2">
+              <p className="flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                Os supermercados são listados por ordem de proximidade
+              </p>
+              <p className="flex items-center gap-2">
+                <Store className="w-4 h-4" />
+                Apenas supermercados com produtos cadastrados são exibidos
+              </p>
+              <p className="flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                O número de produtos indica itens com preços atualizados
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default AreaAtuacao;
