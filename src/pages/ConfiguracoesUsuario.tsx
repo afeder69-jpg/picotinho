@@ -5,7 +5,8 @@ import {
   ChevronRight, 
   MapPin,
   ArrowLeft,
-  Settings
+  Settings,
+  MessageCircle
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -19,6 +20,14 @@ const ConfiguracoesUsuario = () => {
       description: 'Configurar raio geográfico dos supermercados',
       icon: MapPin,
       onClick: () => navigate('/area-atuacao'),
+      isActive: true
+    },
+    {
+      id: 'whatsapp',
+      title: 'Integração WhatsApp',
+      description: 'Configure comandos do Picotinho via WhatsApp',
+      icon: MessageCircle,
+      onClick: () => navigate('/whatsapp'),
       isActive: true
     }
   ];
