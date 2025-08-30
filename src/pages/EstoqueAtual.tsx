@@ -481,11 +481,6 @@ const EstoqueAtual = () => {
             </Card>
 
 
-            <Card>
-              <CardContent className="p-6">
-                {/* Espaço vazio para futuras informações */}
-              </CardContent>
-            </Card>
           </div>
 
           {/* Botões de ação para administração do estoque */}
