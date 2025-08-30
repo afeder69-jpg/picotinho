@@ -57,8 +57,13 @@ Por favor, digite este código no aplicativo para confirmar seu número do Whats
 
 ⏱️ Este código expira em 10 minutos.`
 
-    // Enviar mensagem via Z-API (ou adaptável para outros provedores)
-    const sucesso = await enviarMensagemWhatsApp(numeroFormatado, mensagemVerificacao, whatsappToken)
+    // VERSÃO TEMPORÁRIA - simulando envio para testar o fluxo
+    console.log('🧪 MODO TESTE: Simulando envio do WhatsApp')
+    console.log('📱 Número:', numeroFormatado)
+    console.log('💬 Código que seria enviado:', codigoVerificacao)
+    
+    // Simular sucesso temporariamente
+    const sucesso = true // await enviarMensagemWhatsApp(numeroFormatado, mensagemVerificacao, whatsappToken)
     
     if (sucesso) {
       // Salvar código na base de dados
