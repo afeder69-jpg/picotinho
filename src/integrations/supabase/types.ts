@@ -771,6 +771,39 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_access_log: {
+        Row: {
+          access_type: string
+          accessed_at: string | null
+          accessed_user_id: string
+          id: string
+          ip_address: unknown | null
+          success: boolean | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          access_type: string
+          accessed_at?: string | null
+          accessed_user_id: string
+          id?: string
+          ip_address?: unknown | null
+          success?: boolean | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          access_type?: string
+          accessed_at?: string | null
+          accessed_user_id?: string
+          id?: string
+          ip_address?: unknown | null
+          success?: boolean | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1077,6 +1110,42 @@ export type Database = {
       }
     }
     Views: {
+      profiles_safe: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          id: string | null
+          nome: string | null
+          provider: string | null
+          provider_id: string | null
+          telefone_masked: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+          provider?: string | null
+          provider_id?: string | null
+          telefone_masked?: never
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+          provider?: string | null
+          provider_id?: string | null
+          telefone_masked?: never
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       users_safe: {
         Row: {
           created_at: string | null
@@ -1158,6 +1227,20 @@ export type Database = {
           valor_encontrado: number
         }[]
       }
+      get_my_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avatar_url: string
+          created_at: string
+          id: string
+          nome: string
+          provider: string
+          provider_id: string
+          telefone: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
       get_public_profile_info: {
         Args: { target_user_id: string }
         Returns: {
@@ -1218,6 +1301,14 @@ export type Database = {
         Args: { usuario_uuid: string }
         Returns: undefined
       }
+      log_profile_access: {
+        Args: { access_type: string; accessed_user_id: string }
+        Returns: undefined
+      }
+      mask_phone_number: {
+        Args: { phone_number: string }
+        Returns: string
+      }
       recalcular_estoque_completo: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1225,6 +1316,10 @@ export type Database = {
       recalcular_estoque_usuario: {
         Args: { usuario_uuid: string }
         Returns: undefined
+      }
+      secure_profile_access: {
+        Args: { target_user_id: string }
+        Returns: boolean
       }
       set_limit: {
         Args: { "": number }
