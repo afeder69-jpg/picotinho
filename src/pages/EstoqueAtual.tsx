@@ -234,6 +234,7 @@ const EstoqueAtual = () => {
         .from('estoque_app')
         .select('*')
         .eq('user_id', user.id)
+        .gt('quantidade', 0)  // Filtrar apenas itens com quantidade maior que 0
         .order('produto_nome', { ascending: true });
 
       if (error) throw error;
