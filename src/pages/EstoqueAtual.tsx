@@ -338,6 +338,7 @@ const EstoqueAtual = () => {
           .from('estoque_app')
           .update({ 
             quantidade: produtoExistente.quantidade + quantidade,
+            preco_unitario_ultimo: valor, // Atualizar também o preço
             updated_at: new Date().toISOString()
           })
           .eq('id', produtoExistente.id);
@@ -870,7 +871,7 @@ const EstoqueAtual = () => {
                                  )}
                                </h3>
                               <p className="text-xs text-muted-foreground space-y-1">
-                                {item.preco_unitario_ultimo && (
+                                {item.preco_unitario_ultimo ? (
                                   <>
                                     <div>
                                       Pagou- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
@@ -904,6 +905,10 @@ const EstoqueAtual = () => {
                                       )}
                                     </div>
                                   </>
+                                ) : (
+                                  <div className="text-muted-foreground">
+                                    Produto inserido manualmente - aguardando compra para definir preços
+                                  </div>
                                 )}
                               </p>
                            </div>
