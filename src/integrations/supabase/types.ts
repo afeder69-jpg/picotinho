@@ -1060,26 +1060,41 @@ export type Database = {
           email: string | null
           id: string
           nome: string | null
-          senha: string | null
         }
         Insert: {
           created_at?: string
           email?: string | null
           id?: string
           nome?: string | null
-          senha?: string | null
         }
         Update: {
           created_at?: string
           email?: string | null
           id?: string
           nome?: string | null
-          senha?: string | null
         }
         Relationships: []
       }
     }
     Views: {
+      users_safe: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          nome: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+        }
+        Relationships: []
+      }
       view_comparacao_supermercados_app: {
         Row: {
           preco_medio: number | null
@@ -1124,6 +1139,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      get_user_email: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown
@@ -1167,6 +1186,10 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
+      }
+      validate_user_access: {
+        Args: { user_uuid: string }
+        Returns: boolean
       }
     }
     Enums: {
