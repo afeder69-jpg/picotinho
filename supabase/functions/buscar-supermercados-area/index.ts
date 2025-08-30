@@ -40,21 +40,39 @@ serve(async (req) => {
       return R * c; // Distância em km
     }
 
-    // Buscar todos os supermercados com coordenadas
-    const { data: supermercados, error: supermercadosError } = await supabase
-      .from('supermercados')
-      .select('*')
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null)
-      .eq('ativo', true);
+    // Primeiro, buscar supermercados que tenham notas fiscais processadas
+    const { data: supermercadosComNotas, error: notasError } = await supabase
+      .from('notas_imagens')
+      .select(`
+        dados_extraidos,
+        supermercados!inner(*)
+      `)
+      .eq('processada', true)
+      .not('dados_extraidos', 'is', null)
+      .not('supermercados.latitude', 'is', null)
+      .not('supermercados.longitude', 'is', null)
+      .eq('supermercados.ativo', true);
 
-    if (supermercadosError) {
-      console.error('Erro ao buscar supermercados:', supermercadosError);
-      throw supermercadosError;
+    if (notasError) {
+      console.error('Erro ao buscar supermercados com notas:', notasError);
+      throw notasError;
     }
 
+    // Extrair supermercados únicos
+    const supermercadosUnicos = new Map();
+    supermercadosComNotas?.forEach(nota => {
+      const supermercado = nota.supermercados;
+      if (supermercado && !supermercadosUnicos.has(supermercado.id)) {
+        supermercadosUnicos.set(supermercado.id, supermercado);
+      }
+    });
+
+    const supermercados = Array.from(supermercadosUnicos.values());
+
+    console.log(`📍 Encontrados ${supermercados.length} supermercados com notas fiscais`);
+
     // Filtrar supermercados dentro do raio especificado
-    const supermercadosNoRaio = supermercados?.filter(supermercado => {
+    const supermercadosNoRaio = supermercados.filter(supermercado => {
       const distancia = calcularDistancia(
         latitude,
         longitude,
@@ -72,21 +90,46 @@ serve(async (req) => {
         parseFloat(supermercado.latitude),
         parseFloat(supermercado.longitude)
       )
-    })).sort((a, b) => a.distancia - b.distancia) || [];
+    })).sort((a, b) => a.distancia - b.distancia);
 
     console.log(`✅ Encontrados ${supermercadosNoRaio.length} supermercados dentro de ${raio}km`);
 
-    // Buscar também quantos produtos cada supermercado tem em preços atuais
+    // Contar produtos únicos de cada supermercado baseado nas notas fiscais reais
     const supermercadosComDados = await Promise.all(
       supermercadosNoRaio.map(async (supermercado) => {
-        const { count } = await supabase
-          .from('precos_atuais')
-          .select('*', { count: 'exact', head: true })
-          .eq('estabelecimento_cnpj', supermercado.cnpj);
+        // Buscar todas as notas processadas deste supermercado
+        const { data: notasSupermercado } = await supabase
+          .from('notas_imagens')
+          .select('dados_extraidos')
+          .eq('processada', true)
+          .not('dados_extraidos', 'is', null);
+
+        // Filtrar notas que pertencem a este supermercado (por CNPJ)
+        const notasDoSupermercado = notasSupermercado?.filter(nota => {
+          const dadosExtraidos = nota.dados_extraidos;
+          const cnpjNota = dadosExtraidos?.supermercado?.cnpj || dadosExtraidos?.cnpj;
+          return cnpjNota === supermercado.cnpj;
+        }) || [];
+
+        // Contar produtos únicos de todas as notas deste supermercado
+        const produtosUnicos = new Set();
+        
+        notasDoSupermercado.forEach(nota => {
+          const itens = nota.dados_extraidos?.itens || [];
+          itens.forEach(item => {
+            if (item.descricao) {
+              // Normalizar nome do produto para evitar duplicatas
+              const nomeNormalizado = item.descricao.trim().toUpperCase();
+              produtosUnicos.add(nomeNormalizado);
+            }
+          });
+        });
+
+        console.log(`🛒 ${supermercado.nome}: ${produtosUnicos.size} produtos únicos de ${notasDoSupermercado.length} notas`);
 
         return {
           ...supermercado,
-          produtos_disponiveis: count || 0
+          produtos_disponiveis: produtosUnicos.size
         };
       })
     );
