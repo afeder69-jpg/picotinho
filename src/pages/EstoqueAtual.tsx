@@ -3,8 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, ArrowLeft, Home, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus } from 'lucide-react';
+import { Package, Calendar, ArrowLeft, Home, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +23,13 @@ interface EstoqueItem {
   updated_at: string;
 }
 
+interface ProdutoSugestao {
+  id: string;
+  nome: string;
+  categoria: string;
+  unidade_medida: string;
+}
+
 const EstoqueAtual = () => {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [precosAtuais, setPrecosAtuais] = useState<any[]>([]);
@@ -29,6 +39,18 @@ const EstoqueAtual = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
   const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
+  
+  // Estados para inserção de produto
+  const [modalInserirAberto, setModalInserirAberto] = useState(false);
+  const [produtosSugeridos, setProdutosSugeridos] = useState<ProdutoSugestao[]>([]);
+  const [termoBusca, setTermoBusca] = useState('');
+  const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoSugestao | null>(null);
+  const [novoProduto, setNovoProduto] = useState({
+    nome: '',
+    categoria: '',
+    quantidade: '',
+    unidadeMedida: 'Unidade'
+  });
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -156,6 +178,154 @@ const EstoqueAtual = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Funções para inserção de produtos
+  const buscarProdutosSugeridos = async (termo: string) => {
+    if (termo.length < 2) {
+      setProdutosSugeridos([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('produtos_app')
+        .select('id, nome, categoria_id, unidade_medida')
+        .ilike('nome', `%${termo}%`)
+        .limit(10);
+
+      if (error) throw error;
+
+      const produtosMapeados = data?.map(produto => ({
+        id: produto.id,
+        nome: produto.nome,
+        categoria: 'outros', // Pode mapear categoria_id para nome se necessário
+        unidade_medida: produto.unidade_medida
+      })) || [];
+
+      setProdutosSugeridos(produtosMapeados);
+    } catch (error) {
+      console.error('Erro ao buscar produtos:', error);
+    }
+  };
+
+  const abrirModalInserir = () => {
+    setModalInserirAberto(true);
+    setTermoBusca('');
+    setProdutoSelecionado(null);
+    setNovoProduto({
+      nome: '',
+      categoria: 'outros',
+      quantidade: '',
+      unidadeMedida: 'Unidade'
+    });
+  };
+
+  const fecharModalInserir = () => {
+    setModalInserirAberto(false);
+    setTermoBusca('');
+    setProdutosSugeridos([]);
+    setProdutoSelecionado(null);
+  };
+
+  const selecionarProduto = (produto: ProdutoSugestao) => {
+    setProdutoSelecionado(produto);
+    setTermoBusca(produto.nome);
+    setProdutosSugeridos([]);
+    setNovoProduto({
+      nome: produto.nome,
+      categoria: produto.categoria,
+      quantidade: '',
+      unidadeMedida: produto.unidade_medida
+    });
+  };
+
+  const inserirProdutoNoEstoque = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Usuário não autenticado.",
+        });
+        return;
+      }
+
+      const quantidade = parseFloat(novoProduto.quantidade);
+      if (isNaN(quantidade) || quantidade <= 0) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Quantidade deve ser um número maior que zero.",
+        });
+        return;
+      }
+
+      if (!novoProduto.nome.trim()) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Nome do produto é obrigatório.",
+        });
+        return;
+      }
+
+      // Verificar se o produto já existe no estoque do usuário
+      const { data: produtoExistente, error: erroVerificacao } = await supabase
+        .from('estoque_app')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('produto_nome', novoProduto.nome.toUpperCase().trim())
+        .single();
+
+      if (produtoExistente) {
+        // Atualizar quantidade existente
+        const { error: erroUpdate } = await supabase
+          .from('estoque_app')
+          .update({ 
+            quantidade: produtoExistente.quantidade + quantidade,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', produtoExistente.id);
+
+        if (erroUpdate) throw erroUpdate;
+
+        toast({
+          title: "Sucesso",
+          description: `Quantidade atualizada: +${quantidade} ${novoProduto.unidadeMedida}`,
+        });
+      } else {
+        // Inserir novo produto no estoque
+        const { error: erroInsert } = await supabase
+          .from('estoque_app')
+          .insert({
+            user_id: user.id,
+            produto_nome: novoProduto.nome.toUpperCase().trim(),
+            categoria: novoProduto.categoria || 'outros',
+            unidade_medida: novoProduto.unidadeMedida,
+            quantidade: quantidade,
+            preco_unitario_ultimo: null // Produto manual não tem preço
+          });
+
+        if (erroInsert) throw erroInsert;
+
+        toast({
+          title: "Sucesso",
+          description: `Produto "${novoProduto.nome}" adicionado ao estoque`,
+        });
+      }
+
+      fecharModalInserir();
+      loadEstoque();
+    } catch (error) {
+      console.error('Erro ao inserir produto:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível adicionar o produto ao estoque.",
+      });
     }
   };
 
@@ -422,12 +592,22 @@ const EstoqueAtual = () => {
               <h1 className="text-xl sm:text-3xl font-bold text-foreground">Estoque Atual</h1>
             </div>
             
-            {ultimaAtualizacao && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="w-4 h-4" />
-                <span>Última atualização: {formatDate(ultimaAtualizacao)}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={abrirModalInserir}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Inserir Produto
+              </Button>
+              
+              {ultimaAtualizacao && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="w-4 h-4" />
+                  <span>Última atualização: {formatDate(ultimaAtualizacao)}</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Cards de resumo */}
@@ -797,6 +977,126 @@ const EstoqueAtual = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Inserir Produto */}
+      <Dialog open={modalInserirAberto} onOpenChange={fecharModalInserir}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Inserir Produto no Estoque</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Campo de busca de produto */}
+            <div className="space-y-2">
+              <Label htmlFor="busca-produto">Buscar ou criar produto</Label>
+              <div className="relative">
+                <Input
+                  id="busca-produto"
+                  placeholder="Digite o nome do produto..."
+                  value={termoBusca}
+                  onChange={(e) => {
+                    setTermoBusca(e.target.value);
+                    buscarProdutosSugeridos(e.target.value);
+                    setNovoProduto({ ...novoProduto, nome: e.target.value });
+                  }}
+                />
+                <Search className="absolute right-3 top-3 w-4 h-4 text-muted-foreground" />
+              </div>
+              
+              {/* Lista de sugestões */}
+              {produtosSugeridos.length > 0 && (
+                <div className="border rounded-md max-h-32 overflow-y-auto">
+                  {produtosSugeridos.map((produto) => (
+                    <button
+                      key={produto.id}
+                      onClick={() => selecionarProduto(produto)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted border-b last:border-0 text-sm"
+                    >
+                      <div className="font-medium">{produto.nome}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {produto.categoria} • {produto.unidade_medida}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Campos do produto */}
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="categoria">Categoria</Label>
+                <Select
+                  value={novoProduto.categoria}
+                  onValueChange={(value) => setNovoProduto({ ...novoProduto, categoria: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hortifruti">Hortifruti</SelectItem>
+                    <SelectItem value="laticínios">Laticínios</SelectItem>
+                    <SelectItem value="mercearia">Mercearia</SelectItem>
+                    <SelectItem value="bebidas">Bebidas</SelectItem>
+                    <SelectItem value="limpeza">Limpeza</SelectItem>
+                    <SelectItem value="higiene">Higiene</SelectItem>
+                    <SelectItem value="padaria">Padaria</SelectItem>
+                    <SelectItem value="carnes">Carnes</SelectItem>
+                    <SelectItem value="outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="unidade">Unidade de Medida</Label>
+                <Select
+                  value={novoProduto.unidadeMedida}
+                  onValueChange={(value) => setNovoProduto({ ...novoProduto, unidadeMedida: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Unidade">Unidade</SelectItem>
+                    <SelectItem value="Kg">Kg</SelectItem>
+                    <SelectItem value="Gramas">Gramas</SelectItem>
+                    <SelectItem value="Litros">Litros</SelectItem>
+                    <SelectItem value="ML">ML</SelectItem>
+                    <SelectItem value="Pacote">Pacote</SelectItem>
+                    <SelectItem value="Caixa">Caixa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="quantidade">Quantidade</Label>
+                <Input
+                  id="quantidade"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="Digite a quantidade"
+                  value={novoProduto.quantidade}
+                  onChange={(e) => setNovoProduto({ ...novoProduto, quantidade: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-2 pt-4">
+              <Button variant="outline" onClick={fecharModalInserir} className="flex-1">
+                Cancelar
+              </Button>
+              <Button 
+                onClick={inserirProdutoNoEstoque} 
+                className="flex-1 bg-green-600 hover:bg-green-700"
+              >
+                Adicionar ao Estoque
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
