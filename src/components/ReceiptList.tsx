@@ -6,6 +6,7 @@ import { Eye, Trash2, FileText, X, Bot, Loader2, CheckCircle, Plus } from 'lucid
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 
@@ -37,6 +38,7 @@ const ReceiptList = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -775,7 +777,7 @@ const ReceiptList = () => {
                 {/* Status no canto superior direito */}
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   {getStatusBadge(receipt.status)}
-                  <Button variant="ghost" size="sm" onClick={() => deleteReceipt(receipt.id)} className="text-destructive hover:text-destructive h-7 px-2">
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(receipt.id)} className="text-destructive hover:text-destructive h-7 px-2">
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
@@ -907,6 +909,33 @@ const ReceiptList = () => {
           </div>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              ❗ Você tem certeza que deseja excluir esta nota fiscal?
+              <br />
+              Essa operação é irreversível e removerá todos os itens associados a esta nota do seu estoque.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteConfirmId) {
+                  deleteReceipt(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }
+              }}
+            >
+              Confirmar Exclusão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
