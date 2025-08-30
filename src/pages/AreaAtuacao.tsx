@@ -167,7 +167,7 @@ const AreaAtuacao = () => {
     }
   };
 
-  const salvarConfiguracao = async () => {
+  const salvarConfiguracaoAutomaticamente = async (novoRaio: number) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -176,18 +176,16 @@ const AreaAtuacao = () => {
         .from('configuracoes_usuario')
         .upsert({
           usuario_id: user.id,
-          raio_busca_km: raioAtual,
+          raio_busca_km: novoRaio,
           updated_at: new Date().toISOString()
         });
 
       if (error) throw error;
 
       toast({
-        title: "Configuração salva",
-        description: `Área de atuação definida para ${raioAtual}km de raio.`,
+        title: "Configuração atualizada",
+        description: `Área de atuação definida para ${novoRaio}km de raio.`,
       });
-      
-      navigate('/menu');
     } catch (error) {
       console.error('Erro ao salvar configuração:', error);
       toast({
@@ -196,6 +194,16 @@ const AreaAtuacao = () => {
         description: "Não foi possível salvar a configuração.",
       });
     }
+  };
+
+  const handleRaioChange = (values: number[]) => {
+    const novoRaio = values[0];
+    setRaioAtual(novoRaio);
+  };
+
+  const handleRaioChangeComplete = (values: number[]) => {
+    const novoRaio = values[0];
+    salvarConfiguracaoAutomaticamente(novoRaio);
   };
 
   const formatarDistancia = (distancia: number) => {
@@ -270,7 +278,8 @@ const AreaAtuacao = () => {
               
               <Slider
                 value={[raioAtual]}
-                onValueChange={(values) => setRaioAtual(values[0])}
+                onValueChange={handleRaioChange}
+                onValueCommit={handleRaioChangeComplete}
                 max={50}
                 min={1}
                 step={1}
@@ -284,13 +293,6 @@ const AreaAtuacao = () => {
               </div>
             </div>
 
-            <Button 
-              onClick={salvarConfiguracao} 
-              className="w-full"
-              disabled={!localizacaoUsuario}
-            >
-              Salvar Configuração
-            </Button>
           </CardContent>
         </Card>
 

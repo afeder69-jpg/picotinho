@@ -61,7 +61,11 @@ serve(async (req) => {
 
     notasAtivas?.forEach(nota => {
       const dadosExtraidos = nota.dados_extraidos;
-      const cnpjNota = dadosExtraidos?.supermercado?.cnpj || dadosExtraidos?.cnpj;
+      // Verificar múltiplas possibilidades de onde o CNPJ pode estar
+      const cnpjNota = dadosExtraidos?.supermercado?.cnpj || 
+                       dadosExtraidos?.cnpj || 
+                       dadosExtraidos?.estabelecimento?.cnpj ||
+                       dadosExtraidos?.emitente?.cnpj;
       
       if (cnpjNota) {
         // Normalizar CNPJ para comparação consistente
@@ -69,7 +73,13 @@ serve(async (req) => {
         if (cnpjLimpo.length >= 14) {
           cnpjsComNotasAtivas.add(cnpjLimpo);
           notasPorCnpj.set(cnpjLimpo, (notasPorCnpj.get(cnpjLimpo) || 0) + 1);
+          console.log(`🔍 CNPJ encontrado na nota: ${cnpjLimpo}`);
+        } else {
+          console.log(`⚠️ CNPJ inválido encontrado: ${cnpjLimpo} (length: ${cnpjLimpo.length})`);
         }
+      } else {
+        console.log(`❌ Nenhum CNPJ encontrado na nota ID: ${nota.id}`);
+        console.log(`   Dados extraídos:`, JSON.stringify(dadosExtraidos, null, 2));
       }
     });
 
