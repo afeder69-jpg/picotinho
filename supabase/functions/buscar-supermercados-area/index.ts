@@ -40,39 +40,57 @@ serve(async (req) => {
       return R * c; // Distância em km
     }
 
-    // Primeiro, buscar supermercados que tenham notas fiscais processadas
-    const { data: supermercadosComNotas, error: notasError } = await supabase
+    // Buscar apenas supermercados que realmente têm notas fiscais processadas
+    const { data: notasProcessadas, error: notasError } = await supabase
       .from('notas_imagens')
-      .select(`
-        dados_extraidos,
-        supermercados!inner(*)
-      `)
+      .select('dados_extraidos')
       .eq('processada', true)
-      .not('dados_extraidos', 'is', null)
-      .not('supermercados.latitude', 'is', null)
-      .not('supermercados.longitude', 'is', null)
-      .eq('supermercados.ativo', true);
+      .not('dados_extraidos', 'is', null);
 
     if (notasError) {
-      console.error('Erro ao buscar supermercados com notas:', notasError);
+      console.error('Erro ao buscar notas processadas:', notasError);
       throw notasError;
     }
 
-    // Extrair supermercados únicos
-    const supermercadosUnicos = new Map();
-    supermercadosComNotas?.forEach(nota => {
-      const supermercado = nota.supermercados;
-      if (supermercado && !supermercadosUnicos.has(supermercado.id)) {
-        supermercadosUnicos.set(supermercado.id, supermercado);
+    // Extrair CNPJs únicos das notas fiscais processadas
+    const cnpjsComNotas = new Set();
+    notasProcessadas?.forEach(nota => {
+      const dadosExtraidos = nota.dados_extraidos;
+      const cnpjNota = dadosExtraidos?.supermercado?.cnpj || dadosExtraidos?.cnpj;
+      if (cnpjNota) {
+        // Normalizar CNPJ removendo caracteres especiais para comparação
+        const cnpjLimpo = cnpjNota.replace(/[^\d]/g, '');
+        if (cnpjLimpo.length >= 14) {
+          cnpjsComNotas.add(cnpjLimpo);
+        }
       }
     });
 
-    const supermercados = Array.from(supermercadosUnicos.values());
+    console.log(`📄 Encontrados ${cnpjsComNotas.size} CNPJs únicos com notas processadas`);
 
-    console.log(`📍 Encontrados ${supermercados.length} supermercados com notas fiscais`);
+    // Buscar supermercados que correspondem aos CNPJs das notas
+    const { data: supermercados, error: supermercadosError } = await supabase
+      .from('supermercados')
+      .select('*')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .eq('ativo', true);
+
+    if (supermercadosError) {
+      console.error('Erro ao buscar supermercados:', supermercadosError);
+      throw supermercadosError;
+    }
+
+    // Filtrar apenas supermercados que têm notas processadas
+    const supermercadosComNotas = supermercados?.filter(supermercado => {
+      const cnpjSupermercado = supermercado.cnpj?.replace(/[^\d]/g, '');
+      return cnpjSupermercado && cnpjsComNotas.has(cnpjSupermercado);
+    }) || [];
+
+    console.log(`📍 Encontrados ${supermercadosComNotas.length} supermercados com notas fiscais`);
 
     // Filtrar supermercados dentro do raio especificado
-    const supermercadosNoRaio = supermercados.filter(supermercado => {
+    const supermercadosNoRaio = supermercadosComNotas.filter(supermercado => {
       const distancia = calcularDistancia(
         latitude,
         longitude,
@@ -80,7 +98,7 @@ serve(async (req) => {
         parseFloat(supermercado.longitude)
       );
       
-      console.log(`${supermercado.nome}: ${distancia.toFixed(2)}km`);
+      console.log(`${supermercado.nome}: ${distancia.toFixed(3)}km`);
       return distancia <= raio;
     }).map(supermercado => ({
       ...supermercado,
@@ -104,11 +122,13 @@ serve(async (req) => {
           .eq('processada', true)
           .not('dados_extraidos', 'is', null);
 
-        // Filtrar notas que pertencem a este supermercado (por CNPJ)
+        // Filtrar notas que pertencem a este supermercado (por CNPJ normalizado)
+        const cnpjSupermercadoLimpo = supermercado.cnpj?.replace(/[^\d]/g, '');
         const notasDoSupermercado = notasSupermercado?.filter(nota => {
           const dadosExtraidos = nota.dados_extraidos;
           const cnpjNota = dadosExtraidos?.supermercado?.cnpj || dadosExtraidos?.cnpj;
-          return cnpjNota === supermercado.cnpj;
+          const cnpjNotaLimpo = cnpjNota?.replace(/[^\d]/g, '');
+          return cnpjNotaLimpo === cnpjSupermercadoLimpo;
         }) || [];
 
         // Contar produtos únicos de todas as notas deste supermercado
@@ -117,10 +137,21 @@ serve(async (req) => {
         notasDoSupermercado.forEach(nota => {
           const itens = nota.dados_extraidos?.itens || [];
           itens.forEach(item => {
-            if (item.descricao) {
-              // Normalizar nome do produto para evitar duplicatas
-              const nomeNormalizado = item.descricao.trim().toUpperCase();
-              produtosUnicos.add(nomeNormalizado);
+            if (item.descricao && item.descricao.trim()) {
+              // Normalizar nome do produto usando a mesma lógica do sistema
+              let nomeNormalizado = item.descricao.trim().toUpperCase();
+              
+              // Remover variações comuns que podem gerar duplicatas
+              nomeNormalizado = nomeNormalizado
+                .replace(/\b(GRAENC|GRANEL)\b/g, 'GRANEL')
+                .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO)?\b/g, 'PAO DE FORMA')
+                .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|\d+G|\d+ML|\d+L)\b/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+              
+              if (nomeNormalizado.length > 2) {
+                produtosUnicos.add(nomeNormalizado);
+              }
             }
           });
         });
