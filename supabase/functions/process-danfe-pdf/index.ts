@@ -473,23 +473,31 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 categoria: categoria || 'outros'
               });
 
-            // Atualizar tabela precos_atuais
+            // Atualizar preços atuais de forma inteligente considerando data/hora
             if (descricao && valor_unitario && dadosEstruturados.estabelecimento?.cnpj) {
               try {
-                await supabase
-                  .from('precos_atuais')
-                  .upsert({
-                    produto_codigo: codigo || null,
-                    produto_nome: descricao,
-                    estabelecimento_cnpj: dadosEstruturados.estabelecimento.cnpj,
-                    estabelecimento_nome: dadosEstruturados.estabelecimento.nome || 'Não informado',
-                    valor_unitario: valor_unitario,
-                    data_atualizacao: new Date().toISOString()
-                  }, {
-                    onConflict: 'produto_codigo,estabelecimento_cnpj'
-                  });
+                // Usar a função especializada que considera data/hora e área de atuação
+                await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/update-precos-atuais`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    compraId: compra?.id,
+                    produtoNome: descricao,
+                    precoUnitario: valor_unitario,
+                    estabelecimentoCnpj: dadosEstruturados.estabelecimento.cnpj,
+                    estabelecimentoNome: dadosEstruturados.estabelecimento.nome || 'Não informado',
+                    dataCompra: dadosEstruturados.compra?.data_emissao,
+                    horaCompra: dadosEstruturados.compra?.hora_emissao,
+                    userId: userId
+                  })
+                });
+                
+                console.log(`✅ Preço atual processado para: ${descricao}`);
               } catch (precoError) {
-                console.error('Erro ao atualizar preços atuais:', precoError);
+                console.error('Erro ao processar preço atual:', precoError);
               }
             }
 

@@ -59,6 +59,7 @@ const EstoqueAtual = () => {
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
+    corrigirPrecosZerados(); // Corrigir preços zerados automaticamente
   }, []);
 
   const loadPrecosAtuais = async () => {
@@ -72,6 +73,33 @@ const EstoqueAtual = () => {
       setPrecosAtuais(data || []);
     } catch (error) {
       console.error('Erro ao carregar preços atuais:', error);
+    }
+  };
+
+  const corrigirPrecosZerados = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      console.log('Executando correção de preços zerados...');
+      
+      const { data, error } = await supabase.functions.invoke('fix-precos-zerados', {
+        body: { userId: user.id }
+      });
+
+      if (error) {
+        console.error('Erro ao corrigir preços:', error);
+        return;
+      }
+
+      console.log('Correção de preços concluída:', data);
+      
+      // Recarregar preços atuais após correção
+      if (data?.produtosCorrigidos > 0) {
+        await loadPrecosAtuais();
+      }
+    } catch (error) {
+      console.error('Erro ao executar correção de preços:', error);
     }
   };
 

@@ -63,6 +63,20 @@ serve(async (req) => {
     // 🖼️ FALLBACK: Processamento por imagem (para PDFs escaneados ou quando extração de texto falha)
     console.log('🖼️ Iniciando processamento por imagem...');
 
+    // Buscar dados da nota de imagem
+    const { data: notaImagem, error: notaError } = await supabase
+      .from('notas_imagens')
+      .select('*')
+      .eq('id', notaImagemId)
+      .single();
+
+    if (notaError || !notaImagem) {
+      throw new Error('Nota de imagem não encontrada');
+    }
+
+    const imageUrl = notaImagem.imagem_url;
+    const qrUrl = pdfUrl || imageUrl; // Para compatibilidade
+
     // 🔍 Primeiro passo: OCR para extrair texto bruto da imagem
     console.log('Executando OCR na imagem...');
     const ocrResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -561,24 +575,32 @@ serve(async (req) => {
         .from('itens_nota')
         .insert(itensParaSalvar);
 
-      // Atualizar tabela precos_atuais para cada produto
+      // Atualizar preços atuais de forma inteligente para cada produto
       for (const produto of extractedData.produtos) {
-        if (produto.nome && produto.precoUnitario && extractedData.estabelecimento?.cnpj) {
+        if (produto.nome && produto.precoUnitario && supermercado?.cnpj) {
           try {
-            await supabase
-              .from('precos_atuais')
-              .upsert({
-                produto_codigo: produto.codigo || null,
-                produto_nome: produto.nome || produto.descricao || 'Produto não identificado',
-                estabelecimento_cnpj: extractedData.estabelecimento.cnpj,
-                estabelecimento_nome: extractedData.estabelecimento.nome || 'Não informado',
-                valor_unitario: produto.precoUnitario,
-                data_atualizacao: new Date().toISOString()
-              }, {
-                onConflict: 'produto_codigo,estabelecimento_cnpj'
-              });
+            // Chamar função especializada que considera data/hora e área de atuação
+            await fetch(`${supabaseUrl}/functions/v1/update-precos-atuais`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                compraId: compra.id,
+                produtoNome: produto.nome,
+                precoUnitario: produto.precoUnitario,
+                estabelecimentoCnpj: supermercado.cnpj,
+                estabelecimentoNome: supermercado.nome,
+                dataCompra: extractedData.compra.data,
+                horaCompra: extractedData.compra.hora,
+                userId: notaImagem.usuario_id
+              })
+            });
+            
+            console.log(`✅ Preço atual processado para: ${produto.nome}`);
           } catch (precoError) {
-            console.error('Erro ao atualizar preços atuais:', precoError);
+            console.error('Erro ao processar preço atual:', precoError);
           }
         }
       }
