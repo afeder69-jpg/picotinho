@@ -1139,6 +1139,13 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      get_public_profile_info: {
+        Args: { target_user_id: string }
+        Returns: {
+          nome: string
+          user_id: string
+        }[]
+      }
       get_supermercados_basicos: {
         Args: Record<PropertyKey, never>
         Returns: {
