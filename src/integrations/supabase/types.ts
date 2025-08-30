@@ -1139,6 +1139,16 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      corrigir_produtos_manuais_sem_preco: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          acao_realizada: string
+          preco_sugerido: number
+          produto_id: string
+          produto_nome: string
+          quantidade: number
+        }[]
+      }
       get_public_profile_info: {
         Args: { target_user_id: string }
         Returns: {
