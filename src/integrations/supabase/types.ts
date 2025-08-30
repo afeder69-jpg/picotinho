@@ -1014,6 +1014,8 @@ export type Database = {
           endereco: string | null
           estado: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           nome: string
           telefone: string | null
           updated_at: string | null
@@ -1028,6 +1030,8 @@ export type Database = {
           endereco?: string | null
           estado?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           nome: string
           telefone?: string | null
           updated_at?: string | null
@@ -1042,6 +1046,8 @@ export type Database = {
           endereco?: string | null
           estado?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           nome?: string
           telefone?: string | null
           updated_at?: string | null
