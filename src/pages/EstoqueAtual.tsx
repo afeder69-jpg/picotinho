@@ -375,11 +375,12 @@ const EstoqueAtual = () => {
               <CardContent>
                 <div className="space-y-1">
                    {/* Cabeçalho das colunas */}
-                    <div className="grid grid-cols-[2fr_2fr_2fr_1fr] gap-3 sm:gap-4 pb-1 border-b text-xs text-muted-foreground font-medium">
+                    <div className="grid grid-cols-[2fr_1fr_2fr_2fr_1fr] gap-2 sm:gap-3 pb-1 border-b text-xs text-muted-foreground font-medium">
                       <span>Categoria</span>
+                      <span className="text-center">Qtd</span>
                       <span className="text-center">Valor Pago</span>
                       <span className="text-center">Valor Atual</span>
-                      <span className="text-right">Tendência</span>
+                      <span className="text-right"></span>
                     </div>
                   
                   {subtotaisPorCategoria.map(({ categoria, subtotal }) => {
@@ -413,14 +414,18 @@ const EstoqueAtual = () => {
                        }
                      };
 
+                      // Calcular quantidade total de itens na categoria
+                     const quantidadeItens = itensCategoria.length;
+
                       return (
-                        <div key={categoria} className="grid grid-cols-[2fr_2fr_2fr_1fr] gap-3 sm:gap-4 text-xs sm:text-sm items-center py-1">
+                        <div key={categoria} className="grid grid-cols-[2fr_1fr_2fr_2fr_1fr] gap-2 sm:gap-3 text-xs sm:text-sm items-center py-1">
                           <button 
                             onClick={scrollToCategory}
                             className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium"
                           >
                             {categoria}
                           </button>
+                          <span className="font-medium text-muted-foreground text-center">{quantidadeItens}</span>
                          <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
                           <span className="font-medium text-blue-600 text-center">
                             {formatCurrency(subtotalPrecoAtual)}
@@ -433,8 +438,9 @@ const EstoqueAtual = () => {
                   })}
                   
                    <div className="border-t pt-2 mt-2">
-                      <div className="grid grid-cols-[2fr_2fr_2fr_1fr] gap-3 sm:gap-4 font-bold text-sm">
+                      <div className="grid grid-cols-[2fr_1fr_2fr_2fr_1fr] gap-2 sm:gap-3 font-bold text-sm">
                         <span className="text-foreground">Total</span>
+                        <span className="text-muted-foreground text-center">{totalProdutosUnicos}</span>
                        <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
                        <span className="text-blue-600 text-center">
                          {formatCurrency(
