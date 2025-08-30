@@ -49,7 +49,8 @@ const EstoqueAtual = () => {
     nome: '',
     categoria: '',
     quantidade: '',
-    unidadeMedida: 'Unidade'
+    unidadeMedida: 'Unidade',
+    valor: ''
   });
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -216,9 +217,10 @@ const EstoqueAtual = () => {
     setProdutoSelecionado(null);
     setNovoProduto({
       nome: '',
-      categoria: 'outros',
+      categoria: '',
       quantidade: '',
-      unidadeMedida: 'Unidade'
+      unidadeMedida: 'Unidade',
+      valor: ''
     });
   };
 
@@ -237,8 +239,28 @@ const EstoqueAtual = () => {
       nome: produto.nome,
       categoria: produto.categoria,
       quantidade: '',
-      unidadeMedida: produto.unidade_medida
+      unidadeMedida: produto.unidade_medida,
+      valor: ''
     });
+  };
+
+  // Função para categorizar produto automaticamente com IA
+  const categorizarProdutoIA = async (nomeProduto: string): Promise<string> => {
+    try {
+      const response = await supabase.functions.invoke('categorize-product', {
+        body: { productName: nomeProduto }
+      });
+      
+      if (response.error) {
+        console.error('Erro na categorização:', response.error);
+        return 'outros';
+      }
+      
+      return response.data?.category || 'outros';
+    } catch (error) {
+      console.error('Erro ao categorizar produto:', error);
+      return 'outros';
+    }
   };
 
   const inserirProdutoNoEstoque = async () => {
@@ -253,6 +275,16 @@ const EstoqueAtual = () => {
         return;
       }
 
+      // Validações obrigatórias
+      if (!novoProduto.nome.trim()) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Nome do produto é obrigatório.",
+        });
+        return;
+      }
+
       const quantidade = parseFloat(novoProduto.quantidade);
       if (isNaN(quantidade) || quantidade <= 0) {
         toast({
@@ -263,13 +295,33 @@ const EstoqueAtual = () => {
         return;
       }
 
-      if (!novoProduto.nome.trim()) {
+      const valor = parseFloat(novoProduto.valor);
+      if (isNaN(valor) || valor <= 0) {
         toast({
           variant: "destructive",
           title: "Erro",
-          description: "Nome do produto é obrigatório.",
+          description: "Valor é obrigatório e deve ser maior que zero.",
         });
         return;
+      }
+
+      if (!novoProduto.unidadeMedida) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Unidade de medida é obrigatória.",
+        });
+        return;
+      }
+
+      // Categorizar automaticamente com IA se não for produto existente
+      let categoria = novoProduto.categoria;
+      if (!produtoSelecionado && novoProduto.nome.trim()) {
+        toast({
+          title: "Categorizando...",
+          description: "Aguarde enquanto categorizamos o produto automaticamente.",
+        });
+        categoria = await categorizarProdutoIA(novoProduto.nome.trim());
       }
 
       // Verificar se o produto já existe no estoque do usuário
@@ -298,16 +350,16 @@ const EstoqueAtual = () => {
         });
       } else {
         // Inserir novo produto no estoque
-        const { error: erroInsert } = await supabase
-          .from('estoque_app')
-          .insert({
-            user_id: user.id,
-            produto_nome: novoProduto.nome.toUpperCase().trim(),
-            categoria: novoProduto.categoria || 'outros',
-            unidade_medida: novoProduto.unidadeMedida,
-            quantidade: quantidade,
-            preco_unitario_ultimo: null // Produto manual não tem preço
-          });
+         const { error: erroInsert } = await supabase
+           .from('estoque_app')
+           .insert({
+             user_id: user.id,
+             produto_nome: novoProduto.nome.toUpperCase().trim(),
+             categoria: categoria || 'outros',
+             unidade_medida: novoProduto.unidadeMedida,
+             quantidade: quantidade,
+             preco_unitario_ultimo: valor // Usar o valor inserido pelo usuário
+           });
 
         if (erroInsert) throw erroInsert;
 
@@ -1027,26 +1079,20 @@ const EstoqueAtual = () => {
             {/* Campos do produto */}
             <div className="space-y-3">
               <div>
-                <Label htmlFor="categoria">Categoria</Label>
-                <Select
-                  value={novoProduto.categoria}
-                  onValueChange={(value) => setNovoProduto({ ...novoProduto, categoria: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from(new Set(estoque.map(item => item.categoria))).sort().map(categoria => (
-                      <SelectItem key={categoria} value={categoria}>
-                        {categoria.charAt(0).toUpperCase() + categoria.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="valor">Valor por Unidade *</Label>
+                <Input
+                  id="valor"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="Digite o valor em R$"
+                  value={novoProduto.valor}
+                  onChange={(e) => setNovoProduto({ ...novoProduto, valor: e.target.value })}
+                />
               </div>
 
               <div>
-                <Label htmlFor="unidade">Unidade de Medida</Label>
+                <Label htmlFor="unidade">Unidade de Medida *</Label>
                 <Select
                   value={novoProduto.unidadeMedida}
                   onValueChange={(value) => setNovoProduto({ ...novoProduto, unidadeMedida: value })}
@@ -1067,7 +1113,7 @@ const EstoqueAtual = () => {
               </div>
 
               <div>
-                <Label htmlFor="quantidade">Quantidade</Label>
+                <Label htmlFor="quantidade">Quantidade *</Label>
                 <Input
                   id="quantidade"
                   type="number"
