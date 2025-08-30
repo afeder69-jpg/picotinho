@@ -896,7 +896,7 @@ const EstoqueAtual = () => {
                                           })()}
                                         </>
                                       ) : (
-                                        <span className="text-red-600">
+                                        <span className={!item.preco_unitario_ultimo ? "text-red-600" : ""}>
                                           Atual- {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
                                         </span>
                                       )}
