@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { ArrowLeft, Smartphone, MessageSquare, Minus, Shield, CheckCircle } from "lucide-react";
+import { ArrowLeft, Smartphone, MessageSquare, Minus, Shield, CheckCircle, Trash2 } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -21,6 +21,7 @@ export default function WhatsAppConfig() {
   const [estadoVerificacao, setEstadoVerificacao] = useState<EstadoVerificacao>('inicial');
   const [loading, setLoading] = useState(false);
   const [loadingVerificacao, setLoadingVerificacao] = useState(false);
+  const [loadingDescadastro, setLoadingDescadastro] = useState(false);
 
   // Configuração global do sistema (administrador)
   const SYSTEM_CONFIG = {
@@ -167,6 +168,46 @@ export default function WhatsAppConfig() {
     setCodigoVerificacao("");
   };
 
+  const descadastrarNumero = async () => {
+    if (!numeroWhatsApp) return;
+
+    const confirmacao = window.confirm(
+      `Tem certeza que deseja descadastrar o número ${formatarNumero(numeroWhatsApp)}?\n\nEsta ação removerá a integração com o WhatsApp e você precisará refazer todo o processo de verificação caso queira cadastrar novamente.`
+    );
+
+    if (!confirmacao) return;
+
+    setLoadingDescadastro(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('unregister-whatsapp', {
+        body: {
+          numeroWhatsApp: numeroWhatsApp.trim(),
+          nomeUsuario: user?.user_metadata?.nome || user?.email?.split('@')[0]
+        }
+      });
+
+      if (error) {
+        console.error('Erro ao descadastrar:', error);
+        toast.error("Erro ao descadastrar número");
+        return;
+      }
+
+      if (data?.success) {
+        toast.success("👋 Número descadastrado com sucesso!");
+        setNumeroWhatsApp("");
+        setEstadoVerificacao('inicial');
+        setCodigoVerificacao("");
+      } else {
+        toast.error("Erro ao descadastrar número");
+      }
+      
+    } catch (error) {
+      console.error('Erro ao descadastrar:', error);
+      toast.error("Erro ao descadastrar número");
+    }
+    setLoadingDescadastro(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-blue-50 p-4">
       <div className="max-w-2xl mx-auto">
@@ -191,21 +232,34 @@ export default function WhatsAppConfig() {
           {estadoVerificacao === 'verificado' && (
             <Card className="border-green-200 bg-green-50">
               <CardContent className="pt-6">
-                <div className="flex items-center gap-3 text-green-800">
-                  <CheckCircle className="h-6 w-6" />
-                  <div>
-                    <h3 className="font-semibold">WhatsApp Integrado</h3>
-                    <p className="text-sm">Número {formatarNumero(numeroWhatsApp)} verificado e ativo</p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-green-800">
+                    <CheckCircle className="h-6 w-6" />
+                    <div>
+                      <h3 className="font-semibold">WhatsApp Integrado</h3>
+                      <p className="text-sm">Número {formatarNumero(numeroWhatsApp)} verificado e ativo</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={resetarVerificacao}
+                    >
+                      Alterar número
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={descadastrarNumero}
+                      disabled={loadingDescadastro}
+                      className="flex items-center gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {loadingDescadastro ? "Descadastrando..." : "Descadastrar"}
+                    </Button>
                   </div>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={resetarVerificacao}
-                  className="mt-3"
-                >
-                  Alterar número
-                </Button>
               </CardContent>
             </Card>
           )}

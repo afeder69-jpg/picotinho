@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.verify-whatsapp-code]
 verify_jwt = false
+
+[functions.unregister-whatsapp]
+verify_jwt = false
