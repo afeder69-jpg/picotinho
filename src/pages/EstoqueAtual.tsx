@@ -54,6 +54,7 @@ const EstoqueAtual = () => {
   });
   const [sugestaoNome, setSugestaoNome] = useState<string>('');
   const [mostrarSugestao, setMostrarSugestao] = useState(false);
+  const [diagnosticando, setDiagnosticando] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -814,15 +815,25 @@ const EstoqueAtual = () => {
                <ArrowLeft className="w-4 h-4" />
                Voltar ao Menu
              </Button>
-             <Button
-               variant="outline"
-               size="sm"
-               onClick={diagnosticarInconsistencias}
-               className="flex items-center gap-2 text-yellow-600 border-yellow-200 hover:bg-yellow-50"
-             >
-               <Search className="w-4 h-4" />
-               Diagnosticar
-             </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={diagnosticarInconsistencias}
+                disabled={diagnosticando}
+                className="flex items-center gap-2 text-yellow-600 border-yellow-200 hover:bg-yellow-50 disabled:opacity-50"
+              >
+                {diagnosticando ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+                    Diagnosticando...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                    Diagnosticar
+                  </>
+                )}
+              </Button>
            </div>
           </div>
         </div>
@@ -881,6 +892,25 @@ const EstoqueAtual = () => {
             >
               <ArrowLeft className="w-4 h-4" />
               Voltar ao Menu
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={diagnosticarInconsistencias}
+              disabled={diagnosticando}
+              className="flex items-center gap-2 text-yellow-600 border-yellow-200 hover:bg-yellow-50 disabled:opacity-50"
+            >
+              {diagnosticando ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+                  Diagnosticando...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  Diagnosticar
+                </>
+              )}
             </Button>
           </div>
         </div>
