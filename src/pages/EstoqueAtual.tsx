@@ -480,7 +480,7 @@ const EstoqueAtual = () => {
     }, [] as EstoqueItem[]);
 
     return uniqueItems.reduce((groups, item) => {
-      const categoria = item.categoria || 'outros';
+      const categoria = (item.categoria || 'outros').toLowerCase();
       if (!groups[categoria]) {
         groups[categoria] = [];
       }
