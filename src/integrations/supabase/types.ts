@@ -1108,6 +1108,96 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_configuracoes: {
+        Row: {
+          api_provider: string
+          ativo: boolean
+          created_at: string
+          id: string
+          numero_whatsapp: string
+          ultima_mensagem: string | null
+          updated_at: string
+          usuario_id: string
+          webhook_token: string | null
+        }
+        Insert: {
+          api_provider?: string
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          numero_whatsapp: string
+          ultima_mensagem?: string | null
+          updated_at?: string
+          usuario_id: string
+          webhook_token?: string | null
+        }
+        Update: {
+          api_provider?: string
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          numero_whatsapp?: string
+          ultima_mensagem?: string | null
+          updated_at?: string
+          usuario_id?: string
+          webhook_token?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_mensagens: {
+        Row: {
+          comando_identificado: string | null
+          conteudo: string
+          created_at: string
+          data_processamento: string | null
+          data_recebimento: string
+          erro_processamento: string | null
+          id: string
+          parametros_comando: Json | null
+          processada: boolean
+          remetente: string
+          resposta_enviada: string | null
+          tipo_mensagem: string
+          updated_at: string
+          usuario_id: string | null
+          webhook_data: Json | null
+        }
+        Insert: {
+          comando_identificado?: string | null
+          conteudo: string
+          created_at?: string
+          data_processamento?: string | null
+          data_recebimento?: string
+          erro_processamento?: string | null
+          id?: string
+          parametros_comando?: Json | null
+          processada?: boolean
+          remetente: string
+          resposta_enviada?: string | null
+          tipo_mensagem?: string
+          updated_at?: string
+          usuario_id?: string | null
+          webhook_data?: Json | null
+        }
+        Update: {
+          comando_identificado?: string | null
+          conteudo?: string
+          created_at?: string
+          data_processamento?: string | null
+          data_recebimento?: string
+          erro_processamento?: string | null
+          id?: string
+          parametros_comando?: Json | null
+          processada?: boolean
+          remetente?: string
+          resposta_enviada?: string | null
+          tipo_mensagem?: string
+          updated_at?: string
+          usuario_id?: string | null
+          webhook_data?: Json | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       profiles_safe: {
