@@ -66,8 +66,9 @@ Deno.serve(async (req) => {
       tipoVerificacao = 'codigo_temporario'
       console.log('🔧 Código temporário aceito (Z-API não configurado)')
     } else if (codigo === codigoTemporario && zapiFuncionando) {
-      console.log('❌ Código temporário bloqueado (Z-API está configurado)')
-      throw new Error('Código temporário não aceito quando Z-API está ativo. Use o código recebido no WhatsApp.')
+      console.log('❌ Código temporário BLOQUEADO (Z-API está configurado)')
+      console.log('📞 Use o código que foi enviado para seu WhatsApp:', numeroWhatsApp)
+      throw new Error('Código temporário não é mais aceito. Use o código recebido no seu WhatsApp.')
     }
     
     if (!codigoValido) {
