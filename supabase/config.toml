@@ -1,11 +1,5 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
-[functions.test-zapi-config]
-verify_jwt = false
-
-[functions.test-webhook-direct]
-verify_jwt = false
-
 [functions.process-receipt]
 verify_jwt = false
 
@@ -22,22 +16,4 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.whatsapp-webhook]
-verify_jwt = false
-
-[functions.send-welcome-whatsapp]
-verify_jwt = false
-
-[functions.send-verification-code]
-verify_jwt = false
-
-[functions.verify-whatsapp-code]
-verify_jwt = false
-
-[functions.unregister-whatsapp]
-verify_jwt = false
-
-[functions.test-webhook]
-verify_jwt = false
-
-[functions.diagnostico-zapi]
 verify_jwt = false

@@ -3,24 +3,38 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { ArrowLeft, Smartphone, MessageSquare, Shield, CheckCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle, Smartphone } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
 
+interface WhatsAppConfig {
+  id?: string;
+  numero_whatsapp: string;
+  api_provider: string;
+  webhook_token?: string;
+  ativo: boolean;
+}
+
+interface WhatsAppMessage {
+  id: string;
+  remetente: string;
+  conteudo: string;
+  tipo_mensagem: string;
+  comando_identificado?: string;
+  data_recebimento: string;
+  processada: boolean;
+}
+
 export default function WhatsAppConfig() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [numeroWhatsApp, setNumeroWhatsApp] = useState("");
-  const [codigoVerificacao, setCodigoVerificacao] = useState("");
-  const [aguardandoCodigo, setAguardandoCodigo] = useState(false);
-  const [numeroVerificado, setNumeroVerificado] = useState("");
+  const [mensagens, setMensagens] = useState<WhatsAppMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingVerificacao, setLoadingVerificacao] = useState(false);
 
-  // Configuração global do sistema
+  // Configuração global do sistema (administrador)
   const SYSTEM_CONFIG = {
     api_provider: "z-api",
     webhook_token: "",
@@ -31,6 +45,7 @@ export default function WhatsAppConfig() {
   useEffect(() => {
     if (user) {
       loadConfig();
+      loadMensagens();
     }
   }, [user]);
 
@@ -38,7 +53,7 @@ export default function WhatsAppConfig() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_configuracoes')
-        .select('numero_whatsapp, verificado')
+        .select('numero_whatsapp')
         .eq('usuario_id', user?.id)
         .maybeSingle();
 
@@ -46,34 +61,40 @@ export default function WhatsAppConfig() {
 
       if (data) {
         setNumeroWhatsApp(data.numero_whatsapp || "");
-        if (data.verificado) {
-          setNumeroVerificado(data.numero_whatsapp || "");
-        }
       }
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
     }
   };
 
-  const enviarCodigoVerificacao = async () => {
-    // Remove formatação para validar apenas números
-    const numeroLimpo = numeroWhatsApp.replace(/\D/g, '');
-    
-    if (!user || !numeroLimpo || numeroLimpo.length < 10) {
-      toast.error("Por favor, informe um número válido do WhatsApp");
+  const loadMensagens = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('whatsapp_mensagens')
+        .select('*')
+        .eq('usuario_id', user?.id)
+        .order('data_recebimento', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setMensagens(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar mensagens:', error);
+    }
+  };
+
+  const salvarConfig = async () => {
+    if (!user || !numeroWhatsApp.trim()) {
+      toast.error("Por favor, informe seu número do WhatsApp");
       return;
     }
     
     setLoading(true);
     try {
-      // Sempre gerar novo código - substitui configuração anterior
       const dadosConfig = {
         usuario_id: user.id,
         numero_whatsapp: numeroWhatsApp.trim(),
-        verificado: false,
-        codigo_verificacao: null, // Força novo código
-        data_codigo: null,
-        ...SYSTEM_CONFIG
+        ...SYSTEM_CONFIG // Usa configuração global do sistema
       };
 
       const { error } = await supabase
@@ -82,76 +103,17 @@ export default function WhatsAppConfig() {
 
       if (error) throw error;
 
-      // Enviar código de verificação
-      const { error: errorCodigo } = await supabase.functions.invoke('send-verification-code', {
-        body: {
-          numeroWhatsApp: numeroWhatsApp.trim(),
-          nomeUsuario: user.user_metadata?.nome || user.email?.split('@')[0]
-        }
-      });
-
-      if (errorCodigo) {
-        console.error('Erro ao enviar código:', errorCodigo);
-        toast.error("Erro ao enviar código de verificação");
-        setLoading(false);
-        return;
-      }
-
-      toast.success("Código de verificação gerado! 📱");
-      setAguardandoCodigo(true);
-      setCodigoVerificacao("");
-      
+      toast.success("Número do WhatsApp salvo com sucesso!");
+      loadConfig();
     } catch (error) {
-      console.error('Erro ao enviar código:', error);
-      toast.error("Erro ao enviar código de verificação");
-    } finally {
-      setLoading(false); // ← CORREÇÃO: Sempre resetar loading
+      console.error('Erro ao salvar configuração:', error);
+      toast.error("Erro ao salvar configuração");
     }
+    setLoading(false);
   };
 
-  const verificarCodigo = async () => {
-    if (!codigoVerificacao || codigoVerificacao.length !== 6) {
-      toast.error("Digite o código de 6 dígitos");
-      return;
-    }
-
-    setLoadingVerificacao(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('verify-whatsapp-code', {
-        body: {
-          numeroWhatsApp: numeroWhatsApp.trim(),
-          codigo: codigoVerificacao,
-          nomeUsuario: user?.user_metadata?.nome || user?.email?.split('@')[0]
-        }
-      });
-
-      if (error) {
-        console.error('Erro na verificação:', error);
-        if (error.message?.includes('Código incorreto')) {
-          toast.error("Código incorreto. Tente novamente.");
-        } else if (error.message?.includes('expirado')) {
-          toast.error("Código expirado. Solicite um novo código.");
-          setAguardandoCodigo(false);
-        } else {
-          toast.error("Erro ao verificar código");
-        }
-        return;
-      }
-
-      if (data?.success) {
-        toast.success("🎉 Integração WhatsApp ativada com sucesso!");
-        setNumeroVerificado(numeroWhatsApp);
-        setAguardandoCodigo(false);
-        setCodigoVerificacao("");
-      } else {
-        toast.error("Erro na verificação do código");
-      }
-      
-    } catch (error) {
-      console.error('Erro ao verificar código:', error);
-      toast.error("Erro ao verificar código");
-    }
-    setLoadingVerificacao(false);
+  const formatarData = (data: string) => {
+    return new Date(data).toLocaleString('pt-BR');
   };
 
   const formatarNumero = (numero: string) => {
@@ -167,37 +129,6 @@ export default function WhatsAppConfig() {
     return cleaned.slice(0, 11)
       .replace(/(\d{2})(\d)/, '($1) $2')
       .replace(/(\d{5})(\d)/, '$1-$2');
-  };
-
-  const trocarNumero = () => {
-    setNumeroVerificado("");
-    setAguardandoCodigo(false);
-    setCodigoVerificacao("");
-    // Manter o número atual para permitir reconfiguração do mesmo número
-    // setNumeroWhatsApp(""); 
-  };
-
-  const testarConfiguracao = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('test-zapi-config');
-      
-      if (error) {
-        toast.error("Erro ao testar configuração Z-API");
-        console.error('Erro teste Z-API:', error);
-        return;
-      }
-      
-      if (data?.success) {
-        toast.success("Configuração Z-API OK! ✅");
-        console.log('Diagnóstico Z-API:', data.diagnostico);
-      } else {
-        toast.error("Problema na configuração Z-API");
-        console.log('Problema Z-API:', data);
-      }
-    } catch (error) {
-      console.error('Erro ao testar Z-API:', error);
-      toast.error("Erro ao testar configuração");
-    }
   };
 
   return (
@@ -220,207 +151,118 @@ export default function WhatsAppConfig() {
         </div>
 
         <div className="space-y-6">
-          {/* Status da Integração - Número Verificado */}
-          {numeroVerificado && (
-            <Card className="border-green-200 bg-green-50">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-green-800">
-                    <CheckCircle className="h-6 w-6" />
-                    <div>
-                      <h3 className="font-semibold">WhatsApp Integrado</h3>
-                      <p className="text-sm">Número {formatarNumero(numeroVerificado)} verificado e ativo</p>
-                    </div>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={trocarNumero}
-                  >
-                    Trocar número
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Configuração do Número */}
-          {!numeroVerificado && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Smartphone className="h-5 w-5" />
-                  {!aguardandoCodigo ? 'Configuração WhatsApp' : 'Verificação'}
-                </CardTitle>
-                <CardDescription>
-                  {!aguardandoCodigo 
-                    ? 'Digite seu número do WhatsApp para receber comandos do Picotinho'
-                    : 'Digite o código de 6 dígitos enviado para seu WhatsApp'
-                  }
-                </CardDescription>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
-                  <p className="text-sm text-yellow-800">
-                    <strong>⚠️ Problemas com WhatsApp?</strong><br/>
-                    Estamos com dificuldades técnicas no envio. Por enquanto, use este código temporário: <span className="font-mono bg-yellow-100 px-2 py-1 rounded">123456</span>
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                
-                {/* Campo do Número */}
-                {!aguardandoCodigo && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Número do WhatsApp
-                      </label>
-                      <Input
-                        placeholder="(11) 99999-9999"
-                        value={formatarNumero(numeroWhatsApp)}
-                        onChange={(e) => {
-                          // Remove formatação antes de salvar
-                          const numero = e.target.value.replace(/\D/g, '');
-                          setNumeroWhatsApp(numero);
-                        }}
-                        maxLength={15}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Apenas números (DDD + número). Ex: 11999999999
-                      </p>
-                    </div>
-
-                    <Button 
-                      onClick={enviarCodigoVerificacao} 
-                      disabled={loading || !numeroWhatsApp.trim()}
-                      className="w-full"
-                    >
-                      {loading ? "Enviando código..." : "Enviar código de verificação"}
-                    </Button>
-                  </>
-                )}
-
-                {/* Campo do Código */}
-                {aguardandoCodigo && (
-                  <>
-                    <div className="text-center space-y-4">
-                      <div className="flex items-center justify-center gap-2 text-blue-600">
-                        <Shield className="h-5 w-5" />
-                        <span className="font-medium">Código enviado para {formatarNumero(numeroWhatsApp)}</span>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium mb-3">
-                          Digite o código de 6 dígitos
-                        </label>
-                        <div className="flex justify-center">
-                          <InputOTP
-                            maxLength={6}
-                            value={codigoVerificacao}
-                            onChange={setCodigoVerificacao}
-                          >
-                            <InputOTPGroup>
-                              <InputOTPSlot index={0} />
-                              <InputOTPSlot index={1} />
-                              <InputOTPSlot index={2} />
-                              <InputOTPSlot index={3} />
-                              <InputOTPSlot index={4} />
-                              <InputOTPSlot index={5} />
-                            </InputOTPGroup>
-                          </InputOTP>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                          ⏱️ O código expira em 10 minutos
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Button 
-                          onClick={verificarCodigo} 
-                          disabled={loadingVerificacao || codigoVerificacao.length !== 6}
-                          className="w-full"
-                        >
-                          {loadingVerificacao ? "Verificando..." : "Verificar código"}
-                        </Button>
-                        
-                        <Button 
-                          variant="outline" 
-                          onClick={() => {
-                            setAguardandoCodigo(false);
-                            setCodigoVerificacao("");
-                          }}
-                          className="w-full"
-                        >
-                          Alterar número
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Comandos Disponíveis */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5" />
-                Comandos disponíveis no WhatsApp
+                <Smartphone className="h-5 w-5" />
+                Seu Número
               </CardTitle>
               <CardDescription>
-                Lista de comandos que você pode enviar para o Picotinho
+                Digite seu número do WhatsApp para receber comandos do Picotinho
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-3">
-                    📝 Baixa de Estoque
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Número do WhatsApp
+                </label>
+                <Input
+                  placeholder="(11) 99999-9999"
+                  value={formatarNumero(numeroWhatsApp)}
+                  onChange={(e) => {
+                    // Remove formatação antes de salvar
+                    const numero = e.target.value.replace(/\D/g, '');
+                    setNumeroWhatsApp(numero);
+                  }}
+                  maxLength={15}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Apenas números (DDD + número). Ex: 11999999999
+                </p>
+              </div>
+
+              <Button 
+                onClick={salvarConfig} 
+                disabled={loading || !numeroWhatsApp.trim()}
+                className="w-full"
+              >
+                {loading ? "Salvando..." : "Salvar Número"}
+              </Button>
+
+              {numeroWhatsApp && (
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-green-900 mb-2">
+                    ✅ Como usar o Picotinho:
                   </h4>
-                  <div className="space-y-2 text-sm text-blue-800">
-                    <div className="bg-white/50 p-2 rounded">
-                      <span className="font-mono bg-blue-100 px-2 py-1 rounded text-xs">
-                        👉 "Picotinho, baixa do estoque 1kg de banana prata"
-                      </span>
-                    </div>
-                    <div className="bg-white/50 p-2 rounded">
-                      <span className="font-mono bg-blue-100 px-2 py-1 rounded text-xs">
-                        👉 "Picotinho, dar baixa em 2 unidades de leite integral"
-                      </span>
-                    </div>
+                  <div className="text-sm text-green-800 space-y-1">
+                    <p><strong>Baixar estoque:</strong> "Picotinho, baixa 1 quilo de banana"</p>
+                    <p><strong>Consultar:</strong> "Picotinho, qual o preço do açúcar?"</p>
+                    <p><strong>Adicionar:</strong> "Picotinho, adiciona leite na lista"</p>
                   </div>
                 </div>
-                
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    💡 <strong>Dica:</strong> Sempre comece a mensagem com "Picotinho" para que o sistema reconheça o comando.
-                  </p>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Teste de Configuração Z-API */}
+          {/* Mensagens Recebidas */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                🔧 Diagnóstico Z-API
+                <MessageCircle className="h-5 w-5" />
+                Histórico de Comandos
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={loadMensagens}
+                >
+                  Atualizar
+                </Button>
               </CardTitle>
               <CardDescription>
-                Teste a configuração do WhatsApp Z-API
+                Comandos enviados para o Picotinho via WhatsApp
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                onClick={testarConfiguracao}
-                variant="outline" 
-                className="w-full"
-              >
-                Testar Configuração Z-API
-              </Button>
-              <p className="text-xs text-gray-500 mt-2">
-                Verifica se o token e URL estão configurados corretamente
-              </p>
+              {mensagens.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Nenhum comando recebido ainda</p>
+                  <p className="text-sm">Configure seu número e envie um comando de teste</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {mensagens.map((mensagem) => (
+                    <div 
+                      key={mensagem.id}
+                      className="border rounded-lg p-3 bg-white"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {mensagem.comando_identificado ? (
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                              {mensagem.comando_identificado.replace('_', ' ')}
+                            </span>
+                          ) : (
+                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                              mensagem
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          {mensagem.processada ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 text-yellow-500" />
+                          )}
+                          {formatarData(mensagem.data_recebimento)}
+                        </div>
+                      </div>
+                      <p className="text-gray-700">{mensagem.conteudo}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

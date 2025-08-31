@@ -26,17 +26,11 @@ interface ProcessedMessage {
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('🔧 OPTIONS request recebido - CORS preflight')
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('🚀 ====== WEBHOOK WHATSAPP INICIADO ======')
-    console.log('📱 Método:', req.method)
-    console.log('🔗 URL completa:', req.url)
-    console.log('📋 Headers recebidos:', Object.fromEntries(req.headers.entries()))
-    console.log('🕐 Timestamp:', new Date().toISOString())
-    console.log('===============================================')
+    console.log('📱 WhatsApp Webhook recebido:', req.method)
     
     // Inicializar cliente Supabase com service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -67,11 +61,8 @@ Deno.serve(async (req) => {
     }
 
     if (req.method === 'POST') {
-      console.log('📨 POST request recebido')
       const body = await req.json()
-      console.log('📋 BODY COMPLETO:', JSON.stringify(body, null, 2))
-      console.log('📋 Tipo do body:', typeof body)
-      console.log('📋 Keys do body:', Object.keys(body || {}))
+      console.log('📋 Dados recebidos do webhook:', JSON.stringify(body, null, 2))
 
       // Processar mensagem baseado no provedor
       const processedMessage = await processWhatsAppMessage(body)
