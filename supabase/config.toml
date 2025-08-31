@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.test-webhook]
 verify_jwt = false
+
+[functions.diagnostico-zapi]
+verify_jwt = false
