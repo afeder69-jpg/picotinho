@@ -83,8 +83,10 @@ Deno.serve(async (req) => {
 
     console.log('✅ Configuração Z-API carregada com sucesso')
 
-    // Montar URL para envio de mensagem (formato correto da Z-API)
-    const sendMessageUrl = `${whatsappInstanceUrl}/token/${whatsappApiToken}/send-text`
+    // Montar URL para envio de mensagem (verificar se já tem token na URL)
+    const sendMessageUrl = whatsappInstanceUrl.includes('/token/') 
+      ? `${whatsappInstanceUrl}/send-text`
+      : `${whatsappInstanceUrl}/token/${whatsappApiToken}/send-text`
     
     // Formatar número no padrão internacional sem símbolos
     const numeroFormatado = numero_whatsapp.replace(/\D/g, '')
