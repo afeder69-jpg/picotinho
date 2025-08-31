@@ -56,9 +56,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Enviar código via Z-API - verificar se secrets estão configurados
-    const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
-    const whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
+    // Tentar múltiplas variações dos nomes das variáveis (incluindo com caracteres especiais)
+    let whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL') 
+      || Deno.env.get('WHATSAPP_INSTANCE_URL\r\n')
+      || Deno.env.get('WHATSAPP_INSTANCE_URL\n')
+      || Deno.env.get('WHATSAPP_INSTANCE_URL ')
+    
+    let whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
+      || Deno.env.get('WHATSAPP_API_TOKEN\r\n') 
+      || Deno.env.get('WHATSAPP_API_TOKEN\n')
+      || Deno.env.get('WHATSAPP_API_TOKEN ')
     
     console.log('🔧 Tentando acessar variáveis Z-API...')
     console.log('🔧 WHATSAPP_INSTANCE_URL:', whatsappInstanceUrl || 'NÃO ENCONTRADA')
