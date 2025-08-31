@@ -173,7 +173,8 @@ export default function WhatsAppConfig() {
     setNumeroVerificado("");
     setAguardandoCodigo(false);
     setCodigoVerificacao("");
-    setNumeroWhatsApp("");
+    // Manter o número atual para permitir reconfiguração do mesmo número
+    // setNumeroWhatsApp(""); 
   };
 
   const testarConfiguracao = async () => {
