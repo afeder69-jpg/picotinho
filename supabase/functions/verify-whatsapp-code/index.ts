@@ -47,18 +47,32 @@ Deno.serve(async (req) => {
       throw new Error('Configuração não encontrada')
     }
 
-    // Verificar se código está correto OU é o código temporário
+    // Verificar se código está correto
+    // IMPORTANTE: Código temporário só funciona se Z-API não estiver configurado
+    const whatsappToken = Deno.env.get('WHATSAPP_API_TOKEN')
+    const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
+    const zapiFuncionando = whatsappToken && whatsappInstanceUrl
+    
     const codigoTemporario = '123456'
-    const codigoValido = codigo === config.codigo_verificacao || codigo === codigoTemporario
+    let codigoValido = false
+    let tipoVerificacao = ''
+    
+    if (codigo === config.codigo_verificacao) {
+      codigoValido = true
+      tipoVerificacao = 'codigo_real'
+      console.log('✅ Código real do Z-API aceito')
+    } else if (codigo === codigoTemporario && !zapiFuncionando) {
+      codigoValido = true
+      tipoVerificacao = 'codigo_temporario'
+      console.log('🔧 Código temporário aceito (Z-API não configurado)')
+    } else if (codigo === codigoTemporario && zapiFuncionando) {
+      console.log('❌ Código temporário bloqueado (Z-API está configurado)')
+      throw new Error('Código temporário não aceito quando Z-API está ativo. Use o código recebido no WhatsApp.')
+    }
     
     if (!codigoValido) {
       console.log('❌ Código incorreto fornecido')
       throw new Error('Código incorreto')
-    }
-
-    // Se usou código temporário, registrar nos logs
-    if (codigo === codigoTemporario) {
-      console.log('🔧 Verificação com código temporário aceita')
     }
 
     // Verificar se código não expirou (10 minutos) - só para códigos reais

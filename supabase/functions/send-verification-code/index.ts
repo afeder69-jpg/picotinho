@@ -74,10 +74,9 @@ Deno.serve(async (req) => {
     
     return new Response(JSON.stringify({
       success: true,
-      message: 'Código de verificação gerado com sucesso',
+      message: sucesso ? 'Código enviado via WhatsApp' : 'Código salvo - verifique configuração Z-API',
       enviado_whatsapp: sucesso,
-      // TEMPORÁRIO para debug - remover em produção
-      debug_codigo: codigoVerificacao
+      debug_info: sucesso ? 'Código enviado com sucesso' : 'Falha no envio Z-API - verifique configuração'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

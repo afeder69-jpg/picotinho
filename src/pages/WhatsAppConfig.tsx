@@ -93,11 +93,11 @@ export default function WhatsAppConfig() {
       if (errorCodigo) {
         console.error('Erro ao enviar código:', errorCodigo);
         toast.error("Erro ao enviar código de verificação");
-        setLoading(false); // ← CORREÇÃO: Resetar loading no erro
+        setLoading(false);
         return;
       }
 
-      toast.success("Código de verificação enviado via WhatsApp! 📱");
+      toast.success("Código de verificação gerado! 📱");
       setAguardandoCodigo(true);
       setCodigoVerificacao("");
       
@@ -174,6 +174,29 @@ export default function WhatsAppConfig() {
     setAguardandoCodigo(false);
     setCodigoVerificacao("");
     setNumeroWhatsApp("");
+  };
+
+  const testarConfiguracao = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('test-zapi-config');
+      
+      if (error) {
+        toast.error("Erro ao testar configuração Z-API");
+        console.error('Erro teste Z-API:', error);
+        return;
+      }
+      
+      if (data?.success) {
+        toast.success("Configuração Z-API OK! ✅");
+        console.log('Diagnóstico Z-API:', data.diagnostico);
+      } else {
+        toast.error("Problema na configuração Z-API");
+        console.log('Problema Z-API:', data);
+      }
+    } catch (error) {
+      console.error('Erro ao testar Z-API:', error);
+      toast.error("Erro ao testar configuração");
+    }
   };
 
   return (
@@ -373,6 +396,30 @@ export default function WhatsAppConfig() {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Teste de Configuração Z-API */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                🔧 Diagnóstico Z-API
+              </CardTitle>
+              <CardDescription>
+                Teste a configuração do WhatsApp Z-API
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={testarConfiguracao}
+                variant="outline" 
+                className="w-full"
+              >
+                Testar Configuração Z-API
+              </Button>
+              <p className="text-xs text-gray-500 mt-2">
+                Verifica se o token e URL estão configurados corretamente
+              </p>
             </CardContent>
           </Card>
         </div>

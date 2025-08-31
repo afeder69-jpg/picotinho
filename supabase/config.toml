@@ -1,5 +1,8 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
+[functions.test-zapi-config]
+verify_jwt = false
+
 [functions.test-webhook-direct]
 verify_jwt = false
 
