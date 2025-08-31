@@ -48,16 +48,26 @@ Deno.serve(async (req) => {
       throw saveError
     }
 
-    // Enviar código via Z-API
+    // Enviar código via Z-API - verificar se secrets estão configurados
     const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
     const whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
     
-    if (!whatsappInstanceUrl || !whatsappApiToken) {
-      console.error('❌ Variáveis não encontradas:', { whatsappInstanceUrl, whatsappApiToken })
-      throw new Error('Configuração do Z-API não encontrada')
+    console.log('🔧 Tentando acessar variáveis Z-API...')
+    console.log('🔧 WHATSAPP_INSTANCE_URL existe:', !!whatsappInstanceUrl)
+    console.log('🔧 WHATSAPP_API_TOKEN existe:', !!whatsappApiToken)
+    
+    if (!whatsappInstanceUrl) {
+      console.error('❌ WHATSAPP_INSTANCE_URL não encontrada')
+      throw new Error('Variável WHATSAPP_INSTANCE_URL não configurada')
+    }
+    
+    if (!whatsappApiToken) {
+      console.error('❌ WHATSAPP_API_TOKEN não encontrada')  
+      throw new Error('Variável WHATSAPP_API_TOKEN não configurada')
     }
 
-    console.log('🔧 Configuração Z-API carregada:', { url: whatsappInstanceUrl })
+    console.log('✅ Configuração Z-API carregada com sucesso')
+    console.log('🌐 URL da instância:', whatsappInstanceUrl)
 
     // Montar URL para envio de mensagem
     const sendMessageUrl = `${whatsappInstanceUrl}/send-text`
