@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     const codigoVerificacao = Math.floor(100000 + Math.random() * 900000).toString()
     console.log('🔢 Código gerado:', codigoVerificacao)
     
-    // VERSÃO SIMPLIFICADA: Apenas salvar no banco (sem enviar WhatsApp)
+    // Salvar código no banco de dados
     console.log('💾 Salvando código no banco de dados...')
     
     const { error: dbError } = await supabase
@@ -61,11 +61,21 @@ Deno.serve(async (req) => {
     }
       
     console.log('✅ Código salvo com sucesso no banco')
-    console.log('📝 IMPORTANTE: Use o código', codigoVerificacao, 'para testar')
+    
+    // Enviar código via WhatsApp usando Z-API
+    console.log('📱 Enviando código via WhatsApp...')
+    const sucesso = await enviarCodigoWhatsApp(numeroWhatsApp, codigoVerificacao, nomeUsuario)
+    
+    if (!sucesso) {
+      console.log('⚠️ Falha no envio - usando código temporário')
+    } else {
+      console.log('✅ Código enviado com sucesso!')
+    }
     
     return new Response(JSON.stringify({
       success: true,
       message: 'Código de verificação gerado com sucesso',
+      enviado_whatsapp: sucesso,
       // TEMPORÁRIO para debug - remover em produção
       debug_codigo: codigoVerificacao
     }), {
@@ -86,3 +96,72 @@ Deno.serve(async (req) => {
     })
   }
 })
+
+/**
+ * Envia código de verificação via WhatsApp usando Z-API
+ */
+async function enviarCodigoWhatsApp(numeroWhatsApp: string, codigo: string, nomeUsuario?: string): Promise<boolean> {
+  try {
+    const whatsappToken = Deno.env.get('WHATSAPP_API_TOKEN')
+    const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
+    
+    if (!whatsappToken || !whatsappInstanceUrl) {
+      console.log('⚠️ Token ou URL da instância Z-API não configurados')
+      return false
+    }
+
+    const numeroFormatado = formatPhoneNumber(numeroWhatsApp)
+    const nome = nomeUsuario || 'usuário'
+    
+    const mensagem = `🔐 *Código de Verificação Picotinho*
+
+Olá ${nome}! 
+
+Seu código de verificação é: *${codigo}*
+
+⏱️ Este código expira em 10 minutos.
+
+Digite este código no app para confirmar seu WhatsApp.
+
+---
+Picotinho 🛒`
+
+    const apiUrl = `${whatsappInstanceUrl}/send-text`
+    
+    console.log('📡 Enviando para Z-API:', apiUrl)
+    console.log('📞 Número formatado:', numeroFormatado)
+    
+    const payload = {
+      phone: numeroFormatado,
+      message: mensagem
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-Token': whatsappToken
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const result = await response.json()
+    console.log('📋 Resposta Z-API:', result)
+    
+    return response.ok && result.success !== false
+  } catch (error) {
+    console.error('❌ Erro ao enviar código via WhatsApp:', error)
+    return false
+  }
+}
+
+/**
+ * Formata número de telefone para padrão internacional
+ */
+function formatPhoneNumber(numero: string): string {
+  let cleaned = numero.replace(/\D/g, '')
+  if (cleaned.length === 11 && !cleaned.startsWith('55')) {
+    cleaned = '55' + cleaned
+  }
+  return cleaned
+}

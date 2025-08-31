@@ -87,12 +87,9 @@ Deno.serve(async (req) => {
       throw new Error('Erro ao confirmar verificação')
     }
 
-    // VERSÃO TEMPORÁRIA: Simular envio de boas-vindas
-    console.log('🎉 MENSAGEM DE BOAS-VINDAS (simulada):')
-    console.log(`📱 Para: ${numeroWhatsApp}`)
-    console.log('💬 Mensagem: Número confirmado! Eu sou o Picotinho, seu assistente de compras. Use "Picotinho, baixa do estoque [produto]" para começar!')
-    
-    // await enviarBoasVindas(numeroWhatsApp, nomeUsuario) // Desabilitado temporariamente
+    // Enviar mensagem de boas-vindas
+    console.log('🎉 Enviando mensagem de boas-vindas...')
+    await enviarBoasVindas(numeroWhatsApp, nomeUsuario)
 
     console.log('✅ Código verificado com sucesso')
     
@@ -150,22 +147,35 @@ Vamos começar! 🛒✨`
  */
 async function enviarMensagemWhatsApp(numeroDestino: string, mensagem: string, token: string): Promise<boolean> {
   try {
-    const apiUrl = `https://api.z-api.io/instances/YOUR_INSTANCE/token/${token}/send-text`
+    const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
+    
+    if (!whatsappInstanceUrl) {
+      console.log('⚠️ URL da instância Z-API não configurada')
+      return false
+    }
+
+    const apiUrl = `${whatsappInstanceUrl}/send-text`
     
     const payload = {
       phone: numeroDestino,
       message: mensagem
     }
 
+    console.log('📡 Enviando boas-vindas via Z-API:', apiUrl)
+    console.log('📞 Número:', numeroDestino)
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Client-Token': token
       },
       body: JSON.stringify(payload)
     })
 
     const result = await response.json()
+    console.log('📋 Resposta Z-API (boas-vindas):', result)
+    
     return response.ok && result.success !== false
   } catch (error) {
     console.error('❌ Erro ao chamar API do WhatsApp:', error)
