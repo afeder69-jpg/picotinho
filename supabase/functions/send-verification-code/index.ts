@@ -1,0 +1,107 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    console.log('📱 Enviando código de verificação WhatsApp...')
+    
+    const { numero_whatsapp, usuario_id } = await req.json()
+    
+    if (!numero_whatsapp || !usuario_id) {
+      throw new Error('Número do WhatsApp e usuário são obrigatórios')
+    }
+
+    // Inicializar cliente Supabase
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+
+    // Gerar código de verificação de 6 dígitos
+    const codigoVerificacao = Math.floor(100000 + Math.random() * 900000).toString()
+    
+    console.log('🔐 Código gerado:', codigoVerificacao)
+
+    // Salvar código na configuração do usuário
+    const { error: saveError } = await supabase
+      .from('whatsapp_configuracoes')
+      .upsert({
+        usuario_id,
+        numero_whatsapp,
+        codigo_verificacao: codigoVerificacao,
+        data_codigo: new Date().toISOString(),
+        verificado: false,
+        ativo: false,
+        api_provider: 'z-api'
+      }, { onConflict: 'usuario_id' })
+
+    if (saveError) {
+      console.error('❌ Erro ao salvar código:', saveError)
+      throw saveError
+    }
+
+    // Enviar código via Z-API
+    const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
+    const whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
+    
+    if (!whatsappInstanceUrl || !whatsappApiToken) {
+      throw new Error('Configuração do Z-API não encontrada')
+    }
+
+    // Montar URL para envio de mensagem
+    const sendMessageUrl = `${whatsappInstanceUrl}/send-text`
+    
+    const mensagem = `🤖 *Picotinho* - Código de verificação:\n\n*${codigoVerificacao}*\n\nDigite este código no aplicativo para confirmar seu número do WhatsApp.`
+
+    // Enviar mensagem via Z-API
+    const zapiResponse = await fetch(sendMessageUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: numero_whatsapp,
+        message: mensagem
+      })
+    })
+
+    const zapiResult = await zapiResponse.json()
+    
+    console.log('📤 Resposta Z-API:', zapiResult)
+
+    if (!zapiResponse.ok) {
+      console.error('❌ Erro no Z-API:', zapiResult)
+      throw new Error(`Erro ao enviar mensagem via Z-API: ${zapiResult.message || 'Erro desconhecido'}`)
+    }
+
+    console.log('✅ Código enviado com sucesso para:', numero_whatsapp)
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Código de verificação enviado com sucesso',
+      numero: numero_whatsapp
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+
+  } catch (error) {
+    console.error('❌ Erro ao enviar código:', error)
+    
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+})
