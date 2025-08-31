@@ -1,5 +1,8 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
+[functions.test-webhook-direct]
+verify_jwt = false
+
 [functions.process-receipt]
 verify_jwt = false
 
