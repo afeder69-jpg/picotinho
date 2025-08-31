@@ -3,35 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle, Smartphone } from "lucide-react";
+import { ArrowLeft, Smartphone, MessageSquare, Minus } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
 
-interface WhatsAppConfig {
-  id?: string;
-  numero_whatsapp: string;
-  api_provider: string;
-  webhook_token?: string;
-  ativo: boolean;
-}
-
-interface WhatsAppMessage {
-  id: string;
-  remetente: string;
-  conteudo: string;
-  tipo_mensagem: string;
-  comando_identificado?: string;
-  data_recebimento: string;
-  processada: boolean;
-}
-
 export default function WhatsAppConfig() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [numeroWhatsApp, setNumeroWhatsApp] = useState("");
-  const [mensagens, setMensagens] = useState<WhatsAppMessage[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Configuração global do sistema (administrador)
@@ -45,7 +26,6 @@ export default function WhatsAppConfig() {
   useEffect(() => {
     if (user) {
       loadConfig();
-      loadMensagens();
     }
   }, [user]);
 
@@ -64,22 +44,6 @@ export default function WhatsAppConfig() {
       }
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
-    }
-  };
-
-  const loadMensagens = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('whatsapp_mensagens')
-        .select('*')
-        .eq('usuario_id', user?.id)
-        .order('data_recebimento', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setMensagens(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar mensagens:', error);
     }
   };
 
@@ -110,10 +74,6 @@ export default function WhatsAppConfig() {
       toast.error("Erro ao salvar configuração");
     }
     setLoading(false);
-  };
-
-  const formatarData = (data: string) => {
-    return new Date(data).toLocaleString('pt-BR');
   };
 
   const formatarNumero = (numero: string) => {
@@ -189,80 +149,47 @@ export default function WhatsAppConfig() {
               >
                 {loading ? "Salvando..." : "Salvar Número"}
               </Button>
-
-              {numeroWhatsApp && (
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <h4 className="font-medium text-green-900 mb-2">
-                    ✅ Como usar o Picotinho:
-                  </h4>
-                  <div className="text-sm text-green-800 space-y-1">
-                    <p><strong>Baixar estoque:</strong> "Picotinho, baixa 1 quilo de banana"</p>
-                    <p><strong>Consultar:</strong> "Picotinho, qual o preço do açúcar?"</p>
-                    <p><strong>Adicionar:</strong> "Picotinho, adiciona leite na lista"</p>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          {/* Mensagens Recebidas */}
+          {/* Comandos Disponíveis */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <MessageCircle className="h-5 w-5" />
-                Histórico de Comandos
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={loadMensagens}
-                >
-                  Atualizar
-                </Button>
+                <MessageSquare className="h-5 w-5" />
+                Comandos disponíveis no WhatsApp
               </CardTitle>
               <CardDescription>
-                Comandos enviados para o Picotinho via WhatsApp
+                Lista de comandos que você pode enviar para o Picotinho
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {mensagens.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum comando recebido ainda</p>
-                  <p className="text-sm">Configure seu número e envie um comando de teste</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {mensagens.map((mensagem) => (
-                    <div 
-                      key={mensagem.id}
-                      className="border rounded-lg p-3 bg-white"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {mensagem.comando_identificado ? (
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                              {mensagem.comando_identificado.replace('_', ' ')}
-                            </span>
-                          ) : (
-                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
-                              mensagem
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          {mensagem.processada ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-yellow-500" />
-                          )}
-                          {formatarData(mensagem.data_recebimento)}
-                        </div>
-                      </div>
-                      <p className="text-gray-700">{mensagem.conteudo}</p>
+              <div className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
+                    <Minus className="h-4 w-4" />
+                    Baixa de Estoque
+                  </h4>
+                  <div className="space-y-2 text-sm text-blue-800">
+                    <div className="bg-white/50 p-2 rounded">
+                      <span className="font-mono bg-blue-100 px-2 py-1 rounded text-xs">
+                        👉 "Picotinho, baixa do estoque 1kg de banana prata"
+                      </span>
                     </div>
-                  ))}
+                    <div className="bg-white/50 p-2 rounded">
+                      <span className="font-mono bg-blue-100 px-2 py-1 rounded text-xs">
+                        👉 "Picotinho, dar baixa em 2 unidades de leite integral"
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
+                
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    💡 <strong>Dica:</strong> Sempre comece a mensagem com "Picotinho" para que o sistema reconheça o comando.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
