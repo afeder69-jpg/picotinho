@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     console.log('✅ Configuração Z-API carregada com sucesso')
 
     // Montar URL para envio de mensagem
-    const sendMessageUrl = `${whatsappInstanceUrl}/send-messages`
+    const sendMessageUrl = `${whatsappInstanceUrl}/send-text`
     
     const mensagem = `🤖 *Picotinho* - Código de verificação:\n\n*${codigoVerificacao}*\n\nDigite este código no aplicativo para confirmar seu número do WhatsApp.`
 
@@ -93,6 +93,7 @@ Deno.serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Client-Token': whatsappApiToken,
       },
       body: JSON.stringify({
         phone: numero_whatsapp,
