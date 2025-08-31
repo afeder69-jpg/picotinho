@@ -48,26 +48,33 @@ Deno.serve(async (req) => {
       throw saveError
     }
 
+    // Debug: Listar todas as variáveis de ambiente disponíveis
+    console.log('🔍 Listando todas as variáveis de ambiente:')
+    for (const [key, value] of Object.entries(Deno.env.toObject())) {
+      if (key.includes('WHATSAPP')) {
+        console.log(`  ${key}: ${value ? 'DEFINIDA' : 'VAZIA'}`)
+      }
+    }
+
     // Enviar código via Z-API - verificar se secrets estão configurados
     const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
     const whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
     
     console.log('🔧 Tentando acessar variáveis Z-API...')
-    console.log('🔧 WHATSAPP_INSTANCE_URL existe:', !!whatsappInstanceUrl)
-    console.log('🔧 WHATSAPP_API_TOKEN existe:', !!whatsappApiToken)
+    console.log('🔧 WHATSAPP_INSTANCE_URL:', whatsappInstanceUrl || 'NÃO ENCONTRADA')
+    console.log('🔧 WHATSAPP_API_TOKEN:', whatsappApiToken ? 'DEFINIDA' : 'NÃO ENCONTRADA')
     
     if (!whatsappInstanceUrl) {
       console.error('❌ WHATSAPP_INSTANCE_URL não encontrada')
-      throw new Error('Variável WHATSAPP_INSTANCE_URL não configurada')
+      throw new Error('Variável WHATSAPP_INSTANCE_URL não configurada. Verifique os secrets do Supabase.')
     }
     
     if (!whatsappApiToken) {
       console.error('❌ WHATSAPP_API_TOKEN não encontrada')  
-      throw new Error('Variável WHATSAPP_API_TOKEN não configurada')
+      throw new Error('Variável WHATSAPP_API_TOKEN não configurada. Verifique os secrets do Supabase.')
     }
 
     console.log('✅ Configuração Z-API carregada com sucesso')
-    console.log('🌐 URL da instância:', whatsappInstanceUrl)
 
     // Montar URL para envio de mensagem
     const sendMessageUrl = `${whatsappInstanceUrl}/send-text`
