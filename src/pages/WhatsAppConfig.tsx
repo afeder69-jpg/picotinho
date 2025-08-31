@@ -122,6 +122,28 @@ export default function WhatsAppConfig() {
     setCodigoVerificacao("");
   };
 
+  const testarConexao = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-zapi-connection');
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        toast.success('Conexão Z-API OK!');
+        console.log('Status Z-API:', data);
+      } else {
+        toast.error('Erro na conexão Z-API: ' + data.error);
+        console.error('Erro Z-API:', data);
+      }
+    } catch (error) {
+      console.error('Erro ao testar conexão:', error);
+      toast.error('Erro ao testar conexão Z-API');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatarNumero = (numero: string) => {
     // Remove tudo que não é número
     const cleaned = numero.replace(/\D/g, '');
@@ -310,6 +332,26 @@ export default function WhatsAppConfig() {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão de Teste */}
+          <Card>
+            <CardHeader>
+              <CardTitle>🔧 Diagnóstico</CardTitle>
+              <CardDescription>
+                Teste a conexão com o Z-API para verificar se está funcionando
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={testarConexao}
+                disabled={loading}
+                variant="outline" 
+                className="w-full"
+              >
+                {loading ? "Testando..." : "Testar Conexão Z-API"}
+              </Button>
             </CardContent>
           </Card>
         </div>
