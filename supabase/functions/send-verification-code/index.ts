@@ -86,7 +86,13 @@ Deno.serve(async (req) => {
     // Montar URL para envio de mensagem
     const sendMessageUrl = `${whatsappInstanceUrl}/send-text`
     
+    // Formatar número no padrão internacional sem símbolos
+    const numeroFormatado = numero_whatsapp.replace(/\D/g, '')
+    
     const mensagem = `🤖 *Picotinho* - Código de verificação:\n\n*${codigoVerificacao}*\n\nDigite este código no aplicativo para confirmar seu número do WhatsApp.`
+
+    console.log('📤 Enviando para URL:', sendMessageUrl)
+    console.log('📤 Número formatado:', numeroFormatado)
 
     // Enviar mensagem via Z-API
     const zapiResponse = await fetch(sendMessageUrl, {
@@ -96,7 +102,7 @@ Deno.serve(async (req) => {
         'Client-Token': whatsappApiToken,
       },
       body: JSON.stringify({
-        phone: numero_whatsapp,
+        phone: numeroFormatado,
         message: mensagem
       })
     })
