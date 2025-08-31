@@ -94,12 +94,11 @@ Deno.serve(async (req) => {
     console.log('📤 Enviando para URL:', sendMessageUrl)
     console.log('📤 Número formatado:', numeroFormatado)
 
-    // Enviar mensagem via Z-API
+    // Enviar mensagem via Z-API (mesmo padrão do teste que funciona)
     const zapiResponse = await fetch(sendMessageUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': whatsappApiToken,
       },
       body: JSON.stringify({
         phone: numeroFormatado,
