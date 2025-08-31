@@ -33,8 +33,10 @@ Deno.serve(async (req) => {
   try {
     console.log('🚀 ====== WEBHOOK WHATSAPP INICIADO ======')
     console.log('📱 Método:', req.method)
-    console.log('🔗 URL:', req.url)
-    console.log('📋 Headers:', Object.fromEntries(req.headers.entries()))
+    console.log('🔗 URL completa:', req.url)
+    console.log('📋 Headers recebidos:', Object.fromEntries(req.headers.entries()))
+    console.log('🕐 Timestamp:', new Date().toISOString())
+    console.log('===============================================')
     
     // Inicializar cliente Supabase com service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
