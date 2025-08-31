@@ -53,8 +53,11 @@ Deno.serve(async (req) => {
     const whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
     
     if (!whatsappInstanceUrl || !whatsappApiToken) {
+      console.error('❌ Variáveis não encontradas:', { whatsappInstanceUrl, whatsappApiToken })
       throw new Error('Configuração do Z-API não encontrada')
     }
+
+    console.log('🔧 Configuração Z-API carregada:', { url: whatsappInstanceUrl })
 
     // Montar URL para envio de mensagem
     const sendMessageUrl = `${whatsappInstanceUrl}/send-text`
