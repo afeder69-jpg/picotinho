@@ -111,11 +111,14 @@ Deno.serve(async (req) => {
 
     const zapiResult = await zapiResponse.json()
     
-    console.log('📤 Resposta Z-API:', zapiResult)
+    console.log('📤 Status da resposta Z-API:', zapiResponse.status)
+    console.log('📤 Headers da resposta:', Object.fromEntries(zapiResponse.headers.entries()))
+    console.log('📤 Resposta completa Z-API:', JSON.stringify(zapiResult, null, 2))
 
     if (!zapiResponse.ok) {
-      console.error('❌ Erro no Z-API:', zapiResult)
-      throw new Error(`Erro ao enviar mensagem via Z-API: ${zapiResult.message || 'Erro desconhecido'}`)
+      console.error('❌ Erro no Z-API - Status:', zapiResponse.status)
+      console.error('❌ Erro no Z-API - Resposta:', zapiResult)
+      throw new Error(`Erro ao enviar mensagem via Z-API (${zapiResponse.status}): ${JSON.stringify(zapiResult)}`)
     }
 
     console.log('✅ Código enviado com sucesso para:', numero_whatsapp)
