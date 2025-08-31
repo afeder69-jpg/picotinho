@@ -19,14 +19,24 @@ Deno.serve(async (req) => {
     const envVars = Deno.env.toObject()
     Object.keys(envVars).forEach(key => {
       if (key.includes('WHATSAPP') || key.includes('SUPABASE')) {
-        console.log(`  ${key}: ${envVars[key] ? 'DEFINIDA' : 'VAZIA'}`)
+        // Mostrar também caracteres especiais
+        const keyDisplay = JSON.stringify(key)
+        console.log(`  ${keyDisplay}: ${envVars[key] ? 'DEFINIDA' : 'VAZIA'}`)
       }
     })
     
-    const whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
-    const whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
+    // Tentar múltiplas variações dos nomes das variáveis
+    let whatsappInstanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL') 
+      || Deno.env.get('WHATSAPP_INSTANCE_URL\r\n')
+      || Deno.env.get('WHATSAPP_INSTANCE_URL\n')
+      || Deno.env.get('WHATSAPP_INSTANCE_URL ')
     
-    console.log('📋 Configurações:')
+    let whatsappApiToken = Deno.env.get('WHATSAPP_API_TOKEN')
+      || Deno.env.get('WHATSAPP_API_TOKEN\r\n') 
+      || Deno.env.get('WHATSAPP_API_TOKEN\n')
+      || Deno.env.get('WHATSAPP_API_TOKEN ')
+    
+    console.log('📋 Configurações encontradas:')
     console.log('  WHATSAPP_INSTANCE_URL:', whatsappInstanceUrl || 'NÃO ENCONTRADA')
     console.log('  WHATSAPP_API_TOKEN:', whatsappApiToken ? 'DEFINIDA' : 'NÃO ENCONTRADA')
     
