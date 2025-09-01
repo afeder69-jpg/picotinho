@@ -97,6 +97,34 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log('💾 Mensagem salva:', mensagemSalva.id);
 
+      // Sempre enviar resposta de confirmação para qualquer mensagem
+      try {
+        console.log('📤 Enviando confirmação automática...');
+        
+        const apiToken = Deno.env.get('WHATSAPP_API_TOKEN')!;
+        const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')!;
+        
+        const confirmacao = await fetch(`${instanceUrl}/send-text`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Client-Token': apiToken
+          },
+          body: JSON.stringify({
+            phone: remetente,
+            message: 'Mensagem recebida com sucesso ✅'
+          })
+        });
+        
+        if (confirmacao.ok) {
+          console.log('✅ Confirmação enviada com sucesso');
+        } else {
+          console.error('❌ Erro ao enviar confirmação:', await confirmacao.text());
+        }
+      } catch (error) {
+        console.error('❌ Erro ao enviar confirmação:', error);
+      }
+
       // Processar comando automaticamente se identificado e usuário existe
       if (comando_identificado && usuario?.usuario_id) {
         try {
