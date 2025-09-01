@@ -44,15 +44,14 @@ Deno.serve(async (req) => {
       throw new Error('Configurações do Z-API não encontradas')
     }
 
-    // Testar endpoint de status da instância
-    const statusUrl = `${whatsappInstanceUrl}/status`
+    // Testar endpoint de status da instância Z-API
+    const statusUrl = `${whatsappInstanceUrl}/token/${whatsappApiToken}/status`
     console.log('🔍 Testando status da instância:', statusUrl)
     
     const statusResponse = await fetch(statusUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': whatsappApiToken,
       }
     })
     
