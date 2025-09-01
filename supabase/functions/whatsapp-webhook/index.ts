@@ -112,10 +112,10 @@ Deno.serve(async (req) => {
           console.log('🤖 Processando comando automaticamente...')
           
           // Chamar edge function para processar comando
-          const response = await fetch(`${supabaseUrl}/functions/v1/process-whatsapp-command`, {
+          const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/process-whatsapp-command`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${supabaseServiceRoleKey}`,
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ messageId: mensagemSalva.id })
