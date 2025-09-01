@@ -31,6 +31,8 @@ Deno.serve(async (req) => {
 
   try {
     console.log('📱 WhatsApp Webhook recebido:', req.method)
+    console.log('🌐 URL completa:', req.url)
+    console.log('📋 Headers:', Object.fromEntries(req.headers.entries()))
     
     // Inicializar cliente Supabase com service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -62,6 +64,12 @@ Deno.serve(async (req) => {
 
     if (req.method === 'POST') {
       const body = await req.json()
+      console.log('🔥 WEBHOOK PAYLOAD COMPLETO 🔥')
+      console.log('====================================')
+      console.log(JSON.stringify(body, null, 2))
+      console.log('====================================')
+      console.log('📊 Tipo do payload:', typeof body)
+      console.log('📊 Chaves do payload:', Object.keys(body || {}))
       console.log('📋 Dados recebidos do webhook:', JSON.stringify(body, null, 2))
 
       // Processar mensagem baseado no provedor
@@ -108,10 +116,45 @@ Deno.serve(async (req) => {
 
       console.log('💾 Mensagem salva no banco:', mensagemSalva.id)
 
-      // TODO: Aqui implementar resposta automática do Picotinho
+      // Implementar resposta automática do Picotinho
+      let respostaEnviada = false
       if (processedMessage.comando_identificado) {
         console.log('🤖 Comando identificado:', processedMessage.comando_identificado)
-        // Implementar lógica de resposta automática no futuro
+        
+        const resposta = await enviarRespostaPicotinho(
+          processedMessage.remetente, 
+          processedMessage.comando_identificado,
+          processedMessage.parametros_comando
+        )
+        
+        if (resposta.success) {
+          console.log('✅ Resposta automática enviada:', resposta.message)
+          respostaEnviada = true
+          
+          // Atualizar mensagem com resposta enviada
+          await supabase
+            .from('whatsapp_mensagens')
+            .update({
+              processada: true,
+              resposta_enviada: resposta.message,
+              data_processamento: new Date().toISOString()
+            })
+            .eq('id', mensagemSalva.id)
+        } else {
+          console.error('❌ Erro ao enviar resposta:', resposta.error)
+        }
+      } else {
+        // Resposta padrão para mensagens sem comando específico
+        const respostaDefault = await enviarRespostaPicotinho(
+          processedMessage.remetente,
+          'saudacao',
+          { mensagem_original: processedMessage.conteudo }
+        )
+        
+        if (respostaDefault.success) {
+          console.log('✅ Resposta padrão enviada')
+          respostaEnviada = true
+        }
       }
 
       // Resposta de sucesso
@@ -292,5 +335,81 @@ async function buscarUsuarioPorWhatsApp(supabase: any, numeroWhatsApp: string) {
   } catch (error) {
     console.error('❌ Erro na busca do usuário:', error)
     return null
+  }
+}
+
+/**
+ * Envia resposta automática do Picotinho via Z-API
+ */
+async function enviarRespostaPicotinho(numeroDestino: string, comando: string, parametros?: any) {
+  try {
+    const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')
+    const apiToken = Deno.env.get('WHATSAPP_API_TOKEN')
+    
+    if (!instanceUrl || !apiToken) {
+      console.error('❌ Configurações do Z-API não encontradas')
+      return { success: false, error: 'Configurações não encontradas' }
+    }
+    
+    // Gerar resposta baseada no comando
+    let mensagemResposta = ''
+    
+    switch (comando) {
+      case 'baixar_estoque':
+        mensagemResposta = '🗂️ *Picotinho aqui!* 📊\n\nVou baixar seu estoque. Por favor, me envie as notas fiscais ou códigos QR que deseja processar!'
+        break
+      
+      case 'consultar_estoque':
+        mensagemResposta = '📋 *Picotinho aqui!* 📊\n\nVou consultar seu estoque atual. Um momento...\n\n_(Esta funcionalidade está sendo desenvolvida)_'
+        break
+      
+      case 'adicionar_produto':
+        mensagemResposta = '➕ *Picotinho aqui!* 📦\n\nVou te ajudar a adicionar produtos ao estoque. Por favor, me informe:\n• Nome do produto\n• Quantidade\n• Preço (opcional)'
+        break
+      
+      case 'saudacao':
+      default:
+        mensagemResposta = '👋 *Olá! Sou o Picotinho!* 🤖\n\nSou seu assistente para controle de estoque. Posso te ajudar com:\n\n📊 Consultar estoque\n📥 Baixar produtos\n➕ Adicionar itens\n\nDigite "Picotinho" seguido do que deseja fazer!'
+        break
+    }
+    
+    console.log('📤 Enviando resposta para:', numeroDestino)
+    console.log('💬 Mensagem:', mensagemResposta)
+    
+    // Enviar mensagem via Z-API
+    const response = await fetch(`${instanceUrl}/token/${apiToken}/send-text`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: numeroDestino,
+        message: mensagemResposta
+      })
+    })
+    
+    const responseData = await response.json()
+    console.log('🌐 Resposta da Z-API:', responseData)
+    
+    if (response.ok && !responseData.error) {
+      return { 
+        success: true, 
+        message: mensagemResposta,
+        apiResponse: responseData 
+      }
+    } else {
+      console.error('❌ Erro na resposta da Z-API:', responseData)
+      return { 
+        success: false, 
+        error: responseData.error || 'Erro ao enviar mensagem' 
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro ao enviar resposta:', error)
+    return { 
+      success: false, 
+      error: error.message 
+    }
   }
 }
