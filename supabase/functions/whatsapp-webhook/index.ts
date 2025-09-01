@@ -31,6 +31,11 @@ Deno.serve(async (req) => {
 
   try {
     console.log('📱 WhatsApp Webhook recebido:', req.method)
+    console.log('🌐 URL completa:', req.url)
+    
+    // Mostrar headers para debug
+    const headers = Object.fromEntries(req.headers.entries())
+    console.log('📋 Headers:', JSON.stringify(headers, null, 2))
     
     // Inicializar cliente Supabase com service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -50,38 +55,49 @@ Deno.serve(async (req) => {
         // Verificar token se necessário
         return new Response(hubChallenge, { 
           status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+          headers: corsHeaders 
         })
       }
       
-      return new Response('WhatsApp Webhook ativo', { 
-        status: 200,
+      return new Response('Webhook verification failed', { 
+        status: 400,
         headers: corsHeaders 
       })
     }
 
     if (req.method === 'POST') {
-      const body = await req.json()
-      console.log('📋 Dados recebidos do webhook:', JSON.stringify(body, null, 2))
-
+      // Log do payload completo para debug
+      const requestBody = await req.text()
+      const webhookData = JSON.parse(requestBody)
+      
+      console.log('====================================')
+      console.log('🔥 WEBHOOK PAYLOAD COMPLETO 🔥')
+      console.log(JSON.stringify(webhookData, null, 2))
+      console.log('====================================')
+      
+      // Debug da estrutura dos dados
+      console.log('📊 Tipo do payload:', typeof webhookData)
+      console.log('📊 Chaves do payload:', Object.keys(webhookData))
+      
+      console.log('📋 Dados recebidos do webhook:', JSON.stringify(webhookData, null, 2))
+      
       // Processar mensagem baseado no provedor
-      const processedMessage = await processWhatsAppMessage(body)
+      const processedMessage = await processWhatsAppMessage(webhookData)
       
       if (!processedMessage) {
-        console.log('❌ Mensagem não processável')
-        return new Response(JSON.stringify({ 
-          success: false, 
-          message: 'Mensagem não processável' 
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        console.log('⚠️ Mensagem não processada ou formato não reconhecido')
+        return new Response('Formato não reconhecido', { 
+          status: 400,
+          headers: corsHeaders 
         })
       }
 
-      console.log('✅ Mensagem processada:', processedMessage)
+      console.log('✅ Mensagem processada:', JSON.stringify(processedMessage, null, 2))
 
       // Buscar usuário baseado no número do WhatsApp
+      console.log('🔍 Buscando usuário para número:', processedMessage.remetente)
       const usuario = await buscarUsuarioPorWhatsApp(supabase, processedMessage.remetente)
+      console.log('👤 Usuário encontrado:', usuario)
       
       // Salvar mensagem no banco
       const { data: mensagemSalva, error: erroSalvar } = await supabase
@@ -141,8 +157,22 @@ Deno.serve(async (req) => {
 async function processWhatsAppMessage(webhookData: any): Promise<ProcessedMessage | null> {
   try {
     console.log('🔄 Processando mensagem do webhook...')
+    console.log('📊 Estrutura dos dados recebidos:', Object.keys(webhookData))
     
-    // Z-API Format
+    // Z-API Format v1 (mais comum)
+    if (webhookData.phone && webhookData.text) {
+      console.log('✅ Reconhecido como Z-API v1:', webhookData.text.message)
+      
+      return {
+        remetente: cleanPhoneNumber(webhookData.phone),
+        conteudo: webhookData.text.message || '',
+        tipo_mensagem: webhookData.type || 'text',
+        webhook_data: webhookData,
+        ...identifyCommand(webhookData.text.message || '')
+      }
+    }
+    
+    // Z-API Format v2 (alternativo)
     if (webhookData.phone && webhookData.message) {
       const message = webhookData.message
       
@@ -157,6 +187,8 @@ async function processWhatsAppMessage(webhookData: any): Promise<ProcessedMessag
     
     // Twilio Format
     if (webhookData.From && webhookData.Body) {
+      console.log('✅ Reconhecido como Twilio:', webhookData.Body)
+      
       return {
         remetente: cleanPhoneNumber(webhookData.From),
         conteudo: webhookData.Body,
@@ -167,22 +199,30 @@ async function processWhatsAppMessage(webhookData: any): Promise<ProcessedMessag
     }
     
     // Meta WhatsApp Cloud API Format
-    if (webhookData.entry && webhookData.entry[0]?.changes) {
-      const change = webhookData.entry[0].changes[0]
-      if (change.value?.messages && change.value.messages[0]) {
-        const message = change.value.messages[0]
-        
-        return {
-          remetente: cleanPhoneNumber(message.from),
-          conteudo: message.text?.body || message.caption || '',
-          tipo_mensagem: message.type || 'text',
-          webhook_data: webhookData,
-          ...identifyCommand(message.text?.body || message.caption || '')
+    if (webhookData.entry && Array.isArray(webhookData.entry)) {
+      for (const entry of webhookData.entry) {
+        if (entry.changes && Array.isArray(entry.changes)) {
+          for (const change of entry.changes) {
+            if (change.value && change.value.messages && Array.isArray(change.value.messages)) {
+              const message = change.value.messages[0]
+              const contact = change.value.contacts?.[0]
+              
+              console.log('✅ Reconhecido como Meta Cloud API:', message.text?.body)
+              
+              return {
+                remetente: cleanPhoneNumber(contact?.wa_id || message.from),
+                conteudo: message.text?.body || message.caption || '',
+                tipo_mensagem: message.type || 'text',
+                webhook_data: webhookData,
+                ...identifyCommand(message.text?.body || message.caption || '')
+              }
+            }
+          }
         }
       }
     }
     
-    console.log('❌ Formato de webhook não reconhecido')
+    console.log('❌ Formato não reconhecido')
     return null
     
   } catch (error) {
@@ -192,30 +232,34 @@ async function processWhatsAppMessage(webhookData: any): Promise<ProcessedMessag
 }
 
 /**
- * Identifica comandos na mensagem (para futuras implementações)
+ * Identifica comandos básicos do Picotinho
  */
 function identifyCommand(texto: string): { comando_identificado?: string, parametros_comando?: any } {
-  if (!texto) return {}
+  if (!texto || typeof texto !== 'string') {
+    return {}
+  }
   
-  const textoLimpo = texto.toLowerCase().trim()
+  const textoLower = texto.toLowerCase().trim()
   
-  // Detectar comandos básicos do Picotinho
-  if (textoLimpo.includes('picotinho')) {
-    if (textoLimpo.includes('baixa') || textoLimpo.includes('baixar')) {
+  // Comandos do Picotinho
+  if (textoLower.includes('picotinho') || textoLower.includes('pacotinho')) {
+    console.log('🤖 Comando identificado: baixar_estoque')
+    
+    if (textoLower.includes('baixa') || textoLower.includes('reduz') || textoLower.includes('retira')) {
       return {
         comando_identificado: 'baixar_estoque',
         parametros_comando: { texto_original: texto }
       }
     }
     
-    if (textoLimpo.includes('consulta') || textoLimpo.includes('ver') || textoLimpo.includes('mostrar')) {
+    if (textoLower.includes('consulta') || textoLower.includes('verifica') || textoLower.includes('quanto')) {
       return {
         comando_identificado: 'consultar_estoque',
         parametros_comando: { texto_original: texto }
       }
     }
     
-    if (textoLimpo.includes('adiciona') || textoLimpo.includes('inserir') || textoLimpo.includes('cadastrar')) {
+    if (textoLower.includes('adiciona') || textoLower.includes('inclui') || textoLower.includes('lista')) {
       return {
         comando_identificado: 'adicionar_produto',
         parametros_comando: { texto_original: texto }
@@ -227,20 +271,27 @@ function identifyCommand(texto: string): { comando_identificado?: string, parame
 }
 
 /**
- * Limpa e normaliza número de telefone
+ * Limpa e padroniza número de telefone
  */
 function cleanPhoneNumber(phone: string): string {
+  if (!phone) return ''
+  
   // Remove todos os caracteres não numéricos
   let cleaned = phone.replace(/\D/g, '')
   
-  // Remove código do país se presente (55 para Brasil)
+  // Se começa com 55 (código do Brasil), remove
   if (cleaned.startsWith('55') && cleaned.length > 11) {
     cleaned = cleaned.substring(2)
   }
   
-  // Adiciona 9 se for celular sem
-  if (cleaned.length === 10 && !cleaned.startsWith('9')) {
-    cleaned = cleaned.substring(0, 2) + '9' + cleaned.substring(2)
+  // Se tem 11 dígitos e o segundo dígito é 9 (celular), está correto
+  if (cleaned.length === 11 && cleaned[2] === '9') {
+    return cleaned
+  }
+  
+  // Se tem 10 dígitos, adiciona o 9 do celular
+  if (cleaned.length === 10) {
+    return cleaned.substring(0, 2) + '9' + cleaned.substring(2)
   }
   
   return cleaned
