@@ -106,6 +106,26 @@ Deno.serve(async (req) => {
 
       console.log('💾 Mensagem salva no banco:', mensagemSalva.id)
 
+      // Processar comando automaticamente se foi identificado
+      if (processedMessage.comando_identificado && usuario?.usuario_id) {
+        try {
+          console.log('🤖 Processando comando automaticamente...')
+          
+          // Chamar edge function para processar comando
+          const { data: resultadoProcessamento, error: erroProcessamento } = await supabase.functions.invoke('process-whatsapp-command', {
+            body: { messageId: mensagemSalva.id }
+          })
+          
+          if (erroProcessamento) {
+            console.error('❌ Erro ao processar comando:', erroProcessamento)
+          } else {
+            console.log('✅ Comando processado:', resultadoProcessamento)
+          }
+        } catch (error) {
+          console.error('❌ Erro no processamento automático:', error)
+        }
+      }
+
       // Resposta de sucesso
       return new Response(JSON.stringify({
         success: true,
