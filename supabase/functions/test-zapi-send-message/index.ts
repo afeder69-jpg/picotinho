@@ -30,8 +30,15 @@ Deno.serve(async (req) => {
     const numeroTeste = '5521970016024'
     const mensagemTeste = 'Teste de envio via Z-API pelo Picotinho 🤖'
     
-    // Montar URL da API
-    const apiUrl = `${whatsappInstanceUrl}/send-text`
+    // Montar URL da API (remover /send-text se já estiver na WHATSAPP_INSTANCE_URL)
+    let apiUrl = whatsappInstanceUrl
+    if (apiUrl.includes('/send-text')) {
+      // Se a URL já tem /send-text, usar ela diretamente
+      apiUrl = whatsappInstanceUrl
+    } else {
+      // Se não tem, adicionar /send-text
+      apiUrl = `${whatsappInstanceUrl}/send-text`
+    }
     console.log('🌐 URL da API:', apiUrl)
     
     // Fazer requisição para Z-API
