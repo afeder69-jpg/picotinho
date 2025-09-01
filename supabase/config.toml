@@ -17,15 +17,3 @@ verify_jwt = false
 
 [functions.whatsapp-webhook]
 verify_jwt = false
-
-[functions.send-verification-code]
-verify_jwt = true
-
-[functions.verify-whatsapp-code]
-verify_jwt = true
-
-[functions.test-zapi-connection]
-verify_jwt = false
-
-[functions.test-zapi-send-message]
-verify_jwt = false

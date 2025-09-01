@@ -3,20 +3,26 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Smartphone, MessageSquare, Minus, Shield, CheckCircle } from "lucide-react";
+import { ArrowLeft, Smartphone, MessageSquare, Minus } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
 
+// Fixed: WhatsApp Config simplified for end users
+
 export default function WhatsAppConfig() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [numeroWhatsApp, setNumeroWhatsApp] = useState("");
-  const [codigoVerificacao, setCodigoVerificacao] = useState("");
   const [loading, setLoading] = useState(false);
-  const [etapaVerificacao, setEtapaVerificacao] = useState<'numero' | 'codigo'>('numero');
-  const [whatsappAtivo, setWhatsappAtivo] = useState(false);
+
+  // Configuração global do sistema (administrador)
+  const SYSTEM_CONFIG = {
+    api_provider: "z-api",
+    webhook_token: "",
+    ativo: true
+  };
 
   // Carregar configuração existente
   useEffect(() => {
@@ -29,35 +35,21 @@ export default function WhatsAppConfig() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_configuracoes')
-        .select('*')
+        .select('numero_whatsapp')
         .eq('usuario_id', user?.id)
         .maybeSingle();
 
-      if (error) {
-        console.error('Erro ao carregar configuração:', error);
-        setWhatsappAtivo(false);
-        setEtapaVerificacao('numero');
-        return;
-      }
+      if (error) throw error;
 
       if (data) {
         setNumeroWhatsApp(data.numero_whatsapp || "");
-        // Verificar se tem as colunas verificado e ativo
-        const verificado = (data as any).verificado || false;
-        const ativo = data.ativo || false;
-        setWhatsappAtivo(verificado && ativo);
-        if (verificado && ativo) {
-          setEtapaVerificacao('numero');
-        }
       }
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
-      setWhatsappAtivo(false);
-      setEtapaVerificacao('numero');
     }
   };
 
-  const enviarCodigo = async () => {
+  const salvarConfig = async () => {
     if (!user || !numeroWhatsApp.trim()) {
       toast.error("Por favor, informe seu número do WhatsApp");
       return;
@@ -65,105 +57,25 @@ export default function WhatsAppConfig() {
     
     setLoading(true);
     try {
-      const response = await supabase.functions.invoke('send-verification-code', {
-        body: {
-          numero_whatsapp: numeroWhatsApp.trim(),
-          usuario_id: user.id
-        }
-      });
+      const dadosConfig = {
+        usuario_id: user.id,
+        numero_whatsapp: numeroWhatsApp.trim(),
+        ...SYSTEM_CONFIG // Usa configuração global do sistema
+      };
 
-      if (response.error) {
-        throw response.error;
-      }
+      const { error } = await supabase
+        .from('whatsapp_configuracoes')
+        .upsert(dadosConfig, { onConflict: 'usuario_id' });
 
-      toast.success("Código de verificação enviado para seu WhatsApp!");
-      setEtapaVerificacao('codigo');
-    } catch (error) {
-      console.error('Erro ao enviar código:', error);
-      toast.error("Erro ao enviar código de verificação");
-    }
-    setLoading(false);
-  };
+      if (error) throw error;
 
-  const verificarCodigo = async () => {
-    if (!user || !codigoVerificacao.trim()) {
-      toast.error("Por favor, digite o código de verificação");
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const response = await supabase.functions.invoke('verify-whatsapp-code', {
-        body: {
-          codigo: codigoVerificacao.trim(),
-          usuario_id: user.id
-        }
-      });
-
-      if (response.error) {
-        throw response.error;
-      }
-
-      toast.success("WhatsApp verificado e ativado com sucesso!");
-      setWhatsappAtivo(true);
-      setEtapaVerificacao('numero');
-      setCodigoVerificacao("");
+      toast.success("Número do WhatsApp salvo com sucesso!");
       loadConfig();
     } catch (error) {
-      console.error('Erro ao verificar código:', error);
-      toast.error(error.message || "Código de verificação incorreto");
+      console.error('Erro ao salvar configuração:', error);
+      toast.error("Erro ao salvar configuração");
     }
     setLoading(false);
-  };
-
-  const trocarNumero = () => {
-    setWhatsappAtivo(false);
-    setEtapaVerificacao('numero');
-    setCodigoVerificacao("");
-  };
-
-  const testarConexao = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('test-zapi-connection');
-      
-      if (error) throw error;
-      
-      if (data.success) {
-        toast.success('Conexão Z-API OK!');
-        console.log('Status Z-API:', data);
-      } else {
-        toast.error('Erro na conexão Z-API: ' + data.error);
-        console.error('Erro Z-API:', data);
-      }
-    } catch (error) {
-      console.error('Erro ao testar conexão:', error);
-      toast.error('Erro ao testar conexão Z-API');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const testarEnvioMensagem = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('test-zapi-send-message');
-      
-      if (error) throw error;
-      
-      if (data.success) {
-        toast.success('Mensagem de teste enviada com sucesso!');
-        console.log('Resposta Z-API:', data);
-      } else {
-        toast.error('Erro ao enviar mensagem: ' + data.error);
-        console.error('Erro envio:', data);
-      }
-    } catch (error) {
-      console.error('Erro ao testar envio:', error);
-      toast.error('Erro ao testar envio Z-API');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const formatarNumero = (numero: string) => {
@@ -201,120 +113,46 @@ export default function WhatsAppConfig() {
         </div>
 
         <div className="space-y-6">
-          {/* Status do WhatsApp */}
-          {whatsappAtivo && (
-            <Card className="bg-green-50 border-green-200">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                  <div>
-                    <h3 className="font-semibold text-green-900">WhatsApp Integrado</h3>
-                    <p className="text-sm text-green-700">
-                      Número: {formatarNumero(numeroWhatsApp)}
-                    </p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={trocarNumero}
-                    className="ml-auto border-green-300 text-green-700 hover:bg-green-100"
-                  >
-                    Trocar Número
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Configuração do Número */}
-          {!whatsappAtivo && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  {etapaVerificacao === 'numero' ? 'Configurar WhatsApp' : 'Verificar Código'}
-                </CardTitle>
-                <CardDescription>
-                  {etapaVerificacao === 'numero' 
-                    ? 'Digite seu número do WhatsApp para receber o código de verificação'
-                    : 'Digite o código de 6 dígitos enviado para seu WhatsApp'
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {etapaVerificacao === 'numero' ? (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Número do WhatsApp
-                      </label>
-                      <Input
-                        placeholder="(11) 99999-9999"
-                        value={formatarNumero(numeroWhatsApp)}
-                        onChange={(e) => {
-                          const numero = e.target.value.replace(/\D/g, '');
-                          setNumeroWhatsApp(numero);
-                        }}
-                        maxLength={15}
-                        disabled={loading}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Apenas números (DDD + número). Ex: 11999999999
-                      </p>
-                    </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Smartphone className="h-5 w-5" />
+                Seu Número
+              </CardTitle>
+              <CardDescription>
+                Digite seu número do WhatsApp para receber comandos do Picotinho
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Número do WhatsApp
+                </label>
+                <Input
+                  placeholder="(11) 99999-9999"
+                  value={formatarNumero(numeroWhatsApp)}
+                  onChange={(e) => {
+                    // Remove formatação antes de salvar
+                    const numero = e.target.value.replace(/\D/g, '');
+                    setNumeroWhatsApp(numero);
+                  }}
+                  maxLength={15}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Apenas números (DDD + número). Ex: 11999999999
+                </p>
+              </div>
 
-                    <Button 
-                      onClick={enviarCodigo} 
-                      disabled={loading || !numeroWhatsApp.trim()}
-                      className="w-full"
-                    >
-                      {loading ? "Enviando..." : "Enviar Código de Verificação"}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Código de Verificação
-                      </label>
-                      <Input
-                        placeholder="123456"
-                        value={codigoVerificacao}
-                        onChange={(e) => {
-                          const codigo = e.target.value.replace(/\D/g, '');
-                          setCodigoVerificacao(codigo);
-                        }}
-                        maxLength={6}
-                        disabled={loading}
-                        className="text-center text-xl tracking-widest"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Verifique seu WhatsApp {formatarNumero(numeroWhatsApp)}
-                      </p>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline"
-                        onClick={() => setEtapaVerificacao('numero')} 
-                        disabled={loading}
-                        className="flex-1"
-                      >
-                        Voltar
-                      </Button>
-                      <Button 
-                        onClick={verificarCodigo} 
-                        disabled={loading || codigoVerificacao.length !== 6}
-                        className="flex-1"
-                      >
-                        {loading ? "Verificando..." : "Verificar Código"}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
+              <Button 
+                onClick={salvarConfig} 
+                disabled={loading || !numeroWhatsApp.trim()}
+                className="w-full"
+              >
+                {loading ? "Salvando..." : "Salvar Número"}
+              </Button>
+            </CardContent>
+          </Card>
 
           {/* Comandos Disponíveis */}
           <Card>
@@ -354,35 +192,6 @@ export default function WhatsAppConfig() {
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Botões de Teste */}
-          <Card>
-            <CardHeader>
-              <CardTitle>🔧 Diagnóstico</CardTitle>
-              <CardDescription>
-                Teste a conexão e envio de mensagens via Z-API
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button 
-                onClick={testarConexao}
-                disabled={loading}
-                variant="outline" 
-                className="w-full"
-              >
-                {loading ? "Testando..." : "Testar Conexão Z-API"}
-              </Button>
-              
-              <Button 
-                onClick={testarEnvioMensagem}
-                disabled={loading}
-                variant="outline" 
-                className="w-full"
-              >
-                {loading ? "Enviando..." : "Testar Envio de Mensagem"}
-              </Button>
             </CardContent>
           </Card>
         </div>
