@@ -332,7 +332,7 @@ async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiToken}`
+        'Client-Token': apiToken
       },
       body: JSON.stringify({
         phone: numeroDestino,
