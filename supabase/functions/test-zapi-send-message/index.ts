@@ -57,11 +57,30 @@ Deno.serve(async (req) => {
       })
     })
     
-    const responseStatus = response.status
-    const responseData = await response.json()
+    // ===== LOGGING BRUTO DA RESPOSTA Z-API =====
+    console.log('🔍 ===== RESPOSTA BRUTA Z-API =====')
+    console.log('📊 Status Code:', response.status)
+    console.log('📋 Status Text:', response.statusText)
+    console.log('🌐 Headers:', Object.fromEntries(response.headers.entries()))
+    console.log('✅ Response OK:', response.ok)
     
-    console.log('📊 Status da resposta:', responseStatus)
-    console.log('📋 Dados da resposta:', JSON.stringify(responseData, null, 2))
+    // Clonar response para poder ler o body duas vezes
+    const responseClone = response.clone()
+    const responseText = await responseClone.text()
+    console.log('📝 Body Bruto (texto):', responseText)
+    
+    let responseData
+    try {
+      responseData = await response.json()
+      console.log('📋 Body Parseado (JSON):', JSON.stringify(responseData, null, 2))
+    } catch (parseError) {
+      console.log('❌ Erro ao parsear JSON:', parseError.message)
+      responseData = { error: 'Resposta não é JSON válido', rawResponse: responseText }
+    }
+    
+    console.log('🔍 ===== FIM RESPOSTA BRUTA =====')
+    
+    const responseStatus = response.status
 
     return new Response(JSON.stringify({
       success: true,
