@@ -49,8 +49,14 @@ const handler = async (req: Request): Promise<Response> => {
         remetente = webhookData.phone.replace(/\D/g, '');
         conteudo = webhookData.text.message || '';
         
-        if (conteudo.toLowerCase().includes('picotinho') && conteudo.toLowerCase().includes('baixa')) {
-          comando_identificado = 'baixar_estoque';
+        if (conteudo.toLowerCase().includes('picotinho')) {
+          if (conteudo.toLowerCase().includes('baixa')) {
+            comando_identificado = 'baixar_estoque';
+          } else if (conteudo.toLowerCase().includes('consulta')) {
+            comando_identificado = 'consultar_estoque';
+          } else if (conteudo.toLowerCase().includes('adiciona')) {
+            comando_identificado = 'adicionar_produto';
+          }
         }
       }
       
@@ -90,6 +96,30 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       console.log('💾 Mensagem salva:', mensagemSalva.id);
+
+      // Processar comando automaticamente se identificado e usuário existe
+      if (comando_identificado && usuario?.usuario_id) {
+        try {
+          console.log('🤖 Processando comando automaticamente...');
+          
+          const response = await fetch(`${supabaseUrl}/functions/v1/process-whatsapp-command`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ messageId: mensagemSalva.id })
+          });
+          
+          if (response.ok) {
+            console.log('✅ Comando processado com sucesso');
+          } else {
+            console.error('❌ Erro ao processar comando:', await response.text());
+          }
+        } catch (error) {
+          console.error('❌ Erro no processamento:', error);
+        }
+      }
 
       return new Response(JSON.stringify({
         success: true,
