@@ -1112,34 +1112,43 @@ export type Database = {
         Row: {
           api_provider: string
           ativo: boolean
+          codigo_verificacao: string | null
           created_at: string
+          data_codigo: string | null
           id: string
           numero_whatsapp: string
           ultima_mensagem: string | null
           updated_at: string
           usuario_id: string
+          verificado: boolean
           webhook_token: string | null
         }
         Insert: {
           api_provider?: string
           ativo?: boolean
+          codigo_verificacao?: string | null
           created_at?: string
+          data_codigo?: string | null
           id?: string
           numero_whatsapp: string
           ultima_mensagem?: string | null
           updated_at?: string
           usuario_id: string
+          verificado?: boolean
           webhook_token?: string | null
         }
         Update: {
           api_provider?: string
           ativo?: boolean
+          codigo_verificacao?: string | null
           created_at?: string
+          data_codigo?: string | null
           id?: string
           numero_whatsapp?: string
           ultima_mensagem?: string | null
           updated_at?: string
           usuario_id?: string
+          verificado?: boolean
           webhook_token?: string | null
         }
         Relationships: []
