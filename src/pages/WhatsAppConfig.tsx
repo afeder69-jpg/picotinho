@@ -144,6 +144,28 @@ export default function WhatsAppConfig() {
     }
   };
 
+  const testarEnvioMensagem = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-zapi-send-message');
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        toast.success('Mensagem de teste enviada com sucesso!');
+        console.log('Resposta Z-API:', data);
+      } else {
+        toast.error('Erro ao enviar mensagem: ' + data.error);
+        console.error('Erro envio:', data);
+      }
+    } catch (error) {
+      console.error('Erro ao testar envio:', error);
+      toast.error('Erro ao testar envio Z-API');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatarNumero = (numero: string) => {
     // Remove tudo que não é número
     const cleaned = numero.replace(/\D/g, '');
@@ -335,15 +357,15 @@ export default function WhatsAppConfig() {
             </CardContent>
           </Card>
 
-          {/* Botão de Teste */}
+          {/* Botões de Teste */}
           <Card>
             <CardHeader>
               <CardTitle>🔧 Diagnóstico</CardTitle>
               <CardDescription>
-                Teste a conexão com o Z-API para verificar se está funcionando
+                Teste a conexão e envio de mensagens via Z-API
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <Button 
                 onClick={testarConexao}
                 disabled={loading}
@@ -351,6 +373,15 @@ export default function WhatsAppConfig() {
                 className="w-full"
               >
                 {loading ? "Testando..." : "Testar Conexão Z-API"}
+              </Button>
+              
+              <Button 
+                onClick={testarEnvioMensagem}
+                disabled={loading}
+                variant="outline" 
+                className="w-full"
+              >
+                {loading ? "Enviando..." : "Testar Envio de Mensagem"}
               </Button>
             </CardContent>
           </Card>
