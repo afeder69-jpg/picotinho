@@ -113,7 +113,8 @@ Deno.serve(async (req) => {
     console.log('📤 Headers da resposta:', Object.fromEntries(zapiResponse.headers.entries()))
     console.log('📤 Resposta completa Z-API:', JSON.stringify(zapiResult, null, 2))
 
-    if (!zapiResponse.ok) {
+    // Verificar se a resposta contém erro mesmo com status 200
+    if (!zapiResponse.ok || zapiResult.error || zapiResult.message?.includes('NOT_FOUND')) {
       console.error('❌ Erro no Z-API - Status:', zapiResponse.status)
       console.error('❌ Erro no Z-API - Resposta:', zapiResult)
       throw new Error(`Erro ao enviar mensagem via Z-API (${zapiResponse.status}): ${JSON.stringify(zapiResult)}`)

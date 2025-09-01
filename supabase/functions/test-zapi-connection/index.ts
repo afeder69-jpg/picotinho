@@ -52,6 +52,7 @@ Deno.serve(async (req) => {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Client-Token': whatsappApiToken,
       }
     })
     
