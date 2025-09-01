@@ -112,14 +112,21 @@ Deno.serve(async (req) => {
           console.log('🤖 Processando comando automaticamente...')
           
           // Chamar edge function para processar comando
-          const { data: resultadoProcessamento, error: erroProcessamento } = await supabase.functions.invoke('process-whatsapp-command', {
-            body: { messageId: mensagemSalva.id }
+          const response = await fetch(`${supabaseUrl}/functions/v1/process-whatsapp-command`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseServiceRoleKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ messageId: mensagemSalva.id })
           })
           
-          if (erroProcessamento) {
-            console.error('❌ Erro ao processar comando:', erroProcessamento)
+          if (response.ok) {
+            const resultado = await response.json()
+            console.log('✅ Comando processado:', resultado)
           } else {
-            console.log('✅ Comando processado:', resultadoProcessamento)
+            const erro = await response.text()
+            console.error('❌ Erro ao processar comando:', erro)
           }
         } catch (error) {
           console.error('❌ Erro no processamento automático:', error)
