@@ -81,7 +81,9 @@ Deno.serve(async (req) => {
       console.log('✅ Mensagem processada:', processedMessage)
 
       // Buscar usuário baseado no número do WhatsApp
+      console.log('🔍 Buscando usuário para número:', processedMessage.remetente)
       const usuario = await buscarUsuarioPorWhatsApp(supabase, processedMessage.remetente)
+      console.log('👤 Usuário encontrado:', usuario)
       
       // Salvar mensagem no banco
       const { data: mensagemSalva, error: erroSalvar } = await supabase
@@ -105,6 +107,12 @@ Deno.serve(async (req) => {
       }
 
       console.log('💾 Mensagem salva no banco:', mensagemSalva.id)
+
+      // TODO: Aqui implementar resposta automática do Picotinho
+      if (processedMessage.comando_identificado) {
+        console.log('🤖 Comando identificado:', processedMessage.comando_identificado)
+        // Implementar lógica de resposta automática no futuro
+      }
 
       // Resposta de sucesso
       return new Response(JSON.stringify({
@@ -141,10 +149,26 @@ Deno.serve(async (req) => {
 async function processWhatsAppMessage(webhookData: any): Promise<ProcessedMessage | null> {
   try {
     console.log('🔄 Processando mensagem do webhook...')
+    console.log('📊 Estrutura dos dados recebidos:', Object.keys(webhookData))
     
-    // Z-API Format
+    // Z-API Format v1 (formato atual nos logs)
+    if (webhookData.phone && webhookData.text) {
+      const message = webhookData.text.message || webhookData.text
+      console.log('✅ Reconhecido como Z-API v1:', message)
+      
+      return {
+        remetente: cleanPhoneNumber(webhookData.phone),
+        conteudo: message,
+        tipo_mensagem: webhookData.type || 'text',
+        webhook_data: webhookData,
+        ...identifyCommand(message)
+      }
+    }
+    
+    // Z-API Format v2 
     if (webhookData.phone && webhookData.message) {
       const message = webhookData.message
+      console.log('✅ Reconhecido como Z-API v2:', message)
       
       return {
         remetente: cleanPhoneNumber(webhookData.phone),
@@ -183,6 +207,7 @@ async function processWhatsAppMessage(webhookData: any): Promise<ProcessedMessag
     }
     
     console.log('❌ Formato de webhook não reconhecido')
+    console.log('📋 Dados não processados:', JSON.stringify(webhookData, null, 2))
     return null
     
   } catch (error) {
