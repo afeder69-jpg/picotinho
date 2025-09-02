@@ -165,8 +165,21 @@ const handler = async (req: Request): Promise<Response> => {
         
         if (confirmacao.ok) {
           console.log('✅ Resposta automática enviada com sucesso');
+          
+          // Atualizar mensagem com resposta enviada
+          await supabase
+            .from('whatsapp_mensagens')
+            .update({ resposta_enviada: 'Mensagem recebida com sucesso ✅' })
+            .eq('id', mensagemSalva.id);
+            
         } else {
           console.error('❌ Erro ao enviar resposta automática. Status:', confirmacao.status, 'Body:', responseText);
+          
+          // Salvar erro no banco
+          await supabase
+            .from('whatsapp_mensagens')
+            .update({ erro_processamento: `Erro HTTP ${confirmacao.status}: ${responseText}` })
+            .eq('id', mensagemSalva.id);
         }
       } catch (error) {
         console.error('❌ Erro ao enviar resposta automática:', error);
