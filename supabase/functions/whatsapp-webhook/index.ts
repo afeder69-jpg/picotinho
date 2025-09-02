@@ -100,10 +100,13 @@ const handler = async (req: Request): Promise<Response> => {
       // Sempre enviar resposta de confirmação para qualquer mensagem
       try {
         console.log('📤 Enviando confirmação automática...');
+        console.log('📱 Número de telefone usado no envio:', remetente);
         
-        // Z-API: URL completa + Client-Token header (documentação oficial)
-        const sendTextUrl = 'https://api.z-api.io/instances/3E681FAD30EBC0315D8B4A19A3C36A1F/token/A9A0893271CF96872D8DF727/send-text';
-        const apiToken = 'A9A0893271CF96872D8DF727';
+        const apiToken = Deno.env.get('WHATSAPP_API_TOKEN')!;
+        const instanceId = '3E681FAD30EBC0315D8B4A19A3C36A1F';
+        const sendTextUrl = `https://api.z-api.io/instances/${instanceId}/token/${apiToken}/send-text`;
+        
+        console.log('🔗 URL do envio:', sendTextUrl);
         
         const confirmacao = await fetch(sendTextUrl, {
           method: 'POST',
@@ -117,10 +120,14 @@ const handler = async (req: Request): Promise<Response> => {
           })
         });
         
+        console.log('📊 Status da resposta:', confirmacao.status);
+        const responseText = await confirmacao.text();
+        console.log('📝 Body da resposta:', responseText);
+        
         if (confirmacao.ok) {
           console.log('✅ Confirmação enviada com sucesso');
         } else {
-          console.error('❌ Erro ao enviar confirmação:', await confirmacao.text());
+          console.error('❌ Erro ao enviar confirmação. Status:', confirmacao.status, 'Body:', responseText);
         }
       } catch (error) {
         console.error('❌ Erro ao enviar confirmação:', error);
@@ -151,7 +158,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       return new Response(JSON.stringify({
-        success: true,
+        ok: true,
         messageId: mensagemSalva.id
       }), {
         status: 200,
