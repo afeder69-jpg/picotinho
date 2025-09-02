@@ -11,8 +11,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    console.log('🔍 TESTE DE SECRETS - WHATSAPP');
+    console.log('🔍 TESTE DE SECRETS - WHATSAPP v2.0');
     console.log('🕐 Timestamp:', new Date().toISOString());
+    console.log('🔄 Forçando reload dos secrets...');
     
     // Check ALL environment variables
     const allEnvs = Deno.env.toObject();
