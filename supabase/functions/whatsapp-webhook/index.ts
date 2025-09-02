@@ -183,6 +183,16 @@ const handler = async (req: Request): Promise<Response> => {
         }
       } catch (error) {
         console.error('❌ Erro ao enviar resposta automática:', error);
+        
+        // Salvar erro no banco
+        try {
+          await supabase
+            .from('whatsapp_mensagens')
+            .update({ erro_processamento: `Erro no envio: ${error.message}` })
+            .eq('id', mensagemSalva.id);
+        } catch (updateError) {
+          console.error('❌ Erro ao atualizar mensagem com erro:', updateError);
+        }
       }
 
       // Processar comando automaticamente se identificado e usuário existe
