@@ -15,7 +15,13 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('🚀 WEBHOOK CHAMADO - INÍCIO DA EXECUÇÃO');
     console.log('📱 WhatsApp Webhook recebido:', req.method);
     console.log('🕐 Timestamp:', new Date().toISOString());
-    console.log('🔄 Versão da função: 2.0'); // Força redeploy
+    console.log('🔄 Versão da função: 3.0'); // Debug version
+    
+    // Lista TODOS os environment variables disponíveis
+    console.log('🔍 TODOS OS ENV VARS DISPONÍVEIS:');
+    console.log('🔍 Keys:', JSON.stringify(Object.keys(Deno.env.toObject()).sort(), null, 2));
+    console.log('🔍 WHATSAPP_INSTANCE_URL presente?', Object.keys(Deno.env.toObject()).includes('WHATSAPP_INSTANCE_URL'));
+    console.log('🔍 WHATSAPP_API_TOKEN presente?', Object.keys(Deno.env.toObject()).includes('WHATSAPP_API_TOKEN'));
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
