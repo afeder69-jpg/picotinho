@@ -99,13 +99,28 @@ const handler = async (req: Request): Promise<Response> => {
 
       // SEMPRE enviar resposta automática para qualquer número (independente de cadastro)
       try {
-        console.log('📤 Enviando resposta automática para:', remetente);
+        console.log('🔧 INICIANDO ENVIO DE RESPOSTA AUTOMÁTICA');
+        console.log('📱 Número destinatário:', remetente);
         
-        const apiToken = Deno.env.get('WHATSAPP_API_TOKEN')!;
+        const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+        console.log('🔑 Token existe?', apiToken ? 'SIM' : 'NÃO');
+        console.log('🔑 Primeiros 6 chars do token:', apiToken ? apiToken.substring(0, 6) + '...' : 'N/A');
+        
+        if (!apiToken) {
+          throw new Error('WHATSAPP_API_TOKEN não configurado');
+        }
+        
         const instanceId = '3E681FAD30EBC0315D8B4A19A3C36A1F';
         const sendTextUrl = `https://api.z-api.io/instances/${instanceId}/token/${apiToken}/send-text`;
         
-        console.log('🔗 URL do envio:', sendTextUrl);
+        console.log('🔗 URL completa do envio:', sendTextUrl);
+        
+        const requestBody = {
+          phone: remetente,
+          message: 'Mensagem recebida pelo Picotinho ✅'
+        };
+        
+        console.log('📦 Body da requisição:', JSON.stringify(requestBody, null, 2));
         
         const confirmacao = await fetch(sendTextUrl, {
           method: 'POST',
@@ -113,15 +128,14 @@ const handler = async (req: Request): Promise<Response> => {
             'Content-Type': 'application/json',
             'Client-Token': apiToken
           },
-          body: JSON.stringify({
-            phone: remetente,
-            message: 'Mensagem recebida pelo Picotinho ✅'
-          })
+          body: JSON.stringify(requestBody)
         });
         
-        console.log('📊 Status da resposta:', confirmacao.status);
+        console.log('📊 Status HTTP recebido:', confirmacao.status);
+        console.log('📊 Headers da resposta:', Object.fromEntries(confirmacao.headers.entries()));
+        
         const responseText = await confirmacao.text();
-        console.log('📝 Body da resposta:', responseText);
+        console.log('📝 Resposta completa da Z-API:', responseText);
         
         if (confirmacao.ok) {
           console.log('✅ Resposta automática enviada com sucesso');
