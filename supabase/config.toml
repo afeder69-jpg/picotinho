@@ -20,9 +20,3 @@ verify_jwt = false
 
 [functions.test-whatsapp-secrets]
 verify_jwt = false
-
-[functions.send-whatsapp-verification]
-verify_jwt = false
-
-[functions.verify-whatsapp-code]
-verify_jwt = false
