@@ -101,13 +101,15 @@ const handler = async (req: Request): Promise<Response> => {
       try {
         console.log('📤 Enviando confirmação automática...');
         
-        // Z-API usa o token na URL, não no header
+        // Z-API: URL completa + Client-Token header (documentação oficial)
         const sendTextUrl = 'https://api.z-api.io/instances/3E681FAD30EBC0315D8B4A19A3C36A1F/token/A9A0893271CF96872D8DF727/send-text';
+        const apiToken = 'A9A0893271CF96872D8DF727';
         
         const confirmacao = await fetch(sendTextUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Client-Token': apiToken
           },
           body: JSON.stringify({
             phone: remetente,
