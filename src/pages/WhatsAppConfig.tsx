@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle, Smartphone } from "lucide-react";
+import { ArrowLeft, Smartphone } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -17,21 +17,12 @@ interface WhatsAppConfig {
   ativo: boolean;
 }
 
-interface WhatsAppMessage {
-  id: string;
-  remetente: string;
-  conteudo: string;
-  tipo_mensagem: string;
-  comando_identificado?: string;
-  data_recebimento: string;
-  processada: boolean;
-}
 
 export default function WhatsAppConfig() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [numeroWhatsApp, setNumeroWhatsApp] = useState("");
-  const [mensagens, setMensagens] = useState<WhatsAppMessage[]>([]);
+  
   const [loading, setLoading] = useState(false);
 
   // Configuração global do sistema (administrador)
@@ -45,7 +36,6 @@ export default function WhatsAppConfig() {
   useEffect(() => {
     if (user) {
       loadConfig();
-      loadMensagens();
     }
   }, [user]);
 
@@ -67,21 +57,6 @@ export default function WhatsAppConfig() {
     }
   };
 
-  const loadMensagens = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('whatsapp_mensagens')
-        .select('*')
-        .eq('usuario_id', user?.id)
-        .order('data_recebimento', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setMensagens(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar mensagens:', error);
-    }
-  };
 
   const salvarConfig = async () => {
     if (!user || !numeroWhatsApp.trim()) {
@@ -112,9 +87,6 @@ export default function WhatsAppConfig() {
     setLoading(false);
   };
 
-  const formatarData = (data: string) => {
-    return new Date(data).toLocaleString('pt-BR');
-  };
 
   const formatarNumero = (numero: string) => {
     // Remove tudo que não é número
@@ -212,66 +184,6 @@ export default function WhatsAppConfig() {
             </CardContent>
           </Card>
 
-          {/* Mensagens Recebidas */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageCircle className="h-5 w-5" />
-                Histórico de Comandos
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={loadMensagens}
-                >
-                  Atualizar
-                </Button>
-              </CardTitle>
-              <CardDescription>
-                Comandos enviados para o Picotinho via WhatsApp
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {mensagens.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum comando recebido ainda</p>
-                  <p className="text-sm">Configure seu número e envie um comando de teste</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {mensagens.map((mensagem) => (
-                    <div 
-                      key={mensagem.id}
-                      className="border rounded-lg p-3 bg-white"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {mensagem.comando_identificado ? (
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                              {mensagem.comando_identificado.replace('_', ' ')}
-                            </span>
-                          ) : (
-                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
-                              mensagem
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          {mensagem.processada ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-yellow-500" />
-                          )}
-                          {formatarData(mensagem.data_recebimento)}
-                        </div>
-                      </div>
-                      <p className="text-gray-700">{mensagem.conteudo}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
