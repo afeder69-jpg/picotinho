@@ -166,7 +166,8 @@ const handler = async (req: Request): Promise<Response> => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Client-Token': apiToken
+            'Client-Token': apiToken,
+            'Client-Secret': Deno.env.get('WHATSAPP_ACCOUNT_SECRET')
           },
           body: JSON.stringify(requestBody)
         });
