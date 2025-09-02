@@ -47,7 +47,21 @@ const handler = async (req: Request): Promise<Response> => {
     if (req.method === 'POST') {
       const webhookData = await req.json();
       
-      console.log('📋 Dados recebidos:', JSON.stringify(webhookData, null, 2));
+      console.log('🔍 PAYLOAD COMPLETO RECEBIDO:');
+      console.log(JSON.stringify(webhookData, null, 2));
+      console.log('🔍 TIPO DE EVENTO:', webhookData.type);
+      console.log('🔍 ESTRUTURA DO TEXTO:', webhookData.text ? JSON.stringify(webhookData.text, null, 2) : 'NÃO ENCONTRADO');
+      console.log('🔍 CAMPO PHONE:', webhookData.phone);
+      console.log('🔍 CAMPO MESSAGE:', webhookData.message);
+      console.log('🔍 CAMPO FROM:', webhookData.from);
+      console.log('🔍 TODAS AS CHAVES PRINCIPAIS:', Object.keys(webhookData));
+      
+      // Log para comparar com formato esperado
+      console.log('📋 Comparação de formatos:');
+      console.log('- webhookData.phone =', webhookData.phone);
+      console.log('- webhookData.text.message =', webhookData.text?.message);
+      console.log('- webhookData.message =', webhookData.message);
+      console.log('- webhookData.text =', webhookData.text);
       
       // Processar mensagem Z-API
       let remetente = '';
