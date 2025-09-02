@@ -12,7 +12,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    console.log('🚀 WEBHOOK CHAMADO - INÍCIO DA EXECUÇÃO');
     console.log('📱 WhatsApp Webhook recebido:', req.method);
+    console.log('🕐 Timestamp:', new Date().toISOString());
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
