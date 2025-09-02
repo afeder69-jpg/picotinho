@@ -24,6 +24,38 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('📱 Número a verificar:', numeroCompleto);
     console.log('👤 Usuário ID:', usuarioId);
 
+    // Verificar se o número já está em uso por outro usuário
+    const { data: numeroExistente, error: checkError } = await supabase
+      .from('whatsapp_configuracoes')
+      .select('usuario_id, verificado')
+      .eq('numero_whatsapp', numeroCompleto)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('❌ Erro ao verificar número existente:', checkError);
+      throw new Error('Erro ao verificar número');
+    }
+
+    // Se número já existe e pertence a outro usuário
+    if (numeroExistente && numeroExistente.usuario_id !== usuarioId) {
+      console.log('⚠️ Número já cadastrado por outro usuário');
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Este número já está cadastrado por outro usuário. Se você é o proprietário, entre em contato com o suporte.'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Se é o mesmo usuário recadastrando
+    if (numeroExistente && numeroExistente.usuario_id === usuarioId) {
+      console.log('🔄 Mesmo usuário recadastrando número');
+      if (numeroExistente.verificado) {
+        console.log('✅ Número já verificado - permitindo reverificação');
+      }
+    }
+
     // Gerar código de 6 dígitos
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
     console.log('🔢 Código gerado:', codigo);

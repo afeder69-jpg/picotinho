@@ -183,7 +183,7 @@ export default function WhatsAppConfig() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="bg-green-50 p-4 rounded-lg">
+                <div className="bg-green-50 p-4 rounded-lg mb-4">
                   <h4 className="font-medium text-green-900 mb-2">
                     ✅ Como usar o Picotinho:
                   </h4>
@@ -192,6 +192,22 @@ export default function WhatsAppConfig() {
                     <p><strong>Consultar:</strong> "Picotinho, qual o preço do açúcar?"</p>
                     <p><strong>Adicionar:</strong> "Picotinho, adiciona leite na lista"</p>
                   </div>
+                </div>
+                
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-gray-600 mb-2">
+                    Quer alterar seu número ou reverificar?
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setVerificado(false);
+                      setDddNumero("");
+                    }}
+                    className="w-full"
+                  >
+                    Configurar Novo Número
+                  </Button>
                 </div>
               </CardContent>
             </Card>
