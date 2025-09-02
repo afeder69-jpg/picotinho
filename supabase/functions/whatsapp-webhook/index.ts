@@ -15,13 +15,19 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('🚀 WEBHOOK CHAMADO - INÍCIO DA EXECUÇÃO');
     console.log('📱 WhatsApp Webhook recebido:', req.method);
     console.log('🕐 Timestamp:', new Date().toISOString());
-    console.log('🔄 Versão da função: 4.0 - Client-Token corrigido'); // Debug version
+    console.log('🔄 Versão da função: 5.0 - FORÇA REDEPLOY'); // Debug version
     
-    // Lista TODOS os environment variables disponíveis
-    console.log('🔍 TODOS OS ENV VARS DISPONÍVEIS:');
-    console.log('🔍 Keys:', JSON.stringify(Object.keys(Deno.env.toObject()).sort(), null, 2));
-    console.log('🔍 WHATSAPP_INSTANCE_URL presente?', Object.keys(Deno.env.toObject()).includes('WHATSAPP_INSTANCE_URL'));
-    console.log('🔍 WHATSAPP_API_TOKEN presente?', Object.keys(Deno.env.toObject()).includes('WHATSAPP_API_TOKEN'));
+    // FIRST THING: Check ALL environment variables
+    const allEnvs = Deno.env.toObject();
+    console.log('🔍 TOTAL ENV VARS:', Object.keys(allEnvs).length);
+    console.log('🔍 ENV KEYS SORTED:', JSON.stringify(Object.keys(allEnvs).sort(), null, 2));
+    
+    // Check specific secrets existence
+    console.log('🔍 WHATSAPP_INSTANCE_URL:', Deno.env.get('WHATSAPP_INSTANCE_URL') ? 'EXISTS' : 'MISSING');
+    console.log('🔍 WHATSAPP_API_TOKEN:', Deno.env.get('WHATSAPP_API_TOKEN') ? 'EXISTS' : 'MISSING');
+    console.log('🔍 WHATSAPP_ACCOUNT_SECRET:', Deno.env.get('WHATSAPP_ACCOUNT_SECRET') ? 'EXISTS' : 'MISSING');
+    console.log('🔍 SUPABASE_URL:', Deno.env.get('SUPABASE_URL') ? 'EXISTS' : 'MISSING');
+    console.log('🔍 SUPABASE_SERVICE_ROLE_KEY:', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ? 'EXISTS' : 'MISSING');
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
