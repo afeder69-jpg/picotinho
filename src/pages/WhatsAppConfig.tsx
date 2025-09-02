@@ -59,8 +59,19 @@ export default function WhatsAppConfig() {
 
 
   const salvarConfig = async () => {
-    if (!user || !numeroWhatsApp.trim()) {
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
+    }
+    
+    if (!numeroWhatsApp.trim()) {
       toast.error("Por favor, informe seu número do WhatsApp");
+      return;
+    }
+    
+    // Validar formato obrigatório: 13 dígitos começando com 55
+    if (numeroWhatsApp.length !== 13 || !numeroWhatsApp.startsWith('55')) {
+      toast.error("Formato obrigatório: 5521999999999 (código do país + área + número)");
       return;
     }
     
@@ -147,7 +158,7 @@ export default function WhatsAppConfig() {
                   Número do WhatsApp
                 </label>
                 <Input
-                  placeholder="+55 (11) 99999-9999 ou (11) 99999-9999"
+                  placeholder="5521999999999 (formato obrigatório)"
                   value={formatarNumero(numeroWhatsApp)}
                   onChange={(e) => {
                     // Remove formatação antes de salvar
@@ -157,7 +168,7 @@ export default function WhatsAppConfig() {
                   maxLength={20}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Aceita formato nacional (11999999999) ou internacional (5511999999999)
+                  <strong>Obrigatório:</strong> Código do país + área + número (13 dígitos: 5521999999999)
                 </p>
               </div>
 
