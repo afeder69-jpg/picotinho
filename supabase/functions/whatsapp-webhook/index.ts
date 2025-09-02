@@ -134,16 +134,20 @@ const handler = async (req: Request): Promise<Response> => {
         
         const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
         const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+        const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
         
         console.log('🔍 DEBUG - Todos os env vars disponíveis:');
         console.log('🔍 Env keys:', Object.keys(Deno.env.toObject()));
         console.log('🔍 SUPABASE_URL exists?', Deno.env.get('SUPABASE_URL') ? 'SIM' : 'NÃO');
         console.log('🔍 SUPABASE_SERVICE_ROLE_KEY exists?', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ? 'SIM' : 'NÃO');
+        console.log('🔍 WHATSAPP_ACCOUNT_SECRET exists?', accountSecret ? 'SIM' : 'NÃO');
         
         console.log('🔗 Instance URL existe?', instanceUrl ? 'SIM' : 'NÃO');
         console.log('🔗 Instance URL valor:', instanceUrl);
         console.log('🔑 Token existe?', apiToken ? 'SIM' : 'NÃO');
         console.log('🔑 Primeiros 8 chars do token:', apiToken ? apiToken.substring(0, 8) + '...' : 'N/A');
+        console.log('🔑 Account Secret existe?', accountSecret ? 'SIM' : 'NÃO');
+        console.log('🔑 Primeiros 8 chars do account secret:', accountSecret ? accountSecret.substring(0, 8) + '...' : 'N/A');
         
         if (!instanceUrl || !apiToken) {
           const errorMsg = `WHATSAPP_INSTANCE_URL: ${instanceUrl || 'UNDEFINED'}, WHATSAPP_API_TOKEN: ${apiToken || 'UNDEFINED'}`;
