@@ -15,7 +15,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('🚀 WEBHOOK CHAMADO - INÍCIO DA EXECUÇÃO');
     console.log('📱 WhatsApp Webhook recebido:', req.method);
     console.log('🕐 Timestamp:', new Date().toISOString());
-    console.log('🔄 Versão da função: 3.0'); // Debug version
+    console.log('🔄 Versão da função: 4.0 - Client-Token corrigido'); // Debug version
     
     // Lista TODOS os environment variables disponíveis
     console.log('🔍 TODOS OS ENV VARS DISPONÍVEIS:');
