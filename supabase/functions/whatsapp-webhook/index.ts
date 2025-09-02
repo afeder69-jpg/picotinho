@@ -133,8 +133,9 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log('💾 Mensagem salva:', mensagemSalva.id);
 
-      // SEMPRE enviar resposta automática para qualquer número (independente de cadastro)
-      try {
+      // Verificar se o número está cadastrado antes de enviar resposta automática
+      if (usuario?.usuario_id) {
+        try {
         console.log('🔧 INICIANDO ENVIO DE RESPOSTA AUTOMÁTICA');
         console.log('📱 Número destinatário:', remetente);
         
@@ -217,6 +218,8 @@ const handler = async (req: Request): Promise<Response> => {
         } catch (updateError) {
           console.error('❌ Erro ao atualizar mensagem com erro:', updateError);
         }
+      } else {
+        console.log('📝 Número não cadastrado - resposta automática não enviada');
       }
 
       // Processar comando automaticamente se identificado e usuário existe
