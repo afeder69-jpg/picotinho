@@ -111,22 +111,24 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔧 INICIANDO ENVIO DE RESPOSTA AUTOMÁTICA');
         console.log('📱 Número destinatário:', remetente);
         
+        const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
         const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+        
+        console.log('🔗 Instance URL existe?', instanceUrl ? 'SIM' : 'NÃO');
         console.log('🔑 Token existe?', apiToken ? 'SIM' : 'NÃO');
         console.log('🔑 Primeiros 6 chars do token:', apiToken ? apiToken.substring(0, 6) + '...' : 'N/A');
         
-        if (!apiToken) {
-          throw new Error('WHATSAPP_API_TOKEN não configurado');
+        if (!instanceUrl || !apiToken) {
+          throw new Error('WHATSAPP_INSTANCE_URL ou WHATSAPP_API_TOKEN não configurado');
         }
         
-        const instanceId = '3E681FAD30EBC0315D8B4A19A3C36A1F';
-        const sendTextUrl = `https://api.z-api.io/instances/${instanceId}/token/${apiToken}/send-text`;
+        const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
         
         console.log('🔗 URL completa do envio:', sendTextUrl);
         
         const requestBody = {
           phone: remetente,
-          message: 'Mensagem recebida pelo Picotinho ✅'
+          message: 'Mensagem recebida com sucesso ✅'
         };
         
         console.log('📦 Body da requisição:', JSON.stringify(requestBody, null, 2));
