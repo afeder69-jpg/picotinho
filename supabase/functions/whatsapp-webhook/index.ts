@@ -97,10 +97,9 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log('💾 Mensagem salva:', mensagemSalva.id);
 
-      // Sempre enviar resposta de confirmação para qualquer mensagem
+      // SEMPRE enviar resposta automática para qualquer número (independente de cadastro)
       try {
-        console.log('📤 Enviando confirmação automática...');
-        console.log('📱 Número de telefone usado no envio:', remetente);
+        console.log('📤 Enviando resposta automática para:', remetente);
         
         const apiToken = Deno.env.get('WHATSAPP_API_TOKEN')!;
         const instanceId = '3E681FAD30EBC0315D8B4A19A3C36A1F';
@@ -116,7 +115,7 @@ const handler = async (req: Request): Promise<Response> => {
           },
           body: JSON.stringify({
             phone: remetente,
-            message: 'Mensagem recebida com sucesso ✅'
+            message: 'Mensagem recebida pelo Picotinho ✅'
           })
         });
         
@@ -125,12 +124,12 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('📝 Body da resposta:', responseText);
         
         if (confirmacao.ok) {
-          console.log('✅ Confirmação enviada com sucesso');
+          console.log('✅ Resposta automática enviada com sucesso');
         } else {
-          console.error('❌ Erro ao enviar confirmação. Status:', confirmacao.status, 'Body:', responseText);
+          console.error('❌ Erro ao enviar resposta automática. Status:', confirmacao.status, 'Body:', responseText);
         }
       } catch (error) {
-        console.error('❌ Erro ao enviar confirmação:', error);
+        console.error('❌ Erro ao enviar resposta automática:', error);
       }
 
       // Processar comando automaticamente se identificado e usuário existe
