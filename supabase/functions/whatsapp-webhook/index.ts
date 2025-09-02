@@ -129,8 +129,9 @@ const handler = async (req: Request): Promise<Response> => {
         const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
         
         console.log('🔗 Instance URL existe?', instanceUrl ? 'SIM' : 'NÃO');
+        console.log('🔗 Instance URL valor:', instanceUrl);
         console.log('🔑 Token existe?', apiToken ? 'SIM' : 'NÃO');
-        console.log('🔑 Primeiros 6 chars do token:', apiToken ? apiToken.substring(0, 6) + '...' : 'N/A');
+        console.log('🔑 Primeiros 8 chars do token:', apiToken ? apiToken.substring(0, 8) + '...' : 'N/A');
         
         if (!instanceUrl || !apiToken) {
           throw new Error('WHATSAPP_INSTANCE_URL ou WHATSAPP_API_TOKEN não configurado');
