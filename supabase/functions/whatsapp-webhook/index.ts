@@ -101,14 +101,13 @@ const handler = async (req: Request): Promise<Response> => {
       try {
         console.log('📤 Enviando confirmação automática...');
         
-        const apiToken = Deno.env.get('WHATSAPP_API_TOKEN')!;
-        const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL')!;
+        // Z-API usa o token na URL, não no header
+        const sendTextUrl = 'https://api.z-api.io/instances/3E681FAD30EBC0315D8B4A19A3C36A1F/token/A9A0893271CF96872D8DF727/send-text';
         
-        const confirmacao = await fetch(`${instanceUrl}/send-text`, {
+        const confirmacao = await fetch(sendTextUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Client-Token': apiToken
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             phone: remetente,
