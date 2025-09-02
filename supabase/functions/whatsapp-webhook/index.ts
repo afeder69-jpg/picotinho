@@ -21,18 +21,25 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     if (req.method === 'GET') {
+      console.log('🔧 GET REQUEST RECEBIDO - TESTE DE WEBHOOK');
       const url = new URL(req.url);
       const hubChallenge = url.searchParams.get('hub.challenge');
       
+      console.log('🔍 URL completa:', req.url);
+      console.log('🔍 Query params:', Object.fromEntries(url.searchParams.entries()));
+      
       if (hubChallenge) {
+        console.log('✅ Hub challenge encontrado:', hubChallenge);
         return new Response(hubChallenge, { 
           status: 200,
           headers: corsHeaders 
         });
       }
       
-      return new Response('Webhook verification failed', { 
-        status: 400,
+      // Resposta de teste para GET sem parâmetros
+      console.log('📝 Respondendo com status de teste');
+      return new Response('✅ Webhook Picotinho funcionando! Timestamp: ' + new Date().toISOString(), { 
+        status: 200,
         headers: corsHeaders 
       });
     }
