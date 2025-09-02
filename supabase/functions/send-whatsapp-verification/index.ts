@@ -41,7 +41,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.log('⚠️ Número já cadastrado por outro usuário');
       return new Response(JSON.stringify({
         success: false,
-        error: 'Este número já está cadastrado por outro usuário. Se você é o proprietário, entre em contato com o suporte.'
+        error: 'O número que você está tentando cadastrar já está registrado em nosso sistema por outro usuário. Tente um novo número ou envie um email para sac@picotinho.com.br se você é o proprietário deste número.'
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
