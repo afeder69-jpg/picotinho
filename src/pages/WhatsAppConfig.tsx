@@ -120,14 +120,21 @@ export default function WhatsAppConfig() {
     // Remove tudo que não é número
     const cleaned = numero.replace(/\D/g, '');
     
-    // Aplica formatação (XX) XXXXX-XXXX
+    // Formatação para números com código do país (13 dígitos) ou sem (11 dígitos)
     if (cleaned.length <= 11) {
+      // Formato nacional: (XX) XXXXX-XXXX
       return cleaned
         .replace(/(\d{2})(\d)/, '($1) $2')
         .replace(/(\d{5})(\d)/, '$1-$2');
+    } else if (cleaned.length <= 13) {
+      // Formato internacional: +XX (XX) XXXXX-XXXX
+      return cleaned
+        .replace(/(\d{2})(\d{2})(\d)/, '+$1 ($2) $3')
+        .replace(/(\d{5})(\d)/, '$1-$2');
     }
-    return cleaned.slice(0, 11)
-      .replace(/(\d{2})(\d)/, '($1) $2')
+    // Limita a 13 dígitos para formato internacional
+    return cleaned.slice(0, 13)
+      .replace(/(\d{2})(\d{2})(\d)/, '+$1 ($2) $3')
       .replace(/(\d{5})(\d)/, '$1-$2');
   };
 
@@ -168,17 +175,17 @@ export default function WhatsAppConfig() {
                   Número do WhatsApp
                 </label>
                 <Input
-                  placeholder="(11) 99999-9999"
+                  placeholder="+55 (11) 99999-9999 ou (11) 99999-9999"
                   value={formatarNumero(numeroWhatsApp)}
                   onChange={(e) => {
                     // Remove formatação antes de salvar
                     const numero = e.target.value.replace(/\D/g, '');
                     setNumeroWhatsApp(numero);
                   }}
-                  maxLength={15}
+                  maxLength={20}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Apenas números (DDD + número). Ex: 11999999999
+                  Aceita formato nacional (11999999999) ou internacional (5511999999999)
                 </p>
               </div>
 
