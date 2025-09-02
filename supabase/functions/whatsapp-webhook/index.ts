@@ -218,6 +218,7 @@ const handler = async (req: Request): Promise<Response> => {
         } catch (updateError) {
           console.error('❌ Erro ao atualizar mensagem com erro:', updateError);
         }
+      }
       } else {
         console.log('📝 Número não cadastrado - resposta automática não enviada');
       }
