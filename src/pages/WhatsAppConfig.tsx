@@ -85,6 +85,13 @@ export default function WhatsAppConfig() {
       return;
     }
     
+    // Se está tentando mudar um número já verificado, pedir confirmação
+    if (configExistente?.verificado && numeroWhatsApp !== configExistente.numero_whatsapp) {
+      if (!window.confirm("Você já tem um número verificado. Alterar o número irá desativar o anterior. Continuar?")) {
+        return;
+      }
+    }
+    
     setLoading(true);
     try {
       // Enviar código de verificação
