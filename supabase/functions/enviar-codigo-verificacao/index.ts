@@ -51,24 +51,66 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log(`Gerando código ${codigo} para número ${numero_whatsapp} (enviando para ${numeroSemPrefixo})`);
 
-    // Salvar código na configuração do usuário
-    const { error: updateError } = await supabase
+    // Verificar se já existe uma configuração
+    const { data: configExistente, error: configError } = await supabase
       .from('whatsapp_configuracoes')
-      .upsert({
-        usuario_id: user.id,
-        numero_whatsapp,
-        codigo_verificacao: codigo,
-        data_codigo: new Date().toISOString(),
-        verificado: false,
-        api_provider: 'z-api',
-        webhook_token: '',
-        ativo: true
-      }, { onConflict: 'usuario_id' });
+      .select('*')
+      .eq('usuario_id', user.id)
+      .maybeSingle();
 
-    if (updateError) {
-      console.error('Erro ao salvar código:', updateError);
-      throw new Error('Erro ao salvar código de verificação');
+    if (configError) {
+      console.error('Erro ao verificar configuração existente:', configError);
+      throw new Error('Erro ao verificar configuração');
     }
+
+    // Se já tem uma configuração verificada e está tentando mudar número
+    if (configExistente?.verificado && configExistente.numero_whatsapp !== numero_whatsapp) {
+      // Salvar o código pendente SEM alterar o número ativo
+      const { error: updateError } = await supabase
+        .from('whatsapp_configuracoes')
+        .update({
+          codigo_verificacao: codigo,
+          data_codigo: new Date().toISOString(),
+          // NÃO atualizar numero_whatsapp aqui - só após verificação
+          updated_at: new Date().toISOString()
+        })
+        .eq('usuario_id', user.id);
+
+      if (updateError) {
+        console.error('Erro ao salvar código para troca:', updateError);
+        throw new Error('Erro ao salvar código de verificação');
+      }
+
+      // Salvar o número pendente em uma tabela separada ou campo temporário
+      // Para simplificar, vamos usar um campo JSON para armazenar dados temporários
+      const { error: tempError } = await supabase
+        .from('whatsapp_configuracoes')
+        .update({
+          webhook_token: JSON.stringify({ numero_pendente: numero_whatsapp })
+        })
+        .eq('usuario_id', user.id);
+
+    } else {
+      // Primeira configuração ou mesmo número - pode fazer upsert normal
+      const { error: updateError } = await supabase
+        .from('whatsapp_configuracoes')
+        .upsert({
+          usuario_id: user.id,
+          numero_whatsapp,
+          codigo_verificacao: codigo,
+          data_codigo: new Date().toISOString(),
+          verificado: false,
+          api_provider: 'z-api',
+          webhook_token: '',
+          ativo: true
+        }, { onConflict: 'usuario_id' });
+
+      if (updateError) {
+        console.error('Erro ao salvar código:', updateError);
+        throw new Error('Erro ao salvar código de verificação');
+      }
+    }
+
 
     // Enviar código via WhatsApp
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');

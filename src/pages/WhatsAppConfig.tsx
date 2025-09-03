@@ -30,6 +30,7 @@ export default function WhatsAppConfig() {
   const [loading, setLoading] = useState(false);
   const [loadingVerificacao, setLoadingVerificacao] = useState(false);
   const [aguardandoCodigo, setAguardandoCodigo] = useState(false);
+  const [numeroPendente, setNumeroPendente] = useState("");
 
   // Configuração global do sistema (administrador)
   const SYSTEM_CONFIG = {
@@ -58,6 +59,20 @@ export default function WhatsAppConfig() {
       if (data) {
         setConfigExistente(data);
         setNumeroWhatsApp(data.numero_whatsapp || "");
+        
+        // Verificar se há número pendente
+        let webhookData = null;
+        try {
+          webhookData = data.webhook_token ? JSON.parse(data.webhook_token) : null;
+        } catch (e) {
+          // webhook_token não é JSON, ignorar
+        }
+        
+        if (webhookData?.numero_pendente) {
+          setNumeroPendente(webhookData.numero_pendente);
+          setNumeroWhatsApp(webhookData.numero_pendente);
+        }
+        
         // Se tem código pendente, mostrar campo de verificação
         if (data.codigo_verificacao && !data.verificado) {
           setAguardandoCodigo(true);
@@ -144,6 +159,7 @@ export default function WhatsAppConfig() {
         toast.success("Número verificado com sucesso! 🎉");
         setAguardandoCodigo(false);
         setCodigoVerificacao("");
+        setNumeroPendente(""); // Limpar número pendente
         loadConfig(); // Recarregar configuração
       } else {
         throw new Error(data?.error || 'Erro ao verificar código');
@@ -203,7 +219,7 @@ export default function WhatsAppConfig() {
 
         <div className="space-y-6">
           {/* Status da Verificação */}
-          {configExistente?.verificado && (
+          {configExistente?.verificado && !numeroPendente && (
             <Card className="border-green-200 bg-green-50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-green-800">
@@ -212,6 +228,22 @@ export default function WhatsAppConfig() {
                 </CardTitle>
                 <CardDescription className="text-green-700">
                   Seu número {formatarNumero(configExistente.numero_whatsapp)} está ativo e pode receber comandos do Picotinho
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+          
+          {/* Aviso de Troca Pendente */}
+          {numeroPendente && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-orange-800">
+                  <Shield className="h-5 w-5" />
+                  Troca de Número Pendente
+                </CardTitle>
+                <CardDescription className="text-orange-700">
+                  Número ativo: {formatarNumero(configExistente?.numero_whatsapp || "")} <br/>
+                  Aguardando verificação: {formatarNumero(numeroPendente)}
                 </CardDescription>
               </CardHeader>
             </Card>

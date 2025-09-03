@@ -90,13 +90,30 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Código incorreto. Tente novamente.');
     }
 
-    // Marcar como verificado e limpar código
+    // Verificar se há número pendente para ativação
+    let numeroFinal = config.numero_whatsapp;
+    let webhookData = null;
+    
+    try {
+      webhookData = config.webhook_token ? JSON.parse(config.webhook_token) : null;
+    } catch (e) {
+      // webhook_token não é JSON válido, manter como string normal
+    }
+
+    // Se há número pendente, usar ele ao verificar
+    if (webhookData?.numero_pendente) {
+      numeroFinal = webhookData.numero_pendente;
+    }
+
+    // Marcar como verificado, ativar novo número e limpar dados temporários
     const { error: updateError } = await supabase
       .from('whatsapp_configuracoes')
       .update({
+        numero_whatsapp: numeroFinal, // Ativar o número (novo ou atual)
         verificado: true,
         codigo_verificacao: null,
         data_codigo: null,
+        webhook_token: '', // Limpar dados temporários
         updated_at: new Date().toISOString()
       })
       .eq('usuario_id', user.id);
@@ -106,12 +123,12 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Erro ao verificar número');
     }
 
-    console.log(`Número ${config.numero_whatsapp} verificado com sucesso para usuário ${user.id}`);
+    console.log(`Número ${numeroFinal} verificado com sucesso para usuário ${user.id}`);
 
     return new Response(JSON.stringify({ 
       success: true, 
       message: 'Número verificado com sucesso! Agora você pode receber comandos do Picotinho.',
-      numero_verificado: config.numero_whatsapp
+      numero_verificado: numeroFinal
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
