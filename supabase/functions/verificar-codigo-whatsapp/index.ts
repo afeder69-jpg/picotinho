@@ -59,7 +59,17 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Configuração não encontrada. Solicite um novo código.');
     }
 
-    if (config.verificado) {
+    // Permitir verificação se há um número pendente (processo de troca)
+    let webhookData = null;
+    try {
+      webhookData = config.webhook_token ? JSON.parse(config.webhook_token) : null;
+    } catch (e) {
+      // webhook_token não é JSON válido, manter como string normal
+    }
+    
+    const numeroPendente = webhookData?.numero_pendente;
+    
+    if (config.verificado && !numeroPendente) {
       throw new Error('Número já verificado');
     }
 
