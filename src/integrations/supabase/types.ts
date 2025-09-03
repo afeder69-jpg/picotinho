@@ -804,6 +804,39 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_security_log: {
+        Row: {
+          action: string
+          blocked: boolean | null
+          created_at: string | null
+          id: string
+          ip_address: unknown | null
+          target_user_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          blocked?: boolean | null
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          target_user_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          blocked?: boolean | null
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          target_user_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1281,6 +1314,18 @@ export type Database = {
           nome: string
           provider: string
           provider_id: string
+          telefone: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      get_my_profile_safe: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avatar_url: string
+          created_at: string
+          id: string
+          nome: string
           telefone: string
           updated_at: string
           user_id: string
