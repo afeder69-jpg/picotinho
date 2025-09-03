@@ -43,10 +43,13 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Número do WhatsApp deve ter 13 dígitos e começar com 55');
     }
 
+    // Remover o prefixo 55 para envio via API
+    const numeroSemPrefixo = numero_whatsapp.startsWith('55') ? numero_whatsapp.substring(2) : numero_whatsapp;
+
     // Gerar código de verificação de 6 dígitos
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
     
-    console.log(`Gerando código ${codigo} para número ${numero_whatsapp}`);
+    console.log(`Gerando código ${codigo} para número ${numero_whatsapp} (enviando para ${numeroSemPrefixo})`);
 
     // Salvar código na configuração do usuário
     const { error: updateError } = await supabase
@@ -93,7 +96,7 @@ const handler = async (req: Request): Promise<Response> => {
         'Client-Token': apiToken,
       },
       body: JSON.stringify({
-        phone: numero_whatsapp,
+        phone: numeroSemPrefixo,
         message: mensagem,
       }),
     });
