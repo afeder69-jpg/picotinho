@@ -102,13 +102,6 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Verificar se há número pendente para ativação
     let numeroFinal = config.numero_whatsapp;
-    let webhookData = null;
-    
-    try {
-      webhookData = config.webhook_token ? JSON.parse(config.webhook_token) : null;
-    } catch (e) {
-      // webhook_token não é JSON válido, manter como string normal
-    }
 
     // Se há número pendente, usar ele ao verificar
     if (webhookData?.numero_pendente) {
