@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ArrowLeft, Smartphone, Shield, CheckCircle } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +32,7 @@ export default function WhatsAppConfig() {
   const [loadingVerificacao, setLoadingVerificacao] = useState(false);
   const [aguardandoCodigo, setAguardandoCodigo] = useState(false);
   const [numeroPendente, setNumeroPendente] = useState("");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Configuração global do sistema (administrador)
   const SYSTEM_CONFIG = {
@@ -102,9 +104,8 @@ export default function WhatsAppConfig() {
     
     // Se está tentando mudar um número já verificado, pedir confirmação
     if (configExistente?.verificado && numeroWhatsApp !== configExistente.numero_whatsapp) {
-      if (!window.confirm("Você já tem um número verificado. Alterar o número irá desativar o anterior. Continuar?")) {
-        return;
-      }
+      setShowConfirmDialog(true);
+      return;
     }
     
     setLoading(true);
@@ -174,6 +175,44 @@ export default function WhatsAppConfig() {
   const solicitarNovoCodigo = async () => {
     setCodigoVerificacao("");
     await salvarEEnviarCodigo();
+  };
+
+  const confirmarTrocaNumero = async () => {
+    setShowConfirmDialog(false);
+    await procederEnvioCodigo();
+  };
+
+  const procederEnvioCodigo = async () => {
+    setLoading(true);
+    try {
+      // Enviar código de verificação
+      const { data, error } = await supabase.functions.invoke('enviar-codigo-verificacao', {
+        body: {
+          numero_whatsapp: numeroWhatsApp.trim()
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success("Código de verificação enviado! Verifique seu WhatsApp.");
+        setAguardandoCodigo(true);
+        loadConfig(); // Recarregar para atualizar status
+        
+        // Em ambiente de desenvolvimento, mostrar o código
+        if (data.codigo_debug) {
+          toast.info(`Código para teste: ${data.codigo_debug}`, {
+            duration: 10000,
+          });
+        }
+      } else {
+        throw new Error(data?.error || 'Erro ao enviar código');
+      }
+    } catch (error) {
+      console.error('Erro ao enviar código:', error);
+      toast.error(error.message || "Erro ao enviar código de verificação");
+    }
+    setLoading(false);
   };
 
   const formatarNumero = (numero: string) => {
@@ -375,6 +414,24 @@ export default function WhatsAppConfig() {
           )}
         </div>
       </div>
+
+      {/* Dialog de Confirmação para Troca de Número */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Troca de Número</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você já tem um número verificado. Alterar para um novo número irá desativar o anterior. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarTrocaNumero}>
+              Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
