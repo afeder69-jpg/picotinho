@@ -228,17 +228,21 @@ export default function WhatsAppConfig() {
                 <label className="block text-sm font-medium mb-2">
                   Número do WhatsApp
                 </label>
-                <Input
-                  placeholder="5521999999999 (formato obrigatório)"
-                  value={formatarNumero(numeroWhatsApp)}
-                  onChange={(e) => {
-                    // Remove formatação antes de salvar
-                    const numero = e.target.value.replace(/\D/g, '');
-                    setNumeroWhatsApp(numero);
-                  }}
-                  maxLength={20}
-                  disabled={aguardandoCodigo}
-                />
+                  <Input
+                    placeholder="5521999999999 (formato obrigatório)"
+                    value={formatarNumero(numeroWhatsApp)}
+                    onChange={(e) => {
+                      // Remove formatação antes de salvar
+                      const numero = e.target.value.replace(/\D/g, '');
+                      setNumeroWhatsApp(numero);
+                      // Se mudou o número, cancelar verificação pendente
+                      if (numero !== configExistente?.numero_whatsapp) {
+                        setAguardandoCodigo(false);
+                        setCodigoVerificacao("");
+                      }
+                    }}
+                    maxLength={20}
+                  />
                 <p className="text-xs text-gray-500 mt-1">
                   <strong>Obrigatório:</strong> Código do país + área + número (13 dígitos: 5521999999999)
                 </p>
