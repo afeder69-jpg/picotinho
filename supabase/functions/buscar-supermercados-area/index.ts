@@ -144,10 +144,11 @@ serve(async (req) => {
       }
     });
 
-    // Buscar supermercados cadastrados com coordenadas válidas
+    // Buscar supermercados cadastrados com coordenadas válidas - USANDO VIEW SEGURA
+    // IMPORTANTE: Não expor dados sensíveis (CNPJ, telefone, email) na resposta
     const { data: todosSupermercados, error: supermercadosError } = await supabase
-      .from('supermercados')
-      .select('*')
+      .from('supermercados_publicos')  // MUDANÇA: usando view segura
+      .select('id, nome, endereco, cidade, estado, cep, latitude, longitude, ativo, created_at, updated_at')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
       .eq('ativo', true);
@@ -161,13 +162,24 @@ serve(async (req) => {
     const supermercadosComNotasAtivas = [];
     
     // 1. Primeiro, adicionar supermercados já cadastrados que têm notas ativas
-    todosSupermercados?.forEach(supermercado => {
+    // IMPORTANTE: Como não temos mais acesso ao CNPJ por segurança, vamos usar SERVICE ROLE para buscar internamente
+    const { data: supermercadosCompletos } = await supabase
+      .from('supermercados')
+      .select('id, nome, cnpj, endereco, cidade, estado, cep, latitude, longitude, ativo, created_at, updated_at')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .eq('ativo', true);
+
+    supermercadosCompletos?.forEach(supermercado => {
       const cnpjSupermercado = supermercado.cnpj?.replace(/[^\d]/g, '');
       if (cnpjSupermercado && cnpjsComNotasAtivas.has(cnpjSupermercado)) {
         const quantidadeNotas = notasPorCnpj.get(cnpjSupermercado) || 0;
         console.log(`✅ ${supermercado.nome} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas (CADASTRADO)`);
+        
+        // Remover dados sensíveis antes de adicionar à resposta
+        const { cnpj, telefone, email, ...supermercadoSeguro } = supermercado;
         supermercadosComNotasAtivas.push({
-          ...supermercado,
+          ...supermercadoSeguro,
           fonte: 'cadastrado'
         });
         // Remover da lista de estabelecimentos das notas para evitar duplicatas
@@ -191,7 +203,6 @@ serve(async (req) => {
           supermercadosComNotasAtivas.push({
             id: `temp_${cnpjLimpo}`, // ID temporário
             nome: estabelecimento.nome,
-            cnpj: cnpjLimpo,
             endereco: estabelecimento.endereco,
             latitude: geocodificacao.latitude,
             longitude: geocodificacao.longitude,
@@ -199,6 +210,7 @@ serve(async (req) => {
             fonte: 'nota_fiscal',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
+            // CNPJ removido por segurança
           });
         } else {
           console.log(`❌ Falha na geocodificação para ${estabelecimento.nome}: ${geoError?.message || 'Coordenadas não encontradas'}`);
@@ -234,6 +246,15 @@ serve(async (req) => {
     console.log(`✅ Encontrados ${supermercadosNoRaio.length} supermercados dentro de ${raio}km`);
 
     // Contar produtos únicos de cada supermercado baseado nas notas fiscais reais
+    // IMPORTANTE: Reconstruir mapeamento CNPJ->ID para não expor CNPJs na resposta
+    const idParaCnpj = new Map();
+    supermercadosCompletos?.forEach(s => {
+      const cnpjLimpo = s.cnpj?.replace(/[^\d]/g, '');
+      if (cnpjLimpo) {
+        idParaCnpj.set(s.id, cnpjLimpo);
+      }
+    });
+
     const supermercadosComDados = await Promise.all(
       supermercadosNoRaio.map(async (supermercado) => {
         // Buscar todas as notas processadas deste supermercado
@@ -243,8 +264,15 @@ serve(async (req) => {
           .eq('processada', true)
           .not('dados_extraidos', 'is', null);
 
+        // Obter CNPJ do mapeamento interno (não expostos na resposta)
+        let cnpjSupermercadoLimpo = '';
+        if (supermercado.fonte === 'cadastrado') {
+          cnpjSupermercadoLimpo = idParaCnpj.get(supermercado.id) || '';
+        } else if (supermercado.fonte === 'nota_fiscal' && supermercado.id.startsWith('temp_')) {
+          cnpjSupermercadoLimpo = supermercado.id.replace('temp_', '');
+        }
+
         // Filtrar notas que pertencem a este supermercado (por CNPJ normalizado)
-        const cnpjSupermercadoLimpo = supermercado.cnpj?.replace(/[^\d]/g, '');
         const notasDoSupermercado = notasSupermercado?.filter(nota => {
           const dadosExtraidos = nota.dados_extraidos;
           // Verificar múltiplas possibilidades de onde o CNPJ pode estar
@@ -281,7 +309,7 @@ serve(async (req) => {
           });
         });
 
-        console.log(`🛒 ${supermercado.nome}: ${produtosUnicos.size} produtos únicos de ${notasDoSupermercado.length} notas (CNPJ: ${cnpjSupermercadoLimpo})`);
+        console.log(`🛒 ${supermercado.nome}: ${produtosUnicos.size} produtos únicos de ${notasDoSupermercado.length} notas`);
 
         return {
           ...supermercado,
