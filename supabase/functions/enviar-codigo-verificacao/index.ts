@@ -119,13 +119,14 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (!instanceUrl || !apiToken) {
       console.error('Credenciais WhatsApp não configuradas');
-      // Em produção, aqui enviaria por SMS ou outro método
+      console.error('WHATSAPP_INSTANCE_URL:', instanceUrl ? 'configurado' : 'não configurado');
+      console.error('WHATSAPP_API_TOKEN:', apiToken ? 'configurado' : 'não configurado');
+      
       return new Response(JSON.stringify({ 
-        success: true, 
-        message: 'Código gerado. Em ambiente de desenvolvimento, o código é: ' + codigo,
-        codigo_debug: codigo // Remover em produção
+        success: false, 
+        error: 'WhatsApp não configurado. Configure WHATSAPP_INSTANCE_URL e WHATSAPP_API_TOKEN nas secrets do Supabase.'
       }), {
-        status: 200,
+        status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
