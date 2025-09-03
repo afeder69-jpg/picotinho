@@ -220,13 +220,19 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         .ilike('produto_nome', `%${produtoConsulta}%`);
       
       if (error || !estoque || estoque.length === 0) {
-        return `Produto "${produtoConsulta}" não encontrado no estoque.`;
+        return "Produto não encontrado no seu estoque.";
       }
       
-      let resposta = `📦 Resultado da consulta:\n\n`;
+      // Se encontrou apenas um produto, resposta simples
+      if (estoque.length === 1) {
+        const item = estoque[0];
+        return `✅ Você tem ${item.quantidade} ${item.unidade_medida} de ${item.produto_nome} em estoque.`;
+      }
+      
+      // Se encontrou vários produtos, listar todos
+      let resposta = `📦 Encontrei ${estoque.length} produtos:\n\n`;
       estoque.forEach((item: any) => {
-        const preco = item.preco_unitario_ultimo ? `\n💰 Preço: R$ ${item.preco_unitario_ultimo.toFixed(2)}` : '';
-        resposta += `• ${item.produto_nome}\n📊 Quantidade: ${item.quantidade} ${item.unidade_medida}${preco}\n\n`;
+        resposta += `✅ ${item.produto_nome}: ${item.quantidade} ${item.unidade_medida}\n`;
       });
       
       return resposta;
