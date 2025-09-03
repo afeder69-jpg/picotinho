@@ -112,7 +112,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
 
-    // Enviar código via WhatsApp
+    // Enviar código via WhatsApp usando EXATAMENTE a mesma estrutura do webhook
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
     const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
@@ -122,11 +122,11 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('- WHATSAPP_API_TOKEN:', apiToken ? 'configurado (' + apiToken.substring(0, 8) + '...)' : 'não configurado');
     console.log('- WHATSAPP_ACCOUNT_SECRET:', accountSecret ? 'configurado' : 'não configurado');
 
-    if (!instanceUrl || !apiToken) {
+    if (!instanceUrl || !apiToken || !accountSecret) {
       console.error('❌ Credenciais WhatsApp não configuradas');
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'WhatsApp não configurado. Configure WHATSAPP_INSTANCE_URL e WHATSAPP_API_TOKEN nas secrets do Supabase.'
+        error: 'WhatsApp não configurado. Configure WHATSAPP_INSTANCE_URL, WHATSAPP_API_TOKEN e WHATSAPP_ACCOUNT_SECRET nas secrets do Supabase.'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -136,38 +136,20 @@ const handler = async (req: Request): Promise<Response> => {
     const mensagem = `🔐 *Código de Verificação Picotinho*\n\nSeu código de verificação é: *${codigo}*\n\nEste código expira em 10 minutos.\n\n_Não compartilhe este código com ninguém._`;
 
     // Usar EXATAMENTE a mesma estrutura que funciona no webhook
-    const headers = {
-      'Content-Type': 'application/json',
-      'Client-Token': apiToken,
-    };
-
-    // SEMPRE adicionar Account-Secret (obrigatório para Z-API)
-    if (accountSecret) {
-      headers['Account-Secret'] = accountSecret;
-    }
-
+    const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
+    
     console.log(`📱 Enviando código ${codigo} para número ${numeroSemPrefixo}`);
-    console.log(`🔗 URL: ${instanceUrl}/token/${apiToken}/send-text`);
-    console.log(`📋 Headers: Client-Token=${apiToken.substring(0, 8)}..., Account-Secret=${accountSecret ? 'configurado' : 'não configurado'}`);
-
-    // Verificar se o Account-Secret é obrigatório
-    if (!accountSecret) {
-      console.error('❌ WHATSAPP_ACCOUNT_SECRET é obrigatório');
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: `Account Secret obrigatório. Use este código: ${codigo}`,
-        codigo_debug: codigo,
-        config_error: 'WHATSAPP_ACCOUNT_SECRET não configurado'
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      });
-    }
+    console.log(`🔗 URL: ${sendTextUrl}`);
+    console.log(`📋 Headers: Client-Token=${accountSecret.substring(0, 8)}..., API Token=${apiToken.substring(0, 8)}...`);
 
     try {
-      const whatsappResponse = await fetch(`${instanceUrl}/token/${apiToken}/send-text`, {
+      const whatsappResponse = await fetch(sendTextUrl, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          // Usar Account Secret como Client-Token (igual ao webhook)
+          'Client-Token': accountSecret,
+        },
         body: JSON.stringify({
           phone: numeroSemPrefixo,
           message: mensagem,
