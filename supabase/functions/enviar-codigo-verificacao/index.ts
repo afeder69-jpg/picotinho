@@ -148,7 +148,16 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (!whatsappResponse.ok) {
       console.error('Erro ao enviar mensagem WhatsApp:', whatsappResult);
-      throw new Error('Erro ao enviar código por WhatsApp');
+      // Não falhar completamente - mostrar código para o usuário poder usar
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: `Não foi possível enviar por WhatsApp. Use este código: ${codigo}`,
+        codigo_debug: codigo,
+        whatsapp_error: whatsappResult?.error || 'Erro desconhecido'
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
     }
 
     return new Response(JSON.stringify({ 
