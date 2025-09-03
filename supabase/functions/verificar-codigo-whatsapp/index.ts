@@ -74,7 +74,8 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     if (!config.codigo_verificacao) {
-      throw new Error('Nenhum código de verificação encontrado. Solicite um novo código.');
+      const pendingMessage = numeroPendente ? ` para o número ${numeroPendente}` : '';
+      throw new Error(`Nenhum código de verificação encontrado${pendingMessage}. Solicite um novo código.`);
     }
 
     // Verificar se o código não expirou (10 minutos)
