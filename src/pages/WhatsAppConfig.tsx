@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Smartphone } from "lucide-react";
+import { ArrowLeft, Smartphone, Shield, CheckCircle } from "lucide-react";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -15,6 +15,9 @@ interface WhatsAppConfig {
   api_provider: string;
   webhook_token?: string;
   ativo: boolean;
+  verificado: boolean;
+  codigo_verificacao?: string;
+  data_codigo?: string;
 }
 
 
@@ -22,8 +25,11 @@ export default function WhatsAppConfig() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [numeroWhatsApp, setNumeroWhatsApp] = useState("");
-  
+  const [codigoVerificacao, setCodigoVerificacao] = useState("");
+  const [configExistente, setConfigExistente] = useState<WhatsAppConfig | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingVerificacao, setLoadingVerificacao] = useState(false);
+  const [aguardandoCodigo, setAguardandoCodigo] = useState(false);
 
   // Configuração global do sistema (administrador)
   const SYSTEM_CONFIG = {
@@ -43,22 +49,26 @@ export default function WhatsAppConfig() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_configuracoes')
-        .select('numero_whatsapp')
+        .select('*')
         .eq('usuario_id', user?.id)
         .maybeSingle();
 
       if (error) throw error;
 
       if (data) {
+        setConfigExistente(data);
         setNumeroWhatsApp(data.numero_whatsapp || "");
+        // Se tem código pendente, mostrar campo de verificação
+        if (data.codigo_verificacao && !data.verificado) {
+          setAguardandoCodigo(true);
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
     }
   };
 
-
-  const salvarConfig = async () => {
+  const salvarEEnviarCodigo = async () => {
     if (!user) {
       toast.error("Usuário não autenticado");
       return;
@@ -77,27 +87,71 @@ export default function WhatsAppConfig() {
     
     setLoading(true);
     try {
-      const dadosConfig = {
-        usuario_id: user.id,
-        numero_whatsapp: numeroWhatsApp.trim(),
-        ...SYSTEM_CONFIG // Usa configuração global do sistema
-      };
-
-      const { error } = await supabase
-        .from('whatsapp_configuracoes')
-        .upsert(dadosConfig, { onConflict: 'usuario_id' });
+      // Enviar código de verificação
+      const { data, error } = await supabase.functions.invoke('enviar-codigo-verificacao', {
+        body: {
+          numero_whatsapp: numeroWhatsApp.trim()
+        }
+      });
 
       if (error) throw error;
 
-      toast.success("Número do WhatsApp salvo com sucesso!");
-      loadConfig();
+      if (data?.success) {
+        toast.success("Código de verificação enviado! Verifique seu WhatsApp.");
+        setAguardandoCodigo(true);
+        loadConfig(); // Recarregar para atualizar status
+        
+        // Em ambiente de desenvolvimento, mostrar o código
+        if (data.codigo_debug) {
+          toast.info(`Código para teste: ${data.codigo_debug}`, {
+            duration: 10000,
+          });
+        }
+      } else {
+        throw new Error(data?.error || 'Erro ao enviar código');
+      }
     } catch (error) {
-      console.error('Erro ao salvar configuração:', error);
-      toast.error("Erro ao salvar configuração");
+      console.error('Erro ao enviar código:', error);
+      toast.error(error.message || "Erro ao enviar código de verificação");
     }
     setLoading(false);
   };
 
+  const verificarCodigo = async () => {
+    if (!codigoVerificacao.trim() || codigoVerificacao.length !== 6) {
+      toast.error("Por favor, digite o código de 6 dígitos");
+      return;
+    }
+
+    setLoadingVerificacao(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('verificar-codigo-whatsapp', {
+        body: {
+          codigo: codigoVerificacao.trim()
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success("Número verificado com sucesso! 🎉");
+        setAguardandoCodigo(false);
+        setCodigoVerificacao("");
+        loadConfig(); // Recarregar configuração
+      } else {
+        throw new Error(data?.error || 'Erro ao verificar código');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar código:', error);
+      toast.error(error.message || "Erro ao verificar código");
+    }
+    setLoadingVerificacao(false);
+  };
+
+  const solicitarNovoCodigo = async () => {
+    setCodigoVerificacao("");
+    await salvarEEnviarCodigo();
+  };
 
   const formatarNumero = (numero: string) => {
     // Remove tudo que não é número
@@ -141,15 +195,32 @@ export default function WhatsAppConfig() {
         </div>
 
         <div className="space-y-6">
+          {/* Status da Verificação */}
+          {configExistente?.verificado && (
+            <Card className="border-green-200 bg-green-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-800">
+                  <CheckCircle className="h-5 w-5" />
+                  Número Verificado
+                </CardTitle>
+                <CardDescription className="text-green-700">
+                  Seu número {formatarNumero(configExistente.numero_whatsapp)} está ativo e pode receber comandos do Picotinho
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+
           {/* Configuração do Número */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5" />
-                Seu Número
+                {configExistente?.verificado ? "Alterar Número" : "Configurar Número"}
               </CardTitle>
               <CardDescription>
-                Digite seu número do WhatsApp para receber comandos do Picotinho
+                {configExistente?.verificado 
+                  ? "Digite um novo número se quiser alterar"
+                  : "Digite seu número do WhatsApp para receber comandos do Picotinho"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -166,35 +237,99 @@ export default function WhatsAppConfig() {
                     setNumeroWhatsApp(numero);
                   }}
                   maxLength={20}
+                  disabled={aguardandoCodigo}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   <strong>Obrigatório:</strong> Código do país + área + número (13 dígitos: 5521999999999)
                 </p>
               </div>
 
-              <Button 
-                onClick={salvarConfig} 
-                disabled={loading || !numeroWhatsApp.trim()}
-                className="w-full"
-              >
-                {loading ? "Salvando..." : "Salvar Número"}
-              </Button>
+              {!aguardandoCodigo ? (
+                <Button 
+                  onClick={salvarEEnviarCodigo} 
+                  disabled={loading || !numeroWhatsApp.trim()}
+                  className="w-full"
+                >
+                  {loading ? "Enviando código..." : "Enviar Código de Verificação"}
+                </Button>
+              ) : (
+                <>
+                  {/* Campo de Verificação */}
+                  <Card className="border-blue-200 bg-blue-50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-blue-800">
+                        <Shield className="h-5 w-5" />
+                        Verificação Necessária
+                      </CardTitle>
+                      <CardDescription className="text-blue-700">
+                        Enviamos um código de 6 dígitos para {formatarNumero(numeroWhatsApp)}. 
+                        Digite o código abaixo para verificar seu número.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Código de Verificação
+                        </label>
+                        <Input
+                          placeholder="000000"
+                          value={codigoVerificacao}
+                          onChange={(e) => {
+                            const codigo = e.target.value.replace(/\D/g, '').slice(0, 6);
+                            setCodigoVerificacao(codigo);
+                          }}
+                          maxLength={6}
+                          className="text-center text-lg tracking-widest"
+                        />
+                      </div>
 
-              {numeroWhatsApp && (
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <h4 className="font-medium text-green-900 mb-2">
-                    ✅ Como usar o Picotinho:
-                  </h4>
-                  <div className="text-sm text-green-800 space-y-1">
-                    <p><strong>Baixar estoque:</strong> "Picotinho, baixa 1 quilo de banana"</p>
-                    <p><strong>Consultar:</strong> "Picotinho, qual o preço do açúcar?"</p>
-                    <p><strong>Adicionar:</strong> "Picotinho, adiciona leite na lista"</p>
-                  </div>
-                </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={verificarCodigo} 
+                          disabled={loadingVerificacao || codigoVerificacao.length !== 6}
+                          className="flex-1"
+                        >
+                          {loadingVerificacao ? "Verificando..." : "Verificar Código"}
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={solicitarNovoCodigo}
+                          disabled={loading}
+                        >
+                          Reenviar
+                        </Button>
+                      </div>
+
+                      <p className="text-xs text-blue-600 text-center">
+                        O código expira em 10 minutos. Não recebeu? Clique em "Reenviar".
+                      </p>
+                    </CardContent>
+                  </Card>
+                </>
               )}
             </CardContent>
           </Card>
 
+          {/* Instruções de Uso */}
+          {(configExistente?.verificado || aguardandoCodigo) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-green-800">
+                  ✅ Como usar o Picotinho:
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm space-y-2">
+                  <p><strong>Baixar estoque:</strong> "Picotinho, baixa 1 quilo de banana"</p>
+                  <p><strong>Consultar:</strong> "Picotinho, qual o preço do açúcar?"</p>
+                  <p><strong>Adicionar:</strong> "Picotinho, adiciona leite na lista"</p>
+                  <p className="text-gray-600 mt-3">
+                    💡 Todas as mensagens devem começar com "Picotinho" para serem processadas.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
