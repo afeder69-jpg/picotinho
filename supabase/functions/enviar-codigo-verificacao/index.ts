@@ -86,10 +86,11 @@ const handler = async (req: Request): Promise<Response> => {
 
     const mensagem = `🔐 *Código de Verificação Picotinho*\n\nSeu código de verificação é: *${codigo}*\n\nEste código expira em 10 minutos.\n\n_Não compartilhe este código com ninguém._`;
 
-    const whatsappResponse = await fetch(`${instanceUrl}/token/${apiToken}/send-text`, {
+    const whatsappResponse = await fetch(`${instanceUrl}/send-text`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Client-Token': apiToken,
       },
       body: JSON.stringify({
         phone: numero_whatsapp,
