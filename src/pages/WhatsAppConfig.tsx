@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ export default function WhatsAppConfig() {
   const [aguardandoCodigo, setAguardandoCodigo] = useState(false);
   const [numeroPendente, setNumeroPendente] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const codigoInputRef = useRef<HTMLInputElement>(null);
 
   // Configuração global do sistema (administrador)
   const SYSTEM_CONFIG = {
@@ -180,6 +181,11 @@ export default function WhatsAppConfig() {
   const confirmarTrocaNumero = async () => {
     setShowConfirmDialog(false);
     await procederEnvioCodigo();
+    
+    // Focar no campo de código após enviar
+    setTimeout(() => {
+      codigoInputRef.current?.focus();
+    }, 100);
   };
 
   const procederEnvioCodigo = async () => {
@@ -354,6 +360,7 @@ export default function WhatsAppConfig() {
                           Código de Verificação
                         </label>
                         <Input
+                          ref={codigoInputRef}
                           placeholder="000000"
                           value={codigoVerificacao}
                           onChange={(e) => {
