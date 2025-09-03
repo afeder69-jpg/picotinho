@@ -117,11 +117,13 @@ const handler = async (req: Request): Promise<Response> => {
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
     const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
 
+    console.log('🔍 Verificando credenciais WhatsApp:');
+    console.log('- WHATSAPP_INSTANCE_URL:', instanceUrl ? 'configurado' : 'não configurado');
+    console.log('- WHATSAPP_API_TOKEN:', apiToken ? 'configurado (' + apiToken.substring(0, 8) + '...)' : 'não configurado');
+    console.log('- WHATSAPP_ACCOUNT_SECRET:', accountSecret ? 'configurado' : 'não configurado');
+
     if (!instanceUrl || !apiToken) {
-      console.error('Credenciais WhatsApp não configuradas');
-      console.error('WHATSAPP_INSTANCE_URL:', instanceUrl ? 'configurado' : 'não configurado');
-      console.error('WHATSAPP_API_TOKEN:', apiToken ? 'configurado' : 'não configurado');
-      
+      console.error('❌ Credenciais WhatsApp não configuradas');
       return new Response(JSON.stringify({ 
         success: false, 
         error: 'WhatsApp não configurado. Configure WHATSAPP_INSTANCE_URL e WHATSAPP_API_TOKEN nas secrets do Supabase.'
