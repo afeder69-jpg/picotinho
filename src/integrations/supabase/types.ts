@@ -1209,60 +1209,6 @@ export type Database = {
       }
     }
     Views: {
-      profiles_safe: {
-        Row: {
-          avatar_url: string | null
-          created_at: string | null
-          id: string | null
-          nome: string | null
-          provider: string | null
-          provider_id: string | null
-          telefone_masked: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string | null
-          id?: string | null
-          nome?: string | null
-          provider?: string | null
-          provider_id?: string | null
-          telefone_masked?: never
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string | null
-          id?: string | null
-          nome?: string | null
-          provider?: string | null
-          provider_id?: string | null
-          telefone_masked?: never
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      users_safe: {
-        Row: {
-          created_at: string | null
-          id: string | null
-          nome: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string | null
-          nome?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string | null
-          nome?: string | null
-        }
-        Relationships: []
-      }
       view_comparacao_supermercados_app: {
         Row: {
           preco_medio: number | null
@@ -1361,13 +1307,6 @@ export type Database = {
           user_id: string
         }[]
       }
-      get_public_profile_info: {
-        Args: { target_user_id: string }
-        Returns: {
-          nome: string
-          user_id: string
-        }[]
-      }
       get_supermercados_basicos: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1388,14 +1327,6 @@ export type Database = {
       get_user_email: {
         Args: Record<PropertyKey, never>
         Returns: string
-      }
-      get_user_safe_info: {
-        Args: { target_user_id: string }
-        Returns: {
-          created_at: string
-          id: string
-          nome: string
-        }[]
       }
       gtrgm_compress: {
         Args: { "": unknown }
