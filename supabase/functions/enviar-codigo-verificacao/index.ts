@@ -115,6 +115,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Enviar código via WhatsApp
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+    const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
 
     if (!instanceUrl || !apiToken) {
       console.error('Credenciais WhatsApp não configuradas');
@@ -131,12 +132,23 @@ const handler = async (req: Request): Promise<Response> => {
 
     const mensagem = `🔐 *Código de Verificação Picotinho*\n\nSeu código de verificação é: *${codigo}*\n\nEste código expira em 10 minutos.\n\n_Não compartilhe este código com ninguém._`;
 
+    // Usar a mesma estrutura que funciona no webhook
+    const headers = {
+      'Content-Type': 'application/json',
+      'Client-Token': apiToken,
+    };
+
+    // Se tiver account secret, adicionar no header
+    if (accountSecret) {
+      headers['Account-Secret'] = accountSecret;
+    }
+
+    console.log(`Enviando para: ${instanceUrl}/token/${apiToken}/send-text`);
+    console.log(`Headers: Client-Token=${apiToken.substring(0, 8)}..., Account-Secret=${accountSecret ? 'configurado' : 'não configurado'}`);
+
     const whatsappResponse = await fetch(`${instanceUrl}/token/${apiToken}/send-text`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Client-Token': apiToken,
-      },
+      headers,
       body: JSON.stringify({
         phone: numeroSemPrefixo,
         message: mensagem,
