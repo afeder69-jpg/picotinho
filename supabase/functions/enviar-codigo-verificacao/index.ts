@@ -146,42 +146,60 @@ const handler = async (req: Request): Promise<Response> => {
       headers['Account-Secret'] = accountSecret;
     }
 
-    console.log(`Enviando para: ${instanceUrl}/token/${apiToken}/send-text`);
-    console.log(`Headers: Client-Token=${apiToken.substring(0, 8)}..., Account-Secret=${accountSecret ? 'configurado' : 'não configurado'}`);
+    console.log(`📱 Enviando código ${codigo} para número ${numeroSemPrefixo}`);
+    console.log(`🔗 URL: ${instanceUrl}/token/${apiToken}/send-text`);
+    console.log(`📋 Headers: Client-Token=${apiToken.substring(0, 8)}..., Account-Secret=${accountSecret ? 'configurado' : 'não configurado'}`);
 
-    const whatsappResponse = await fetch(`${instanceUrl}/token/${apiToken}/send-text`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        phone: numeroSemPrefixo,
-        message: mensagem,
-      }),
-    });
+    try {
+      const whatsappResponse = await fetch(`${instanceUrl}/token/${apiToken}/send-text`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          phone: numeroSemPrefixo,
+          message: mensagem,
+        }),
+      });
 
-    const whatsappResult = await whatsappResponse.json();
-    console.log('Resposta WhatsApp:', whatsappResult);
+      const whatsappResult = await whatsappResponse.json();
+      console.log('📊 Status da resposta WhatsApp:', whatsappResponse.status);
+      console.log('📦 Resposta completa da Z-API:', JSON.stringify(whatsappResult));
 
-    if (!whatsappResponse.ok) {
-      console.error('Erro ao enviar mensagem WhatsApp:', whatsappResult);
-      // Não falhar completamente - mostrar código para o usuário poder usar
+      if (!whatsappResponse.ok) {
+        console.error('❌ Erro ao enviar mensagem WhatsApp:', whatsappResult);
+        // Se falhou, mostrar o código na tela como fallback
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: `Não foi possível enviar por WhatsApp (Erro: ${whatsappResult?.error || 'Desconhecido'}). Use este código: ${codigo}`,
+          codigo_debug: codigo,
+          whatsapp_error: whatsappResult?.error || 'Erro desconhecido',
+          whatsapp_status: whatsappResponse.status
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      console.log('✅ Código enviado com sucesso via WhatsApp!');
       return new Response(JSON.stringify({ 
         success: true, 
-        message: `Não foi possível enviar por WhatsApp. Use este código: ${codigo}`,
+        message: 'Código de verificação enviado com sucesso!'
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+
+    } catch (error) {
+      console.error('💥 Erro na requisição para WhatsApp:', error);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: `Erro na conexão com WhatsApp: ${error.message}. Use este código: ${codigo}`,
         codigo_debug: codigo,
-        whatsapp_error: whatsappResult?.error || 'Erro desconhecido'
+        connection_error: error.message
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Código de verificação enviado com sucesso!'
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    });
 
   } catch (error) {
     console.error('Erro na função enviar-codigo-verificacao:', error);
