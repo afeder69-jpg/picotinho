@@ -56,6 +56,11 @@ const handler = async (req: Request): Promise<Response> => {
         comandoExecutado = true;
         break;
         
+      case 'aumentar_estoque':
+        resposta += await processarAumentarEstoque(supabase, mensagem);
+        comandoExecutado = true;
+        break;
+        
       case 'adicionar_produto':
         resposta += await processarAdicionarProduto(supabase, mensagem);
         comandoExecutado = true;
@@ -66,6 +71,7 @@ const handler = async (req: Request): Promise<Response> => {
         resposta += "Comandos disponíveis:\n";
         resposta += "• Picotinho, baixa X de [produto]\n";
         resposta += "• Picotinho, consulta [produto]\n";
+        resposta += "• Picotinho, aumenta X de [produto]\n";
         resposta += "• Picotinho, adiciona [produto]";
     }
 
@@ -323,39 +329,143 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
 }
 
 /**
- * Processar comando de adicionar produto
+ * Processar comando de aumentar estoque
+ */
+async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<string> {
+  try {
+    console.log('📈 Processando comando aumentar estoque...');
+    
+    // Extrair produto e quantidade do texto
+    const texto = mensagem.conteudo.toLowerCase();
+    
+    // Remover variações de comando "aumentar"
+    const comandosAumentar = /picotinho,?\s*(aumenta?r?|coloca?r?|bota?r?|soma?r?)\s*(no\s+estoque|ao\s+estoque)?\s*/i;
+    const textoLimpo = texto.replace(comandosAumentar, '').trim();
+    
+    // Regex para extrair quantidade e produto
+    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|kilos?|quilos?|g|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
+    const match = textoLimpo.match(regexQuantidade);
+    
+    if (!match) {
+      return "❌ Não entendi. Para aumentar, use: 'aumentar [quantidade] [produto]'.";
+    }
+    
+    let quantidade = parseFloat(match[1].replace(',', '.'));
+    let unidadeExtraida = match[2] ? match[2].toLowerCase() : null;
+    const produtoNome = match[3].trim().toUpperCase();
+    
+    console.log(`📊 Extraído para aumentar: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNome}`);
+    
+    // Buscar produto no estoque do usuário
+    const { data: estoque, error: erroEstoque } = await supabase
+      .from('estoque_app')
+      .select('*')
+      .eq('user_id', mensagem.usuario_id)
+      .ilike('produto_nome', `%${produtoNome}%`)
+      .maybeSingle();
+    
+    if (erroEstoque) {
+      console.error('❌ Erro ao buscar estoque:', erroEstoque);
+      return "Erro ao consultar estoque. Tente novamente.";
+    }
+    
+    if (!estoque) {
+      return `❌ Produto "${produtoNome}" não encontrado no seu estoque. Use o comando 'adicionar' para incluir um novo produto.`;
+    }
+    
+    // Converter unidades se necessário
+    let quantidadeConvertida = quantidade;
+    
+    if (unidadeExtraida) {
+      if (unidadeExtraida.match(/g|gramas?/)) {
+        // Converter gramas para kg se o estoque está em kg
+        if (estoque.unidade_medida.toLowerCase().includes('kg')) {
+          quantidadeConvertida = quantidade / 1000;
+        }
+      } else if (unidadeExtraida.match(/kg|kilos?|quilos?/)) {
+        // Converter kg para gramas se o estoque está em gramas
+        if (estoque.unidade_medida.toLowerCase().includes('g') && !estoque.unidade_medida.toLowerCase().includes('kg')) {
+          quantidadeConvertida = quantidade * 1000;
+        }
+      }
+    }
+    
+    // Somar ao estoque existente
+    let novaQuantidade = estoque.quantidade + quantidadeConvertida;
+    
+    // Arredondar baseado na unidade de medida
+    if (estoque.unidade_medida.toLowerCase().includes('kg') || estoque.unidade_medida.toLowerCase().includes('kilo')) {
+      novaQuantidade = Math.round(novaQuantidade * 100) / 100; // 2 casas decimais
+    } else {
+      novaQuantidade = Math.round(novaQuantidade); // Número inteiro para unidades
+    }
+    
+    // Atualizar estoque
+    await supabase
+      .from('estoque_app')
+      .update({
+        quantidade: novaQuantidade,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', estoque.id);
+    
+    const adicionadoFormatado = formatarQuantidade(quantidade, unidadeExtraida || estoque.unidade_medida);
+    const estoqueAtualFormatado = formatarQuantidade(novaQuantidade, estoque.unidade_medida);
+    
+    return `✅ Foram adicionados ${adicionadoFormatado} ao estoque de ${estoque.produto_nome}. Agora você tem ${estoqueAtualFormatado} em estoque.`;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar aumentar estoque:', error);
+    return "Erro ao processar comando de aumentar estoque. Tente novamente.";
+  }
+}
+
+/**
+ * Processar comando de adicionar produto novo
  */
 async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<string> {
   try {
-    console.log('➕ Processando adicionar produto...');
+    console.log('➕ Processando adicionar produto novo...');
     
     const texto = mensagem.conteudo.toLowerCase();
-    const produtoTexto = texto.replace(/picotinho,?\s*adiciona?\s*/i, '').replace(/\s*(na\s+lista|no\s+estoque).*$/i, '').trim();
     
-    if (!produtoTexto) {
-      return "Não consegui identificar o produto. Tente: 'Picotinho, adiciona banana na lista'";
+    // Remover variações de comando "adicionar"
+    const comandosAdicionar = /picotinho,?\s*(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s+produto)\s*/i;
+    const textoLimpo = texto.replace(comandosAdicionar, '').replace(/\s*(na\s+lista|no\s+estoque).*$/i, '').trim();
+    
+    if (!textoLimpo) {
+      return "❌ Não entendi. Para adicionar, use: 'adicionar [quantidade] [produto]'.";
     }
     
     // Extrair quantidade se especificada
-    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
-    const match = produtoTexto.match(regexQuantidade);
+    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|kilos?|quilos?|g|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
+    const match = textoLimpo.match(regexQuantidade);
     
     let quantidade = 1;
-    let unidade = 'unidade';
-    let produtoNome = produtoTexto.toUpperCase();
+    let unidade = 'UN';
+    let produtoNome = textoLimpo.toUpperCase();
     
     if (match) {
       quantidade = parseFloat(match[1].replace(',', '.'));
-      unidade = match[2] || 'unidade';
+      unidade = match[2] ? match[2].toUpperCase() : 'UN';
       produtoNome = match[3].trim().toUpperCase();
+      
+      // Normalizar unidades
+      if (unidade.match(/G|GRAMAS?/i)) unidade = 'G';
+      else if (unidade.match(/KG|KILOS?|QUILOS?/i)) unidade = 'KG';
+      else if (unidade.match(/L|LITROS?/i)) unidade = 'L';
+      else if (unidade.match(/ML/i)) unidade = 'ML';
+      else if (unidade.match(/UNIDADE|UN|PACOTE/i)) unidade = 'UN';
     }
+    
+    console.log(`📦 Adicionando produto: ${quantidade} ${unidade} de ${produtoNome}`);
     
     // Verificar se produto já existe
     const { data: existente, error: erroExistente } = await supabase
       .from('estoque_app')
       .select('*')
       .eq('user_id', mensagem.usuario_id)
-      .eq('produto_nome', produtoNome)
+      .ilike('produto_nome', `%${produtoNome}%`)
       .maybeSingle();
     
     if (erroExistente) {
@@ -364,32 +474,30 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     }
     
     if (existente) {
-      // Atualizar quantidade existente
-      const novaQuantidade = existente.quantidade + quantidade;
-      
-      await supabase
-        .from('estoque_app')
-        .update({
-          quantidade: novaQuantidade,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existente.id);
-        
-      return `✅ Produto atualizado!\n\n📦 ${produtoNome}\n➕ Adicionado: ${quantidade} ${unidade}\n📊 Estoque total: ${novaQuantidade} ${existente.unidade_medida}`;
-    } else {
-      // Criar novo produto
-      await supabase
-        .from('estoque_app')
-        .insert({
-          user_id: mensagem.usuario_id,
-          produto_nome: produtoNome,
-          categoria: 'outros',
-          quantidade: quantidade,
-          unidade_medida: unidade
-        });
-        
-      return `✅ Produto adicionado ao estoque!\n\n📦 ${produtoNome}\n📊 Quantidade: ${quantidade} ${unidade}`;
+      return `⚠️ O produto ${produtoNome} já existe no estoque. Use o comando 'aumentar' para atualizar a quantidade.`;
     }
+    
+    // Arredondar quantidade baseado na unidade
+    if (unidade === 'KG') {
+      quantidade = Math.round(quantidade * 100) / 100; // 2 casas decimais
+    } else {
+      quantidade = Math.round(quantidade); // Número inteiro para outras unidades
+    }
+    
+    // Criar novo produto sem preço por enquanto (será implementado fluxo de preço posteriormente)
+    await supabase
+      .from('estoque_app')
+      .insert({
+        user_id: mensagem.usuario_id,
+        produto_nome: produtoNome,
+        categoria: 'outros',
+        quantidade: quantidade,
+        unidade_medida: unidade,
+        preco_unitario_ultimo: 0
+      });
+    
+    const quantidadeFormatada = formatarQuantidade(quantidade, unidade);
+    return `✅ Produto ${produtoNome} adicionado com ${quantidadeFormatada} em estoque.`;
     
   } catch (error) {
     console.error('❌ Erro ao adicionar produto:', error);
