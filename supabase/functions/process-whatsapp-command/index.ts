@@ -56,15 +56,23 @@ const handler = async (req: Request): Promise<Response> => {
     // PRIORIDADE 1: Se há sessão pendente, processar como resposta a um estado anterior
     if (sessao) {
       console.log(`📞 Sessão encontrada: ${sessao.estado} para produto ${sessao.produto_nome}`);
+      console.log(`📞 Processando resposta para sessão: ${sessao.estado}`);
       resposta += await processarRespostaSessao(supabase, mensagem, sessao);
       comandoExecutado = true;
     } else {
-      // PRIORIDADE 2: Verificar se é comando de aumentar/adicionar independente do comando_identificado
+      // PRIORIDADE 2: Verificar se é comando novo de aumentar/adicionar
       const textoNormalizado = mensagem.conteudo.toLowerCase();
       
-      // Reconhecer TODAS as variações de aumentar/adicionar
-      const isAumentar = textoNormalizado.match(/\b(aumenta?r?|soma?r?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/);
-      const isAdicionar = textoNormalizado.match(/\b(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\b/);
+      // ENCERRAR TODAS AS SESSÕES EXISTENTES ANTES DE PROCESSAR NOVO COMANDO
+      await supabase
+        .from('whatsapp_sessions')
+        .delete()
+        .eq('usuario_id', mensagem.usuario_id)
+        .eq('remetente', mensagem.remetente);
+      
+      // Reconhecer TODAS as variações de aumentar/adicionar com regex mais específico
+      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/);
+      const isAdicionar = textoNormalizado.match(/\b(adiciona|adicionar|cadastra|cadastrar|inseri|inserir|bota|botar)\b/);
       
       if (isAumentar) {
         console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
@@ -505,15 +513,7 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     }
     
     // Limpar completamente qualquer prefixo técnico do nome do produto
-    produtoNome = produtoNome
-      .replace(/^(ID\s+|D\s+|[A-Z]\s+)/i, '') // Remove prefixos como "ID ", "D ", "B ", etc.
-      .replace(/^\s*DE\s+/i, '') // Remove "DE " no início
-      .replace(/^\s*\w\s+/i, function(match) {
-        // Remove qualquer letra isolada seguida de espaço no início
-        if (match.trim().length === 1) return '';
-        return match;
-      })
-      .trim();
+    produtoNome = limparNomeProduto(produtoNome);
     
     console.log(`📦 Adicionando produto: ${quantidade} ${unidade} de ${produtoNome}`);
     
@@ -667,6 +667,21 @@ async function processarComandoGenerico(supabase: any, mensagem: any): Promise<s
     console.error('❌ Erro ao processar comando genérico:', error);
     return "Erro ao processar comando. Tente novamente.";
   }
+}
+
+/**
+ * Função para limpar prefixos técnicos do nome do produto
+ */
+function limparNomeProduto(nome: string): string {
+  return nome
+    .replace(/^(ID\s+|D\s+|[A-Z]\s+)/i, '') // Remove prefixos como "ID ", "D ", "B ", etc.
+    .replace(/^\s*DE\s+/i, '') // Remove "DE " no início
+    .replace(/^\s*\w\s+/i, function(match) {
+      // Remove qualquer letra isolada seguida de espaço no início
+      if (match.trim().length === 1) return '';
+      return match;
+    })
+    .trim();
 }
 
 /**
