@@ -338,38 +338,57 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
  */
 async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): Promise<boolean> {
   try {
+    console.log('📤 [ENVIO] Iniciando envio da resposta WhatsApp...');
+    console.log(`📤 [ENVIO] Número destino: ${numeroDestino}`);
+    console.log(`📤 [ENVIO] Mensagem: ${mensagem}`);
+    
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
     
+    console.log(`📤 [ENVIO] Instance URL: ${instanceUrl ? 'OK' : 'MISSING'}`);
+    console.log(`📤 [ENVIO] API Token: ${apiToken ? 'OK' : 'MISSING'}`);
+    
     if (!instanceUrl || !apiToken) {
-      console.error('❌ Configurações do WhatsApp não encontradas');
+      console.error('❌ [ENVIO] Configurações do WhatsApp não encontradas');
       return false;
     }
     
     const url = `${instanceUrl}/send-text`;
+    console.log(`📤 [ENVIO] URL completa: ${url}`);
     
+    const payload = {
+      phone: numeroDestino,
+      message: mensagem
+    };
+    console.log(`📤 [ENVIO] Payload:`, JSON.stringify(payload));
+    
+    console.log('📤 [ENVIO] Fazendo requisição HTTP...');
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Client-Token': apiToken
       },
-      body: JSON.stringify({
-        phone: numeroDestino,
-        message: mensagem
-      })
+      body: JSON.stringify(payload)
     });
     
+    console.log(`📤 [ENVIO] Status da resposta: ${response.status}`);
+    console.log(`📤 [ENVIO] Headers da resposta:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
+    
+    const responseText = await response.text();
+    console.log(`📤 [ENVIO] Corpo da resposta: ${responseText}`);
+    
     if (response.ok) {
-      console.log('✅ Resposta enviada via WhatsApp');
+      console.log('✅ [ENVIO] Resposta enviada via WhatsApp com sucesso');
       return true;
     } else {
-      console.error('❌ Erro ao enviar resposta:', await response.text());
+      console.error(`❌ [ENVIO] Erro HTTP ${response.status}:`, responseText);
       return false;
     }
     
   } catch (error) {
-    console.error('❌ Erro no envio WhatsApp:', error);
+    console.error('❌ [ENVIO] Erro no envio WhatsApp:', error);
+    console.error('❌ [ENVIO] Stack trace:', error.stack);
     return false;
   }
 }
