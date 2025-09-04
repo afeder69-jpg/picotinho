@@ -96,11 +96,11 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 Texto limpo para análise:', textoLimpo);
         
         // Identificar comando baseado em palavras-chave
-        if (textoLimpo.includes('baixa')) {
+        if (textoLimpo.match(/\b(baixa|baixar)\b/)) {
           comando_identificado = 'baixar_estoque';
-        } else if (textoLimpo.includes('consulta')) {
+        } else if (textoLimpo.match(/\b(consulta|consultar|consulte)\b/)) {
           comando_identificado = 'consultar_estoque';
-        } else if (textoLimpo.includes('adiciona') || textoLimpo.includes('add')) {
+        } else if (textoLimpo.match(/\b(adiciona|adicionar|add)\b/)) {
           comando_identificado = 'adicionar_produto';
         }
         

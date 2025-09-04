@@ -200,11 +200,19 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     console.log(`📝 Texto normalizado: "${textoNormalizado}"`);
     
     // Extrair o produto da mensagem
-    // Remove palavras de comando ("picotinho", "consulta", etc.)
-    let produtoConsulta = textoNormalizado
-      .replace(/\b(picotinho|consulta|consultas|consultar)\b/gi, '') // Remove palavras de comando
-      .replace(/\s+/g, ' ') // Normaliza espaços novamente
-      .trim();
+    // Procurar pela palavra "consulta" e pegar tudo que vem depois
+    const match = textoNormalizado.match(/\b(consulta|consultar|consulte)\s+(.+)/);
+    let produtoConsulta = '';
+    
+    if (match && match[2]) {
+      produtoConsulta = match[2].trim();
+    } else {
+      // Fallback: remover palavras de comando
+      produtoConsulta = textoNormalizado
+        .replace(/\b(picotinho|consulta|consultas|consultar|consulte)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
     
     console.log(`📝 Produto extraído: "${produtoConsulta}"`);
     
