@@ -70,9 +70,9 @@ const handler = async (req: Request): Promise<Response> => {
         .eq('usuario_id', mensagem.usuario_id)
         .eq('remetente', mensagem.remetente);
       
-      // Reconhecer TODAS as variações de aumentar/adicionar com regex mais específico
-      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/);
-      const isAdicionar = textoNormalizado.match(/\b(adiciona|adicionar|cadastra|cadastrar|inseri|inserir|bota|botar)\b/);
+      // Reconhecer TODAS as variações de aumentar/adicionar (case insensitive, com ou sem "Picotinho")
+      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar)\b/);
+      const isAdicionar = textoNormalizado.match(/\b(adiciona|adicionar)\b/);
       
       if (isAumentar) {
         console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
@@ -371,7 +371,7 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     const texto = mensagem.conteudo.toLowerCase();
     
     // Remover variações de comando "aumentar" - incluindo TODOS os sinônimos
-    const comandosAumentar = /picotinho,?\s*(aumenta?r?|soma?r?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\s*/i;
+    const comandosAumentar = /(?:picotinho,?\s*)?(aumenta|aumentar|soma|somar)\s+/i;
     const textoLimpo = texto.replace(comandosAumentar, '').trim();
     
     // Regex para extrair quantidade e produto
@@ -448,25 +448,11 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       })
       .eq('id', estoque.id);
     
-    // Calcular quantidade adicionada formatada corretamente
-    let quantidadeAdicionadaDisplay = quantidade;
-    let unidadeDisplay = unidadeExtraida || estoque.unidade_medida;
-    
-    // Se a mensagem veio em kg mas o estoque é em gramas, mostrar em kg
-    if (unidadeExtraida && unidadeExtraida.match(/kg|kilos?|quilos?/i) && unidadeFinalEstoque.includes('g')) {
-      quantidadeAdicionadaDisplay = quantidade;
-      unidadeDisplay = 'kg';
-    }
-    // Se a mensagem veio em gramas mas o estoque é em kg, mostrar em gramas
-    else if (unidadeExtraida && unidadeExtraida.match(/g|gramas?/i) && unidadeFinalEstoque.includes('kg')) {
-      quantidadeAdicionadaDisplay = quantidade;
-      unidadeDisplay = 'g';
-    }
-    
-    const adicionadoFormatado = formatarQuantidade(quantidadeAdicionadaDisplay, unidadeDisplay);
+    const adicionadoFormatado = formatarQuantidade(quantidade, unidadeExtraida || estoque.unidade_medida);
     const estoqueAtualFormatado = formatarQuantidade(novaQuantidade, estoque.unidade_medida);
     
-    return `✅ Foram adicionados ${adicionadoFormatado} ao estoque de ${estoque.produto_nome}. Agora você tem ${estoqueAtualFormatado} em estoque.`;
+    const produtoNomeLimpo = limparNomeProduto(estoque.produto_nome);
+    return `✅ Foram adicionados ${adicionadoFormatado} ao estoque de ${produtoNomeLimpo}. Agora você tem ${estoqueAtualFormatado} em estoque.`;
     
   } catch (error) {
     console.error('❌ Erro ao processar aumentar estoque:', error);
@@ -475,7 +461,7 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
 }
 
 /**
- * Processar comando de adicionar produto novo
+ * Processar comando de adicionar produto
  */
 async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<string> {
   try {
@@ -483,9 +469,9 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Remover variações de comando "adicionar"  
-    const comandosAdicionar = /picotinho,?\s*(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\s*/i;
-    const textoLimpo = texto.replace(comandosAdicionar, '').replace(/\s*(na\s+lista|no\s+estoque).*$/i, '').trim();
+    // Remover comando "adicionar" do início (Picotinho, adiciona | adicionar) 
+    const comandosAdicionar = /(?:picotinho,?\s*)?(adiciona|adicionar)\s+/i;
+    const textoLimpo = texto.replace(comandosAdicionar, '').trim();
     
     if (!textoLimpo) {
       return "❌ Não entendi. Para adicionar, use: 'adicionar [quantidade] [produto]'.";
@@ -531,7 +517,8 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     }
     
     if (existente) {
-      return `⚠️ O produto ${produtoNome} já existe no estoque. Use o comando 'aumentar' para atualizar a quantidade.`;
+      const produtoNomeLimpo = limparNomeProduto(existente.produto_nome);
+      return `⚠️ O produto ${produtoNomeLimpo} já existe no estoque. Use o comando 'aumentar' para atualizar a quantidade.`;
     }
     
     // Arredondar quantidade baseado na unidade
@@ -569,9 +556,10 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
       });
     
     const quantidadeFormatada = formatarQuantidade(quantidade, unidade);
+    const produtoNomeLimpo = limparNomeProduto(produtoNome);
     
     // Retornar mensagem solicitando o preço de compra
-    return `✅ Produto ${produtoNome} adicionado com ${quantidadeFormatada} em estoque. Informe o preço de compra.`;
+    return `✅ Produto ${produtoNomeLimpo} adicionado com ${quantidadeFormatada} em estoque.\n\nInforme o preço de compra para ${produtoNomeLimpo} (ex: 5,90):`;
     
   } catch (error) {
     console.error('❌ Erro ao adicionar produto:', error);
@@ -580,92 +568,94 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
 }
 
 /**
- * Processar resposta em sessão ativa (preço ou categoria)
+ * Processar resposta de sessão ativa
  */
 async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any): Promise<string> {
   try {
-    console.log(`📞 Processando resposta para sessão: ${sessao.estado}`);
+    console.log(`🔄 Processando resposta para sessão: ${sessao.estado}`);
     
     if (sessao.estado === 'aguardando_preco') {
-      // Processar resposta de preço
-      const textoLimpo = mensagem.conteudo.replace(/[^\d,.-]/g, '').replace(',', '.');
-      const preco = parseFloat(textoLimpo);
-      
-      if (isNaN(preco) || preco <= 0) {
-        return "❌ Não entendi. Por favor, informe apenas o preço em formato numérico, ex: 8,90.";
+      // Processar preço informado
+      const precoMatch = mensagem.conteudo.match(/(\d+(?:[.,]\d+)?)/);
+      if (!precoMatch) {
+        const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
+        return `❌ Preço inválido. Digite apenas o valor em reais (exemplo: 5,90 ou 5.90).\n\nInforme o preço de compra para ${produtoNomeLimpo}:`;
       }
       
-      // Atualizar produto com o preço
+      const preco = parseFloat(precoMatch[1].replace(',', '.'));
+      
+      // Atualizar produto no estoque com o preço
       await supabase
         .from('estoque_app')
-        .update({ preco_unitario_ultimo: preco })
+        .update({
+          preco_unitario_ultimo: preco,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', sessao.produto_id);
       
-      // Criar nova sessão para aguardar categoria
+      // Atualizar sessão para aguardar categoria
       await supabase
         .from('whatsapp_sessions')
         .update({
           estado: 'aguardando_categoria',
-          contexto: { ...sessao.contexto, preco },
-          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora
+          contexto: { ...sessao.contexto, preco_informado: preco },
+          updated_at: new Date().toISOString()
         })
         .eq('id', sessao.id);
       
-      return `✅ Preço de R$ ${preco.toFixed(2).replace('.', ',')} registrado para ${sessao.produto_nome}.\n\nQual categoria deseja? Exemplos: Hortifruti, Bebidas, Limpeza, etc.`;
+      const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
+      return `💰 Preço R$ ${preco.toFixed(2).replace('.', ',')} registrado para ${produtoNomeLimpo}!\n\nAgora escolha a categoria (digite apenas o número):\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Carnes\n6️⃣ Limpeza\n7️⃣ Higiene/Farmácia\n8️⃣ Laticínios\n9️⃣ Outros`;
       
     } else if (sessao.estado === 'aguardando_categoria') {
-      // Processar resposta de categoria
-      const categoria = mensagem.conteudo.trim();
+      // Processar categoria informada
+      const categoriaNumero = parseInt(mensagem.conteudo.trim());
       
-      if (!categoria || categoria.length < 2) {
-        return "❌ Por favor, informe uma categoria válida. Ex: Hortifruti, Bebidas, Limpeza, etc.";
+      const categorias = [
+        'Hortifruti',
+        'Bebidas', 
+        'Padaria',
+        'Mercearia',
+        'Carnes',
+        'Limpeza',
+        'Higiene/Farmácia',
+        'Laticínios',
+        'Outros'
+      ];
+      
+      if (categoriaNumero < 1 || categoriaNumero > 9 || isNaN(categoriaNumero)) {
+        const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
+        return `❌ Categoria inválida. Digite apenas um número de 1 a 9.\n\nEscolha a categoria para ${produtoNomeLimpo}:\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Carnes\n6️⃣ Limpeza\n7️⃣ Higiene/Farmácia\n8️⃣ Laticínios\n9️⃣ Outros`;
       }
       
-      // Atualizar produto com a categoria
+      const categoriaSelecionada = categorias[categoriaNumero - 1];
+      const precoInformado = sessao.contexto?.preco_informado || 0;
+      
+      // Atualizar produto no estoque com a categoria
       await supabase
         .from('estoque_app')
-        .update({ categoria: categoria.toLowerCase() })
+        .update({
+          categoria: categoriaSelecionada.toLowerCase(),
+          updated_at: new Date().toISOString()
+        })
         .eq('id', sessao.produto_id);
       
-      // Remover sessão (processo concluído)
+      // Encerrar sessão
       await supabase
         .from('whatsapp_sessions')
         .delete()
         .eq('id', sessao.id);
       
-      const precoFormatado = sessao.contexto?.preco ? `R$ ${sessao.contexto.preco.toFixed(2).replace('.', ',')}` : 'não informado';
-      const quantidadeFormatada = formatarQuantidade(sessao.contexto?.quantidade || 1, sessao.contexto?.unidade || 'UN');
+      const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
+      const quantidadeFormatada = formatarQuantidade(sessao.contexto?.quantidade || 0, sessao.contexto?.unidade || 'unidade');
       
-      return `✅ Produto ${sessao.produto_nome} adicionado com sucesso!\n\n📦 Quantidade: ${quantidadeFormatada} | 💰 Preço: ${precoFormatado} | 📂 Categoria: ${categoria}`;
+      return `✅ Produto ${produtoNomeLimpo} adicionado com ${quantidadeFormatada} em estoque.\n💰 Preço: R$ ${precoInformado.toFixed(2).replace('.', ',')} | 📂 Categoria: ${categoriaSelecionada}`;
     }
     
-    return "❌ Estado de sessão não reconhecido.";
+    return "❌ Estado de sessão inválido.";
     
   } catch (error) {
     console.error('❌ Erro ao processar resposta da sessão:', error);
-    return "Erro ao processar sua resposta. Tente novamente.";
-  }
-}
-
-/**
- * Processar comando genérico quando não foi identificado corretamente
- */
-async function processarComandoGenerico(supabase: any, mensagem: any): Promise<string> {
-  try {
-    const texto = mensagem.conteudo.toLowerCase();
-    
-    // Tentar identificar se é comando de aumentar ou adicionar (última chance)
-    if (texto.match(/\b(aumenta?r?|soma?r?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/)) {
-      return await processarAumentarEstoque(supabase, mensagem);
-    } else if (texto.match(/\b(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\b/)) {
-      return await processarAdicionarProduto(supabase, mensagem);
-    }
-    
-    return "❌ Não entendi seu comando. Tente:\n• Picotinho, aumenta 2 kg de banana\n• Picotinho, adiciona 1 kg de morango\n• Picotinho, consulta banana\n• Picotinho, baixa 1 kg de banana";
-    
-  } catch (error) {
-    console.error('❌ Erro ao processar comando genérico:', error);
-    return "Erro ao processar comando. Tente novamente.";
+    return "❌ Erro ao processar sua resposta. Tente novamente.";
   }
 }
 
@@ -690,57 +680,56 @@ function limparNomeProduto(nome: string): string {
 async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): Promise<boolean> {
   try {
     console.log('📤 [ENVIO] Iniciando envio da resposta WhatsApp...');
-    console.log(`📤 [ENVIO] Número destino: ${numeroDestino}`);
-    console.log(`📤 [ENVIO] Mensagem: ${mensagem}`);
-    
+    console.log('📤 [ENVIO] Número destino:', numeroDestino);
+    console.log('📤 [ENVIO] Mensagem:', mensagem);
+
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
-    const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
     
-    console.log(`📤 [ENVIO] Instance URL: ${instanceUrl ? 'OK' : 'MISSING'}`);
-    console.log(`📤 [ENVIO] API Token: ${apiToken ? 'OK' : 'MISSING'}`);
-    
+    console.log('📤 [ENVIO] Instance URL:', instanceUrl ? 'OK' : 'MISSING');
+    console.log('📤 [ENVIO] API Token:', apiToken ? 'OK' : 'MISSING');
+
     if (!instanceUrl || !apiToken) {
-      console.error('❌ [ENVIO] Configurações do WhatsApp não encontradas');
+      console.error('❌ [ENVIO] Configurações WhatsApp não encontradas');
       return false;
     }
-    
-    const url = `${instanceUrl}/token/${apiToken}/send-text`;
-    console.log(`📤 [ENVIO] URL completa: ${url}`);
+
+    const url = `${instanceUrl}/send-text`;
     
     const payload = {
       phone: numeroDestino,
       message: mensagem
     };
-    console.log(`📤 [ENVIO] Payload:`, JSON.stringify(payload));
-    
+
+    console.log('📤 [ENVIO] URL completa:', url);
+    console.log('📤 [ENVIO] Payload:', JSON.stringify(payload));
+
     console.log('📤 [ENVIO] Fazendo requisição HTTP...');
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': accountSecret
       },
       body: JSON.stringify(payload)
     });
-    
-    console.log(`📤 [ENVIO] Status da resposta: ${response.status}`);
-    console.log(`📤 [ENVIO] Headers da resposta:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
-    
-    const responseText = await response.text();
-    console.log(`📤 [ENVIO] Corpo da resposta: ${responseText}`);
-    
+
+    console.log('📤 [ENVIO] Status da resposta:', response.status);
+    console.log('📤 [ENVIO] Headers da resposta:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+
+    const responseBody = await response.text();
+    console.log('📤 [ENVIO] Corpo da resposta:', responseBody);
+
     if (response.ok) {
       console.log('✅ [ENVIO] Resposta enviada via WhatsApp com sucesso');
       return true;
     } else {
-      console.error(`❌ [ENVIO] Erro HTTP ${response.status}:`, responseText);
+      console.error('❌ [ENVIO] Erro ao enviar resposta WhatsApp:', response.status, responseBody);
       return false;
     }
-    
+
   } catch (error) {
-    console.error('❌ [ENVIO] Erro no envio WhatsApp:', error);
-    console.error('❌ [ENVIO] Stack trace:', error.stack);
+    console.error('❌ [ENVIO] Erro ao enviar resposta WhatsApp:', error);
     return false;
   }
 }
