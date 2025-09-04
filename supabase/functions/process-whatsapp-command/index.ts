@@ -188,6 +188,7 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
 async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<string> {
   try {
     console.log('🔍 Processando consulta de estoque...');
+    console.log('📨 Dados da mensagem:', JSON.stringify(mensagem, null, 2));
     
     // Normalizar o texto da mensagem
     const textoNormalizado = mensagem.conteudo.toLowerCase()
@@ -199,15 +200,26 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     
     console.log(`📝 Texto normalizado: "${textoNormalizado}"`);
     
-    // Extrair o produto da mensagem
-    // Procurar pela palavra "consulta" e pegar tudo que vem depois
-    const match = textoNormalizado.match(/\b(consulta|consultar|consulte)\s+(.+)/);
+    // Extrair o produto da mensagem de forma mais robusta
     let produtoConsulta = '';
     
-    if (match && match[2]) {
-      produtoConsulta = match[2].trim();
-    } else {
-      // Fallback: remover palavras de comando
+    // Procurar por padrões de consulta
+    const patterns = [
+      /\b(consulta|consultar|consulte)\s+(.+)/i,
+      /\b(picotinho[,\s]*consulta|picotinho[,\s]*consultar|picotinho[,\s]*consulte)\s+(.+)/i
+    ];
+    
+    for (const pattern of patterns) {
+      const match = textoNormalizado.match(pattern);
+      if (match) {
+        // Pegar o último grupo que contém o produto
+        produtoConsulta = match[match.length - 1].trim();
+        break;
+      }
+    }
+    
+    // Se não encontrou com regex, fazer fallback
+    if (!produtoConsulta) {
       produtoConsulta = textoNormalizado
         .replace(/\b(picotinho|consulta|consultas|consultar|consulte)\b/gi, '')
         .replace(/\s+/g, ' ')
@@ -216,7 +228,14 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     
     console.log(`📝 Produto extraído: "${produtoConsulta}"`);
     
+    // Verificar se usuario_id existe
+    if (!mensagem.usuario_id) {
+      console.error('❌ Usuario ID não encontrado:', mensagem);
+      return "❌ Erro interno: usuário não identificado.";
+    }
+    
     if (!produtoConsulta) {
+      console.log('📦 Listando todo o estoque...');
       // Se não extraiu produto específico, listar todo o estoque
       const { data: estoque, error } = await supabase
         .from('estoque_app')
@@ -224,7 +243,14 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         .eq('user_id', mensagem.usuario_id)
         .order('produto_nome');
       
-      if (error || !estoque || estoque.length === 0) {
+      console.log('📦 Resultado da consulta completa:', { estoque, error });
+      
+      if (error) {
+        console.error('❌ Erro na consulta completa:', error);
+        return "❌ Houve um erro ao consultar seu estoque.";
+      }
+      
+      if (!estoque || estoque.length === 0) {
         return "❌ Seu estoque está vazio.";
       }
       
@@ -237,7 +263,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       return resposta;
     } else {
       // Consultar produto específico usando busca flexível
-      console.log(`🔍 Procurando produto: "${produtoConsulta}"`);
+      console.log(`🔍 Procurando produto específico: "${produtoConsulta}"`);
       
       const { data: estoque, error } = await supabase
         .from('estoque_app')
@@ -245,11 +271,11 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         .eq('user_id', mensagem.usuario_id)
         .ilike('produto_nome', `%${produtoConsulta}%`);
       
-      console.log(`🔍 Busca por "${produtoConsulta}" encontrou ${estoque?.length || 0} resultados`);
+      console.log(`🔍 Resultado da busca por "${produtoConsulta}":`, { estoque, error });
       
       if (error) {
-        console.error('❌ Erro na consulta:', error);
-        return "❌ Erro ao consultar estoque. Tente novamente.";
+        console.error('❌ Erro na consulta específica:', error);
+        return "❌ Houve um erro ao processar sua consulta.";
       }
       
       if (!estoque || estoque.length === 0) {
@@ -272,8 +298,8 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     }
     
   } catch (error) {
-    console.error('❌ Erro ao consultar estoque:', error);
-    return "❌ Erro ao consultar estoque. Tente novamente.";
+    console.error('❌ Erro geral ao consultar estoque:', error);
+    return "❌ Houve um erro ao processar sua consulta.";
   }
 }
 
