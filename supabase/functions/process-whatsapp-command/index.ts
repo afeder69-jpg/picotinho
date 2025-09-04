@@ -187,13 +187,16 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
  */
 async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<string> {
   try {
-    console.log('🔍 Processando consulta de estoque...');
+    console.log('🔍 [INICIO] Processando consulta de estoque...');
     
     // Verificar se usuario_id existe
     if (!mensagem.usuario_id) {
-      console.error('❌ Usuario ID não encontrado na mensagem');
+      console.error('❌ [ERRO] Usuario ID não encontrado na mensagem');
       return "❌ Erro interno: usuário não identificado.";
     }
+    
+    console.log(`📋 [DEBUG] Usuario ID: ${mensagem.usuario_id}`);
+    console.log(`📋 [DEBUG] Conteudo original: "${mensagem.conteudo}"`);
     
     // Normalizar texto exatamente como solicitado
     const texto = mensagem.conteudo
@@ -201,17 +204,24 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
       .replace(/[^\w\s]/gi, ""); // remove pontuação
     
-    console.log(`📝 Texto normalizado: "${texto}"`);
+    console.log(`📝 [STEP 1] Texto normalizado: "${texto}"`);
     
     if (texto.includes("consulta")) {
+      console.log(`✅ [STEP 2] Texto contém "consulta" - prosseguindo...`);
+      
       const partes = texto.split("consulta");
+      console.log(`📋 [DEBUG] Partes após split: ${JSON.stringify(partes)}`);
+      
       const produto = partes[1]?.trim();
+      console.log(`📝 [STEP 3] Produto extraído: "${produto}"`);
 
       if (!produto) {
+        console.log(`❌ [STEP 4] Produto vazio - retornando erro`);
         return "❌ Você precisa informar um produto. Exemplo: 'Picotinho, consulta banana'";
       }
 
-      console.log(`🔍 Buscando produto: "${produto}"`);
+      console.log(`🔍 [STEP 5] Iniciando busca no banco...`);
+      console.log(`📋 [SQL] Query: SELECT produto_nome, quantidade, unidade_medida FROM estoque_app WHERE user_id = '${mensagem.usuario_id}' AND produto_nome ILIKE '%${produto}%' LIMIT 1`);
 
       // Buscar no estoque
       const { data, error } = await supabase
@@ -222,19 +232,28 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         .limit(1)
         .single();
 
+      console.log(`📋 [STEP 6] Resultado do banco:`);
+      console.log(`📋 [RESULT] Data:`, data);
+      console.log(`📋 [RESULT] Error:`, error);
+
       if (error || !data) {
-        console.log('❌ Produto não encontrado:', error);
+        console.log(`❌ [STEP 7] Produto não encontrado - retornando erro`);
         return "❌ Produto não encontrado no seu estoque.";
       }
 
-      return `✅ Você tem ${data.quantidade} ${data.unidade_medida} de ${data.produto_nome} em estoque.`;
+      console.log(`✅ [STEP 8] Produto encontrado - preparando resposta`);
+      const resposta = `✅ Você tem ${data.quantidade} ${data.unidade_medida} de ${data.produto_nome} em estoque.`;
+      console.log(`📤 [STEP 9] Resposta final: "${resposta}"`);
+      return resposta;
     }
 
+    console.log(`❌ [FALLBACK] Texto não contém "consulta" - retornando fallback`);
     // Fallback se não for comando válido
     return "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta produto'.";
 
   } catch (err) {
-    console.error("Erro ao processar comando:", err);
+    console.error("❌ [ERRO GERAL] Erro ao processar comando:", err);
+    console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao processar sua consulta. Tente novamente mais tarde.";
   }
 }
