@@ -41,7 +41,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('📨 Processando mensagem:', mensagem.conteudo);
 
-    // Verificar se existe sessão pendente para o usuário
+    // Verificar se existe sessão pendente para o usuário PRIMEIRO
     const { data: sessao } = await supabase
       .from('whatsapp_sessions')
       .select('*')
@@ -53,48 +53,49 @@ const handler = async (req: Request): Promise<Response> => {
     let resposta = "Olá! Sou o Picotinho 🤖\n\n";
     let comandoExecutado = false;
 
-    // Se há sessão pendente, processar como resposta a um estado anterior
+    // PRIORIDADE 1: Se há sessão pendente, processar como resposta a um estado anterior
     if (sessao) {
+      console.log(`📞 Sessão encontrada: ${sessao.estado} para produto ${sessao.produto_nome}`);
       resposta += await processarRespostaSessao(supabase, mensagem, sessao);
       comandoExecutado = true;
     } else {
-      // Processar comandos baseado no comando_identificado
-      switch (mensagem.comando_identificado) {
-        case 'baixar_estoque':
-          resposta += await processarBaixarEstoque(supabase, mensagem);
-          comandoExecutado = true;
-          break;
-          
-        case 'consultar_estoque':
-          resposta += await processarConsultarEstoque(supabase, mensagem);
-          comandoExecutado = true;
-          break;
-          
-        case 'aumentar_estoque':
-        case 'adicionar_produto':
-          // Tratar tanto "aumentar" quanto "adicionar" na mesma lógica
-          const textoNormalizado = mensagem.conteudo.toLowerCase();
-          const isAumentar = textoNormalizado.match(/\b(aumenta?r?|somar?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/);
-          const isAdicionar = textoNormalizado.match(/\b(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\b/);
-          
-          if (isAumentar) {
-            resposta += await processarAumentarEstoque(supabase, mensagem);
-          } else if (isAdicionar) {
-            resposta += await processarAdicionarProduto(supabase, mensagem);
-          } else {
-            // Fallback para comando não identificado corretamente
-            resposta += await processarComandoGenerico(supabase, mensagem);
-          }
-          comandoExecutado = true;
-          break;
-          
-        default:
-          resposta += "Não entendi seu comando 😅\n\n";
-          resposta += "Comandos disponíveis:\n";
-          resposta += "• Picotinho, baixa X de [produto]\n";
-          resposta += "• Picotinho, consulta [produto]\n";
-          resposta += "• Picotinho, aumenta X de [produto]\n";
-          resposta += "• Picotinho, adiciona [produto]";
+      // PRIORIDADE 2: Verificar se é comando de aumentar/adicionar independente do comando_identificado
+      const textoNormalizado = mensagem.conteudo.toLowerCase();
+      
+      // Reconhecer TODAS as variações de aumentar/adicionar
+      const isAumentar = textoNormalizado.match(/\b(aumenta?r?|soma?r?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/);
+      const isAdicionar = textoNormalizado.match(/\b(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\b/);
+      
+      if (isAumentar) {
+        console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
+        resposta += await processarAumentarEstoque(supabase, mensagem);
+        comandoExecutado = true;
+      } else if (isAdicionar) {
+        console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
+        resposta += await processarAdicionarProduto(supabase, mensagem);
+        comandoExecutado = true;
+      } else {
+        // PRIORIDADE 3: Processar outros comandos baseado no comando_identificado
+        switch (mensagem.comando_identificado) {
+          case 'baixar_estoque':
+            resposta += await processarBaixarEstoque(supabase, mensagem);
+            comandoExecutado = true;
+            break;
+            
+          case 'consultar_estoque':
+            resposta += await processarConsultarEstoque(supabase, mensagem);
+            comandoExecutado = true;
+            break;
+            
+          default:
+            console.log('❌ Comando não reconhecido:', textoNormalizado);
+            resposta += "Não entendi seu comando 😅\n\n";
+            resposta += "Comandos disponíveis:\n";
+            resposta += "• Picotinho, baixa X de [produto]\n";
+            resposta += "• Picotinho, consulta [produto]\n";
+            resposta += "• Picotinho, aumenta X de [produto]\n";
+            resposta += "• Picotinho, adiciona [produto]";
+        }
       }
     }
 
@@ -361,8 +362,8 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     // Extrair produto e quantidade do texto
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Remover variações de comando "aumentar" - incluindo novos sinônimos
-    const comandosAumentar = /picotinho,?\s*(aumenta?r?|coloca?r?|bota?r?|soma?r?|colocar\s*no\s*estoque|botar\s*no\s*estoque)\s*(no\s+estoque|ao\s+estoque)?\s*/i;
+    // Remover variações de comando "aumentar" - incluindo TODOS os sinônimos
+    const comandosAumentar = /picotinho,?\s*(aumenta?r?|soma?r?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\s*/i;
     const textoLimpo = texto.replace(comandosAumentar, '').trim();
     
     // Regex para extrair quantidade e produto
@@ -474,8 +475,8 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Remover variações de comando "adicionar"
-    const comandosAdicionar = /picotinho,?\s*(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s+produto)\s*/i;
+    // Remover variações de comando "adicionar"  
+    const comandosAdicionar = /picotinho,?\s*(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\s*/i;
     const textoLimpo = texto.replace(comandosAdicionar, '').replace(/\s*(na\s+lista|no\s+estoque).*$/i, '').trim();
     
     if (!textoLimpo) {
@@ -502,6 +503,17 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
       else if (unidade.match(/ML/i)) unidade = 'ML';
       else if (unidade.match(/UNIDADE|UN|PACOTE/i)) unidade = 'UN';
     }
+    
+    // Limpar completamente qualquer prefixo técnico do nome do produto
+    produtoNome = produtoNome
+      .replace(/^(ID\s+|D\s+|[A-Z]\s+)/i, '') // Remove prefixos como "ID ", "D ", "B ", etc.
+      .replace(/^\s*DE\s+/i, '') // Remove "DE " no início
+      .replace(/^\s*\w\s+/i, function(match) {
+        // Remove qualquer letra isolada seguida de espaço no início
+        if (match.trim().length === 1) return '';
+        return match;
+      })
+      .trim();
     
     console.log(`📦 Adicionando produto: ${quantidade} ${unidade} de ${produtoNome}`);
     
@@ -622,8 +634,9 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         .eq('id', sessao.id);
       
       const precoFormatado = sessao.contexto?.preco ? `R$ ${sessao.contexto.preco.toFixed(2).replace('.', ',')}` : 'não informado';
+      const quantidadeFormatada = formatarQuantidade(sessao.contexto?.quantidade || 1, sessao.contexto?.unidade || 'UN');
       
-      return `✅ Produto ${sessao.produto_nome} adicionado com sucesso!\n\n📦 Quantidade: ${sessao.contexto?.quantidade || '1'}\n💰 Preço: ${precoFormatado}\n📂 Categoria: ${categoria}`;
+      return `✅ Produto ${sessao.produto_nome} adicionado com sucesso!\n\n📦 Quantidade: ${quantidadeFormatada} | 💰 Preço: ${precoFormatado} | 📂 Categoria: ${categoria}`;
     }
     
     return "❌ Estado de sessão não reconhecido.";
@@ -641,8 +654,8 @@ async function processarComandoGenerico(supabase: any, mensagem: any): Promise<s
   try {
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Tentar identificar se é comando de aumentar ou adicionar
-    if (texto.match(/\b(aumenta?r?|somar?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/)) {
+    // Tentar identificar se é comando de aumentar ou adicionar (última chance)
+    if (texto.match(/\b(aumenta?r?|soma?r?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/)) {
       return await processarAumentarEstoque(supabase, mensagem);
     } else if (texto.match(/\b(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\b/)) {
       return await processarAdicionarProduto(supabase, mensagem);
