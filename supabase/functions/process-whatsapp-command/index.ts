@@ -60,7 +60,7 @@ const handler = async (req: Request): Promise<Response> => {
       resposta += await processarRespostaSessao(supabase, mensagem, sessao);
       comandoExecutado = true;
     } else {
-      // PRIORIDADE 2: Verificar se é comando novo de aumentar/adicionar
+      // PRIORIDADE 2: Verificar comandos novos
       const textoNormalizado = mensagem.conteudo.toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
         .replace(/[^\w\s]/gi, ""); // Remove pontuação
@@ -72,13 +72,20 @@ const handler = async (req: Request): Promise<Response> => {
         .eq('usuario_id', mensagem.usuario_id)
         .eq('remetente', mensagem.remetente);
       
-      // Reconhecer comandos para AUMENTAR ESTOQUE (case insensitive, sem acento, sem vírgula/ponto)
+      // Comandos para BAIXAR ESTOQUE
+      const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/);
+      
+      // Comandos para AUMENTAR ESTOQUE
       const isAumentar = textoNormalizado.match(/\b(aumentar|aumenta|somar|colocar no estoque|botar no estoque)\b/);
       
-      // Reconhecer comandos para ADICIONAR PRODUTO NOVO (case insensitive, sem acento, sem vírgula/ponto)
+      // Comandos para ADICIONAR PRODUTO NOVO
       const isAdicionar = textoNormalizado.match(/\b(adicionar|adiciona|cadastrar produto|inserir produto|botar produto)\b/);
       
-      if (isAumentar) {
+      if (isBaixar) {
+        console.log('📉 Comando BAIXAR identificado:', textoNormalizado);
+        resposta += await processarBaixarEstoque(supabase, mensagem);
+        comandoExecutado = true;
+      } else if (isAumentar) {
         console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
         resposta += await processarAumentarEstoque(supabase, mensagem);
         comandoExecutado = true;
@@ -89,11 +96,6 @@ const handler = async (req: Request): Promise<Response> => {
       } else {
         // PRIORIDADE 3: Processar outros comandos baseado no comando_identificado
         switch (mensagem.comando_identificado) {
-          case 'baixar_estoque':
-            resposta += await processarBaixarEstoque(supabase, mensagem);
-            comandoExecutado = true;
-            break;
-            
           case 'consultar_estoque':
             resposta += await processarConsultarEstoque(supabase, mensagem);
             comandoExecutado = true;
@@ -101,7 +103,7 @@ const handler = async (req: Request): Promise<Response> => {
             
           default:
             console.log('❌ Comando não reconhecido:', textoNormalizado);
-            resposta += "❌ Desculpe, não entendi o comando. Exemplos: 'adicionar 1kg de maçã' ou 'aumentar 2 unidades de leite'.";
+            resposta += "❌ Desculpe, não entendi o comando. Exemplos: 'adicionar 1kg de maçã', 'aumentar 2 unidades de leite' ou 'baixa 500g de arroz'.";
         }
       }
     }
