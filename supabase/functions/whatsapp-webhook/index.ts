@@ -164,19 +164,14 @@ const handler = async (req: Request): Promise<Response> => {
         try {
           console.log('🤖 Processando comando automaticamente...');
           
-          const response = await fetch(`${supabaseUrl}/functions/v1/process-whatsapp-command`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ messageId: mensagemSalva.id })
+          const response = await supabase.functions.invoke('process-whatsapp-command', {
+            body: { messageId: mensagemSalva.id }
           });
           
-          if (response.ok) {
-            console.log('✅ Comando processado com sucesso');
+          if (response.error) {
+            console.error('❌ Erro ao processar comando:', response.error);
           } else {
-            console.error('❌ Erro ao processar comando:', await response.text());
+            console.log('✅ Comando processado com sucesso:', response.data);
           }
         } catch (error) {
           console.error('❌ Erro no processamento:', error);
