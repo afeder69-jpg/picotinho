@@ -188,118 +188,114 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
 async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<string> {
   try {
     console.log('🔍 Processando consulta de estoque...');
-    console.log('📨 Dados da mensagem:', JSON.stringify(mensagem, null, 2));
+    
+    // Verificar se usuario_id existe PRIMEIRO
+    if (!mensagem.usuario_id) {
+      console.error('❌ Usuario ID não encontrado na mensagem');
+      return "❌ Erro interno: usuário não identificado.";
+    }
     
     // Normalizar o texto da mensagem
-    const textoNormalizado = mensagem.conteudo.toLowerCase()
+    const textoOriginal = mensagem.conteudo || '';
+    const textoNormalizado = textoOriginal.toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // Remove acentos
       .replace(/[,\.\!\?]/g, ' ') // Remove pontuação
       .replace(/\s+/g, ' ') // Normaliza espaços
       .trim();
     
+    console.log(`📝 Texto original: "${textoOriginal}"`);
     console.log(`📝 Texto normalizado: "${textoNormalizado}"`);
     
-    // Extrair o produto da mensagem de forma mais robusta
+    // Extrair o produto - buscar tudo depois de "consulta"
     let produtoConsulta = '';
     
-    // Procurar por padrões de consulta
-    const patterns = [
-      /\b(consulta|consultar|consulte)\s+(.+)/i,
-      /\b(picotinho[,\s]*consulta|picotinho[,\s]*consultar|picotinho[,\s]*consulte)\s+(.+)/i
-    ];
-    
-    for (const pattern of patterns) {
-      const match = textoNormalizado.match(pattern);
-      if (match) {
-        // Pegar o último grupo que contém o produto
-        produtoConsulta = match[match.length - 1].trim();
-        break;
+    // Tentar diferentes padrões
+    if (textoNormalizado.includes('consulta')) {
+      // Pegar tudo depois da palavra "consulta"
+      const partes = textoNormalizado.split('consulta');
+      if (partes.length > 1) {
+        produtoConsulta = partes[1].trim();
       }
-    }
-    
-    // Se não encontrou com regex, fazer fallback
-    if (!produtoConsulta) {
-      produtoConsulta = textoNormalizado
-        .replace(/\b(picotinho|consulta|consultas|consultar|consulte)\b/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
     }
     
     console.log(`📝 Produto extraído: "${produtoConsulta}"`);
     
-    // Verificar se usuario_id existe
-    if (!mensagem.usuario_id) {
-      console.error('❌ Usuario ID não encontrado:', mensagem);
-      return "❌ Erro interno: usuário não identificado.";
+    // Se não conseguiu extrair produto, listar estoque completo
+    if (!produtoConsulta || produtoConsulta.length === 0) {
+      console.log('📦 Produto vazio - listando todo o estoque...');
+      
+      try {
+        const { data: estoque, error } = await supabase
+          .from('estoque_app')
+          .select('produto_nome, quantidade, unidade_medida, preco_unitario_ultimo')
+          .eq('user_id', mensagem.usuario_id)
+          .order('produto_nome');
+        
+        if (error) {
+          console.error('❌ Erro na consulta do estoque completo:', error);
+          return "❌ Houve um erro ao consultar seu estoque.";
+        }
+        
+        if (!estoque || estoque.length === 0) {
+          return "❌ Seu estoque está vazio.";
+        }
+        
+        let resposta = "📦 Seu estoque atual:\n\n";
+        estoque.forEach((item: any) => {
+          const preco = item.preco_unitario_ultimo ? ` (R$ ${item.preco_unitario_ultimo.toFixed(2)})` : '';
+          resposta += `• ${item.produto_nome}: ${item.quantidade} ${item.unidade_medida}${preco}\n`;
+        });
+        
+        return resposta;
+        
+      } catch (dbError) {
+        console.error('❌ Erro de banco na consulta completa:', dbError);
+        return "❌ Houve um erro ao acessar o banco de dados.";
+      }
     }
     
-    if (!produtoConsulta) {
-      console.log('📦 Listando todo o estoque...');
-      // Se não extraiu produto específico, listar todo o estoque
-      const { data: estoque, error } = await supabase
-        .from('estoque_app')
-        .select('produto_nome, quantidade, unidade_medida, preco_unitario_ultimo')
-        .eq('user_id', mensagem.usuario_id)
-        .order('produto_nome');
-      
-      console.log('📦 Resultado da consulta completa:', { estoque, error });
-      
-      if (error) {
-        console.error('❌ Erro na consulta completa:', error);
-        return "❌ Houve um erro ao consultar seu estoque.";
-      }
-      
-      if (!estoque || estoque.length === 0) {
-        return "❌ Seu estoque está vazio.";
-      }
-      
-      let resposta = "📦 Seu estoque atual:\n\n";
-      estoque.forEach((item: any) => {
-        const preco = item.preco_unitario_ultimo ? ` (R$ ${item.preco_unitario_ultimo.toFixed(2)})` : '';
-        resposta += `• ${item.produto_nome}: ${item.quantidade} ${item.unidade_medida}${preco}\n`;
-      });
-      
-      return resposta;
-    } else {
-      // Consultar produto específico usando busca flexível
-      console.log(`🔍 Procurando produto específico: "${produtoConsulta}"`);
-      
+    // Buscar produto específico
+    console.log(`🔍 Buscando produto específico: "${produtoConsulta}"`);
+    
+    try {
       const { data: estoque, error } = await supabase
         .from('estoque_app')
         .select('produto_nome, quantidade, unidade_medida')
         .eq('user_id', mensagem.usuario_id)
         .ilike('produto_nome', `%${produtoConsulta}%`);
       
-      console.log(`🔍 Resultado da busca por "${produtoConsulta}":`, { estoque, error });
-      
       if (error) {
-        console.error('❌ Erro na consulta específica:', error);
+        console.error('❌ Erro na busca específica:', error);
         return "❌ Houve um erro ao processar sua consulta.";
       }
       
       if (!estoque || estoque.length === 0) {
-        return "❌ Produto não encontrado no seu estoque.";
+        return `❌ Produto "${produtoConsulta}" não encontrado no seu estoque.`;
       }
       
-      // Se encontrou apenas um produto, resposta simples
+      // Se encontrou apenas um produto
       if (estoque.length === 1) {
         const item = estoque[0];
         return `✅ Você tem ${item.quantidade} ${item.unidade_medida} de ${item.produto_nome} em estoque.`;
       }
       
-      // Se encontrou vários produtos, listar todos
-      let resposta = `📦 Encontrei ${estoque.length} produtos:\n\n`;
+      // Se encontrou vários produtos
+      let resposta = `📦 Encontrei ${estoque.length} produtos para "${produtoConsulta}":\n\n`;
       estoque.forEach((item: any) => {
         resposta += `✅ ${item.produto_nome}: ${item.quantidade} ${item.unidade_medida}\n`;
       });
       
       return resposta;
+      
+    } catch (dbError) {
+      console.error('❌ Erro de banco na busca específica:', dbError);
+      return "❌ Houve um erro ao acessar o banco de dados.";
     }
     
   } catch (error) {
-    console.error('❌ Erro geral ao consultar estoque:', error);
-    return "❌ Houve um erro ao processar sua consulta.";
+    console.error('❌ Erro geral na função de consulta:', error);
+    return "❌ Houve um erro ao processar sua consulta. Tente novamente mais tarde.";
   }
 }
 
