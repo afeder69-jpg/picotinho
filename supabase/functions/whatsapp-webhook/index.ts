@@ -135,8 +135,21 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log('💾 Mensagem salva - aguardando processamento do comando se identificado');
 
-      // Processar comando automaticamente se identificado e usuário existe
-      if (comando_identificado && usuario?.usuario_id) {
+      // Verificar se usuário está cadastrado
+      if (!usuario?.usuario_id) {
+        console.log('📝 Número não cadastrado - ignorando mensagem');
+        return new Response(JSON.stringify({
+          ok: true,
+          messageId: mensagemSalva.id,
+          action: 'ignored_unregistered'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Processar comando automaticamente se identificado
+      if (comando_identificado) {
         try {
           console.log('🤖 Processando comando automaticamente...');
           
@@ -156,6 +169,47 @@ const handler = async (req: Request): Promise<Response> => {
           }
         } catch (error) {
           console.error('❌ Erro no processamento:', error);
+        }
+      } else {
+        // Comando não reconhecido - enviar mensagem de erro amigável
+        try {
+          console.log('❌ Comando não reconhecido - enviando mensagem de erro');
+          
+          const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
+          const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+          const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
+          
+          if (instanceUrl && apiToken) {
+            const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
+            
+            const requestBody = {
+              phone: remetente,
+              message: "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta [produto]'."
+            };
+            
+            const errorResponse = await fetch(sendTextUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Client-Token': accountSecret
+              },
+              body: JSON.stringify(requestBody)
+            });
+            
+            if (errorResponse.ok) {
+              console.log('✅ Mensagem de erro enviada com sucesso');
+              
+              // Atualizar mensagem com resposta enviada
+              await supabase
+                .from('whatsapp_mensagens')
+                .update({ resposta_enviada: requestBody.message })
+                .eq('id', mensagemSalva.id);
+            } else {
+              console.error('❌ Erro ao enviar mensagem de erro:', await errorResponse.text());
+            }
+          }
+        } catch (error) {
+          console.error('❌ Erro ao enviar mensagem de erro:', error);
         }
       }
 
