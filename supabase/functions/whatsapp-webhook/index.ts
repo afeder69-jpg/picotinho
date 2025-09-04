@@ -85,24 +85,23 @@ const handler = async (req: Request): Promise<Response> => {
         remetente = webhookData.phone.replace(/\D/g, '');
         conteudo = webhookData.text.message || '';
         
-        // Reconhecimento mais flexível de comandos
+        // Normalizar o texto para reconhecimento de comando
         const textoLimpo = conteudo.toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-          .replace(/[^\w\s]/g, ' ') // Remove pontuação
+          .replace(/[,\.\!\?]/g, ' ') // Remove pontuação específica
+          .replace(/\s+/g, ' ') // Normaliza espaços
           .trim();
         
         console.log('🔍 Texto limpo para análise:', textoLimpo);
         
-        // Verificar comandos de forma mais flexível
-        if (textoLimpo.includes('picotinho') || textoLimpo.includes('consulta') || textoLimpo.includes('baixa') || textoLimpo.includes('adiciona')) {
-          if (textoLimpo.match(/\b(baixa|baixar)\b/)) {
-            comando_identificado = 'baixar_estoque';
-          } else if (textoLimpo.match(/\b(consulta|consultar)\b/)) {
-            comando_identificado = 'consultar_estoque';
-          } else if (textoLimpo.match(/\b(adiciona|adicionar|add)\b/)) {
-            comando_identificado = 'adicionar_produto';
-          }
+        // Identificar comando baseado em palavras-chave
+        if (textoLimpo.includes('baixa')) {
+          comando_identificado = 'baixar_estoque';
+        } else if (textoLimpo.includes('consulta')) {
+          comando_identificado = 'consultar_estoque';
+        } else if (textoLimpo.includes('adiciona') || textoLimpo.includes('add')) {
+          comando_identificado = 'adicionar_produto';
         }
         
         console.log('🎯 Comando identificado:', comando_identificado);

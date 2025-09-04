@@ -189,19 +189,27 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
   try {
     console.log('🔍 Processando consulta de estoque...');
     
-    const texto = mensagem.conteudo.toLowerCase();
+    // Normalizar o texto da mensagem
+    const textoNormalizado = mensagem.conteudo.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[,\.\!\?]/g, ' ') // Remove pontuação
+      .replace(/\s+/g, ' ') // Normaliza espaços
+      .trim();
     
-    // Reconhecimento flexível do comando de consulta
-    // Remove "picotinho", vírgulas, e palavras como "consulta"
-    let produtoConsulta = texto
-      .replace(/picotinho[,\s]*/gi, '')  // Remove "picotinho" e vírgulas/espaços
-      .replace(/consulta[s]?[,\s]*/gi, '') // Remove "consulta" ou "consultas" e vírgulas/espaços
+    console.log(`📝 Texto normalizado: "${textoNormalizado}"`);
+    
+    // Extrair o produto da mensagem
+    // Remove palavras de comando ("picotinho", "consulta", etc.)
+    let produtoConsulta = textoNormalizado
+      .replace(/\b(picotinho|consulta|consultas|consultar)\b/gi, '') // Remove palavras de comando
+      .replace(/\s+/g, ' ') // Normaliza espaços novamente
       .trim();
     
     console.log(`📝 Produto extraído: "${produtoConsulta}"`);
     
     if (!produtoConsulta) {
-      // Listar todo o estoque
+      // Se não extraiu produto específico, listar todo o estoque
       const { data: estoque, error } = await supabase
         .from('estoque_app')
         .select('produto_nome, quantidade, unidade_medida, preco_unitario_ultimo')
@@ -221,6 +229,8 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       return resposta;
     } else {
       // Consultar produto específico usando busca flexível
+      console.log(`🔍 Procurando produto: "${produtoConsulta}"`);
+      
       const { data: estoque, error } = await supabase
         .from('estoque_app')
         .select('produto_nome, quantidade, unidade_medida')
