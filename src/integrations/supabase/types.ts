@@ -1254,6 +1254,45 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_sessions: {
+        Row: {
+          contexto: Json | null
+          created_at: string
+          estado: string
+          expires_at: string
+          id: string
+          produto_id: string | null
+          produto_nome: string | null
+          remetente: string
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          contexto?: Json | null
+          created_at?: string
+          estado: string
+          expires_at?: string
+          id?: string
+          produto_id?: string | null
+          produto_nome?: string | null
+          remetente: string
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          contexto?: Json | null
+          created_at?: string
+          estado?: string
+          expires_at?: string
+          id?: string
+          produto_id?: string | null
+          produto_nome?: string | null
+          remetente?: string
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       supermercados_publicos: {
@@ -1454,6 +1493,10 @@ export type Database = {
       }
       limpar_estoque_usuario: {
         Args: { usuario_uuid: string }
+        Returns: undefined
+      }
+      limpar_sessoes_expiradas: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       log_profile_access: {

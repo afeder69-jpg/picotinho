@@ -41,38 +41,61 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('📨 Processando mensagem:', mensagem.conteudo);
 
+    // Verificar se existe sessão pendente para o usuário
+    const { data: sessao } = await supabase
+      .from('whatsapp_sessions')
+      .select('*')
+      .eq('usuario_id', mensagem.usuario_id)
+      .eq('remetente', mensagem.remetente)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
+
     let resposta = "Olá! Sou o Picotinho 🤖\n\n";
     let comandoExecutado = false;
 
-    // Processar comandos baseado no comando_identificado
-    switch (mensagem.comando_identificado) {
-      case 'baixar_estoque':
-        resposta += await processarBaixarEstoque(supabase, mensagem);
-        comandoExecutado = true;
-        break;
-        
-      case 'consultar_estoque':
-        resposta += await processarConsultarEstoque(supabase, mensagem);
-        comandoExecutado = true;
-        break;
-        
-      case 'aumentar_estoque':
-        resposta += await processarAumentarEstoque(supabase, mensagem);
-        comandoExecutado = true;
-        break;
-        
-      case 'adicionar_produto':
-        resposta += await processarAdicionarProduto(supabase, mensagem);
-        comandoExecutado = true;
-        break;
-        
-      default:
-        resposta += "Não entendi seu comando 😅\n\n";
-        resposta += "Comandos disponíveis:\n";
-        resposta += "• Picotinho, baixa X de [produto]\n";
-        resposta += "• Picotinho, consulta [produto]\n";
-        resposta += "• Picotinho, aumenta X de [produto]\n";
-        resposta += "• Picotinho, adiciona [produto]";
+    // Se há sessão pendente, processar como resposta a um estado anterior
+    if (sessao) {
+      resposta += await processarRespostaSessao(supabase, mensagem, sessao);
+      comandoExecutado = true;
+    } else {
+      // Processar comandos baseado no comando_identificado
+      switch (mensagem.comando_identificado) {
+        case 'baixar_estoque':
+          resposta += await processarBaixarEstoque(supabase, mensagem);
+          comandoExecutado = true;
+          break;
+          
+        case 'consultar_estoque':
+          resposta += await processarConsultarEstoque(supabase, mensagem);
+          comandoExecutado = true;
+          break;
+          
+        case 'aumentar_estoque':
+        case 'adicionar_produto':
+          // Tratar tanto "aumentar" quanto "adicionar" na mesma lógica
+          const textoNormalizado = mensagem.conteudo.toLowerCase();
+          const isAumentar = textoNormalizado.match(/\b(aumenta?r?|somar?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/);
+          const isAdicionar = textoNormalizado.match(/\b(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\b/);
+          
+          if (isAumentar) {
+            resposta += await processarAumentarEstoque(supabase, mensagem);
+          } else if (isAdicionar) {
+            resposta += await processarAdicionarProduto(supabase, mensagem);
+          } else {
+            // Fallback para comando não identificado corretamente
+            resposta += await processarComandoGenerico(supabase, mensagem);
+          }
+          comandoExecutado = true;
+          break;
+          
+        default:
+          resposta += "Não entendi seu comando 😅\n\n";
+          resposta += "Comandos disponíveis:\n";
+          resposta += "• Picotinho, baixa X de [produto]\n";
+          resposta += "• Picotinho, consulta [produto]\n";
+          resposta += "• Picotinho, aumenta X de [produto]\n";
+          resposta += "• Picotinho, adiciona [produto]";
+      }
     }
 
     // Enviar resposta via Z-API
@@ -507,7 +530,7 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     }
     
     // Criar novo produto no estoque
-    await supabase
+    const { data: novoProduto } = await supabase
       .from('estoque_app')
       .insert({
         user_id: mensagem.usuario_id,
@@ -516,16 +539,120 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
         quantidade: quantidade,
         unidade_medida: unidade,
         preco_unitario_ultimo: 0
+      })
+      .select()
+      .single();
+    
+    // Criar sessão para aguardar preço
+    await supabase
+      .from('whatsapp_sessions')
+      .insert({
+        usuario_id: mensagem.usuario_id,
+        remetente: mensagem.remetente,
+        estado: 'aguardando_preco',
+        produto_id: novoProduto.id,
+        produto_nome: produtoNome,
+        contexto: { quantidade, unidade },
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora
       });
     
     const quantidadeFormatada = formatarQuantidade(quantidade, unidade);
     
     // Retornar mensagem solicitando o preço de compra
-    return `✅ Produto ${produtoNome} adicionado com ${quantidadeFormatada} em estoque. Informe o preço de compra.\n\nQual categoria deseja para ${produtoNome}? Exemplos: Hortifruti, Bebidas, Limpeza, etc.`;
+    return `✅ Produto ${produtoNome} adicionado com ${quantidadeFormatada} em estoque. Informe o preço de compra.`;
     
   } catch (error) {
     console.error('❌ Erro ao adicionar produto:', error);
     return "Erro ao adicionar produto. Tente novamente.";
+  }
+}
+
+/**
+ * Processar resposta em sessão ativa (preço ou categoria)
+ */
+async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any): Promise<string> {
+  try {
+    console.log(`📞 Processando resposta para sessão: ${sessao.estado}`);
+    
+    if (sessao.estado === 'aguardando_preco') {
+      // Processar resposta de preço
+      const textoLimpo = mensagem.conteudo.replace(/[^\d,.-]/g, '').replace(',', '.');
+      const preco = parseFloat(textoLimpo);
+      
+      if (isNaN(preco) || preco <= 0) {
+        return "❌ Não entendi. Por favor, informe apenas o preço em formato numérico, ex: 8,90.";
+      }
+      
+      // Atualizar produto com o preço
+      await supabase
+        .from('estoque_app')
+        .update({ preco_unitario_ultimo: preco })
+        .eq('id', sessao.produto_id);
+      
+      // Criar nova sessão para aguardar categoria
+      await supabase
+        .from('whatsapp_sessions')
+        .update({
+          estado: 'aguardando_categoria',
+          contexto: { ...sessao.contexto, preco },
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora
+        })
+        .eq('id', sessao.id);
+      
+      return `✅ Preço de R$ ${preco.toFixed(2).replace('.', ',')} registrado para ${sessao.produto_nome}.\n\nQual categoria deseja? Exemplos: Hortifruti, Bebidas, Limpeza, etc.`;
+      
+    } else if (sessao.estado === 'aguardando_categoria') {
+      // Processar resposta de categoria
+      const categoria = mensagem.conteudo.trim();
+      
+      if (!categoria || categoria.length < 2) {
+        return "❌ Por favor, informe uma categoria válida. Ex: Hortifruti, Bebidas, Limpeza, etc.";
+      }
+      
+      // Atualizar produto com a categoria
+      await supabase
+        .from('estoque_app')
+        .update({ categoria: categoria.toLowerCase() })
+        .eq('id', sessao.produto_id);
+      
+      // Remover sessão (processo concluído)
+      await supabase
+        .from('whatsapp_sessions')
+        .delete()
+        .eq('id', sessao.id);
+      
+      const precoFormatado = sessao.contexto?.preco ? `R$ ${sessao.contexto.preco.toFixed(2).replace('.', ',')}` : 'não informado';
+      
+      return `✅ Produto ${sessao.produto_nome} adicionado com sucesso!\n\n📦 Quantidade: ${sessao.contexto?.quantidade || '1'}\n💰 Preço: ${precoFormatado}\n📂 Categoria: ${categoria}`;
+    }
+    
+    return "❌ Estado de sessão não reconhecido.";
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar resposta da sessão:', error);
+    return "Erro ao processar sua resposta. Tente novamente.";
+  }
+}
+
+/**
+ * Processar comando genérico quando não foi identificado corretamente
+ */
+async function processarComandoGenerico(supabase: any, mensagem: any): Promise<string> {
+  try {
+    const texto = mensagem.conteudo.toLowerCase();
+    
+    // Tentar identificar se é comando de aumentar ou adicionar
+    if (texto.match(/\b(aumenta?r?|somar?|colocar?\s*(no|ao)\s*estoque|botar?\s*(no|ao)\s*estoque)\b/)) {
+      return await processarAumentarEstoque(supabase, mensagem);
+    } else if (texto.match(/\b(adiciona?r?|cadastra?r?|inseri?r?|bota?r?\s*produto)\b/)) {
+      return await processarAdicionarProduto(supabase, mensagem);
+    }
+    
+    return "❌ Não entendi seu comando. Tente:\n• Picotinho, aumenta 2 kg de banana\n• Picotinho, adiciona 1 kg de morango\n• Picotinho, consulta banana\n• Picotinho, baixa 1 kg de banana";
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar comando genérico:', error);
+    return "Erro ao processar comando. Tente novamente.";
   }
 }
 
