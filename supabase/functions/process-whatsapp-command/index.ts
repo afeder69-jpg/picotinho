@@ -344,6 +344,7 @@ async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): 
     
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+    const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
     
     console.log(`📤 [ENVIO] Instance URL: ${instanceUrl ? 'OK' : 'MISSING'}`);
     console.log(`📤 [ENVIO] API Token: ${apiToken ? 'OK' : 'MISSING'}`);
@@ -353,7 +354,7 @@ async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): 
       return false;
     }
     
-    const url = `${instanceUrl}/send-text`;
+    const url = `${instanceUrl}/token/${apiToken}/send-text`;
     console.log(`📤 [ENVIO] URL completa: ${url}`);
     
     const payload = {
@@ -367,7 +368,7 @@ async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': apiToken
+        'Client-Token': accountSecret
       },
       body: JSON.stringify(payload)
     });
