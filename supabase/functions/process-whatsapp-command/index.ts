@@ -182,7 +182,14 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     }
     
     // Baixar do estoque
-    const novaQuantidade = estoque.quantidade - quantidadeConvertida;
+    let novaQuantidade = estoque.quantidade - quantidadeConvertida;
+    
+    // Arredondar baseado na unidade de medida
+    if (estoque.unidade_medida.toLowerCase().includes('kg') || estoque.unidade_medida.toLowerCase().includes('kilo')) {
+      novaQuantidade = Math.round(novaQuantidade * 100) / 100; // 2 casas decimais
+    } else {
+      novaQuantidade = Math.round(novaQuantidade); // Número inteiro para unidades
+    }
     
     if (novaQuantidade <= 0) {
       // Remover produto do estoque se ficou zerado
