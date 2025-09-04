@@ -338,8 +338,8 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     // Extrair produto e quantidade do texto
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Remover variações de comando "aumentar"
-    const comandosAumentar = /picotinho,?\s*(aumenta?r?|coloca?r?|bota?r?|soma?r?)\s*(no\s+estoque|ao\s+estoque)?\s*/i;
+    // Remover variações de comando "aumentar" - incluindo novos sinônimos
+    const comandosAumentar = /picotinho,?\s*(aumenta?r?|coloca?r?|bota?r?|soma?r?|colocar\s*no\s*estoque|botar\s*no\s*estoque)\s*(no\s+estoque|ao\s+estoque)?\s*/i;
     const textoLimpo = texto.replace(comandosAumentar, '').trim();
     
     // Regex para extrair quantidade e produto
@@ -373,21 +373,28 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       return `❌ Produto "${produtoNome}" não encontrado no seu estoque. Use o comando 'adicionar' para incluir um novo produto.`;
     }
     
-    // Converter unidades se necessário
+    // Converter unidades corretamente baseado na mensagem
     let quantidadeConvertida = quantidade;
+    let unidadeFinalEstoque = estoque.unidade_medida.toLowerCase();
     
     if (unidadeExtraida) {
-      if (unidadeExtraida.match(/g|gramas?/)) {
-        // Converter gramas para kg se o estoque está em kg
-        if (estoque.unidade_medida.toLowerCase().includes('kg')) {
-          quantidadeConvertida = quantidade / 1000;
-        }
-      } else if (unidadeExtraida.match(/kg|kilos?|quilos?/)) {
-        // Converter kg para gramas se o estoque está em gramas
-        if (estoque.unidade_medida.toLowerCase().includes('g') && !estoque.unidade_medida.toLowerCase().includes('kg')) {
-          quantidadeConvertida = quantidade * 1000;
-        }
+      const unidadeMensagem = unidadeExtraida.toLowerCase();
+      
+      // Se a mensagem está em kg e o estoque em gramas
+      if (unidadeMensagem.match(/kg|kilos?|quilos?/) && unidadeFinalEstoque.includes('g') && !unidadeFinalEstoque.includes('kg')) {
+        quantidadeConvertida = quantidade * 1000; // 1 kg = 1000 g
       }
+      // Se a mensagem está em gramas e o estoque em kg
+      else if (unidadeMensagem.match(/g|gramas?/) && unidadeFinalEstoque.includes('kg')) {
+        quantidadeConvertida = quantidade / 1000; // 1000 g = 1 kg
+      }
+      // Se ambos estão na mesma unidade, usar diretamente
+      else {
+        quantidadeConvertida = quantidade;
+      }
+    } else {
+      // Se não especificou unidade, assumir a unidade do estoque
+      quantidadeConvertida = quantidade;
     }
     
     // Somar ao estoque existente
@@ -409,7 +416,22 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       })
       .eq('id', estoque.id);
     
-    const adicionadoFormatado = formatarQuantidade(quantidade, unidadeExtraida || estoque.unidade_medida);
+    // Calcular quantidade adicionada formatada corretamente
+    let quantidadeAdicionadaDisplay = quantidade;
+    let unidadeDisplay = unidadeExtraida || estoque.unidade_medida;
+    
+    // Se a mensagem veio em kg mas o estoque é em gramas, mostrar em kg
+    if (unidadeExtraida && unidadeExtraida.match(/kg|kilos?|quilos?/i) && unidadeFinalEstoque.includes('g')) {
+      quantidadeAdicionadaDisplay = quantidade;
+      unidadeDisplay = 'kg';
+    }
+    // Se a mensagem veio em gramas mas o estoque é em kg, mostrar em gramas
+    else if (unidadeExtraida && unidadeExtraida.match(/g|gramas?/i) && unidadeFinalEstoque.includes('kg')) {
+      quantidadeAdicionadaDisplay = quantidade;
+      unidadeDisplay = 'g';
+    }
+    
+    const adicionadoFormatado = formatarQuantidade(quantidadeAdicionadaDisplay, unidadeDisplay);
     const estoqueAtualFormatado = formatarQuantidade(novaQuantidade, estoque.unidade_medida);
     
     return `✅ Foram adicionados ${adicionadoFormatado} ao estoque de ${estoque.produto_nome}. Agora você tem ${estoqueAtualFormatado} em estoque.`;
@@ -484,7 +506,7 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
       quantidade = Math.round(quantidade); // Número inteiro para outras unidades
     }
     
-    // Criar novo produto sem preço por enquanto (será implementado fluxo de preço posteriormente)
+    // Criar novo produto no estoque
     await supabase
       .from('estoque_app')
       .insert({
@@ -497,7 +519,9 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
       });
     
     const quantidadeFormatada = formatarQuantidade(quantidade, unidade);
-    return `✅ Produto ${produtoNome} adicionado com ${quantidadeFormatada} em estoque.`;
+    
+    // Retornar mensagem solicitando o preço de compra
+    return `✅ Produto ${produtoNome} adicionado com ${quantidadeFormatada} em estoque. Informe o preço de compra.\n\nQual categoria deseja para ${produtoNome}? Exemplos: Hortifruti, Bebidas, Limpeza, etc.`;
     
   } catch (error) {
     console.error('❌ Erro ao adicionar produto:', error);
