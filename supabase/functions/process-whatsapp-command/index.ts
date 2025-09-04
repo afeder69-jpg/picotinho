@@ -61,7 +61,9 @@ const handler = async (req: Request): Promise<Response> => {
       comandoExecutado = true;
     } else {
       // PRIORIDADE 2: Verificar se é comando novo de aumentar/adicionar
-      const textoNormalizado = mensagem.conteudo.toLowerCase();
+      const textoNormalizado = mensagem.conteudo.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[^\w\s]/gi, ""); // Remove pontuação
       
       // ENCERRAR TODAS AS SESSÕES EXISTENTES ANTES DE PROCESSAR NOVO COMANDO
       await supabase
@@ -70,9 +72,11 @@ const handler = async (req: Request): Promise<Response> => {
         .eq('usuario_id', mensagem.usuario_id)
         .eq('remetente', mensagem.remetente);
       
-      // Reconhecer TODAS as variações de aumentar/adicionar (case insensitive, com ou sem "Picotinho")
-      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar)\b/);
-      const isAdicionar = textoNormalizado.match(/\b(adiciona|adicionar)\b/);
+      // Reconhecer comandos para AUMENTAR ESTOQUE (case insensitive, sem acento, sem vírgula/ponto)
+      const isAumentar = textoNormalizado.match(/\b(aumentar|aumenta|somar|colocar no estoque|botar no estoque)\b/);
+      
+      // Reconhecer comandos para ADICIONAR PRODUTO NOVO (case insensitive, sem acento, sem vírgula/ponto)
+      const isAdicionar = textoNormalizado.match(/\b(adicionar|adiciona|cadastrar produto|inserir produto|botar produto)\b/);
       
       if (isAumentar) {
         console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
@@ -97,12 +101,7 @@ const handler = async (req: Request): Promise<Response> => {
             
           default:
             console.log('❌ Comando não reconhecido:', textoNormalizado);
-            resposta += "Não entendi seu comando 😅\n\n";
-            resposta += "Comandos disponíveis:\n";
-            resposta += "• Picotinho, baixa X de [produto]\n";
-            resposta += "• Picotinho, consulta [produto]\n";
-            resposta += "• Picotinho, aumenta X de [produto]\n";
-            resposta += "• Picotinho, adiciona [produto]";
+            resposta += "❌ Desculpe, não entendi o comando. Exemplos: 'adicionar 1kg de maçã' ou 'aumentar 2 unidades de leite'.";
         }
       }
     }
