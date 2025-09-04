@@ -190,7 +190,15 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     console.log('🔍 Processando consulta de estoque...');
     
     const texto = mensagem.conteudo.toLowerCase();
-    const produtoConsulta = texto.replace(/picotinho,?\s*consulta?\s*/i, '').trim().toUpperCase();
+    
+    // Reconhecimento flexível do comando de consulta
+    // Remove "picotinho", vírgulas, e palavras como "consulta"
+    let produtoConsulta = texto
+      .replace(/picotinho[,\s]*/gi, '')  // Remove "picotinho" e vírgulas/espaços
+      .replace(/consulta[s]?[,\s]*/gi, '') // Remove "consulta" ou "consultas" e vírgulas/espaços
+      .trim();
+    
+    console.log(`📝 Produto extraído: "${produtoConsulta}"`);
     
     if (!produtoConsulta) {
       // Listar todo o estoque
@@ -201,7 +209,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         .order('produto_nome');
       
       if (error || !estoque || estoque.length === 0) {
-        return "Seu estoque está vazio.";
+        return "❌ Seu estoque está vazio.";
       }
       
       let resposta = "📦 Seu estoque atual:\n\n";
@@ -212,15 +220,22 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       
       return resposta;
     } else {
-      // Consultar produto específico
+      // Consultar produto específico usando busca flexível
       const { data: estoque, error } = await supabase
         .from('estoque_app')
-        .select('*')
+        .select('produto_nome, quantidade, unidade_medida')
         .eq('user_id', mensagem.usuario_id)
         .ilike('produto_nome', `%${produtoConsulta}%`);
       
-      if (error || !estoque || estoque.length === 0) {
-        return "Produto não encontrado no seu estoque.";
+      console.log(`🔍 Busca por "${produtoConsulta}" encontrou ${estoque?.length || 0} resultados`);
+      
+      if (error) {
+        console.error('❌ Erro na consulta:', error);
+        return "❌ Erro ao consultar estoque. Tente novamente.";
+      }
+      
+      if (!estoque || estoque.length === 0) {
+        return "❌ Produto não encontrado no seu estoque.";
       }
       
       // Se encontrou apenas um produto, resposta simples
@@ -240,7 +255,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     
   } catch (error) {
     console.error('❌ Erro ao consultar estoque:', error);
-    return "Erro ao consultar estoque. Tente novamente.";
+    return "❌ Erro ao consultar estoque. Tente novamente.";
   }
 }
 
