@@ -117,18 +117,18 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     const texto = mensagem.conteudo.toLowerCase();
     
     // Regex para extrair quantidade e produto
-    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
+    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|kilos?|quilos?|g|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
     const match = texto.replace(/picotinho,?\s*baixa?\s*/i, '').match(regexQuantidade);
     
     if (!match) {
       return "Não consegui entender a quantidade e produto. Tente: 'Picotinho, baixa 1 kg de banana'";
     }
     
-    const quantidade = parseFloat(match[1].replace(',', '.'));
-    const unidade = match[2] || 'unidade';
+    let quantidade = parseFloat(match[1].replace(',', '.'));
+    let unidadeExtraida = match[2] ? match[2].toLowerCase() : null;
     const produtoNome = match[3].trim().toUpperCase();
     
-    console.log(`📊 Extraído: ${quantidade} ${unidade} de ${produtoNome}`);
+    console.log(`📊 Extraído: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNome}`);
     
     // Buscar produto no estoque do usuário
     const { data: estoque, error: erroEstoque } = await supabase
@@ -147,13 +147,42 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
       return `Produto "${produtoNome}" não encontrado no seu estoque.`;
     }
     
+    // Converter unidades se necessário
+    let quantidadeConvertida = quantidade;
+    let unidadeFinal = unidadeExtraida;
+    
+    if (unidadeExtraida) {
+      // Se foi especificada uma unidade na mensagem
+      if (unidadeExtraida.match(/g|gramas?/)) {
+        // Converter gramas para kg
+        quantidadeConvertida = quantidade / 1000;
+        unidadeFinal = 'g';
+      } else if (unidadeExtraida.match(/kg|kilos?|quilos?/)) {
+        // Manter como kg
+        quantidadeConvertida = quantidade;
+        unidadeFinal = 'kg';
+      } else {
+        // Usar a unidade especificada
+        quantidadeConvertida = quantidade;
+      }
+    } else {
+      // Se não foi especificada unidade, usar a unidade do estoque
+      quantidadeConvertida = quantidade;
+      unidadeFinal = estoque.unidade_medida;
+    }
+    
+    console.log(`📊 Quantidade convertida: ${quantidadeConvertida} (original: ${quantidade} ${unidadeExtraida || 'sem unidade'})`);
+    
     // Verificar se há quantidade suficiente
-    if (estoque.quantidade < quantidade) {
-      return `❌ Estoque insuficiente!\n\nVocê tem: ${estoque.quantidade} ${estoque.unidade_medida}\nTentou baixar: ${quantidade} ${unidade}\n\nQuantidade disponível: ${estoque.quantidade} ${estoque.unidade_medida}`;
+    if (estoque.quantidade < quantidadeConvertida) {
+      const estoqueFormatado = formatarQuantidade(estoque.quantidade, estoque.unidade_medida);
+      const tentouBaixarFormatado = formatarQuantidade(quantidade, unidadeFinal || estoque.unidade_medida);
+      
+      return `❌ Estoque insuficiente!\n\nVocê tem: ${estoqueFormatado}\nTentou baixar: ${tentouBaixarFormatado}\n\nQuantidade disponível: ${estoqueFormatado}`;
     }
     
     // Baixar do estoque
-    const novaQuantidade = estoque.quantidade - quantidade;
+    const novaQuantidade = estoque.quantidade - quantidadeConvertida;
     
     if (novaQuantidade <= 0) {
       // Remover produto do estoque se ficou zerado
@@ -162,7 +191,8 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
         .delete()
         .eq('id', estoque.id);
         
-      return `✅ Produto retirado do estoque!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${quantidade} ${unidade}\n📊 Estoque atual: 0 (produto removido)`;
+      const baixadoFormatado = formatarQuantidade(quantidade, unidadeFinal || estoque.unidade_medida);
+      return `✅ Produto retirado do estoque!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: 0 (produto removido)`;
     } else {
       // Atualizar quantidade
       await supabase
@@ -173,12 +203,39 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
         })
         .eq('id', estoque.id);
         
-      return `✅ Estoque atualizado!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${quantidade} ${unidade}\n📊 Estoque atual: ${novaQuantidade} ${estoque.unidade_medida}`;
+      const baixadoFormatado = formatarQuantidade(quantidade, unidadeFinal || estoque.unidade_medida);
+      const estoqueAtualFormatado = formatarQuantidade(novaQuantidade, estoque.unidade_medida);
+      
+      return `✅ Estoque atualizado!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: ${estoqueAtualFormatado}`;
     }
     
   } catch (error) {
     console.error('❌ Erro ao processar baixar estoque:', error);
     return "Erro ao processar comando de baixar estoque. Tente novamente.";
+  }
+}
+
+/**
+ * Função para formatar quantidade com casas decimais apropriadas
+ */
+function formatarQuantidade(quantidade: number, unidade: string): string {
+  const unidadeLower = unidade.toLowerCase();
+  
+  if (unidadeLower.includes('kg') || unidadeLower.includes('kilo')) {
+    // Para kg, mostrar no máximo 2 casas decimais
+    return `${quantidade.toFixed(2).replace(/\.?0+$/, '')} Kg`;
+  } else if (unidadeLower.includes('g') && !unidadeLower.includes('kg')) {
+    // Para gramas, mostrar como inteiro
+    return `${Math.round(quantidade)} g`;
+  } else if (unidadeLower.includes('l') || unidadeLower.includes('litro')) {
+    // Para litros, mostrar no máximo 2 casas decimais
+    return `${quantidade.toFixed(2).replace(/\.?0+$/, '')} L`;
+  } else if (unidadeLower.includes('ml')) {
+    // Para ml, mostrar como inteiro
+    return `${Math.round(quantidade)} ml`;
+  } else {
+    // Para unidades, mostrar como inteiro
+    return `${Math.round(quantidade)} ${unidade === 'UN' ? 'unidades' : unidade}`;
   }
 }
 
