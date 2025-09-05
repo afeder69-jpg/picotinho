@@ -163,8 +163,8 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     // Extrair produto e quantidade do texto
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Regex para extrair quantidade e produto
-    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|kilos?|quilos?|g|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
+    // Regex para extrair quantidade e produto (incluindo "k" e "gr")
+    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|k|kilos?|quilos?|g|gr|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
     const match = texto.replace(/picotinho,?\s*baixa?\s*/i, '').match(regexQuantidade);
     
     if (!match) {
@@ -194,22 +194,24 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
       return `Produto "${produtoNome}" não encontrado no seu estoque.`;
     }
     
-    // Converter unidades se necessário
+    // Converter unidades se necessário (CORRIGIDO: kg vs g)
     let quantidadeConvertida = quantidade;
     let unidadeFinal = unidadeExtraida;
     
     if (unidadeExtraida) {
       // Se foi especificada uma unidade na mensagem
-      if (unidadeExtraida.match(/g|gramas?/)) {
-        // Converter gramas para kg
+      if (unidadeExtraida.match(/^(g|gr|gramas?)$/)) {
+        // Converter gramas para kg (divide por 1000)
         quantidadeConvertida = quantidade / 1000;
         unidadeFinal = 'g';
-      } else if (unidadeExtraida.match(/kg|kilos?|quilos?/)) {
-        // Manter como kg
+        console.log(`🔄 Convertendo ${quantidade} g → ${quantidadeConvertida} kg`);
+      } else if (unidadeExtraida.match(/^(kg|k|kilos?|quilos?)$/)) {
+        // Manter como kg (sem conversão)
         quantidadeConvertida = quantidade;
         unidadeFinal = 'kg';
+        console.log(`✅ Mantendo ${quantidade} kg → ${quantidadeConvertida} kg`);
       } else {
-        // Usar a unidade especificada
+        // Usar a unidade especificada sem conversão
         quantidadeConvertida = quantidade;
       }
     } else {
@@ -400,8 +402,8 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     const comandosAumentar = /(?:picotinho,?\s*)?(aumenta|aumentar|soma|somar)\s+/i;
     const textoLimpo = texto.replace(comandosAumentar, '').trim();
     
-    // Regex para extrair quantidade e produto
-    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|kilos?|quilos?|g|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
+    // Regex para extrair quantidade e produto (incluindo "k" e "gr")
+    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|k|kilos?|quilos?|g|gr|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
     const match = textoLimpo.match(regexQuantidade);
     
     if (!match) {
@@ -431,8 +433,27 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       return `❌ Produto "${produtoNome}" não encontrado no seu estoque. Use o comando 'adicionar' para incluir um novo produto.`;
     }
     
-    // Converter unidades usando a função padronizada
-    const quantidadeConvertida = converterUnidade(quantidade, unidadeExtraida || estoque.unidade_medida, estoque.unidade_medida);
+    // Converter unidades se necessário (CORRIGIDO: kg vs g)
+    let quantidadeConvertida = quantidade;
+    
+    if (unidadeExtraida) {
+      // Se foi especificada uma unidade na mensagem
+      if (unidadeExtraida.match(/^(g|gr|gramas?)$/)) {
+        // Converter gramas para kg (divide por 1000)
+        quantidadeConvertida = quantidade / 1000;
+        console.log(`🔄 Convertendo ${quantidade} g → ${quantidadeConvertida} kg`);
+      } else if (unidadeExtraida.match(/^(kg|k|kilos?|quilos?)$/)) {
+        // Manter como kg (sem conversão)
+        quantidadeConvertida = quantidade;
+        console.log(`✅ Mantendo ${quantidade} kg → ${quantidadeConvertida} kg`);
+      } else {
+        // Usar a unidade especificada sem conversão
+        quantidadeConvertida = quantidade;
+      }
+    } else {
+      // Se não foi especificada unidade, usar valor direto
+      quantidadeConvertida = quantidade;
+    }
     
     // Somar ao estoque existente e arredondar com 3 casas decimais para precisão de miligrama
     const novaQuantidade = Math.round((estoque.quantidade + quantidadeConvertida) * 1000) / 1000;
