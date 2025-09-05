@@ -81,6 +81,9 @@ const handler = async (req: Request): Promise<Response> => {
       // Comandos para ADICIONAR PRODUTO NOVO
       const isAdicionar = textoNormalizado.match(/\b(adicionar|adiciona|cadastrar produto|inserir produto|botar produto)\b/);
       
+      // Comandos para CONSULTAR ESTOQUE
+      const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
+      
       if (isBaixar) {
         console.log('📉 Comando BAIXAR identificado:', textoNormalizado);
         resposta += await processarBaixarEstoque(supabase, mensagem);
@@ -93,18 +96,14 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
         resposta += await processarAdicionarProduto(supabase, mensagem);
         comandoExecutado = true;
+      } else if (isConsultar) {
+        console.log('🔍 Comando CONSULTAR identificado:', textoNormalizado);
+        resposta += await processarConsultarEstoque(supabase, mensagem);
+        comandoExecutado = true;
       } else {
-        // PRIORIDADE 3: Processar outros comandos baseado no comando_identificado
-        switch (mensagem.comando_identificado) {
-          case 'consultar_estoque':
-            resposta += await processarConsultarEstoque(supabase, mensagem);
-            comandoExecutado = true;
-            break;
-            
-          default:
-            console.log('❌ Comando não reconhecido:', textoNormalizado);
-            resposta += "❌ Desculpe, não entendi o comando. Exemplos: 'adicionar 1kg de maçã', 'aumentar 2 unidades de leite' ou 'baixa 500g de arroz'.";
-        }
+        // PRIORIDADE 3: Fallback para comandos não reconhecidos
+        console.log('❌ Comando não reconhecido:', textoNormalizado);
+        resposta += "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta [produto]'.";
       }
     }
 
