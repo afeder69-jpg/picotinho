@@ -1079,12 +1079,12 @@ const EstoqueAtual = () => {
                               </p>
                            </div>
                            
-                            <div className="text-right flex-shrink-0 ml-2">
-                              <div className="text-lg font-bold text-foreground">
-                                {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
-                              </div>
-                              {/* Texto removido conforme solicitação do usuário */}
-                        </div>
+                             <div className="text-right flex-shrink-0 ml-2">
+                               <div className="text-xs font-medium text-foreground">
+                                 {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
+                               </div>
+                               {/* Texto removido conforme solicitação do usuário */}
+                         </div>
                        </div>
                     );
                   })}
