@@ -153,6 +153,28 @@ const handler = async (req: Request): Promise<Response> => {
   }
 };
 
+// Função auxiliar para normalizar nomes de produtos
+function normalizarNomeProduto(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .replace(/[^\w\s]/gi, "") // Remove pontuação
+    .trim();
+}
+
+// Função auxiliar para normalizar unidades
+function normalizarUnidade(unidade: string): string {
+  const unidadeLower = unidade.toLowerCase();
+  
+  // Variações de "unidade"
+  if (unidadeLower.match(/^(unidade|unid|und|un)$/)) {
+    return 'un';
+  }
+  
+  // Outras unidades mantêm o padrão original
+  return unidadeLower;
+}
+
 /**
  * Processar comando de baixar estoque
  */
@@ -161,12 +183,10 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     console.log('📦 Processando comando baixar estoque...');
     
     // Extrair produto e quantidade do texto com normalização
-    const texto = mensagem.conteudo.toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-      .replace(/[^\w\s]/gi, ""); // Remove pontuação
+    const texto = normalizarNomeProduto(mensagem.conteudo);
     
     // Regex para extrair quantidade e produto (incluindo "k" e "gr")
-    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|k|kilos?|quilos?|g|gr|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
+    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|k|kilos?|quilos?|g|gr|gramas?|l|litros?|ml|unidade|unid|und|un|pacote)?\s*(?:de\s+)?(.+)/i;
     const match = texto.replace(/picotinho\s*baixa?\s*/i, '').match(regexQuantidade);
     
     if (!match) {
@@ -174,20 +194,29 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     }
     
     let quantidade = parseFloat(match[1].replace(',', '.'));
-    let unidadeExtraida = match[2] ? match[2].toLowerCase() : null;
-    const produtoNome = match[3].trim().toUpperCase();
-    const produtoNomeNormalizado = produtoNome.toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    let unidadeExtraida = match[2] ? normalizarUnidade(match[2]) : null;
+    const produtoNomeOriginal = match[3].trim();
+    const produtoNomeNormalizado = normalizarNomeProduto(produtoNomeOriginal);
     
-    console.log(`📊 Extraído: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNome}`);
+    console.log(`📊 Extraído: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNomeOriginal}`);
     
-    // Buscar produto no estoque do usuário usando nome normalizado
-    const { data: estoque, error: erroEstoque } = await supabase
+    // Buscar produto no estoque usando nomes normalizados
+    const { data: estoques, error: erroEstoque } = await supabase
       .from('estoque_app')
       .select('*')
-      .eq('user_id', mensagem.usuario_id)
-      .or(`produto_nome.ilike.%${produtoNome}%,produto_nome.ilike.%${produtoNomeNormalizado}%`)
-      .maybeSingle();
+      .eq('user_id', mensagem.usuario_id);
+    
+    if (erroEstoque) {
+      console.error('❌ Erro ao buscar estoque:', erroEstoque);
+      return "Erro ao consultar estoque. Tente novamente.";
+    }
+    
+    // Buscar produto comparando nomes normalizados
+    const estoque = estoques?.find((item: any) => {
+      const nomeEstoqueNormalizado = normalizarNomeProduto(item.produto_nome);
+      return nomeEstoqueNormalizado.includes(produtoNomeNormalizado) || 
+             produtoNomeNormalizado.includes(nomeEstoqueNormalizado);
+    });
     
     if (erroEstoque) {
       console.error('❌ Erro ao buscar estoque:', erroEstoque);
@@ -354,14 +383,23 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
 
       console.log(`🔍 [STEP 5] Iniciando busca no banco...`);
       
-      // Buscar no estoque usando nome original e normalizado
-      const { data, error } = await supabase
+    // Buscar no estoque usando nomes normalizados
+      const { data: estoques, error } = await supabase
         .from("estoque_app")
         .select("produto_nome, quantidade, unidade_medida")
-        .eq("user_id", mensagem.usuario_id)
-        .or(`produto_nome.ilike.%${produto}%,lower(unaccent(produto_nome)).ilike.%${produto}%`)
-        .limit(1)
-        .single();
+        .eq("user_id", mensagem.usuario_id);
+      
+      if (error) {
+        console.log(`❌ [STEP 7] Erro no banco:`, error);
+        return "❌ Erro ao consultar estoque.";
+      }
+      
+      // Buscar produto comparando nomes normalizados
+      const data = estoques?.find((item: any) => {
+        const nomeEstoqueNormalizado = normalizarNomeProduto(item.produto_nome);
+        return nomeEstoqueNormalizado.includes(produto) || 
+               produto.includes(nomeEstoqueNormalizado);
+      });
 
       console.log(`📋 [STEP 6] Resultado do banco:`);
       console.log(`📋 [RESULT] Data:`, data);
@@ -423,13 +461,18 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     
     console.log(`📊 Extraído para aumentar: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNome}`);
     
-    // Buscar produto no estoque do usuário usando nome normalizado
-    const { data: estoque, error: erroEstoque } = await supabase
+    // Buscar produto no estoque usando nomes normalizados
+    const { data: estoques, error: erroEstoque } = await supabase
       .from('estoque_app')
       .select('*')
-      .eq('user_id', mensagem.usuario_id)
-      .or(`produto_nome.ilike.%${produtoNome}%,produto_nome.ilike.%${produtoNomeNormalizado}%`)
-      .maybeSingle();
+      .eq('user_id', mensagem.usuario_id);
+    
+    // Buscar produto comparando nomes normalizados
+    const estoque = estoques?.find((item: any) => {
+      const nomeEstoqueNormalizado = normalizarNomeProduto(item.produto_nome);
+      return nomeEstoqueNormalizado.includes(produtoNomeNormalizado) || 
+             produtoNomeNormalizado.includes(nomeEstoqueNormalizado);
+    });
     
     if (erroEstoque) {
       console.error('❌ Erro ao buscar estoque:', erroEstoque);
