@@ -694,7 +694,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     // Extrair nome da categoria da mensagem
     let categoria = '';
     
-    // Lista de categorias válidas
+    // Lista de categorias válidas (baseadas nos dados reais do banco)
     const categoriasValidas = [
       'hortifruti', 'bebidas', 'padaria', 'mercearia', 
       'carnes', 'limpeza', 'higiene', 'farmacia', 
@@ -709,19 +709,19 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       }
     }
     
-    // Mapear categorias do texto para formato do banco
+    // Mapear categorias do texto para formato EXATO do banco (case-sensitive)
     const mapCategoria: { [key: string]: string } = {
-      'hortifruti': 'hortifruti',
-      'bebidas': 'bebidas',
-      'padaria': 'padaria',
-      'mercearia': 'mercearia',
-      'carnes': 'carnes',
-      'limpeza': 'limpeza',
-      'higiene': 'higiene/farmácia',
-      'farmacia': 'higiene/farmácia',
-      'higienefarmacia': 'higiene/farmácia',
-      'laticinios': 'laticínios',
-      'outros': 'outros'
+      'hortifruti': 'Hortifruti',
+      'bebidas': 'Bebidas',
+      'padaria': 'Padaria',
+      'mercearia': 'Mercearia',
+      'carnes': 'Carnes',
+      'limpeza': 'Limpeza',
+      'higiene': 'Higie./Farm.',
+      'farmacia': 'Higie./Farm.',
+      'higienefarmacia': 'Higie./Farm.',
+      'laticinios': 'Laticínios',
+      'outros': 'Outros'
     };
     
     const categoriaFinal = mapCategoria[categoria];
