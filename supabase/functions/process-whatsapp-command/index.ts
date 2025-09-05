@@ -60,17 +60,18 @@ const handler = async (req: Request): Promise<Response> => {
       resposta += await processarRespostaSessao(supabase, mensagem, sessao);
       comandoExecutado = true;
     } else {
-      // PRIORIDADE 2: Verificar comandos novos
-      const textoNormalizado = mensagem.conteudo.toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-        .replace(/[^\w\s]/gi, ""); // Remove pontuação
-      
-      // ENCERRAR TODAS AS SESSÕES EXISTENTES ANTES DE PROCESSAR NOVO COMANDO
+      // LIMPAR SESSÕES EXPIRADAS ANTES DE PROCESSAR NOVO COMANDO
       await supabase
         .from('whatsapp_sessions')
         .delete()
         .eq('usuario_id', mensagem.usuario_id)
-        .eq('remetente', mensagem.remetente);
+        .eq('remetente', mensagem.remetente)
+        .lt('expires_at', new Date().toISOString());
+
+      // PRIORIDADE 2: Verificar comandos novos
+      const textoNormalizado = mensagem.conteudo.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[^\w\s]/gi, ""); // Remove pontuação
       
       // Comandos para BAIXAR ESTOQUE
       const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/);
