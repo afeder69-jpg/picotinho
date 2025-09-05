@@ -449,14 +449,27 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       novaQuantidade = Math.round(novaQuantidade); // Número inteiro para unidades
     }
     
-    // Atualizar estoque
-    await supabase
+    // Atualizar estoque com logs completos
+    console.log(`🔄 Atualizando estoque ID: ${estoque.id}`);
+    console.log(`📊 Quantidade atual: ${estoque.quantidade}`);
+    console.log(`➕ Quantidade a adicionar: ${quantidadeConvertida}`);
+    console.log(`🎯 Nova quantidade: ${novaQuantidade}`);
+    
+    const { data: updateResult, error: updateError } = await supabase
       .from('estoque_app')
       .update({
         quantidade: novaQuantidade,
         updated_at: new Date().toISOString()
       })
-      .eq('id', estoque.id);
+      .eq('id', estoque.id)
+      .select();
+    
+    if (updateError) {
+      console.error('❌ ERRO NA ATUALIZAÇÃO:', updateError);
+      return `❌ Erro ao atualizar estoque: ${updateError.message}`;
+    }
+    
+    console.log('✅ ESTOQUE ATUALIZADO COM SUCESSO:', updateResult);
     
     const adicionadoFormatado = formatarQuantidade(quantidade, unidadeExtraida || estoque.unidade_medida);
     const estoqueAtualFormatado = formatarQuantidade(novaQuantidade, estoque.unidade_medida);
