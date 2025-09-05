@@ -78,6 +78,8 @@ const handler = async (req: Request): Promise<Response> => {
       
       // Comandos para AUMENTAR ESTOQUE
       const isAumentar = textoNormalizado.match(/\b(aumentar|aumenta|somar|colocar no estoque|botar no estoque)\b/);
+      console.log(`🔍 [DEBUG] Texto normalizado: "${textoNormalizado}"`);
+      console.log(`🔍 [DEBUG] isAumentar result:`, isAumentar);
       
       // Comandos para ADICIONAR PRODUTO NOVO
       const isAdicionar = textoNormalizado.match(/\b(adicionar|adiciona|cadastrar produto|inserir produto|botar produto)\b/);
