@@ -160,12 +160,14 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
   try {
     console.log('📦 Processando comando baixar estoque...');
     
-    // Extrair produto e quantidade do texto
-    const texto = mensagem.conteudo.toLowerCase();
+    // Extrair produto e quantidade do texto com normalização
+    const texto = mensagem.conteudo.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+      .replace(/[^\w\s]/gi, ""); // Remove pontuação
     
     // Regex para extrair quantidade e produto (incluindo "k" e "gr")
     const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|k|kilos?|quilos?|g|gr|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
-    const match = texto.replace(/picotinho,?\s*baixa?\s*/i, '').match(regexQuantidade);
+    const match = texto.replace(/picotinho\s*baixa?\s*/i, '').match(regexQuantidade);
     
     if (!match) {
       return "Não consegui entender a quantidade e produto. Tente: 'Picotinho, baixa 1 kg de banana'";
@@ -174,15 +176,17 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     let quantidade = parseFloat(match[1].replace(',', '.'));
     let unidadeExtraida = match[2] ? match[2].toLowerCase() : null;
     const produtoNome = match[3].trim().toUpperCase();
+    const produtoNomeNormalizado = produtoNome.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
     console.log(`📊 Extraído: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNome}`);
     
-    // Buscar produto no estoque do usuário
+    // Buscar produto no estoque do usuário usando nome normalizado
     const { data: estoque, error: erroEstoque } = await supabase
       .from('estoque_app')
       .select('*')
       .eq('user_id', mensagem.usuario_id)
-      .ilike('produto_nome', `%${produtoNome}%`)
+      .or(`produto_nome.ilike.%${produtoNome}%,produto_nome.ilike.%${produtoNomeNormalizado}%`)
       .maybeSingle();
     
     if (erroEstoque) {
@@ -349,14 +353,13 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       }
 
       console.log(`🔍 [STEP 5] Iniciando busca no banco...`);
-      console.log(`📋 [SQL] Query: SELECT produto_nome, quantidade, unidade_medida FROM estoque_app WHERE user_id = '${mensagem.usuario_id}' AND produto_nome ILIKE '%${produto}%' LIMIT 1`);
-
-      // Buscar no estoque
+      
+      // Buscar no estoque usando nome original e normalizado
       const { data, error } = await supabase
         .from("estoque_app")
         .select("produto_nome, quantidade, unidade_medida")
         .eq("user_id", mensagem.usuario_id)
-        .ilike("produto_nome", `%${produto}%`)
+        .or(`produto_nome.ilike.%${produto}%,lower(unaccent(produto_nome)).ilike.%${produto}%`)
         .limit(1)
         .single();
 
@@ -395,11 +398,13 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
   try {
     console.log('📈 Processando comando aumentar estoque...');
     
-    // Extrair produto e quantidade do texto
-    const texto = mensagem.conteudo.toLowerCase();
+    // Extrair produto e quantidade do texto com normalização
+    const texto = mensagem.conteudo.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+      .replace(/[^\w\s]/gi, ""); // Remove pontuação
     
     // Remover variações de comando "aumentar" - incluindo TODOS os sinônimos
-    const comandosAumentar = /(?:picotinho,?\s*)?(aumenta|aumentar|soma|somar)\s+/i;
+    const comandosAumentar = /(?:picotinho\s*)?(aumenta|aumentar|soma|somar)\s+/i;
     const textoLimpo = texto.replace(comandosAumentar, '').trim();
     
     // Regex para extrair quantidade e produto (incluindo "k" e "gr")
@@ -413,15 +418,17 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     let quantidade = parseFloat(match[1].replace(',', '.'));
     let unidadeExtraida = match[2] ? match[2].toLowerCase() : null;
     const produtoNome = match[3].trim().toUpperCase();
+    const produtoNomeNormalizado = produtoNome.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
     console.log(`📊 Extraído para aumentar: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNome}`);
     
-    // Buscar produto no estoque do usuário
+    // Buscar produto no estoque do usuário usando nome normalizado
     const { data: estoque, error: erroEstoque } = await supabase
       .from('estoque_app')
       .select('*')
       .eq('user_id', mensagem.usuario_id)
-      .ilike('produto_nome', `%${produtoNome}%`)
+      .or(`produto_nome.ilike.%${produtoNome}%,produto_nome.ilike.%${produtoNomeNormalizado}%`)
       .maybeSingle();
     
     if (erroEstoque) {
