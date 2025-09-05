@@ -231,12 +231,8 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     // Baixar do estoque
     let novaQuantidade = estoque.quantidade - quantidadeConvertida;
     
-    // Arredondar baseado na unidade de medida
-    if (estoque.unidade_medida.toLowerCase().includes('kg') || estoque.unidade_medida.toLowerCase().includes('kilo')) {
-      novaQuantidade = Math.round(novaQuantidade * 100) / 100; // 2 casas decimais
-    } else {
-      novaQuantidade = Math.round(novaQuantidade); // Número inteiro para unidades
-    }
+    // Arredondar SEMPRE com 3 casas decimais para precisão de miligrama
+    novaQuantidade = Math.round(novaQuantidade * 1000) / 1000;
     
     if (novaQuantidade <= 0) {
       // Remover produto do estoque se ficou zerado
@@ -438,8 +434,8 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     // Converter unidades usando a função padronizada
     const quantidadeConvertida = converterUnidade(quantidade, unidadeExtraida || estoque.unidade_medida, estoque.unidade_medida);
     
-    // Somar ao estoque existente (SEM arredondamento)
-    const novaQuantidade = estoque.quantidade + quantidadeConvertida;
+    // Somar ao estoque existente e arredondar com 3 casas decimais para precisão de miligrama
+    const novaQuantidade = Math.round((estoque.quantidade + quantidadeConvertida) * 1000) / 1000;
     
     // Atualizar estoque com logs completos
     console.log(`🔄 Atualizando estoque ID: ${estoque.id}`);
