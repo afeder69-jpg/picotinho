@@ -686,16 +686,19 @@ async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): 
 
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+    const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
     
     console.log('📤 [ENVIO] Instance URL:', instanceUrl ? 'OK' : 'MISSING');
     console.log('📤 [ENVIO] API Token:', apiToken ? 'OK' : 'MISSING');
+    console.log('📤 [ENVIO] Account Secret:', accountSecret ? 'OK' : 'MISSING');
 
-    if (!instanceUrl || !apiToken) {
+    if (!instanceUrl || !apiToken || !accountSecret) {
       console.error('❌ [ENVIO] Configurações WhatsApp não encontradas');
       return false;
     }
 
-    const url = `${instanceUrl}/send-text`;
+    // USAR A MESMA URL E HEADERS QUE FUNCIONAM PARA A MENSAGEM DE ERRO
+    const url = `${instanceUrl}/token/${apiToken}/send-text`;
     
     const payload = {
       phone: numeroDestino,
@@ -711,6 +714,7 @@ async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Client-Token': accountSecret
       },
       body: JSON.stringify(payload)
     });
