@@ -85,8 +85,8 @@ const handler = async (req: Request): Promise<Response> => {
       // Comandos para CONSULTAR ESTOQUE
       const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
       
-      // Comandos para CONSULTAR CATEGORIA
-      const isConsultarCategoria = textoNormalizado.match(/\b(categoria|categorias)\b/);
+      // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
+      const isConsultarCategoria = textoNormalizado.match(/\b(consulta|consultar)\s+(categoria|categorias)\b/);
       
       if (isBaixar) {
         console.log('📉 Comando BAIXAR identificado:', textoNormalizado);
