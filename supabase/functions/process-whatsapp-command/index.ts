@@ -270,26 +270,45 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
 }
 
 /**
- * Função para formatar quantidade com casas decimais apropriadas
+ * Função para converter unidades e formatar quantidades com 3 casas decimais
+ */
+function converterUnidade(quantidade: number, unidadeOrigem: string, unidadeDestino: string): number {
+  const origemLower = unidadeOrigem?.toLowerCase() || '';
+  const destinoLower = unidadeDestino?.toLowerCase() || '';
+  
+  // Converter de kg para gramas
+  if ((origemLower.match(/kg|quilo|quilos/) && destinoLower.includes('g') && !destinoLower.includes('kg'))) {
+    return quantidade * 1000;
+  }
+  
+  // Converter de gramas para kg
+  if ((origemLower.match(/g|grama|gramas/) && !origemLower.includes('kg')) && destinoLower.includes('kg')) {
+    return quantidade / 1000;
+  }
+  
+  // Mesma unidade ou unidades compatíveis
+  return quantidade;
+}
+
+/**
+ * Função para formatar quantidade SEMPRE com 3 casas decimais
  */
 function formatarQuantidade(quantidade: number, unidade: string): string {
   const unidadeLower = unidade.toLowerCase();
   
+  // Formatar SEMPRE com 3 casas decimais e vírgula brasileira
+  const quantidadeFormatada = quantidade.toFixed(3).replace('.', ',');
+  
   if (unidadeLower.includes('kg') || unidadeLower.includes('kilo')) {
-    // Para kg, mostrar no máximo 2 casas decimais
-    return `${quantidade.toFixed(2).replace(/\.?0+$/, '')} Kg`;
+    return `${quantidadeFormatada} Kg`;
   } else if (unidadeLower.includes('g') && !unidadeLower.includes('kg')) {
-    // Para gramas, mostrar como inteiro
-    return `${Math.round(quantidade)} g`;
+    return `${quantidadeFormatada} g`;
   } else if (unidadeLower.includes('l') || unidadeLower.includes('litro')) {
-    // Para litros, mostrar no máximo 2 casas decimais
-    return `${quantidade.toFixed(2).replace(/\.?0+$/, '')} L`;
+    return `${quantidadeFormatada} L`;
   } else if (unidadeLower.includes('ml')) {
-    // Para ml, mostrar como inteiro
-    return `${Math.round(quantidade)} ml`;
+    return `${quantidadeFormatada} ml`;
   } else {
-    // Para unidades, mostrar como inteiro
-    return `${Math.round(quantidade)} ${unidade === 'UN' ? 'unidades' : unidade}`;
+    return `${quantidadeFormatada} ${unidade === 'UN' ? 'Unidades' : unidade}`;
   }
 }
 
@@ -353,7 +372,9 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       }
 
       console.log(`✅ [STEP 8] Produto encontrado - preparando resposta`);
-      const resposta = `✅ Você tem ${data.quantidade} ${data.unidade_medida} de ${data.produto_nome} em estoque.`;
+      const quantidadeFormatada = formatarQuantidade(data.quantidade, data.unidade_medida);
+      const produtoNomeLimpo = limparNomeProduto(data.produto_nome);
+      const resposta = `✅ Você tem ${quantidadeFormatada} de ${produtoNomeLimpo} em estoque.`;
       console.log(`📤 [STEP 9] Resposta final: "${resposta}"`);
       return resposta;
     }
@@ -414,39 +435,11 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       return `❌ Produto "${produtoNome}" não encontrado no seu estoque. Use o comando 'adicionar' para incluir um novo produto.`;
     }
     
-    // Converter unidades corretamente baseado na mensagem
-    let quantidadeConvertida = quantidade;
-    let unidadeFinalEstoque = estoque.unidade_medida.toLowerCase();
+    // Converter unidades usando a função padronizada
+    const quantidadeConvertida = converterUnidade(quantidade, unidadeExtraida || estoque.unidade_medida, estoque.unidade_medida);
     
-    if (unidadeExtraida) {
-      const unidadeMensagem = unidadeExtraida.toLowerCase();
-      
-      // Se a mensagem está em kg e o estoque em gramas
-      if (unidadeMensagem.match(/kg|kilos?|quilos?/) && unidadeFinalEstoque.includes('g') && !unidadeFinalEstoque.includes('kg')) {
-        quantidadeConvertida = quantidade * 1000; // 1 kg = 1000 g
-      }
-      // Se a mensagem está em gramas e o estoque em kg
-      else if (unidadeMensagem.match(/g|gramas?/) && unidadeFinalEstoque.includes('kg')) {
-        quantidadeConvertida = quantidade / 1000; // 1000 g = 1 kg
-      }
-      // Se ambos estão na mesma unidade, usar diretamente
-      else {
-        quantidadeConvertida = quantidade;
-      }
-    } else {
-      // Se não especificou unidade, assumir a unidade do estoque
-      quantidadeConvertida = quantidade;
-    }
-    
-    // Somar ao estoque existente
-    let novaQuantidade = estoque.quantidade + quantidadeConvertida;
-    
-    // Arredondar baseado na unidade de medida
-    if (estoque.unidade_medida.toLowerCase().includes('kg') || estoque.unidade_medida.toLowerCase().includes('kilo')) {
-      novaQuantidade = Math.round(novaQuantidade * 100) / 100; // 2 casas decimais
-    } else {
-      novaQuantidade = Math.round(novaQuantidade); // Número inteiro para unidades
-    }
+    // Somar ao estoque existente (SEM arredondamento)
+    const novaQuantidade = estoque.quantidade + quantidadeConvertida;
     
     // Atualizar estoque com logs completos
     console.log(`🔄 Atualizando estoque ID: ${estoque.id}`);
