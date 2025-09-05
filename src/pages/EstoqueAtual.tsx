@@ -1043,9 +1043,9 @@ const EstoqueAtual = () => {
                                      <div className="text-blue-600 font-medium flex items-center gap-1">
                                        {precoAtual ? (
                                          <>
-                                           <span>
-                                             Atual- {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
-                                           </span>
+                                            <span>
+                                              {new Date(precoAtual.data_atualizacao).toLocaleDateString('pt-BR')} - {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                            </span>
                                            {(() => {
                                              const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
                                              const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
@@ -1060,9 +1060,9 @@ const EstoqueAtual = () => {
                                            })()}
                                          </>
                                        ) : (
-                                         <span className="text-red-600">
-                                           Atual- {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
-                                         </span>
+                                          <span className="text-red-600">
+                                            Sem preço - {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
+                                          </span>
                                        )}
                                      </div>
                                    </>
@@ -1071,9 +1071,9 @@ const EstoqueAtual = () => {
                                      <div>
                                        Produto inserido manualmente - sem valor definido
                                      </div>
-                                     <div className="text-red-600 font-medium">
-                                       Atual- {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
-                                     </div>
+                                      <div className="text-red-600 font-medium">
+                                        Sem preço - {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
+                                      </div>
                                    </>
                                  )}
                               </p>
@@ -1083,23 +1083,7 @@ const EstoqueAtual = () => {
                               <div className="text-lg font-bold text-foreground">
                                 {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
                               </div>
-                             <div className="text-xs text-muted-foreground">
-                               {(() => {
-                                 const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
-                                 return dataNotaFiscal ? (
-                                   <>
-                                     <p>Comprado:</p>
-                                     <p>{new Date(dataNotaFiscal).toLocaleDateString('pt-BR')}</p>
-                                   </>
-                                 ) : (
-                                   <>
-                                     <p>Adicionado:</p>
-                                     <p>{new Date(item.updated_at).toLocaleDateString('pt-BR')}</p>
-                                     <p>{new Date(item.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                   </>
-                                 );
-                               })()}
-                             </div>
+                              {/* Texto removido conforme solicitação do usuário */}
                         </div>
                        </div>
                     );
