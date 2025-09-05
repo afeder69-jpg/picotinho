@@ -686,30 +686,67 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         .eq('id', sessao.id);
       
       const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
-      return `💰 Preço R$ ${preco.toFixed(2).replace('.', ',')} registrado para ${produtoNomeLimpo}!\n\nAgora escolha a categoria (digite apenas o número):\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Carnes\n6️⃣ Limpeza\n7️⃣ Higiene/Farmácia\n8️⃣ Laticínios\n9️⃣ Outros`;
+      return `💰 Preço R$ ${preco.toFixed(2).replace('.', ',')} registrado para ${produtoNomeLimpo}!\n\nAgora escolha a categoria (digite o número ou o nome):\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Açougue\n6️⃣ Frios\n7️⃣ Limpeza\n8️⃣ Higiene/Farmácia\n9️⃣ Pet\n🔟 Outros`;
       
     } else if (sessao.estado === 'aguardando_categoria') {
       // Processar categoria informada
-      const categoriaNumero = parseInt(mensagem.conteudo.trim());
+      const textoLimpo = mensagem.conteudo.trim().toLowerCase();
       
-      const categorias = [
-        'Hortifruti',
-        'Bebidas', 
-        'Padaria',
-        'Mercearia',
-        'Carnes',
-        'Limpeza',
-        'Higiene/Farmácia',
-        'Laticínios',
-        'Outros'
-      ];
+      // Mapeamento de categorias (número e nome)
+      const categorias = {
+        '1': 'Hortifruti',
+        '2': 'Bebidas', 
+        '3': 'Padaria',
+        '4': 'Mercearia',
+        '5': 'Açougue',
+        '6': 'Frios',
+        '7': 'Limpeza',
+        '8': 'Higiene/Farmácia',
+        '9': 'Pet',
+        '10': 'Outros'
+      };
       
-      if (categoriaNumero < 1 || categoriaNumero > 9 || isNaN(categoriaNumero)) {
-        const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
-        return `❌ Categoria inválida. Digite apenas um número de 1 a 9.\n\nEscolha a categoria para ${produtoNomeLimpo}:\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Carnes\n6️⃣ Limpeza\n7️⃣ Higiene/Farmácia\n8️⃣ Laticínios\n9️⃣ Outros`;
+      // Mapeamento reverso por nome
+      const categoriasPorNome = {
+        'hortifruti': 'Hortifruti',
+        'bebidas': 'Bebidas',
+        'padaria': 'Padaria', 
+        'mercearia': 'Mercearia',
+        'acougue': 'Açougue',
+        'frios': 'Frios',
+        'limpeza': 'Limpeza',
+        'higiene': 'Higiene/Farmácia',
+        'farmacia': 'Higiene/Farmácia',
+        'pet': 'Pet',
+        'outros': 'Outros'
+      };
+      
+      let categoriaSelecionada: string | null = null;
+      
+      // Verificar se é número
+      if (categorias[textoLimpo]) {
+        categoriaSelecionada = categorias[textoLimpo];
+      }
+      // Verificar se é nome da categoria
+      else if (categoriasPorNome[textoLimpo]) {
+        categoriaSelecionada = categoriasPorNome[textoLimpo];
+      }
+      // Verificar correspondências parciais
+      else {
+        for (const [key, value] of Object.entries(categoriasPorNome)) {
+          if (textoLimpo.includes(key) || key.includes(textoLimpo)) {
+            categoriaSelecionada = value;
+            break;
+          }
+        }
       }
       
-      const categoriaSelecionada = categorias[categoriaNumero - 1];
+      // Se não foi encontrada categoria válida
+      if (!categoriaSelecionada) {
+        const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
+        return `❌ Categoria inválida. Digite o número ou o nome da categoria.\n\nEscolha a categoria para ${produtoNomeLimpo}:\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Açougue\n6️⃣ Frios\n7️⃣ Limpeza\n8️⃣ Higiene/Farmácia\n9️⃣ Pet\n🔟 Outros`;
+      }
+      
       const precoInformado = sessao.contexto?.preco_informado || 0;
       
       // Atualizar produto no estoque com a categoria
@@ -730,7 +767,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
       const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
       const quantidadeFormatada = formatarQuantidade(sessao.contexto?.quantidade || 0, sessao.contexto?.unidade || 'unidade');
       
-      return `✅ Produto ${produtoNomeLimpo} adicionado com ${quantidadeFormatada} em estoque.\n💰 Preço: R$ ${precoInformado.toFixed(2).replace('.', ',')} | 📂 Categoria: ${categoriaSelecionada}`;
+      return `✅ Produto ${produtoNomeLimpo} adicionado com ${quantidadeFormatada}.\n💰 Preço: R$ ${precoInformado.toFixed(2).replace('.', ',')} | 📂 Categoria: ${categoriaSelecionada}`;
     }
     
     return "❌ Estado de sessão inválido.";
