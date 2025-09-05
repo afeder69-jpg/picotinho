@@ -76,7 +76,7 @@ const handler = async (req: Request): Promise<Response> => {
       const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/);
       
       // Comandos para AUMENTAR ESTOQUE
-      const isAumentar = textoNormalizado.match(/\b(aumentar|aumenta|somar|colocar no estoque|botar no estoque)\b/);
+      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/);
       console.log(`🔍 [DEBUG] Texto normalizado: "${textoNormalizado}"`);
       console.log(`🔍 [DEBUG] isAumentar result:`, isAumentar);
       
@@ -480,7 +480,7 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     }
     
     if (!estoque) {
-      return `❌ Produto "${produtoNome}" não encontrado no seu estoque. Use o comando 'adicionar' para incluir um novo produto.`;
+      return `❌ Produto não encontrado no seu estoque. Use o comando 'criar' ou 'incluir' para adicionar um novo produto.`;
     }
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
