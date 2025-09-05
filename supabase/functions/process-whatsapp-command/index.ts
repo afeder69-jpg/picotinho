@@ -26,12 +26,11 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { messageId }: ProcessCommandRequest = await req.json();
 
-    // Buscar mensagem para processar
+    // Buscar mensagem para processar (REMOVENDO filtro processada=false)
     const { data: mensagem, error: erroMensagem } = await supabase
       .from('whatsapp_mensagens')
       .select('*')
       .eq('id', messageId)
-      .eq('processada', false)
       .maybeSingle();
 
     if (erroMensagem || !mensagem) {
