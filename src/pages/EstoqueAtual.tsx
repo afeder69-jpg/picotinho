@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { formatarQuantidade } from '@/lib/utils';
 import PicotinhoLogo from '@/components/PicotinhoLogo';
 
 interface EstoqueItem {
@@ -381,7 +382,7 @@ const EstoqueAtual = () => {
 
         toast({
           title: "Sucesso",
-          description: `Quantidade atualizada: +${quantidade} ${novoProduto.unidadeMedida}`,
+          description: `Quantidade atualizada: +${formatarQuantidade(quantidade)} ${novoProduto.unidadeMedida}`,
         });
       } else {
         // Inserir novo produto no estoque
@@ -510,7 +511,7 @@ const EstoqueAtual = () => {
 
         toast({
           title: "Sucesso",
-          description: `Quantidade atualizada: +${quantidade} ${novoProduto.unidadeMedida}`,
+          description: `Quantidade atualizada: +${formatarQuantidade(quantidade)} ${novoProduto.unidadeMedida}`,
         });
       } else {
         // Inserir novo produto no estoque
@@ -660,7 +661,7 @@ const EstoqueAtual = () => {
       
       toast({
         title: "Quantidade atualizada",
-        description: `${itemEditando.produto_nome}: ${novaQuantidade} ${itemEditando.unidade_medida}`,
+        description: `${itemEditando.produto_nome}: ${formatarQuantidade(novaQuantidade)} ${itemEditando.unidade_medida}`,
       });
     } catch (error) {
       console.error('Erro ao salvar ajuste:', error);
@@ -1078,10 +1079,10 @@ const EstoqueAtual = () => {
                               </p>
                            </div>
                            
-                           <div className="text-right flex-shrink-0 ml-2">
-                             <div className="text-lg font-bold text-foreground">
-                               {quantidade} {item.unidade_medida.replace('Unidade', 'Un')}
-                             </div>
+                            <div className="text-right flex-shrink-0 ml-2">
+                              <div className="text-lg font-bold text-foreground">
+                                {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
+                              </div>
                              <div className="text-xs text-muted-foreground">
                                {(() => {
                                  const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
@@ -1122,13 +1123,13 @@ const EstoqueAtual = () => {
               <div className="text-center">
                 <h3 className="font-semibold text-lg">{itemEditando.produto_nome}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Quantidade atual: {itemEditando.quantidade} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
+                  Quantidade atual: {formatarQuantidade(itemEditando.quantidade)} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
                 </p>
               </div>
               
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-600">
-                  {novaQuantidade.toFixed(2)} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
+                  {formatarQuantidade(novaQuantidade)} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
                 </p>
               </div>
               
@@ -1318,7 +1319,7 @@ const EstoqueAtual = () => {
                     💰 Valor Total: {formatCurrency(parseFloat(novoProduto.valor) * parseFloat(novoProduto.quantidade))}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {novoProduto.quantidade} {novoProduto.unidadeMedida} × {formatCurrency(parseFloat(novoProduto.valor))}
+                    {formatarQuantidade(parseFloat(novoProduto.quantidade))} {novoProduto.unidadeMedida} × {formatCurrency(parseFloat(novoProduto.valor))}
                   </div>
                 </div>
               )}

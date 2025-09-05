@@ -26,3 +26,12 @@ export function formatarDistancia(distancia: number | string): string {
     return `${dist.toFixed(1)}km`;
   }
 }
+
+/**
+ * Formata quantidade SEMPRE com 3 casas decimais e vírgula brasileira
+ * @param quantity Quantidade numérica
+ * @returns String formatada (ex: "2,000" ou "1,500")
+ */
+export function formatarQuantidade(quantity: number): string {
+  return quantity.toFixed(3).replace('.', ',');
+}
