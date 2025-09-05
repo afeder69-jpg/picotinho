@@ -85,6 +85,9 @@ const handler = async (req: Request): Promise<Response> => {
       // Comandos para CONSULTAR ESTOQUE
       const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
       
+      // Comandos para CONSULTAR CATEGORIA
+      const isConsultarCategoria = textoNormalizado.match(/\b(categoria|categorias)\b/);
+      
       if (isBaixar) {
         console.log('📉 Comando BAIXAR identificado:', textoNormalizado);
         resposta += await processarBaixarEstoque(supabase, mensagem);
@@ -96,6 +99,10 @@ const handler = async (req: Request): Promise<Response> => {
       } else if (isAdicionar) {
         console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
         resposta += await processarAdicionarProduto(supabase, mensagem);
+        comandoExecutado = true;
+      } else if (isConsultarCategoria) {
+        console.log('📂 Comando CONSULTAR CATEGORIA identificado:', textoNormalizado);
+        resposta += await processarConsultarCategoria(supabase, mensagem);
         comandoExecutado = true;
       } else if (isConsultar) {
         console.log('🔍 Comando CONSULTAR identificado:', textoNormalizado);
@@ -657,6 +664,137 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
   } catch (error) {
     console.error('❌ Erro ao processar resposta da sessão:', error);
     return "❌ Erro ao processar sua resposta. Tente novamente.";
+  }
+}
+
+/**
+ * Processar comando de consultar categoria
+ */
+async function processarConsultarCategoria(supabase: any, mensagem: any): Promise<string> {
+  try {
+    console.log('📂 [INICIO] Processando consulta de categoria...');
+    
+    // Verificar se usuario_id existe
+    if (!mensagem.usuario_id) {
+      console.error('❌ [ERRO] Usuario ID não encontrado na mensagem');
+      return "❌ Erro interno: usuário não identificado.";
+    }
+    
+    console.log(`📋 [DEBUG] Usuario ID: ${mensagem.usuario_id}`);
+    console.log(`📋 [DEBUG] Conteudo original: "${mensagem.conteudo}"`);
+    
+    // Normalizar texto
+    const texto = mensagem.conteudo
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .replace(/[^\w\s]/gi, ""); // remove pontuação
+    
+    console.log(`📝 [STEP 1] Texto normalizado: "${texto}"`);
+    
+    // Extrair nome da categoria da mensagem
+    let categoria = '';
+    
+    // Lista de categorias válidas
+    const categoriasValidas = [
+      'hortifruti', 'bebidas', 'padaria', 'mercearia', 
+      'carnes', 'limpeza', 'higiene', 'farmacia', 
+      'higienefarmacia', 'laticinios', 'outros'
+    ];
+    
+    // Buscar categoria na mensagem
+    for (const cat of categoriasValidas) {
+      if (texto.includes(cat)) {
+        categoria = cat;
+        break;
+      }
+    }
+    
+    // Mapear categorias do texto para formato do banco
+    const mapCategoria: { [key: string]: string } = {
+      'hortifruti': 'hortifruti',
+      'bebidas': 'bebidas',
+      'padaria': 'padaria',
+      'mercearia': 'mercearia',
+      'carnes': 'carnes',
+      'limpeza': 'limpeza',
+      'higiene': 'higiene/farmácia',
+      'farmacia': 'higiene/farmácia',
+      'higienefarmacia': 'higiene/farmácia',
+      'laticinios': 'laticínios',
+      'outros': 'outros'
+    };
+    
+    const categoriaFinal = mapCategoria[categoria];
+    
+    if (!categoriaFinal) {
+      console.log(`❌ [STEP 2] Categoria não identificada - retornando ajuda`);
+      return "❌ Categoria não identificada. Use: 'categoria [nome]'\n\nCategorias disponíveis:\n🥬 Hortifruti\n🥤 Bebidas\n🍞 Padaria\n🛒 Mercearia\n🥩 Carnes\n🧽 Limpeza\n🧴 Higiene/Farmácia\n🥛 Laticínios\n📦 Outros";
+    }
+    
+    console.log(`📝 [STEP 2] Categoria identificada: "${categoriaFinal}"`);
+    console.log(`🔍 [STEP 3] Iniciando busca no banco...`);
+    
+    // Buscar todos os produtos da categoria
+    const { data, error } = await supabase
+      .from("estoque_app")
+      .select("produto_nome, quantidade, unidade_medida, preco_unitario_ultimo")
+      .eq("user_id", mensagem.usuario_id)
+      .eq("categoria", categoriaFinal)
+      .gt("quantidade", 0) // Apenas produtos com estoque
+      .order("produto_nome");
+    
+    console.log(`📋 [STEP 4] Resultado do banco:`);
+    console.log(`📋 [RESULT] Data:`, data);
+    console.log(`📋 [RESULT] Error:`, error);
+    
+    if (error) {
+      console.error('❌ [ERRO] Erro ao buscar categoria:', error);
+      return "❌ Erro ao consultar estoque da categoria. Tente novamente.";
+    }
+    
+    if (!data || data.length === 0) {
+      console.log(`❌ [STEP 5] Nenhum produto encontrado na categoria`);
+      return `❌ Nenhum produto encontrado na categoria "${categoriaFinal}".`;
+    }
+    
+    console.log(`✅ [STEP 5] ${data.length} produtos encontrados - preparando resposta`);
+    
+    // Montar resposta organizada
+    let resposta = `📂 **${categoriaFinal.toUpperCase()}** (${data.length} item${data.length > 1 ? 'ns' : ''})\n\n`;
+    
+    let valorTotal = 0;
+    
+    data.forEach((produto, index) => {
+      const produtoNomeLimpo = limparNomeProduto(produto.produto_nome);
+      const quantidadeFormatada = formatarQuantidade(produto.quantidade, produto.unidade_medida);
+      
+      resposta += `${index + 1}. ${produtoNomeLimpo}\n`;
+      resposta += `   📊 ${quantidadeFormatada}`;
+      
+      if (produto.preco_unitario_ultimo && produto.preco_unitario_ultimo > 0) {
+        const precoFormatado = `R$ ${produto.preco_unitario_ultimo.toFixed(2).replace('.', ',')}`;
+        const valorItem = produto.quantidade * produto.preco_unitario_ultimo;
+        valorTotal += valorItem;
+        
+        resposta += ` | 💰 ${precoFormatado}/un`;
+        resposta += ` | 💵 R$ ${valorItem.toFixed(2).replace('.', ',')}`;
+      }
+      
+      resposta += '\n\n';
+    });
+    
+    // Adicionar valor total se há preços
+    if (valorTotal > 0) {
+      resposta += `💰 **VALOR TOTAL**: R$ ${valorTotal.toFixed(2).replace('.', ',')}`;
+    }
+    
+    console.log(`📤 [STEP 6] Resposta final preparada`);
+    return resposta;
+    
+  } catch (err) {
+    console.error("❌ [ERRO GERAL] Erro ao processar consulta de categoria:", err);
+    console.error("❌ [ERRO STACK]:", err.stack);
+    return "❌ Houve um erro ao processar sua consulta de categoria. Tente novamente mais tarde.";
   }
 }
 
