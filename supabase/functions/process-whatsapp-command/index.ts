@@ -641,6 +641,42 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
   }
 }
 
+// Função para normalizar preços (vírgula/ponto para formato padrão)
+function normalizarPreco(valor: string): number | null {
+  if (!valor) return null;
+  
+  // Remove espaços e caracteres não numéricos (exceto vírgula e ponto)
+  const valorLimpo = valor.replace(/[^\d,.-]/g, '');
+  
+  // Se contém vírgula, trata como separador decimal brasileiro
+  if (valorLimpo.includes(',')) {
+    // Remove pontos (milhares) e substitui vírgula por ponto
+    const normalizado = valorLimpo.replace(/\./g, '').replace(',', '.');
+    const numero = parseFloat(normalizado);
+    return isNaN(numero) ? null : numero;
+  }
+  
+  // Se contém apenas ponto, trata como separador decimal
+  const numero = parseFloat(valorLimpo);
+  return isNaN(numero) ? null : numero;
+}
+
+// Função para formatar preço para exibição (R$ X,XX)
+function formatarPreco(valor: number): string {
+  return `R$ ${valor.toFixed(2).replace('.', ',')}`;
+}
+
+// Função para encerrar sessão por excesso de erros
+async function encerrarSessaoPorErros(supabase: any, sessaoId: string): Promise<string> {
+  // Deletar a sessão
+  await supabase
+    .from('whatsapp_sessions')
+    .delete()
+    .eq('id', sessaoId);
+  
+  return "👋 Olá, eu sou o Picotinho! Você pode consultar, incluir ou atualizar produtos do estoque.\nExemplos: 'consulta arroz', 'incluir leite 1L', 'aumentar 2kg de batata'.";
+}
+
 /**
  * Processar comando de adicionar produto
  */
@@ -738,14 +774,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         const novasTentativas = tentativasErro + 1;
         
         if (novasTentativas >= 3) {
-          // Encerrar sessão após 3 tentativas
-          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
-          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
-Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
-Exemplos:
-• "Consulta arroz"
-• "Incluir café pilão 500g"
-• "Aumentar 2kg de banana"`;
+          return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
         // Atualizar tentativas de erro
@@ -780,19 +809,13 @@ Qual a unidade do produto ${produtoNomeLimpo}?
     
     // ETAPA 2: Aguardando quantidade
     else if (sessao.estado === 'aguardando_quantidade') {
-      const quantidadeMatch = mensagem.conteudo.match(/(\d+(?:[.,]\d+)?)/);
+      const quantidadeNormalizada = normalizarPreco(mensagem.conteudo);
       
-      if (!quantidadeMatch) {
+      if (quantidadeNormalizada === null || quantidadeNormalizada <= 0) {
         const novasTentativas = tentativasErro + 1;
         
         if (novasTentativas >= 3) {
-          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
-          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
-Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
-Exemplos:
-• "Consulta arroz"
-• "Incluir café pilão 500g"
-• "Aumentar 2kg de banana"`;
+          return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
         await supabase
@@ -803,12 +826,12 @@ Exemplos:
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+        return `❌ Quantidade inválida. Informe um valor numérico válido (ex.: 0,5 ou 2).
 
 Qual a quantidade do produto ${produtoNomeLimpo}?`;
       }
       
-      const quantidade = parseFloat(quantidadeMatch[1].replace(',', '.'));
+      const quantidade = quantidadeNormalizada;
       
       // Avançar para próxima etapa
       await supabase
@@ -860,13 +883,7 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
         const novasTentativas = tentativasErro + 1;
         
         if (novasTentativas >= 3) {
-          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
-          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
-Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
-Exemplos:
-• "Consulta arroz"
-• "Incluir café pilão 500g"
-• "Aumentar 2kg de banana"`;
+          return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
         await supabase
@@ -908,19 +925,13 @@ Qual categoria deseja para ${produtoNomeLimpo}?
     
     // ETAPA 4: Aguardando preço
     else if (sessao.estado === 'aguardando_preco') {
-      const precoMatch = mensagem.conteudo.match(/(\d+(?:[.,]\d+)?)/);
+      const precoNormalizado = normalizarPreco(mensagem.conteudo);
       
-      if (!precoMatch) {
+      if (precoNormalizado === null || precoNormalizado <= 0) {
         const novasTentativas = tentativasErro + 1;
         
         if (novasTentativas >= 3) {
-          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
-          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
-Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
-Exemplos:
-• "Consulta arroz"
-• "Incluir café pilão 500g"
-• "Aumentar 2kg de banana"`;
+          return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
         await supabase
@@ -931,12 +942,12 @@ Exemplos:
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+        return `❌ Preço inválido. Informe um valor válido (ex.: 8,90 ou 8.90).
 
 Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor, ex.: 8,90)`;
       }
       
-      const preco = parseFloat(precoMatch[1].replace(',', '.'));
+      const preco = precoNormalizado;
       const { unidade, quantidade, categoria } = sessao.contexto;
       
       // Converter quantidade com 3 casas decimais
@@ -959,7 +970,7 @@ Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor,
       
       // Formatar resposta final
       const quantidadeFormatada = formatarQuantidade(quantidadeDecimal, unidade);
-      const precoFormatado = `R$ ${preco.toFixed(2).replace('.', ',')}`;
+      const precoFormatado = formatarPreco(preco);
       const categoriaDisplay = categoria.charAt(0).toUpperCase() + categoria.slice(1);
       
       return `✅ Produto ${produtoNomeLimpo} adicionado com sucesso!
