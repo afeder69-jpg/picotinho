@@ -96,17 +96,17 @@ const handler = async (req: Request): Promise<Response> => {
     // Se houve sessão expirada, enviar mensagem inicial e retornar
     if (sessaoExpirada) {
       console.log(`⏰ [TIMEOUT] Sessão expirou - enviando mensagem inicial`);
-      resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+      const respostaTimeout = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
       
       // Enviar resposta e marcar como processada
-      await enviarRespostaWhatsApp(mensagem.remetente, resposta);
+      await enviarRespostaWhatsApp(mensagem.remetente, respostaTimeout);
       await supabase
         .from('whatsapp_mensagens')
         .update({
           processada: true,
           data_processamento: new Date().toISOString(),
           comando_identificado: 'sessao_expirada',
-          resposta_enviada: resposta
+          resposta_enviada: respostaTimeout
         })
         .eq('id', mensagem.id);
       
@@ -395,7 +395,7 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     }
     
     if (!estoque) {
-      return `Produto "${produtoNome}" não encontrado no seu estoque.`;
+      return `Produto "${produtoNomeOriginal}" não encontrado no seu estoque.`;
     }
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
