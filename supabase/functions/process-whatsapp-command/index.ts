@@ -953,11 +953,28 @@ Qual categoria deseja para ${produtoNomeLimpo}?
     
     // ETAPA 4: Aguardando preço
     else if (sessao.estado === 'aguardando_preco') {
-      console.log(`💰 [DEBUG] Processando preço: "${mensagem.conteudo}"`);
-      const precoNormalizado = normalizarPreco(mensagem.conteudo);
-      console.log(`💰 [DEBUG] Preço normalizado: ${precoNormalizado}`);
+      console.log(`💰 [SESSAO] Processando estado aguardando_preco`);
+      console.log(`💰 [SESSAO] Mensagem original recebida: "${mensagem.conteudo}"`);
       
-      if (precoNormalizado === null || precoNormalizado <= 0) {
+      // Limpar e normalizar o valor do preço dentro da sessão
+      let valorLimpo = mensagem.conteudo.trim();
+      console.log(`💰 [SESSAO] Após trim: "${valorLimpo}"`);
+      
+      // Substituir vírgula por ponto
+      valorLimpo = valorLimpo.replace(',', '.');
+      console.log(`💰 [SESSAO] Após substituir vírgula por ponto: "${valorLimpo}"`);
+      
+      // Remover caracteres inválidos (manter apenas números e ponto)
+      valorLimpo = valorLimpo.replace(/[^0-9.]/g, '');
+      console.log(`💰 [SESSAO] Após limpar caracteres inválidos: "${valorLimpo}"`);
+      
+      // Converter para número
+      const precoNumerico = parseFloat(valorLimpo);
+      console.log(`💰 [SESSAO] Valor numérico parseFloat: ${precoNumerico}`);
+      
+      // Validar se é um número válido e maior que zero
+      if (isNaN(precoNumerico) || precoNumerico <= 0) {
+        console.log(`💰 [SESSAO] Valor inválido detectado: ${precoNumerico}`);
         const novasTentativas = tentativasErro + 1;
         
         if (novasTentativas >= 3) {
@@ -972,12 +989,16 @@ Qual categoria deseja para ${produtoNomeLimpo}?
           })
           .eq('id', sessao.id);
         
-        return `❌ Preço inválido. Informe um valor válido (ex.: 8,90 ou 8.90).
+        return `❌ Não entendi o preço. Informe no formato 8,90 ou 8.90.
 
 Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor, ex.: 8,90)`;
       }
       
-      const preco = precoNormalizado;
+      // Garantir 2 casas decimais
+      const precoFinal = Math.round(precoNumerico * 100) / 100;
+      console.log(`💰 [SESSAO] Valor numérico final antes de salvar: ${precoFinal}`);
+      
+      const preco = precoFinal;
       const { unidade, quantidade, categoria } = sessao.contexto;
       
       // Converter quantidade com 3 casas decimais
