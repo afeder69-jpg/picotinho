@@ -653,27 +653,25 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
 }
 
 // Função para normalizar preços (vírgula/ponto para formato padrão)
-function normalizarPreco(valor: string): number | null {
-  if (!valor || valor.trim() === '') return null;
-  
-  console.log(`💰 [DEBUG] Normalizando preço: "${valor}"`);
-  
-  // Remove espaços
-  const valorLimpo = valor.trim();
-  
-  // Aceita formatos: 8,90 | 8.90 | 9 | 9,0 | 9.0 | 890 | 0,50 | 0.50 | 3860
-  const regexNumero = /^\d*[,.]?\d*$/;
-  
-  if (!regexNumero.test(valorLimpo)) {
-    console.log(`💰 [DEBUG] Formato inválido: "${valorLimpo}"`);
-    return null;
-  }
-  
-  // Converte vírgula para ponto e transforma em número
-  const numeroFormatado = parseFloat(valorLimpo.replace(',', '.'));
-  
-  console.log(`💰 [DEBUG] Resultado: ${numeroFormatado}`);
-  return isNaN(numeroFormatado) ? null : numeroFormatado;
+function normalizarPreco(input: string): number | null {
+  if (!input) return null;
+
+  // Remove espaços extras
+  let valor = input.trim();
+
+  // Troca vírgula por ponto (para 45,90 → 45.90)
+  valor = valor.replace(',', '.');
+
+  // Remove qualquer caractere inválido
+  valor = valor.replace(/[^0-9.]/g, '');
+
+  // Converte para número
+  const num = parseFloat(valor);
+
+  if (isNaN(num)) return null;
+
+  // Retorna sempre com 2 casas decimais
+  return Math.round(num * 100) / 100;
 }
 
 // Função para formatar preço para exibição (R$ X,XX)
