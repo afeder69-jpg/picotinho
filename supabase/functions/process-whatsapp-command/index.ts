@@ -89,7 +89,8 @@ const handler = async (req: Request): Promise<Response> => {
           .update({
             processada: true,
             data_processamento: new Date().toISOString(),
-            comando_identificado: `sessao_${sessao.estado}`
+            comando_identificado: `sessao_${sessao.estado}`,
+            resposta_enviada: resposta
           })
           .eq('id', mensagem.id);
           
@@ -111,52 +112,11 @@ const handler = async (req: Request): Promise<Response> => {
         .lt('expires_at', new Date().toISOString());
       console.log('🧹 [LIMPEZA] Sessões expiradas removidas');
 
-      // PRIORIDADE 2: Verificar comandos novos
-      console.log('🚀 [INICIO VERIFICACAO] Conteudo da mensagem:', mensagem.conteudo);
+      // PRIORIDADE 1: VERIFICAÇÃO ESPECIAL para números/decimais (resposta a sessão perdida)
+      const isNumeroOuDecimal = /^\s*\d+([,.]\d+)?\s*$/.test(mensagem.conteudo);
       
-      // Verificar sinais ANTES da normalização para não perder os símbolos
-      const temSinalMenos = mensagem.conteudo.trim().startsWith('-');
-      const temSinalMais = mensagem.conteudo.trim().startsWith('+');
-      console.log('🔍 [DEBUG] Tem sinal menos (startsWith):', temSinalMenos);
-      console.log('🔍 [DEBUG] Tem sinal mais (startsWith):', temSinalMais);
-      
-      const textoNormalizado = mensagem.conteudo.toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-        .replace(/[^\w\s]/gi, ""); // Remove pontuação
-      
-      console.log('🔍 [DEBUG] Texto normalizado:', textoNormalizado);
-      
-      // Comandos para BAIXAR ESTOQUE
-      const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || temSinalMenos;
-      
-      console.log('🔍 [DEBUG] isBaixar result:', isBaixar);
-      console.log('🔍 [DEBUG] Match regex baixar:', textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/));
-      console.log('🔍 [DEBUG] temSinalMenos:', temSinalMenos);
-      
-      // Comandos para AUMENTAR ESTOQUE
-      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/) || temSinalMais;
-      console.log(`🔍 [DEBUG] Texto normalizado: "${textoNormalizado}"`);
-      console.log(`🔍 [DEBUG] isAumentar result:`, isAumentar);
-      console.log('🔍 [DEBUG] Match regex aumentar:', textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/));
-      console.log('🔍 [DEBUG] temSinalMais:', temSinalMais);
-      
-      // Comandos para ADICIONAR PRODUTO NOVO
-      const isAdicionar = textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/);
-      console.log('🔍 [DEBUG] isAdicionar match:', textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/));
-      console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
-      
-      // Comandos para CONSULTAR ESTOQUE
-      const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
-      
-      // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
-      const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
-      
-      // VERIFICAÇÃO ESPECIAL: Se não há sessão ativa mas mensagem é um número simples,
-      // verificar se pode ser resposta a uma sessão que não foi encontrada
-      const isNumeroSimples = /^\s*\d+\s*$/.test(mensagem.conteudo);
-      
-      if (isNumeroSimples) {
-        console.log(`🔢 [ESPECIAL] Número simples detectado: "${mensagem.conteudo}" - verificando sessões não expiradas`);
+      if (isNumeroOuDecimal) {
+        console.log(`🔢 [ESPECIAL] Número/decimal detectado: "${mensagem.conteudo}" - verificando sessões não expiradas`);
         
         // Buscar QUALQUER sessão não expirada para este usuário
         const { data: sessaoAlternativa } = await supabase
@@ -173,10 +133,61 @@ const handler = async (req: Request): Promise<Response> => {
           console.log(`🔢 [ESPECIAL] Sessão alternativa encontrada: ${sessaoAlternativa.estado} - processando número como resposta`);
           resposta += await processarRespostaSessao(supabase, mensagem, sessaoAlternativa);
           comandoExecutado = true;
+          
+          // Marcar mensagem como processada IMEDIATAMENTE
+          await supabase
+            .from('whatsapp_mensagens')
+            .update({
+              processada: true,
+              data_processamento: new Date().toISOString(),
+              comando_identificado: `sessao_especial_${sessaoAlternativa.estado}`,
+              resposta_enviada: resposta
+            })
+            .eq('id', mensagem.id);
         }
       }
-      
+
+      // PRIORIDADE 2: Verificar comandos novos (só se não processou número especial)
       if (!comandoExecutado) {
+        console.log('🚀 [INICIO VERIFICACAO] Conteudo da mensagem:', mensagem.conteudo);
+        
+        // Verificar sinais ANTES da normalização para não perder os símbolos
+        const temSinalMenos = mensagem.conteudo.trim().startsWith('-');
+        const temSinalMais = mensagem.conteudo.trim().startsWith('+');
+        console.log('🔍 [DEBUG] Tem sinal menos (startsWith):', temSinalMenos);
+        console.log('🔍 [DEBUG] Tem sinal mais (startsWith):', temSinalMais);
+        
+        const textoNormalizado = mensagem.conteudo.toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+          .replace(/[^\w\s]/gi, ""); // Remove pontuação
+        
+        console.log('🔍 [DEBUG] Texto normalizado:', textoNormalizado);
+        
+        // Comandos para BAIXAR ESTOQUE
+        const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || temSinalMenos;
+        
+        console.log('🔍 [DEBUG] isBaixar result:', isBaixar);
+        console.log('🔍 [DEBUG] Match regex baixar:', textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/));
+        console.log('🔍 [DEBUG] temSinalMenos:', temSinalMenos);
+        
+        // Comandos para AUMENTAR ESTOQUE
+        const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/) || temSinalMais;
+        console.log(`🔍 [DEBUG] Texto normalizado: "${textoNormalizado}"`);
+        console.log(`🔍 [DEBUG] isAumentar result:`, isAumentar);
+        console.log('🔍 [DEBUG] Match regex aumentar:', textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/));
+        console.log('🔍 [DEBUG] temSinalMais:', temSinalMais);
+        
+        // Comandos para ADICIONAR PRODUTO NOVO
+        const isAdicionar = textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/);
+        console.log('🔍 [DEBUG] isAdicionar match:', textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/));
+        console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
+        
+        // Comandos para CONSULTAR ESTOQUE
+        const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
+        
+        // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
+        const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
+        
         if (isBaixar) {
           console.log('📉 Comando BAIXAR identificado:', temSinalMenos ? 'simbolo menos' : textoNormalizado);
           resposta += await processarBaixarEstoque(supabase, mensagem);
@@ -650,8 +661,8 @@ function normalizarPreco(valor: string): number | null {
   // Remove espaços
   const valorLimpo = valor.trim();
   
-  // Aceita formatos: 8,90 | 8.90 | 9 | 9,0 | 9.0 | 890 | 0,50 | 0.50
-  const regexNumero = /^\d*[,.]?\d+$/;
+  // Aceita formatos: 8,90 | 8.90 | 9 | 9,0 | 9.0 | 890 | 0,50 | 0.50 | 3860
+  const regexNumero = /^\d*[,.]?\d*$/;
   
   if (!regexNumero.test(valorLimpo)) {
     console.log(`💰 [DEBUG] Formato inválido: "${valorLimpo}"`);
