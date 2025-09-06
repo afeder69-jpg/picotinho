@@ -185,7 +185,12 @@ const handler = async (req: Request): Promise<Response> => {
           comandoExecutado = true;
         } else {
           // PRIORIDADE 3: Fallback para comandos não reconhecidos
-          console.log('❌ Comando não reconhecido:', textoNormalizado);
+          console.log('❌ [FALLBACK] Comando não reconhecido:', textoNormalizado);
+          console.log('❌ [FALLBACK] temSinalMenos:', temSinalMenos);
+          console.log('❌ [FALLBACK] isBaixar:', isBaixar);
+          console.log('❌ [FALLBACK] isAumentar:', isAumentar);
+          console.log('❌ [FALLBACK] isAdicionar:', isAdicionar);
+          console.log('❌ [FALLBACK] isConsultar:', isConsultar);
           resposta += "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta [produto]'.";
         }
       }
