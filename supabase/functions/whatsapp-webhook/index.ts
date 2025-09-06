@@ -161,10 +161,43 @@ const handler = async (req: Request): Promise<Response> => {
         });
       }
 
-      // Processar comando automaticamente se identificado
+      // Verificar se há sessões ativas antes de processar comando ou enviar erro
+      let deveProcessar = false;
+      let motivoProcessamento = '';
+      
       if (comando_identificado) {
+        deveProcessar = true;
+        motivoProcessamento = `comando identificado: ${comando_identificado}`;
+      } else {
+        // Verificar se é número simples e há sessão ativa
+        const isNumeroSimples = /^\s*\d+\s*$/.test(conteudo);
+        
+        if (isNumeroSimples) {
+          console.log(`🔢 Número simples detectado: "${conteudo}" - verificando sessões ativas...`);
+          
+          // Buscar sessões ativas para o usuário
+          const { data: sessaoAtiva } = await supabase
+            .from('whatsapp_sessions')
+            .select('*')
+            .eq('usuario_id', usuario.usuario_id)
+            .eq('remetente', remetente)
+            .gt('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+            
+          if (sessaoAtiva) {
+            console.log(`🔢 Sessão ativa encontrada: ${sessaoAtiva.estado} - forçando processamento`);
+            deveProcessar = true;
+            motivoProcessamento = `número simples com sessão ativa: ${sessaoAtiva.estado}`;
+          }
+        }
+      }
+
+      // Processar comando automaticamente se identificado OU se há sessão ativa
+      if (deveProcessar) {
         try {
-          console.log('🤖 Processando comando automaticamente...');
+          console.log(`🤖 Processando comando automaticamente... (${motivoProcessamento})`);
           
           const response = await supabase.functions.invoke('process-whatsapp-command', {
             body: { messageId: mensagemSalva.id }
@@ -179,7 +212,7 @@ const handler = async (req: Request): Promise<Response> => {
           console.error('❌ Erro no processamento:', error);
         }
       } else {
-        // Comando não reconhecido - enviar mensagem de erro amigável
+        // Comando não reconhecido E sem sessão ativa - enviar mensagem de erro amigável
         try {
           console.log('❌ Comando não reconhecido - enviando mensagem de erro');
           
