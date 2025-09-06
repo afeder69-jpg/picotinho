@@ -836,7 +836,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi. Escolha uma das opções: Kg, Unidade ou Litro.`;
+        return `❌ Não entendi. Escolha uma das opções: 1- Kg, 2- Unidade ou 3- Litro.`;
       }
       
       // Avançar para próxima etapa

@@ -172,28 +172,31 @@ const handler = async (req: Request): Promise<Response> => {
         deveProcessar = true;
         motivoProcessamento = `comando identificado: ${comando_identificado}`;
       } else {
-        // Verificar se é número simples (incluindo decimais) e há sessão ativa
-        const isNumeroSimples = /^\s*\d+([,.]\d+)?\s*$/.test(conteudo);
-        console.log(`🔢 [DEBUG WEBHOOK] Testando "${conteudo}" com regex decimal: ${isNumeroSimples}`);
+        // Verificar se há sessão ativa para QUALQUER tipo de resposta (não só números)
+        console.log(`🔍 Verificando se há sessão ativa para qualquer resposta...`);
         
-        if (isNumeroSimples) {
-          console.log(`🔢 Número simples detectado: "${conteudo}" - verificando sessões ativas...`);
+        // Buscar sessões ativas para o usuário
+        const { data: sessaoAtiva } = await supabase
+          .from('whatsapp_sessions')
+          .select('*')
+          .eq('usuario_id', usuario.usuario_id)
+          .eq('remetente', remetente)
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
           
-          // Buscar sessões ativas para o usuário
-          const { data: sessaoAtiva } = await supabase
-            .from('whatsapp_sessions')
-            .select('*')
-            .eq('usuario_id', usuario.usuario_id)
-            .eq('remetente', remetente)
-            .gt('expires_at', new Date().toISOString())
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-            
-          if (sessaoAtiva) {
-            console.log(`🔢 Sessão ativa encontrada: ${sessaoAtiva.estado} - forçando processamento`);
-            deveProcessar = true;
-            motivoProcessamento = `número simples com sessão ativa: ${sessaoAtiva.estado}`;
+        if (sessaoAtiva) {
+          console.log(`🎯 Sessão ativa encontrada: ${sessaoAtiva.estado} - forçando processamento para qualquer resposta`);
+          deveProcessar = true;
+          motivoProcessamento = `resposta em sessão ativa: ${sessaoAtiva.estado}`;
+        } else {
+          // Verificar se é número simples para casos especiais
+          const isNumeroSimples = /^\s*\d+([,.]\d+)?\s*$/.test(conteudo);
+          console.log(`🔢 [DEBUG WEBHOOK] Testando "${conteudo}" com regex decimal: ${isNumeroSimples}`);
+          
+          if (isNumeroSimples) {
+            console.log(`🔢 Número simples sem sessão ativa: "${conteudo}"`);
           }
         }
       }
