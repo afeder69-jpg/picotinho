@@ -779,13 +779,10 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     const produtoNomeLimpo = limparNomeProduto(produtoNome);
     
     // Primeira pergunta: unidade
-    return `Qual a unidade do produto ${produtoNomeLimpo}? Escolha uma das opções:
-
-📦 unidade, un
-⚖️ kg, g
-🥤 l, ml
-📦 pacote, pct
-📦 caixa, cx`;
+    return `Qual a unidade do produto ${produtoNomeLimpo}?
+1️⃣ Quilo
+2️⃣ Unidade  
+3️⃣ Litro`;
     
   } catch (error) {
     console.error('❌ Erro ao adicionar produto:', error);
@@ -805,12 +802,16 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
     
     // ETAPA 1: Aguardando unidade
     if (sessao.estado === 'aguardando_unidade') {
-      const unidadesSugeridas = ['unidade', 'un', 'kg', 'g', 'l', 'ml', 'pacote', 'pct', 'caixa', 'cx'];
-      const unidadeNormalizada = mensagem.conteudo.toLowerCase().trim();
+      const resposta = mensagem.conteudo.trim().toLowerCase();
       let unidadeSelecionada = null;
       
-      if (unidadesSugeridas.includes(unidadeNormalizada)) {
-        unidadeSelecionada = unidadeNormalizada;
+      // Mapear resposta para unidade
+      if (resposta === '1' || resposta.includes('quilo') || resposta.includes('kg')) {
+        unidadeSelecionada = 'kg';
+      } else if (resposta === '2' || resposta.includes('unidade') || resposta.includes('un')) {
+        unidadeSelecionada = 'un';
+      } else if (resposta === '3' || resposta.includes('litro') || resposta.includes('l')) {
+        unidadeSelecionada = 'l';
       }
       
       if (!unidadeSelecionada) {
@@ -831,13 +832,10 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         
         return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
-Qual a unidade do produto ${produtoNomeLimpo}? Escolha uma das opções:
-
-📦 unidade, un
-⚖️ kg, g
-🥤 l, ml
-📦 pacote, pct
-📦 caixa, cx`;
+Qual a unidade do produto ${produtoNomeLimpo}?
+1️⃣ Quilo
+2️⃣ Unidade  
+3️⃣ Litro`;
       }
       
       // Avançar para próxima etapa
