@@ -108,13 +108,15 @@ const handler = async (req: Request): Promise<Response> => {
         .lt('expires_at', new Date().toISOString());
 
       // PRIORIDADE 2: Verificar comandos novos
+      // Verificar sinal de menos ANTES da normalização para não perder o símbolo
+      const temSinalMenos = /^\s*-\s*\d/.test(mensagem.conteudo);
+      
       const textoNormalizado = mensagem.conteudo.toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
         .replace(/[^\w\s]/gi, ""); // Remove pontuação
       
       // Comandos para BAIXAR ESTOQUE
-      const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || 
-                       /^\s*-\s*\d/.test(mensagem.conteudo);
+      const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || temSinalMenos;
       
       // Comandos para AUMENTAR ESTOQUE
       const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/);
@@ -157,7 +159,7 @@ const handler = async (req: Request): Promise<Response> => {
       
       if (!comandoExecutado) {
         if (isBaixar) {
-          console.log('📉 Comando BAIXAR identificado:', /^\s*-\s*\d/.test(mensagem.conteudo) ? 'simbolo menos' : textoNormalizado);
+          console.log('📉 Comando BAIXAR identificado:', temSinalMenos ? 'simbolo menos' : textoNormalizado);
           resposta += await processarBaixarEstoque(supabase, mensagem);
           comandoExecutado = true;
         } else if (isAumentar) {
