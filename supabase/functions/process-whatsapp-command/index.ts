@@ -718,7 +718,7 @@ async function encerrarSessaoPorErros(supabase: any, sessaoId: string): Promise<
     .delete()
     .eq('id', sessaoId);
   
-  return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+  return "👋 Olá, eu sou o Picotinho! Você pode consultar, incluir ou atualizar produtos do estoque.\nExemplos: 'consulta arroz', 'incluir leite 1L', 'aumentar 2kg de batata'.";
 }
 
 /**
@@ -817,7 +817,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
       if (!unidadeSelecionada) {
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 4) {
+        if (novasTentativas >= 3) {
           return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
@@ -830,7 +830,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
+        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
 
 Qual a unidade do produto ${produtoNomeLimpo}?
 1️⃣ Quilo
@@ -858,7 +858,7 @@ Qual a unidade do produto ${produtoNomeLimpo}?
       if (quantidadeNormalizada === null || quantidadeNormalizada <= 0) {
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 4) {
+        if (novasTentativas >= 3) {
           return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
@@ -870,7 +870,7 @@ Qual a unidade do produto ${produtoNomeLimpo}?
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
+        return `❌ Quantidade inválida. Informe um valor numérico válido (ex.: 0,5 ou 2).
 
 Qual a quantidade do produto ${produtoNomeLimpo}?`;
       }
@@ -926,7 +926,7 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
       if (!categoriaSelecionada) {
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 4) {
+        if (novasTentativas >= 3) {
           return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
@@ -938,7 +938,7 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
+        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
 
 Qual categoria deseja para ${produtoNomeLimpo}?
 1️⃣ Hortifruti
@@ -993,7 +993,7 @@ Qual categoria deseja para ${produtoNomeLimpo}?
         console.log(`💰 [SESSAO] Valor inválido detectado: ${precoNumerico}`);
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 4) {
+        if (novasTentativas >= 3) {
           return await encerrarSessaoPorErros(supabase, sessao.id);
         }
         
@@ -1005,7 +1005,7 @@ Qual categoria deseja para ${produtoNomeLimpo}?
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
+        return `❌ Não entendi o preço. Informe no formato 8,90 ou 8.90.
 
 Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor, ex.: 8,90)`;
       }
