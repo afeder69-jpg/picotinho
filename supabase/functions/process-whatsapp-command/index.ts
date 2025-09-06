@@ -41,13 +41,24 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('📨 Processando mensagem:', mensagem.conteudo);
 
     // Verificar se existe sessão pendente para o usuário PRIMEIRO
-    const { data: sessao } = await supabase
+    console.log(`🔍 [DEBUG] Buscando sessão para usuário: ${mensagem.usuario_id}, remetente: ${mensagem.remetente}`);
+    console.log(`🔍 [DEBUG] Data atual: ${new Date().toISOString()}`);
+    
+    const { data: sessoesAtivas, error: sessaoError } = await supabase
       .from('whatsapp_sessions')
       .select('*')
       .eq('usuario_id', mensagem.usuario_id)
       .eq('remetente', mensagem.remetente)
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle();
+      .order('created_at', { ascending: false });
+    
+    console.log(`🔍 [DEBUG] Todas as sessões encontradas:`, sessoesAtivas);
+    console.log(`🔍 [DEBUG] Erro na busca:`, sessaoError);
+    
+    // Filtrar sessões não expiradas manualmente para debug
+    const agora = new Date();
+    const sessao = sessoesAtivas?.find(s => new Date(s.expires_at) > agora);
+    
+    console.log(`🔍 [DEBUG] Sessão ativa encontrada:`, sessao);
 
     let resposta = "Olá! Sou o Picotinho 🤖\n\n";
     let comandoExecutado = false;
@@ -56,6 +67,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (sessao) {
       console.log(`📞 Sessão encontrada: ${sessao.estado} para produto ${sessao.produto_nome}`);
       console.log(`📞 Processando resposta para sessão: ${sessao.estado}`);
+      console.log(`📞 Conteúdo da mensagem: "${mensagem.conteudo}"`);
       resposta += await processarRespostaSessao(supabase, mensagem, sessao);
       comandoExecutado = true;
     } else {
