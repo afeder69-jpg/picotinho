@@ -172,8 +172,9 @@ const handler = async (req: Request): Promise<Response> => {
         deveProcessar = true;
         motivoProcessamento = `comando identificado: ${comando_identificado}`;
       } else {
-        // Verificar se é número simples e há sessão ativa
-        const isNumeroSimples = /^\s*\d+\s*$/.test(conteudo);
+        // Verificar se é número simples (incluindo decimais) e há sessão ativa
+        const isNumeroSimples = /^\s*\d+([,.]\d+)?\s*$/.test(conteudo);
+        console.log(`🔢 [DEBUG WEBHOOK] Testando "${conteudo}" com regex decimal: ${isNumeroSimples}`);
         
         if (isNumeroSimples) {
           console.log(`🔢 Número simples detectado: "${conteudo}" - verificando sessões ativas...`);
