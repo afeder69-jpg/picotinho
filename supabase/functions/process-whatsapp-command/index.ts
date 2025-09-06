@@ -141,7 +141,9 @@ const handler = async (req: Request): Promise<Response> => {
       console.log('🔍 [DEBUG] temSinalMais:', temSinalMais);
       
       // Comandos para ADICIONAR PRODUTO NOVO
-      const isAdicionar = textoNormalizado.match(/\b(incluir|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)\b/);
+      const isAdicionar = textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/);
+      console.log('🔍 [DEBUG] isAdicionar match:', textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/));
+      console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
       
       // Comandos para CONSULTAR ESTOQUE
       const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
@@ -648,8 +650,8 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Remover comandos variados do início
-    const comandosAdicionar = /(?:picotinho,?\s*)?(incluir|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar)\s+/i;
+    // Remover comandos variados do início - captura TUDO que vem depois das palavras-chave
+    const comandosAdicionar = /(?:picotinho,?\s*)?(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar)\s+/i;
     const textoLimpo = texto.replace(comandosAdicionar, '').trim();
     
     if (!textoLimpo) {
