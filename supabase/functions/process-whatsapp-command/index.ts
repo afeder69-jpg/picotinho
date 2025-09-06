@@ -141,7 +141,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.log('🔍 [DEBUG] temSinalMais:', temSinalMais);
       
       // Comandos para ADICIONAR PRODUTO NOVO
-      const isAdicionar = textoNormalizado.match(/\b(adicionar|adiciona|cadastrar produto|inserir produto|botar produto)\b/);
+      const isAdicionar = textoNormalizado.match(/\b(incluir|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)\b/);
       
       // Comandos para CONSULTAR ESTOQUE
       const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
@@ -648,39 +648,21 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     
     const texto = mensagem.conteudo.toLowerCase();
     
-    // Remover comando "adicionar" do início (Picotinho, adiciona | adicionar) 
-    const comandosAdicionar = /(?:picotinho,?\s*)?(adiciona|adicionar)\s+/i;
+    // Remover comandos variados do início
+    const comandosAdicionar = /(?:picotinho,?\s*)?(incluir|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar)\s+/i;
     const textoLimpo = texto.replace(comandosAdicionar, '').trim();
     
     if (!textoLimpo) {
-      return "❌ Não entendi. Para adicionar, use: 'adicionar [quantidade] [produto]'.";
+      return "❌ Não entendi. Para incluir um produto, use: 'Incluir café pilão 500g'.";
     }
     
-    // Extrair quantidade se especificada
-    const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|kilos?|quilos?|g|gramas?|l|litros?|ml|unidade|un|pacote)?\s*(?:de\s+)?(.+)/i;
-    const match = textoLimpo.match(regexQuantidade);
-    
-    let quantidade = 1;
-    let unidade = 'UN';
+    // Extrair nome do produto (sem quantidade para este fluxo)
     let produtoNome = textoLimpo.toUpperCase();
-    
-    if (match) {
-      quantidade = parseFloat(match[1].replace(',', '.'));
-      unidade = match[2] ? match[2].toUpperCase() : 'UN';
-      produtoNome = match[3].trim().toUpperCase();
-      
-      // Normalizar unidades
-      if (unidade.match(/G|GRAMAS?/i)) unidade = 'G';
-      else if (unidade.match(/KG|KILOS?|QUILOS?/i)) unidade = 'KG';
-      else if (unidade.match(/L|LITROS?/i)) unidade = 'L';
-      else if (unidade.match(/ML/i)) unidade = 'ML';
-      else if (unidade.match(/UNIDADE|UN|PACOTE/i)) unidade = 'UN';
-    }
     
     // Limpar completamente qualquer prefixo técnico do nome do produto
     produtoNome = limparNomeProduto(produtoNome);
     
-    console.log(`📦 Adicionando produto: ${quantidade} ${unidade} de ${produtoNome}`);
+    console.log(`📦 Iniciando cadastro do produto: ${produtoNome}`);
     
     // Verificar se produto já existe
     const { data: existente, error: erroExistente } = await supabase
@@ -700,45 +682,25 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
       return `⚠️ O produto ${produtoNomeLimpo} já existe no estoque. Use o comando 'aumentar' para atualizar a quantidade.`;
     }
     
-    // Arredondar quantidade baseado na unidade
-    if (unidade === 'KG') {
-      quantidade = Math.round(quantidade * 100) / 100; // 2 casas decimais
-    } else {
-      quantidade = Math.round(quantidade); // Número inteiro para outras unidades
-    }
-    
-    // Criar novo produto no estoque
-    const { data: novoProduto } = await supabase
-      .from('estoque_app')
-      .insert({
-        user_id: mensagem.usuario_id,
-        produto_nome: produtoNome,
-        categoria: 'outros',
-        quantidade: quantidade,
-        unidade_medida: unidade,
-        preco_unitario_ultimo: 0
-      })
-      .select()
-      .single();
-    
-    // Criar sessão para aguardar preço
+    // Criar sessão para fluxo multi-step
     await supabase
       .from('whatsapp_sessions')
       .insert({
         usuario_id: mensagem.usuario_id,
         remetente: mensagem.remetente,
-        estado: 'aguardando_preco',
-        produto_id: novoProduto.id,
+        estado: 'aguardando_unidade',
         produto_nome: produtoNome,
-        contexto: { quantidade, unidade },
+        contexto: { tentativas_erro: 0 },
         expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora
       });
     
-    const quantidadeFormatada = formatarQuantidade(quantidade, unidade);
     const produtoNomeLimpo = limparNomeProduto(produtoNome);
     
-    // Retornar mensagem solicitando o preço de compra
-    return `✅ Produto ${produtoNomeLimpo} adicionado com ${quantidadeFormatada} em estoque.\n\nInforme o preço de compra para ${produtoNomeLimpo} (ex: 5,90):`;
+    // Primeira pergunta: unidade
+    return `Qual a unidade do produto ${produtoNomeLimpo}?
+1️⃣ Quilo
+2️⃣ Unidade  
+3️⃣ Litro`;
     
   } catch (error) {
     console.error('❌ Erro ao adicionar produto:', error);
@@ -753,118 +715,255 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
   try {
     console.log(`🔄 Processando resposta para sessão: ${sessao.estado}`);
     
-    if (sessao.estado === 'aguardando_preco') {
-      // Processar preço informado
-      const precoMatch = mensagem.conteudo.match(/(\d+(?:[.,]\d+)?)/);
-      if (!precoMatch) {
-        const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
-        return `❌ Preço inválido. Digite apenas o valor em reais (exemplo: 5,90 ou 5.90).\n\nInforme o preço de compra para ${produtoNomeLimpo}:`;
+    const tentativasErro = sessao.contexto?.tentativas_erro || 0;
+    const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
+    
+    // ETAPA 1: Aguardando unidade
+    if (sessao.estado === 'aguardando_unidade') {
+      const resposta = mensagem.conteudo.trim().toLowerCase();
+      let unidadeSelecionada = null;
+      
+      // Mapear resposta para unidade
+      if (resposta === '1' || resposta.includes('quilo') || resposta.includes('kg')) {
+        unidadeSelecionada = 'kg';
+      } else if (resposta === '2' || resposta.includes('unidade') || resposta.includes('un')) {
+        unidadeSelecionada = 'un';
+      } else if (resposta === '3' || resposta.includes('litro') || resposta.includes('l')) {
+        unidadeSelecionada = 'l';
       }
       
-      const preco = parseFloat(precoMatch[1].replace(',', '.'));
+      if (!unidadeSelecionada) {
+        const novasTentativas = tentativasErro + 1;
+        
+        if (novasTentativas >= 3) {
+          // Encerrar sessão após 3 tentativas
+          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
+Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
+Exemplos:
+• "Consulta arroz"
+• "Incluir café pilão 500g"
+• "Aumentar 2kg de banana"`;
+        }
+        
+        // Atualizar tentativas de erro
+        await supabase
+          .from('whatsapp_sessions')
+          .update({
+            contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessao.id);
+        
+        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+
+Qual a unidade do produto ${produtoNomeLimpo}?
+1️⃣ Quilo
+2️⃣ Unidade  
+3️⃣ Litro`;
+      }
       
-      // Atualizar produto no estoque com o preço
+      // Avançar para próxima etapa
       await supabase
-        .from('estoque_app')
+        .from('whatsapp_sessions')
         .update({
-          preco_unitario_ultimo: preco,
+          estado: 'aguardando_quantidade',
+          contexto: { ...sessao.contexto, unidade: unidadeSelecionada, tentativas_erro: 0 },
           updated_at: new Date().toISOString()
         })
-        .eq('id', sessao.produto_id);
+        .eq('id', sessao.id);
       
-      // Atualizar sessão para aguardar categoria
+      return `Qual a quantidade do produto ${produtoNomeLimpo}?`;
+    }
+    
+    // ETAPA 2: Aguardando quantidade
+    else if (sessao.estado === 'aguardando_quantidade') {
+      const quantidadeMatch = mensagem.conteudo.match(/(\d+(?:[.,]\d+)?)/);
+      
+      if (!quantidadeMatch) {
+        const novasTentativas = tentativasErro + 1;
+        
+        if (novasTentativas >= 3) {
+          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
+Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
+Exemplos:
+• "Consulta arroz"
+• "Incluir café pilão 500g"
+• "Aumentar 2kg de banana"`;
+        }
+        
+        await supabase
+          .from('whatsapp_sessions')
+          .update({
+            contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessao.id);
+        
+        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+
+Qual a quantidade do produto ${produtoNomeLimpo}?`;
+      }
+      
+      const quantidade = parseFloat(quantidadeMatch[1].replace(',', '.'));
+      
+      // Avançar para próxima etapa
       await supabase
         .from('whatsapp_sessions')
         .update({
           estado: 'aguardando_categoria',
-          contexto: { ...sessao.contexto, preco_informado: preco },
+          contexto: { ...sessao.contexto, quantidade, tentativas_erro: 0 },
           updated_at: new Date().toISOString()
         })
         .eq('id', sessao.id);
       
-      const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
-      return `💰 Preço R$ ${preco.toFixed(2).replace('.', ',')} registrado para ${produtoNomeLimpo}!\n\nAgora escolha a categoria (digite o número ou o nome):\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Açougue\n6️⃣ Frios\n7️⃣ Limpeza\n8️⃣ Higiene/Farmácia\n9️⃣ Pet\n🔟 Outros`;
+      return `Qual categoria deseja para ${produtoNomeLimpo}?
+1️⃣ Hortifruti
+2️⃣ Bebidas
+3️⃣ Mercearia
+4️⃣ Açougue
+5️⃣ Padaria
+6️⃣ Laticínios/Frios
+7️⃣ Limpeza
+8️⃣ Higiene/Farmácia
+9️⃣ Congelados
+🔟 Pet
+1️⃣1️⃣ Outros`;
+    }
+    
+    // ETAPA 3: Aguardando categoria
+    else if (sessao.estado === 'aguardando_categoria') {
+      const resposta = mensagem.conteudo.trim().toLowerCase();
+      let categoriaSelecionada = null;
       
-    } else if (sessao.estado === 'aguardando_categoria') {
-      // Processar categoria informada
-      const textoLimpo = mensagem.conteudo.trim().toLowerCase();
-      
-      // Mapeamento de categorias (número e nome)
-      const categorias = {
-        '1': 'Hortifruti',
-        '2': 'Bebidas', 
-        '3': 'Padaria',
-        '4': 'Mercearia',
-        '5': 'Açougue',
-        '6': 'Frios',
-        '7': 'Limpeza',
-        '8': 'Higiene/Farmácia',
-        '9': 'Pet',
-        '10': 'Outros'
+      // Mapear resposta para categoria
+      const mapeamentoCategoria = {
+        '1': 'hortifruti', 'hortifruti': 'hortifruti',
+        '2': 'bebidas', 'bebidas': 'bebidas',
+        '3': 'mercearia', 'mercearia': 'mercearia',
+        '4': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue',
+        '5': 'padaria': 'padaria',
+        '6': 'laticínios', 'frios': 'laticínios', 'laticinios': 'laticínios',
+        '7': 'limpeza': 'limpeza',
+        '8': 'higiene': 'higiene', 'farmacia': 'higiene',
+        '9': 'congelados': 'congelados',
+        '10': 'pet': 'pet',
+        '11': 'outros': 'outros'
       };
       
-      // Mapeamento reverso por nome
-      const categoriasPorNome = {
-        'hortifruti': 'Hortifruti',
-        'bebidas': 'Bebidas',
-        'padaria': 'Padaria', 
-        'mercearia': 'Mercearia',
-        'acougue': 'Açougue',
-        'frios': 'Frios',
-        'limpeza': 'Limpeza',
-        'higiene': 'Higiene/Farmácia',
-        'farmacia': 'Higiene/Farmácia',
-        'pet': 'Pet',
-        'outros': 'Outros'
-      };
+      categoriaSelecionada = mapeamentoCategoria[resposta];
       
-      let categoriaSelecionada: string | null = null;
-      
-      // Verificar se é número
-      if (categorias[textoLimpo]) {
-        categoriaSelecionada = categorias[textoLimpo];
-      }
-      // Verificar se é nome da categoria
-      else if (categoriasPorNome[textoLimpo]) {
-        categoriaSelecionada = categoriasPorNome[textoLimpo];
-      }
-      // Verificar correspondências parciais
-      else {
-        for (const [key, value] of Object.entries(categoriasPorNome)) {
-          if (textoLimpo.includes(key) || key.includes(textoLimpo)) {
-            categoriaSelecionada = value;
-            break;
-          }
-        }
-      }
-      
-      // Se não foi encontrada categoria válida
       if (!categoriaSelecionada) {
-        const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
-        return `❌ Categoria inválida. Digite o número ou o nome da categoria.\n\nEscolha a categoria para ${produtoNomeLimpo}:\n\n1️⃣ Hortifruti\n2️⃣ Bebidas\n3️⃣ Padaria\n4️⃣ Mercearia\n5️⃣ Açougue\n6️⃣ Frios\n7️⃣ Limpeza\n8️⃣ Higiene/Farmácia\n9️⃣ Pet\n🔟 Outros`;
+        const novasTentativas = tentativasErro + 1;
+        
+        if (novasTentativas >= 3) {
+          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
+Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
+Exemplos:
+• "Consulta arroz"
+• "Incluir café pilão 500g"
+• "Aumentar 2kg de banana"`;
+        }
+        
+        await supabase
+          .from('whatsapp_sessions')
+          .update({
+            contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessao.id);
+        
+        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+
+Qual categoria deseja para ${produtoNomeLimpo}?
+1️⃣ Hortifruti
+2️⃣ Bebidas
+3️⃣ Mercearia
+4️⃣ Açougue
+5️⃣ Padaria
+6️⃣ Laticínios/Frios
+7️⃣ Limpeza
+8️⃣ Higiene/Farmácia
+9️⃣ Congelados
+🔟 Pet
+1️⃣1️⃣ Outros`;
       }
       
-      const precoInformado = sessao.contexto?.preco_informado || 0;
-      
-      // Atualizar produto no estoque com a categoria
-      await supabase
-        .from('estoque_app')
-        .update({
-          categoria: categoriaSelecionada.toLowerCase(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessao.produto_id);
-      
-      // Encerrar sessão
+      // Avançar para próxima etapa
       await supabase
         .from('whatsapp_sessions')
-        .delete()
+        .update({
+          estado: 'aguardando_preco',
+          contexto: { ...sessao.contexto, categoria: categoriaSelecionada, tentativas_erro: 0 },
+          updated_at: new Date().toISOString()
+        })
         .eq('id', sessao.id);
       
-      const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
-      const quantidadeFormatada = formatarQuantidade(sessao.contexto?.quantidade || 0, sessao.contexto?.unidade || 'unidade');
+      return `Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor, ex.: 8,90)`;
+    }
+    
+    // ETAPA 4: Aguardando preço
+    else if (sessao.estado === 'aguardando_preco') {
+      const precoMatch = mensagem.conteudo.match(/(\d+(?:[.,]\d+)?)/);
       
-      return `✅ Produto ${produtoNomeLimpo} adicionado com ${quantidadeFormatada}.\n💰 Preço: R$ ${precoInformado.toFixed(2).replace('.', ',')} | 📂 Categoria: ${categoriaSelecionada}`;
+      if (!precoMatch) {
+        const novasTentativas = tentativasErro + 1;
+        
+        if (novasTentativas >= 3) {
+          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+          return `👋 Olá, eu sou o Picotinho, seu assistente de compras!
+Você pode me pedir para consultar o estoque, incluir um novo produto ou atualizar um produto existente.
+Exemplos:
+• "Consulta arroz"
+• "Incluir café pilão 500g"
+• "Aumentar 2kg de banana"`;
+        }
+        
+        await supabase
+          .from('whatsapp_sessions')
+          .update({
+            contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessao.id);
+        
+        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+
+Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor, ex.: 8,90)`;
+      }
+      
+      const preco = parseFloat(precoMatch[1].replace(',', '.'));
+      const { unidade, quantidade, categoria } = sessao.contexto;
+      
+      // Converter quantidade com 3 casas decimais
+      const quantidadeDecimal = Math.round(quantidade * 1000) / 1000;
+      
+      // Criar produto no estoque
+      await supabase
+        .from('estoque_app')
+        .insert({
+          user_id: mensagem.usuario_id,
+          produto_nome: sessao.produto_nome,
+          categoria: categoria,
+          quantidade: quantidadeDecimal,
+          unidade_medida: unidade.toUpperCase(),
+          preco_unitario_ultimo: preco
+        });
+      
+      // Encerrar sessão
+      await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+      
+      // Formatar resposta final
+      const quantidadeFormatada = formatarQuantidade(quantidadeDecimal, unidade);
+      const precoFormatado = `R$ ${preco.toFixed(2).replace('.', ',')}`;
+      const categoriaDisplay = categoria.charAt(0).toUpperCase() + categoria.slice(1);
+      
+      return `✅ Produto ${produtoNomeLimpo} adicionado com sucesso!
+📦 Quantidade: ${quantidadeFormatada}
+📂 Categoria: ${categoriaDisplay}
+💰 Preço: ${precoFormatado}`;
     }
     
     return "❌ Estado de sessão inválido.";
