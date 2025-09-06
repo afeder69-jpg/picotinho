@@ -114,6 +114,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       // PRIORIDADE 1: VERIFICAÇÃO ESPECIAL para números/decimais (resposta a sessão perdida)
       const isNumeroOuDecimal = /^\s*\d+([,.]\d+)?\s*$/.test(mensagem.conteudo);
+      console.log(`🔍 [DEBUG] Testando número/decimal "${mensagem.conteudo}": ${isNumeroOuDecimal}`);
       
       if (isNumeroOuDecimal) {
         console.log(`🔢 [ESPECIAL] Número/decimal detectado: "${mensagem.conteudo}" - verificando sessões não expiradas`);
@@ -654,24 +655,38 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
 
 // Função para normalizar preços (vírgula/ponto para formato padrão)
 function normalizarPreco(input: string): number | null {
-  if (!input) return null;
+  if (!input) {
+    console.log(`💰 [DEBUG] normalizarPreco: input vazio`);
+    return null;
+  }
+
+  console.log(`💰 [DEBUG] normalizarPreco: input original = "${input}"`);
 
   // Remove espaços extras
   let valor = input.trim();
+  console.log(`💰 [DEBUG] normalizarPreco: após trim = "${valor}"`);
 
   // Troca vírgula por ponto (para 45,90 → 45.90)
   valor = valor.replace(',', '.');
+  console.log(`💰 [DEBUG] normalizarPreco: após replace vírgula = "${valor}"`);
 
   // Remove qualquer caractere inválido
   valor = valor.replace(/[^0-9.]/g, '');
+  console.log(`💰 [DEBUG] normalizarPreco: após limpar caracteres = "${valor}"`);
 
   // Converte para número
   const num = parseFloat(valor);
+  console.log(`💰 [DEBUG] normalizarPreco: parseFloat = ${num}`);
 
-  if (isNaN(num)) return null;
+  if (isNaN(num)) {
+    console.log(`💰 [DEBUG] normalizarPreco: NaN detectado, retornando null`);
+    return null;
+  }
 
   // Retorna sempre com 2 casas decimais
-  return Math.round(num * 100) / 100;
+  const resultado = Math.round(num * 100) / 100;
+  console.log(`💰 [DEBUG] normalizarPreco: resultado final = ${resultado}`);
+  return resultado;
 }
 
 // Função para formatar preço para exibição (R$ X,XX)
@@ -938,7 +953,9 @@ Qual categoria deseja para ${produtoNomeLimpo}?
     
     // ETAPA 4: Aguardando preço
     else if (sessao.estado === 'aguardando_preco') {
+      console.log(`💰 [DEBUG] Processando preço: "${mensagem.conteudo}"`);
       const precoNormalizado = normalizarPreco(mensagem.conteudo);
+      console.log(`💰 [DEBUG] Preço normalizado: ${precoNormalizado}`);
       
       if (precoNormalizado === null || precoNormalizado <= 0) {
         const novasTentativas = tentativasErro + 1;
