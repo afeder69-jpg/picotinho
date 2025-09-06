@@ -79,7 +79,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Se houve sessão expirada, enviar mensagem inicial e retornar
     if (sessaoExpirada) {
       console.log(`⏰ [TIMEOUT] Sessão expirou - enviando mensagem inicial`);
-      resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+      resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
       
       // Enviar resposta e marcar como processada
       await enviarRespostaWhatsApp(mensagem.remetente, resposta);
@@ -863,7 +863,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
@@ -905,7 +905,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
@@ -981,7 +981,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
@@ -1042,7 +1042,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
