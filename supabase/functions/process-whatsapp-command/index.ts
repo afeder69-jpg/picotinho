@@ -779,10 +779,13 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
     const produtoNomeLimpo = limparNomeProduto(produtoNome);
     
     // Primeira pergunta: unidade
-    return `Qual a unidade do produto ${produtoNomeLimpo}?
-1️⃣ Quilo
-2️⃣ Unidade  
-3️⃣ Litro`;
+    return `Qual a unidade do produto ${produtoNomeLimpo}? Escolha uma das opções:
+
+📦 unidade, un
+⚖️ kg, g
+🥤 l, ml
+📦 pacote, pct
+📦 caixa, cx`;
     
   } catch (error) {
     console.error('❌ Erro ao adicionar produto:', error);
@@ -802,16 +805,12 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
     
     // ETAPA 1: Aguardando unidade
     if (sessao.estado === 'aguardando_unidade') {
-      const resposta = mensagem.conteudo.trim().toLowerCase();
+      const unidadesSugeridas = ['unidade', 'un', 'kg', 'g', 'l', 'ml', 'pacote', 'pct', 'caixa', 'cx'];
+      const unidadeNormalizada = mensagem.conteudo.toLowerCase().trim();
       let unidadeSelecionada = null;
       
-      // Mapear resposta para unidade
-      if (resposta === '1' || resposta.includes('quilo') || resposta.includes('kg')) {
-        unidadeSelecionada = 'kg';
-      } else if (resposta === '2' || resposta.includes('unidade') || resposta.includes('un')) {
-        unidadeSelecionada = 'un';
-      } else if (resposta === '3' || resposta.includes('litro') || resposta.includes('l')) {
-        unidadeSelecionada = 'l';
+      if (unidadesSugeridas.includes(unidadeNormalizada)) {
+        unidadeSelecionada = unidadeNormalizada;
       }
       
       if (!unidadeSelecionada) {
@@ -832,10 +831,13 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         
         return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
-Qual a unidade do produto ${produtoNomeLimpo}?
-1️⃣ Quilo
-2️⃣ Unidade  
-3️⃣ Litro`;
+Qual a unidade do produto ${produtoNomeLimpo}? Escolha uma das opções:
+
+📦 unidade, un
+⚖️ kg, g
+🥤 l, ml
+📦 pacote, pct
+📦 caixa, cx`;
       }
       
       // Avançar para próxima etapa
@@ -887,41 +889,31 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
         })
         .eq('id', sessao.id);
       
-      return `Qual categoria deseja para ${produtoNomeLimpo}?
-1️⃣ Hortifruti
-2️⃣ Bebidas
-3️⃣ Mercearia
-4️⃣ Açougue
-5️⃣ Padaria
-6️⃣ Laticínios/Frios
-7️⃣ Limpeza
-8️⃣ Higiene/Farmácia
-9️⃣ Congelados
-🔟 Pet
-1️⃣1️⃣ Outros`;
+      return `Qual categoria deseja para ${produtoNomeLimpo}? Escolha uma das opções:
+
+🥩 açougue
+🥛 laticínios
+🍞 padaria
+🧹 limpeza
+🧴 higiene
+🍎 hortifruti
+🥫 mercearia
+❄️ congelados
+🍺 bebidas
+🏥 farmácia
+🐕 pet
+📱 outros`;
     }
     
     // ETAPA 3: Aguardando categoria
     else if (sessao.estado === 'aguardando_categoria') {
-      const resposta = mensagem.conteudo.trim().toLowerCase();
+      const categoriasSugeridas = ['açougue', 'laticínios', 'padaria', 'limpeza', 'higiene', 'hortifruti', 'mercearia', 'congelados', 'bebidas', 'farmácia', 'pet', 'outros'];
+      const categoriaNormalizada = mensagem.conteudo.toLowerCase().trim();
       let categoriaSelecionada = null;
       
-      // Mapear resposta para categoria
-      const mapeamentoCategoria = {
-        '1': 'hortifruti', 'hortifruti': 'hortifruti',
-        '2': 'bebidas', 'bebidas': 'bebidas',
-        '3': 'mercearia', 'mercearia': 'mercearia',
-        '4': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue',
-        '5': 'padaria', 'padaria': 'padaria',
-        '6': 'laticínios', 'frios': 'laticínios', 'laticinios': 'laticínios',
-        '7': 'limpeza', 'limpeza': 'limpeza',
-        '8': 'higiene', 'higiene': 'higiene', 'farmacia': 'higiene',
-        '9': 'congelados', 'congelados': 'congelados',
-        '10': 'pet', 'pet': 'pet',
-        '11': 'outros', 'outros': 'outros'
-      };
-      
-      categoriaSelecionada = mapeamentoCategoria[resposta];
+      if (categoriasSugeridas.includes(categoriaNormalizada)) {
+        categoriaSelecionada = categoriaNormalizada;
+      }
       
       if (!categoriaSelecionada) {
         const novasTentativas = tentativasErro + 1;
@@ -940,18 +932,20 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
         
         return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
-Qual categoria deseja para ${produtoNomeLimpo}?
-1️⃣ Hortifruti
-2️⃣ Bebidas
-3️⃣ Mercearia
-4️⃣ Açougue
-5️⃣ Padaria
-6️⃣ Laticínios/Frios
-7️⃣ Limpeza
-8️⃣ Higiene/Farmácia
-9️⃣ Congelados
-🔟 Pet
-1️⃣1️⃣ Outros`;
+Qual categoria deseja para ${produtoNomeLimpo}? Escolha uma das opções:
+
+🥩 açougue
+🥛 laticínios
+🍞 padaria
+🧹 limpeza
+🧴 higiene
+🍎 hortifruti
+🥫 mercearia
+❄️ congelados
+🍺 bebidas
+🏥 farmácia
+🐕 pet
+📱 outros`;
       }
       
       // Avançar para próxima etapa
