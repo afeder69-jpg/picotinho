@@ -164,21 +164,22 @@ const handler = async (req: Request): Promise<Response> => {
           resposta += await processarAumentarEstoque(supabase, mensagem);
           comandoExecutado = true;
         } else if (isAdicionar) {
-        console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
-        resposta += await processarAdicionarProduto(supabase, mensagem);
-        comandoExecutado = true;
-      } else if (isConsultarCategoria) {
-        console.log('📂 Comando CONSULTAR CATEGORIA identificado:', textoNormalizado);
-        resposta += await processarConsultarCategoria(supabase, mensagem);
-        comandoExecutado = true;
-      } else if (isConsultar) {
-        console.log('🔍 Comando CONSULTAR identificado:', textoNormalizado);
-        resposta += await processarConsultarEstoque(supabase, mensagem);
-        comandoExecutado = true;
-      } else {
-        // PRIORIDADE 3: Fallback para comandos não reconhecidos
-        console.log('❌ Comando não reconhecido:', textoNormalizado);
-        resposta += "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta [produto]'.";
+          console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
+          resposta += await processarAdicionarProduto(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (isConsultarCategoria) {
+          console.log('📂 Comando CONSULTAR CATEGORIA identificado:', textoNormalizado);
+          resposta += await processarConsultarCategoria(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (isConsultar) {
+          console.log('🔍 Comando CONSULTAR identificado:', textoNormalizado);
+          resposta += await processarConsultarEstoque(supabase, mensagem);
+          comandoExecutado = true;
+        } else {
+          // PRIORIDADE 3: Fallback para comandos não reconhecidos
+          console.log('❌ Comando não reconhecido:', textoNormalizado);
+          resposta += "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta [produto]'.";
+        }
       }
     }
 
