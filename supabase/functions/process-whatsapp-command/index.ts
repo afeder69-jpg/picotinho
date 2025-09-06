@@ -843,11 +843,11 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
         '2': 'bebidas', 'bebidas': 'bebidas',
         '3': 'mercearia', 'mercearia': 'mercearia',
         '4': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue',
-        '5': 'padaria': 'padaria',
+        '5': 'padaria', 'padaria': 'padaria',
         '6': 'laticínios', 'frios': 'laticínios', 'laticinios': 'laticínios',
-        '7': 'limpeza': 'limpeza',
-        '8': 'higiene': 'higiene', 'farmacia': 'higiene',
-        '9': 'congelados': 'congelados',
+        '7': 'limpeza', 'limpeza': 'limpeza',
+        '8': 'higiene', 'higiene': 'higiene', 'farmacia': 'higiene',
+        '9': 'congelados', 'congelados': 'congelados',
         '10': 'pet': 'pet',
         '11': 'outros': 'outros'
       };
