@@ -272,6 +272,15 @@ const handler = async (req: Request): Promise<Response> => {
           console.log('❌ [FALLBACK] isAumentar:', isAumentar);
           console.log('❌ [FALLBACK] isAdicionar:', isAdicionar);
           console.log('❌ [FALLBACK] isConsultar:', isConsultar);
+          // Limpar qualquer sessão ativa antes de enviar mensagem inicial
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('usuario_id', mensagem.usuario_id)
+            .eq('remetente', mensagem.remetente);
+          
+          console.log(`🗑️ [RESET] Sessões ativas removidas para ${mensagem.remetente}`);
+          
           resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
       }
@@ -585,6 +594,16 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     }
 
     console.log(`❌ [FALLBACK] Texto não contém "consulta" - retornando fallback`);
+    
+    // Limpar qualquer sessão ativa antes de retornar mensagem inicial
+    await supabase
+      .from('whatsapp_sessions')
+      .delete()
+      .eq('usuario_id', usuarioId)
+      .eq('remetente', remetente);
+    
+    console.log(`🗑️ [RESET] Sessões ativas removidas para consulta fallback`);
+    
     // Fallback se não for comando válido
     return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
 
