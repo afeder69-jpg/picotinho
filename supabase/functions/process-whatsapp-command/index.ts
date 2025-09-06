@@ -111,12 +111,17 @@ const handler = async (req: Request): Promise<Response> => {
       // Verificar sinal de menos ANTES da normalização para não perder o símbolo
       const temSinalMenos = /^\s*-\s*\d/.test(mensagem.conteudo);
       
+      console.log(`🔍 [DEBUG] Conteudo original: "${mensagem.conteudo}"`);
+      console.log(`🔍 [DEBUG] Tem sinal menos:`, temSinalMenos);
+      
       const textoNormalizado = mensagem.conteudo.toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
         .replace(/[^\w\s]/gi, ""); // Remove pontuação
       
       // Comandos para BAIXAR ESTOQUE
       const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || temSinalMenos;
+      
+      console.log(`🔍 [DEBUG] isBaixar result:`, isBaixar);
       
       // Comandos para AUMENTAR ESTOQUE
       const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/);
