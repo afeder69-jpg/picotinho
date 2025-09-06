@@ -95,10 +95,10 @@ const handler = async (req: Request): Promise<Response> => {
         
         console.log('🔍 Texto limpo para análise:', textoLimpo);
         
-        // Identificar comando baseado em palavras-chave
-        if (textoLimpo.match(/\b(baixa|baixar|diminui|diminuir|remove|remover)\b/)) {
+        // Identificar comando baseado em palavras-chave E símbolos
+        if (textoLimpo.startsWith('-') || textoLimpo.match(/\b(baixa|baixar|diminui|diminuir|remove|remover)\b/)) {
           comando_identificado = 'baixar_estoque';
-        } else if (textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
+        } else if (textoLimpo.startsWith('+') || textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
           comando_identificado = 'aumentar_estoque';
         } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar)\b/)) {
           comando_identificado = 'consultar_estoque';
