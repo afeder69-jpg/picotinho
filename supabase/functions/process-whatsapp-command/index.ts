@@ -838,7 +838,6 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         
         return `❌ Não entendi. Escolha uma das opções: Kg, Unidade ou Litro.`;
       }
-      }
       
       // Avançar para próxima etapa
       await supabase
