@@ -99,13 +99,17 @@ const handler = async (req: Request): Promise<Response> => {
         resposta += `❌ Erro ao processar sua resposta. Tente novamente.`;
       }
     } else {
+      console.log('📍 [FLUXO] Nenhuma sessão ativa - processando como comando novo');
+      
       // LIMPAR SESSÕES EXPIRADAS ANTES DE PROCESSAR NOVO COMANDO
+      console.log('🧹 [LIMPEZA] Removendo sessões expiradas...');
       await supabase
         .from('whatsapp_sessions')
         .delete()
         .eq('usuario_id', mensagem.usuario_id)
         .eq('remetente', mensagem.remetente)
         .lt('expires_at', new Date().toISOString());
+      console.log('🧹 [LIMPEZA] Sessões expiradas removidas');
 
       // PRIORIDADE 2: Verificar comandos novos
       console.log('🚀 [INICIO VERIFICACAO] Conteudo da mensagem:', mensagem.conteudo);
