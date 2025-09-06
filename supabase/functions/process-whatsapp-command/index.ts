@@ -115,12 +115,25 @@ const handler = async (req: Request): Promise<Response> => {
       // PRIORIDADE 1: VERIFICAÇÃO ESPECIAL para números/decimais (resposta a sessão perdida)
       const isNumeroOuDecimal = /^\s*\d+([,.]\d+)?\s*$/.test(mensagem.conteudo);
       console.log(`🔍 [DEBUG] Testando número/decimal "${mensagem.conteudo}": ${isNumeroOuDecimal}`);
+      console.log(`🔍 [DEBUG] Regex usado: /^\\s*\\d+([,.]+)\\s*$/`);
+      console.log(`🔍 [DEBUG] Conteudo trimmed: "${mensagem.conteudo.trim()}"`);
+      console.log(`🔍 [DEBUG] Length do conteudo: ${mensagem.conteudo.length}`);
+      
+      
+      // Teste específico para valores como "10,50"
+      if (mensagem.conteudo === "10,50") {
+        console.log(`🔍 [DEBUG ESPECIAL] Testando especificamente "10,50"`);
+        console.log(`🔍 [DEBUG ESPECIAL] Regex match: ${/^\s*\d+([,.]\d+)?\s*$/.test("10,50")}`);
+      }
       
       if (isNumeroOuDecimal) {
         console.log(`🔢 [ESPECIAL] Número/decimal detectado: "${mensagem.conteudo}" - verificando sessões não expiradas`);
         
         // Buscar QUALQUER sessão não expirada para este usuário
-        const { data: sessaoAlternativa } = await supabase
+        console.log(`🔍 [DEBUG SESSAO] Buscando sessão ativa para: usuario_id=${mensagem.usuario_id}, remetente=${mensagem.remetente}`);
+        console.log(`🔍 [DEBUG SESSAO] Data atual para comparação: ${new Date().toISOString()}`);
+        
+        const { data: sessaoAlternativa, error: erroSessaoAlt } = await supabase
           .from('whatsapp_sessions')
           .select('*')
           .eq('usuario_id', mensagem.usuario_id)
@@ -129,6 +142,9 @@ const handler = async (req: Request): Promise<Response> => {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+          
+        console.log(`🔍 [DEBUG SESSAO] Erro na busca:`, erroSessaoAlt);
+        console.log(`🔍 [DEBUG SESSAO] Sessão encontrada:`, sessaoAlternativa);
           
         if (sessaoAlternativa) {
           console.log(`🔢 [ESPECIAL] Sessão alternativa encontrada: ${sessaoAlternativa.estado} - processando número como resposta`);
