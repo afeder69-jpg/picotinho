@@ -105,7 +105,7 @@ const handler = async (req: Request): Promise<Response> => {
           comando_identificado = 'aumentar_estoque';
         } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar)\b/)) {
           comando_identificado = 'consultar_estoque';
-        } else if (textoLimpo.match(/\b(adiciona|adicionar|add|novo produto|criar produto|inclui|incluir|cria|criar)\b/)) {
+        } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
           comando_identificado = 'adicionar_produto';
         }
         

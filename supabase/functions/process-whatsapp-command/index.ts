@@ -194,9 +194,9 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] Match regex aumentar:', textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/));
         console.log('🔍 [DEBUG] temSinalMais:', temSinalMais);
         
-        // Comandos para ADICIONAR PRODUTO NOVO
-        const isAdicionar = textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/);
-        console.log('🔍 [DEBUG] isAdicionar match:', textoNormalizado.match(/(inclui|incluir|cria|criar|cadastra|cadastrar|adicionar|adiciona)/));
+        // Comandos para ADICIONAR PRODUTO NOVO  
+        const isAdicionar = textoNormalizado.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar)\b/);
+        console.log('🔍 [DEBUG] isAdicionar match:', textoNormalizado.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar)\b/));
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
         // Comandos para CONSULTAR ESTOQUE
