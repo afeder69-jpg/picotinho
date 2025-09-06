@@ -114,7 +114,7 @@ const handler = async (req: Request): Promise<Response> => {
       
       // Comandos para BAIXAR ESTOQUE
       const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || 
-                       mensagem.conteudo.trim().startsWith('-');
+                       /^\s*-\s*\d/.test(mensagem.conteudo);
       
       // Comandos para AUMENTAR ESTOQUE
       const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/);
@@ -157,7 +157,7 @@ const handler = async (req: Request): Promise<Response> => {
       
       if (!comandoExecutado) {
         if (isBaixar) {
-          console.log('📉 Comando BAIXAR identificado:', mensagem.conteudo.trim().startsWith('-') ? 'simbolo menos' : textoNormalizado);
+          console.log('📉 Comando BAIXAR identificado:', /^\s*-\s*\d/.test(mensagem.conteudo) ? 'simbolo menos' : textoNormalizado);
           resposta += await processarBaixarEstoque(supabase, mensagem);
           comandoExecutado = true;
         } else if (isAumentar) {
@@ -255,7 +255,12 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     
     // Regex para extrair quantidade e produto (incluindo "k" e "gr")
     const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|k|kilos?|quilos?|g|gr|gramas?|l|litros?|ml|unidade|unid|und|un|pacote)?\s*(?:de\s+)?(.+)/i;
-    const match = texto.replace(/picotinho\s*(baixa?|baixar?)\s*/i, '').replace(/^\s*-\s*/, '').match(regexQuantidade);
+    
+    // Limpar texto removendo comando e símbolo de menos
+    let textoLimpo = texto.replace(/picotinho\s*(baixa?|baixar?)\s*/i, '');
+    textoLimpo = textoLimpo.replace(/^\s*-\s*/, '');
+    
+    const match = textoLimpo.match(regexQuantidade);
     
     if (!match) {
       return "Não consegui entender a quantidade e produto. Tente: 'Picotinho, baixa 1 kg de banana'";
