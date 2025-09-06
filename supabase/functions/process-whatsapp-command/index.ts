@@ -643,22 +643,26 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
 
 // Função para normalizar preços (vírgula/ponto para formato padrão)
 function normalizarPreco(valor: string): number | null {
-  if (!valor) return null;
+  if (!valor || valor.trim() === '') return null;
   
-  // Remove espaços e caracteres não numéricos (exceto vírgula e ponto)
-  const valorLimpo = valor.replace(/[^\d,.-]/g, '');
+  console.log(`💰 [DEBUG] Normalizando preço: "${valor}"`);
   
-  // Se contém vírgula, trata como separador decimal brasileiro
-  if (valorLimpo.includes(',')) {
-    // Remove pontos (milhares) e substitui vírgula por ponto
-    const normalizado = valorLimpo.replace(/\./g, '').replace(',', '.');
-    const numero = parseFloat(normalizado);
-    return isNaN(numero) ? null : numero;
+  // Remove espaços
+  const valorLimpo = valor.trim();
+  
+  // Aceita formatos: 8,90 | 8.90 | 9 | 9,0 | 9.0 | 890 | 0,50 | 0.50
+  const regexNumero = /^\d*[,.]?\d+$/;
+  
+  if (!regexNumero.test(valorLimpo)) {
+    console.log(`💰 [DEBUG] Formato inválido: "${valorLimpo}"`);
+    return null;
   }
   
-  // Se contém apenas ponto, trata como separador decimal
-  const numero = parseFloat(valorLimpo);
-  return isNaN(numero) ? null : numero;
+  // Converte vírgula para ponto e transforma em número
+  const numeroFormatado = parseFloat(valorLimpo.replace(',', '.'));
+  
+  console.log(`💰 [DEBUG] Resultado: ${numeroFormatado}`);
+  return isNaN(numeroFormatado) ? null : numeroFormatado;
 }
 
 // Função para formatar preço para exibição (R$ X,XX)
