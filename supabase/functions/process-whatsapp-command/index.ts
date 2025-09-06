@@ -817,11 +817,17 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
       if (!unidadeSelecionada) {
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 3) {
-          return await encerrarSessaoPorErros(supabase, sessao.id);
+        if (novasTentativas >= 4) {
+          // Na quarta tentativa, encerrar sessão e enviar mensagem inicial
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('id', sessao.id);
+          
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
-        // Atualizar tentativas de erro
+        // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
         await supabase
           .from('whatsapp_sessions')
           .update({
@@ -830,7 +836,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
 Qual a unidade do produto ${produtoNomeLimpo}?
 1️⃣ Quilo
@@ -858,10 +864,17 @@ Qual a unidade do produto ${produtoNomeLimpo}?
       if (quantidadeNormalizada === null || quantidadeNormalizada <= 0) {
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 3) {
-          return await encerrarSessaoPorErros(supabase, sessao.id);
+        if (novasTentativas >= 4) {
+          // Na quarta tentativa, encerrar sessão e enviar mensagem inicial
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('id', sessao.id);
+          
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
+        // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
         await supabase
           .from('whatsapp_sessions')
           .update({
@@ -870,7 +883,7 @@ Qual a unidade do produto ${produtoNomeLimpo}?
           })
           .eq('id', sessao.id);
         
-        return `❌ Quantidade inválida. Informe um valor numérico válido (ex.: 0,5 ou 2).
+        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
 Qual a quantidade do produto ${produtoNomeLimpo}?`;
       }
@@ -926,10 +939,17 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
       if (!categoriaSelecionada) {
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 3) {
-          return await encerrarSessaoPorErros(supabase, sessao.id);
+        if (novasTentativas >= 4) {
+          // Na quarta tentativa, encerrar sessão e enviar mensagem inicial
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('id', sessao.id);
+          
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
+        // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
         await supabase
           .from('whatsapp_sessions')
           .update({
@@ -938,7 +958,7 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi. Por favor, escolha uma das opções listadas.
+        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
 Qual categoria deseja para ${produtoNomeLimpo}?
 1️⃣ Hortifruti
@@ -993,10 +1013,17 @@ Qual categoria deseja para ${produtoNomeLimpo}?
         console.log(`💰 [SESSAO] Valor inválido detectado: ${precoNumerico}`);
         const novasTentativas = tentativasErro + 1;
         
-        if (novasTentativas >= 3) {
-          return await encerrarSessaoPorErros(supabase, sessao.id);
+        if (novasTentativas >= 4) {
+          // Na quarta tentativa, encerrar sessão e enviar mensagem inicial
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('id', sessao.id);
+          
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
         
+        // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
         await supabase
           .from('whatsapp_sessions')
           .update({
@@ -1005,7 +1032,7 @@ Qual categoria deseja para ${produtoNomeLimpo}?
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi o preço. Informe no formato 8,90 ou 8.90.
+        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
 Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor, ex.: 8,90)`;
       }
