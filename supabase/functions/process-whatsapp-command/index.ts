@@ -272,7 +272,7 @@ const handler = async (req: Request): Promise<Response> => {
           console.log('❌ [FALLBACK] isAumentar:', isAumentar);
           console.log('❌ [FALLBACK] isAdicionar:', isAdicionar);
           console.log('❌ [FALLBACK] isConsultar:', isConsultar);
-          resposta += "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta [produto]'.";
+          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
         }
       }
     }
@@ -586,7 +586,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
 
     console.log(`❌ [FALLBACK] Texto não contém "consulta" - retornando fallback`);
     // Fallback se não for comando válido
-    return "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta produto'.";
+    return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
 
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar comando:", err);

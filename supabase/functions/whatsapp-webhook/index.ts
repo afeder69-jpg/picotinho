@@ -232,7 +232,7 @@ const handler = async (req: Request): Promise<Response> => {
             
             const requestBody = {
               phone: remetente,
-              message: "❌ Desculpe, não entendi o comando. Tente novamente no formato: 'Picotinho, consulta [produto]'."
+              message: "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]"
             };
             
             const errorResponse = await fetch(sendTextUrl, {
