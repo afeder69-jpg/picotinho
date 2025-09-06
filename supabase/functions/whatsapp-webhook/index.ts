@@ -93,7 +93,10 @@ const handler = async (req: Request): Promise<Response> => {
           .replace(/\s+/g, ' ') // Normaliza espaços
           .trim();
         
+        
         console.log('🔍 Texto limpo para análise:', textoLimpo);
+        console.log('🔍 Inicia com "-"?', textoLimpo.startsWith('-'));
+        console.log('🔍 Inicia com "+"?', textoLimpo.startsWith('+'));
         
         // Identificar comando baseado em palavras-chave E símbolos
         if (textoLimpo.startsWith('-') || textoLimpo.match(/\b(baixa|baixar|diminui|diminuir|remove|remover)\b/)) {
