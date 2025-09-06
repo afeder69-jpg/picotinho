@@ -60,6 +60,45 @@ const handler = async (req: Request): Promise<Response> => {
     const agora = new Date();
     console.log(`🔍 [DEBUG] Data agora:`, agora.toISOString());
     
+    // Verificar se há sessões expiradas e limpá-las
+    let sessaoExpirada = false;
+    if (sessoesAtivas && sessoesAtivas.length > 0) {
+      for (const s of sessoesAtivas) {
+        const expira = new Date(s.expires_at);
+        if (expira <= agora) {
+          console.log(`⏰ [TIMEOUT] Sessão ${s.id} expirada em ${expira.toISOString()} - removendo`);
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('id', s.id);
+          sessaoExpirada = true;
+        }
+      }
+    }
+    
+    // Se houve sessão expirada, enviar mensagem inicial e retornar
+    if (sessaoExpirada) {
+      console.log(`⏰ [TIMEOUT] Sessão expirou - enviando mensagem inicial`);
+      resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+      
+      // Enviar resposta e marcar como processada
+      await enviarRespostaWhatsApp(mensagem.remetente, resposta);
+      await supabase
+        .from('whatsapp_mensagens')
+        .update({
+          processada: true,
+          data_processamento: new Date().toISOString(),
+          comando_identificado: 'sessao_expirada',
+          resposta_enviada: resposta
+        })
+        .eq('id', mensagem.id);
+      
+      console.log(`✅ Timeout processado e mensagem enviada`);
+      return new Response(JSON.stringify({ success: true, message: 'Sessão expirada processada' }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
     const sessao = sessoesAtivas?.find(s => {
       const expira = new Date(s.expires_at);
       const ativa = expira > agora;
@@ -773,7 +812,7 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
         estado: 'aguardando_unidade',
         produto_nome: produtoNome,
         contexto: { tentativas_erro: 0 },
-        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora
+        expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString() // 2 minutos
       });
     
     const produtoNomeLimpo = limparNomeProduto(produtoNome);
@@ -896,38 +935,38 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         })
         .eq('id', sessao.id);
       
-      return `Qual categoria deseja para ${produtoNomeLimpo}?
-1️⃣ Hortifruti
-2️⃣ Bebidas
-3️⃣ Mercearia
-4️⃣ Açougue
-5️⃣ Padaria
-6️⃣ Laticínios/Frios
-7️⃣ Limpeza
-8️⃣ Higiene/Farmácia
-9️⃣ Congelados
-🔟 Pet
-1️⃣1️⃣ Outros`;
+      return `Escolha uma categoria para o produto:
+1. Hortifruti
+2. Bebidas
+3. Mercearia
+4. Açougue
+5. Padaria
+6. Laticínios/Frios
+7. Limpeza
+8. Higiene/Farmácia
+9. Congelados
+10. Pet
+11. Outros`;
     }
     
     // ETAPA 3: Aguardando categoria
     else if (sessao.estado === 'aguardando_categoria') {
-      const resposta = mensagem.conteudo.trim().toLowerCase();
+      const resposta = mensagem.conteudo.trim();
       let categoriaSelecionada = null;
       
-      // Mapear resposta para categoria
+      // Mapear apenas números de 1 a 11
       const mapeamentoCategoria = {
-        '1': 'hortifruti', 'hortifruti': 'hortifruti',
-        '2': 'bebidas', 'bebidas': 'bebidas',
-        '3': 'mercearia', 'mercearia': 'mercearia',
-        '4': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue',
-        '5': 'padaria', 'padaria': 'padaria',
-        '6': 'laticínios', 'frios': 'laticínios', 'laticinios': 'laticínios',
-        '7': 'limpeza', 'limpeza': 'limpeza',
-        '8': 'higiene', 'higiene': 'higiene', 'farmacia': 'higiene',
-        '9': 'congelados', 'congelados': 'congelados',
-        '10': 'pet', 'pet': 'pet',
-        '11': 'outros', 'outros': 'outros'
+        '1': 'hortifruti',
+        '2': 'bebidas',
+        '3': 'mercearia',
+        '4': 'açougue',
+        '5': 'padaria',
+        '6': 'laticínios',
+        '7': 'limpeza',
+        '8': 'higiene',
+        '9': 'congelados',
+        '10': 'pet',
+        '11': 'outros'
       };
       
       categoriaSelecionada = mapeamentoCategoria[resposta];
@@ -954,20 +993,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
-
-Qual categoria deseja para ${produtoNomeLimpo}?
-1️⃣ Hortifruti
-2️⃣ Bebidas
-3️⃣ Mercearia
-4️⃣ Açougue
-5️⃣ Padaria
-6️⃣ Laticínios/Frios
-7️⃣ Limpeza
-8️⃣ Higiene/Farmácia
-9️⃣ Congelados
-🔟 Pet
-1️⃣1️⃣ Outros`;
+        return `❌ Não entendi. Por favor, informe apenas o número da categoria (1 a 11).`;
       }
       
       // Avançar para próxima etapa
