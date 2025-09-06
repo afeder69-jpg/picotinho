@@ -114,9 +114,11 @@ const handler = async (req: Request): Promise<Response> => {
       // PRIORIDADE 2: Verificar comandos novos
       console.log('🚀 [INICIO VERIFICACAO] Conteudo da mensagem:', mensagem.conteudo);
       
-      // Verificar sinal de menos ANTES da normalização para não perder o símbolo
+      // Verificar sinais ANTES da normalização para não perder os símbolos
       const temSinalMenos = mensagem.conteudo.trim().startsWith('-');
+      const temSinalMais = mensagem.conteudo.trim().startsWith('+');
       console.log('🔍 [DEBUG] Tem sinal menos (startsWith):', temSinalMenos);
+      console.log('🔍 [DEBUG] Tem sinal mais (startsWith):', temSinalMais);
       
       const textoNormalizado = mensagem.conteudo.toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
@@ -128,13 +130,15 @@ const handler = async (req: Request): Promise<Response> => {
       const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || temSinalMenos;
       
       console.log('🔍 [DEBUG] isBaixar result:', isBaixar);
-      console.log('🔍 [DEBUG] Match regex:', textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/));
+      console.log('🔍 [DEBUG] Match regex baixar:', textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/));
       console.log('🔍 [DEBUG] temSinalMenos:', temSinalMenos);
       
       // Comandos para AUMENTAR ESTOQUE
-      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/);
+      const isAumentar = textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/) || temSinalMais;
       console.log(`🔍 [DEBUG] Texto normalizado: "${textoNormalizado}"`);
       console.log(`🔍 [DEBUG] isAumentar result:`, isAumentar);
+      console.log('🔍 [DEBUG] Match regex aumentar:', textoNormalizado.match(/\b(aumenta|aumentar|soma|somar|adiciona|adicionar)\b/));
+      console.log('🔍 [DEBUG] temSinalMais:', temSinalMais);
       
       // Comandos para ADICIONAR PRODUTO NOVO
       const isAdicionar = textoNormalizado.match(/\b(adicionar|adiciona|cadastrar produto|inserir produto|botar produto)\b/);
