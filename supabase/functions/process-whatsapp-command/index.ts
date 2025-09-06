@@ -25,6 +25,8 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { messageId }: ProcessCommandRequest = await req.json();
+    
+    console.log(`🚀 [INICIO] Processando messageId: ${messageId}`);
 
     // Buscar mensagem para processar (REMOVENDO filtro processada=false)
     const { data: mensagem, error: erroMensagem } = await supabase
@@ -51,14 +53,21 @@ const handler = async (req: Request): Promise<Response> => {
       .eq('remetente', mensagem.remetente)
       .order('created_at', { ascending: false });
     
-    console.log(`🔍 [DEBUG] Todas as sessões encontradas:`, sessoesAtivas);
+    console.log(`🔍 [DEBUG] Todas as sessões encontradas:`, JSON.stringify(sessoesAtivas, null, 2));
     console.log(`🔍 [DEBUG] Erro na busca:`, sessaoError);
     
     // Filtrar sessões não expiradas manualmente para debug
     const agora = new Date();
-    const sessao = sessoesAtivas?.find(s => new Date(s.expires_at) > agora);
+    console.log(`🔍 [DEBUG] Data agora:`, agora.toISOString());
     
-    console.log(`🔍 [DEBUG] Sessão ativa encontrada:`, sessao);
+    const sessao = sessoesAtivas?.find(s => {
+      const expira = new Date(s.expires_at);
+      const ativa = expira > agora;
+      console.log(`🔍 [DEBUG] Sessão ${s.id}: expira em ${expira.toISOString()}, ativa: ${ativa}`);
+      return ativa;
+    });
+    
+    console.log(`🔍 [DEBUG] Sessão ativa encontrada:`, sessao ? `ID: ${sessao.id}, Estado: ${sessao.estado}` : 'NENHUMA');
 
     let resposta = "Olá! Sou o Picotinho 🤖\n\n";
     let comandoExecutado = false;
@@ -68,8 +77,27 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`📞 Sessão encontrada: ${sessao.estado} para produto ${sessao.produto_nome}`);
       console.log(`📞 Processando resposta para sessão: ${sessao.estado}`);
       console.log(`📞 Conteúdo da mensagem: "${mensagem.conteudo}"`);
-      resposta += await processarRespostaSessao(supabase, mensagem, sessao);
-      comandoExecutado = true;
+      
+      // FORÇAR o processamento da sessão - não permitir que vá para outros comandos
+      try {
+        resposta += await processarRespostaSessao(supabase, mensagem, sessao);
+        comandoExecutado = true;
+        
+        // Marcar mensagem como processada IMEDIATAMENTE após processar sessão
+        await supabase
+          .from('whatsapp_mensagens')
+          .update({
+            processada: true,
+            data_processamento: new Date().toISOString(),
+            comando_identificado: `sessao_${sessao.estado}`
+          })
+          .eq('id', mensagem.id);
+          
+        console.log(`✅ Sessão processada e mensagem marcada como processada`);
+      } catch (error) {
+        console.error(`❌ Erro ao processar sessão:`, error);
+        resposta += `❌ Erro ao processar sua resposta. Tente novamente.`;
+      }
     } else {
       // LIMPAR SESSÕES EXPIRADAS ANTES DE PROCESSAR NOVO COMANDO
       await supabase
@@ -101,15 +129,41 @@ const handler = async (req: Request): Promise<Response> => {
       // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
       const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
       
-      if (isBaixar) {
-        console.log('📉 Comando BAIXAR identificado:', textoNormalizado);
-        resposta += await processarBaixarEstoque(supabase, mensagem);
-        comandoExecutado = true;
-      } else if (isAumentar) {
-        console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
-        resposta += await processarAumentarEstoque(supabase, mensagem);
-        comandoExecutado = true;
-      } else if (isAdicionar) {
+      // VERIFICAÇÃO ESPECIAL: Se não há sessão ativa mas mensagem é um número simples,
+      // verificar se pode ser resposta a uma sessão que não foi encontrada
+      const isNumeroSimples = /^\s*\d+\s*$/.test(mensagem.conteudo);
+      
+      if (isNumeroSimples) {
+        console.log(`🔢 [ESPECIAL] Número simples detectado: "${mensagem.conteudo}" - verificando sessões não expiradas`);
+        
+        // Buscar QUALQUER sessão não expirada para este usuário
+        const { data: sessaoAlternativa } = await supabase
+          .from('whatsapp_sessions')
+          .select('*')
+          .eq('usuario_id', mensagem.usuario_id)
+          .eq('remetente', mensagem.remetente)
+          .gte('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+          
+        if (sessaoAlternativa) {
+          console.log(`🔢 [ESPECIAL] Sessão alternativa encontrada: ${sessaoAlternativa.estado} - processando número como resposta`);
+          resposta += await processarRespostaSessao(supabase, mensagem, sessaoAlternativa);
+          comandoExecutado = true;
+        }
+      }
+      
+      if (!comandoExecutado) {
+        if (isBaixar) {
+          console.log('📉 Comando BAIXAR identificado:', textoNormalizado);
+          resposta += await processarBaixarEstoque(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (isAumentar) {
+          console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
+          resposta += await processarAumentarEstoque(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (isAdicionar) {
         console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
         resposta += await processarAdicionarProduto(supabase, mensagem);
         comandoExecutado = true;
