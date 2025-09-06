@@ -836,12 +836,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
-
-Qual a unidade do produto ${produtoNomeLimpo}?
-1️⃣ Quilo
-2️⃣ Unidade  
-3️⃣ Litro`;
+        return `❌ Não entendi. Escolha uma das opções: Kg, Unidade ou Litro.`;
+      }
       }
       
       // Avançar para próxima etapa
