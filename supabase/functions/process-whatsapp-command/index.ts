@@ -62,15 +62,20 @@ const handler = async (req: Request): Promise<Response> => {
     
     // Verificar se há sessões expiradas e limpá-las
     let sessaoExpirada = false;
+    let resposta = "Olá! Sou o Picotinho 🤖\n\n";
+    
     if (sessoesAtivas && sessoesAtivas.length > 0) {
       for (const s of sessoesAtivas) {
         const expira = new Date(s.expires_at);
         if (expira <= agora) {
           console.log(`⏰ [TIMEOUT] Sessão ${s.id} expirada em ${expira.toISOString()} - removendo`);
+          
+          // Remover sessão expirada
           await supabase
             .from('whatsapp_sessions')
             .delete()
             .eq('id', s.id);
+          
           sessaoExpirada = true;
         }
       }
@@ -79,24 +84,58 @@ const handler = async (req: Request): Promise<Response> => {
     // Se houve sessão expirada, enviar mensagem inicial e retornar
     if (sessaoExpirada) {
       console.log(`⏰ [TIMEOUT] Sessão expirou - enviando mensagem inicial`);
-      resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
       
-      // Enviar resposta e marcar como processada
-      await enviarRespostaWhatsApp(mensagem.remetente, resposta);
-      await supabase
-        .from('whatsapp_mensagens')
-        .update({
-          processada: true,
-          data_processamento: new Date().toISOString(),
-          comando_identificado: 'sessao_expirada',
-          resposta_enviada: resposta
-        })
-        .eq('id', mensagem.id);
+      const mensagemInicial = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\n\nEscolha uma das opções para começar:\n\n🔍 Consulta [produto]\n📋 Consulta Categoria [Nome da Categoria]\n➕ Incluir [produto]\n⬆️ Aumentar [quantidade] [produto]\n⬇️ Baixar [quantidade] [produto]";
       
-      console.log(`✅ Timeout processado e mensagem enviada`);
-      return new Response(JSON.stringify({ success: true, message: 'Sessão expirada processada' }), { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.log(`📤 [TIMEOUT] Enviando mensagem inicial: ${mensagemInicial}`);
+      
+      // Tentar enviar mensagem inicial
+      const enviado = await enviarRespostaWhatsApp(mensagem.remetente, mensagemInicial);
+      
+      if (enviado) {
+        console.log(`✅ [TIMEOUT] Mensagem inicial enviada com sucesso`);
+        
+        // Marcar mensagem como processada
+        await supabase
+          .from('whatsapp_mensagens')
+          .update({
+            processada: true,
+            data_processamento: new Date().toISOString(),
+            comando_identificado: 'sessao_expirada',
+            resposta_enviada: mensagemInicial
+          })
+          .eq('id', mensagem.id);
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Sessão expirada e mensagem inicial enviada',
+          resposta: mensagemInicial
+        }), { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      } else {
+        console.error(`❌ [TIMEOUT] Falha ao enviar mensagem inicial`);
+        
+        // Mesmo com falha no envio, marcar como processada
+        await supabase
+          .from('whatsapp_mensagens')
+          .update({
+            processada: true,
+            data_processamento: new Date().toISOString(),
+            comando_identificado: 'sessao_expirada_erro',
+            resposta_enviada: 'Erro ao enviar mensagem inicial'
+          })
+          .eq('id', mensagem.id);
+        
+        return new Response(JSON.stringify({ 
+          success: false, 
+          message: 'Sessão expirada mas erro ao enviar mensagem',
+          error: 'Falha no envio WhatsApp'
+        }), { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
     
     const sessao = sessoesAtivas?.find(s => {
@@ -108,7 +147,6 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log(`🔍 [DEBUG] Sessão ativa encontrada:`, sessao ? `ID: ${sessao.id}, Estado: ${sessao.estado}` : 'NENHUMA');
 
-    let resposta = "Olá! Sou o Picotinho 🤖\n\n";
     let comandoExecutado = false;
 
     // PRIORIDADE 1: Se há sessão pendente, processar como resposta a um estado anterior
