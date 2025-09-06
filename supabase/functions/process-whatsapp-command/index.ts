@@ -887,31 +887,41 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
         })
         .eq('id', sessao.id);
       
-      return `Qual categoria deseja para ${produtoNomeLimpo}? Escolha uma das opções:
-
-🥩 açougue
-🥛 laticínios
-🍞 padaria
-🧹 limpeza
-🧴 higiene
-🍎 hortifruti
-🥫 mercearia
-❄️ congelados
-🍺 bebidas
-🏥 farmácia
-🐕 pet
-📱 outros`;
+      return `Qual categoria deseja para ${produtoNomeLimpo}?
+1️⃣ Hortifruti
+2️⃣ Bebidas
+3️⃣ Mercearia
+4️⃣ Açougue
+5️⃣ Padaria
+6️⃣ Laticínios/Frios
+7️⃣ Limpeza
+8️⃣ Higiene/Farmácia
+9️⃣ Congelados
+🔟 Pet
+1️⃣1️⃣ Outros`;
     }
     
     // ETAPA 3: Aguardando categoria
     else if (sessao.estado === 'aguardando_categoria') {
-      const categoriasSugeridas = ['açougue', 'laticínios', 'padaria', 'limpeza', 'higiene', 'hortifruti', 'mercearia', 'congelados', 'bebidas', 'farmácia', 'pet', 'outros'];
-      const categoriaNormalizada = mensagem.conteudo.toLowerCase().trim();
+      const resposta = mensagem.conteudo.trim().toLowerCase();
       let categoriaSelecionada = null;
       
-      if (categoriasSugeridas.includes(categoriaNormalizada)) {
-        categoriaSelecionada = categoriaNormalizada;
-      }
+      // Mapear resposta para categoria
+      const mapeamentoCategoria = {
+        '1': 'hortifruti', 'hortifruti': 'hortifruti',
+        '2': 'bebidas', 'bebidas': 'bebidas',
+        '3': 'mercearia', 'mercearia': 'mercearia',
+        '4': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue',
+        '5': 'padaria', 'padaria': 'padaria',
+        '6': 'laticínios', 'frios': 'laticínios', 'laticinios': 'laticínios',
+        '7': 'limpeza', 'limpeza': 'limpeza',
+        '8': 'higiene', 'higiene': 'higiene', 'farmacia': 'higiene',
+        '9': 'congelados', 'congelados': 'congelados',
+        '10': 'pet', 'pet': 'pet',
+        '11': 'outros', 'outros': 'outros'
+      };
+      
+      categoriaSelecionada = mapeamentoCategoria[resposta];
       
       if (!categoriaSelecionada) {
         const novasTentativas = tentativasErro + 1;
@@ -930,20 +940,18 @@ Qual a quantidade do produto ${produtoNomeLimpo}?`;
         
         return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
 
-Qual categoria deseja para ${produtoNomeLimpo}? Escolha uma das opções:
-
-🥩 açougue
-🥛 laticínios
-🍞 padaria
-🧹 limpeza
-🧴 higiene
-🍎 hortifruti
-🥫 mercearia
-❄️ congelados
-🍺 bebidas
-🏥 farmácia
-🐕 pet
-📱 outros`;
+Qual categoria deseja para ${produtoNomeLimpo}?
+1️⃣ Hortifruti
+2️⃣ Bebidas
+3️⃣ Mercearia
+4️⃣ Açougue
+5️⃣ Padaria
+6️⃣ Laticínios/Frios
+7️⃣ Limpeza
+8️⃣ Higiene/Farmácia
+9️⃣ Congelados
+🔟 Pet
+1️⃣1️⃣ Outros`;
       }
       
       // Avançar para próxima etapa
