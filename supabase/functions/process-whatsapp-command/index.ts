@@ -42,71 +42,54 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('📨 Processando mensagem:', mensagem.conteudo);
 
-    // PRIMEIRO: Limpar todas as sessões expiradas
-    const agora = new Date();
-    console.log(`🔍 [DEBUG] Data atual: ${agora.toISOString()}`);
-    console.log(`🧹 [LIMPEZA] Removendo sessões expiradas automaticamente...`);
-    
-    const { error: cleanupError } = await supabase
-      .from('whatsapp_sessions')
-      .delete()
-      .eq('usuario_id', mensagem.usuario_id)
-      .eq('remetente', mensagem.remetente)
-      .lt('expires_at', agora.toISOString());
-    
-    if (cleanupError) {
-      console.log('⚠️ [CLEANUP] Erro ao limpar sessões:', cleanupError);
-    } else {
-      console.log('✅ [CLEANUP] Sessões expiradas removidas automaticamente');
-    }
-
-    // SEGUNDO: Buscar apenas sessões ainda válidas
-    console.log(`🔍 [DEBUG] Buscando sessões ativas para usuário: ${mensagem.usuario_id}, remetente: ${mensagem.remetente}`);
+    // Verificar se existe sessão pendente para o usuário PRIMEIRO
+    console.log(`🔍 [DEBUG] Buscando sessão para usuário: ${mensagem.usuario_id}, remetente: ${mensagem.remetente}`);
+    console.log(`🔍 [DEBUG] Data atual: ${new Date().toISOString()}`);
     
     const { data: sessoesAtivas, error: sessaoError } = await supabase
       .from('whatsapp_sessions')
       .select('*')
       .eq('usuario_id', mensagem.usuario_id)
       .eq('remetente', mensagem.remetente)
-      .gte('expires_at', agora.toISOString())
       .order('created_at', { ascending: false });
     
-    console.log(`🔍 [DEBUG] Sessões ativas encontradas:`, JSON.stringify(sessoesAtivas, null, 2));
+    console.log(`🔍 [DEBUG] Todas as sessões encontradas:`, JSON.stringify(sessoesAtivas, null, 2));
     console.log(`🔍 [DEBUG] Erro na busca:`, sessaoError);
     
-    // Se não há sessões ativas, pode ser que tenha expirado
+    // Filtrar sessões não expiradas manualmente para debug
+    const agora = new Date();
+    console.log(`🔍 [DEBUG] Data agora:`, agora.toISOString());
+    
+    // Verificar se há sessões expiradas e limpá-las
     let sessaoExpirada = false;
-    if (!sessoesAtivas || sessoesAtivas.length === 0) {
-      // Verificar se houve sessões que expiraram recentemente (últimos 10 segundos)
-      const recentExpiry = new Date(Date.now() - 10 * 1000);
-      const { data: sessoesRecentesExpiradas } = await supabase
-        .from('whatsapp_sessions')
-        .select('count')
-        .eq('usuario_id', mensagem.usuario_id)
-        .eq('remetente', mensagem.remetente)
-        .gte('expires_at', recentExpiry.toISOString())
-        .lt('expires_at', agora.toISOString());
-      
-      if (sessoesRecentesExpiradas && sessoesRecentesExpiradas.length > 0) {
-        console.log(`⏰ [TIMEOUT] Detectada sessão que expirou recentemente`);
-        sessaoExpirada = true;
+    if (sessoesAtivas && sessoesAtivas.length > 0) {
+      for (const s of sessoesAtivas) {
+        const expira = new Date(s.expires_at);
+        if (expira <= agora) {
+          console.log(`⏰ [TIMEOUT] Sessão ${s.id} expirada em ${expira.toISOString()} - removendo`);
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('id', s.id);
+          sessaoExpirada = true;
+        }
       }
     }
     
     // Se houve sessão expirada, enviar mensagem inicial e retornar
     if (sessaoExpirada) {
       console.log(`⏰ [TIMEOUT] Sessão expirou - enviando mensagem inicial`);
-      const respostaTimeout = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+      resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
       
       // Enviar resposta e marcar como processada
-      await enviarRespostaWhatsApp(mensagem.remetente, respostaTimeout);
+      await enviarRespostaWhatsApp(mensagem.remetente, resposta);
       await supabase
         .from('whatsapp_mensagens')
         .update({
           processada: true,
           data_processamento: new Date().toISOString(),
           comando_identificado: 'sessao_expirada',
-          resposta_enviada: respostaTimeout
+          resposta_enviada: resposta
         })
         .eq('id', mensagem.id);
       
@@ -116,8 +99,12 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     
-    // Como já filtramos sessões expiradas na busca, a primeira sessão é a mais recente e válida
-    const sessao = sessoesAtivas?.[0];
+    const sessao = sessoesAtivas?.find(s => {
+      const expira = new Date(s.expires_at);
+      const ativa = expira > agora;
+      console.log(`🔍 [DEBUG] Sessão ${s.id}: expira em ${expira.toISOString()}, ativa: ${ativa}`);
+      return ativa;
+    });
     
     console.log(`🔍 [DEBUG] Sessão ativa encontrada:`, sessao ? `ID: ${sessao.id}, Estado: ${sessao.estado}` : 'NENHUMA');
 
@@ -154,7 +141,15 @@ const handler = async (req: Request): Promise<Response> => {
     } else {
       console.log('📍 [FLUXO] Nenhuma sessão ativa - processando como comando novo');
       
-      // Sessões expiradas já foram limpas no início da função
+      // LIMPAR SESSÕES EXPIRADAS ANTES DE PROCESSAR NOVO COMANDO
+      console.log('🧹 [LIMPEZA] Removendo sessões expiradas...');
+      await supabase
+        .from('whatsapp_sessions')
+        .delete()
+        .eq('usuario_id', mensagem.usuario_id)
+        .eq('remetente', mensagem.remetente)
+        .lt('expires_at', new Date().toISOString());
+      console.log('🧹 [LIMPEZA] Sessões expiradas removidas');
 
       // PRIORIDADE 1: VERIFICAÇÃO ESPECIAL para números/decimais (resposta a sessão perdida)
       const isNumeroOuDecimal = /^\s*\d+([,.]\d+)?\s*$/.test(mensagem.conteudo);
@@ -395,7 +390,7 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     }
     
     if (!estoque) {
-      return `Produto "${produtoNomeOriginal}" não encontrado no seu estoque.`;
+      return `Produto "${produtoNome}" não encontrado no seu estoque.`;
     }
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
