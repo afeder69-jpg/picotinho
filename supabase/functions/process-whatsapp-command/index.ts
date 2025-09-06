@@ -878,9 +878,10 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           })
           .eq('id', sessao.id);
         
-        return `❌ Não entendi, tente novamente. Escolha uma das opções listadas.
-
-Qual a quantidade do produto ${produtoNomeLimpo}?`;
+        return `❌ Não entendi. Por favor, informe a quantidade no formato:
+- Exemplo para Kg: 1.250 (1 quilo e 250 gramas)
+- Exemplo para Unidade: 3
+- Exemplo para Litro: 0.750 (750 ml)`;
       }
       
       const quantidade = quantidadeNormalizada;
