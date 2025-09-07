@@ -222,6 +222,21 @@ const handler = async (req: Request): Promise<Response> => {
         
         console.log('🔍 [DEBUG] Texto normalizado:', textoNormalizado);
         
+        // VERIFICAÇÃO DE CANCELAMENTO - ALTA PRIORIDADE (funciona mesmo sem sessão ativa)
+        if (textoNormalizado === 'cancela' || textoNormalizado === 'cancelar') {
+          console.log('❌ [CANCELAMENTO] Comando cancelar detectado - limpando todas as sessões');
+          
+          // Limpar todas as sessões do usuário
+          await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('usuario_id', mensagem.usuario_id)
+            .eq('remetente', mensagem.remetente);
+          
+          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          comandoExecutado = true;
+        }
+        
         // Comandos para BAIXAR ESTOQUE
         const isBaixar = textoNormalizado.match(/\b(baixa|baixar|retirar|remover)\b/) || temSinalMenos;
         
@@ -857,6 +872,21 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
 async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any): Promise<string> {
   try {
     console.log(`🔄 Processando resposta para sessão: ${sessao.estado}`);
+    
+    // VERIFICAÇÃO DE CANCELAMENTO - SEMPRE PRIMEIRA PRIORIDADE
+    const conteudoLimpo = mensagem.conteudo.trim().toUpperCase();
+    if (conteudoLimpo === 'CANCELA' || conteudoLimpo === 'CANCELAR') {
+      console.log('❌ [CANCELAMENTO] Usuário solicitou cancelamento da sessão');
+      
+      // Deletar sessão imediatamente
+      await supabase
+        .from('whatsapp_sessions')
+        .delete()
+        .eq('id', sessao.id);
+      
+      // Retornar mensagem inicial padrão
+      return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+    }
     
     const tentativasErro = sessao.contexto?.tentativas_erro || 0;
     const produtoNomeLimpo = limparNomeProduto(sessao.produto_nome);
