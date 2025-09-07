@@ -246,71 +246,56 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             continue;
           }
 
-          console.log('=== REGISTRO SALVO COM SUCESSO ===', notaData);
+          console.log('📂 Carregando nota fiscal');
           successfulUploads++;
 
-          // Processar arquivo baseado no tipo
-          if (file.type.startsWith('image/')) {
-            // Para imagens, processar diretamente com IA
-            try {
-              const response = await supabase.functions.invoke('process-receipt-full', {
-                body: {
-                  notaImagemId: notaData.id,
-                  imageUrl: urlData.publicUrl,
-                  qrUrl: null
-                }
-              });
-
-              if (response.error) {
-                console.error('Erro no processamento IA:', response.error);
-                toast({
-                  title: "Aviso",
-                  description: `${file.name} foi salvo, mas houve erro no processamento automático`,
-                  variant: "default",
-                });
-              }
-            } catch (processError) {
-              console.error('Erro no processamento IA:', processError);
-              toast({
-                title: "Aviso",
-                description: `${file.name} foi salvo, mas houve erro no processamento automático`,
-                variant: "default",
-              });
-            }
-          } else if (isPdf) {
-            // Para PDFs, converter primeiro em JPG
-            try {
-              console.log('Iniciando conversão PDF para JPG...');
-              const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
+          // Iniciar processamento automático baseado no tipo de arquivo
+          console.log('⚡ Processando IA');
+          
+          try {
+            let response;
+            
+            if (isPdf) {
+              // Para PDFs, usar process-danfe-pdf
+              response = await supabase.functions.invoke('process-danfe-pdf', {
                 body: {
                   notaImagemId: notaData.id,
                   pdfUrl: urlData.publicUrl,
                   userId: currentUser.id
                 }
               });
-
-              if (convertResponse.error) {
-                console.error('Erro na conversão PDF:', convertResponse.error);
-                toast({
-                  title: "Aviso",
-                  description: `PDF ${file.name} foi salvo, mas houve erro na conversão para JPG`,
-                  variant: "default",
-                });
-              } else {
-                console.log('PDF convertido com sucesso:', convertResponse.data);
-                toast({
-                  title: "PDF Convertido",
-                  description: `PDF pronto para processamento com IA (${convertResponse.data?.convertedImages?.length || 0} página(s))`,
-                });
-              }
-            } catch (convertError) {
-              console.error('Erro na conversão PDF:', convertError);
-              toast({
-                title: "Aviso",
-                description: `PDF ${file.name} foi salvo, mas houve erro na conversão`,
-                variant: "default",
+            } else {
+              // Para imagens, usar process-receipt-full
+              response = await supabase.functions.invoke('process-receipt-full', {
+                body: {
+                  notaImagemId: notaData.id,
+                  imageUrl: urlData.publicUrl,
+                  qrUrl: null
+                }
               });
             }
+
+            if (response.error) {
+              console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
+              toast({
+                title: "Erro no processamento",
+                description: response.error.message || 'Erro desconhecido no processamento',
+                variant: "destructive",
+              });
+            } else {
+              console.log('✅ Processamento concluído');
+              toast({
+                title: "Sucesso",
+                description: `${file.name} processado com sucesso`,
+              });
+            }
+          } catch (processError) {
+            console.log('❌ Erro no processamento: ' + (processError.message || 'Erro de conexão'));
+            toast({
+              title: "Erro no processamento",
+              description: processError.message || 'Erro de conexão',
+              variant: "destructive",
+            });
           }
         } catch (fileError) {
           console.error(`ERRO GERAL NO ARQUIVO ${file.name}:`, fileError);
