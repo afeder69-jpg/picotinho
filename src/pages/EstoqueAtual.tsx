@@ -799,6 +799,9 @@ const EstoqueAtual = () => {
   
   // Total do estoque considerando apenas preços atuais disponíveis
   const valorTotalEstoque = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotalAtual, 0);
+  
+  // Total dos preços pagos (para coluna "Valor Pago")
+  const valorTotalPago = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotal, 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -929,42 +932,28 @@ const EstoqueAtual = () => {
                      );
                   })}
                   
-                    <div className="border-t pt-2 mt-2">
-                      <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 font-bold text-xs">
-                        <span className="text-foreground">Total</span>
-                        <span className="text-muted-foreground text-center">{totalProdutosUnicos}</span>
-                       <span className="text-foreground text-center">{formatCurrency(valorTotalEstoque)}</span>
-                       <span className="text-blue-600 text-right">
-                         {formatCurrency(
-                           Object.values(groupedEstoque).flat().reduce((total, item) => {
-                             const precoAtual = encontrarPrecoAtual(item.produto_nome);
-                             const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
-                             const quantidade = parseFloat(item.quantidade.toString());
-                             return total + (preco * quantidade);
-                           }, 0)
-                         )}
-                        </span>
-                        <div className="flex justify-end">
-                           {/* Ícone de tendência total com normalização */}
-                          {(() => {
-                            const totalAtual = Object.values(groupedEstoque).flat().reduce((total, item) => {
-                              const precoAtual = encontrarPrecoAtual(item.produto_nome);
-                              const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
-                              const quantidade = parseFloat(item.quantidade.toString());
-                              return total + (preco * quantidade);
-                            }, 0);
-                            
-                            const totalAtualNormalizado = normalizeValue(totalAtual);
-                            const valorTotalNormalizado = normalizeValue(valorTotalEstoque);
-                            
-                            if (totalAtualNormalizado > valorTotalNormalizado) {
-                              return <ArrowUp className="w-3 h-3 text-green-600" />;
-                            } else if (totalAtualNormalizado < valorTotalNormalizado) {
-                              return <ArrowDown className="w-3 h-3 text-red-600" />;
-                            } else {
-                              return <Minus className="w-3 h-3 text-gray-400" />;
-                            }
-                          })()}
+                     <div className="border-t pt-2 mt-2">
+                       <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 font-bold text-xs">
+                         <span className="text-foreground">Total</span>
+                         <span className="text-muted-foreground text-center">{totalProdutosUnicos}</span>
+                        <span className="text-foreground text-center">{formatCurrency(valorTotalPago)}</span>
+                        <span className="text-blue-600 text-right">
+                          {formatCurrency(valorTotalEstoque)}
+                         </span>
+                         <div className="flex justify-end">
+                            {/* Ícone de tendência total com normalização */}
+                           {(() => {
+                             const totalAtualNormalizado = normalizeValue(valorTotalEstoque);
+                             const valorTotalPagoNormalizado = normalizeValue(valorTotalPago);
+                             
+                             if (totalAtualNormalizado > valorTotalPagoNormalizado) {
+                               return <ArrowUp className="w-3 h-3 text-green-600" />;
+                             } else if (totalAtualNormalizado < valorTotalPagoNormalizado) {
+                               return <ArrowDown className="w-3 h-3 text-red-600" />;
+                             } else {
+                               return <Minus className="w-3 h-3 text-gray-400" />;
+                             }
+                           })()}
                        </div>
                      </div>
                   </div>
