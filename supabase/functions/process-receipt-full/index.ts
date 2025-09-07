@@ -93,7 +93,13 @@ serve(async (req) => {
             content: [
               { 
                 type: 'text', 
-                text: 'Extraia APENAS o texto desta nota fiscal brasileira. Retorne o texto exato como aparece na imagem, linha por linha, sem interpretação ou formatação adicional.' 
+                text: `Extraia EXATAMENTE o texto desta nota fiscal brasileira. Retorne o texto exato como aparece na imagem, linha por linha, sem interpretação ou formatação adicional.
+
+⚠️ CRITICAL: Preste atenção especial em extrair COMPLETAMENTE a CHAVE DE ACESSO da nota fiscal de 44 dígitos, que geralmente aparece no final da nota no formato:
+- 44 dígitos seguidos: 1234567890123456789012345678901234567890123456
+- Ou separados por espaços: 1234 5678 9012 3456 7890 1234 5678 9012 3456 7890 1234
+
+Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.` 
               },
               { type: 'image_url', image_url: { url: imageUrl } }
             ]
@@ -123,7 +129,7 @@ serve(async (req) => {
       const dataRegex = /(\d{2}\/\d{2}\/\d{4})/;
       const horaRegex = /(\d{2}:\d{2}:\d{2})/;
       const valorTotalRegex = /TOTAL.*?(\d+[,\.]\d{2})/i;
-      const chaveAcessoRegex = /(\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4})/;
+      const chaveAcessoRegex = /(\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/;
       
       // Extrair dados do cabeçalho
       for (let i = 0; i < Math.min(20, linhas.length); i++) {

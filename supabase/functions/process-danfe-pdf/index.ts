@@ -128,9 +128,14 @@ serve(async (req) => {
 
 IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
+🔑 CRÍTICO: SEMPRE EXTRAIR A CHAVE DE ACESSO DE 44 DÍGITOS da nota fiscal. Esta chave é FUNDAMENTAL e aparece no formato:
+   • 44 dígitos seguidos: 1234567890123456789012345678901234567890123456
+   • Ou separados por espaços: 1234 5678 9012 3456 7890 1234 5678 9012 3456 7890 1234
+   • Procure por termos como "Chave de Acesso", "Consulta de Autenticidade", ou números de 44 dígitos no final da nota
+
 1. Estruture em JSON os dados da compra:
    • Estabelecimento (nome, cnpj, endereco)
-   • Compra (valor_total, forma_pagamento, numero, serie, data_emissao)
+   • Compra (valor_total, forma_pagamento, numero, serie, data_emissao, chave_acesso)
    • Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
 
 2. Regras OBRIGATÓRIAS:
@@ -171,7 +176,8 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
     "forma_pagamento": "...",
     "numero": "...",
     "serie": "...",
-    "data_emissao": "..."
+    "data_emissao": "...",
+    "chave_acesso": "..." // 44 dígitos da chave de acesso NFCe
   },
   "itens": [
     {
@@ -312,7 +318,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
       // 🛒 Criar compra
       if (dadosEstruturados.compra && supermercadoId) {
-        const { valor_total, forma_pagamento, data_emissao, numero, serie } = dadosEstruturados.compra;
+        const { valor_total, forma_pagamento, data_emissao, numero, serie, chave_acesso } = dadosEstruturados.compra;
         
         // Parse da data (formato brasileiro)
         let dataCompra = new Date().toISOString().split('T')[0]; // fallback para hoje
@@ -408,16 +414,23 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         }
 
         
-        // 🔐 VERIFICAR DUPLICIDADE DE CHAVE DE ACESSO antes de inserir
-        let chaveAcesso = null;
+        // Priorizar chave de acesso extraída pela IA, fallback para regex
+        let chaveAcesso = chave_acesso; // Prioridade para dados estruturados da IA
         
-        // Tentar extrair chave de acesso do texto (44 dígitos)
-        const chaveRegex = /(\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4})/;
-        const chaveMatch = textNormalizado.match(chaveRegex);
-        if (chaveMatch) {
-          chaveAcesso = chaveMatch[1].replace(/\s/g, '');
-          console.log(`🔍 Chave de acesso extraída: ${chaveAcesso}`);
-          
+        if (!chaveAcesso || chaveAcesso.length !== 44) {
+          // Fallback: tentar extrair chave de acesso do texto (44 dígitos)
+          const chaveRegex = /(\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/;
+          const chaveMatch = textNormalizado.match(chaveRegex);
+          if (chaveMatch) {
+            chaveAcesso = chaveMatch[1].replace(/\s/g, '');
+            console.log(`🔍 Chave de acesso extraída via regex: ${chaveAcesso}`);
+          }
+        } else {
+          console.log(`🤖 Chave de acesso extraída pela IA: ${chaveAcesso}`);
+        }
+        
+        // Verificar duplicidade somente se temos uma chave válida
+        if (chaveAcesso && chaveAcesso.length === 44) {
           // Verificar se já existe no banco
           const { data: notaExistente } = await supabase
             .from('compras_app')
@@ -441,6 +454,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               }
             );
           }
+        } else {
+          console.log(`⚠️ Chave de acesso não encontrada ou inválida: ${chaveAcesso || 'null'}`);
         }
 
         const { data: novaCompra, error: errorCompra } = await supabase
