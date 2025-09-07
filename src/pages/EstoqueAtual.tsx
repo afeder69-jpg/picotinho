@@ -1042,28 +1042,31 @@ const EstoqueAtual = () => {
                            })()}
                         </div>
                         
-                        {/* Linha de diferença e percentual */}
-                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 text-xs mt-2 pt-2 border-t border-dashed">
-                          <span className="text-muted-foreground">Diferença</span>
-                          <span></span>
-                          <span></span>
-                          <span className="text-right">
-                            {(() => {
+                        {/* Linha de diferença e percentual - ocupa toda a largura */}
+                        <div className="mt-2 pt-2 border-t border-dashed">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Diferença</span>
+                            <div className={`font-medium ${(() => {
                               const diferenca = valorTotalEstoque - valorTotalPago;
-                              const percentual = valorTotalPago > 0 ? ((diferenca / valorTotalPago) * 100) : 0;
-                              // Inverter lógica: preços altos = ruim (vermelho), preços baixos = bom (verde)
-                              const cor = diferenca >= 0 ? 'text-red-600' : 'text-green-600';
-                              const sinal = diferenca >= 0 ? '+' : '';
-                              
-                              return (
-                                <div className={`font-medium ${cor} flex items-center justify-end gap-1`}>
-                                  <span>{sinal}{formatCurrency(Math.abs(diferenca))}</span>
-                                  <span className="text-xs">({sinal}{Math.abs(percentual).toFixed(1)}%)</span>
-                                </div>
-                              );
-                            })()}
-                          </span>
-                          <span></span>
+                              return diferenca >= 0 ? 'text-red-600' : 'text-green-600';
+                            })()} flex items-center gap-1`}>
+                              <span>
+                                {(() => {
+                                  const diferenca = valorTotalEstoque - valorTotalPago;
+                                  const sinal = diferenca >= 0 ? '+' : '';
+                                  return `${sinal}${formatCurrency(Math.abs(diferenca))}`;
+                                })()}
+                              </span>
+                              <span className="text-xs">
+                                ({(() => {
+                                  const diferenca = valorTotalEstoque - valorTotalPago;
+                                  const percentual = valorTotalPago > 0 ? ((diferenca / valorTotalPago) * 100) : 0;
+                                  const sinal = diferenca >= 0 ? '+' : '';
+                                  return `${sinal}${Math.abs(percentual).toFixed(1)}%`;
+                                })()})
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                   </div>
