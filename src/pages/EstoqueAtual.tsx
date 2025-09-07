@@ -770,19 +770,35 @@ const EstoqueAtual = () => {
   // Contagem real de produtos únicos considerando todas as categorias
   const totalProdutosUnicos = Object.values(groupedEstoque).reduce((total, itens) => total + itens.length, 0);
   
-  // Calcular subtotais por categoria com arredondamento correto
+  // Calcular subtotais por categoria usando APENAS preços atuais (não preços pagos)
   const subtotaisPorCategoria = Object.entries(groupedEstoque).map(([categoria, itens]) => {
-    const subtotal = itens.reduce((sum, item) => {
+    // Subtotal com preços pagos (para exibição na coluna "Valor Pago")
+    const subtotalPago = itens.reduce((sum, item) => {
       const preco = item.preco_unitario_ultimo || 0;
       const quantidade = parseFloat(item.quantidade.toString());
-      // Arredondar cada produto individualmente para 2 casas decimais
       const subtotalItem = Math.round((preco * quantidade) * 100) / 100;
       return sum + subtotalItem;
     }, 0);
-    return { categoria, subtotal: Math.round(subtotal * 100) / 100 };
-  }).sort((a, b) => b.subtotal - a.subtotal);
+    
+    // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
+    const subtotalAtual = itens.reduce((sum, item) => {
+      const precoAtual = encontrarPrecoAtual(item.produto_nome);
+      // REGRA: Apenas usar preços atuais (de notas fiscais), não preços pagos manuais
+      const preco = precoAtual?.valor_unitario || 0; // Se não há preço atual, não somar
+      const quantidade = parseFloat(item.quantidade.toString());
+      const subtotalItem = Math.round((preco * quantidade) * 100) / 100;
+      return sum + subtotalItem;
+    }, 0);
+    
+    return { 
+      categoria, 
+      subtotal: Math.round(subtotalPago * 100) / 100,  // Para ordenação, usar preços pagos
+      subtotalAtual: Math.round(subtotalAtual * 100) / 100 
+    };
+  }).sort((a, b) => b.subtotalAtual - a.subtotalAtual); // Ordenar por valor atual
   
-  const valorTotalEstoque = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotal, 0);
+  // Total do estoque considerando apenas preços atuais disponíveis
+  const valorTotalEstoque = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotalAtual, 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -865,20 +881,14 @@ const EstoqueAtual = () => {
                       <span className="text-right"></span>
                     </div>
                   
-                  {subtotaisPorCategoria.map(({ categoria, subtotal }) => {
-                    // Calcular subtotal com preços atuais para esta categoria
+                  {subtotaisPorCategoria.map(({ categoria, subtotal, subtotalAtual }) => {
+                    // Calcular subtotal com preços atuais para esta categoria (mesmo cálculo do subtotal principal)
                     const itensCategoria = groupedEstoque[categoria] || [];
-                    const subtotalPrecoAtual = itensCategoria.reduce((sum, item) => {
-                      const precoAtual = encontrarPrecoAtual(item.produto_nome);
-                      const preco = precoAtual?.valor_unitario || item.preco_unitario_ultimo || 0;
-                      const quantidade = parseFloat(item.quantidade.toString());
-                      return sum + (preco * quantidade);
-                    }, 0);
                     
                     // Função para determinar o ícone de tendência com normalização
                     const getTrendIcon = () => {
                       const subtotalNormalizado = normalizeValue(subtotal);
-                      const subtotalAtualNormalizado = normalizeValue(subtotalPrecoAtual);
+                      const subtotalAtualNormalizado = normalizeValue(subtotalAtual);
                       
                       if (subtotalAtualNormalizado > subtotalNormalizado) {
                         return <ArrowUp className="w-3 h-3 text-green-600" />;
@@ -908,10 +918,10 @@ const EstoqueAtual = () => {
                             {categoria}
                           </button>
                           <span className="font-medium text-muted-foreground text-center">{quantidadeItens}</span>
-                         <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
-                          <span className="font-medium text-blue-600 text-right">
-                            {formatCurrency(subtotalPrecoAtual)}
-                          </span>
+                          <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
+                           <span className="font-medium text-blue-600 text-right">
+                             {formatCurrency(subtotalAtual)}
+                           </span>
                           <div className="flex justify-end">
                             {getTrendIcon()}
                           </div>
