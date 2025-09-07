@@ -78,7 +78,13 @@ serve(async (req) => {
   try {
     const { pdfUrl, notaImagemId, userId } = await req.json();
 
+    console.log("🔍 DEBUG - Parâmetros recebidos:");
+    console.log(`   - pdfUrl: ${pdfUrl}`);
+    console.log(`   - notaImagemId: ${notaImagemId}`);
+    console.log(`   - userId: ${userId}`);
+
     if (!pdfUrl || !notaImagemId || !userId) {
+      console.error("❌ Parâmetros ausentes:", { pdfUrl: !!pdfUrl, notaImagemId: !!notaImagemId, userId: !!userId });
       return new Response(JSON.stringify({
         success: false,
         error: "MISSING_PARAMETERS",
@@ -591,6 +597,12 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       }
 
       // 📦 Atualizar estoque do usuário
+      console.log("🔍 DEBUG - Verificando condições para atualizar estoque:");
+      console.log(`   - dadosEstruturados.itens existe: ${!!dadosEstruturados.itens}`);
+      console.log(`   - dadosEstruturados.itens length: ${dadosEstruturados.itens?.length}`);
+      console.log(`   - userId: ${userId}`);
+      console.log(`   - dadosEstruturados.itens:`, dadosEstruturados.itens);
+      
       if (dadosEstruturados.itens && userId) {
         console.log("📦 Iniciando atualização do estoque...");
         for (let idx = 0; idx < dadosEstruturados.itens.length; idx++) {
