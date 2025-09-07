@@ -68,13 +68,59 @@ const EstoqueAtual = () => {
 
   const loadPrecosAtuais = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Buscar preços específicos do usuário (produtos inseridos manualmente)
+      const { data: precosUsuario, error: errorUsuario } = await supabase
+        .from('precos_atuais_usuario')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('produto_nome', { ascending: true });
+
+      if (errorUsuario) throw errorUsuario;
+
+      // Buscar preços gerais (de notas fiscais públicas)
+      const { data: precosGerais, error: errorGerais } = await supabase
         .from('precos_atuais')
         .select('*')
         .order('produto_nome', { ascending: true });
 
-      if (error) throw error;
-      setPrecosAtuais(data || []);
+      if (errorGerais) throw errorGerais;
+
+      // Combinar preços: prioridade para preços específicos do usuário
+      // Normalizar estrutura dos dados para compatibilidade
+      const precosUnificados: any[] = [];
+      
+      // Adicionar preços específicos do usuário primeiro (maior prioridade)
+      (precosUsuario || []).forEach(precoUser => {
+        precosUnificados.push({
+          id: precoUser.id,
+          produto_nome: precoUser.produto_nome,
+          valor_unitario: precoUser.valor_unitario,
+          data_atualizacao: precoUser.data_atualizacao,
+          origem: 'usuario'
+        });
+      });
+      
+      // Adicionar preços gerais apenas se não houver preço específico do usuário para o produto
+      (precosGerais || []).forEach(precoGeral => {
+        const jaExistePrecoUsuario = precosUsuario?.some(precoUser => 
+          precoUser.produto_nome.toLowerCase() === precoGeral.produto_nome.toLowerCase()
+        );
+        
+        if (!jaExistePrecoUsuario) {
+          precosUnificados.push({
+            id: precoGeral.id,
+            produto_nome: precoGeral.produto_nome,
+            valor_unitario: precoGeral.valor_unitario,
+            data_atualizacao: precoGeral.data_atualizacao,
+            origem: 'geral'
+          });
+        }
+      });
+
+      setPrecosAtuais(precosUnificados);
     } catch (error) {
       console.error('Erro ao carregar preços atuais:', error);
     }
