@@ -290,8 +290,11 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             if (response.error) {
               console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
               
-              // Verificar se é erro de arquivo não-nota fiscal
-              if (response.error.error === 'INVALID_RECEIPT') {
+              // Verificar se é erro de arquivo não-nota fiscal (múltiplas formas possíveis)
+              const errorData = response.error.error || response.error.code || response.error.type;
+              const errorMessage = response.error.message || '';
+              
+              if (errorData === 'INVALID_RECEIPT' || errorMessage.includes('não é uma nota fiscal válida') || errorMessage.includes('ARQUIVO NÃO É UMA NOTA FISCAL VÁLIDA')) {
                 toast({
                   title: "Arquivo Inválido",
                   description: "❌ Esse arquivo não é uma nota fiscal válida. Por favor, envie o cupom/nota fiscal (NFC-e/DANFE) em PDF, XML ou imagem.",
