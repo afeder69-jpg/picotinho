@@ -268,6 +268,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   userId: currentUser.id
                 }
               });
+              console.log('📥 Resposta completa da função PDF:', processResponse);
             } else {
               console.log('🖼️ Processando imagem...');
               processResponse = await supabase.functions.invoke('process-receipt-full', {
@@ -280,6 +281,25 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             }
 
             console.log('📥 Resposta do processamento:', processResponse);
+
+            // ⚠️ VERIFICAR SE A FUNÇÃO RETORNOU 503 (Service Unavailable)
+            if (processResponse.error && processResponse.error.message?.includes('500') || 
+                processResponse.error && processResponse.error.message?.includes('503')) {
+              console.error('🔥 Edge function com erro 503/500, tentando fallback...');
+              
+              // 🔄 FALLBACK: tentar process-receipt-full para PDFs se process-danfe-pdf falhar
+              if (isPdf) {
+                console.log('🔄 Tentando fallback: process-receipt-full para PDF...');
+                processResponse = await supabase.functions.invoke('process-receipt-full', {
+                  body: {
+                    notaImagemId: notaData.id,
+                    pdfUrl: urlData.publicUrl,
+                    userId: currentUser.id
+                  }
+                });
+                console.log('📥 Resposta do fallback:', processResponse);
+              }
+            }
 
             // Tratamento das respostas
             if (processResponse.error) {
@@ -297,6 +317,13 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 toast({
                   title: "❌ Nota rejeitada",
                   description: processResponse.error.message,
+                  variant: "destructive",
+                });
+              } else if (processResponse.error.error === 'ARQUIVO_INVALIDO') {
+                // 🚫 Arquivo inválido - foi excluído automaticamente
+                toast({
+                  title: "❌ Arquivo rejeitado",
+                  description: "Esse arquivo não é uma nota fiscal válida e foi recusado pelo Picotinho.",
                   variant: "destructive",
                 });
               } else if (processResponse.error.error === 'NOTA_DUPLICADA') {
@@ -323,11 +350,12 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 });
               }
             } else {
-              // 🔄 Caso não haja data nem error - forçar atualização do status
-              console.warn('⚠️ Resposta sem data nem error - aguardando processamento em background');
+              // 🔄 Caso não haja data nem error - possivelmente erro 503/500
+              console.warn('⚠️ Resposta sem data nem error - possivelmente edge function indisponível');
               toast({
-                title: "🔄 Processamento iniciado",
-                description: `${file.name} está sendo processada em segundo plano`,
+                title: "⚠️ Processamento em fila",
+                description: `${file.name} foi enviada mas o processamento pode estar temporariamente indisponível. Tente recarregar a página em alguns minutos.`,
+                variant: "destructive",
               });
             }
             
