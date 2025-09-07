@@ -297,7 +297,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               if (errorData === 'INVALID_RECEIPT' || errorMessage.includes('não é uma nota fiscal válida') || errorMessage.includes('ARQUIVO NÃO É UMA NOTA FISCAL VÁLIDA')) {
                 toast({
                   title: "Arquivo Inválido",
-                  description: "❌ Esse arquivo não é uma nota fiscal válida. Por favor, envie o cupom/nota fiscal (NFC-e/DANFE) em PDF, XML ou imagem.",
+                  description: "❌ Esse arquivo não é uma nota fiscal válida. O Picotinho não aceita esse tipo de documento. Por favor, envie apenas nota ou cupom fiscal em PDF, XML ou imagem.",
                   variant: "destructive",
                 });
               } else {
@@ -307,7 +307,16 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   variant: "destructive",
                 });
               }
+            } else if (response.data && response.data.success === false) {
+              // Verificar se a resposta indica falha (arquivo inválido processado corretamente)
+              console.log('❌ Arquivo rejeitado por não ser nota fiscal');
+              toast({
+                title: "Arquivo Inválido",
+                description: "❌ Esse arquivo não é uma nota fiscal válida. O Picotinho não aceita esse tipo de documento. Por favor, envie apenas nota ou cupom fiscal em PDF, XML ou imagem.",
+                variant: "destructive",
+              });
             } else {
+              // Sucesso real
               console.log('✅ Processamento concluído');
               toast({
                 title: "✅ Processamento concluído",
