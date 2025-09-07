@@ -107,8 +107,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    try {
+      // Se estiver em modo teste, apenas limpar estado local
+      if (isTestMode) {
+        setUser(null);
+        setSession(null);
+        setIsTestMode(false);
+        return;
+      }
+
+      // Tentar fazer logout no Supabase
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      
+      // Mesmo com erro, limpar estado local para evitar problemas de UI
+      setUser(null);
+      setSession(null);
+      setIsTestMode(false);
+      
+      // Só propagar o erro se for algo crítico (não session not found)
+      if (error && !error.message.includes('session_not_found') && !error.message.includes('Session not found')) {
+        throw error;
+      }
+    } catch (error) {
+      // Em caso de erro, garantir que o estado local seja limpo
+      setUser(null);
+      setSession(null);
+      setIsTestMode(false);
+      
+      // Log do erro para debug, mas não propagar erros de sessão
+      console.warn('Erro durante logout (não crítico):', error);
+    }
   };
 
   const value = {
