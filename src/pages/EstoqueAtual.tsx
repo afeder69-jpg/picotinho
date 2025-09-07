@@ -214,6 +214,25 @@ const EstoqueAtual = () => {
     }
   };
 
+  // Função para verificar se um produto foi inserido manualmente
+  const isProdutoManual = (nomeProduto: string) => {
+    // Verifica se existe preço específico do usuário com origem 'manual'
+    const precoUsuario = precosAtuais.find(preco => 
+      preco.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
+      preco.origem === 'manual'
+    );
+    
+    if (precoUsuario) return true;
+    
+    // Se não há preço específico, verifica se o produto não aparece em nenhuma nota fiscal processada
+    const aparaceEmNotasFiscais = Object.keys(datasNotasFiscais).some(produtoNota =>
+      produtoNota.toLowerCase().includes(nomeProduto.toLowerCase()) ||
+      nomeProduto.toLowerCase().includes(produtoNota.toLowerCase())
+    );
+    
+    return !aparaceEmNotasFiscais;
+  };
+
   // Função para encontrar a data da nota fiscal de um produto
   const encontrarDataNotaFiscal = (nomeProduto: string) => {
     // Buscar correspondência exata primeiro
@@ -1085,8 +1104,11 @@ const EstoqueAtual = () => {
                             className="flex items-center py-2 border-b border-border last:border-0"
                           >
                             <div className="flex-1 overflow-hidden relative">
-                               <h3 className="text-xs font-medium text-foreground leading-tight relative">
-                                 {item.produto_nome}
+                                <h3 className="text-xs font-medium text-foreground leading-tight relative">
+                                  {item.produto_nome}
+                                  {isProdutoManual(item.produto_nome) && (
+                                    <span className="text-red-500 text-xs ml-1">(manual)</span>
+                                  )}
                                  {/* Botão de ajuste sobreposto ao título do produto */}
                                  {modoEdicao && (
                                    <Button
