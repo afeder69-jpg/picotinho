@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,136 +17,113 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { userId } = await req.json();
+    console.log('🔧 Iniciando correção GLOBAL de preços zerados...');
 
-    console.log('Corrigindo preços zerados para usuário:', userId);
+    // Buscar todos os produtos de notas fiscais processadas que não estão em precos_atuais
+    const { data: produtosSemPreco } = await supabase.rpc('sql', { 
+      query: `
+        WITH produtos_notas AS (
+          SELECT DISTINCT
+            UPPER(TRIM(
+              REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                  REGEXP_REPLACE(
+                    item->>'descricao',
+                    '\\b(PAO DE FORMA|PAO FORMA)\\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\\s*\\d*G?\\s*(100\\s*NUTRICAO|INTEGRAL|10\\s*GRAOS|ORIGINAL)?\\b', 
+                    'PAO DE FORMA', 'gi'
+                  ),
+                  '\\b(FATIADO|MINI\\s*LANCHE|170G\\s*AMEIXA|380G|450G|480G|500G|180G\\s*REQUEIJAO|3\\.0|INTEGRAL|10\\s*GRAOS|ORIGINAL|\\d+G|\\d+ML|\\d+L|\\d+KG)\\b', 
+                  '', 'gi'
+                ),
+                '\\s+', ' ', 'g'
+              )
+            )) as produto_nome_normalizado,
+            COALESCE((item->>'valor_unitario')::numeric, (item->>'preco_unitario')::numeric, 0) as valor_unitario,
+            COALESCE(
+              ni.dados_extraidos->'estabelecimento'->>'nome',
+              ni.dados_extraidos->'supermercado'->>'nome', 
+              ni.dados_extraidos->'emitente'->>'nome',
+              'Estabelecimento'
+            ) as estabelecimento_nome,
+            COALESCE(
+              REGEXP_REPLACE(ni.dados_extraidos->'estabelecimento'->>'cnpj', '[^\\d]', '', 'g'),
+              REGEXP_REPLACE(ni.dados_extraidos->'supermercado'->>'cnpj', '[^\\d]', '', 'g'),
+              REGEXP_REPLACE(ni.dados_extraidos->'emitente'->>'cnpj', '[^\\d]', '', 'g'),
+              '00000000000000'
+            ) as estabelecimento_cnpj,
+            GREATEST(ni.created_at, now() - interval '30 days') as data_atualizacao
+          FROM notas_imagens ni
+          CROSS JOIN LATERAL jsonb_array_elements(ni.dados_extraidos->'itens') as item
+          WHERE ni.processada = true 
+            AND ni.dados_extraidos IS NOT NULL
+            AND item->>'descricao' IS NOT NULL
+            AND COALESCE((item->>'valor_unitario')::numeric, (item->>'preco_unitario')::numeric, 0) > 0
+            AND LENGTH(TRIM(item->>'descricao')) > 2
+        )
+        SELECT 
+          produto_nome_normalizado,
+          valor_unitario,
+          estabelecimento_nome,
+          estabelecimento_cnpj,
+          data_atualizacao,
+          COUNT(*) as frequencia
+        FROM produtos_notas pn
+        WHERE NOT EXISTS (
+          SELECT 1 FROM precos_atuais pa 
+          WHERE pa.produto_nome = pn.produto_nome_normalizado
+          AND pa.estabelecimento_cnpj = pn.estabelecimento_cnpj
+        )
+        AND produto_nome_normalizado IS NOT NULL 
+        AND LENGTH(produto_nome_normalizado) > 2
+        GROUP BY produto_nome_normalizado, valor_unitario, estabelecimento_nome, estabelecimento_cnpj, data_atualizacao
+        ORDER BY frequencia DESC, produto_nome_normalizado
+        LIMIT 50;
+      `
+    });
 
-    // 1. Buscar todos os produtos no estoque do usuário que têm preço pago mas não têm preço atual
-    const { data: produtosSemPrecoAtual } = await supabase
-      .from('estoque_app')
-      .select('*')
-      .eq('user_id', userId)
-      .not('preco_unitario_ultimo', 'is', null)
-      .gt('preco_unitario_ultimo', 0);
-
-    if (!produtosSemPrecoAtual || produtosSemPrecoAtual.length === 0) {
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Nenhum produto com preço pago encontrado para correção',
-        produtosCorrigidos: 0
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log(`Encontrados ${produtosSemPrecoAtual.length} produtos com preço pago`);
+    console.log(`📊 Encontrados ${produtosSemPreco?.length || 0} produtos sem preço atual`);
 
     let produtosCorrigidos = 0;
+    let erros = 0;
 
-    // 2. Para cada produto, verificar se já existe preço atual
-    for (const produto of produtosSemPrecoAtual) {
+    // Processar cada produto individualmente para evitar conflitos
+    for (const produto of produtosSemPreco || []) {
       try {
-        // Verificar se já existe preço atual para este produto em algum estabelecimento
-        const { data: precoAtualExistente } = await supabase
+        const { error: insertError } = await supabase
           .from('precos_atuais')
-          .select('*')
-          .ilike('produto_nome', `%${produto.produto_nome}%`)
-          .order('data_atualizacao', { ascending: false })
-          .limit(1);
+          .upsert({
+            produto_nome: produto.produto_nome_normalizado,
+            valor_unitario: produto.valor_unitario,
+            estabelecimento_nome: produto.estabelecimento_nome,
+            estabelecimento_cnpj: produto.estabelecimento_cnpj,
+            data_atualizacao: produto.data_atualizacao
+          }, {
+            onConflict: 'produto_nome,estabelecimento_cnpj'
+          });
 
-        // Se não existe preço atual ou o existente é muito antigo, criar/atualizar com base no preço pago
-        let deveAtualizarPreco = false;
-        let estabelecimentoParaUsar = 'INSERÇÃO_MANUAL_' + userId.substring(0, 8);
-        let estabelecimentoNome = 'Inserção Manual do Usuário';
-
-        if (!precoAtualExistente || precoAtualExistente.length === 0) {
-          // Não existe preço atual, usar preço pago
-          deveAtualizarPreco = true;
-          console.log(`📋 Produto sem preço atual: ${produto.produto_nome}`);
+        if (insertError) {
+          console.error(`❌ Erro ao inserir ${produto.produto_nome_normalizado}:`, insertError);
+          erros++;
         } else {
-          // Existe preço atual, verificar se é muito antigo (mais de 30 dias)
-          const precoExistente = precoAtualExistente[0];
-          const dataPrecoExistente = new Date(precoExistente.data_atualizacao);
-          const agora = new Date();
-          const diferencaDias = (agora.getTime() - dataPrecoExistente.getTime()) / (1000 * 3600 * 24);
-
-          if (diferencaDias > 30) {
-            // Preço atual muito antigo, usar preço pago como referência mais recente
-            deveAtualizarPreco = true;
-            estabelecimentoParaUsar = precoExistente.estabelecimento_cnpj;
-            estabelecimentoNome = precoExistente.estabelecimento_nome;
-            console.log(`📋 Produto com preço antigo (${Math.round(diferencaDias)} dias): ${produto.produto_nome}`);
-          } else {
-            console.log(`✅ Produto já tem preço atual recente: ${produto.produto_nome}`);
-          }
+          console.log(`✅ Preço corrigido: ${produto.produto_nome_normalizado} - R$ ${produto.valor_unitario}`);
+          produtosCorrigidos++;
         }
-
-        if (deveAtualizarPreco) {
-          // Buscar a nota fiscal mais recente deste produto para obter data/hora precisas
-          const { data: notaRecente } = await supabase
-            .from('notas_imagens')
-            .select('dados_extraidos, data_criacao')
-            .eq('usuario_id', userId)
-            .eq('processada', true)
-            .not('dados_extraidos', 'is', null)
-            .order('data_criacao', { ascending: false });
-
-          let dataAtualizacao = new Date().toISOString();
-          
-          // Buscar a data da compra mais recente deste produto
-          if (notaRecente && notaRecente.length > 0) {
-            for (const nota of notaRecente) {
-              const dadosExtraidos = nota.dados_extraidos as any;
-              if (dadosExtraidos?.itens) {
-                const itemEncontrado = dadosExtraidos.itens.find((item: any) => 
-                  item.nome && item.nome.toLowerCase().includes(produto.produto_nome.toLowerCase())
-                );
-                
-                if (itemEncontrado && dadosExtraidos.compra?.data) {
-                  const dataCompra = dadosExtraidos.compra.data;
-                  const horaCompra = dadosExtraidos.compra.hora || '12:00:00';
-                  dataAtualizacao = new Date(`${dataCompra}T${horaCompra}`).toISOString();
-                  break;
-                }
-              }
-            }
-          }
-
-          // Criar/atualizar preço atual usando o preço pago
-          const { data: precoAtualizado, error: erroPreco } = await supabase
-            .from('precos_atuais')
-            .upsert({
-              produto_nome: produto.produto_nome,
-              estabelecimento_cnpj: estabelecimentoParaUsar,
-              estabelecimento_nome: estabelecimentoNome,
-              valor_unitario: produto.preco_unitario_ultimo,
-              data_atualizacao: dataAtualizacao
-            }, {
-              onConflict: 'produto_nome,estabelecimento_cnpj'
-            });
-
-          if (erroPreco) {
-            console.error(`❌ Erro ao atualizar preço para ${produto.produto_nome}:`, erroPreco);
-          } else {
-            console.log(`✅ Preço atual corrigido: ${produto.produto_nome} - R$ ${produto.preco_unitario_ultimo}`);
-            produtosCorrigidos++;
-          }
-        }
-
-      } catch (error) {
-        console.error(`❌ Erro ao processar produto ${produto.produto_nome}:`, error);
+      } catch (produtoError) {
+        console.error(`❌ Erro no produto ${produto.produto_nome_normalizado}:`, produtoError);
+        erros++;
       }
     }
 
-    console.log(`✅ Correção concluída: ${produtosCorrigidos} produtos corrigidos`);
+    console.log(`🎯 Correção concluída: ${produtosCorrigidos} produtos corrigidos, ${erros} erros`);
 
     return new Response(JSON.stringify({
       success: true,
-      message: `Preços atuais corrigidos com sucesso`,
-      produtosAnalisados: produtosSemPrecoAtual.length,
-      produtosCorrigidos: produtosCorrigidos
+      message: `Correção de preços concluída`,
+      produtosCorrigidos,
+      erros,
+      totalEncontrados: produtosSemPreco?.length || 0
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
