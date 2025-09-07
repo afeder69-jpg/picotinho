@@ -322,6 +322,13 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   description: `${file.name} foi processada com sucesso pelo Picotinho`,
                 });
               }
+            } else {
+              // 🔄 Caso não haja data nem error - forçar atualização do status
+              console.warn('⚠️ Resposta sem data nem error - aguardando processamento em background');
+              toast({
+                title: "🔄 Processamento iniciado",
+                description: `${file.name} está sendo processada em segundo plano`,
+              });
             }
             
           } catch (processError: any) {
