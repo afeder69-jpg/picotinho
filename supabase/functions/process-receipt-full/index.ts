@@ -364,6 +364,8 @@ serve(async (req) => {
       .single();
 
     if (compraError) throw compraError;
+    
+    console.log(`✅ Compra criada: ID=${compra.id}, Total=${compra.preco_total}`);
 
     // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
     const normalizarNomeProduto = async (nome: string): Promise<string> => {
@@ -515,15 +517,16 @@ serve(async (req) => {
             // 📈 Atualizar produto existente
             const novaQuantidade = produtoSimilar.quantidade + (produtoData.quantidade || 1);
             
-            // Se há preço na nota, usar ele; senão manter o existente
-            const precoAtualizado = produtoData.precoUnitario && produtoData.precoUnitario > 0 
+            // CORREÇÃO CRÍTICA: Sempre usar o preço da nota se ele for válido
+            const precoAtualizado = (produtoData.precoUnitario && produtoData.precoUnitario > 0) 
               ? produtoData.precoUnitario 
-              : produtoSimilar.preco_unitario_ultimo;
+              : (produtoSimilar.preco_unitario_ultimo || 0);
             
             console.log(`🔍 Debug preço - Produto: ${nomeNormalizado}`);
             console.log(`   - Preço da nota: ${produtoData.precoUnitario}`);
             console.log(`   - Preço atual estoque: ${produtoSimilar.preco_unitario_ultimo}`);
             console.log(`   - Preço que será usado: ${precoAtualizado}`);
+            console.log(`   - Nova quantidade: ${novaQuantidade}`);
             
             const { error: updateError } = await supabase
               .from('estoque_app')
