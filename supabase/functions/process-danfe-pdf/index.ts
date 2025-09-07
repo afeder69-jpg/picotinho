@@ -593,7 +593,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       // 📦 Atualizar estoque do usuário
       if (dadosEstruturados.itens && userId) {
         console.log("📦 Iniciando atualização do estoque...");
-        for (const item of dadosEstruturados.itens) {
+        for (let idx = 0; idx < dadosEstruturados.itens.length; idx++) {
+          const item = dadosEstruturados.itens[idx];
           try {
             const { descricao, quantidade, unidade, valor_unitario, categoria } = item;
 
@@ -606,17 +607,33 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               ?.trim()
               ?.toUpperCase() || 'PRODUTO';
 
+            console.log(`\n🔍 PROCESSANDO ITEM ${idx + 1}: "${descricao}"`);
+            console.log(`   - Nome normalizado: "${nomeNormalizado}"`);
+            console.log(`   - Quantidade: ${quantidade}`);
+            console.log(`   - Valor unitário: ${valor_unitario}`);
+            console.log(`   - Valor total: ${valor_total}`);
+            console.log(`   - Categoria: ${categoria}`);
+            console.log(`   - Unidade: ${unidade}`);
+
             // 📊 Verificar se produto já existe no estoque
             const { data: estoqueExistente } = await supabase
               .from('estoque_app')
-              .select('id, quantidade')
+              .select('id, quantidade, preco_unitario_ultimo')
               .eq('user_id', userId)
               .eq('produto_nome', nomeNormalizado)
               .single();
 
+            console.log(`🔍 VERIFICAÇÃO ESTOQUE - Item ${idx + 1}:`);
             if (estoqueExistente) {
+              console.log(`   ✅ PRODUTO ENCONTRADO NO ESTOQUE:`);
+              console.log(`      - ID: ${estoqueExistente.id}`);
+              console.log(`      - Quantidade atual: ${estoqueExistente.quantidade}`);
+              console.log(`      - Preço atual: ${estoqueExistente.preco_unitario_ultimo}`);
+              console.log(`      - Quantidade a adicionar: ${quantidade}`);
+              console.log(`      - Novo preço: ${valor_unitario || 0}`);
+
               // Atualizar quantidade existente
-              await supabase
+              const { error: updateError } = await supabase
                 .from('estoque_app')
                 .update({
                   quantidade: estoqueExistente.quantidade + (quantidade || 0),
@@ -624,10 +641,20 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 })
                 .eq('id', estoqueExistente.id);
 
-              console.log(`📦 Estoque atualizado: ${nomeNormalizado} (${estoqueExistente.quantidade} + ${quantidade} = ${estoqueExistente.quantidade + (quantidade || 0)})`);
+              if (updateError) {
+                console.error(`❌ ERRO ao atualizar estoque - Item ${idx + 1}:`, updateError);
+              } else {
+                console.log(`✅ SUCESSO - Item ${idx + 1} ATUALIZADO: ${nomeNormalizado} (${estoqueExistente.quantidade} + ${quantidade} = ${estoqueExistente.quantidade + (quantidade || 0)}) - Preço: R$ ${valor_unitario || 0}`);
+              }
             } else {
+              console.log(`   🆕 PRODUTO NÃO ENCONTRADO - CRIANDO NOVO:`);
+              console.log(`      - Nome: ${nomeNormalizado}`);
+              console.log(`      - Quantidade: ${quantidade}`);
+              console.log(`      - Preço: ${valor_unitario || 0}`);
+              console.log(`      - Categoria: ${categoria || 'outros'}`);
+
               // Criar novo item no estoque
-              await supabase
+              const { error: insertError } = await supabase
                 .from('estoque_app')
                 .insert({
                   user_id: userId,
@@ -638,7 +665,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                   preco_unitario_ultimo: valor_unitario || 0
                 });
 
-              console.log(`📦 Novo item no estoque: ${nomeNormalizado} (${quantidade})`);
+              if (insertError) {
+                console.error(`❌ ERRO ao criar produto - Item ${idx + 1}:`, insertError);
+              } else {
+                console.log(`✅ SUCESSO - Item ${idx + 1} CRIADO: ${nomeNormalizado} (${quantidade}) - Preço: R$ ${valor_unitario || 0}`);
+              }
             }
 
           } catch (estoqueError) {
