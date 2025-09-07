@@ -326,8 +326,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     console.log("=".repeat(80));
 
     // 🔍 Verificar validação da nota (apenas se não for processamento forçado)
-    const forceProcess = false; // Definir explicitamente como false
-    if (!forceProcess) {
+    const isForceProcess = forceProcess || false; // Usar a variável do request
+    if (!isForceProcess) {
       if (respostaIA.includes('NOTA_INVÁLIDA')) {
         // 🗑️ EXCLUIR arquivo de serviço automaticamente
         try {
