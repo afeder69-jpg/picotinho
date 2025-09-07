@@ -48,31 +48,99 @@ serve(async (req) => {
     // 🔍 PONTO DE DECISÃO: Validar se é nota fiscal de produtos válida
     console.log("🔍 Validando se é nota fiscal de produtos...");
     
-    // Validar dados essenciais da NFe/NFC-e
+    // Buscar texto original da imagem para análise
+    const { data: notaCompleta } = await supabase
+      .from('notas_imagens')
+      .select('debug_texto')
+      .eq('id', imagemId)
+      .single();
+    
+    const textoOriginal = notaCompleta?.debug_texto || '';
+    const textoCompleto = textoOriginal.toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[^\w\d\s]/g, ' ');
+    
+    // === GRUPO 1: Identificador Fiscal ===
+    let g1_identificador = false;
+    let chaveDetectada = '';
+    
+    // Buscar chave de acesso (44 dígitos, aceitar com espaços/pontos/quebras)
+    const textoNumerico = textoOriginal.replace(/[^\d]/g, '');
+    const chaveMatch = textoNumerico.match(/\d{44}/);
+    if (chaveMatch) {
+      g1_identificador = true;
+      chaveDetectada = chaveMatch[0].substring(0, 6) + '...' + chaveMatch[0].substring(38); // Mascarar
+    }
+    
+    // Buscar URL/QR SEFAZ
+    if (!g1_identificador) {
+      const urlSefazMatch = textoCompleto.match(/sefaz|fazenda.*gov.*br|nfce.*consulta/);
+      const qrParamMatch = textoCompleto.match(/p=\d{44}/);
+      if (urlSefazMatch && qrParamMatch) {
+        g1_identificador = true;
+        chaveDetectada = 'QR SEFAZ detectado';
+      }
+    }
+    
+    // === GRUPO 2: Metadados do Documento ===
     const temCNPJ = extractedData.estabelecimento?.cnpj && 
                     extractedData.estabelecimento.cnpj.replace(/[^\d]/g, '').length >= 14;
     const temNomeEstabelecimento = extractedData.estabelecimento?.nome && 
                                   extractedData.estabelecimento.nome.trim().length > 0;
+    const temDataEmissao = extractedData.compra?.data_emissao && 
+                          extractedData.compra.data_emissao.trim().length > 0;
     const temTotal = extractedData.compra?.valor_total && extractedData.compra.valor_total > 0;
+    
+    const g2_metadados = temCNPJ && temDataEmissao && temTotal;
+    
+    // === GRUPO 3: Itens de Produtos ===
     const temItens = extractedData.produtos && 
                      Array.isArray(extractedData.produtos) && 
                      extractedData.produtos.length > 0 &&
                      extractedData.produtos.some(item => 
                        item.nome && item.nome.trim().length > 0 &&
                        item.quantidade && item.quantidade > 0 &&
-                       item.precoUnitario !== undefined
+                       (item.precoUnitario !== undefined || item.precoTotal !== undefined)
                      );
     
-    const isNotaFiscalValida = temCNPJ && temNomeEstabelecimento && temTotal && temItens;
+    const g3_itens = temItens;
     
-    console.log("🔍 Validação da nota fiscal:");
+    // === REGRAS DE EXCLUSÃO IMEDIATA ===
+    const textoParaExclusao = textoCompleto + ' ' + JSON.stringify(extractedData).toLowerCase();
+    const temNFSe = /nfs-e|imposto sobre serviços|iss|prestação de serviços|serviço prestado/i.test(textoParaExclusao);
+    const semIndicativoFiscal = !g1_identificador && !g2_metadados && !g3_itens;
+    
+    // === VALIDAÇÃO N-de-M (2 de 3 grupos) ===
+    const gruposAtendidos = [g1_identificador, g2_metadados, g3_itens].filter(Boolean).length;
+    const isNotaFiscalProdutos = gruposAtendidos >= 2 && !temNFSe && !semIndicativoFiscal;
+    
+    const reason = isNotaFiscalProdutos 
+      ? `Válida: ${gruposAtendidos}/3 grupos atendidos`
+      : temNFSe 
+        ? 'Rejeitada: documento de serviços (NFS-e)'
+        : semIndicativoFiscal
+          ? 'Rejeitada: sem indicativos fiscais'
+          : `Rejeitada: apenas ${gruposAtendidos}/3 grupos atendidos`;
+    
+    console.log("🔍 Validação robusta da nota fiscal:");
+    console.log(`   === GRUPO 1 - Identificador Fiscal: ${g1_identificador} ===`);
+    console.log(`   - Chave detectada: ${chaveDetectada || 'Não encontrada'}`);
+    console.log(`   === GRUPO 2 - Metadados: ${g2_metadados} ===`);
     console.log(`   - CNPJ válido: ${temCNPJ}`);
     console.log(`   - Nome estabelecimento: ${temNomeEstabelecimento}`);
+    console.log(`   - Data emissão: ${temDataEmissao}`);
     console.log(`   - Valor total: ${temTotal}`);
+    console.log(`   === GRUPO 3 - Itens: ${g3_itens} ===`);
     console.log(`   - Itens válidos: ${temItens}`);
-    console.log(`   - É nota fiscal válida: ${isNotaFiscalValida}`);
+    console.log(`   === EXCLUSÕES ===`);
+    console.log(`   - Tem NFS-e: ${temNFSe}`);
+    console.log(`   - Sem indicativo fiscal: ${semIndicativoFiscal}`);
+    console.log(`   === RESULTADO ===`);
+    console.log(`   - Grupos atendidos: ${gruposAtendidos}/3`);
+    console.log(`   - É nota fiscal de produtos: ${isNotaFiscalProdutos}`);
+    console.log(`   - Motivo: ${reason}`);
     
-    if (!isNotaFiscalValida) {
+    if (!isNotaFiscalProdutos) {
       console.log("❌ Arquivo não é uma nota fiscal de produtos válida");
       
       // Buscar o path da imagem para excluir
