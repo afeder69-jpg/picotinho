@@ -509,11 +509,16 @@ serve(async (req) => {
             // 📈 Atualizar produto existente
             const novaQuantidade = produtoSimilar.quantidade + (produtoData.quantidade || 1);
             
+            // Se há preço na nota, usar ele; senão manter o existente
+            const precoAtualizado = produtoData.precoUnitario && produtoData.precoUnitario > 0 
+              ? produtoData.precoUnitario 
+              : produtoSimilar.preco_unitario_ultimo;
+            
             const { error: updateError } = await supabase
               .from('estoque_app')
               .update({
                 quantidade: novaQuantidade,
-                preco_unitario_ultimo: produtoData.precoUnitario || produtoSimilar.preco_unitario_ultimo,
+                preco_unitario_ultimo: precoAtualizado,
                 updated_at: new Date().toISOString()
               })
               .eq('id', produtoSimilar.id);
