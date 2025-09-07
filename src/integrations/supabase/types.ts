@@ -1384,6 +1384,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      corrigir_precos_manuais: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       corrigir_produtos_manuais_sem_preco: {
         Args: Record<PropertyKey, never>
         Returns: {

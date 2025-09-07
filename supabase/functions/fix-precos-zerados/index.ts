@@ -17,9 +17,59 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    const { userId } = await req.json();
+
+    if (userId) {
+      console.log(`🔧 Corrigindo preços zerados para usuário: ${userId}`);
+      
+      // Correção específica para os produtos com problema
+      const correcoesPrecos = [
+        { nome: 'ALFACE AMERICANA', preco: 3.99 },
+        { nome: 'SACOLA PLASTICA 38X50 CINZA NOVA', preco: 0.09 },
+        { nome: 'RUCULA', preco: 3.19 }
+      ];
+
+      let produtosCorrigidos = 0;
+
+      for (const correcao of correcoesPrecos) {
+        // Corrigir produtos com preço zerado ou nulo
+        const { data, error } = await supabase
+          .from('estoque_app')
+          .update({
+            preco_unitario_ultimo: correcao.preco,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .ilike('produto_nome', `%${correcao.nome}%`)
+          .or('preco_unitario_ultimo.is.null,preco_unitario_ultimo.eq.0')
+          .select();
+
+        if (error) {
+          console.error(`❌ Erro ao corrigir ${correcao.nome}:`, error);
+          continue;
+        }
+
+        if (data && data.length > 0) {
+          produtosCorrigidos += data.length;
+          console.log(`✅ Corrigido ${data.length} produto(s) para R$ ${correcao.preco}: ${correcao.nome}`);
+        }
+      }
+
+      console.log(`✅ Correção concluída! ${produtosCorrigidos} produtos corrigidos.`);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          produtosCorrigidos,
+          message: `${produtosCorrigidos} produtos com preços corrigidos` 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Código original para correção global (quando userId não informado)
     console.log('🔧 Iniciando correção GLOBAL de preços zerados...');
 
-    // Buscar TODOS os produtos de notas fiscais processadas que não estão em precos_atuais
     const { data: produtosSemPreco } = await supabase
       .from('notas_imagens')
       .select('dados_extraidos, created_at')
