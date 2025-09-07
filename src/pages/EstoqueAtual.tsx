@@ -1056,11 +1056,9 @@ const EstoqueAtual = () => {
                               const sinal = diferenca >= 0 ? '+' : '';
                               
                               return (
-                                <div className={`font-medium ${cor}`}>
-                                  <div>{sinal}{formatCurrency(Math.abs(diferenca))}</div>
-                                  <div className="text-xs">
-                                    ({sinal}{Math.abs(percentual).toFixed(1)}%)
-                                  </div>
+                                <div className={`font-medium ${cor} flex items-center justify-end gap-1`}>
+                                  <span>{sinal}{formatCurrency(Math.abs(diferenca))}</span>
+                                  <span className="text-xs">({sinal}{Math.abs(percentual).toFixed(1)}%)</span>
                                 </div>
                               );
                             })()}
