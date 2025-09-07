@@ -1040,8 +1040,33 @@ const EstoqueAtual = () => {
                                return <Minus className="w-3 h-3 text-gray-400" />;
                              }
                            })()}
-                       </div>
-                     </div>
+                        </div>
+                        
+                        {/* Linha de diferença e percentual */}
+                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 text-xs mt-2 pt-2 border-t border-dashed">
+                          <span className="text-muted-foreground">Diferença</span>
+                          <span></span>
+                          <span></span>
+                          <span className="text-right">
+                            {(() => {
+                              const diferenca = valorTotalEstoque - valorTotalPago;
+                              const percentual = valorTotalPago > 0 ? ((diferenca / valorTotalPago) * 100) : 0;
+                              const cor = diferenca >= 0 ? 'text-green-600' : 'text-red-600';
+                              const sinal = diferenca >= 0 ? '+' : '';
+                              
+                              return (
+                                <div className={`font-medium ${cor}`}>
+                                  <div>{sinal}{formatCurrency(Math.abs(diferenca))}</div>
+                                  <div className="text-xs">
+                                    ({sinal}{Math.abs(percentual).toFixed(1)}%)
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </span>
+                          <span></span>
+                        </div>
+                      </div>
                   </div>
                 </div>
               </CardContent>
