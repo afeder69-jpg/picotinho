@@ -80,7 +80,7 @@ const EstoqueAtual = () => {
 
       if (errorUsuario) throw errorUsuario;
 
-      // Buscar preços gerais (de notas fiscais públicas)
+      // Buscar preços gerais (de notas fiscais públicas de outros usuários)
       const { data: precosGerais, error: errorGerais } = await supabase
         .from('precos_atuais')
         .select('*')
@@ -88,34 +88,55 @@ const EstoqueAtual = () => {
 
       if (errorGerais) throw errorGerais;
 
-      // Combinar preços: prioridade para preços específicos do usuário
-      // Normalizar estrutura dos dados para compatibilidade
+      // Combinar preços: aplicar regra de prioridade
       const precosUnificados: any[] = [];
       
-      // Adicionar preços específicos do usuário primeiro (maior prioridade)
-      (precosUsuario || []).forEach(precoUser => {
+      // Primeiro, adicionar todos os preços gerais (base)
+      (precosGerais || []).forEach(precoGeral => {
         precosUnificados.push({
-          id: precoUser.id,
-          produto_nome: precoUser.produto_nome,
-          valor_unitario: precoUser.valor_unitario,
-          data_atualizacao: precoUser.data_atualizacao,
-          origem: 'usuario'
+          id: precoGeral.id,
+          produto_nome: precoGeral.produto_nome,
+          valor_unitario: precoGeral.valor_unitario,
+          data_atualizacao: precoGeral.data_atualizacao,
+          origem: 'geral'
         });
       });
       
-      // Adicionar preços gerais apenas se não houver preço específico do usuário para o produto
-      (precosGerais || []).forEach(precoGeral => {
-        const jaExistePrecoUsuario = precosUsuario?.some(precoUser => 
-          precoUser.produto_nome.toLowerCase() === precoGeral.produto_nome.toLowerCase()
+      // Depois, processar preços específicos do usuário
+      (precosUsuario || []).forEach(precoUser => {
+        // Verificar se existe preço geral para o mesmo produto
+        const precoGeralExistente = precosGerais?.find(precoGeral => 
+          precoGeral.produto_nome.toLowerCase() === precoUser.produto_nome.toLowerCase()
         );
         
-        if (!jaExistePrecoUsuario) {
+        if (precoGeralExistente) {
+          // Se existe preço geral E é menor que o preço do usuário, manter o geral
+          if (precoGeralExistente.valor_unitario < precoUser.valor_unitario) {
+            // Preço geral já foi adicionado acima, não fazer nada
+            return;
+          } else {
+            // Preço do usuário é menor ou igual, substituir o geral pelo do usuário
+            const index = precosUnificados.findIndex(p => 
+              p.produto_nome.toLowerCase() === precoUser.produto_nome.toLowerCase()
+            );
+            if (index >= 0) {
+              precosUnificados[index] = {
+                id: precoUser.id,
+                produto_nome: precoUser.produto_nome,
+                valor_unitario: precoUser.valor_unitario,
+                data_atualizacao: precoUser.data_atualizacao,
+                origem: 'usuario'
+              };
+            }
+          }
+        } else {
+          // Não existe preço geral, adicionar o preço do usuário
           precosUnificados.push({
-            id: precoGeral.id,
-            produto_nome: precoGeral.produto_nome,
-            valor_unitario: precoGeral.valor_unitario,
-            data_atualizacao: precoGeral.data_atualizacao,
-            origem: 'geral'
+            id: precoUser.id,
+            produto_nome: precoUser.produto_nome,
+            valor_unitario: precoUser.valor_unitario,
+            data_atualizacao: precoUser.data_atualizacao,
+            origem: 'usuario'
           });
         }
       });
