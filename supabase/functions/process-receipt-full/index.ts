@@ -675,6 +675,40 @@ serve(async (req) => {
       }
     }
 
+    // Atualizar preços atuais para todos os produtos processados
+    console.log('🔄 Atualizando preços atuais...');
+    let precosAtualizados = 0;
+    
+    if (extractedData.produtos && Array.isArray(extractedData.produtos)) {
+      for (const produto of extractedData.produtos) {
+        try {
+          const { error: updatePrecoError } = await supabase.functions.invoke('update-precos-atuais', {
+            body: {
+              compraId: compra.id,
+              produtoNome: produto.nome_normalizado || produto.nome,
+              precoUnitario: produto.preco_unitario || 0,
+              estabelecimentoCnpj: extractedData.cnpj_limpo,
+              estabelecimentoNome: extractedData.supermercado || extractedData.mercado || 'Estabelecimento',
+              dataCompra: extractedData.data_compra,
+              horaCompra: extractedData.hora_compra,
+              userId: notaImagem.usuario_id
+            }
+          });
+          
+          if (updatePrecoError) {
+            console.error(`❌ Erro ao atualizar preço atual do produto ${produto.nome}:`, updatePrecoError);
+          } else {
+            precosAtualizados++;
+            console.log(`✅ Preço atual atualizado: ${produto.nome} - R$ ${produto.preco_unitario}`);
+          }
+        } catch (priceError) {
+          console.error(`❌ Erro no preço do produto ${produto.nome}:`, priceError);
+        }
+      }
+    }
+    
+    console.log(`💰 ${precosAtualizados} preços atuais atualizados`);
+
     // Atualiza compra_id na nota de imagem e marca como processada
     await supabase
       .from('notas_imagens')
@@ -692,7 +726,8 @@ serve(async (req) => {
         success: true, 
         compraId: compra.id,
         notaFiscalId: notaFiscal?.id,
-        produtosProcessados: extractedData.produtos?.length || 0
+        produtosProcessados: extractedData.produtos?.length || 0,
+        precosAtualizados
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
