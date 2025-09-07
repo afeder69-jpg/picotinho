@@ -64,7 +64,6 @@ const EstoqueAtual = () => {
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
-    corrigirPrecosZerados(); // Corrigir preços zerados automaticamente
   }, []);
 
   const loadPrecosAtuais = async () => {
