@@ -277,51 +277,52 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 }
               });
             } else {
-              // Para imagens, usar process-receipt-full
-              response = await supabase.functions.invoke('process-receipt-full', {
+              // Para imagens, usar process-image-ai
+              response = await supabase.functions.invoke('process-image-ai', {
                 body: {
                   notaImagemId: notaData.id,
-                  imageUrl: urlData.publicUrl,
-                  qrUrl: null
+                  imageUrl: urlData.publicUrl
                 }
               });
             }
 
             if (response.error) {
               console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
+              toast({
+                title: "❌ Erro no processamento",
+                description: response.error.message || 'Erro desconhecido no processamento',
+                variant: "destructive",
+              });
+            } else if (response.data) {
+              const data = response.data;
               
-              // Verificar se é erro de arquivo não-nota fiscal (múltiplas formas possíveis)
-              const errorData = response.error.error || response.error.code || response.error.type;
-              const errorMessage = response.error.message || '';
-              
-              if (errorData === 'INVALID_RECEIPT' || errorMessage.includes('não é uma nota fiscal válida') || errorMessage.includes('ARQUIVO NÃO É UMA NOTA FISCAL VÁLIDA')) {
-                toast({
-                  title: "Arquivo Inválido",
-                  description: "❌ Esse arquivo não é uma nota fiscal válida. O Picotinho não aceita esse tipo de documento. Por favor, envie apenas nota ou cupom fiscal em PDF, XML ou imagem.",
-                  variant: "destructive",
-                });
+              // Verificar se há o veredito da IA
+              if (data.hasOwnProperty('isNotaFiscal')) {
+                if (data.isNotaFiscal === false) {
+                  // Arquivo não é nota fiscal
+                  console.log('❌ Arquivo rejeitado por não ser nota fiscal');
+                  toast({
+                    title: "Arquivo Inválido",
+                    description: "❌ Esse arquivo não é uma nota fiscal válida. O Picotinho não aceita esse tipo de documento. Por favor, envie apenas nota ou cupom fiscal em PDF, XML ou imagem.",
+                    variant: "destructive",
+                  });
+                } else if (data.isNotaFiscal === true) {
+                  // Nota fiscal válida processada com sucesso
+                  console.log('✅ Processamento concluído');
+                  toast({
+                    title: "✅ Processamento concluído",
+                    description: `${file.name} processado com sucesso`,
+                  });
+                }
               } else {
+                // Veredito ausente - erro genérico
+                console.log('⚠️ Veredito da IA ausente');
                 toast({
                   title: "❌ Erro no processamento",
-                  description: response.error.message || 'Erro desconhecido no processamento',
+                  description: 'Não foi possível analisar o arquivo. Tente novamente.',
                   variant: "destructive",
                 });
               }
-            } else if (response.data && response.data.success === false) {
-              // Verificar se a resposta indica falha (arquivo inválido processado corretamente)
-              console.log('❌ Arquivo rejeitado por não ser nota fiscal');
-              toast({
-                title: "Arquivo Inválido",
-                description: "❌ Esse arquivo não é uma nota fiscal válida. O Picotinho não aceita esse tipo de documento. Por favor, envie apenas nota ou cupom fiscal em PDF, XML ou imagem.",
-                variant: "destructive",
-              });
-            } else {
-              // Sucesso real
-              console.log('✅ Processamento concluído');
-              toast({
-                title: "✅ Processamento concluído",
-                description: `${file.name} processado com sucesso`,
-              });
             }
           } catch (processError) {
             console.log('❌ Erro no processamento: ' + (processError.message || 'Erro de conexão'));
