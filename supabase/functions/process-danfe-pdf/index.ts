@@ -124,43 +124,63 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
+    const aiPrompt = `Você recebeu um arquivo para análise.
+
+PASSO 1 – Validação inicial:
+Antes de qualquer coisa, verifique se o texto corresponde a uma nota fiscal de produtos (NFC-e ou DANFE de mercadorias).
+
+Deve conter indícios claros como: Chave de Acesso de 44 dígitos, CNPJ do estabelecimento, data de emissão, valor total e itens de produtos com descrição + quantidade + valor.
+
+Se for NFS-e (nota de serviço) ou qualquer outro documento que não seja nota fiscal de produtos, você deve retornar exatamente este JSON:
+
+{
+  "isNotaFiscalProdutos": false,
+  "motivo": "Este arquivo não é uma nota fiscal de produtos."
+}
+
+Se for realmente uma nota fiscal de produtos, então siga para o Passo 2 normalmente.
+
+PASSO 2 – Estruturar em JSON os dados da compra (somente se for nota fiscal de produtos):
 
 IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
-1. Estruture em JSON os dados da compra:
-   • Estabelecimento (nome, cnpj, endereco)
-   • Compra (valor_total, forma_pagamento, numero, serie, data_emissao)
-   • Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
+Estruture em JSON os dados da compra:
+• Estabelecimento (nome, cnpj, endereco)
+• Compra (valor_total, forma_pagamento, numero, serie, data_emissao)
+• Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
 
-2. Regras OBRIGATÓRIAS:
-   - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
-   - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
-     • JAMAIS altere marcas ou nomes originais (ex: se estiver "Nescau" não pode virar "Nesquik", se estiver "Plusvita" não pode virar "Pullman")
-     • NUNCA inclua quantidade comprada na descrição (a quantidade vai no campo separado "quantidade")
-     • Remova espaços duplicados entre palavras
-     • Organize na ordem: Nome + Marca/Variedade + Peso/Volume + Extra (Granel, Corte, etc.)
-     • Exemplos: "Mamão Formosa Granel" ou "Manga Palmer Granel" (sem incluir o peso comprado 1.135kg na descrição)
-     • SEMPRE preserve peso/volume/medidas DA EMBALAGEM (350g, 535g, 1L, 2kg, 170g, etc.)
-     • Peso/volume da embalagem é parte da identidade única do produto e NÃO pode ser removido
-     • Corrija apenas ortografia, acentuação e capitalização de erros de extração (ex: "Cart o" → "Cartão")
-     • NÃO invente ou troque nomes/marcas, apenas limpe e organize o que está no texto original
-   - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
-   - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
-   - Categorize cada item usando APENAS estas categorias fixas:
-     [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados, Outros]
-   - Use "Outros" somente em último caso, quando o produto realmente não pertence a nenhuma dessas categorias.
-   - Produtos comuns de mercado devem sempre ser classificados corretamente:
-     • Achocolatado → Bebidas ou Mercearia
-     • Extrato de tomate → Mercearia  
-     • Frutas, verduras, legumes → Hortifruti
-   - TODOS os itens DEVEM ter uma categoria obrigatoriamente.
-   - O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
-   - NUNCA truncar ou cortar no meio - incluir TODOS os itens da nota.
+Regras OBRIGATÓRIAS:
 
-3. Estrutura OBRIGATÓRIA do retorno:
-\`\`\`json
+Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
+
+Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
+• JAMAIS altere marcas ou nomes originais.
+• NUNCA inclua quantidade comprada na descrição (a quantidade vai no campo separado "quantidade").
+• Remova espaços duplicados entre palavras.
+• Organize na ordem: Nome + Marca/Variedade + Peso/Volume + Extra (Granel, Corte, etc.).
+• SEMPRE preserve peso/volume/medidas da embalagem (350g, 535g, 1L, 2kg, 170g, etc.).
+• Corrija apenas ortografia, acentuação e capitalização de erros de extração.
+• NÃO invente ou troque nomes/marcas, apenas limpe e organize o que está no texto original.
+
+NÃO altere números, quantidades, CNPJs ou chaves de acesso.
+
+Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
+
+Categorize cada item usando APENAS estas categorias fixas:
+[Hortifruti, Bebidas, Mercearia, Açougue, Padaria, Laticínios/Frios, Limpeza, Higiene/Farmácia, Congelados, PET, Outros]
+
+Use "Outros" somente em último caso, quando o produto realmente não pertence a nenhuma das categorias acima.
+
+TODOS os itens DEVEM ter uma categoria obrigatoriamente.
+
+O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
+
+NUNCA truncar ou cortar no meio – incluir TODOS os itens da nota.
+
+Estrutura OBRIGATÓRIA do retorno (quando isNotaFiscalProdutos for true):
+
 {
+  "isNotaFiscalProdutos": true,
   "estabelecimento": {
     "nome": "...",
     "cnpj": "...", 
@@ -185,10 +205,8 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
     }
   ]
 }
-\`\`\`
 
-Texto da DANFE:
-${textoLimpo}
+Texto da DANFE: ${textoLimpo}
 
 Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANTA que o JSON seja válido e contenha TODOS os itens da nota.`;
 
