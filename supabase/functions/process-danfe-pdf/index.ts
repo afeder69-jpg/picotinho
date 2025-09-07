@@ -254,7 +254,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           error: 'NOTA_INVALIDA',
           message: 'Esta nota fiscal não é de estabelecimento de consumo (supermercado, farmácia, etc.) ou contém apenas serviços. O Picotinho é focado em compras de consumo.'
         }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
@@ -267,7 +267,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           requiresConfirmation: true,
           notaImagemId: notaImagemId
         }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
@@ -530,10 +530,10 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               JSON.stringify({ 
                 success: false,
                 error: 'NOTA_DUPLICADA',
-                message: '❌ Essa nota fiscal já foi cadastrada no Picotinho e não pode ser cadastrada novamente.'
+                message: 'Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.'
               }),
               { 
-                status: 409,
+                status: 200,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
               }
             );

@@ -146,7 +146,7 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
           error: 'NOTA_INVALIDA',
           message: 'Esta nota fiscal não é de estabelecimento de consumo (supermercado, farmácia, etc.) ou contém apenas serviços. O Picotinho é focado em compras de consumo.'
         }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -159,7 +159,7 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
           requiresConfirmation: true,
           notaImagemId: notaImagemId
         }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -459,10 +459,10 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
           JSON.stringify({ 
             success: false,
             error: 'NOTA_DUPLICADA', 
-            message: '❌ Essa nota fiscal já foi cadastrada no Picotinho e não pode ser cadastrada novamente.'
+            message: 'Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.'
           }),
           { 
-            status: 409,
+            status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         );
