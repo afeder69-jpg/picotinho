@@ -45,6 +45,74 @@ serve(async (req) => {
     const extractedData = notaImagem.dados_extraidos as any;
     console.log('✅ Dados extraídos carregados');
 
+    // 🔍 PONTO DE DECISÃO: Validar se é nota fiscal de produtos válida
+    console.log("🔍 Validando se é nota fiscal de produtos...");
+    
+    // Validar dados essenciais da NFe/NFC-e
+    const temCNPJ = extractedData.estabelecimento?.cnpj && 
+                    extractedData.estabelecimento.cnpj.replace(/[^\d]/g, '').length >= 14;
+    const temNomeEstabelecimento = extractedData.estabelecimento?.nome && 
+                                  extractedData.estabelecimento.nome.trim().length > 0;
+    const temTotal = extractedData.compra?.valor_total && extractedData.compra.valor_total > 0;
+    const temItens = extractedData.produtos && 
+                     Array.isArray(extractedData.produtos) && 
+                     extractedData.produtos.length > 0 &&
+                     extractedData.produtos.some(item => 
+                       item.nome && item.nome.trim().length > 0 &&
+                       item.quantidade && item.quantidade > 0 &&
+                       item.precoUnitario !== undefined
+                     );
+    
+    const isNotaFiscalValida = temCNPJ && temNomeEstabelecimento && temTotal && temItens;
+    
+    console.log("🔍 Validação da nota fiscal:");
+    console.log(`   - CNPJ válido: ${temCNPJ}`);
+    console.log(`   - Nome estabelecimento: ${temNomeEstabelecimento}`);
+    console.log(`   - Valor total: ${temTotal}`);
+    console.log(`   - Itens válidos: ${temItens}`);
+    console.log(`   - É nota fiscal válida: ${isNotaFiscalValida}`);
+    
+    if (!isNotaFiscalValida) {
+      console.log("❌ Arquivo não é uma nota fiscal de produtos válida");
+      
+      // Buscar o path da imagem para excluir
+      const { data: notaData } = await supabase
+        .from('notas_imagens')
+        .select('imagem_path')
+        .eq('id', imagemId)
+        .single();
+      
+      if (notaData?.imagem_path) {
+        // Excluir arquivo do storage
+        const { error: deleteError } = await supabase.storage
+          .from('receipts')
+          .remove([notaData.imagem_path]);
+        
+        if (deleteError) {
+          console.error("❌ Erro ao excluir arquivo:", deleteError);
+        } else {
+          console.log("🗑️ Arquivo excluído do storage");
+        }
+      }
+      
+      // Excluir registro do banco
+      await supabase
+        .from('notas_imagens')
+        .delete()
+        .eq('id', imagemId);
+      
+      return new Response(JSON.stringify({
+        success: false,
+        error: "INVALID_RECEIPT",
+        message: "Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento."
+      }), { 
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    
+    console.log("✅ Nota fiscal de produtos validada - prosseguindo com o processamento");
+
     // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
     const normalizarNomeProduto = async (nome: string): Promise<string> => {
       if (!nome) return '';

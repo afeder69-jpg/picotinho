@@ -238,6 +238,71 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
 
+      // 🔍 PONTO DE DECISÃO: Validar se é nota fiscal de produtos válida
+      console.log("🔍 Validando se é nota fiscal de produtos...");
+      
+      // Validar chave de acesso (44 dígitos)
+      const textoCompleto = textoLimpo.toLowerCase();
+      const chaveMatch = textoCompleto.match(/\b\d{44}\b/);
+      const temChaveAcesso = chaveMatch !== null;
+      
+      // Validar dados essenciais da NFe/NFC-e
+      const temCNPJ = dadosEstruturados.estabelecimento?.cnpj && 
+                      dadosEstruturados.estabelecimento.cnpj.replace(/[^\d]/g, '').length >= 14;
+      const temNomeEstabelecimento = dadosEstruturados.estabelecimento?.nome && 
+                                    dadosEstruturados.estabelecimento.nome.trim().length > 0;
+      const temTotal = dadosEstruturados.compra?.valor_total && dadosEstruturados.compra.valor_total > 0;
+      const temItens = dadosEstruturados.itens && 
+                       Array.isArray(dadosEstruturados.itens) && 
+                       dadosEstruturados.itens.length > 0 &&
+                       dadosEstruturados.itens.some(item => 
+                         item.descricao && item.descricao.trim().length > 0 &&
+                         item.quantidade && item.quantidade > 0 &&
+                         item.valor_unitario !== undefined
+                       );
+      
+      const isNotaFiscalValida = temChaveAcesso && temCNPJ && temNomeEstabelecimento && temTotal && temItens;
+      
+      console.log("🔍 Validação da nota fiscal:");
+      console.log(`   - Chave de acesso (44 dígitos): ${temChaveAcesso}`);
+      console.log(`   - CNPJ válido: ${temCNPJ}`);
+      console.log(`   - Nome estabelecimento: ${temNomeEstabelecimento}`);
+      console.log(`   - Valor total: ${temTotal}`);
+      console.log(`   - Itens válidos: ${temItens}`);
+      console.log(`   - É nota fiscal válida: ${isNotaFiscalValida}`);
+      
+      if (!isNotaFiscalValida) {
+        console.log("❌ Arquivo não é uma nota fiscal de produtos válida");
+        
+        // Excluir arquivo do storage
+        const { error: deleteError } = await supabase.storage
+          .from('receipts')
+          .remove([pdfUrl.split('/receipts/')[1]]);
+        
+        if (deleteError) {
+          console.error("❌ Erro ao excluir arquivo:", deleteError);
+        } else {
+          console.log("🗑️ Arquivo excluído do storage");
+        }
+        
+        // Excluir registro do banco
+        await supabase
+          .from('notas_imagens')
+          .delete()
+          .eq('id', notaImagemId);
+        
+        return new Response(JSON.stringify({
+          success: false,
+          error: "INVALID_RECEIPT",
+          message: "Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento."
+        }), { 
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      
+      console.log("✅ Nota fiscal de produtos validada - prosseguindo com o processamento");
+
       // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
       if (dadosEstruturados.estabelecimento) {

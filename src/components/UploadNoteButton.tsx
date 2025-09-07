@@ -288,12 +288,39 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             }
 
             if (response.error) {
-              console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
-              toast({
-                title: "❌ Erro no processamento",
-                description: response.error.message || 'Erro desconhecido no processamento',
-                variant: "destructive",
-              });
+              // Verificar se é erro de arquivo não sendo nota fiscal
+              if (response.error.message?.includes('INVALID_RECEIPT') || 
+                  response.error.message?.includes('Este arquivo não é uma nota fiscal')) {
+                console.log('❌ Arquivo rejeitado: não é nota fiscal de produtos');
+                toast({
+                  title: "❌ Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento.",
+                  variant: "destructive",
+                });
+              } else {
+                console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
+                toast({
+                  title: "❌ Erro no processamento",
+                  description: response.error.message || 'Erro desconhecido no processamento',
+                  variant: "destructive",
+                });
+              }
+            } else if (response.data?.success === false) {
+              // Verificar resposta de sucesso = false
+              if (response.data.error === 'INVALID_RECEIPT' || 
+                  response.data.message?.includes('Este arquivo não é uma nota fiscal')) {
+                console.log('❌ Arquivo rejeitado: não é nota fiscal de produtos');
+                toast({
+                  title: "❌ Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento.",
+                  variant: "destructive",
+                });
+              } else {
+                console.log('❌ Erro no processamento: ' + (response.data.message || 'Erro desconhecido'));
+                toast({
+                  title: "❌ Erro no processamento",
+                  description: response.data.message || 'Erro desconhecido no processamento',
+                  variant: "destructive",
+                });
+              }
             } else {
               console.log('✅ Processamento concluído');
               toast({
