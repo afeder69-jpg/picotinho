@@ -277,11 +277,12 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 }
               });
             } else {
-              // Para imagens, usar process-image-ai
-              response = await supabase.functions.invoke('process-image-ai', {
+              // Para imagens, usar process-receipt-full
+              response = await supabase.functions.invoke('process-receipt-full', {
                 body: {
                   notaImagemId: notaData.id,
-                  imageUrl: urlData.publicUrl
+                  imageUrl: urlData.publicUrl,
+                  qrUrl: null
                 }
               });
             }
@@ -293,36 +294,12 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 description: response.error.message || 'Erro desconhecido no processamento',
                 variant: "destructive",
               });
-            } else if (response.data) {
-              const data = response.data;
-              
-              // Verificar se há o veredito da IA
-              if (data.hasOwnProperty('isNotaFiscal')) {
-                if (data.isNotaFiscal === false) {
-                  // Arquivo não é nota fiscal
-                  console.log('❌ Arquivo rejeitado por não ser nota fiscal');
-                  toast({
-                    title: "Arquivo Inválido",
-                    description: "❌ Esse arquivo não é uma nota fiscal válida. O Picotinho não aceita esse tipo de documento. Por favor, envie apenas nota ou cupom fiscal em PDF, XML ou imagem.",
-                    variant: "destructive",
-                  });
-                } else if (data.isNotaFiscal === true) {
-                  // Nota fiscal válida processada com sucesso
-                  console.log('✅ Processamento concluído');
-                  toast({
-                    title: "✅ Processamento concluído",
-                    description: `${file.name} processado com sucesso`,
-                  });
-                }
-              } else {
-                // Veredito ausente - erro genérico
-                console.log('⚠️ Veredito da IA ausente');
-                toast({
-                  title: "❌ Erro no processamento",
-                  description: 'Não foi possível analisar o arquivo. Tente novamente.',
-                  variant: "destructive",
-                });
-              }
+            } else {
+              console.log('✅ Processamento concluído');
+              toast({
+                title: "✅ Processamento concluído",
+                description: `${file.name} processado com sucesso`,
+              });
             }
           } catch (processError) {
             console.log('❌ Erro no processamento: ' + (processError.message || 'Erro de conexão'));
