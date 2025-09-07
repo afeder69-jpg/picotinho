@@ -671,6 +671,39 @@ export type Database = {
         }
         Relationships: []
       }
+      precos_atuais_usuario: {
+        Row: {
+          created_at: string
+          data_atualizacao: string
+          id: string
+          origem: string
+          produto_nome: string
+          updated_at: string
+          user_id: string
+          valor_unitario: number
+        }
+        Insert: {
+          created_at?: string
+          data_atualizacao?: string
+          id?: string
+          origem?: string
+          produto_nome: string
+          updated_at?: string
+          user_id: string
+          valor_unitario?: number
+        }
+        Update: {
+          created_at?: string
+          data_atualizacao?: string
+          id?: string
+          origem?: string
+          produto_nome?: string
+          updated_at?: string
+          user_id?: string
+          valor_unitario?: number
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           created_at: string | null
