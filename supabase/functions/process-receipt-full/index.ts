@@ -466,6 +466,12 @@ serve(async (req) => {
         try {
           const nomeNormalizado = await normalizarNomeProduto(produtoData.nome);
           console.log(`🏷️ Produto original: "${produtoData.nome}" -> Normalizado: "${nomeNormalizado}"`);
+          console.log(`💰 Dados do produto da nota:`, {
+            nome: produtoData.nome,
+            quantidade: produtoData.quantidade,
+            precoUnitario: produtoData.precoUnitario,
+            precoTotal: produtoData.precoTotal
+          });
           
           // Verificar se já existe um produto similar no estoque
           const { data: estoqueLista, error: estoqueListaError } = await supabase
@@ -513,6 +519,11 @@ serve(async (req) => {
             const precoAtualizado = produtoData.precoUnitario && produtoData.precoUnitario > 0 
               ? produtoData.precoUnitario 
               : produtoSimilar.preco_unitario_ultimo;
+            
+            console.log(`🔍 Debug preço - Produto: ${nomeNormalizado}`);
+            console.log(`   - Preço da nota: ${produtoData.precoUnitario}`);
+            console.log(`   - Preço atual estoque: ${produtoSimilar.preco_unitario_ultimo}`);
+            console.log(`   - Preço que será usado: ${precoAtualizado}`);
             
             const { error: updateError } = await supabase
               .from('estoque_app')
