@@ -517,10 +517,8 @@ serve(async (req) => {
             // 📈 Atualizar produto existente
             const novaQuantidade = produtoSimilar.quantidade + (produtoData.quantidade || 1);
             
-            // CORREÇÃO CRÍTICA: Sempre usar o preço da nota se ele for válido
-            const precoAtualizado = (produtoData.precoUnitario && produtoData.precoUnitario > 0) 
-              ? produtoData.precoUnitario 
-              : (produtoSimilar.preco_unitario_ultimo || 0);
+            // CORREÇÃO CRÍTICA: SEMPRE usar o preço da nota fiscal se existir
+            const precoAtualizado = produtoData.precoUnitario || produtoSimilar.preco_unitario_ultimo || 0;
             
             console.log(`🔍 Debug preço - Produto: ${nomeNormalizado}`);
             console.log(`   - Preço da nota: ${produtoData.precoUnitario}`);
