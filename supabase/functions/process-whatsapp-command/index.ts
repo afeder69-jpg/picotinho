@@ -834,7 +834,7 @@ async function processarAdicionarProduto(supabase: any, mensagem: any): Promise<
         estado: 'aguardando_unidade',
         produto_nome: produtoNome,
         contexto: { tentativas_erro: 0 },
-        expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString() // 2 minutos
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutos
       });
     
     const produtoNomeLimpo = limparNomeProduto(produtoNome);
@@ -893,7 +893,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           .from('whatsapp_sessions')
           .update({
             contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Renovar timeout
           })
           .eq('id', sessao.id);
         
@@ -906,7 +907,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         .update({
           estado: 'aguardando_quantidade',
           contexto: { ...sessao.contexto, unidade: unidadeSelecionada, tentativas_erro: 0 },
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Renovar timeout para 5 minutos
         })
         .eq('id', sessao.id);
       
@@ -935,7 +937,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           .from('whatsapp_sessions')
           .update({
             contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Renovar timeout
           })
           .eq('id', sessao.id);
         
@@ -953,7 +956,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         .update({
           estado: 'aguardando_categoria',
           contexto: { ...sessao.contexto, quantidade, tentativas_erro: 0 },
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Renovar timeout para 5 minutos
         })
         .eq('id', sessao.id);
       
@@ -1011,7 +1015,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           .from('whatsapp_sessions')
           .update({
             contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Renovar timeout
           })
           .eq('id', sessao.id);
         
@@ -1024,7 +1029,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         .update({
           estado: 'aguardando_preco',
           contexto: { ...sessao.contexto, categoria: categoriaSelecionada, tentativas_erro: 0 },
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Renovar timeout para 5 minutos
         })
         .eq('id', sessao.id);
       
@@ -1072,7 +1078,8 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
           .from('whatsapp_sessions')
           .update({
             contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Renovar timeout
           })
           .eq('id', sessao.id);
         
