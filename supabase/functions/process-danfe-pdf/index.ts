@@ -124,6 +124,16 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
+    // Mascarar dados sensíveis para o log
+    function mascarDadosSensiveis(texto: string): string {
+      return texto
+        // Mascarar chave de acesso (44 dígitos) - mostrar só 8 dígitos centrais
+        .replace(/(\d{18})(\d{8})(\d{18})/g, '$1••••••••••••••••••$3')
+        // Mascarar CNPJ - mostrar só início e fim
+        .replace(/(\d{2}\.\d{3}\.\d{3}\/)(\d{4})(-\d{2})/g, '$1••••$3')
+        .replace(/(\d{2})(\d{9})(\d{2})/g, '$1•••••••••$3');
+    }
+
     const aiPrompt = `Você recebeu um arquivo para análise.
 
 PASSO 1 – Validação inicial:
@@ -138,7 +148,7 @@ Se for NFS-e (nota de serviço) ou qualquer outro documento que não seja nota f
   "motivo": "Este arquivo não é uma nota fiscal de produtos."
 }
 
-Se for realmente uma nota fiscal de produtos, então siga para o Passo 2 normalmente.
+Se for realmente uma nota fiscal de produtos, então siga para o Passo 2 normalmente e INCLUA isNotaFiscalProdutos: true no JSON retornado.
 
 PASSO 2 – Estruturar em JSON os dados da compra (somente se for nota fiscal de produtos):
 
@@ -177,7 +187,7 @@ O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
 
 NUNCA truncar ou cortar no meio – incluir TODOS os itens da nota.
 
-Estrutura OBRIGATÓRIA do retorno (quando isNotaFiscalProdutos for true):
+Estrutura OBRIGATÓRIA do retorno (quando for nota fiscal de produtos):
 
 {
   "isNotaFiscalProdutos": true,
@@ -210,10 +220,10 @@ Texto da DANFE: ${textoLimpo}
 
 Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANTA que o JSON seja válido e contenha TODOS os itens da nota.`;
 
-    // 📝 REGISTRAR PROMPT COMPLETO enviado para a IA
+    // 📝 REGISTRAR PROMPT COMPLETO enviado para a IA (mascarando dados sensíveis)
     console.log("📝 PROMPT COMPLETO enviado para IA:");
     console.log("=".repeat(80));
-    console.log(aiPrompt);
+    console.log(mascarDadosSensiveis(aiPrompt));
     console.log("=".repeat(80));
 
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -229,7 +239,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           { role: 'user', content: aiPrompt }
         ],
         max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
-        temperature: 0.1
+        temperature: 0.1,
+        response_format: { type: "json_object" } // Forçar saída JSON válida
       }),
     });
 
@@ -261,6 +272,47 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
+
+      // 🔍 VERIFICAR VEREDITO DA IA ANTES DE QUALQUER VALIDAÇÃO
+      if (dadosEstruturados.hasOwnProperty('isNotaFiscalProdutos')) {
+        if (dadosEstruturados.isNotaFiscalProdutos === false) {
+          console.log("❌ IA determinou que não é nota fiscal de produtos:", dadosEstruturados.motivo);
+          
+          // Excluir arquivo do storage
+          const { error: deleteError } = await supabase.storage
+            .from('receipts')
+            .remove([pdfUrl.split('/receipts/')[1]]);
+          
+          if (deleteError) {
+            console.error("❌ Erro ao excluir arquivo:", deleteError);
+          } else {
+            console.log("🗑️ Arquivo excluído do storage");
+          }
+          
+          // Excluir registro do banco
+          await supabase
+            .from('notas_imagens')
+            .delete()
+            .eq('id', notaImagemId);
+          
+          return new Response(JSON.stringify({
+            success: false,
+            error: "INVALID_RECEIPT",
+            message: dadosEstruturados.motivo || "Este arquivo não é uma nota fiscal de produtos."
+          }), { 
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        
+        if (dadosEstruturados.isNotaFiscalProdutos === true) {
+          console.log("✅ IA confirmou que é nota fiscal de produtos válida");
+        } else {
+          console.log("⚠️ Campo isNotaFiscalProdutos indefinido - prosseguindo com validação robusta");
+        }
+      } else {
+        console.log("⚠️ Campo isNotaFiscalProdutos ausente - prosseguindo com validação robusta");
+      }
 
       // 🔍 PONTO DE DECISÃO: Validar se é nota fiscal de produtos válida
       console.log("🔍 Validando se é nota fiscal de produtos...");
