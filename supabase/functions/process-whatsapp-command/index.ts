@@ -99,6 +99,17 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     
+    // PRIMEIRO: Limpar sessões expiradas ANTES de verificar se há alguma ativa
+    console.log('🧹 [LIMPEZA PREVENTIVA] Removendo sessões expiradas antes da verificação...');
+    await supabase
+      .from('whatsapp_sessions')
+      .delete()
+      .eq('usuario_id', mensagem.usuario_id)
+      .eq('remetente', mensagem.remetente)
+      .lt('expires_at', agora.toISOString());
+    console.log('🧹 [LIMPEZA PREVENTIVA] Sessões expiradas removidas');
+
+    // DEPOIS: Buscar apenas sessões realmente ativas
     const sessao = sessoesAtivas?.find(s => {
       const expira = new Date(s.expires_at);
       const ativa = expira > agora;
@@ -141,15 +152,7 @@ const handler = async (req: Request): Promise<Response> => {
     } else {
       console.log('📍 [FLUXO] Nenhuma sessão ativa - processando como comando novo');
       
-      // LIMPAR SESSÕES EXPIRADAS ANTES DE PROCESSAR NOVO COMANDO
-      console.log('🧹 [LIMPEZA] Removendo sessões expiradas...');
-      await supabase
-        .from('whatsapp_sessions')
-        .delete()
-        .eq('usuario_id', mensagem.usuario_id)
-        .eq('remetente', mensagem.remetente)
-        .lt('expires_at', new Date().toISOString());
-      console.log('🧹 [LIMPEZA] Sessões expiradas removidas');
+      // Limpeza já foi feita no início da função
 
       // PRIORIDADE 1: VERIFICAÇÃO ESPECIAL para números/decimais (resposta a sessão perdida)
       const isNumeroOuDecimal = /^\s*\d+([,.]\d+)?\s*$/.test(mensagem.conteudo);
