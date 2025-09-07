@@ -282,6 +282,13 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                     description: response.error.message,
                     variant: "destructive",
                   });
+                } else if (response.error.error === 'NOTA_DUPLICADA') {
+                  // Mensagem amigável para nota duplicada
+                  toast({
+                    title: "Nota já processada",
+                    description: "👉 Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.",
+                    variant: "destructive",
+                  });
                 } else {
                   toast({
                     title: "Aviso",

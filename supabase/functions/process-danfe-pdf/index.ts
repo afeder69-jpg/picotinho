@@ -493,7 +493,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               JSON.stringify({ 
                 success: false,
                 error: 'NOTA_DUPLICADA',
-                message: '❌ Essa nota fiscal já foi cadastrada no Picotinho e não pode ser cadastrada novamente.',
+                message: 'Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.',
                 existingNoteId: notaExistente.id,
                 existingNoteDate: notaExistente.created_at
               }),

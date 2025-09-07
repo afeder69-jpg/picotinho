@@ -376,8 +376,8 @@ const ReceiptList = () => {
           // Verificar se é erro de nota duplicada
           if (pdfResponse.data?.error === 'NOTA_DUPLICADA') {
             toast({ 
-              title: "❌ Nota Fiscal Duplicada", 
-              description: pdfResponse.data.message || "Esta nota fiscal já foi cadastrada e não pode ser processada novamente.",
+              title: "Nota já processada", 
+              description: "👉 Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.",
               variant: "destructive",
               duration: 8000 // Mais tempo para ler a mensagem
             });
@@ -421,11 +421,21 @@ const ReceiptList = () => {
 
     } catch (error: any) {
       console.error('💥 Erro ao processar nota:', error);
-      toast({
-        title: "Erro ao processar nota",
-        description: error.message || "Falha inesperada no processamento",
-        variant: "destructive"
-      });
+      
+      // Verificar se é erro de duplicidade
+      if (error.message && error.message.includes('Essa nota fiscal já foi cadastrada')) {
+        toast({
+          title: "Nota já processada",
+          description: "👉 Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Erro ao processar nota",
+          description: error.message || "Falha inesperada no processamento",
+          variant: "destructive"
+        });
+      }
     } finally {
       setProcessingReceipts(prev => {
         const newSet = new Set(prev);
