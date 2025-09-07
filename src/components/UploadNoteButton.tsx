@@ -68,6 +68,9 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
       return;
     }
 
+    // Fechar o dialog imediatamente quando o upload começar
+    setIsDialogOpen(false);
+
     // Log detalhado de cada arquivo
     Array.from(files).forEach((file, index) => {
       console.log(`Arquivo ${index + 1}:`, {
@@ -323,7 +326,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           description: `${successfulUploads} arquivo(s) enviado(s) com sucesso`,
         });
         onUploadSuccess();
-        setIsDialogOpen(false);
+        // Dialog já foi fechado no início do upload
       } else {
         toast({
           title: "Erro",
