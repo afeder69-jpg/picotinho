@@ -1051,7 +1051,8 @@ const EstoqueAtual = () => {
                             {(() => {
                               const diferenca = valorTotalEstoque - valorTotalPago;
                               const percentual = valorTotalPago > 0 ? ((diferenca / valorTotalPago) * 100) : 0;
-                              const cor = diferenca >= 0 ? 'text-green-600' : 'text-red-600';
+                              // Inverter lógica: preços altos = ruim (vermelho), preços baixos = bom (verde)
+                              const cor = diferenca >= 0 ? 'text-red-600' : 'text-green-600';
                               const sinal = diferenca >= 0 ? '+' : '';
                               
                               return (
