@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Upload, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { ConfirmacaoNotaDuvidosa } from '@/components/ConfirmacaoNotaDuvidosa';
 
 // Função para normalizar nomes de arquivos
 const normalizeFileName = (fileName: string): string => {
@@ -48,6 +49,10 @@ interface UploadNoteButtonProps {
 const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
   const [uploading, setUploading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [notaDuvidosa, setNotaDuvidosa] = useState<{
+    message: string;
+    notaImagemId: string;
+  } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -263,11 +268,27 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
 
               if (response.error) {
                 console.error('Erro no processamento IA:', response.error);
-                toast({
-                  title: "Aviso",
-                  description: `${file.name} foi salvo, mas houve erro no processamento automático`,
-                  variant: "default",
-                });
+                
+                // Verificar se é uma nota duvidosa que precisa de confirmação
+                if (response.error.error === 'NOTA_DUVIDOSA' && response.error.requiresConfirmation) {
+                  setNotaDuvidosa({
+                    message: response.error.message,
+                    notaImagemId: response.error.notaImagemId
+                  });
+                  return; // Não mostrar toast de erro, aguardar decisão do usuário
+                } else if (response.error.error === 'NOTA_INVALIDA') {
+                  toast({
+                    title: "❌ Nota rejeitada",
+                    description: response.error.message,
+                    variant: "destructive",
+                  });
+                } else {
+                  toast({
+                    title: "Aviso",
+                    description: `${file.name} foi salvo, mas houve erro no processamento automático`,
+                    variant: "default",
+                  });
+                }
               }
             } catch (processError) {
               console.error('Erro no processamento IA:', processError);
@@ -352,6 +373,27 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
       setUploading(false);
     }
   };
+
+  const handleConfirmacaoNotaDuvidosa = (success: boolean) => {
+    setNotaDuvidosa(null);
+    if (success) {
+      onUploadSuccess();
+      setIsDialogOpen(false);
+    }
+  };
+
+  // Se há uma nota duvidosa, mostrar apenas o componente de confirmação
+  if (notaDuvidosa) {
+    return (
+      <div className="w-full">
+        <ConfirmacaoNotaDuvidosa
+          message={notaDuvidosa.message}
+          notaImagemId={notaDuvidosa.notaImagemId}
+          onConfirmacao={handleConfirmacaoNotaDuvidosa}
+        />
+      </div>
+    );
+  }
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

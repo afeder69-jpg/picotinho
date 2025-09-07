@@ -79,7 +79,7 @@ serve(async (req) => {
 
     // 🔍 Primeiro passo: OCR para extrair texto bruto da imagem
     console.log('Executando OCR na imagem...');
-    const ocrResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      const ocrResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiApiKey}`,
@@ -93,7 +93,27 @@ serve(async (req) => {
             content: [
               { 
                 type: 'text', 
-                text: `Extraia EXATAMENTE o texto desta nota fiscal brasileira. Retorne o texto exato como aparece na imagem, linha por linha, sem interpretação ou formatação adicional.
+                text: `FASE 1: VALIDAÇÃO DA NOTA FISCAL - PRIMEIRO PASSO OBRIGATÓRIO
+
+ANTES de extrair os dados, analise esta nota fiscal e determine se ela é válida para o sistema Picotinho:
+
+1️⃣ FILTRO DE ESTABELECIMENTO - Verifique se o nome do emitente contém:
+- "Supermercado", "Hipermercado", "Mercado", "Mercearia", "Farmácia", "Hortifruti", "Padaria", "Açougue"
+- "Distribuidora" junto com nomes de redes conhecidas (ex: "Sendas Distribuidora")
+
+2️⃣ FILTRO DE PRODUTOS - Analise os itens listados:
+- ✅ VÁLIDOS: alimentos, bebidas, higiene, limpeza, frios, congelados, medicamentos, produtos de consumo
+- ❌ INVÁLIDOS: pneus, peças de carro, material de construção, produtos industriais
+
+3️⃣ FILTRO DE SERVIÇOS - SEMPRE RECUSAR:
+- Serviços de telefonia, internet, oficina mecânica, consultoria, mão de obra, etc.
+
+RESPONDA PRIMEIRO com uma das opções:
+- "NOTA_VÁLIDA" - Se passar nos filtros 1 e 2
+- "NOTA_INVÁLIDA" - Se for serviço ou produtos claramente inválidos  
+- "NOTA_DUVIDOSA" - Se não for serviço mas não parecer supermercado/farmácia
+
+Se for NOTA_VÁLIDA, então prossiga para extrair o texto completo:
 
 ⚠️ CRITICAL: Preste atenção especial em extrair COMPLETAMENTE a CHAVE DE ACESSO da nota fiscal de 44 dígitos, que geralmente aparece no final da nota no formato:
 - 44 dígitos seguidos: 1234567890123456789012345678901234567890123456
@@ -116,7 +136,40 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
     }
 
     const textoOCR = ocrData.choices[0].message.content;
-    console.log('Texto extraído por OCR:', textoOCR);
+    console.log('Resposta completa da IA (validação + OCR):', textoOCR);
+
+    // 🔍 Verificar validação da nota (apenas se não for processamento forçado)
+    if (!forceProcess) {
+      if (textoOCR.includes('NOTA_INVÁLIDA')) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'NOTA_INVALIDA',
+          message: 'Esta nota fiscal não é de estabelecimento de consumo (supermercado, farmácia, etc.) ou contém apenas serviços. O Picotinho é focado em compras de consumo.'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (textoOCR.includes('NOTA_DUVIDOSA')) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'NOTA_DUVIDOSA',
+          message: '❓ Esta nota não parece ser de supermercado, farmácia ou comércio de consumo, que é o objetivo do Picotinho. Tem certeza de que deseja inserir esta nota?',
+          requiresConfirmation: true,
+          notaImagemId: notaImagemId
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } else {
+      console.log('⚠️ Processamento forçado - pulando validação de tipo de estabelecimento');
+    }
+
+    // Extrair apenas o texto OCR (após a validação)
+    const textoOCRLimpo = textoOCR.replace(/^(NOTA_VÁLIDA|NOTA_INVÁLIDA|NOTA_DUVIDOSA)[\s\S]*?(?=\n[A-Z])/i, '').trim();
+    console.log('Texto extraído por OCR (limpo):', textoOCRLimpo);
     const parseNotaFiscal = (texto: string) => {
       const linhas = texto.split('\n').map(linha => linha.trim()).filter(linha => linha.length > 0);
       

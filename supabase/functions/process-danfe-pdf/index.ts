@@ -76,7 +76,7 @@ serve(async (req) => {
   }
 
   try {
-    const { pdfUrl, notaImagemId, userId } = await req.json();
+    const { pdfUrl, notaImagemId, userId, forceProcess } = await req.json();
 
     if (!pdfUrl || !notaImagemId || !userId) {
       return new Response(JSON.stringify({
@@ -124,7 +124,27 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
+    const aiPrompt = `FASE 1: VALIDAÇÃO DA NOTA FISCAL - PRIMEIRO PASSO OBRIGATÓRIO
+
+ANTES de extrair os dados, analise esta DANFE NFC-e e determine se ela é válida para o sistema Picotinho:
+
+1️⃣ FILTRO DE ESTABELECIMENTO - Verifique se o nome do emitente contém:
+- "Supermercado", "Hipermercado", "Mercado", "Mercearia", "Farmácia", "Hortifruti", "Padaria", "Açougue"
+- "Distribuidora" junto com nomes de redes conhecidas (ex: "Sendas Distribuidora")
+
+2️⃣ FILTRO DE PRODUTOS - Analise os itens listados:
+- ✅ VÁLIDOS: alimentos, bebidas, higiene, limpeza, frios, congelados, medicamentos, produtos de consumo
+- ❌ INVÁLIDOS: pneus, peças de carro, material de construção, produtos industriais
+
+3️⃣ FILTRO DE SERVIÇOS - SEMPRE RECUSAR:
+- Serviços de telefonia, internet, oficina mecânica, consultoria, mão de obra, etc.
+
+RESPONDA PRIMEIRO com uma das opções:
+- "NOTA_VÁLIDA" - Se passar nos filtros 1 e 2
+- "NOTA_INVÁLIDA" - Se for serviço ou produtos claramente inválidos  
+- "NOTA_DUVIDOSA" - Se não for serviço mas não parecer supermercado/farmácia
+
+Se for NOTA_VÁLIDA, então prossiga para extrair os dados:
 
 IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
@@ -225,6 +245,35 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     console.log("📝 RESPOSTA_BRUTA da IA (completa):");
     console.log(respostaIA); // RESPOSTA COMPLETA da IA, sem cortar
     console.log("=".repeat(80));
+
+    // 🔍 Verificar validação da nota (apenas se não for processamento forçado)
+    if (!forceProcess) {
+      if (respostaIA.includes('NOTA_INVÁLIDA')) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'NOTA_INVALIDA',
+          message: 'Esta nota fiscal não é de estabelecimento de consumo (supermercado, farmácia, etc.) ou contém apenas serviços. O Picotinho é focado em compras de consumo.'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      if (respostaIA.includes('NOTA_DUVIDOSA')) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'NOTA_DUVIDOSA',
+          message: '❓ Esta nota não parece ser de supermercado, farmácia ou comércio de consumo, que é o objetivo do Picotinho. Tem certeza de que deseja inserir esta nota?',
+          requiresConfirmation: true,
+          notaImagemId: notaImagemId
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    } else {
+      console.log('⚠️ Processamento forçado - pulando validação de tipo de estabelecimento');
+    }
 
     // 💾 Configurar Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
