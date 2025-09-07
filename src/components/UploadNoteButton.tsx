@@ -289,11 +289,21 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
 
             if (response.error) {
               console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
-              toast({
-                title: "❌ Erro no processamento",
-                description: response.error.message || 'Erro desconhecido no processamento',
-                variant: "destructive",
-              });
+              
+              // Verificar se é erro de arquivo não-nota fiscal
+              if (response.error.error === 'INVALID_RECEIPT') {
+                toast({
+                  title: "Arquivo Inválido",
+                  description: "❌ Esse arquivo não é uma nota fiscal válida. Por favor, envie o cupom/nota fiscal (NFC-e/DANFE) em PDF, XML ou imagem.",
+                  variant: "destructive",
+                });
+              } else {
+                toast({
+                  title: "❌ Erro no processamento",
+                  description: response.error.message || 'Erro desconhecido no processamento',
+                  variant: "destructive",
+                });
+              }
             } else {
               console.log('✅ Processamento concluído');
               toast({

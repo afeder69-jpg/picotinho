@@ -238,6 +238,90 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
 
+      // 🔍 VALIDAÇÃO DE NOTA FISCAL (antes de qualquer gravação)
+      const isValidNotaFiscal = () => {
+        // Critério 1: Chave de acesso com 44 dígitos
+        const chaveAcesso = dadosEstruturados?.chave_acesso || 
+                           dadosEstruturados?.compra?.chave_acesso ||
+                           dadosEstruturados?.nota?.chave_acesso;
+        const chaveValida = chaveAcesso && chaveAcesso.replace(/[^\d]/g, '').length === 44;
+        
+        // Critério 2: CNPJ do estabelecimento
+        const cnpj = dadosEstruturados?.estabelecimento?.cnpj;
+        const cnpjValido = cnpj && cnpj.replace(/[^\d]/g, '').length >= 14;
+        
+        // Critério 3: Data da compra
+        const dataCompra = dadosEstruturados?.compra?.data_emissao;
+        const dataValida = dataCompra && dataCompra.length > 0;
+        
+        // Critério 4: Valor total
+        const valorTotal = dadosEstruturados?.compra?.valor_total;
+        const valorValido = valorTotal && typeof valorTotal === 'number' && valorTotal > 0;
+        
+        // Critério 5: Lista de itens com pelo menos 1 produto válido
+        const itens = dadosEstruturados?.itens || [];
+        const itemValido = itens.length > 0 && itens.some(item => 
+          item.descricao && 
+          item.quantidade && 
+          (item.valor_unitario || item.valor_total)
+        );
+        
+        console.log("🔍 VALIDAÇÃO DE NOTA FISCAL:");
+        console.log(`   - Chave de acesso (44 dígitos): ${chaveValida ? '✅' : '❌'} (${chaveAcesso || 'não encontrada'})`);
+        console.log(`   - CNPJ estabelecimento: ${cnpjValido ? '✅' : '❌'} (${cnpj || 'não encontrado'})`);
+        console.log(`   - Data da compra: ${dataValida ? '✅' : '❌'} (${dataCompra || 'não encontrada'})`);
+        console.log(`   - Valor total: ${valorValido ? '✅' : '❌'} (${valorTotal || 'não encontrado'})`);
+        console.log(`   - Itens válidos: ${itemValido ? '✅' : '❌'} (${itens.length} itens encontrados)`);
+        
+        return chaveValida && cnpjValido && dataValida && valorValido && itemValido;
+      };
+
+      if (!isValidNotaFiscal()) {
+        console.log("❌ ARQUIVO NÃO É UMA NOTA FISCAL VÁLIDA - Cancelando processamento");
+        
+        // Excluir arquivo do storage
+        try {
+          const { error: deleteError } = await supabase.storage
+            .from('receipts')
+            .remove([`${userId}/${notaImagemId.split('/').pop()}`]);
+          
+          if (deleteError) {
+            console.error("⚠️ Erro ao excluir arquivo do storage:", deleteError);
+          } else {
+            console.log("🗑️ Arquivo excluído do storage");
+          }
+        } catch (deleteStorageError) {
+          console.error("⚠️ Erro ao excluir do storage:", deleteStorageError);
+        }
+
+        // Excluir registro do banco
+        try {
+          const { error: deleteDbError } = await supabase
+            .from('notas_imagens')
+            .delete()
+            .eq('id', notaImagemId);
+          
+          if (deleteDbError) {
+            console.error("⚠️ Erro ao excluir registro do banco:", deleteDbError);
+          } else {
+            console.log("🗑️ Registro excluído do banco");
+          }
+        } catch (deleteDbError) {
+          console.error("⚠️ Erro ao excluir do banco:", deleteDbError);
+        }
+
+        return new Response(JSON.stringify({
+          success: false,
+          error: "INVALID_RECEIPT",
+          message: "❌ Esse arquivo não é uma nota fiscal válida. Por favor, envie o cupom/nota fiscal (NFC-e/DANFE) em PDF, XML ou imagem."
+        }), { 
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      console.log("✅ NOTA FISCAL VALIDADA - Prosseguindo com o processamento");
+
       // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
       if (dadosEstruturados.estabelecimento) {

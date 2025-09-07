@@ -45,6 +45,97 @@ serve(async (req) => {
     const extractedData = notaImagem.dados_extraidos as any;
     console.log('✅ Dados extraídos carregados');
 
+    // 🔍 VALIDAÇÃO DE NOTA FISCAL (antes de qualquer processamento)
+    const isValidNotaFiscal = () => {
+      // Critério 1: Chave de acesso com 44 dígitos
+      const chaveAcesso = extractedData?.chave_acesso || 
+                         extractedData?.compra?.chave_acesso ||
+                         extractedData?.nota?.chave_acesso ||
+                         extractedData?.access_key;
+      const chaveValida = chaveAcesso && chaveAcesso.replace(/[^\d]/g, '').length === 44;
+      
+      // Critério 2: CNPJ do estabelecimento
+      const cnpj = extractedData?.estabelecimento?.cnpj || 
+                   extractedData?.store_cnpj ||
+                   extractedData?.cnpj;
+      const cnpjValido = cnpj && cnpj.replace(/[^\d]/g, '').length >= 14;
+      
+      // Critério 3: Data da compra
+      const dataCompra = extractedData?.compra?.data_emissao || 
+                        extractedData?.purchase_date ||
+                        extractedData?.data_compra;
+      const dataValida = dataCompra && dataCompra.length > 0;
+      
+      // Critério 4: Valor total
+      const valorTotal = extractedData?.compra?.valor_total || 
+                        extractedData?.total_amount ||
+                        extractedData?.valor_total;
+      const valorValido = valorTotal && typeof valorTotal === 'number' && valorTotal > 0;
+      
+      // Critério 5: Lista de itens com pelo menos 1 produto válido
+      const itens = extractedData?.itens || extractedData?.items || extractedData?.produtos || [];
+      const itemValido = itens.length > 0 && itens.some(item => 
+        (item.descricao || item.name || item.nome) && 
+        (item.quantidade || item.quantity) && 
+        (item.valor_unitario || item.unit_price || item.precoUnitario || item.valor_total || item.total_price || item.precoTotal)
+      );
+      
+      console.log("🔍 VALIDAÇÃO DE NOTA FISCAL:");
+      console.log(`   - Chave de acesso (44 dígitos): ${chaveValida ? '✅' : '❌'} (${chaveAcesso || 'não encontrada'})`);
+      console.log(`   - CNPJ estabelecimento: ${cnpjValido ? '✅' : '❌'} (${cnpj || 'não encontrado'})`);
+      console.log(`   - Data da compra: ${dataValida ? '✅' : '❌'} (${dataCompra || 'não encontrada'})`);
+      console.log(`   - Valor total: ${valorValido ? '✅' : '❌'} (${valorTotal || 'não encontrado'})`);
+      console.log(`   - Itens válidos: ${itemValido ? '✅' : '❌'} (${itens.length} itens encontrados)`);
+      
+      return chaveValida && cnpjValido && dataValida && valorValido && itemValido;
+    };
+
+    if (!isValidNotaFiscal()) {
+      console.log("❌ ARQUIVO NÃO É UMA NOTA FISCAL VÁLIDA - Cancelando processamento");
+      
+      // Excluir arquivo do storage
+      try {
+        const { error: deleteError } = await supabase.storage
+          .from('receipts')
+          .remove([notaImagem.imagem_path]);
+        
+        if (deleteError) {
+          console.error("⚠️ Erro ao excluir arquivo do storage:", deleteError);
+        } else {
+          console.log("🗑️ Arquivo excluído do storage");
+        }
+      } catch (deleteStorageError) {
+        console.error("⚠️ Erro ao excluir do storage:", deleteStorageError);
+      }
+
+      // Excluir registro do banco
+      try {
+        const { error: deleteDbError } = await supabase
+          .from('notas_imagens')
+          .delete()
+          .eq('id', imagemId);
+        
+        if (deleteDbError) {
+          console.error("⚠️ Erro ao excluir registro do banco:", deleteDbError);
+        } else {
+          console.log("🗑️ Registro excluído do banco");
+        }
+      } catch (deleteDbError) {
+        console.error("⚠️ Erro ao excluir do banco:", deleteDbError);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "INVALID_RECEIPT",
+          message: "❌ Esse arquivo não é uma nota fiscal válida. Por favor, envie o cupom/nota fiscal (NFC-e/DANFE) em PDF, XML ou imagem."
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log("✅ NOTA FISCAL VALIDADA - Prosseguindo com o processamento");
+
     // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
     const normalizarNomeProduto = async (nome: string): Promise<string> => {
       if (!nome) return '';
