@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Trash2, FileText, X, Loader2, CheckCircle, Plus } from 'lucide-react';
+import { Eye, Trash2, FileText, X, Bot, Loader2, CheckCircle, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -36,7 +36,7 @@ const ReceiptList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
+  const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { toast } = useToast();
@@ -149,33 +149,10 @@ const ReceiptList = () => {
 
   const deleteReceipt = async (id: string) => {
     try {
-      // 1. Primeiro buscar se existe compra_id linkada na nota de imagem
-      const { data: notaImagem } = await supabase
-        .from('notas_imagens')
-        .select('compra_id')
-        .eq('id', id)
-        .single();
-
-      // 2. Excluir da tabela receipts e notas_imagens
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').delete().eq('id', id),
         supabase.from('notas_imagens').delete().eq('id', id)
       ]);
-
-      // 3. Se havia uma compra linkada, excluir também (isso libera a chave de acesso)
-      if (notaImagem?.compra_id) {
-        console.log(`🗑️ Excluindo compra linkada: ${notaImagem.compra_id}`);
-        const { error: compraError } = await supabase
-          .from('compras_app')
-          .delete()
-          .eq('id', notaImagem.compra_id);
-        
-        if (compraError) {
-          console.error('Erro ao excluir compra:', compraError);
-        } else {
-          console.log('✅ Compra excluída - chave de acesso liberada para reuso');
-        }
-      }
 
       const receiptsSuccess = !receiptsResult.error;
       const notasSuccess = !notasImagensResult.error;
@@ -184,10 +161,7 @@ const ReceiptList = () => {
       }
 
       await loadReceipts();
-      toast({ 
-        title: "Sucesso", 
-        description: "Nota fiscal excluída com sucesso. A chave de acesso foi liberada para reuso." 
-      });
+      toast({ title: "Sucesso", description: "Nota fiscal excluída com sucesso" });
     } catch (error) {
       console.error('Error deleting receipt:', error);
       toast({ title: "Erro", description: "Erro ao excluir nota fiscal", variant: "destructive" });
@@ -338,6 +312,91 @@ const ReceiptList = () => {
     `;
   };
 
+  const processReceiptWithAI = async (receipt: Receipt) => {
+    if (processingReceipts.has(receipt.id)) return;
+
+    try {
+      setProcessingReceipts(prev => new Set(prev).add(receipt.id));
+      toast({ title: "Processando nota fiscal", description: "A IA está analisando os dados da nota..." });
+
+      let processedSuccessfully = false;
+      const isPDF = receipt.file_type?.toLowerCase().includes('pdf') || receipt.imagem_url?.toLowerCase().endsWith('.pdf');
+
+      if (isPDF) {
+        console.log("📄 PDF detectado - usando process-danfe-pdf");
+        console.log("🔍 Dados enviados:", { 
+          pdfUrl: receipt.imagem_url, 
+          notaImagemId: receipt.id, 
+          userId: (await supabase.auth.getUser()).data.user?.id 
+        });
+        
+        // Sempre usar process-danfe-pdf para PDFs
+        const pdfResponse = await supabase.functions.invoke('process-danfe-pdf', {
+          body: { 
+            pdfUrl: receipt.imagem_url, 
+            notaImagemId: receipt.id, 
+            userId: (await supabase.auth.getUser()).data.user?.id 
+          }
+        });
+
+        console.log("📋 Resposta da função:", pdfResponse);
+
+        if (pdfResponse.data?.success && pdfResponse.data?.textoCompleto) {
+          console.log("✅ PDF processado com sucesso:", pdfResponse.data);
+          processedSuccessfully = true;
+        } else if (pdfResponse.error) {
+          console.error("❌ Erro na função process-danfe-pdf:", pdfResponse.error);
+          
+          // Se for erro INSUFFICIENT_TEXT, fazer fallback para OCR
+          if (pdfResponse.error.message?.includes('INSUFFICIENT_TEXT')) {
+            toast({ 
+              title: "PDF escaneado detectado", 
+              description: "Texto insuficiente - OCR não implementado ainda",
+              variant: "destructive" 
+            });
+            return;
+          }
+          
+          throw new Error(pdfResponse.error.message || "Erro no processamento do PDF");
+        }
+
+        if (!pdfResponse.data?.success) {
+          throw new Error(pdfResponse.data?.message || "Falha no processamento do PDF");
+        }
+
+        console.log("✅ PDF processado com sucesso:", pdfResponse.data);
+        toast({ 
+          title: "Nota fiscal processada com sucesso!", 
+          description: "Use o botão 'Ver Detalhes' para visualizar o cupom fiscal digital." 
+        });
+        processedSuccessfully = true;
+
+      } else {
+        toast({
+          title: "Processamento de imagens não implementado",
+          description: "Apenas PDFs são suportados no momento",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (processedSuccessfully) await loadReceipts();
+
+    } catch (error: any) {
+      console.error('💥 Erro ao processar nota:', error);
+      toast({
+        title: "Erro ao processar nota",
+        description: error.message || "Falha inesperada no processamento",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingReceipts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(receipt.id);
+        return newSet;
+      });
+    }
+  };
 
   const getStatusBadge = (status: string | null) => {
     switch (status) {
@@ -691,12 +750,24 @@ const ReceiptList = () => {
                           Aguardando processamento...
                         </div>
                         
-                        {/* Botão de ação */}
+                        {/* Quarta linha: Botão de ação */}
                         <div className="pt-2 flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-8 px-3">
                             <Eye className="w-4 h-4 mr-2" /> 
                             Ver Detalhes
                           </Button>
+                          {(receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => processReceiptWithAI(receipt)}
+                              disabled={processingReceipts.has(receipt.id)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3"
+                            >
+                              {processingReceipts.has(receipt.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bot className="w-4 h-4 mr-2" />}
+                              {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </>

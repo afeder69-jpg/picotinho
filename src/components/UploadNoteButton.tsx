@@ -6,7 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Upload, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { ConfirmacaoNotaDuvidosa } from '@/components/ConfirmacaoNotaDuvidosa';
 
 // Função para normalizar nomes de arquivos
 const normalizeFileName = (fileName: string): string => {
@@ -20,7 +19,7 @@ const normalizeFileName = (fileName: string): string => {
     // Remover acentos e caracteres especiais
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    // Substituir espaços e caracteres especiais por underscores
+    // Substituir espaços e caracteres especiais por underscore
     .replace(/[^a-zA-Z0-9]/g, '_')
     // Remover underscores múltiplos
     .replace(/_+/g, '_')
@@ -29,9 +28,14 @@ const normalizeFileName = (fileName: string): string => {
     // Converter para minúsculas
     .toLowerCase();
   
-  // Limitar o tamanho
+  // Limitar tamanho (máximo 50 caracteres)
   if (normalizedName.length > 50) {
     normalizedName = normalizedName.substring(0, 50);
+  }
+  
+  // Se o nome ficou vazio, usar um padrão
+  if (!normalizedName) {
+    normalizedName = 'arquivo';
   }
   
   return normalizedName + extension.toLowerCase();
@@ -41,239 +45,273 @@ interface UploadNoteButtonProps {
   onUploadSuccess: () => void;
 }
 
-export const UploadNoteButton: React.FC<UploadNoteButtonProps> = ({ onUploadSuccess }) => {
+const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
   const [uploading, setUploading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
-  const { user: currentUser } = useAuth();
-  const [notaDuvidosa, setNotaDuvidosa] = useState<{
-    message: string;
-    notaImagemId: string;
-  } | null>(null);
+  const { user } = useAuth();
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('=== INICIANDO PROCESSO DE UPLOAD ===');
+    
     const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    if (!currentUser) {
+    console.log('Arquivos selecionados:', files);
+    console.log('Quantidade de arquivos:', files?.length || 0);
+    
+    if (!files || files.length === 0) {
+      console.log('ERRO: Nenhum arquivo selecionado');
       toast({
         title: "Erro",
-        description: "Você precisa estar logado para enviar notas fiscais.",
+        description: "Nenhum arquivo foi selecionado",
         variant: "destructive",
       });
       return;
     }
 
-    setUploading(true);
-
-    try {
-      const validFiles = Array.from(files).filter(file => {
-        const isValidType = file.type === 'application/pdf' || 
-                           file.type.startsWith('image/') ||
-                           file.type === 'image/jpeg' ||
-                           file.type === 'image/png' ||
-                           file.type === 'image/webp';
-        
-        const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB
-
-        if (!isValidType) {
-          toast({
-            title: "Arquivo inválido",
-            description: `${file.name}: Apenas imagens (JPEG, PNG, WebP) e PDFs são aceitos.`,
-            variant: "destructive",
-          });
-          return false;
-        }
-
-        if (!isValidSize) {
-          toast({
-            title: "Arquivo muito grande",
-            description: `${file.name}: Tamanho máximo permitido é 50MB.`,
-            variant: "destructive",
-          });
-          return false;
-        }
-
-        return true;
+    // Log detalhado de cada arquivo
+    Array.from(files).forEach((file, index) => {
+      console.log(`Arquivo ${index + 1}:`, {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: file.lastModified
       });
+    });
 
-      if (validFiles.length === 0) {
-        setUploading(false);
-        return;
-      }
+    if (!user) {
+      console.log('ERRO: Usuário não logado');
+      toast({
+        title: "Erro",
+        description: "Você precisa estar logado para enviar notas fiscais",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      let successfulUploads = 0;
-
-      for (const file of validFiles) {
+    console.log('Usuário logado:', user.id);
+    setUploading(true);
+    let successfulUploads = 0;
+    
+    try {
+      // Processar cada arquivo
+      for (const file of Array.from(files)) {
         try {
-          console.log('🚨 DEBUG: Processando arquivo:', file.name);
+          console.log('=== INICIANDO UPLOAD ===', file.name);
           
-          const isPdf = file.type === 'application/pdf';
-          const timestamp = Date.now();
-          const randomStr = Math.random().toString(36).substring(2, 8);
-          const normalizedName = normalizeFileName(file.name);
-          const fileName = `${timestamp}-${randomStr}-${normalizedName}`;
-          const filePath = `${currentUser.id}/${fileName}`;
-
-          // Upload para storage
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('receipts')
-            .upload(filePath, file, {
-              cacheControl: '3600',
-              upsert: false
+          // Validar tipo de arquivo - incluindo PDFs com tipos MIME alternativos para Android
+          const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+          const allowedPdfTypes = [
+            'application/pdf',
+            'application/x-pdf', 
+            'application/acrobat',
+            'applications/vnd.pdf',
+            'text/pdf',
+            'text/x-pdf'
+          ];
+          const allowedTypes = [...allowedImageTypes, ...allowedPdfTypes];
+          const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
+          const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+          
+          console.log('Validando arquivo:', {
+            fileName: file.name,
+            type: file.type,
+            extension: fileExtension,
+            size: file.size,
+            allowedTypes,
+            allowedExtensions
+          });
+          
+          // Verificação mais flexível para PDFs no Android
+          const isImage = allowedImageTypes.includes(file.type) || ['.jpg', '.jpeg', '.png', '.webp'].includes(fileExtension);
+          const isPdf = allowedPdfTypes.includes(file.type) || fileExtension === '.pdf' || file.type === '' && fileExtension === '.pdf';
+          const isValidFile = isImage || isPdf;
+          
+          if (!isValidFile) {
+            console.log('ARQUIVO REJEITADO:', {
+              type: file.type,
+              extension: fileExtension,
+              isImage,
+              isPdf
             });
-
-          if (uploadError) {
-            console.error('Erro no upload:', uploadError);
             toast({
-              title: "Erro no upload",
-              description: `Erro ao enviar ${file.name}: ${uploadError.message}`,
+              title: "Erro",
+              description: `Tipo de arquivo não suportado: ${file.name}. Use JPG, PNG, WebP ou PDF.`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          
+          console.log('Arquivo aceito:', {
+            name: file.name,
+            type: file.type,
+            isImage,
+            isPdf
+          });
+
+          // Validar tamanho (máximo 5MB - aumentado para aceitar PDFs de nota fiscal)
+          if (file.size > 5 * 1024 * 1024) {
+            toast({
+              title: "Erro",
+              description: `Arquivo muito grande: ${file.name}. Máximo 5MB.`,
               variant: "destructive",
             });
             continue;
           }
 
-          // Obter URL pública
+          // Normalizar nome do arquivo
+          const normalizedFileName = normalizeFileName(file.name);
+          const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          const fileName = `${uniqueId}-${normalizedFileName}`;
+          const filePath = `${user.id}/${fileName}`;
+          
+          console.log('Nome original:', file.name);
+          console.log('Nome normalizado:', normalizedFileName);
+          console.log('Nome final:', fileName);
+          
+          console.log('Fazendo upload para storage:', filePath);
+
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('receipts')
+            .upload(filePath, file);
+
+          if (uploadError) {
+            console.error('ERRO NO UPLOAD STORAGE:', uploadError);
+            toast({
+              title: "Erro",
+              description: `Erro ao fazer upload de ${file.name}: ${uploadError.message}`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          
+          console.log('Upload storage SUCESSO:', uploadData);
+
+          // Obter URL pública do arquivo
           const { data: urlData } = supabase.storage
             .from('receipts')
             .getPublicUrl(filePath);
+            
+          console.log('URL pública gerada:', urlData.publicUrl);
 
-          if (!urlData.publicUrl) {
+          // Verificar autenticação antes de inserir
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (!currentUser) {
+            console.error('USUÁRIO NÃO AUTENTICADO');
             toast({
               title: "Erro",
-              description: `Erro ao obter URL pública para ${file.name}`,
+              description: "Usuário não autenticado. Faça login novamente.",
+              variant: "destructive",
+            });
+            continue;
+          }
+          
+          console.log('Usuário autenticado:', currentUser.id);
+
+          // Salvar no banco de dados com nome original como metadado
+          const insertData = {
+            usuario_id: currentUser.id,
+            imagem_path: filePath,
+            imagem_url: urlData.publicUrl,
+            processada: false,
+            nome_original: file.name // Salvar nome original como metadado
+          };
+          
+          console.log('=== INSERINDO NO BANCO ===', insertData);
+
+          const { data: notaData, error: dbError } = await supabase
+            .from('notas_imagens')
+            .insert(insertData)
+            .select()
+            .maybeSingle();
+
+          console.log('=== RESULTADO INSERT ===', { notaData, dbError });
+
+          if (dbError) {
+            console.error('ERRO NO BANCO:', dbError);
+            toast({
+              title: "Erro de Banco",
+              description: `Erro ao salvar ${file.name}: ${dbError.message}`,
               variant: "destructive",
             });
             continue;
           }
 
-          // Inserir registro na tabela notas_imagens
-          const { data: notaData, error: notaError } = await supabase
-            .from('notas_imagens')
-            .insert({
-              usuario_id: currentUser.id,
-              imagem_url: urlData.publicUrl,
-              imagem_path: filePath,
-              nome_original: file.name,
-              processada: false
-            })
-            .select()
-            .single();
-
-          if (notaError) {
-            console.error('Erro ao criar registro:', notaError);
+          if (!notaData) {
+            console.error('NENHUM DADO RETORNADO DO BANCO');
             toast({
-              title: "Erro no banco de dados",
-              description: `Erro ao registrar ${file.name}: ${notaError.message}`,
+              title: "Erro",
+              description: `Falha ao salvar ${file.name}: nenhum dado retornado`,
               variant: "destructive",
             });
             continue;
           }
 
           console.log('=== REGISTRO SALVO COM SUCESSO ===', notaData);
-          console.log('🚨 DEBUG: Checando se vai executar processamento automático...');
-          console.log('🚨 DEBUG: currentUser existe?', !!currentUser);
-          console.log('🚨 DEBUG: currentUser.id:', currentUser?.id);
-          console.log('🚨 DEBUG: notaData.id:', notaData.id);
-          console.log('🚨 DEBUG: urlData.publicUrl:', urlData.publicUrl);
           successfulUploads++;
 
-          // 🔄 FLUXO AUTOMÁTICO: Disparar processamento IA imediatamente após upload
-          try {
-            console.log('🚀 INICIANDO PROCESSAMENTO AUTOMÁTICO para:', file.name);
-            console.log('📝 Dados do arquivo:', { 
-              notaId: notaData.id, 
-              isPdf, 
-              publicUrl: urlData.publicUrl,
-              userId: currentUser.id 
-            });
-            
-            // PROCESSAMENTO SIMPLIFICADO
-            console.log('🔥 EXECUTANDO INVOKE DA EDGE FUNCTION...');
-            
-            const processResponse = await supabase.functions.invoke(
-              isPdf ? 'process-danfe-pdf' : 'process-receipt-full',
-              {
-                body: isPdf ? {
-                  pdfUrl: urlData.publicUrl,
-                  notaImagemId: notaData.id,
-                  userId: currentUser.id
-                } : {
+          // Processar arquivo baseado no tipo
+          if (file.type.startsWith('image/')) {
+            // Para imagens, processar diretamente com IA
+            try {
+              const response = await supabase.functions.invoke('process-receipt-full', {
+                body: {
                   notaImagemId: notaData.id,
                   imageUrl: urlData.publicUrl,
                   qrUrl: null
                 }
-              }
-            );
-            
-            console.log('📥 RESPOSTA DA EDGE FUNCTION:', processResponse);
+              });
 
-            // Tratamento simples da resposta
-            if (processResponse.error?.error === 'NOTA_DUVIDOSA' && processResponse.error.requiresConfirmation) {
-              console.log('❓ Nota duvidosa - aguardando confirmação do usuário');
-              setNotaDuvidosa({
-                message: processResponse.error.message,
-                notaImagemId: processResponse.error.notaImagemId
-              });
-              return;
-              
-            } else if (processResponse.error?.error === 'NOTA_INVALIDA') {
-              console.log('🚫 Nota de serviço rejeitada automaticamente');
+              if (response.error) {
+                console.error('Erro no processamento IA:', response.error);
+                toast({
+                  title: "Aviso",
+                  description: `${file.name} foi salvo, mas houve erro no processamento automático`,
+                  variant: "default",
+                });
+              }
+            } catch (processError) {
+              console.error('Erro no processamento IA:', processError);
               toast({
-                title: "❌ Nota rejeitada",
-                description: processResponse.error.message,
-                variant: "destructive",
-              });
-              
-            } else if (processResponse.error?.error === 'ARQUIVO_INVALIDO') {
-              console.log('🚫 Arquivo inválido rejeitado automaticamente');
-              toast({
-                title: "❌ Arquivo rejeitado",
-                description: "Esse arquivo não é uma nota fiscal válida e foi recusado pelo Picotinho.",
-                variant: "destructive",
-              });
-              
-            } else if (processResponse.error?.error === 'NOTA_DUPLICADA') {
-              console.log('🔄 Nota duplicada rejeitada automaticamente');
-              toast({
-                title: "Nota já processada",
-                description: "👉 Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.",
-                variant: "destructive",
-              });
-              
-            } else if (processResponse.data?.success) {
-              console.log('✅ Processamento concluído com sucesso');
-              toast({
-                title: "✅ Nota fiscal processada",
-                description: `${file.name} foi processada com sucesso pelo Picotinho`,
-              });
-              
-            } else if (processResponse.error) {
-              console.log('❌ Erro genérico no processamento:', processResponse.error);
-              toast({
-                title: "❌ Erro ao processar nota",
-                description: processResponse.error.message || `Erro no processamento de ${file.name}`,
-                variant: "destructive",
-              });
-              
-            } else {
-              console.warn('⚠️ Resposta inesperada da edge function:', processResponse);
-              toast({
-                title: "⚠️ Status do processamento incerto",
-                description: `${file.name} foi enviada, mas o status do processamento é incerto. Verifique sua lista de notas.`,
-                variant: "destructive",
+                title: "Aviso",
+                description: `${file.name} foi salvo, mas houve erro no processamento automático`,
+                variant: "default",
               });
             }
-            
-          } catch (processError: any) {
-            console.error('💥 Erro crítico no processamento:', processError);
-            toast({
-              title: "❌ Erro ao processar nota", 
-              description: `Falha no processamento de ${file.name}: ${processError.message}`,
-              variant: "destructive",
-            });
+          } else if (isPdf) {
+            // Para PDFs, converter primeiro em JPG
+            try {
+              console.log('Iniciando conversão PDF para JPG...');
+              const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
+                body: {
+                  notaImagemId: notaData.id,
+                  pdfUrl: urlData.publicUrl,
+                  userId: currentUser.id
+                }
+              });
+
+              if (convertResponse.error) {
+                console.error('Erro na conversão PDF:', convertResponse.error);
+                toast({
+                  title: "Aviso",
+                  description: `PDF ${file.name} foi salvo, mas houve erro na conversão para JPG`,
+                  variant: "default",
+                });
+              } else {
+                console.log('PDF convertido com sucesso:', convertResponse.data);
+                toast({
+                  title: "PDF Convertido",
+                  description: `PDF pronto para processamento com IA (${convertResponse.data?.convertedImages?.length || 0} página(s))`,
+                });
+              }
+            } catch (convertError) {
+              console.error('Erro na conversão PDF:', convertError);
+              toast({
+                title: "Aviso",
+                description: `PDF ${file.name} foi salvo, mas houve erro na conversão`,
+                variant: "default",
+              });
+            }
           }
-          
         } catch (fileError) {
           console.error(`ERRO GERAL NO ARQUIVO ${file.name}:`, fileError);
           toast({
@@ -315,69 +353,52 @@ export const UploadNoteButton: React.FC<UploadNoteButtonProps> = ({ onUploadSucc
     }
   };
 
-  if (!currentUser) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <Button disabled variant="outline">
-          <Upload className="mr-2 h-4 w-4" />
-          Faça login para enviar
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <>
-      {notaDuvidosa && (
-        <ConfirmacaoNotaDuvidosa
-          message={notaDuvidosa.message}
-          notaImagemId={notaDuvidosa.notaImagemId}
-          onConfirmacao={(success) => {
-            setNotaDuvidosa(null);
-            if (success) onUploadSuccess();
-          }}
-        />
-      )}
-      
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogTrigger asChild>
-          <Button variant="default">
-            <Upload className="mr-2 h-4 w-4" />
-            Enviar Nota Fiscal
-          </Button>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Enviar Nota Fiscal</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="receipt-upload" className="block text-sm font-medium mb-2">
-                Selecione os arquivos da nota fiscal (PDF ou imagem)
-              </label>
-              <Input
-                id="receipt-upload"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp"
-                multiple
-                onChange={handleFileUpload}
-                disabled={uploading}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Formatos aceitos: PDF, JPEG, PNG, WebP (máximo 50MB cada)
-              </p>
-            </div>
-            
-            {uploading && (
-              <div className="flex items-center space-x-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Enviando e processando...</span>
-              </div>
-            )}
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogTrigger asChild>
+        <Button 
+          variant="default" 
+          className="w-full"
+          disabled={!user}
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          {user ? 'Enviar Nota' : 'Faça login para enviar'}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Enviar Nota Fiscal</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Selecione uma ou mais imagens da nota fiscal, ou um arquivo PDF.
+          </p>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Arquivos aceitos:</label>
+            <ul className="text-xs text-muted-foreground list-disc list-inside">
+              <li>Imagens: JPEG, PNG, WebP (máx. 5MB cada)</li>
+              <li>PDF de nota fiscal (máx. 5MB)</li>
+              <li>Múltiplos arquivos da mesma nota</li>
+            </ul>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+          <Input
+            type="file"
+            multiple
+            accept="image/*,.pdf,application/pdf"
+            onChange={handleFileUpload}
+            disabled={uploading}
+            className="cursor-pointer"
+            capture={false}
+          />
+          {uploading && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />
+              <span className="text-sm">Enviando e processando...</span>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

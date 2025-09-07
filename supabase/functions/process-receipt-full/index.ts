@@ -79,7 +79,7 @@ serve(async (req) => {
 
     // 🔍 Primeiro passo: OCR para extrair texto bruto da imagem
     console.log('Executando OCR na imagem...');
-      const ocrResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const ocrResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiApiKey}`,
@@ -93,33 +93,7 @@ serve(async (req) => {
             content: [
               { 
                 type: 'text', 
-                text: `FASE 1: VALIDAÇÃO DA NOTA FISCAL - PRIMEIRO PASSO OBRIGATÓRIO
-
-ANTES de extrair os dados, analise esta nota fiscal e determine se ela é válida para o sistema Picotinho:
-
-1️⃣ FILTRO DE ESTABELECIMENTO - Verifique se o nome do emitente contém:
-- "Supermercado", "Hipermercado", "Mercado", "Mercearia", "Farmácia", "Hortifruti", "Padaria", "Açougue"
-- "Distribuidora" junto com nomes de redes conhecidas (ex: "Sendas Distribuidora")
-
-2️⃣ FILTRO DE PRODUTOS - Analise os itens listados:
-- ✅ VÁLIDOS: alimentos, bebidas, higiene, limpeza, frios, congelados, medicamentos, produtos de consumo
-- ❌ INVÁLIDOS: pneus, peças de carro, material de construção, produtos industriais
-
-3️⃣ FILTRO DE SERVIÇOS - SEMPRE RECUSAR:
-- Serviços de telefonia, internet, oficina mecânica, consultoria, mão de obra, etc.
-
-RESPONDA PRIMEIRO com uma das opções:
-- "NOTA_VÁLIDA" - Se passar nos filtros 1 e 2
-- "NOTA_INVÁLIDA" - Se for serviço ou produtos claramente inválidos  
-- "NOTA_DUVIDOSA" - Se não for serviço mas não parecer supermercado/farmácia
-
-Se for NOTA_VÁLIDA, então prossiga para extrair o texto completo:
-
-⚠️ CRITICAL: Preste atenção especial em extrair COMPLETAMENTE a CHAVE DE ACESSO da nota fiscal de 44 dígitos, que geralmente aparece no final da nota no formato:
-- 44 dígitos seguidos: 1234567890123456789012345678901234567890123456
-- Ou separados por espaços: 1234 5678 9012 3456 7890 1234 5678 9012 3456 7890 1234
-
-Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.` 
+                text: 'Extraia APENAS o texto desta nota fiscal brasileira. Retorne o texto exato como aparece na imagem, linha por linha, sem interpretação ou formatação adicional.' 
               },
               { type: 'image_url', image_url: { url: imageUrl } }
             ]
@@ -136,157 +110,7 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
     }
 
     const textoOCR = ocrData.choices[0].message.content;
-    console.log('Resposta completa da IA (validação + OCR):', textoOCR);
-
-    // ✅ VALIDAÇÃO PRÉVIA: Verificar se a resposta da IA contém texto suficiente
-    if (!textoOCR || textoOCR.length < 50) {
-      console.log('❌ Arquivo rejeitado: resposta da IA muito curta (<50 caracteres)');
-      
-      // 🗑️ EXCLUIR arquivo inválido automaticamente
-      try {
-        const { data: notaImagemData } = await supabase
-          .from('notas_imagens')
-          .select('imagem_path')
-          .eq('id', notaImagemId)
-          .single();
-        
-        if (notaImagemData?.imagem_path) {
-          console.log('🗑️ Excluindo arquivo inválido:', notaImagemData.imagem_path);
-          await supabase.storage
-            .from('receipts')
-            .remove([notaImagemData.imagem_path]);
-        }
-        
-        // Excluir registro da tabela notas_imagens
-        await supabase
-          .from('notas_imagens')
-          .delete()
-          .eq('id', notaImagemId);
-          
-        console.log('✅ Arquivo inválido excluído automaticamente');
-      } catch (deleteError) {
-        console.error('⚠️ Erro ao excluir arquivo inválido:', deleteError);
-      }
-      
-      return new Response(JSON.stringify({
-        success: false,
-        error: "ARQUIVO_INVALIDO",
-        message: "❌ Esse arquivo não é uma nota fiscal válida e foi recusado pelo Picotinho.",
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // ✅ VALIDAÇÃO PRÉVIA: Verificar se contém elementos básicos de nota fiscal
-    const temCaracteristicasBasicas = 
-      textoOCR.includes('CNPJ') || 
-      textoOCR.includes('CPF') ||
-      textoOCR.includes('NFC') || 
-      textoOCR.includes('NFe') ||
-      textoOCR.includes('Cupom') ||
-      textoOCR.includes('Fiscal') ||
-      textoOCR.includes('Total') ||
-      /\d{14}/.test(textoOCR); // CNPJ pattern
-
-    if (!temCaracteristicasBasicas) {
-      console.log('❌ Arquivo rejeitado: não contém características básicas de nota fiscal');
-      
-      // 🗑️ EXCLUIR arquivo inválido automaticamente
-      try {
-        const { data: notaImagemData } = await supabase
-          .from('notas_imagens')
-          .select('imagem_path')
-          .eq('id', notaImagemId)
-          .single();
-        
-        if (notaImagemData?.imagem_path) {
-          console.log('🗑️ Excluindo arquivo inválido:', notaImagemData.imagem_path);
-          await supabase.storage
-            .from('receipts')
-            .remove([notaImagemData.imagem_path]);
-        }
-        
-        // Excluir registro da tabela notas_imagens
-        await supabase
-          .from('notas_imagens')
-          .delete()
-          .eq('id', notaImagemId);
-          
-        console.log('✅ Arquivo inválido excluído automaticamente');
-      } catch (deleteError) {
-        console.error('⚠️ Erro ao excluir arquivo inválido:', deleteError);
-      }
-      
-      return new Response(JSON.stringify({
-        success: false,
-        error: "ARQUIVO_INVALIDO",
-        message: "❌ Esse arquivo não é uma nota fiscal válida e foi recusado pelo Picotinho.",
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // 🔍 Verificar validação da nota (apenas se não for processamento forçado)
-    const forceProcess = false; // Definir explicitamente como false
-    if (!forceProcess) {
-      if (textoOCR.includes('NOTA_INVÁLIDA')) {
-        // 🗑️ EXCLUIR arquivo de serviço automaticamente
-        try {
-          const { data: notaImagemData } = await supabase
-            .from('notas_imagens')
-            .select('imagem_path')
-            .eq('id', notaImagemId)
-            .single();
-          
-          if (notaImagemData?.imagem_path) {
-            console.log('🗑️ Excluindo arquivo de serviço:', notaImagemData.imagem_path);
-            await supabase.storage
-              .from('receipts')
-              .remove([notaImagemData.imagem_path]);
-          }
-          
-          // Excluir registro da tabela notas_imagens
-          await supabase
-            .from('notas_imagens')
-            .delete()
-            .eq('id', notaImagemId);
-            
-          console.log('✅ Arquivo de serviço excluído automaticamente');
-        } catch (deleteError) {
-          console.error('⚠️ Erro ao excluir arquivo de serviço:', deleteError);
-        }
-        
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'NOTA_INVALIDA',
-          message: 'Esta nota fiscal não é de estabelecimento de consumo (supermercado, farmácia, etc.) ou contém apenas serviços. O Picotinho é focado em compras de consumo.'
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (textoOCR.includes('NOTA_DUVIDOSA')) {
-        return new Response(JSON.stringify({ 
-          success: false,
-          error: 'NOTA_DUVIDOSA',
-          message: '❓ Esta nota não parece ser de supermercado, farmácia ou comércio de consumo, que é o objetivo do Picotinho. Tem certeza de que deseja inserir esta nota?',
-          requiresConfirmation: true,
-          notaImagemId: notaImagemId
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    } else {
-      console.log('⚠️ Processamento forçado - pulando validação de tipo de estabelecimento');
-    }
-
-    // Extrair apenas o texto OCR (após a validação)
-    const textoOCRLimpo = textoOCR.replace(/^(NOTA_VÁLIDA|NOTA_INVÁLIDA|NOTA_DUVIDOSA)[\s\S]*?(?=\n[A-Z])/i, '').trim();
-    console.log('Texto extraído por OCR (limpo):', textoOCRLimpo);
+    console.log('Texto extraído por OCR:', textoOCR);
     const parseNotaFiscal = (texto: string) => {
       const linhas = texto.split('\n').map(linha => linha.trim()).filter(linha => linha.length > 0);
       
@@ -299,7 +123,7 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
       const dataRegex = /(\d{2}\/\d{2}\/\d{4})/;
       const horaRegex = /(\d{2}:\d{2}:\d{2})/;
       const valorTotalRegex = /TOTAL.*?(\d+[,\.]\d{2})/i;
-      const chaveAcessoRegex = /(\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/;
+      const chaveAcessoRegex = /(\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4})/;
       
       // Extrair dados do cabeçalho
       for (let i = 0; i < Math.min(20, linhas.length); i++) {
@@ -520,61 +344,6 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
       console.log('⚠️ Nenhum CNPJ encontrado nos dados extraídos');
     }
 
-    // 🔐 VERIFICAR DUPLICIDADE DE CHAVE DE ACESSO
-    if (extractedData.compra.chaveAcesso && extractedData.compra.chaveAcesso.length === 44) {
-      console.log(`🔍 Verificando duplicidade da chave: ${extractedData.compra.chaveAcesso}`);
-      
-      const { data: notaExistente } = await supabase
-        .from('compras_app')
-        .select('id, created_at')
-        .eq('chave_acesso', extractedData.compra.chaveAcesso)
-        .single();
-      
-      if (notaExistente) {
-        console.log('❌ Chave de acesso já existe no banco de dados');
-        
-        // 🗑️ EXCLUIR arquivo duplicado automaticamente
-        try {
-          // Buscar dados da nota para obter o path do arquivo
-          const { data: notaImagemData } = await supabase
-            .from('notas_imagens')
-            .select('imagem_path')
-            .eq('id', notaImagemId)
-            .single();
-          
-          if (notaImagemData?.imagem_path) {
-            console.log('🗑️ Excluindo arquivo duplicado:', notaImagemData.imagem_path);
-            await supabase.storage
-              .from('receipts')
-              .remove([notaImagemData.imagem_path]);
-          }
-          
-          // Excluir registro da tabela notas_imagens
-          await supabase
-            .from('notas_imagens')
-            .delete()
-            .eq('id', notaImagemId);
-            
-          console.log('✅ Arquivo duplicado excluído automaticamente');
-        } catch (deleteError) {
-          console.error('⚠️ Erro ao excluir arquivo duplicado:', deleteError);
-        }
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: 'NOTA_DUPLICADA',
-            message: 'Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.'
-          }),
-          { 
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        );
-      }
-      
-      console.log('✅ Chave de acesso válida, prosseguindo com inserção');
-    }
 
     // Cria compra
     const { data: compra, error: compraError } = await supabase
@@ -594,51 +363,7 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
       .select()
       .single();
 
-    if (compraError) {
-      // Se for erro de chave duplicada, retornar mensagem específica
-      if (compraError.code === '23505' && compraError.message.includes('unique_chave_acesso')) {
-        console.log('❌ Erro de chave de acesso duplicada detectado');
-        
-        // 🗑️ EXCLUIR arquivo duplicado automaticamente
-        try {
-          const { data: notaImagemData } = await supabase
-            .from('notas_imagens')
-            .select('imagem_path')
-            .eq('id', notaImagemId)
-            .single();
-          
-          if (notaImagemData?.imagem_path) {
-            console.log('🗑️ Excluindo arquivo duplicado:', notaImagemData.imagem_path);
-            await supabase.storage
-              .from('receipts')
-              .remove([notaImagemData.imagem_path]);
-          }
-          
-          // Excluir registro da tabela notas_imagens
-          await supabase
-            .from('notas_imagens')
-            .delete()
-            .eq('id', notaImagemId);
-            
-          console.log('✅ Arquivo duplicado excluído automaticamente');
-        } catch (deleteError) {
-          console.error('⚠️ Erro ao excluir arquivo duplicado:', deleteError);
-        }
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: 'NOTA_DUPLICADA', 
-            message: 'Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.'
-          }),
-          { 
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        );
-      }
-      throw compraError;
-    }
+    if (compraError) throw compraError;
 
     // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
     const normalizarNomeProduto = async (nome: string): Promise<string> => {
