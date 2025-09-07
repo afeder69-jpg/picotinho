@@ -210,6 +210,12 @@ Texto da DANFE: ${textoLimpo}
 
 Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANTA que o JSON seja válido e contenha TODOS os itens da nota.`;
 
+    // 📝 REGISTRAR PROMPT COMPLETO enviado para a IA
+    console.log("📝 PROMPT COMPLETO enviado para IA:");
+    console.log("=".repeat(80));
+    console.log(aiPrompt);
+    console.log("=".repeat(80));
+
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
