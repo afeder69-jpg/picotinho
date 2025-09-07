@@ -424,7 +424,7 @@ Esta chave é FUNDAMENTAL para o sistema - não pode faltar ou estar incompleta.
             existingNoteDate: notaExistente.created_at
           }),
           { 
-            status: 409, // Conflict
+            status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         );

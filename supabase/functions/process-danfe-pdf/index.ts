@@ -498,7 +498,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 existingNoteDate: notaExistente.created_at
               }),
               { 
-                status: 409,
+                status: 200,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
               }
             );

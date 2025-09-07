@@ -297,7 +297,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   });
                 }
               }
-            } catch (processError) {
+            } catch (processError: any) {
               console.error('Erro no processamento IA:', processError);
               toast({
                 title: "Aviso",
