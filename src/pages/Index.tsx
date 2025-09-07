@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import QRCodeScanner from "@/components/QRCodeScanner";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
+import BackgroundRemovalTool from "@/components/BackgroundRemovalTool";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LogIn, LogOut } from "lucide-react";
@@ -10,6 +11,7 @@ import { toast } from "sonner";
 
 const Index = () => {
   const [showScanner, setShowScanner] = useState(false);
+  const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -29,6 +31,10 @@ const Index = () => {
     } catch (error) {
       toast.error("Erro ao fazer logout");
     }
+  };
+
+  const handleImageProcessed = (url: string) => {
+    setProcessedImageUrl(url);
   };
 
   return (
@@ -78,23 +84,25 @@ const Index = () => {
           
           <h1 className="text-2xl font-bold text-foreground leading-tight">
             Bem-vindo ao Picotinho, gerencie suas compras de supermercado
-          </h1>
-          
+           </h1>
+           
+           {/* Background Removal Tool */}
+           <BackgroundRemovalTool onImageProcessed={handleImageProcessed} />
 
-          {!user && (
-            <div className="text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Faça login para salvar suas notas fiscais
-              </p>
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/auth')}
-                className="w-full"
-              >
-                Criar conta ou fazer login
-              </Button>
-            </div>
-          )}
+           {!user && (
+             <div className="text-center space-y-2">
+               <p className="text-sm text-muted-foreground">
+                 Faça login para salvar suas notas fiscais
+               </p>
+               <Button 
+                 variant="outline" 
+                 onClick={() => navigate('/auth')}
+                 className="w-full"
+               >
+                 Criar conta ou fazer login
+               </Button>
+             </div>
+           )}
         </div>
       </div>
       
