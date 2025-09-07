@@ -344,6 +344,35 @@ serve(async (req) => {
       console.log('⚠️ Nenhum CNPJ encontrado nos dados extraídos');
     }
 
+    // 🔐 VERIFICAR DUPLICIDADE DE CHAVE DE ACESSO
+    if (extractedData.compra.chaveAcesso && extractedData.compra.chaveAcesso.length === 44) {
+      console.log(`🔍 Verificando duplicidade da chave: ${extractedData.compra.chaveAcesso}`);
+      
+      const { data: notaExistente } = await supabase
+        .from('compras_app')
+        .select('id, created_at')
+        .eq('chave_acesso', extractedData.compra.chaveAcesso)
+        .single();
+      
+      if (notaExistente) {
+        console.log('❌ Chave de acesso já existe no banco de dados');
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'NOTA_DUPLICADA',
+            message: '❌ Essa nota fiscal já foi cadastrada no Picotinho e não pode ser cadastrada novamente.',
+            existingNoteId: notaExistente.id,
+            existingNoteDate: notaExistente.created_at
+          }),
+          { 
+            status: 409, // Conflict
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+      
+      console.log('✅ Chave de acesso válida, prosseguindo com inserção');
+    }
 
     // Cria compra
     const { data: compra, error: compraError } = await supabase
@@ -363,7 +392,24 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (compraError) throw compraError;
+    if (compraError) {
+      // Se for erro de chave duplicada, retornar mensagem específica
+      if (compraError.code === '23505' && compraError.message.includes('unique_chave_acesso')) {
+        console.log('❌ Erro de chave de acesso duplicada detectado');
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'NOTA_DUPLICADA', 
+            message: '❌ Essa nota fiscal já foi cadastrada no Picotinho e não pode ser cadastrada novamente.'
+          }),
+          { 
+            status: 409,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+      throw compraError;
+    }
 
     // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
     const normalizarNomeProduto = async (nome: string): Promise<string> => {

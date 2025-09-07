@@ -149,10 +149,33 @@ const ReceiptList = () => {
 
   const deleteReceipt = async (id: string) => {
     try {
+      // 1. Primeiro buscar se existe compra_id linkada na nota de imagem
+      const { data: notaImagem } = await supabase
+        .from('notas_imagens')
+        .select('compra_id')
+        .eq('id', id)
+        .single();
+
+      // 2. Excluir da tabela receipts e notas_imagens
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').delete().eq('id', id),
         supabase.from('notas_imagens').delete().eq('id', id)
       ]);
+
+      // 3. Se havia uma compra linkada, excluir também (isso libera a chave de acesso)
+      if (notaImagem?.compra_id) {
+        console.log(`🗑️ Excluindo compra linkada: ${notaImagem.compra_id}`);
+        const { error: compraError } = await supabase
+          .from('compras_app')
+          .delete()
+          .eq('id', notaImagem.compra_id);
+        
+        if (compraError) {
+          console.error('Erro ao excluir compra:', compraError);
+        } else {
+          console.log('✅ Compra excluída - chave de acesso liberada para reuso');
+        }
+      }
 
       const receiptsSuccess = !receiptsResult.error;
       const notasSuccess = !notasImagensResult.error;
@@ -161,7 +184,10 @@ const ReceiptList = () => {
       }
 
       await loadReceipts();
-      toast({ title: "Sucesso", description: "Nota fiscal excluída com sucesso" });
+      toast({ 
+        title: "Sucesso", 
+        description: "Nota fiscal excluída com sucesso. A chave de acesso foi liberada para reuso." 
+      });
     } catch (error) {
       console.error('Error deleting receipt:', error);
       toast({ title: "Erro", description: "Erro ao excluir nota fiscal", variant: "destructive" });
@@ -346,6 +372,17 @@ const ReceiptList = () => {
           processedSuccessfully = true;
         } else if (pdfResponse.error) {
           console.error("❌ Erro na função process-danfe-pdf:", pdfResponse.error);
+          
+          // Verificar se é erro de nota duplicada
+          if (pdfResponse.data?.error === 'NOTA_DUPLICADA') {
+            toast({ 
+              title: "❌ Nota Fiscal Duplicada", 
+              description: pdfResponse.data.message || "Esta nota fiscal já foi cadastrada e não pode ser processada novamente.",
+              variant: "destructive",
+              duration: 8000 // Mais tempo para ler a mensagem
+            });
+            return; // Sair da função sem mostrar outros erros
+          }
           
           // Se for erro INSUFFICIENT_TEXT, fazer fallback para OCR
           if (pdfResponse.error.message?.includes('INSUFFICIENT_TEXT')) {

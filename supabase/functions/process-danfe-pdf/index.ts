@@ -407,6 +407,42 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           }
         }
 
+        
+        // 🔐 VERIFICAR DUPLICIDADE DE CHAVE DE ACESSO antes de inserir
+        let chaveAcesso = null;
+        
+        // Tentar extrair chave de acesso do texto (44 dígitos)
+        const chaveRegex = /(\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4})/;
+        const chaveMatch = textNormalizado.match(chaveRegex);
+        if (chaveMatch) {
+          chaveAcesso = chaveMatch[1].replace(/\s/g, '');
+          console.log(`🔍 Chave de acesso extraída: ${chaveAcesso}`);
+          
+          // Verificar se já existe no banco
+          const { data: notaExistente } = await supabase
+            .from('compras_app')
+            .select('id, created_at')
+            .eq('chave_acesso', chaveAcesso)
+            .single();
+          
+          if (notaExistente) {
+            console.log('❌ Chave de acesso já existe no banco de dados');
+            return new Response(
+              JSON.stringify({ 
+                success: false,
+                error: 'NOTA_DUPLICADA',
+                message: '❌ Essa nota fiscal já foi cadastrada no Picotinho e não pode ser cadastrada novamente.',
+                existingNoteId: notaExistente.id,
+                existingNoteDate: notaExistente.created_at
+              }),
+              { 
+                status: 409,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+              }
+            );
+          }
+        }
+
         const { data: novaCompra, error: errorCompra } = await supabase
           .from('compras_app')
           .insert({
@@ -416,12 +452,28 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
             preco_total: valor_total || 0,
             forma_pagamento: forma_pagamento || null,
             numero_nota_fiscal: numero || null,
+            chave_acesso: chaveAcesso,
             status: 'processada'
           })
           .select('id')
           .single();
 
         if (errorCompra) {
+          // Se for erro de chave duplicada, retornar mensagem específica
+          if (errorCompra.code === '23505' && errorCompra.message.includes('unique_chave_acesso')) {
+            console.log('❌ Erro de chave de acesso duplicada detectado');
+            return new Response(
+              JSON.stringify({ 
+                success: false,
+                error: 'NOTA_DUPLICADA',
+                message: '❌ Essa nota fiscal já foi cadastrada no Picotinho e não pode ser cadastrada novamente.'
+              }),
+              { 
+                status: 409,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+              }
+            );
+          }
           console.error("❌ Erro ao criar compra:", errorCompra);
         } else {
           compraId = novaCompra.id;
