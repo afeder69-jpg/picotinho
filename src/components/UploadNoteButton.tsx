@@ -255,106 +255,164 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           successfulUploads++;
 
           // 🔄 FLUXO AUTOMÁTICO: Disparar processamento IA imediatamente após upload
+          console.log('🚀 INICIANDO PROCESSAMENTO AUTOMÁTICO para:', file.name);
+          console.log('📝 Dados do arquivo:', { 
+            notaId: notaData.id, 
+            isPdf, 
+            publicUrl: urlData.publicUrl,
+            userId: currentUser.id 
+          });
+          
           try {
             let processResponse;
+            let tentativa = 0;
+            const maxTentativas = 2;
             
-            // Determinar qual função usar baseado no tipo de arquivo
-            if (isPdf) {
-              console.log('📄 Processando PDF diretamente...');
-              processResponse = await supabase.functions.invoke('process-danfe-pdf', {
-                body: {
-                  pdfUrl: urlData.publicUrl,
-                  notaImagemId: notaData.id,
-                  userId: currentUser.id
-                }
-              });
-              console.log('📥 Resposta completa da função PDF:', processResponse);
-            } else {
-              console.log('🖼️ Processando imagem...');
-              processResponse = await supabase.functions.invoke('process-receipt-full', {
-                body: {
-                  notaImagemId: notaData.id,
-                  imageUrl: urlData.publicUrl,
-                  qrUrl: null
-                }
-              });
-            }
-
-            console.log('📥 Resposta do processamento:', processResponse);
-
-            // ⚠️ VERIFICAR SE A FUNÇÃO RETORNOU 503 (Service Unavailable)
-            if (processResponse.error && processResponse.error.message?.includes('500') || 
-                processResponse.error && processResponse.error.message?.includes('503')) {
-              console.error('🔥 Edge function com erro 503/500, tentando fallback...');
+            while (tentativa < maxTentativas) {
+              tentativa++;
+              console.log(`🔄 Tentativa ${tentativa}/${maxTentativas} de processamento...`);
               
-              // 🔄 FALLBACK: tentar process-receipt-full para PDFs se process-danfe-pdf falhar
-              if (isPdf) {
-                console.log('🔄 Tentando fallback: process-receipt-full para PDF...');
-                processResponse = await supabase.functions.invoke('process-receipt-full', {
-                  body: {
-                    notaImagemId: notaData.id,
-                    pdfUrl: urlData.publicUrl,
-                    userId: currentUser.id
+              try {
+                // Determinar qual função usar baseado no tipo de arquivo
+                if (isPdf) {
+                  console.log('📄 Processando PDF diretamente...');
+                  processResponse = await supabase.functions.invoke('process-danfe-pdf', {
+                    body: {
+                      pdfUrl: urlData.publicUrl,
+                      notaImagemId: notaData.id,
+                      userId: currentUser.id
+                    }
+                  });
+                  console.log('📥 Resposta completa da função PDF:', processResponse);
+                } else {
+                  console.log('🖼️ Processando imagem...');
+                  processResponse = await supabase.functions.invoke('process-receipt-full', {
+                    body: {
+                      notaImagemId: notaData.id,
+                      imageUrl: urlData.publicUrl,
+                      qrUrl: null
+                    }
+                  });
+                  console.log('📥 Resposta completa da função Imagem:', processResponse);
+                }
+                
+                // Se chegou aqui, a função foi chamada com sucesso
+                break;
+                
+              } catch (invokeError: any) {
+                console.error(`❌ Erro na tentativa ${tentativa}:`, invokeError);
+                
+                if (tentativa === maxTentativas) {
+                  // Última tentativa falhou - tentar fallback
+                  if (isPdf) {
+                    console.log('🔄 FALLBACK: Tentando process-receipt-full para PDF...');
+                    processResponse = await supabase.functions.invoke('process-receipt-full', {
+                      body: {
+                        notaImagemId: notaData.id,
+                        pdfUrl: urlData.publicUrl,
+                        userId: currentUser.id
+                      }
+                    });
+                    console.log('📥 Resposta do fallback:', processResponse);
+                  } else {
+                    throw invokeError; // Re-throw se for imagem
                   }
-                });
-                console.log('📥 Resposta do fallback:', processResponse);
+                }
+                
+                // Aguardar 1 segundo antes da próxima tentativa
+                await new Promise(resolve => setTimeout(resolve, 1000));
               }
             }
 
-            // Tratamento das respostas
+            console.log('📥 Resposta final do processamento:', processResponse);
+
+            // 🔍 ANÁLISE DETALHADA DA RESPOSTA
+            console.log('🔍 Analisando resposta:', {
+              hasError: !!processResponse.error,
+              hasData: !!processResponse.data,
+              errorType: processResponse.error?.error,
+              dataSuccess: processResponse.data?.success
+            });
+
+            // ⚠️ VERIFICAR SE A FUNÇÃO RETORNOU 503/500 ou erro de conexão
             if (processResponse.error) {
-              console.error('❌ Erro no processamento IA:', processResponse.error);
+              const errorMsg = processResponse.error.message || '';
+              const isConnectionError = errorMsg.includes('500') || 
+                                      errorMsg.includes('503') || 
+                                      errorMsg.includes('Failed to fetch') ||
+                                      errorMsg.includes('NetworkError');
               
-              // Verificar se é uma nota duvidosa que precisa de confirmação
-              if (processResponse.error.error === 'NOTA_DUVIDOSA' && processResponse.error.requiresConfirmation) {
+              if (isConnectionError) {
+                console.error('🔥 Edge function indisponível, erro de conexão:', processResponse.error);
+                toast({
+                  title: "⚠️ Servidor temporariamente indisponível",
+                  description: `O processamento de ${file.name} falhou. Tente novamente em alguns minutos.`,
+                  variant: "destructive",
+                });
+                continue; // Pular para próximo arquivo
+              }
+            }
+
+            // Tratamento das respostas baseado no tipo de erro
+            if (processResponse.error?.error) {
+              const errorType = processResponse.error.error;
+              console.log('❌ Erro específico detectado:', errorType);
+              
+              if (errorType === 'NOTA_DUVIDOSA' && processResponse.error.requiresConfirmation) {
+                console.log('❓ Nota duvidosa - aguardando confirmação do usuário');
                 setNotaDuvidosa({
                   message: processResponse.error.message,
                   notaImagemId: processResponse.error.notaImagemId
                 });
                 return; // Não mostrar toast de erro, aguardar decisão do usuário
-              } else if (processResponse.error.error === 'NOTA_INVALIDA') {
-                // 🚫 Nota de serviço ou inválida - arquivo já foi excluído automaticamente
+                
+              } else if (errorType === 'NOTA_INVALIDA') {
+                console.log('🚫 Nota de serviço rejeitada automaticamente');
                 toast({
                   title: "❌ Nota rejeitada",
                   description: processResponse.error.message,
                   variant: "destructive",
                 });
-              } else if (processResponse.error.error === 'ARQUIVO_INVALIDO') {
-                // 🚫 Arquivo inválido - foi excluído automaticamente
+                
+              } else if (errorType === 'ARQUIVO_INVALIDO') {
+                console.log('🚫 Arquivo inválido rejeitado automaticamente');
                 toast({
                   title: "❌ Arquivo rejeitado",
                   description: "Esse arquivo não é uma nota fiscal válida e foi recusado pelo Picotinho.",
                   variant: "destructive",
                 });
-              } else if (processResponse.error.error === 'NOTA_DUPLICADA') {
-                // 🔄 Nota duplicada - arquivo já foi excluído automaticamente
+                
+              } else if (errorType === 'NOTA_DUPLICADA') {
+                console.log('🔄 Nota duplicada rejeitada automaticamente');
                 toast({
                   title: "Nota já processada",
                   description: "👉 Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.",
                   variant: "destructive",
                 });
+                
               } else {
+                console.log('❌ Erro genérico no processamento');
                 toast({
                   title: "❌ Erro ao processar nota",
                   description: processResponse.error.message || `Erro no processamento de ${file.name}`,
                   variant: "destructive",
                 });
               }
-            } else if (processResponse.data) {
+              
+            } else if (processResponse.data?.success) {
               // ✅ Processamento bem sucedido
-              console.log('✅ Processamento concluído:', processResponse.data);
-              if (processResponse.data.success) {
-                toast({
-                  title: "✅ Nota fiscal processada",
-                  description: `${file.name} foi processada com sucesso pelo Picotinho`,
-                });
-              }
-            } else {
-              // 🔄 Caso não haja data nem error - possivelmente erro 503/500
-              console.warn('⚠️ Resposta sem data nem error - possivelmente edge function indisponível');
+              console.log('✅ Processamento concluído com sucesso:', processResponse.data);
               toast({
-                title: "⚠️ Processamento em fila",
-                description: `${file.name} foi enviada mas o processamento pode estar temporariamente indisponível. Tente recarregar a página em alguns minutos.`,
+                title: "✅ Nota fiscal processada",
+                description: `${file.name} foi processada com sucesso pelo Picotinho`,
+              });
+              
+            } else {
+              // 🔄 Resposta inesperada - sem error nem success
+              console.warn('⚠️ Resposta inesperada da edge function:', processResponse);
+              toast({
+                title: "⚠️ Status do processamento incerto",
+                description: `${file.name} foi enviada, mas o status do processamento é incerto. Verifique sua lista de notas.`,
                 variant: "destructive",
               });
             }
