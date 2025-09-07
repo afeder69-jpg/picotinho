@@ -106,13 +106,92 @@ serve(async (req) => {
     console.log(textoLimpo); // TEXTO NORMALIZADO COMPLETO, sem cortar
     console.log("=".repeat(80));
 
+    // ✅ VALIDAÇÃO PRÉVIA: Verificar se o arquivo tem características básicas de nota fiscal
     if (!textoLimpo || textoLimpo.length < 50) {
+      console.log('❌ Arquivo rejeitado: texto insuficiente (<50 caracteres)');
+      
+      // 🗑️ EXCLUIR arquivo inválido automaticamente
+      try {
+        const { data: notaImagemData } = await supabase
+          .from('notas_imagens')
+          .select('imagem_path')
+          .eq('id', notaImagemId)
+          .single();
+        
+        if (notaImagemData?.imagem_path) {
+          console.log('🗑️ Excluindo arquivo inválido:', notaImagemData.imagem_path);
+          await supabase.storage
+            .from('receipts')
+            .remove([notaImagemData.imagem_path]);
+        }
+        
+        // Excluir registro da tabela notas_imagens
+        await supabase
+          .from('notas_imagens')
+          .delete()
+          .eq('id', notaImagemId);
+          
+        console.log('✅ Arquivo inválido excluído automaticamente');
+      } catch (deleteError) {
+        console.error('⚠️ Erro ao excluir arquivo inválido:', deleteError);
+      }
+      
       return new Response(JSON.stringify({
         success: false,
-        error: "INSUFFICIENT_TEXT",
-        message: "PDF não contém texto suficiente — provavelmente é escaneado",
+        error: "ARQUIVO_INVALIDO",
+        message: "❌ Esse arquivo não é uma nota fiscal válida e foi recusado pelo Picotinho.",
       }), { 
-        status: 400,
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // ✅ VALIDAÇÃO PRÉVIA: Verificar se contém elementos básicos de nota fiscal
+    const temCaracteristicasBasicas = 
+      textoLimpo.includes('CNPJ') || 
+      textoLimpo.includes('CPF') ||
+      textoLimpo.includes('NFC') || 
+      textoLimpo.includes('NFe') ||
+      textoLimpo.includes('Cupom') ||
+      textoLimpo.includes('Fiscal') ||
+      textoLimpo.includes('Total') ||
+      /\d{14}/.test(textoLimpo); // CNPJ pattern
+
+    if (!temCaracteristicasBasicas) {
+      console.log('❌ Arquivo rejeitado: não contém características básicas de nota fiscal');
+      
+      // 🗑️ EXCLUIR arquivo inválido automaticamente
+      try {
+        const { data: notaImagemData } = await supabase
+          .from('notas_imagens')
+          .select('imagem_path')
+          .eq('id', notaImagemId)
+          .single();
+        
+        if (notaImagemData?.imagem_path) {
+          console.log('🗑️ Excluindo arquivo inválido:', notaImagemData.imagem_path);
+          await supabase.storage
+            .from('receipts')
+            .remove([notaImagemData.imagem_path]);
+        }
+        
+        // Excluir registro da tabela notas_imagens
+        await supabase
+          .from('notas_imagens')
+          .delete()
+          .eq('id', notaImagemId);
+          
+        console.log('✅ Arquivo inválido excluído automaticamente');
+      } catch (deleteError) {
+        console.error('⚠️ Erro ao excluir arquivo inválido:', deleteError);
+      }
+      
+      return new Response(JSON.stringify({
+        success: false,
+        error: "ARQUIVO_INVALIDO", 
+        message: "❌ Esse arquivo não é uma nota fiscal válida e foi recusado pelo Picotinho.",
+      }), { 
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
@@ -247,6 +326,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     console.log("=".repeat(80));
 
     // 🔍 Verificar validação da nota (apenas se não for processamento forçado)
+    const forceProcess = false; // Definir explicitamente como false
     if (!forceProcess) {
       if (respostaIA.includes('NOTA_INVÁLIDA')) {
         // 🗑️ EXCLUIR arquivo de serviço automaticamente
