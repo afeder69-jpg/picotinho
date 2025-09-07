@@ -247,10 +247,19 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           }
 
           console.log('📂 Carregando nota fiscal');
+          toast({
+            title: "📂 Carregando nota fiscal",
+            description: "Upload realizado com sucesso",
+          });
+          
           successfulUploads++;
 
           // Iniciar processamento automático baseado no tipo de arquivo
           console.log('⚡ Processando IA');
+          toast({
+            title: "⚡ Processando IA",
+            description: "Analisando os dados da nota fiscal...",
+          });
           
           try {
             let response;
@@ -278,21 +287,21 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             if (response.error) {
               console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
               toast({
-                title: "Erro no processamento",
+                title: "❌ Erro no processamento",
                 description: response.error.message || 'Erro desconhecido no processamento',
                 variant: "destructive",
               });
             } else {
               console.log('✅ Processamento concluído');
               toast({
-                title: "Sucesso",
+                title: "✅ Processamento concluído",
                 description: `${file.name} processado com sucesso`,
               });
             }
           } catch (processError) {
             console.log('❌ Erro no processamento: ' + (processError.message || 'Erro de conexão'));
             toast({
-              title: "Erro no processamento",
+              title: "❌ Erro no processamento",
               description: processError.message || 'Erro de conexão',
               variant: "destructive",
             });

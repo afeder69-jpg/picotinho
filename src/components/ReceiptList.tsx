@@ -756,18 +756,7 @@ const ReceiptList = () => {
                             <Eye className="w-4 h-4 mr-2" /> 
                             Ver Detalhes
                           </Button>
-                          {(receipt.imagem_url || (receipt.dados_extraidos as any)?.imagens_convertidas) && (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => processReceiptWithAI(receipt)}
-                              disabled={processingReceipts.has(receipt.id)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3"
-                            >
-                              {processingReceipts.has(receipt.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bot className="w-4 h-4 mr-2" />}
-                              {processingReceipts.has(receipt.id) ? 'Processando...' : 'Extrair com IA'}
-                            </Button>
-                          )}
+                          {/* Botão "Extrair com IA" removido - processamento agora é automático */}
                         </div>
                       </div>
                     </>
