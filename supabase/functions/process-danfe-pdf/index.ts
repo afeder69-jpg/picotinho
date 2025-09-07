@@ -124,73 +124,43 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    // Mascarar dados sensíveis para o log
-    function mascarDadosSensiveis(texto: string): string {
-      return texto
-        // Mascarar chave de acesso (44 dígitos) - mostrar só 8 dígitos centrais
-        .replace(/(\d{18})(\d{8})(\d{18})/g, '$1••••••••••••••••••$3')
-        // Mascarar CNPJ - mostrar só início e fim
-        .replace(/(\d{2}\.\d{3}\.\d{3}\/)(\d{4})(-\d{2})/g, '$1••••$3')
-        .replace(/(\d{2})(\d{9})(\d{2})/g, '$1•••••••••$3');
-    }
-
-    const aiPrompt = `Você recebeu um arquivo para análise.
-
-PASSO 1 – Validação inicial:
-Antes de qualquer coisa, verifique se o texto corresponde a uma nota fiscal de produtos (NFC-e ou DANFE de mercadorias).
-
-Deve conter indícios claros como: Chave de Acesso de 44 dígitos, CNPJ do estabelecimento, data de emissão, valor total e itens de produtos com descrição + quantidade + valor.
-
-Se for NFS-e (nota de serviço) ou qualquer outro documento que não seja nota fiscal de produtos, você deve retornar exatamente este JSON:
-
-{
-  "isNotaFiscalProdutos": false,
-  "motivo": "Este arquivo não é uma nota fiscal de produtos."
-}
-
-Se for realmente uma nota fiscal de produtos, então siga para o Passo 2 normalmente e INCLUA isNotaFiscalProdutos: true no JSON retornado.
-
-PASSO 2 – Estruturar em JSON os dados da compra (somente se for nota fiscal de produtos):
+    const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
 
 IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
-Estruture em JSON os dados da compra:
-• Estabelecimento (nome, cnpj, endereco)
-• Compra (valor_total, forma_pagamento, numero, serie, data_emissao)
-• Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
+1. Estruture em JSON os dados da compra:
+   • Estabelecimento (nome, cnpj, endereco)
+   • Compra (valor_total, forma_pagamento, numero, serie, data_emissao)
+   • Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
 
-Regras OBRIGATÓRIAS:
+2. Regras OBRIGATÓRIAS:
+   - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
+   - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
+     • JAMAIS altere marcas ou nomes originais (ex: se estiver "Nescau" não pode virar "Nesquik", se estiver "Plusvita" não pode virar "Pullman")
+     • NUNCA inclua quantidade comprada na descrição (a quantidade vai no campo separado "quantidade")
+     • Remova espaços duplicados entre palavras
+     • Organize na ordem: Nome + Marca/Variedade + Peso/Volume + Extra (Granel, Corte, etc.)
+     • Exemplos: "Mamão Formosa Granel" ou "Manga Palmer Granel" (sem incluir o peso comprado 1.135kg na descrição)
+     • SEMPRE preserve peso/volume/medidas DA EMBALAGEM (350g, 535g, 1L, 2kg, 170g, etc.)
+     • Peso/volume da embalagem é parte da identidade única do produto e NÃO pode ser removido
+     • Corrija apenas ortografia, acentuação e capitalização de erros de extração (ex: "Cart o" → "Cartão")
+     • NÃO invente ou troque nomes/marcas, apenas limpe e organize o que está no texto original
+   - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
+   - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
+   - Categorize cada item usando APENAS estas categorias fixas:
+     [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados, Outros]
+   - Use "Outros" somente em último caso, quando o produto realmente não pertence a nenhuma dessas categorias.
+   - Produtos comuns de mercado devem sempre ser classificados corretamente:
+     • Achocolatado → Bebidas ou Mercearia
+     • Extrato de tomate → Mercearia  
+     • Frutas, verduras, legumes → Hortifruti
+   - TODOS os itens DEVEM ter uma categoria obrigatoriamente.
+   - O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
+   - NUNCA truncar ou cortar no meio - incluir TODOS os itens da nota.
 
-Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
-
-Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
-• JAMAIS altere marcas ou nomes originais.
-• NUNCA inclua quantidade comprada na descrição (a quantidade vai no campo separado "quantidade").
-• Remova espaços duplicados entre palavras.
-• Organize na ordem: Nome + Marca/Variedade + Peso/Volume + Extra (Granel, Corte, etc.).
-• SEMPRE preserve peso/volume/medidas da embalagem (350g, 535g, 1L, 2kg, 170g, etc.).
-• Corrija apenas ortografia, acentuação e capitalização de erros de extração.
-• NÃO invente ou troque nomes/marcas, apenas limpe e organize o que está no texto original.
-
-NÃO altere números, quantidades, CNPJs ou chaves de acesso.
-
-Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
-
-Categorize cada item usando APENAS estas categorias fixas:
-[Hortifruti, Bebidas, Mercearia, Açougue, Padaria, Laticínios/Frios, Limpeza, Higiene/Farmácia, Congelados, PET, Outros]
-
-Use "Outros" somente em último caso, quando o produto realmente não pertence a nenhuma das categorias acima.
-
-TODOS os itens DEVEM ter uma categoria obrigatoriamente.
-
-O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
-
-NUNCA truncar ou cortar no meio – incluir TODOS os itens da nota.
-
-Estrutura OBRIGATÓRIA do retorno (quando for nota fiscal de produtos):
-
+3. Estrutura OBRIGATÓRIA do retorno:
+\`\`\`json
 {
-  "isNotaFiscalProdutos": true,
   "estabelecimento": {
     "nome": "...",
     "cnpj": "...", 
@@ -215,16 +185,12 @@ Estrutura OBRIGATÓRIA do retorno (quando for nota fiscal de produtos):
     }
   ]
 }
+\`\`\`
 
-Texto da DANFE: ${textoLimpo}
+Texto da DANFE:
+${textoLimpo}
 
 Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANTA que o JSON seja válido e contenha TODOS os itens da nota.`;
-
-    // 📝 REGISTRAR PROMPT COMPLETO enviado para a IA (mascarando dados sensíveis)
-    console.log("📝 PROMPT COMPLETO enviado para IA:");
-    console.log("=".repeat(80));
-    console.log(mascarDadosSensiveis(aiPrompt));
-    console.log("=".repeat(80));
 
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -239,8 +205,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           { role: 'user', content: aiPrompt }
         ],
         max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
-        temperature: 0.1,
-        response_format: { type: "json_object" } // Forçar saída JSON válida
+        temperature: 0.1
       }),
     });
 
@@ -272,167 +237,6 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
-
-      // 🔍 VERIFICAR VEREDITO DA IA ANTES DE QUALQUER VALIDAÇÃO
-      if (dadosEstruturados.hasOwnProperty('isNotaFiscalProdutos')) {
-        if (dadosEstruturados.isNotaFiscalProdutos === false) {
-          console.log("❌ IA determinou que não é nota fiscal de produtos:", dadosEstruturados.motivo);
-          
-          // Excluir arquivo do storage
-          const { error: deleteError } = await supabase.storage
-            .from('receipts')
-            .remove([pdfUrl.split('/receipts/')[1]]);
-          
-          if (deleteError) {
-            console.error("❌ Erro ao excluir arquivo:", deleteError);
-          } else {
-            console.log("🗑️ Arquivo excluído do storage");
-          }
-          
-          // Excluir registro do banco
-          await supabase
-            .from('notas_imagens')
-            .delete()
-            .eq('id', notaImagemId);
-          
-          return new Response(JSON.stringify({
-            success: false,
-            error: "INVALID_RECEIPT",
-            message: dadosEstruturados.motivo || "Este arquivo não é uma nota fiscal de produtos."
-          }), { 
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
-        
-        if (dadosEstruturados.isNotaFiscalProdutos === true) {
-          console.log("✅ IA confirmou que é nota fiscal de produtos válida");
-        } else {
-          console.log("⚠️ Campo isNotaFiscalProdutos indefinido - prosseguindo com validação robusta");
-        }
-      } else {
-        console.log("⚠️ Campo isNotaFiscalProdutos ausente - prosseguindo com validação robusta");
-      }
-
-      // 🔍 PONTO DE DECISÃO: Validar se é nota fiscal de produtos válida
-      console.log("🔍 Validando se é nota fiscal de produtos...");
-      
-      // Normalizar texto para análise
-      const textoCompleto = textoLimpo.toLowerCase()
-        .replace(/\s+/g, ' ')
-        .replace(/[^\w\d\s]/g, ' ');
-      
-      // === GRUPO 1: Identificador Fiscal ===
-      let g1_identificador = false;
-      let chaveDetectada = '';
-      
-      // Buscar chave de acesso (44 dígitos, aceitar com espaços/pontos/quebras)
-      const textoNumerico = textoLimpo.replace(/[^\d]/g, '');
-      const chaveMatch = textoNumerico.match(/\d{44}/);
-      if (chaveMatch) {
-        g1_identificador = true;
-        chaveDetectada = chaveMatch[0].substring(0, 6) + '...' + chaveMatch[0].substring(38); // Mascarar
-      }
-      
-      // Buscar URL/QR SEFAZ
-      if (!g1_identificador) {
-        const urlSefazMatch = textoCompleto.match(/sefaz|fazenda.*gov.*br|nfce.*consulta/);
-        const qrParamMatch = textoCompleto.match(/p=\d{44}/);
-        if (urlSefazMatch && qrParamMatch) {
-          g1_identificador = true;
-          chaveDetectada = 'QR SEFAZ detectado';
-        }
-      }
-      
-      // === GRUPO 2: Metadados do Documento ===
-      const temCNPJ = dadosEstruturados.estabelecimento?.cnpj && 
-                      dadosEstruturados.estabelecimento.cnpj.replace(/[^\d]/g, '').length >= 14;
-      const temNomeEstabelecimento = dadosEstruturados.estabelecimento?.nome && 
-                                    dadosEstruturados.estabelecimento.nome.trim().length > 0;
-      const temDataEmissao = dadosEstruturados.compra?.data_emissao && 
-                            dadosEstruturados.compra.data_emissao.trim().length > 0;
-      const temTotal = dadosEstruturados.compra?.valor_total && dadosEstruturados.compra.valor_total > 0;
-      
-      const g2_metadados = temCNPJ && temDataEmissao && temTotal;
-      
-      // === GRUPO 3: Itens de Produtos ===
-      const temItens = dadosEstruturados.itens && 
-                       Array.isArray(dadosEstruturados.itens) && 
-                       dadosEstruturados.itens.length > 0 &&
-                       dadosEstruturados.itens.some(item => 
-                         item.descricao && item.descricao.trim().length > 0 &&
-                         item.quantidade && item.quantidade > 0 &&
-                         (item.valor_unitario !== undefined || item.valor_total !== undefined)
-                       );
-      
-      const g3_itens = temItens;
-      
-      // === REGRAS DE EXCLUSÃO IMEDIATA ===
-      const textoParaExclusao = textoCompleto + ' ' + JSON.stringify(dadosEstruturados).toLowerCase();
-      const temNFSe = /nfs-e|imposto sobre serviços|iss|prestação de serviços|serviço prestado/i.test(textoParaExclusao);
-      const semIndicativoFiscal = !g1_identificador && !g2_metadados && !g3_itens;
-      
-      // === VALIDAÇÃO N-de-M (2 de 3 grupos) ===
-      const gruposAtendidos = [g1_identificador, g2_metadados, g3_itens].filter(Boolean).length;
-      const isNotaFiscalProdutos = gruposAtendidos >= 2 && !temNFSe && !semIndicativoFiscal;
-      
-      const reason = isNotaFiscalProdutos 
-        ? `Válida: ${gruposAtendidos}/3 grupos atendidos`
-        : temNFSe 
-          ? 'Rejeitada: documento de serviços (NFS-e)'
-          : semIndicativoFiscal
-            ? 'Rejeitada: sem indicativos fiscais'
-            : `Rejeitada: apenas ${gruposAtendidos}/3 grupos atendidos`;
-      
-      console.log("🔍 Validação robusta da nota fiscal:");
-      console.log(`   === GRUPO 1 - Identificador Fiscal: ${g1_identificador} ===`);
-      console.log(`   - Chave detectada: ${chaveDetectada || 'Não encontrada'}`);
-      console.log(`   === GRUPO 2 - Metadados: ${g2_metadados} ===`);
-      console.log(`   - CNPJ válido: ${temCNPJ}`);
-      console.log(`   - Nome estabelecimento: ${temNomeEstabelecimento}`);
-      console.log(`   - Data emissão: ${temDataEmissao}`);
-      console.log(`   - Valor total: ${temTotal}`);
-      console.log(`   === GRUPO 3 - Itens: ${g3_itens} ===`);
-      console.log(`   - Itens válidos: ${temItens}`);
-      console.log(`   === EXCLUSÕES ===`);
-      console.log(`   - Tem NFS-e: ${temNFSe}`);
-      console.log(`   - Sem indicativo fiscal: ${semIndicativoFiscal}`);
-      console.log(`   === RESULTADO ===`);
-      console.log(`   - Grupos atendidos: ${gruposAtendidos}/3`);
-      console.log(`   - É nota fiscal de produtos: ${isNotaFiscalProdutos}`);
-      console.log(`   - Motivo: ${reason}`);
-      
-      if (!isNotaFiscalProdutos) {
-        console.log("❌ Arquivo não é uma nota fiscal de produtos válida");
-        
-        // Excluir arquivo do storage
-        const { error: deleteError } = await supabase.storage
-          .from('receipts')
-          .remove([pdfUrl.split('/receipts/')[1]]);
-        
-        if (deleteError) {
-          console.error("❌ Erro ao excluir arquivo:", deleteError);
-        } else {
-          console.log("🗑️ Arquivo excluído do storage");
-        }
-        
-        // Excluir registro do banco
-        await supabase
-          .from('notas_imagens')
-          .delete()
-          .eq('id', notaImagemId);
-        
-        return new Response(JSON.stringify({
-          success: false,
-          error: "INVALID_RECEIPT",
-          message: "Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento."
-        }), { 
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-      
-      console.log("✅ Nota fiscal de produtos validada - prosseguindo com o processamento");
 
       // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
