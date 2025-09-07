@@ -249,7 +249,33 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     // 🔍 Verificar validação da nota (apenas se não for processamento forçado)
     if (!forceProcess) {
       if (respostaIA.includes('NOTA_INVÁLIDA')) {
-        return new Response(JSON.stringify({ 
+        // 🗑️ EXCLUIR arquivo de serviço automaticamente
+        try {
+          const { data: notaImagemData } = await supabase
+            .from('notas_imagens')
+            .select('imagem_path')
+            .eq('id', notaImagemId)
+            .single();
+          
+          if (notaImagemData?.imagem_path) {
+            console.log('🗑️ Excluindo arquivo de serviço:', notaImagemData.imagem_path);
+            await supabase.storage
+              .from('receipts')
+              .remove([notaImagemData.imagem_path]);
+          }
+          
+          // Excluir registro da tabela notas_imagens
+          await supabase
+            .from('notas_imagens')
+            .delete()
+            .eq('id', notaImagemId);
+            
+          console.log('✅ Arquivo de serviço excluído automaticamente');
+        } catch (deleteError) {
+          console.error('⚠️ Erro ao excluir arquivo de serviço:', deleteError);
+        }
+        
+        return new Response(JSON.stringify({
           success: false,
           error: 'NOTA_INVALIDA',
           message: 'Esta nota fiscal não é de estabelecimento de consumo (supermercado, farmácia, etc.) ou contém apenas serviços. O Picotinho é focado em compras de consumo.'
@@ -526,6 +552,32 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           // Se for erro de chave duplicada, retornar mensagem específica
           if (errorCompra.code === '23505' && errorCompra.message.includes('unique_chave_acesso')) {
             console.log('❌ Erro de chave de acesso duplicada detectado');
+            // 🗑️ EXCLUIR arquivo duplicado automaticamente
+            try {
+              const { data: notaImagemData } = await supabase
+                .from('notas_imagens')
+                .select('imagem_path')
+                .eq('id', notaImagemId)
+                .single();
+              
+              if (notaImagemData?.imagem_path) {
+                console.log('🗑️ Excluindo arquivo duplicado:', notaImagemData.imagem_path);
+                await supabase.storage
+                  .from('receipts')
+                  .remove([notaImagemData.imagem_path]);
+              }
+              
+              // Excluir registro da tabela notas_imagens
+              await supabase
+                .from('notas_imagens')
+                .delete()
+                .eq('id', notaImagemId);
+                
+              console.log('✅ Arquivo duplicado excluído automaticamente');
+            } catch (deleteError) {
+              console.error('⚠️ Erro ao excluir arquivo duplicado:', deleteError);
+            }
+            
             return new Response(
               JSON.stringify({ 
                 success: false,

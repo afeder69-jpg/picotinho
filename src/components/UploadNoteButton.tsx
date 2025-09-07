@@ -254,91 +254,83 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           console.log('=== REGISTRO SALVO COM SUCESSO ===', notaData);
           successfulUploads++;
 
-          // Processar arquivo baseado no tipo
-          if (file.type.startsWith('image/')) {
-            // Para imagens, processar diretamente com IA
-            try {
-              const response = await supabase.functions.invoke('process-receipt-full', {
+          // 🔄 FLUXO AUTOMÁTICO: Disparar processamento IA imediatamente após upload
+          try {
+            let processResponse;
+            
+            // Determinar qual função usar baseado no tipo de arquivo
+            if (isPdf) {
+              console.log('📄 Processando PDF diretamente...');
+              processResponse = await supabase.functions.invoke('process-danfe-pdf', {
+                body: {
+                  pdfUrl: urlData.publicUrl,
+                  notaImagemId: notaData.id,
+                  userId: currentUser.id
+                }
+              });
+            } else {
+              console.log('🖼️ Processando imagem...');
+              processResponse = await supabase.functions.invoke('process-receipt-full', {
                 body: {
                   notaImagemId: notaData.id,
                   imageUrl: urlData.publicUrl,
                   qrUrl: null
                 }
               });
-
-              if (response.error) {
-                console.error('Erro no processamento IA:', response.error);
-                
-                // Verificar se é uma nota duvidosa que precisa de confirmação
-                if (response.error.error === 'NOTA_DUVIDOSA' && response.error.requiresConfirmation) {
-                  setNotaDuvidosa({
-                    message: response.error.message,
-                    notaImagemId: response.error.notaImagemId
-                  });
-                  return; // Não mostrar toast de erro, aguardar decisão do usuário
-                } else if (response.error.error === 'NOTA_INVALIDA') {
-                  toast({
-                    title: "❌ Nota rejeitada",
-                    description: response.error.message,
-                    variant: "destructive",
-                  });
-                } else if (response.error.error === 'NOTA_DUPLICADA') {
-                  // Mensagem amigável para nota duplicada
-                  toast({
-                    title: "Nota já processada",
-                    description: "👉 Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.",
-                    variant: "destructive",
-                  });
-                } else {
-                  toast({
-                    title: "Aviso",
-                    description: `${file.name} foi salvo, mas houve erro no processamento automático`,
-                    variant: "default",
-                  });
-                }
-              }
-            } catch (processError: any) {
-              console.error('Erro no processamento IA:', processError);
-              toast({
-                title: "Aviso",
-                description: `${file.name} foi salvo, mas houve erro no processamento automático`,
-                variant: "default",
-              });
             }
-          } else if (isPdf) {
-            // Para PDFs, converter primeiro em JPG
-            try {
-              console.log('Iniciando conversão PDF para JPG...');
-              const convertResponse = await supabase.functions.invoke('convert-pdf-to-jpg', {
-                body: {
-                  notaImagemId: notaData.id,
-                  pdfUrl: urlData.publicUrl,
-                  userId: currentUser.id
-                }
-              });
 
-              if (convertResponse.error) {
-                console.error('Erro na conversão PDF:', convertResponse.error);
+            console.log('📥 Resposta do processamento:', processResponse);
+
+            // Tratamento das respostas
+            if (processResponse.error) {
+              console.error('❌ Erro no processamento IA:', processResponse.error);
+              
+              // Verificar se é uma nota duvidosa que precisa de confirmação
+              if (processResponse.error.error === 'NOTA_DUVIDOSA' && processResponse.error.requiresConfirmation) {
+                setNotaDuvidosa({
+                  message: processResponse.error.message,
+                  notaImagemId: processResponse.error.notaImagemId
+                });
+                return; // Não mostrar toast de erro, aguardar decisão do usuário
+              } else if (processResponse.error.error === 'NOTA_INVALIDA') {
+                // 🚫 Nota de serviço ou inválida - arquivo já foi excluído automaticamente
                 toast({
-                  title: "Aviso",
-                  description: `PDF ${file.name} foi salvo, mas houve erro na conversão para JPG`,
-                  variant: "default",
+                  title: "❌ Nota rejeitada",
+                  description: processResponse.error.message,
+                  variant: "destructive",
+                });
+              } else if (processResponse.error.error === 'NOTA_DUPLICADA') {
+                // 🔄 Nota duplicada - arquivo já foi excluído automaticamente
+                toast({
+                  title: "Nota já processada",
+                  description: "👉 Essa nota fiscal já foi processada pelo Picotinho e não pode ser lançada novamente.",
+                  variant: "destructive",
                 });
               } else {
-                console.log('PDF convertido com sucesso:', convertResponse.data);
                 toast({
-                  title: "PDF Convertido",
-                  description: `PDF pronto para processamento com IA (${convertResponse.data?.convertedImages?.length || 0} página(s))`,
+                  title: "❌ Erro ao processar nota",
+                  description: processResponse.error.message || `Erro no processamento de ${file.name}`,
+                  variant: "destructive",
                 });
               }
-            } catch (convertError) {
-              console.error('Erro na conversão PDF:', convertError);
-              toast({
-                title: "Aviso",
-                description: `PDF ${file.name} foi salvo, mas houve erro na conversão`,
-                variant: "default",
-              });
+            } else if (processResponse.data) {
+              // ✅ Processamento bem sucedido
+              console.log('✅ Processamento concluído:', processResponse.data);
+              if (processResponse.data.success) {
+                toast({
+                  title: "✅ Nota fiscal processada",
+                  description: `${file.name} foi processada com sucesso pelo Picotinho`,
+                });
+              }
             }
+            
+          } catch (processError: any) {
+            console.error('💥 Erro crítico no processamento:', processError);
+            toast({
+              title: "❌ Erro ao processar nota",
+              description: `Falha no processamento de ${file.name}: ${processError.message}`,
+              variant: "destructive",
+            });
           }
         } catch (fileError) {
           console.error(`ERRO GERAL NO ARQUIVO ${file.name}:`, fileError);
