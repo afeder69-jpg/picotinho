@@ -3,10 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Upload, Loader2, Wrench } from 'lucide-react';
+import { Upload, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { executarCorrecaoChaves } from '@/utils/correcaoChaves';
 
 // Função para normalizar nomes de arquivos
 const normalizeFileName = (fileName: string): string => {
@@ -49,7 +48,6 @@ interface UploadNoteButtonProps {
 const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
   const [uploading, setUploading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isFixing, setIsFixing] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -394,57 +392,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
     }
   };
 
-  const handleCorrecaoChaves = async () => {
-    setIsFixing(true);
-    try {
-      const result = await executarCorrecaoChaves();
-      
-      if (result.success) {
-        toast({
-          title: "✅ Correção Concluída",
-          description: `${result.chavesEncontradas || 0} chaves de acesso foram extraídas e salvas de ${result.notasProcessadas || 0} notas processadas.`,
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "❌ Erro na Correção", 
-          description: result.error || "Erro desconhecido",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "❌ Erro na Correção",
-        description: "Erro ao executar correção de chaves",
-        variant: "destructive",
-      });
-    } finally {
-      setIsFixing(false);
-    }
-  };
-
   return (
-    <div className="space-y-2">
-      <Button
-        onClick={handleCorrecaoChaves}
-        disabled={isFixing || !user}
-        variant="outline"
-        size="sm"
-        className="w-full"
-      >
-        {isFixing ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Corrigindo chaves...
-          </>
-        ) : (
-          <>
-            <Wrench className="mr-2 h-4 w-4" />
-            Corrigir Chaves de Acesso
-          </>
-        )}
-      </Button>
-    
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
         <Button 
@@ -490,7 +438,6 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
         </div>
       </DialogContent>
     </Dialog>
-    </div>
   );
 };
 
