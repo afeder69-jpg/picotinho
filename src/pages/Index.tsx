@@ -70,7 +70,7 @@ const Index = () => {
           {/* Mascote do Picotinho */}
           <div className="flex justify-center">
             <img 
-              src="/lovable-uploads/001d78d6-0621-4eee-a7c8-d55416f88f4f.png" 
+              src="/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png" 
               alt="Mascote Picotinho" 
               className="w-32 h-32 object-contain"
             />
