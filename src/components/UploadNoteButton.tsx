@@ -287,12 +287,12 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
 
             const validationResult = validationResponse.data;
             
-            // Se não foi aprovado, mostrar mensagem e parar
+            // Se não foi aprovado, mostrar mensagem específica e parar
             if (!validationResult.approved) {
               console.log('❌ Documento rejeitado:', validationResult.reason);
               toast({
                 title: validationResult.message,
-                description: "",
+                description: "O arquivo foi automaticamente removido.",
                 variant: "destructive",
               });
               continue;

@@ -86,76 +86,136 @@ Responda APENAS o JSON:
     let analysisText = '';
     
     if (pdfUrl) {
-      // Para PDF, extrair texto primeiro
-      const pdfResponse = await fetch(pdfUrl);
-      const pdfBuffer = await pdfResponse.arrayBuffer();
+      // Para PDF, fazer análise direta via OpenAI Vision (não precisa extrair texto)
+      console.log('Analisando PDF via OpenAI Vision:', pdfUrl);
       
-      // Converter PDF para imagem para análise por IA (simplificado)
-      // Por agora, vamos usar a análise direta via OpenAI
-      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content: validationPrompt
-            },
-            {
-              role: 'user',
-              content: 'Este é um arquivo PDF. Analise o documento seguindo as instruções.'
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.1
-        }),
-      });
+      try {
+        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'system',
+                content: validationPrompt
+              },
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Analise este documento PDF seguindo as instruções. Se conseguir identificar o tipo de documento, formato e conteúdo, responda com o JSON apropriado:'
+                  },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: pdfUrl
+                    }
+                  }
+                ]
+              }
+            ],
+            max_tokens: 500,
+            temperature: 0.1
+          }),
+        });
 
-      const openaiResult = await openaiResponse.json();
-      analysisText = openaiResult.choices[0]?.message?.content || '{}';
+        if (!openaiResponse.ok) {
+          throw new Error(`OpenAI Error: ${openaiResponse.status} ${openaiResponse.statusText}`);
+        }
+
+        const openaiResult = await openaiResponse.json();
+        analysisText = openaiResult.choices[0]?.message?.content || '{}';
+        
+        console.log('OpenAI resposta para PDF:', analysisText);
+        
+      } catch (pdfError) {
+        console.error('Erro ao analisar PDF:', pdfError);
+        // Fallback: assumir que é um documento não reconhecido
+        analysisText = JSON.stringify({
+          approved: false,
+          reason: 'erro_analise_pdf',
+          chave_encontrada: null,
+          setor_inferido: 'desconhecido',
+          tem_sinais_compra: false,
+          eh_nfse: false
+        });
+      }
       
     } else if (imageUrl) {
       // Para imagem, análise via visão
-      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content: validationPrompt
-            },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Analise esta imagem de documento seguindo as instruções:'
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: imageUrl
+      console.log('Analisando imagem via OpenAI Vision:', imageUrl);
+      
+      try {
+        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'system',
+                content: validationPrompt
+              },
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Analise esta imagem de documento seguindo as instruções:'
+                  },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: imageUrl
+                    }
                   }
-                }
-              ]
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.1
-        }),
-      });
+                ]
+              }
+            ],
+            max_tokens: 500,
+            temperature: 0.1
+          }),
+        });
 
-      const openaiResult = await openaiResponse.json();
-      analysisText = openaiResult.choices[0]?.message?.content || '{}';
+        if (!openaiResponse.ok) {
+          throw new Error(`OpenAI Error: ${openaiResponse.status} ${openaiResponse.statusText}`);
+        }
+
+        const openaiResult = await openaiResponse.json();
+        analysisText = openaiResult.choices[0]?.message?.content || '{}';
+        
+        console.log('OpenAI resposta para imagem:', analysisText);
+        
+      } catch (imageError) {
+        console.error('Erro ao analisar imagem:', imageError);
+        // Fallback: assumir que é um documento não reconhecido
+        analysisText = JSON.stringify({
+          approved: false,
+          reason: 'erro_analise_imagem',
+          chave_encontrada: null,
+          setor_inferido: 'desconhecido',
+          tem_sinais_compra: false,
+          eh_nfse: false
+        });
+      }
+    } else {
+      // Nem PDF nem imagem fornecidos
+      analysisText = JSON.stringify({
+        approved: false,
+        reason: 'arquivo_nao_fornecido',
+        chave_encontrada: null,
+        setor_inferido: 'desconhecido',
+        tem_sinais_compra: false,
+        eh_nfse: false
+      });
     }
 
     console.log('Resposta IA análise:', analysisText);
@@ -222,6 +282,20 @@ Responda APENAS o JSON:
         shouldDelete: true,
         message: '❌ Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento.'
       };
+    } else if (analysis.reason === 'erro_analise_pdf' || analysis.reason === 'erro_analise_imagem') {
+      result = {
+        approved: false,
+        reason: 'erro_analise',
+        shouldDelete: true,
+        message: '❌ Não foi possível analisar este documento. Verifique se o arquivo está legível e tente novamente.'
+      };
+    } else if (analysis.reason === 'arquivo_nao_fornecido') {
+      result = {
+        approved: false,
+        reason: 'arquivo_invalido',
+        shouldDelete: true,
+        message: '❌ Arquivo inválido. Envie uma imagem ou PDF de nota fiscal.'
+      };
     } else if (!analysis.approved) {
       result = {
         approved: false,
@@ -234,7 +308,7 @@ Responda APENAS o JSON:
         approved: true,
         reason: 'aprovada',
         shouldDelete: false,
-        message: 'Documento aprovado para processamento'
+        message: '✅ Documento aprovado para processamento'
       };
     }
 
