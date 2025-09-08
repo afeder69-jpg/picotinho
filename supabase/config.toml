@@ -1,5 +1,8 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
+[functions.validate-receipt]
+verify_jwt = false
+
 [functions.process-receipt]
 verify_jwt = false
 

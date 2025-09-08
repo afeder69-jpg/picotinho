@@ -257,19 +257,59 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           
           successfulUploads++;
 
-          // Iniciar processamento automático baseado no tipo de arquivo
+          // IA-1: Validação da Nota (NOVA ETAPA)
           console.log('⚡ Processando IA');
           toast({
             title: "⚡ Processando IA",
-            description: "Analisando os dados da nota fiscal...",
+            description: "Validando documento...",
           });
           
           try {
-            let response;
+            // Primeira etapa: Validação
+            const validationResponse = await supabase.functions.invoke('validate-receipt', {
+              body: {
+                notaImagemId: notaData.id,
+                imageUrl: isPdf ? null : urlData.publicUrl,
+                pdfUrl: isPdf ? urlData.publicUrl : null,
+                userId: currentUser.id
+              }
+            });
+
+            if (validationResponse.error) {
+              console.log('❌ Erro no processamento: ' + (validationResponse.error.message || 'Erro desconhecido'));
+              toast({
+                title: "❌ Erro no processamento",
+                description: validationResponse.error.message || 'Erro desconhecido no processamento',
+                variant: "destructive",
+              });
+              continue;
+            }
+
+            const validationResult = validationResponse.data;
+            
+            // Se não foi aprovado, mostrar mensagem e parar
+            if (!validationResult.approved) {
+              console.log('❌ Documento rejeitado:', validationResult.reason);
+              toast({
+                title: validationResult.message,
+                description: "",
+                variant: "destructive",
+              });
+              continue;
+            }
+
+            // IA-2: Processamento da Nota (ETAPA EXISTENTE)
+            console.log('⚡ Processando IA - Fase 2');
+            toast({
+              title: "⚡ Processando IA",
+              description: "Extraindo dados da nota fiscal...",
+            });
+
+            let processResponse;
             
             if (isPdf) {
               // Para PDFs, usar process-danfe-pdf
-              response = await supabase.functions.invoke('process-danfe-pdf', {
+              processResponse = await supabase.functions.invoke('process-danfe-pdf', {
                 body: {
                   notaImagemId: notaData.id,
                   pdfUrl: urlData.publicUrl,
@@ -278,7 +318,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               });
             } else {
               // Para imagens, usar process-receipt-full
-              response = await supabase.functions.invoke('process-receipt-full', {
+              processResponse = await supabase.functions.invoke('process-receipt-full', {
                 body: {
                   notaImagemId: notaData.id,
                   imageUrl: urlData.publicUrl,
@@ -287,11 +327,11 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               });
             }
 
-            if (response.error) {
-              console.log('❌ Erro no processamento: ' + (response.error.message || 'Erro desconhecido'));
+            if (processResponse.error) {
+              console.log('❌ Erro no processamento: ' + (processResponse.error.message || 'Erro desconhecido'));
               toast({
                 title: "❌ Erro no processamento",
-                description: response.error.message || 'Erro desconhecido no processamento',
+                description: processResponse.error.message || 'Erro desconhecido no processamento',
                 variant: "destructive",
               });
             } else {
