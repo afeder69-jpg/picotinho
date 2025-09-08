@@ -285,20 +285,21 @@ Responda APENAS o JSON:
         .replace(/B/g, '8');
 
       if (normalizedKey.length === 44) {
-        console.log('Verificando duplicidade para chave:', normalizedKey);
+        console.log('Verificando duplicidade GLOBAL para chave:', normalizedKey);
 
-        // Buscar por chave de acesso exata
+        // BUSCAR EM TODAS AS NOTAS DE TODOS OS USUÁRIOS (verificação global)
         const { data: existingNotes } = await supabase
           .from('notas_imagens')
-          .select('id, created_at')
+          .select('id, created_at, usuario_id')
           .or(`dados_extraidos->chave_acesso.eq."${normalizedKey}",dados_extraidos->>chave_acesso.eq."${normalizedKey}"`)
           .neq('id', notaImagemId); // Excluir a própria nota
 
-        console.log('Resultado busca duplicata:', existingNotes);
+        console.log('Resultado busca duplicata GLOBAL:', existingNotes);
         isDuplicate = existingNotes && existingNotes.length > 0;
         
         if (isDuplicate) {
-          console.log('⚠️ DUPLICATA DETECTADA! Chave já existe:', normalizedKey.slice(-6));
+          console.log('⚠️ DUPLICATA DETECTADA GLOBALMENTE! Chave já existe:', normalizedKey.slice(-6));
+          console.log('📊 Encontrada em:', existingNotes.length, 'registro(s) de outros usuários');
         }
       }
     }
@@ -311,7 +312,7 @@ Responda APENAS o JSON:
         approved: false,
         reason: 'duplicada',
         shouldDelete: true,
-        message: '❌ Esta nota já foi cadastrada no Picotinho.'
+        message: '❌ NOTA FISCAL JÁ LANÇADA NO PICOTINHO! Esta nota fiscal já foi cadastrada por outro usuário no sistema.'
       };
     } else if (analysis.eh_nfse) {
       result = {

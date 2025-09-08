@@ -21,12 +21,12 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🔧 Iniciando correção de chaves de acesso em notas existentes...');
+    console.log('🔧 Iniciando correção GLOBAL de chaves de acesso em notas existentes...');
 
-    // Buscar todas as notas processadas sem chave de acesso
+    // Buscar TODAS as notas processadas sem chave de acesso (TODOS OS USUÁRIOS)
     const { data: notasSemChave, error } = await supabase
       .from('notas_imagens')
-      .select('id, dados_extraidos, imagem_url')
+      .select('id, dados_extraidos, imagem_url, usuario_id')
       .eq('processada', true)
       .is('dados_extraidos->chave_acesso', null);
 
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`📝 Encontradas ${notasSemChave.length} notas sem chave de acesso`);
+    console.log(`📝 Encontradas ${notasSemChave.length} notas sem chave de acesso (TODOS OS USUÁRIOS)`);
 
     let processadas = 0;
     let comChaveEncontrada = 0;
