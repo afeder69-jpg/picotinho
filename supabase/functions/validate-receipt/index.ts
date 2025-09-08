@@ -361,6 +361,33 @@ Responda APENAS o JSON:
       isDuplicate
     });
 
+    // CORREÇÃO CRÍTICA: Salvar chave de acesso encontrada no banco de dados
+    if (result.approved && analysis.chave_encontrada) {
+      console.log('💾 Salvando chave de acesso encontrada no banco de dados');
+      
+      // Buscar dados extraídos atuais
+      const { data: notaAtual } = await supabase
+        .from('notas_imagens')
+        .select('dados_extraidos')
+        .eq('id', notaImagemId)
+        .single();
+      
+      if (notaAtual?.dados_extraidos) {
+        // Atualizar dados extraídos com a chave de acesso
+        const dadosAtualizados = {
+          ...notaAtual.dados_extraidos,
+          chave_acesso: analysis.chave_encontrada
+        };
+        
+        await supabase
+          .from('notas_imagens')
+          .update({ dados_extraidos: dadosAtualizados })
+          .eq('id', notaImagemId);
+        
+        console.log('✅ Chave de acesso salva com sucesso:', analysis.chave_encontrada.slice(-6));
+      }
+    }
+
     // Se deve deletar, remover arquivo e registro
     if (result.shouldDelete) {
       // Buscar dados da nota para remover arquivo
