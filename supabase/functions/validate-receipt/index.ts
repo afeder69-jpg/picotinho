@@ -19,6 +19,36 @@ interface ValidationResult {
   message: string;
 }
 
+// Função para extrair texto de PDF (mesma implementação da IA-2)
+async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
+  try {
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
+    
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
+    let extractedText = "";
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      extractedText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
+    }
+    
+    return extractedText.trim();
+  } catch (error) {
+    console.error("❌ Erro ao extrair texto do PDF:", error);
+    // Fallback: tentar extrair texto simples usando regex
+    const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
+    const regex = /\(([^)]+)\)/g;
+    let extractedText = "";
+    let match;
+    while ((match = regex.exec(pdfString)) !== null) {
+      extractedText += match[1] + " ";
+    }
+    return extractedText.trim();
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -45,9 +75,8 @@ Deno.serve(async (req) => {
       hasPdf: !!pdfUrl
     });
 
-    // Preparar prompt para análise
-    const validationPrompt = `
-Analise este documento e responda APENAS com um JSON no formato especificado.
+    // Preparar prompt para análise (baseado na IA-2)
+    const validationPrompt = `Analise este documento e responda APENAS com um JSON no formato especificado.
 
 VOCÊ DEVE ANALISAR:
 1. CHAVE DE ACESSO: Procure por sequência de 44 dígitos (pode ter espaços, pontos, quebras). Normalize: O→0, I/l→1, B→8.
@@ -86,20 +115,23 @@ Responda APENAS o JSON:
     let analysisText = '';
     
     if (pdfUrl) {
-      // Para PDF, usar modelo de texto mais recente
-      console.log('Analisando PDF via modelo de texto:', pdfUrl);
+      // Para PDF, usar extração de texto igual à IA-2
+      console.log('Processando PDF como na IA-2:', pdfUrl);
       
       try {
-        // Primeiro, baixar o PDF para análise
-        const pdfResponse = await fetch(pdfUrl);
-        if (!pdfResponse.ok) {
-          throw new Error(`Erro ao baixar PDF: ${pdfResponse.status}`);
+        // Baixar PDF e extrair texto
+        const resp = await fetch(pdfUrl);
+        if (!resp.ok) throw new Error(`Falha ao baixar PDF: ${resp.status}`);
+        const buffer = await resp.arrayBuffer();
+        
+        const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
+        console.log('Texto extraído do PDF:', extractedText.substring(0, 500) + '...');
+        
+        if (!extractedText || extractedText.length < 50) {
+          throw new Error('PDF não contém texto suficiente');
         }
         
-        // Para PDFs, vamos assumir que a maioria dos arquivos enviados são notas fiscais válidas
-        // e fazer uma validação mais simples baseada na URL e contexto
-        console.log('PDF encontrado, assumindo como documento válido para análise posterior');
-        
+        // Usar modelo de texto para analisar o conteúdo extraído
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -111,28 +143,11 @@ Responda APENAS o JSON:
             messages: [
               {
                 role: 'system',
-                content: `Você é um validador de documentos fiscais. Analise o contexto fornecido e determine se é uma nota fiscal de produtos.
-
-REGRAS:
-- Se é um PDF de nota fiscal (DANFE, Cupom Fiscal, etc.) = APROVAR
-- Se é NFS-e ou documento de serviços = REJEITAR
-- Se não conseguir determinar = APROVAR (deixar para próxima etapa)
-
-Responda APENAS com JSON:
-{
-  "approved": boolean,
-  "reason": "string",
-  "chave_encontrada": null,
-  "setor_inferido": "supermercado",
-  "tem_sinais_compra": true,
-  "eh_nfse": boolean
-}`
+                content: validationPrompt
               },
               {
                 role: 'user',
-                content: `PDF recebido para validação. URL: ${pdfUrl}
-                
-Baseado no contexto de que este é um PDF enviado por usuário para análise de nota fiscal, determine se deve ser aprovado ou rejeitado.`
+                content: `Analise este texto extraído de PDF e determine se é uma nota fiscal de produtos válida:\n\n${extractedText}`
               }
             ],
             max_completion_tokens: 300
@@ -152,19 +167,19 @@ Baseado no contexto de que este é um PDF enviado por usuário para análise de 
         
       } catch (pdfError) {
         console.error('Erro ao analisar PDF:', pdfError);
-        // Para PDFs, assumir como válido e deixar a próxima etapa decidir
+        // Para PDFs com erro, assumir como inválido
         analysisText = JSON.stringify({
-          approved: true,
-          reason: 'pdf_assumido_valido',
+          approved: false,
+          reason: 'erro_analise_pdf',
           chave_encontrada: null,
-          setor_inferido: 'supermercado',
-          tem_sinais_compra: true,
+          setor_inferido: 'desconhecido',
+          tem_sinais_compra: false,
           eh_nfse: false
         });
       }
       
     } else if (imageUrl) {
-      // Para imagem, análise via visão
+      // Para imagem, análise via visão (igual à IA-2)
       console.log('Analisando imagem via OpenAI Vision:', imageUrl);
       
       try {
@@ -197,11 +212,13 @@ Baseado no contexto de que este é um PDF enviado por usuário para análise de 
                 ]
               }
             ],
-            max_completion_tokens: 500
+            max_completion_tokens: 300
           }),
         });
 
         if (!openaiResponse.ok) {
+          const errorText = await openaiResponse.text();
+          console.error('Erro OpenAI:', errorText);
           throw new Error(`OpenAI Error: ${openaiResponse.status} ${openaiResponse.statusText}`);
         }
 
@@ -212,7 +229,7 @@ Baseado no contexto de que este é um PDF enviado por usuário para análise de 
         
       } catch (imageError) {
         console.error('Erro ao analisar imagem:', imageError);
-        // Fallback: assumir que é um documento não reconhecido
+        // Para imagens com erro, assumir como inválido
         analysisText = JSON.stringify({
           approved: false,
           reason: 'erro_analise_imagem',
@@ -386,4 +403,4 @@ Baseado no contexto de que este é um PDF enviado por usuário para análise de 
       }
     );
   }
-});
+})
