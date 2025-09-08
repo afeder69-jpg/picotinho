@@ -285,16 +285,21 @@ Responda APENAS o JSON:
         .replace(/B/g, '8');
 
       if (normalizedKey.length === 44) {
-        console.log('Verificando duplicidade para chave:', normalizedKey.substring(-6)); // Log apenas últimos 6 dígitos
+        console.log('Verificando duplicidade para chave:', normalizedKey);
 
-        // Buscar em toda a base (todos os usuários)
-        const { data: existingNote } = await supabase
+        // Buscar por chave de acesso exata
+        const { data: existingNotes } = await supabase
           .from('notas_imagens')
-          .select('id')
-          .eq('dados_extraidos->>chave_acesso', normalizedKey)
-          .limit(1);
+          .select('id, created_at')
+          .or(`dados_extraidos->chave_acesso.eq."${normalizedKey}",dados_extraidos->>chave_acesso.eq."${normalizedKey}"`)
+          .neq('id', notaImagemId); // Excluir a própria nota
 
-        isDuplicate = existingNote && existingNote.length > 0;
+        console.log('Resultado busca duplicata:', existingNotes);
+        isDuplicate = existingNotes && existingNotes.length > 0;
+        
+        if (isDuplicate) {
+          console.log('⚠️ DUPLICATA DETECTADA! Chave já existe:', normalizedKey.slice(-6));
+        }
       }
     }
 
