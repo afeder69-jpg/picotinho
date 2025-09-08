@@ -15,7 +15,7 @@ const PicotinhoLogo = ({ size = 'md', className = '' }: PicotinhoLogoProps) => {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <img 
-        src="/lovable-uploads/001d78d6-0621-4eee-a7c8-d55416f88f4f.png" 
+        src="/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png" 
         alt="Mascote Picotinho" 
         className={`object-contain ${sizeClasses[size]}`}
       />
