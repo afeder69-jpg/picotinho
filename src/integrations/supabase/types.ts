@@ -1431,6 +1431,13 @@ export type Database = {
           quantidade: number
         }[]
       }
+      corrigir_produtos_marcados_incorretamente_como_manuais: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          detalhes: string
+          produtos_corrigidos: number
+        }[]
+      }
       diagnosticar_e_corrigir_estoque: {
         Args: { usuario_uuid: string }
         Returns: {
