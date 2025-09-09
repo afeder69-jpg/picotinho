@@ -294,9 +294,9 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               // Verificar se é duplicata para mostrar mensagem específica
               if (validationResult.reason === 'duplicada') {
                 toast({
-                  title: "📋 Nota não aceita",
+                  title: "📋 Nota já processada",
                   description: "Esta nota fiscal já consta como processada pelo PICOTINHO!",
-                  className: "bg-background border-orange-200 text-foreground",
+                  className: "bg-background border-orange-200 text-foreground text-base",
                 });
               } else {
                 toast({
