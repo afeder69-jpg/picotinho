@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical, RefreshCw } from 'lucide-react';
+import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -939,10 +939,6 @@ const EstoqueAtual = () => {
                         Diagnosticar
                       </>
                     )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={corrigirProdutosManuais}>
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Corrigir Produtos Manuais
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
