@@ -732,36 +732,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               console.error("❌ Erro ao criar item:", errorItem);
             }
 
-            // Atualizar estoque
-            const { data: estoqueExistente, error: errorBuscarEstoque } = await supabase
-              .from('estoque_app')
-              .select('id, quantidade')
-              .eq('user_id', userId)
-              .eq('produto_nome', descricao)
-              .single();
-
-            if (estoqueExistente) {
-              // Atualizar quantidade existente
-              await supabase
-                .from('estoque_app')
-                .update({
-                  quantidade: estoqueExistente.quantidade + (quantidade || 0),
-                  preco_unitario_ultimo: valor_unitario || 0
-                })
-                .eq('id', estoqueExistente.id);
-            } else {
-              // Criar novo item no estoque
-              await supabase
-                .from('estoque_app')
-                .insert({
-                  user_id: userId,
-                  produto_nome: descricao || 'Produto',
-                  categoria: categoria || 'outros',
-                  quantidade: quantidade || 0,
-                  unidade_medida: unidade || 'unidade',
-                  preco_unitario_ultimo: valor_unitario || 0
-                });
-            }
+            // ⚠️ ESTOQUE JÁ FOI ATUALIZADO NA SEÇÃO ANTERIOR
+            // Remover esta duplicação que estava causando produtos serem marcados como manuais
 
           } catch (itemError) {
             console.error("❌ Erro ao processar item:", item, itemError);
