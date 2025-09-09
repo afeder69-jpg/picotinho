@@ -290,7 +290,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             if (!validationResult.approved) {
               console.log('❌ Documento rejeitado:', validationResult.reason);
               
-              // APENAS para duplicata, mostrar mensagem amigável
+              // Para duplicata, mostrar mensagem amigável
               if (validationResult.reason === 'duplicada') {
                 console.log('🔄 MOSTRANDO MENSAGEM DE DUPLICATA:', {
                   reason: validationResult.reason,
@@ -302,9 +302,20 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   description: "Esta nota fiscal já consta como processada pelo PICOTINHO!",
                   className: "bg-background border-orange-200 text-foreground text-base",
                 });
+              } else {
+                // Para qualquer outra rejeição (documento inválido, não é nota fiscal, etc.)
+                console.log('🚫 MOSTRANDO MENSAGEM DE REJEIÇÃO:', {
+                  reason: validationResult.reason,
+                  message: validationResult.message,
+                  approved: validationResult.approved
+                });
+                toast({
+                  title: "❌ Arquivo rejeitado",
+                  description: "O PICOTINHO não aceita este tipo de arquivo ou nota!",
+                  duration: 4000,
+                  variant: "destructive",
+                });
               }
-              // Para outros tipos de rejeição, também não mostrar mensagem aqui
-              // porque pode ser confuso para o usuário
               
               // Não contar como upload bem-sucedido
               successfulUploads--;
