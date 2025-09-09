@@ -310,10 +310,10 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   approved: validationResult.approved
                 });
                 toast({
-                  title: "❌ Arquivo rejeitado",
+                  title: "🚫 Arquivo rejeitado",
                   description: "O PICOTINHO não aceita este tipo de arquivo ou nota!",
                   duration: 4000,
-                  variant: "destructive",
+                  className: "bg-background border-red-200 text-foreground font-bold",
                 });
               }
               
