@@ -303,8 +303,8 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   className: "bg-background border-orange-200 text-foreground text-base",
                 });
               }
-              // Para outros tipos de rejeição, NÃO mostrar mensagem aqui
-              // (deixar que sejam tratadas mais tarde se necessário)
+              // Para outros tipos de rejeição, também não mostrar mensagem aqui
+              // porque pode ser confuso para o usuário
               
               // Não contar como upload bem-sucedido
               successfulUploads--;
