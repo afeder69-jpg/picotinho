@@ -130,8 +130,15 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
 
 1. Estruture em JSON os dados da compra:
    • Estabelecimento (nome, cnpj, endereco)
-   • Compra (valor_total, forma_pagamento, numero, serie, data_emissao)
+   • Compra (valor_total, forma_pagamento, numero, serie, data_emissao, chave_acesso)
    • Itens (descrição corrigida, codigo, quantidade, unidade, valor_unitario, valor_total, categoria)
+
+🔑 EXTRAÇÃO DE CHAVE DE ACESSO - CRÍTICO:
+   - PROCURE e extraia a CHAVE DE ACESSO de 44 dígitos numéricos
+   - Esta chave é FUNDAMENTAL para evitar notas duplicadas
+   - Formato: 44 números seguidos (ex: 33191234567890001234567890001234567890123456)
+   - Salve no campo "chave_acesso" dentro do objeto "compra"
+   - Se não encontrar, deixe null
 
 2. Regras OBRIGATÓRIAS:
    - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
@@ -171,7 +178,8 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
     "forma_pagamento": "...",
     "numero": "...",
     "serie": "...",
-    "data_emissao": "..."
+    "data_emissao": "...",
+    "chave_acesso": "44444444444444444444444444444444444444444444"
   },
   "itens": [
     {
@@ -761,13 +769,30 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         }
       }
 
-      // Marcar nota como processada
+      // ⚡ COMANDO CRÍTICO: SALVAR CHAVE DE ACESSO DE 44 DÍGITOS PARA VERIFICAÇÃO GLOBAL
+      // A IA-1 (validate-receipt) precisa desta chave para evitar duplicatas entre TODOS os usuários
+      let chaveAcessoFinal = null;
+      if (dadosEstruturados?.chave_acesso) {
+        const chave = dadosEstruturados.chave_acesso.toString().replace(/\D/g, '');
+        if (chave.length === 44) {
+          chaveAcessoFinal = chave;
+          console.log("🔑 CHAVE DE 44 DÍGITOS DETECTADA E SERÁ SALVA:", chave.slice(-6));
+        }
+      }
+
+      // Garantir que a chave de acesso seja salva nos dados extraídos
+      if (chaveAcessoFinal) {
+        dadosEstruturados.chave_acesso = chaveAcessoFinal;
+        console.log("💾 SALVANDO CHAVE DE ACESSO NO BANCO:", chaveAcessoFinal);
+      }
+
+      // Marcar nota como processada COM chave de acesso
       await supabase
         .from("notas_imagens")
         .update({
           processada: true,
           compra_id: compraId,
-          dados_extraidos: dadosEstruturados
+          dados_extraidos: dadosEstruturados // ← CRÍTICO: Inclui a chave de 44 dígitos
         })
         .eq("id", notaImagemId);
 
