@@ -292,7 +292,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               console.log('❌ Documento rejeitado:', validationResult.reason);
               
               // Verificar se é duplicata para mostrar mensagem específica
-              if (validationResult.reason === 'duplicada') {
+              if (validationResult.reason === 'duplicata') {
                 toast({
                   title: "📋 Nota já processada",
                   description: "Esta nota fiscal já consta como processada pelo PICOTINHO!",
@@ -301,7 +301,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               } else {
                 toast({
                   title: "❌ Documento Rejeitado",
-                  description: validationResult.message || "O arquivo foi automaticamente removido.",
+                  description: "O arquivo foi automaticamente removido.",
                   variant: "destructive",
                 });
               }
