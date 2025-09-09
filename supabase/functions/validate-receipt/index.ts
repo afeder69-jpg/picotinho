@@ -316,7 +316,7 @@ Responda APENAS o JSON:
         approved: false,
         reason: 'duplicada',
         shouldDelete: true,
-        message: '❌ NOTA FISCAL JÁ LANÇADA NO PICOTINHO! Esta nota fiscal já foi cadastrada por outro usuário no sistema.'
+        message: '📋 Esta nota fiscal já consta como processada pelo PICOTINHO!'
       };
     } else if (analysis.eh_nfse) {
       result = {
