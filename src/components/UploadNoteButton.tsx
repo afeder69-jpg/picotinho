@@ -275,36 +275,36 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               }
             });
 
+            console.log('=== RESPOSTA COMPLETA DA VALIDAÇÃO ===', validationResponse);
+
             if (validationResponse.error) {
-              console.log('❌ Erro no processamento: ' + (validationResponse.error.message || 'Erro desconhecido'));
-              toast({
-                title: "❌ Erro no processamento",
-                description: validationResponse.error.message || 'Erro desconhecido no processamento',
-                variant: "destructive",
-              });
+              console.log('❌ Erro no processamento (ERROR OBJECT): ', validationResponse.error);
+              // NÃO mostrar toast aqui - pode estar duplicando
               continue;
             }
 
             const validationResult = validationResponse.data;
+            console.log('=== RESULTADO VALIDAÇÃO RECEBIDO ===', validationResult);
             
             // Se não foi aprovado, mostrar mensagem específica e parar
             if (!validationResult.approved) {
               console.log('❌ Documento rejeitado:', validationResult.reason);
               
-              // Verificar se é duplicata para mostrar mensagem específica
-              if (validationResult.reason === 'duplicata') {
+              // APENAS para duplicata, mostrar mensagem amigável
+              if (validationResult.reason === 'duplicada') {
+                console.log('🔄 MOSTRANDO MENSAGEM DE DUPLICATA:', {
+                  reason: validationResult.reason,
+                  message: validationResult.message,
+                  approved: validationResult.approved
+                });
                 toast({
                   title: "📋 Nota já processada",
                   description: "Esta nota fiscal já consta como processada pelo PICOTINHO!",
                   className: "bg-background border-orange-200 text-foreground text-base",
                 });
-              } else {
-                toast({
-                  title: "❌ Documento Rejeitado",
-                  description: "O arquivo foi automaticamente removido.",
-                  variant: "destructive",
-                });
               }
+              // Para outros tipos de rejeição, NÃO mostrar mensagem aqui
+              // (deixar que sejam tratadas mais tarde se necessário)
               
               // Não contar como upload bem-sucedido
               successfulUploads--;
