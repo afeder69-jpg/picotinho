@@ -174,46 +174,6 @@ const EstoqueAtual = () => {
     }
   };
 
-  const corrigirProdutosManuais = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase.rpc('corrigir_produtos_marcados_incorretamente_como_manuais');
-      
-      if (error) throw error;
-
-      const resultado = data?.[0];
-      if (resultado?.produtos_corrigidos > 0) {
-        toast({
-          title: "✅ Produtos corrigidos",
-          description: `${resultado.produtos_corrigidos} produtos não são mais marcados como manuais.`,
-          duration: 4000,
-        });
-        
-        // Recarregar dados
-        await Promise.all([
-          loadEstoque(),
-          loadPrecosAtuais(),
-          loadDatasNotasFiscais()
-        ]);
-      } else {
-        toast({
-          title: "ℹ️ Nenhuma correção necessária",
-          description: "Todos os produtos estão corretamente categorizados.",
-          duration: 3000,
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao corrigir produtos manuais:', error);
-      toast({
-        title: "❌ Erro na correção",
-        description: "Não foi possível corrigir os produtos. Tente novamente.",
-        duration: 4000,
-        variant: "destructive",
-      });
-    }
-  };
 
   const loadDatasNotasFiscais = async () => {
     try {
