@@ -288,10 +288,11 @@ Responda APENAS o JSON:
         console.log('Verificando duplicidade GLOBAL para chave:', normalizedKey);
 
         // BUSCAR EM TODAS AS NOTAS DE TODOS OS USUÁRIOS (verificação global)
+        // CRÍTICO: Verificar tanto no campo direto quanto no campo dentro de "compra"
         const { data: existingNotes } = await supabase
           .from('notas_imagens')
           .select('id, created_at, usuario_id')
-          .or(`dados_extraidos->chave_acesso.eq."${normalizedKey}",dados_extraidos->>chave_acesso.eq."${normalizedKey}"`)
+          .or(`dados_extraidos->chave_acesso.eq."${normalizedKey}",dados_extraidos->>chave_acesso.eq."${normalizedKey}",dados_extraidos->compra->>chave_acesso.eq."${normalizedKey}"`)
           .neq('id', notaImagemId); // Excluir a própria nota
 
         console.log('Resultado busca duplicata GLOBAL:', existingNotes);
@@ -299,7 +300,10 @@ Responda APENAS o JSON:
         
         if (isDuplicate) {
           console.log('⚠️ DUPLICATA DETECTADA GLOBALMENTE! Chave já existe:', normalizedKey.slice(-6));
-          console.log('📊 Encontrada em:', existingNotes.length, 'registro(s) de outros usuários');
+          console.log('📊 Encontrada em:', existingNotes.length, 'registro(s)');
+          console.log('🔍 IDs das notas duplicadas:', existingNotes.map(n => n.id));
+        } else {
+          console.log('✅ Chave única confirmada - não há duplicatas para:', normalizedKey.slice(-6));
         }
       }
     }

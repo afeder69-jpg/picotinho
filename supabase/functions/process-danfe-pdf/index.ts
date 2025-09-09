@@ -772,18 +772,32 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       // ⚡ COMANDO CRÍTICO: SALVAR CHAVE DE ACESSO DE 44 DÍGITOS PARA VERIFICAÇÃO GLOBAL
       // A IA-1 (validate-receipt) precisa desta chave para evitar duplicatas entre TODOS os usuários
       let chaveAcessoFinal = null;
-      if (dadosEstruturados?.chave_acesso) {
-        const chave = dadosEstruturados.chave_acesso.toString().replace(/\D/g, '');
+      
+      // Buscar chave de acesso nos dados estruturados (múltiplos locais possíveis)
+      if (dadosEstruturados?.compra?.chave_acesso) {
+        chaveAcessoFinal = dadosEstruturados.compra.chave_acesso;
+      } else if (dadosEstruturados?.chave_acesso) {
+        chaveAcessoFinal = dadosEstruturados.chave_acesso;
+      }
+      
+      if (chaveAcessoFinal) {
+        const chave = chaveAcessoFinal.toString().replace(/\D/g, '');
         if (chave.length === 44) {
           chaveAcessoFinal = chave;
           console.log("🔑 CHAVE DE 44 DÍGITOS DETECTADA E SERÁ SALVA:", chave.slice(-6));
+          
+          // Garantir que seja salva em AMBOS os locais para compatibilidade
+          dadosEstruturados.chave_acesso = chaveAcessoFinal;
+          if (!dadosEstruturados.compra) dadosEstruturados.compra = {};
+          dadosEstruturados.compra.chave_acesso = chaveAcessoFinal;
+          
+          console.log("💾 CHAVE SALVA EM AMBOS OS LOCAIS:", chaveAcessoFinal);
+        } else {
+          console.log("⚠️ Chave inválida (não tem 44 dígitos):", chave, "Tamanho:", chave.length);
+          chaveAcessoFinal = null;
         }
-      }
-
-      // Garantir que a chave de acesso seja salva nos dados extraídos
-      if (chaveAcessoFinal) {
-        dadosEstruturados.chave_acesso = chaveAcessoFinal;
-        console.log("💾 SALVANDO CHAVE DE ACESSO NO BANCO:", chaveAcessoFinal);
+      } else {
+        console.log("⚠️ NENHUMA CHAVE DE ACESSO ENCONTRADA NOS DADOS EXTRAÍDOS");
       }
 
       // Marcar nota como processada COM chave de acesso
