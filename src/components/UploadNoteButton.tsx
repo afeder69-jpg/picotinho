@@ -380,13 +380,9 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
         });
         onUploadSuccess();
         // Dialog já foi fechado no início do upload
-      } else {
-        toast({
-          title: "Erro",
-          description: "Nenhum arquivo foi enviado com sucesso",
-          variant: "destructive",
-        });
       }
+      // Não mostrar mensagem de erro genérica quando todos os arquivos foram rejeitados
+      // porque as mensagens específicas (duplicata, etc.) já foram mostradas
       
       // Limpar input
       event.target.value = '';
