@@ -23,39 +23,39 @@ const BottomNavigation = () => {
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border p-4 safe-area-inset-bottom">
-        <div className="flex justify-between items-end w-full max-w-screen-lg mx-auto gap-2 px-2">
-          {/* Botão Início - menor, verde claro */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex-col h-16 w-20 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 border border-green-200"
-            onClick={() => navigate('/')}
-          >
-            <Home className="w-5 h-5 mb-1" />
-            <span className="text-xs font-medium">Início</span>
-          </Button>
-          
-          {/* Botão Escanear QR - maior, verde forte, centralizado */}
+      {/* Botões flutuantes fixos */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
+        <div className="flex justify-between items-end w-full max-w-screen-lg mx-auto p-4 safe-area-inset-bottom">
+          {/* Botão Início - sempre presente no canto esquerdo */}
           <Button
             variant="default"
             size="lg"
-            className="flex-col h-20 w-32 rounded-xl bg-green-600 hover:bg-green-700 text-white border-0 shadow-lg"
-            onClick={openScanner}
+            className="flex-col h-16 w-16 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
+            onClick={() => navigate('/')}
           >
-            <QrCode className="w-6 h-6 mb-1" />
-            <span className="text-sm font-medium">Escanear QR</span>
+            <Home className="w-6 h-6" />
           </Button>
           
-          {/* Botão Menu - menor, verde claro */}
+          {/* Botão Escanear QR - apenas na página inicial */}
+          {location.pathname === '/' && (
+            <Button
+              variant="default"
+              size="lg"
+              className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
+              onClick={openScanner}
+            >
+              <QrCode className="w-8 h-8" />
+            </Button>
+          )}
+          
+          {/* Botão Menu - sempre presente no canto direito */}
           <Button
-            variant="ghost"
-            size="sm"
-            className="flex-col h-16 w-20 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 border border-green-200"
+            variant="default"
+            size="lg"
+            className="flex-col h-16 w-16 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
             onClick={() => navigate('/menu')}
           >
-            <Menu className="w-5 h-5 mb-1" />
-            <span className="text-xs font-medium">Menu</span>
+            <Menu className="w-6 h-6" />
           </Button>
         </div>
       </div>
