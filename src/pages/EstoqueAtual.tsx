@@ -487,6 +487,18 @@ const EstoqueAtual = () => {
 
         if (erroInsert) throw erroInsert;
 
+        // Inserir o preço atual para o produto manual
+        const { error: erroPreco } = await supabase
+          .from('precos_atuais_usuario')
+          .insert({
+            user_id: user.id,
+            produto_nome: nomeEscolhido.toUpperCase(),
+            valor_unitario: valor,
+            origem: 'manual'
+          });
+
+        if (erroPreco) throw erroPreco;
+
         toast({
           title: "Sucesso",
           description: `Produto "${nomeEscolhido}" adicionado ao estoque`,
@@ -611,11 +623,23 @@ const EstoqueAtual = () => {
              categoria: categoria || 'outros',
              unidade_medida: novoProduto.unidadeMedida,
              quantidade: quantidade,
-             preco_unitario_ultimo: valor, // Usar o valor inserido pelo usuário
+             preco_unitario_último: valor, // Usar o valor inserido pelo usuário
              origem: 'manual'
            });
 
         if (erroInsert) throw erroInsert;
+
+        // Inserir o preço atual para o produto manual
+        const { error: erroPreco } = await supabase
+          .from('precos_atuais_usuario')
+          .insert({
+            user_id: user.id,
+            produto_nome: nomeParaSalvar.toUpperCase(),
+            valor_unitario: valor,
+            origem: 'manual'
+          });
+
+        if (erroPreco) throw erroPreco;
 
         toast({
           title: "Sucesso",
