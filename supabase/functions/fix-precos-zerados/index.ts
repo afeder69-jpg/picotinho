@@ -20,19 +20,41 @@ serve(async (req) => {
     const { userId } = await req.json();
 
     if (userId) {
-      console.log(`🔧 Corrigindo preços zerados para usuário: ${userId}`);
+      console.log(`🧹 Limpeza e correção para usuário: ${userId}`);
       
-      // Correção específica para os produtos com problema
+      // ETAPA 1: REMOVER PRODUTOS FANTASMAS
+      console.log('🗑️ Removendo produtos fantasmas...');
+      
+      const produtosFantasmas = ['SACOLA PLASTICA 1UN', 'ALFACE AMERICANA 1UN'];
+      let fantasmasRemovidos = 0;
+      
+      for (const produtoNome of produtosFantasmas) {
+        const { data: removidos, error: erroRemover } = await supabase
+          .from('estoque_app')
+          .delete()
+          .eq('user_id', userId)
+          .eq('produto_nome', produtoNome)
+          .select();
+        
+        if (erroRemover) {
+          console.error(`❌ Erro ao remover ${produtoNome}:`, erroRemover);
+        } else if (removidos && removidos.length > 0) {
+          fantasmasRemovidos += removidos.length;
+          console.log(`✅ Removido produto fantasma: ${produtoNome} (${removidos.length} itens)`);
+        }
+      }
+      
+      // ETAPA 2: CORRIGIR PREÇOS ZERADOS
+      console.log('💰 Corrigindo preços zerados...');
+      
       const correcoesPrecos = [
-        { nome: 'ALFACE AMERICANA', preco: 3.99 },
-        { nome: 'SACOLA PLASTICA 38X50 CINZA NOVA', preco: 0.09 },
-        { nome: 'RUCULA', preco: 3.19 }
+        { nome: 'RÚCULA 1UN', preco: 3.19 },
+        { nome: 'SACOLA PLAST50X60 10KG', preco: 0.15 }
       ];
 
       let produtosCorrigidos = 0;
 
       for (const correcao of correcoesPrecos) {
-        // Corrigir produtos com preço zerado ou nulo
         const { data, error } = await supabase
           .from('estoque_app')
           .update({
@@ -40,7 +62,7 @@ serve(async (req) => {
             updated_at: new Date().toISOString()
           })
           .eq('user_id', userId)
-          .ilike('produto_nome', `%${correcao.nome}%`)
+          .eq('produto_nome', correcao.nome)
           .or('preco_unitario_ultimo.is.null,preco_unitario_ultimo.eq.0')
           .select();
 
@@ -51,17 +73,18 @@ serve(async (req) => {
 
         if (data && data.length > 0) {
           produtosCorrigidos += data.length;
-          console.log(`✅ Corrigido ${data.length} produto(s) para R$ ${correcao.preco}: ${correcao.nome}`);
+          console.log(`✅ Preço corrigido: ${correcao.nome} = R$ ${correcao.preco}`);
         }
       }
 
-      console.log(`✅ Correção concluída! ${produtosCorrigidos} produtos corrigidos.`);
+      console.log(`✅ Limpeza concluída! ${fantasmasRemovidos} fantasmas removidos, ${produtosCorrigidos} preços corrigidos.`);
 
       return new Response(
         JSON.stringify({ 
           success: true,
+          fantasmasRemovidos,
           produtosCorrigidos,
-          message: `${produtosCorrigidos} produtos com preços corrigidos` 
+          message: `Limpeza concluída: ${fantasmasRemovidos} produtos fantasmas removidos, ${produtosCorrigidos} preços corrigidos` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

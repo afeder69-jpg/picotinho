@@ -1556,6 +1556,14 @@ export type Database = {
           produto_afetado: string
         }[]
       }
+      limpar_produtos_fantasmas_usuario: {
+        Args: { target_user_id: string }
+        Returns: {
+          acao_realizada: string
+          detalhes: string
+          produto_afetado: string
+        }[]
+      }
       limpar_sessoes_expiradas: {
         Args: Record<PropertyKey, never>
         Returns: undefined
