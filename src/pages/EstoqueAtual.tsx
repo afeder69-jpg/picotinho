@@ -998,7 +998,7 @@ const EstoqueAtual = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Botão Ações flutuante fixo alinhado com o botão Menu */}
-      <div className="fixed top-12 left-0 right-0 z-40 pointer-events-none">
+      <div className="fixed top-14 left-0 right-0 z-40 pointer-events-none">
         <div className="flex justify-end w-full max-w-screen-lg mx-auto p-4">
           <div className="pointer-events-auto">
         <DropdownMenu>
