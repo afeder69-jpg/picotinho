@@ -255,7 +255,24 @@ const EstoqueAtual = () => {
 
   // Função para encontrar preço atual de um produto
   const encontrarPrecoAtual = (nomeProduto: string) => {
-    if (!nomeProduto || precosAtuais.length === 0) return null;
+    if (!nomeProduto || precosAtuais.length === 0) {
+      // Se não há preços da área, verificar se é produto manual e usar seu próprio preço
+      const produtoManual = estoque.find(item => 
+        item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
+        item.origem === 'manual'
+      );
+      
+      if (produtoManual && produtoManual.preco_unitario_ultimo) {
+        return {
+          produto_nome: nomeProduto,
+          valor_unitario: produtoManual.preco_unitario_ultimo,
+          data_atualizacao: produtoManual.updated_at,
+          origem: 'manual_proprio'
+        };
+      }
+      
+      return null;
+    }
     
     const nomeProdutoNormalizado = nomeProduto.toLowerCase().trim();
     
@@ -307,7 +324,24 @@ const EstoqueAtual = () => {
       return coincidencias >= 2;
     });
     
-    return buscaSimilaridade;
+    if (buscaSimilaridade) return buscaSimilaridade;
+    
+    // 4. Se não encontrou na área de atuação, verificar se é produto manual e usar seu próprio preço
+    const produtoManual = estoque.find(item => 
+      item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
+      item.origem === 'manual'
+    );
+    
+    if (produtoManual && produtoManual.preco_unitario_ultimo) {
+      return {
+        produto_nome: nomeProduto,
+        valor_unitario: produtoManual.preco_unitario_ultimo,
+        data_atualizacao: produtoManual.updated_at,
+        origem: 'manual_proprio'
+      };
+    }
+    
+    return null;
   };
 
   const loadEstoque = async () => {
