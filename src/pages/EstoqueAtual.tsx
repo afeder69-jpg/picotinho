@@ -23,7 +23,7 @@ interface EstoqueItem {
   quantidade: number;
   preco_unitario_ultimo: number | null;
   updated_at: string;
-  origem?: string; // 'manual' ou 'nota_fiscal'
+  origem: string; // 'manual' ou 'nota_fiscal'
 }
 
 interface ProdutoSugestao {
@@ -218,13 +218,20 @@ const EstoqueAtual = () => {
 
   // Função para verificar se um produto foi inserido manualmente
   const isProdutoManual = (nomeProduto: string) => {
+    console.log(`🔍 Verificando se "${nomeProduto}" é manual...`);
+    console.log(`📦 Estoque disponível:`, estoque.map(item => ({ nome: item.produto_nome, origem: item.origem })));
+    
     // Buscar no estoque se o produto tem origem 'manual'
     const produtoEstoque = estoque.find(item => 
       item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
       item.origem === 'manual'
     );
     
-    return !!produtoEstoque;
+    console.log(`📦 Produto encontrado no estoque:`, produtoEstoque);
+    const isManual = !!produtoEstoque;
+    console.log(`✅ Produto "${nomeProduto}" é manual: ${isManual}`);
+    
+    return isManual;
   };
 
   // Função para encontrar a data da nota fiscal de um produto
@@ -359,6 +366,7 @@ const EstoqueAtual = () => {
 
       if (error) throw error;
 
+      console.log('📦 Estoque carregado:', data);
       setEstoque(data || []);
       
       // Encontrar a última atualização
