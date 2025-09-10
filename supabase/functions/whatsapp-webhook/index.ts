@@ -95,6 +95,10 @@ const handler = async (req: Request): Promise<Response> => {
             mimetype: webhookData.document.mimetype
           };
           comando_identificado = 'inserir_nota';
+          // Se não há texto mas há documento, definir conteúdo padrão
+          if (!conteudo) {
+            conteudo = `[DOCUMENTO] ${anexoInfo.filename}`;
+          }
           console.log('📎 Documento detectado:', anexoInfo);
         } else if (webhookData.image) {
           anexoInfo = {
@@ -104,6 +108,10 @@ const handler = async (req: Request): Promise<Response> => {
             mimetype: webhookData.image.mimetype
           };
           comando_identificado = 'inserir_nota';
+          // Se não há texto mas há imagem, definir conteúdo padrão
+          if (!conteudo) {
+            conteudo = `[IMAGEM] ${anexoInfo.filename}`;
+          }
           console.log('🖼️ Imagem detectada:', anexoInfo);
         }
         
@@ -137,7 +145,8 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🎯 Comando identificado:', comando_identificado);
       }
       
-      if (!remetente || !conteudo) {
+      // Validar remetente (obrigatório) e conteúdo (obrigatório exceto para anexos)
+      if (!remetente || (!conteudo && !anexoInfo)) {
         return new Response('Formato não reconhecido', { 
           status: 400,
           headers: corsHeaders 
