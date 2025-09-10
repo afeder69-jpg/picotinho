@@ -415,7 +415,7 @@ const EstoqueAtual = () => {
     
     console.log(`📦 Produto manual encontrado no estoque:`, produtoManual);
     
-    if (produtoManual && produtoManual.preco_unitario_ultimo) {
+    if (produtoManual && produtoManual.preco_unitario_ultimo && produtoManual.preco_unitario_ultimo > 0) {
       console.log(`💰 Usando preço próprio do produto manual: R$ ${produtoManual.preco_unitario_ultimo}`);
       return {
         produto_nome: nomeProduto,
@@ -581,7 +581,7 @@ const EstoqueAtual = () => {
           .update({ 
             quantidade: produtoExistente.quantidade + quantidade,
             preco_unitario_ultimo: valor, // Atualizar também o preço
-            origem: 'manual', // Marcar como manual quando inserido manualmente
+            origem: 'manual', // Sempre marcar como manual quando inserido manualmente
             updated_at: new Date().toISOString()
           })
           .eq('id', produtoExistente.id);
@@ -618,7 +618,9 @@ const EstoqueAtual = () => {
             origem: 'manual'
           });
 
-        if (erroPreco) throw erroPreco;
+        if (erroPreco) {
+          console.warn('Erro ao inserir preço usuario, mas produto foi inserido:', erroPreco);
+        }
 
         toast({
           title: "Sucesso",
