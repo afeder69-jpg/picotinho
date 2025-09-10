@@ -255,33 +255,26 @@ const EstoqueAtual = () => {
 
   // Função para encontrar preço atual de um produto
   const encontrarPrecoAtual = (nomeProduto: string) => {
-    if (!nomeProduto || precosAtuais.length === 0) {
-      // Se não há preços da área, verificar se é produto manual e usar seu próprio preço
-      const produtoManual = estoque.find(item => 
-        item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
-        item.origem === 'manual'
-      );
-      
-      if (produtoManual && produtoManual.preco_unitario_ultimo) {
-        return {
-          produto_nome: nomeProduto,
-          valor_unitario: produtoManual.preco_unitario_ultimo,
-          data_atualizacao: produtoManual.updated_at,
-          origem: 'manual_proprio'
-        };
-      }
-      
+    console.log(`🔍 Buscando preço atual para: "${nomeProduto}"`);
+    console.log(`📊 Preços disponíveis na área: ${precosAtuais.length}`);
+    console.log(`📦 Produtos no estoque: ${estoque.length}`);
+    
+    if (!nomeProduto) {
+      console.log('❌ Nome do produto vazio');
       return null;
     }
     
     const nomeProdutoNormalizado = nomeProduto.toLowerCase().trim();
     
-    // 1. Busca exata
+    // 1. Busca exata nos preços da área
     const buscaExata = precosAtuais.find(preco => 
       preco.produto_nome && 
       preco.produto_nome.toLowerCase().trim() === nomeProdutoNormalizado
     );
-    if (buscaExata) return buscaExata;
+    if (buscaExata) {
+      console.log(`✅ Encontrou preço exato na área: R$ ${buscaExata.valor_unitario}`);
+      return buscaExata;
+    }
     
     // 2. Busca por palavras-chave principais (remover tamanhos, marcas específicas)
     const palavrasChave = nomeProdutoNormalizado
@@ -301,7 +294,10 @@ const EstoqueAtual = () => {
       
       return palavrasChave.includes(precoNormalizado) || precoNormalizado.includes(palavrasChave);
     });
-    if (buscaPorPalavrasChave) return buscaPorPalavrasChave;
+    if (buscaPorPalavrasChave) {
+      console.log(`✅ Encontrou preço por palavras-chave na área: R$ ${buscaPorPalavrasChave.valor_unitario}`);
+      return buscaPorPalavrasChave;
+    }
     
     // 3. Busca por similaridade (contém partes do nome)
     const buscaSimilaridade = precosAtuais.find(preco => {
@@ -324,15 +320,22 @@ const EstoqueAtual = () => {
       return coincidencias >= 2;
     });
     
-    if (buscaSimilaridade) return buscaSimilaridade;
+    if (buscaSimilaridade) {
+      console.log(`✅ Encontrou preço por similaridade na área: R$ ${buscaSimilaridade.valor_unitario}`);
+      return buscaSimilaridade;
+    }
     
     // 4. Se não encontrou na área de atuação, verificar se é produto manual e usar seu próprio preço
+    console.log(`🔍 Não encontrou na área, buscando produto manual...`);
     const produtoManual = estoque.find(item => 
       item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
       item.origem === 'manual'
     );
     
+    console.log(`📦 Produto manual encontrado:`, produtoManual);
+    
     if (produtoManual && produtoManual.preco_unitario_ultimo) {
+      console.log(`💰 Usando preço próprio do produto manual: R$ ${produtoManual.preco_unitario_ultimo}`);
       return {
         produto_nome: nomeProduto,
         valor_unitario: produtoManual.preco_unitario_ultimo,
@@ -341,6 +344,7 @@ const EstoqueAtual = () => {
       };
     }
     
+    console.log(`❌ Nenhum preço encontrado para: "${nomeProduto}"`);
     return null;
   };
 
