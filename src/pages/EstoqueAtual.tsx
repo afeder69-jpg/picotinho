@@ -324,14 +324,28 @@ const EstoqueAtual = () => {
       return buscaSimilaridade;
     }
     
-    // 4. Se não encontrou na área de atuação, verificar se é produto manual e usar seu próprio preço
-    console.log(`🔍 Não encontrou na área, buscando produto manual...`);
+    // 4. Se não encontrou na área de atuação, buscar primeiro na tabela precos_atuais_usuario
+    console.log(`🔍 Não encontrou na área, buscando na tabela precos_atuais_usuario...`);
+    const precoManualTabela = precosAtuais.find(preco => 
+      preco.origem === 'usuario' && 
+      preco.produto_nome.toLowerCase() === nomeProduto.toLowerCase()
+    );
+    
+    console.log(`📦 Produto manual encontrado na tabela:`, precoManualTabela);
+    
+    if (precoManualTabela) {
+      console.log(`💰 Usando preço da tabela precos_atuais_usuario: R$ ${precoManualTabela.valor_unitario}`);
+      return precoManualTabela;
+    }
+    
+    // 5. Se não encontrou na tabela, verificar se é produto manual no estoque e usar seu próprio preço
+    console.log(`🔍 Não encontrou na tabela, verificando no estoque...`);
     const produtoManual = estoque.find(item => 
       item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
       item.origem === 'manual'
     );
     
-    console.log(`📦 Produto manual encontrado:`, produtoManual);
+    console.log(`📦 Produto manual encontrado no estoque:`, produtoManual);
     
     if (produtoManual && produtoManual.preco_unitario_ultimo) {
       console.log(`💰 Usando preço próprio do produto manual: R$ ${produtoManual.preco_unitario_ultimo}`);
@@ -496,9 +510,10 @@ const EstoqueAtual = () => {
         // Atualizar quantidade existente
         const { error: erroUpdate } = await supabase
           .from('estoque_app')
-          .update({
+          .update({ 
             quantidade: produtoExistente.quantidade + quantidade,
-            preco_unitario_ultimo: valor,
+            preco_unitario_ultimo: valor, // Atualizar também o preço
+            origem: 'manual', // Marcar como manual quando inserido manualmente
             updated_at: new Date().toISOString()
           })
           .eq('id', produtoExistente.id);
