@@ -1238,6 +1238,7 @@ export type Database = {
       }
       whatsapp_mensagens: {
         Row: {
+          anexo_info: Json | null
           comando_identificado: string | null
           conteudo: string
           created_at: string
@@ -1255,6 +1256,7 @@ export type Database = {
           webhook_data: Json | null
         }
         Insert: {
+          anexo_info?: Json | null
           comando_identificado?: string | null
           conteudo: string
           created_at?: string
@@ -1272,6 +1274,7 @@ export type Database = {
           webhook_data?: Json | null
         }
         Update: {
+          anexo_info?: Json | null
           comando_identificado?: string | null
           conteudo?: string
           created_at?: string
