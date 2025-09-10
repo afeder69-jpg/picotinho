@@ -641,6 +641,7 @@ const EstoqueAtual = () => {
           .update({ 
             quantidade: produtoExistente.quantidade + quantidade,
             preco_unitario_ultimo: valor, // Atualizar também o preço
+            origem: 'manual', // Marcar como manual quando inserido manualmente
             updated_at: new Date().toISOString()
           })
           .eq('id', produtoExistente.id);
@@ -652,18 +653,18 @@ const EstoqueAtual = () => {
           description: `Quantidade atualizada: +${formatarQuantidade(quantidade)} ${novoProduto.unidadeMedida}`,
         });
       } else {
-        // Inserir novo produto no estoque
-         const { error: erroInsert } = await supabase
-           .from('estoque_app')
-           .insert({
-             user_id: user.id,
-             produto_nome: nomeParaSalvar.toUpperCase(),
-             categoria: categoria || 'outros',
-             unidade_medida: novoProduto.unidadeMedida,
-             quantidade: quantidade,
-             preco_unitario_último: valor, // Usar o valor inserido pelo usuário
-             origem: 'manual'
-           });
+         // Inserir novo produto no estoque
+          const { error: erroInsert } = await supabase
+            .from('estoque_app')
+            .insert({
+              user_id: user.id,
+              produto_nome: nomeParaSalvar.toUpperCase(),
+              categoria: categoria || 'outros',
+              unidade_medida: novoProduto.unidadeMedida,
+              quantidade: quantidade,
+              preco_unitario_ultimo: valor, // CORRIGIDO: sem acento
+              origem: 'manual'
+            });
 
         if (erroInsert) throw erroInsert;
 
