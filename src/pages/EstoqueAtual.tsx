@@ -1312,8 +1312,11 @@ const EstoqueAtual = () => {
               </CardContent>
             </Card>
           ))}
-        </div>
-      </div>
+         </div>
+         
+         {/* Espaço extra no final para evitar sobreposição com botões flutuantes */}
+         <div className="h-24"></div>
+       </div>
 
       {/* Modal de Edição */}
       <Dialog open={!!itemEditando} onOpenChange={fecharModalEdicao}>
