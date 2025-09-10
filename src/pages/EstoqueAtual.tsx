@@ -795,7 +795,8 @@ const EstoqueAtual = () => {
       }
 
       fecharModalInserir();
-      loadEstoque();
+      await loadEstoque(); // Aguardar o reload do estoque
+      await loadPrecosAtuais(); // Recarregar preços também
     } catch (error) {
       console.error('Erro ao inserir produto:', error);
       toast({
@@ -1308,9 +1309,9 @@ const EstoqueAtual = () => {
                             <div className="flex-1 overflow-hidden relative">
                                 <h3 className="text-xs font-medium text-foreground leading-tight relative">
                                   {item.produto_nome}
-                                  {isProdutoManual(item.produto_nome) && (
-                                    <span className="text-red-500 text-xs ml-1">(manual)</span>
-                                  )}
+                                   {item.origem === 'manual' && (
+                                     <span className="text-red-500 text-xs ml-1">(manual)</span>
+                                   )}
                                  {/* Botão de ajuste sobreposto ao título do produto */}
                                  {modoEdicao && (
                                    <Button
