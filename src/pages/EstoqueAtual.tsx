@@ -23,6 +23,7 @@ interface EstoqueItem {
   quantidade: number;
   preco_unitario_ultimo: number | null;
   updated_at: string;
+  origem?: string; // 'manual' ou 'nota_fiscal'
 }
 
 interface ProdutoSugestao {
@@ -218,7 +219,6 @@ const EstoqueAtual = () => {
   // Função para verificar se um produto foi inserido manualmente
   const isProdutoManual = (nomeProduto: string) => {
     // Um produto é manual apenas se tiver origem 'manual' na tabela precos_atuais_usuario
-    // OU se foi inserido diretamente no estoque (não através de nota fiscal)
     const precoUsuario = precosAtuais.find(preco => 
       preco.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
       preco.origem === 'manual'
@@ -227,10 +227,12 @@ const EstoqueAtual = () => {
     // Se tem preço específico marcado como manual, é manual
     if (precoUsuario) return true;
     
-    // Para determinar se foi inserido manualmente, verificamos se é o produto mais recente
-    // inserido diretamente pelo usuário (não vindo de nota fiscal)
-    // Por enquanto, apenas "CHECAR MILAO" é manual verdadeiro
-    return nomeProduto === 'CHECAR MILAO';
+    // Buscar no estoque se o produto tem origem 'manual'
+    const produtoEstoque = estoque.find(item => 
+      item.produto_nome.toLowerCase() === nomeProduto.toLowerCase()
+    );
+    
+    return produtoEstoque?.origem === 'manual';
   };
 
   // Função para encontrar a data da nota fiscal de um produto
@@ -320,7 +322,7 @@ const EstoqueAtual = () => {
 
       const { data, error } = await supabase
         .from('estoque_app')
-        .select('*')
+        .select('*, origem')
         .eq('user_id', user.id)
         .gt('quantidade', 0)  // Filtrar apenas itens com quantidade maior que 0
         .order('produto_nome', { ascending: true });
@@ -479,7 +481,8 @@ const EstoqueAtual = () => {
              categoria: categoriaEscolhida || 'outros',
              unidade_medida: novoProduto.unidadeMedida,
              quantidade: quantidade,
-             preco_unitario_ultimo: valor
+             preco_unitario_ultimo: valor,
+             origem: 'manual'
            });
 
         if (erroInsert) throw erroInsert;
@@ -608,7 +611,8 @@ const EstoqueAtual = () => {
              categoria: categoria || 'outros',
              unidade_medida: novoProduto.unidadeMedida,
              quantidade: quantidade,
-             preco_unitario_ultimo: valor // Usar o valor inserido pelo usuário
+             preco_unitario_ultimo: valor, // Usar o valor inserido pelo usuário
+             origem: 'manual'
            });
 
         if (erroInsert) throw erroInsert;

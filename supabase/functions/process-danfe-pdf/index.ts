@@ -628,7 +628,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 .from('estoque_app')
                 .update({
                   quantidade: estoqueExistente.quantidade + (quantidade || 0),
-                  preco_unitario_ultimo: valor_unitario || 0
+                  preco_unitario_ultimo: valor_unitario || 0,
+                  origem: 'nota_fiscal'
                 })
                 .eq('id', estoqueExistente.id);
 
@@ -643,7 +644,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                   categoria: categoria || 'outros',
                   quantidade: quantidade || 0,
                   unidade_medida: unidade || 'unidade',
-                  preco_unitario_ultimo: valor_unitario || 0
+                  preco_unitario_ultimo: valor_unitario || 0,
+                  origem: 'nota_fiscal'
                 });
 
               console.log(`📦 Novo item no estoque: ${nomeNormalizado} (${quantidade})`);

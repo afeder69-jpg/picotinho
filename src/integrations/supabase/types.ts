@@ -173,6 +173,7 @@ export type Database = {
           categoria: string
           created_at: string
           id: string
+          origem: string | null
           preco_unitario_ultimo: number | null
           produto_nome: string
           quantidade: number
@@ -184,6 +185,7 @@ export type Database = {
           categoria: string
           created_at?: string
           id?: string
+          origem?: string | null
           preco_unitario_ultimo?: number | null
           produto_nome: string
           quantidade?: number
@@ -195,6 +197,7 @@ export type Database = {
           categoria?: string
           created_at?: string
           id?: string
+          origem?: string | null
           preco_unitario_ultimo?: number | null
           produto_nome?: string
           quantidade?: number
