@@ -65,7 +65,7 @@ const EstoqueAtual = () => {
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
-    corrigirProdutosManuais();
+    // corrigirProdutosManuais(); // Removido - correção manual
   }, []);
 
   // Função para corrigir produtos que foram salvos incorretamente como 'nota_fiscal'
@@ -735,23 +735,44 @@ const EstoqueAtual = () => {
           title: "Sucesso",
           description: `Quantidade atualizada: +${formatarQuantidade(quantidade)} ${novoProduto.unidadeMedida}`,
         });
-      } else {
-         // Inserir novo produto no estoque
-          const { error: erroInsert } = await supabase
-            .from('estoque_app')
-            .insert({
-              user_id: user.id,
-              produto_nome: nomeParaSalvar.toUpperCase(),
-              categoria: categoria || 'outros',
-              unidade_medida: novoProduto.unidadeMedida,
-              quantidade: quantidade,
-              preco_unitario_ultimo: valor,
-              origem: 'manual'
-            });
+       } else {
+          // Inserir novo produto no estoque
+          console.log('💾 Inserindo no estoque_app:', {
+            user_id: user.id,
+            produto_nome: nomeParaSalvar.toUpperCase(),
+            categoria: categoria || 'outros',
+            unidade_medida: novoProduto.unidadeMedida,
+            quantidade: quantidade,
+            preco_unitario_ultimo: valor,
+            origem: 'manual'
+          });
+          
+           const { error: erroInsert } = await supabase
+             .from('estoque_app')
+             .insert({
+               user_id: user.id,
+               produto_nome: nomeParaSalvar.toUpperCase(),
+               categoria: categoria || 'outros',
+               unidade_medida: novoProduto.unidadeMedida,
+               quantidade: quantidade,
+               preco_unitario_ultimo: valor,
+               origem: 'manual'
+             });
 
-        if (erroInsert) throw erroInsert;
+         if (erroInsert) {
+           console.error('❌ Erro ao inserir no estoque:', erroInsert);
+           throw erroInsert;
+         }
+         console.log('✅ Produto inserido no estoque com sucesso');
 
         // Inserir o preço atual para o produto manual
+        console.log('💰 Inserindo preço atual:', {
+          user_id: user.id,
+          produto_nome: nomeParaSalvar.toUpperCase(),
+          valor_unitario: valor,
+          origem: 'manual'
+        });
+        
         const { error: erroPreco } = await supabase
           .from('precos_atuais_usuario')
           .insert({
@@ -761,7 +782,11 @@ const EstoqueAtual = () => {
             origem: 'manual'
           });
 
-        if (erroPreco) throw erroPreco;
+        if (erroPreco) {
+          console.error('❌ Erro ao inserir preço:', erroPreco);
+          throw erroPreco;
+        }
+        console.log('✅ Preço inserido com sucesso');
 
         toast({
           title: "Sucesso",
