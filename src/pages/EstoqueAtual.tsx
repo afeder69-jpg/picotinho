@@ -997,6 +997,51 @@ const EstoqueAtual = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Botão Ações flutuante fixo no canto superior direito */}
+      <div className="fixed top-20 right-4 z-40">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
+              <MoreVertical className="w-4 h-4 mr-2" />
+              Ações
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-background z-50">
+            <DropdownMenuItem onClick={abrirModalInserir}>
+              <Plus className="w-4 h-4 mr-2" />
+              Inserir Produto
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setModoEdicao(!modoEdicao)}>
+              <Edit3 className="w-4 h-4 mr-2" />
+              {modoEdicao ? "Sair da Edição" : "Ajustar Estoque"}
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={diagnosticarInconsistencias}
+              disabled={diagnosticando}
+            >
+              {diagnosticando ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+                  Diagnosticando...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  Diagnosticar
+                </>
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Limpar Estoque
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {/* Header com logo */}
       <div className="bg-card border-b border-border">
         <div className="flex justify-center items-center p-4">
@@ -1006,57 +1051,12 @@ const EstoqueAtual = () => {
       
       <div className="container mx-auto p-6">
         <div className="space-y-4">
-          {/* Header da página */}
+          {/* Header da página - sem o botão ações */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <h1 className="text-xl sm:text-3xl font-bold text-foreground">Estoque Atual</h1>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="bg-green-600 hover:bg-green-700 text-white">
-                    <MoreVertical className="w-4 h-4 mr-2" />
-                    Ações
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={abrirModalInserir}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Inserir Produto
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setModoEdicao(!modoEdicao)}>
-                    <Edit3 className="w-4 h-4 mr-2" />
-                    {modoEdicao ? "Sair da Edição" : "Ajustar Estoque"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={diagnosticarInconsistencias}
-                    disabled={diagnosticando}
-                  >
-                    {diagnosticando ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
-                        Diagnosticando...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-4 h-4 mr-2" />
-                        Diagnosticar
-                      </>
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Limpar Estoque
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
           </div>
-
           {/* Cards de resumo */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <Card className="md:col-span-2 lg:col-span-1">
