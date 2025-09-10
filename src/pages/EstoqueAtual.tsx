@@ -1020,22 +1020,6 @@ const EstoqueAtual = () => {
               {modoEdicao ? "Sair da Edição" : "Ajustar Estoque"}
             </DropdownMenuItem>
             <DropdownMenuItem 
-              onClick={diagnosticarInconsistencias}
-              disabled={diagnosticando}
-            >
-              {diagnosticando ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
-                  Diagnosticando...
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4 mr-2" />
-                  Diagnosticar
-                </>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuItem 
               onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
               className="text-destructive focus:text-destructive"
             >
