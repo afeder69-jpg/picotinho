@@ -262,7 +262,16 @@ const handler = async (req: Request): Promise<Response> => {
         // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
         const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
         
-        if (isBaixar) {
+        // Verificar se é comando de inserir nota com anexo
+        if (mensagem.comando_identificado === 'inserir_nota') {
+          console.log('📎 Comando INSERIR NOTA identificado com anexo');
+          resposta += await processarInserirNota(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (mensagem.comando_identificado === 'solicitar_nota') {
+          console.log('📋 Comando SOLICITAR NOTA identificado (texto apenas)');
+          resposta += "📂 Para inserir uma nota fiscal, envie o arquivo (PDF, XML ou imagem) anexado na mensagem.\n\nTipos aceitos:\n• PDF da nota fiscal\n• XML da nota fiscal\n• Foto/imagem da nota fiscal\n\nApenas envie o arquivo que eu processarei automaticamente!";
+          comandoExecutado = true;
+        } else if (isBaixar) {
           console.log('📉 Comando BAIXAR identificado:', temSinalMenos ? 'simbolo menos' : textoNormalizado);
           resposta += await processarBaixarEstoque(supabase, mensagem);
           comandoExecutado = true;
@@ -299,7 +308,7 @@ const handler = async (req: Request): Promise<Response> => {
           
           console.log(`🗑️ [RESET] Sessões ativas removidas para ${mensagem.remetente}`);
           
-          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
         }
       }
     }
@@ -1370,6 +1379,164 @@ async function enviarRespostaWhatsApp(numeroDestino: string, mensagem: string): 
   } catch (error) {
     console.error('❌ [ENVIO] Erro ao enviar resposta WhatsApp:', error);
     return false;
+  }
+}
+
+/**
+ * Processar comando de inserir nota fiscal via WhatsApp
+ */
+async function processarInserirNota(supabase: any, mensagem: any): Promise<string> {
+  try {
+    console.log('📎 Processando inserção de nota fiscal via WhatsApp...');
+    
+    if (!mensagem.anexo_info) {
+      return "❌ Nenhum arquivo foi detectado. Por favor, envie o arquivo da nota fiscal (PDF, XML ou imagem) anexado à mensagem.";
+    }
+    
+    const anexo = mensagem.anexo_info;
+    console.log('📎 Anexo detectado:', anexo);
+    
+    // Verificar tipo de arquivo aceito
+    const tiposAceitos = [
+      'application/pdf',
+      'application/xml', 
+      'text/xml',
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/webp'
+    ];
+    
+    if (!tiposAceitos.includes(anexo.mimetype)) {
+      return `❌ Tipo de arquivo não aceito: ${anexo.mimetype}\n\nTipos aceitos:\n• PDF (.pdf)\n• XML (.xml)\n• Imagens (.jpg, .png, .webp)`;
+    }
+    
+    // Baixar o arquivo do WhatsApp
+    console.log('📥 Baixando arquivo do WhatsApp:', anexo.url);
+    
+    const response = await fetch(anexo.url);
+    if (!response.ok) {
+      console.error('❌ Erro ao baixar arquivo:', response.status, response.statusText);
+      return "❌ Erro ao baixar o arquivo. Tente enviar novamente.";
+    }
+    
+    const fileBuffer = await response.arrayBuffer();
+    const fileData = new Uint8Array(fileBuffer);
+    
+    console.log('✅ Arquivo baixado com sucesso, tamanho:', fileData.length, 'bytes');
+    
+    // Determinar nome do arquivo e tipo
+    let fileName = anexo.filename || 'nota_whatsapp';
+    if (anexo.tipo === 'document' && anexo.mimetype === 'application/pdf') {
+      fileName = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
+    } else if (anexo.tipo === 'document' && (anexo.mimetype.includes('xml'))) {
+      fileName = fileName.endsWith('.xml') ? fileName : fileName + '.xml';
+    } else if (anexo.tipo === 'image') {
+      const ext = anexo.mimetype === 'image/jpeg' ? '.jpg' : 
+                  anexo.mimetype === 'image/png' ? '.png' : 
+                  anexo.mimetype === 'image/webp' ? '.webp' : '.jpg';
+      fileName = fileName.includes('.') ? fileName : fileName + ext;
+    }
+    
+    // Upload para o Supabase Storage
+    const filePath = `${mensagem.usuario_id}/whatsapp_${Date.now()}_${fileName}`;
+    
+    console.log('📤 Fazendo upload para storage:', filePath);
+    
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('receipts')
+      .upload(filePath, fileData, {
+        contentType: anexo.mimetype,
+        upsert: false
+      });
+    
+    if (uploadError) {
+      console.error('❌ Erro no upload:', uploadError);
+      return "❌ Erro ao salvar o arquivo. Tente novamente.";
+    }
+    
+    console.log('✅ Upload realizado com sucesso:', uploadData);
+    
+    // Obter URL pública
+    const { data: { publicUrl } } = supabase.storage
+      .from('receipts')
+      .getPublicUrl(filePath);
+    
+    console.log('🔗 URL pública gerada:', publicUrl);
+    
+    // Criar registro na tabela notas_imagens
+    const { data: notaImagem, error: dbError } = await supabase
+      .from('notas_imagens')
+      .insert({
+        usuario_id: mensagem.usuario_id,
+        imagem_url: publicUrl,
+        imagem_path: filePath,
+        processada: false,
+        origem: 'whatsapp',
+        dados_extraidos: {
+          origem_whatsapp: true,
+          remetente: mensagem.remetente,
+          timestamp: new Date().toISOString(),
+          arquivo_original: fileName,
+          mimetype: anexo.mimetype
+        }
+      })
+      .select()
+      .single();
+    
+    if (dbError) {
+      console.error('❌ Erro ao salvar no banco:', dbError);
+      return "❌ Erro ao processar a nota. Tente novamente.";
+    }
+    
+    console.log('✅ Nota salva no banco:', notaImagem.id);
+    
+    // Iniciar processamento assíncrono seguindo o mesmo fluxo do app
+    console.log('🤖 Iniciando processamento da nota...');
+    
+    // Fase 1: Validação (IA-1)
+    const validacaoResponse = await supabase.functions.invoke('validate-receipt', {
+      body: {
+        notaImagemId: notaImagem.id,
+        imageUrl: anexo.tipo === 'image' ? publicUrl : null,
+        pdfUrl: anexo.tipo === 'document' ? publicUrl : null,
+        userId: mensagem.usuario_id
+      }
+    });
+    
+    if (validacaoResponse.error) {
+      console.error('❌ Erro na validação:', validacaoResponse.error);
+      return "❌ Erro na validação da nota. Tente novamente.";
+    }
+    
+    const validacao = validacaoResponse.data;
+    console.log('✅ Validação concluída:', validacao);
+    
+    if (!validacao.approved) {
+      console.log('❌ Nota rejeitada na validação:', validacao.reason);
+      return `❌ ${validacao.message}`;
+    }
+    
+    // Enviar mensagem de confirmação e iniciar processamento em background
+    supabase.functions.invoke('process-receipt-full', {
+      body: { imagemId: notaImagem.id }
+    }).then((processResult) => {
+      console.log('✅ Processamento completo iniciado:', processResult);
+      
+      // Enviar mensagem de sucesso
+      enviarRespostaWhatsApp(mensagem.remetente, "✅ Nota processada com sucesso! Os produtos foram adicionados ao seu estoque.");
+    }).catch((processError) => {
+      console.error('❌ Erro no processamento completo:', processError);
+      
+      // Enviar mensagem de erro
+      enviarRespostaWhatsApp(mensagem.remetente, "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente.");
+    });
+    
+    return "📂 Nota recebida, iniciando avaliação...";
+    
+  } catch (error: any) {
+    console.error('❌ Erro geral ao processar nota:', error);
+    return "❌ Erro interno ao processar a nota. Tente novamente.";
   }
 }
 

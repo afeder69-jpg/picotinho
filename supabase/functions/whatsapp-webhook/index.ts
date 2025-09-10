@@ -80,10 +80,32 @@ const handler = async (req: Request): Promise<Response> => {
       let remetente = '';
       let conteudo = '';
       let comando_identificado = null;
+      let anexoInfo = null;
       
-      if (webhookData.phone && webhookData.text) {
+      if (webhookData.phone && (webhookData.text || webhookData.document || webhookData.image)) {
         remetente = webhookData.phone.replace(/\D/g, '');
-        conteudo = webhookData.text.message || '';
+        conteudo = webhookData.text?.message || '';
+        
+        // Verificar se há anexo (documento ou imagem)
+        if (webhookData.document) {
+          anexoInfo = {
+            tipo: 'document',
+            url: webhookData.document.downloadUrl || webhookData.document.url,
+            filename: webhookData.document.filename || 'documento.pdf',
+            mimetype: webhookData.document.mimetype
+          };
+          comando_identificado = 'inserir_nota';
+          console.log('📎 Documento detectado:', anexoInfo);
+        } else if (webhookData.image) {
+          anexoInfo = {
+            tipo: 'image',
+            url: webhookData.image.downloadUrl || webhookData.image.url,
+            filename: webhookData.image.filename || 'imagem.jpg',
+            mimetype: webhookData.image.mimetype
+          };
+          comando_identificado = 'inserir_nota';
+          console.log('🖼️ Imagem detectada:', anexoInfo);
+        }
         
         // Normalizar o texto para reconhecimento de comando
         const textoLimpo = conteudo.toLowerCase()
@@ -93,20 +115,23 @@ const handler = async (req: Request): Promise<Response> => {
           .replace(/\s+/g, ' ') // Normaliza espaços
           .trim();
         
-        
         console.log('🔍 Texto limpo para análise:', textoLimpo);
         console.log('🔍 Inicia com "-"?', textoLimpo.startsWith('-'));
         console.log('🔍 Inicia com "+"?', textoLimpo.startsWith('+'));
         
-        // Identificar comando baseado em palavras-chave E símbolos
-        if (textoLimpo.startsWith('-') || textoLimpo.match(/\b(baixa|baixar|diminui|diminuir|remove|remover)\b/)) {
-          comando_identificado = 'baixar_estoque';
-        } else if (textoLimpo.startsWith('+') || textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
-          comando_identificado = 'aumentar_estoque';
-        } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar)\b/)) {
-          comando_identificado = 'consultar_estoque';
-        } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
-          comando_identificado = 'adicionar_produto';
+        // Identificar comando baseado em palavras-chave E símbolos (só se não há anexo)
+        if (!anexoInfo) {
+          if (textoLimpo.startsWith('-') || textoLimpo.match(/\b(baixa|baixar|diminui|diminuir|remove|remover)\b/)) {
+            comando_identificado = 'baixar_estoque';
+          } else if (textoLimpo.startsWith('+') || textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
+            comando_identificado = 'aumentar_estoque';
+          } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar)\b/)) {
+            comando_identificado = 'consultar_estoque';
+          } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
+            comando_identificado = 'adicionar_produto';
+          } else if (textoLimpo.match(/\b(inserir nota|inserir notas|enviar nota|enviar notas|nota fiscal|notas fiscais)\b/)) {
+            comando_identificado = 'solicitar_nota';
+          }
         }
         
         console.log('🎯 Comando identificado:', comando_identificado);
@@ -134,9 +159,10 @@ const handler = async (req: Request): Promise<Response> => {
           usuario_id: usuario?.usuario_id || null,
           remetente,
           conteudo,
-          tipo_mensagem: 'text',
+          tipo_mensagem: anexoInfo ? anexoInfo.tipo : 'text',
           webhook_data: webhookData,
           comando_identificado,
+          anexo_info: anexoInfo,
           data_recebimento: new Date().toISOString()
         })
         .select()
@@ -232,7 +258,7 @@ const handler = async (req: Request): Promise<Response> => {
             
             const requestBody = {
               phone: remetente,
-              message: "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]"
+              message: "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)"
             };
             
             const errorResponse = await fetch(sendTextUrl, {
