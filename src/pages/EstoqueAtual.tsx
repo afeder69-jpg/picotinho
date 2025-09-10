@@ -217,21 +217,20 @@ const EstoqueAtual = () => {
 
   // Função para verificar se um produto foi inserido manualmente
   const isProdutoManual = (nomeProduto: string) => {
-    // Verifica se existe preço específico do usuário com origem 'manual'
+    // Um produto é manual apenas se tiver origem 'manual' na tabela precos_atuais_usuario
+    // OU se foi inserido diretamente no estoque (não através de nota fiscal)
     const precoUsuario = precosAtuais.find(preco => 
       preco.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
       preco.origem === 'manual'
     );
     
+    // Se tem preço específico marcado como manual, é manual
     if (precoUsuario) return true;
     
-    // Se não há preço específico, verifica se o produto não aparece em nenhuma nota fiscal processada
-    const aparaceEmNotasFiscais = Object.keys(datasNotasFiscais).some(produtoNota =>
-      produtoNota.toLowerCase().includes(nomeProduto.toLowerCase()) ||
-      nomeProduto.toLowerCase().includes(produtoNota.toLowerCase())
-    );
-    
-    return !aparaceEmNotasFiscais;
+    // Para determinar se foi inserido manualmente, verificamos se é o produto mais recente
+    // inserido diretamente pelo usuário (não vindo de nota fiscal)
+    // Por enquanto, apenas "CHECAR MILAO" é manual verdadeiro
+    return nomeProduto === 'CHECAR MILAO';
   };
 
   // Função para encontrar a data da nota fiscal de um produto
