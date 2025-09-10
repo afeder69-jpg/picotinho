@@ -65,7 +65,75 @@ const EstoqueAtual = () => {
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
+    corrigirProdutosManuais();
   }, []);
+
+  // Função para corrigir produtos que foram salvos incorretamente como 'nota_fiscal'
+  const corrigirProdutosManuais = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Buscar produtos recentes que podem ter sido inseridos manualmente mas salvos como 'nota_fiscal'
+      const { data: produtosRecentes, error } = await supabase
+        .from('estoque_app')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('origem', 'nota_fiscal')
+        .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString()) // Últimas 1 hora
+        .order('created_at', { ascending: false });
+
+      if (error || !produtosRecentes) return;
+
+      // Para cada produto recente, verificar se existe em notas fiscais
+      for (const produto of produtosRecentes) {
+        const { data: notaFiscal } = await supabase
+          .from('notas_imagens')
+          .select('dados_extraidos')
+          .eq('usuario_id', user.id)
+          .eq('processada', true)
+          .not('dados_extraidos', 'is', null);
+
+        let encontrouEmNota = false;
+        
+        if (notaFiscal) {
+          encontrouEmNota = notaFiscal.some(nota => {
+            const dados = nota.dados_extraidos as any;
+            if (dados?.itens) {
+              return dados.itens.some((item: any) => {
+                const nomeItem = (item.descricao || item.nome || '').toUpperCase();
+                return nomeItem === produto.produto_nome;
+              });
+            }
+            return false;
+          });
+        }
+
+        // Se não encontrou em nenhuma nota fiscal, é produto manual
+        if (!encontrouEmNota) {
+          console.log(`🔧 Corrigindo produto manual: ${produto.produto_nome}`);
+          
+          // Atualizar como manual
+          await supabase
+            .from('estoque_app')
+            .update({ origem: 'manual' })
+            .eq('id', produto.id);
+
+          // Inserir na tabela de preços do usuário
+          await supabase
+            .from('precos_atuais_usuario')
+            .upsert({
+              user_id: user.id,
+              produto_nome: produto.produto_nome,
+              valor_unitario: produto.preco_unitario_ultimo || 0,
+              origem: 'manual'
+            });
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao corrigir produtos manuais:', error);
+    }
+  };
 
   const loadPrecosAtuais = async () => {
     try {
@@ -677,7 +745,7 @@ const EstoqueAtual = () => {
               categoria: categoria || 'outros',
               unidade_medida: novoProduto.unidadeMedida,
               quantidade: quantidade,
-              preco_unitario_ultimo: valor, // CORRIGIDO: sem acento
+              preco_unitario_ultimo: valor,
               origem: 'manual'
             });
 
