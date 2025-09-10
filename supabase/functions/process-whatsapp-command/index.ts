@@ -1535,20 +1535,50 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
       return `❌ ${validacao.message}`;
     }
     
-    // Enviar mensagem de confirmação e iniciar processamento em background
-    supabase.functions.invoke('process-receipt-full', {
-      body: { imagemId: notaImagem.id }
-    }).then((processResult) => {
-      console.log('✅ Processamento completo iniciado:', processResult);
+    // Para PDFs, chamar primeiro process-danfe-pdf para extrair dados estruturados
+    if (anexo.tipo === 'document' && mimetype === 'application/pdf') {
+      console.log('🔍 Iniciando extração de dados do PDF...');
       
-      // Enviar mensagem de sucesso
-      enviarRespostaWhatsApp(mensagem.remetente, "✅ Nota processada com sucesso! Os produtos foram adicionados ao seu estoque.");
-    }).catch((processError) => {
-      console.error('❌ Erro no processamento completo:', processError);
-      
-      // Enviar mensagem de erro
-      enviarRespostaWhatsApp(mensagem.remetente, "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente.");
-    });
+      supabase.functions.invoke('process-danfe-pdf', {
+        body: { 
+          pdfUrl: publicUrl,
+          notaImagemId: notaImagem.id,
+          userId: mensagem.usuario_id
+        }
+      }).then((extractResult) => {
+        console.log('✅ Extração de dados concluída:', extractResult);
+        
+        // Após extração, chamar process-receipt-full
+        return supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagem.id }
+        });
+      }).then((processResult) => {
+        console.log('✅ Processamento completo iniciado:', processResult);
+        
+        // Enviar mensagem de sucesso
+        enviarRespostaWhatsApp(mensagem.remetente, "✅ Nota processada com sucesso! Os produtos foram adicionados ao seu estoque.");
+      }).catch((processError) => {
+        console.error('❌ Erro no processamento:', processError);
+        
+        // Enviar mensagem de erro
+        enviarRespostaWhatsApp(mensagem.remetente, "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente.");
+      });
+    } else {
+      // Para imagens, usar o fluxo original
+      supabase.functions.invoke('process-receipt-full', {
+        body: { imagemId: notaImagem.id }
+      }).then((processResult) => {
+        console.log('✅ Processamento completo iniciado:', processResult);
+        
+        // Enviar mensagem de sucesso
+        enviarRespostaWhatsApp(mensagem.remetente, "✅ Nota processada com sucesso! Os produtos foram adicionados ao seu estoque.");
+      }).catch((processError) => {
+        console.error('❌ Erro no processamento completo:', processError);
+        
+        // Enviar mensagem de erro
+        enviarRespostaWhatsApp(mensagem.remetente, "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente.");
+      });
+    }
     
     return "📂 Nota recebida, iniciando avaliação...";
     
