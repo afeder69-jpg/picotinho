@@ -443,7 +443,7 @@ const EstoqueAtual = () => {
       nome: '',
       categoria: '',
       quantidade: '',
-      unidadeMedida: 'Unidade',
+      unidadeMedida: 'un',
       valor: ''
     });
     setSugestaoNome('');
@@ -597,6 +597,15 @@ const EstoqueAtual = () => {
         return;
       }
 
+      if (!novoProduto.categoria) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Categoria é obrigatória.",
+        });
+        return;
+      }
+
       const quantidade = parseFloat(novoProduto.quantidade);
       if (isNaN(quantidade) || quantidade <= 0) {
         toast({
@@ -626,25 +635,9 @@ const EstoqueAtual = () => {
         return;
       }
 
-      // Categorizar automaticamente com IA se não for produto existente
-      let categoria = novoProduto.categoria;
-      let nomeParaSalvar = novoProduto.nome.trim();
-      
-      if (!produtoSelecionado && novoProduto.nome.trim()) {
-        toast({
-          title: "Categorizando...",
-          description: "Aguarde enquanto categorizamos o produto automaticamente.",
-        });
-        const resultado = await categorizarProdutoIA(novoProduto.nome.trim());
-        categoria = resultado.category;
-        
-        // Se há uma sugestão diferente do nome original, mostrar para o usuário
-        if (resultado.suggestedName && resultado.suggestedName !== novoProduto.nome.trim()) {
-          setSugestaoNome(resultado.suggestedName);
-          setMostrarSugestao(true);
-          return; // Para aqui para mostrar a sugestão
-        }
-      }
+      // Usar categoria selecionada manualmente (sem IA)
+      const categoria = novoProduto.categoria;
+      const nomeParaSalvar = novoProduto.nome.trim();
 
       // Verificar se o produto já existe no estoque do usuário
       const { data: produtoExistente, error: erroVerificacao } = await supabase
@@ -1401,9 +1394,9 @@ const EstoqueAtual = () => {
           </DialogHeader>
           
           <div className="space-y-4">
-            {/* Campo de busca de produto */}
+            {/* 1. Nome do produto - Campo de busca */}
             <div className="space-y-2">
-              <Label htmlFor="busca-produto">Buscar ou criar produto</Label>
+              <Label htmlFor="busca-produto">Nome do produto *</Label>
               <div className="relative">
                 <Input
                   id="busca-produto"
@@ -1437,104 +1430,89 @@ const EstoqueAtual = () => {
               )}
             </div>
 
-            {/* Sugestão de Nome (se disponível) */}
-            {mostrarSugestao && (
-              <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="text-sm">
-                  <div className="font-medium text-blue-900">Sugestão de nome padronizado:</div>
-                  <div className="text-gray-600 mt-1">Você digitou: <span className="font-mono bg-gray-100 px-1 rounded">{novoProduto.nome}</span></div>
-                  <div className="text-blue-700 mt-1">Sugerido: <span className="font-mono bg-blue-100 px-1 rounded">{sugestaoNome}</span></div>
+            {/* 2. Unidade de medida - Apenas 3 opções */}
+            <div className="space-y-2">
+              <Label htmlFor="unidade">Unidade de medida *</Label>
+              <Select
+                value={novoProduto.unidadeMedida}
+                onValueChange={(value) => setNovoProduto({ ...novoProduto, unidadeMedida: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="kg">Quilo (kg)</SelectItem>
+                  <SelectItem value="un">Unidade (un)</SelectItem>
+                  <SelectItem value="L">Litro (L)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 3. Quantidade */}
+            <div className="space-y-2">
+              <Label htmlFor="quantidade">Quantidade *</Label>
+              <Input
+                id="quantidade"
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="Digite a quantidade"
+                value={novoProduto.quantidade}
+                onChange={(e) => setNovoProduto({ ...novoProduto, quantidade: e.target.value })}
+              />
+            </div>
+
+            {/* 4. Categoria - 11 categorias fixas */}
+            <div className="space-y-2">
+              <Label htmlFor="categoria">Categoria *</Label>
+              <Select
+                value={novoProduto.categoria}
+                onValueChange={(value) => setNovoProduto({ ...novoProduto, categoria: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="hortifruti">Hortifruti</SelectItem>
+                  <SelectItem value="bebidas">Bebidas</SelectItem>
+                  <SelectItem value="mercearia">Mercearia</SelectItem>
+                  <SelectItem value="açougue">Açougue</SelectItem>
+                  <SelectItem value="padaria">Padaria</SelectItem>
+                  <SelectItem value="laticínios/frios">Laticínios/Frios</SelectItem>
+                  <SelectItem value="limpeza">Limpeza</SelectItem>
+                  <SelectItem value="higiene/farmácia">Higiene/Farmácia</SelectItem>
+                  <SelectItem value="congelados">Congelados</SelectItem>
+                  <SelectItem value="pet">Pet</SelectItem>
+                  <SelectItem value="outros">Outros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 5. Preço pago por unidade */}
+            <div className="space-y-2">
+              <Label htmlFor="valor">Preço pago por unidade *</Label>
+              <Input
+                id="valor"
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="Digite o preço que você pagou em R$"
+                value={novoProduto.valor}
+                onChange={(e) => setNovoProduto({ ...novoProduto, valor: e.target.value })}
+              />
+            </div>
+
+            {/* Mostrar preço total calculado */}
+            {novoProduto.valor && novoProduto.quantidade && (
+              <div className="bg-muted p-3 rounded-md">
+                <div className="text-sm font-medium text-foreground">
+                  💰 Valor Total: {formatCurrency(parseFloat(novoProduto.valor) * parseFloat(novoProduto.quantidade))}
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={async () => {
-                      setMostrarSugestao(false);
-                      // Continuar inserção com nome sugerido
-                      await continuarInsercaoProduto(sugestaoNome, 'outros');
-                    }}
-                    className="flex-1"
-                  >
-                    Usar sugestão
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={async () => {
-                      setMostrarSugestao(false);
-                      // Continuar inserção com nome original
-                      await continuarInsercaoProduto(novoProduto.nome.trim(), 'outros');
-                    }}
-                    className="flex-1"
-                  >
-                    Manter original
-                  </Button>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {formatarQuantidade(parseFloat(novoProduto.quantidade))} {novoProduto.unidadeMedida} × {formatCurrency(parseFloat(novoProduto.valor))}
                 </div>
               </div>
             )}
-
-            {/* Campos do produto */}
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="valor">Preço Pago por Unidade *</Label>
-                <Input
-                  id="valor"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="Digite o preço que você pagou em R$"
-                  value={novoProduto.valor}
-                  onChange={(e) => setNovoProduto({ ...novoProduto, valor: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="unidade">Unidade de Medida *</Label>
-                <Select
-                  value={novoProduto.unidadeMedida}
-                  onValueChange={(value) => setNovoProduto({ ...novoProduto, unidadeMedida: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Unidade">Unidade</SelectItem>
-                    <SelectItem value="Kg">Kg</SelectItem>
-                    <SelectItem value="Gramas">Gramas</SelectItem>
-                    <SelectItem value="Litros">Litros</SelectItem>
-                    <SelectItem value="ML">ML</SelectItem>
-                    <SelectItem value="Pacote">Pacote</SelectItem>
-                    <SelectItem value="Caixa">Caixa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="quantidade">Quantidade *</Label>
-                <Input
-                  id="quantidade"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="Digite a quantidade"
-                  value={novoProduto.quantidade}
-                  onChange={(e) => setNovoProduto({ ...novoProduto, quantidade: e.target.value })}
-                />
-              </div>
-
-              {/* Mostrar preço total calculado */}
-              {novoProduto.valor && novoProduto.quantidade && (
-                <div className="bg-muted p-3 rounded-md">
-                  <div className="text-sm font-medium text-foreground">
-                    💰 Valor Total: {formatCurrency(parseFloat(novoProduto.valor) * parseFloat(novoProduto.quantidade))}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {formatarQuantidade(parseFloat(novoProduto.quantidade))} {novoProduto.unidadeMedida} × {formatCurrency(parseFloat(novoProduto.valor))}
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Botões */}
             <div className="flex gap-2 pt-4">
