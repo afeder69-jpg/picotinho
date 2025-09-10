@@ -998,7 +998,7 @@ const EstoqueAtual = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Botão Ações flutuante fixo no canto superior direito */}
-      <div className="fixed top-20 right-4 z-40">
+      <div className="fixed bottom-4 right-4 z-40">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button 
