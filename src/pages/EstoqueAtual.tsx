@@ -1001,9 +1001,11 @@ const EstoqueAtual = () => {
       <div className="fixed top-20 right-4 z-40">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
-              <MoreVertical className="w-4 h-4 mr-2" />
-              Ações
+            <Button 
+              size="lg"
+              className="h-16 w-16 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg"
+            >
+              <MoreVertical className="w-6 h-6" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 bg-background z-50">
