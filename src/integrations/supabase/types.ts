@@ -1548,6 +1548,14 @@ export type Database = {
         Args: { usuario_uuid: string }
         Returns: undefined
       }
+      limpar_produtos_fantasmas_e_corrigir_precos: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          acao_realizada: string
+          detalhes: string
+          produto_afetado: string
+        }[]
+      }
       limpar_sessoes_expiradas: {
         Args: Record<PropertyKey, never>
         Returns: undefined
