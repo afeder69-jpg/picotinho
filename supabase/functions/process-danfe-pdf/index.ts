@@ -567,14 +567,9 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
             if (descricao && valor_unitario && dadosEstruturados.estabelecimento?.cnpj) {
               try {
                 // Usar a função especializada que considera data/hora e área de atuação
-                await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/update-precos-atuais`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    compraId: compra?.id,
+                await supabase.functions.invoke('update-precos-atuais', {
+                  body: {
+                    compraId: novaCompra?.id,
                     produtoNome: descricao,
                     precoUnitario: valor_unitario,
                     estabelecimentoCnpj: dadosEstruturados.estabelecimento.cnpj?.replace(/[^\d]/g, '') || '',
@@ -582,7 +577,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                     dataCompra: dadosEstruturados.compra?.data_emissao,
                     horaCompra: dadosEstruturados.compra?.hora_emissao,
                     userId: userId
-                  })
+                  }
                 });
                 
                 console.log(`✅ Preço atual processado para: ${descricao}`);
@@ -598,65 +593,9 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         }
       }
 
-      // 📦 Atualizar estoque do usuário
-      if (dadosEstruturados.itens && userId) {
-        console.log("📦 Iniciando atualização do estoque...");
-        for (const item of dadosEstruturados.itens) {
-          try {
-            const { descricao, quantidade, unidade, valor_unitario, categoria } = item;
-
-            // 📦 Normalizar nome do produto
-            const nomeNormalizado = descricao
-              ?.replace(/\b(GRAENC|GRANEL)\b/gi, 'GRANEL')
-              ?.replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO)?\b/gi, 'PAO DE FORMA')
-              ?.replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|\d+G|\d+ML|\d+L)\b/gi, '')
-              ?.replace(/\s+/g, ' ')
-              ?.trim()
-              ?.toUpperCase() || 'PRODUTO';
-
-            // 📊 Verificar se produto já existe no estoque
-            const { data: estoqueExistente } = await supabase
-              .from('estoque_app')
-              .select('id, quantidade')
-              .eq('user_id', userId)
-              .eq('produto_nome', nomeNormalizado)
-              .single();
-
-            if (estoqueExistente) {
-              // Atualizar quantidade existente - SEMPRE usar preço da nota
-              await supabase
-                .from('estoque_app')
-                .update({
-                  quantidade: estoqueExistente.quantidade + (quantidade || 0),
-                  preco_unitario_ultimo: valor_unitario || 0,
-                  origem: 'nota_fiscal'
-                })
-                .eq('id', estoqueExistente.id);
-
-              console.log(`📦 Estoque atualizado: ${nomeNormalizado} (${estoqueExistente.quantidade} + ${quantidade} = ${estoqueExistente.quantidade + (quantidade || 0)})`);
-            } else {
-              // Criar novo item no estoque
-              await supabase
-                .from('estoque_app')
-                .insert({
-                  user_id: userId,
-                  produto_nome: nomeNormalizado,
-                  categoria: categoria || 'outros',
-                  quantidade: quantidade || 0,
-                  unidade_medida: unidade || 'unidade',
-                  preco_unitario_ultimo: valor_unitario || 0,
-                  origem: 'nota_fiscal'
-                });
-
-              console.log(`📦 Novo item no estoque: ${nomeNormalizado} (${quantidade})`);
-            }
-
-          } catch (estoqueError) {
-            console.error("❌ Erro ao atualizar estoque:", item, estoqueError);
-          }
-        }
-        console.log("✅ Atualização do estoque concluída");
-      }
+      // 📦 REMOVIDO: Não atualizar estoque aqui para evitar duplicação
+      // O estoque será atualizado pela function process-receipt-full usando normalização consistente
+      console.log("📦 Processamento de estoque será feito pela process-receipt-full");
 
       // 🛍️ Processar itens da compra
       if (dadosEstruturados.itens && compraId) {

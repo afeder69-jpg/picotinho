@@ -120,13 +120,19 @@ serve(async (req) => {
           // Verificar se o produto é similar (usando lógica de normalização)
           const produtoSimilar = verificarSimilaridadeProduto(itemEstoque.produto_nome, produtoNome);
           
-          if (produtoSimilar) {
-            // Verificar se o usuário está na área de atuação
-            // Para simplificar, vamos aplicar para todos os usuários por enquanto
-            // Futuramente podemos adicionar verificação de geolocalização
+          if (produtoSimilar && itemEstoque.preco_unitario_ultimo === null || itemEstoque.preco_unitario_ultimo === 0) {
+            // CORREÇÃO CRÍTICA: Aplicar preço atual se não existe ou está zerado
+            const { error: updateError } = await supabase
+              .from('estoque_app')
+              .update({
+                preco_unitario_ultimo: precoUnitario
+              })
+              .eq('id', itemEstoque.id);
             
-            console.log(`📍 Aplicando preço atual para usuário ${itemEstoque.user_id}`);
-            usuariosAtualizados++;
+            if (!updateError) {
+              console.log(`📍 Preço atual aplicado: ${itemEstoque.produto_nome} = R$ ${precoUnitario} (usuário ${itemEstoque.user_id})`);
+              usuariosAtualizados++;
+            }
           }
         }
         
