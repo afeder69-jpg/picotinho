@@ -1137,7 +1137,8 @@ Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor,
           categoria: categoria,
           quantidade: quantidadeDecimal,
           unidade_medida: unidade.toUpperCase(),
-          preco_unitario_ultimo: preco
+          preco_unitario_ultimo: preco,
+          origem: 'manual' // IMPORTANTE: Marcar como produto inserido manualmente via WhatsApp
         });
       
       // Encerrar sessão
