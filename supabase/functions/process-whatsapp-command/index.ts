@@ -1407,14 +1407,32 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
       'image/webp'
     ];
     
-    if (!tiposAceitos.includes(anexo.mimetype)) {
-      return `❌ Tipo de arquivo não aceito: ${anexo.mimetype}\n\nTipos aceitos:\n• PDF (.pdf)\n• XML (.xml)\n• Imagens (.jpg, .png, .webp)`;
+    // Obter mimetype do anexo ou da mensagem original
+    let mimetype = anexo.mimetype;
+    if (!mimetype && mensagem.webhook_data?.document?.mimeType) {
+      mimetype = mensagem.webhook_data.document.mimeType;
+    }
+    if (!mimetype && mensagem.webhook_data?.image?.mimetype) {
+      mimetype = mensagem.webhook_data.image.mimetype;
+    }
+    
+    if (!tiposAceitos.includes(mimetype)) {
+      return `❌ Tipo de arquivo não aceito: ${mimetype || 'undefined'}\n\nTipos aceitos:\n• PDF (.pdf)\n• XML (.xml)\n• Imagens (.jpg, .png, .webp)`;
+    }
+    
+    // Obter URL do anexo
+    let anexoUrl = anexo.url;
+    if (!anexoUrl && mensagem.webhook_data?.document?.documentUrl) {
+      anexoUrl = mensagem.webhook_data.document.documentUrl;
+    }
+    if (!anexoUrl && mensagem.webhook_data?.image?.url) {
+      anexoUrl = mensagem.webhook_data.image.url;
     }
     
     // Baixar o arquivo do WhatsApp
-    console.log('📥 Baixando arquivo do WhatsApp:', anexo.url);
+    console.log('📥 Baixando arquivo do WhatsApp:', anexoUrl);
     
-    const response = await fetch(anexo.url);
+    const response = await fetch(anexoUrl);
     if (!response.ok) {
       console.error('❌ Erro ao baixar arquivo:', response.status, response.statusText);
       return "❌ Erro ao baixar o arquivo. Tente enviar novamente.";
@@ -1426,15 +1444,15 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
     console.log('✅ Arquivo baixado com sucesso, tamanho:', fileData.length, 'bytes');
     
     // Determinar nome do arquivo e tipo
-    let fileName = anexo.filename || 'nota_whatsapp';
-    if (anexo.tipo === 'document' && anexo.mimetype === 'application/pdf') {
+    let fileName = anexo.filename || mensagem.webhook_data?.document?.fileName || mensagem.webhook_data?.image?.filename || 'nota_whatsapp';
+    if (anexo.tipo === 'document' && mimetype === 'application/pdf') {
       fileName = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
-    } else if (anexo.tipo === 'document' && (anexo.mimetype.includes('xml'))) {
+    } else if (anexo.tipo === 'document' && mimetype && mimetype.includes('xml')) {
       fileName = fileName.endsWith('.xml') ? fileName : fileName + '.xml';
     } else if (anexo.tipo === 'image') {
-      const ext = anexo.mimetype === 'image/jpeg' ? '.jpg' : 
-                  anexo.mimetype === 'image/png' ? '.png' : 
-                  anexo.mimetype === 'image/webp' ? '.webp' : '.jpg';
+      const ext = mimetype === 'image/jpeg' ? '.jpg' : 
+                  mimetype === 'image/png' ? '.png' : 
+                  mimetype === 'image/webp' ? '.webp' : '.jpg';
       fileName = fileName.includes('.') ? fileName : fileName + ext;
     }
     
