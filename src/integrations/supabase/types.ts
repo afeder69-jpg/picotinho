@@ -607,6 +607,7 @@ export type Database = {
           imagem_path: string
           imagem_url: string
           nome_original: string | null
+          origem: string | null
           processada: boolean | null
           updated_at: string | null
           usuario_id: string
@@ -621,6 +622,7 @@ export type Database = {
           imagem_path: string
           imagem_url: string
           nome_original?: string | null
+          origem?: string | null
           processada?: boolean | null
           updated_at?: string | null
           usuario_id: string
@@ -635,6 +637,7 @@ export type Database = {
           imagem_path?: string
           imagem_url?: string
           nome_original?: string | null
+          origem?: string | null
           processada?: boolean | null
           updated_at?: string | null
           usuario_id?: string
