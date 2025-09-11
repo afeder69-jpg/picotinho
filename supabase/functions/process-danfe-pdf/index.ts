@@ -237,33 +237,49 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
 Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANTA que o JSON seja válido e contenha TODOS os itens da nota.`;
 
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
-          { role: 'user', content: aiPrompt }
-        ],
-        max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
-        temperature: 0.1
-      }),
-    });
+let respostaIA = '';
+try {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort('timeout'), 25000);
 
-    if (!aiResponse.ok) {
-      throw new Error(`Erro na API OpenAI: ${aiResponse.status}`);
-    }
+  const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
+        { role: 'user', content: aiPrompt }
+      ],
+      max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
+      temperature: 0.1
+    }),
+    signal: controller.signal,
+  });
+  clearTimeout(timeoutId);
 
-    const aiData = await aiResponse.json();
-    const respostaIA = aiData.choices[0]?.message?.content || '';
-    
-    console.log("📝 RESPOSTA_BRUTA da IA (completa):");
-    console.log(respostaIA); // RESPOSTA COMPLETA da IA, sem cortar
-    console.log("=".repeat(80));
+  if (!aiResponse.ok) {
+    throw new Error(`Erro na API OpenAI: ${aiResponse.status}`);
+  }
+
+  const aiData = await aiResponse.json();
+  respostaIA = aiData.choices?.[0]?.message?.content || '';
+} catch (e) {
+  console.error('⚠️ IA-2 falhou ou excedeu o tempo. Usando fallback local:', e);
+  // Fallback mínimo: JSON válido para permitir continuação do processamento e reconciliação via regex
+  respostaIA = JSON.stringify({
+    estabelecimento: { nome: null, cnpj: null, endereco: null },
+    compra: { valor_total: null, forma_pagamento: null, numero: null, serie: null, data_emissao: null, chave_acesso: null },
+    itens: []
+  });
+}
+
+console.log("📝 RESPOSTA_BRUTA da IA (completa):");
+console.log(respostaIA); // RESPOSTA COMPLETA da IA, sem cortar
+console.log("=".repeat(80));
 
     // 💾 Configurar Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -861,20 +877,25 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     }
 
     // 📦 CHAMAR PROCESS-RECEIPT-FULL para processar estoque
+try {
+  console.log("📦 Agendando processamento de estoque em background...");
+  EdgeRuntime.waitUntil((async () => {
     try {
-      console.log("📦 Iniciando processamento de estoque...");
-      const { data: estoqueResult, error: estoqueError } = await supabase.functions.invoke('process-receipt-full', {
+      const { data, error } = await supabase.functions.invoke('process-receipt-full', {
         body: { imagemId: notaImagemId }
       });
-      
-      if (estoqueError) {
-        console.error('⚠️ Erro no processamento de estoque (não crítico):', estoqueError);
+      if (error) {
+        console.error('⚠️ Erro no processamento de estoque (bg):', error);
       } else {
-        console.log('✅ Processamento de estoque concluído:', estoqueResult);
+        console.log('✅ Processamento de estoque (bg) concluído:', data);
       }
-    } catch (estoqueError) {
-      console.error('⚠️ Erro ao chamar process-receipt-full (não crítico):', estoqueError);
+    } catch (e) {
+      console.error('⚠️ Falha ao chamar process-receipt-full (bg):', e);
     }
+  })());
+} catch (e) {
+  console.error('⚠️ Erro ao agendar processamento de estoque:', e);
+}
 
     return new Response(JSON.stringify({
       success: true,
