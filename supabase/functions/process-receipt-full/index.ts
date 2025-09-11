@@ -210,7 +210,11 @@ serve(async (req) => {
             console.log(`   - Quantidade: ${produtoData.quantidade}`);
             console.log(`   - Categoria: ${produtoData.categoria}`);
             
-            // 📈 Criar novo produto no estoque
+            // 📈 Criar novo produto no estoque - GARANTIR que sempre tenha preço
+            const precoParaSalvar = produtoData.precoUnitario && produtoData.precoUnitario > 0 
+              ? produtoData.precoUnitario 
+              : 0.01; // Preço mínimo para evitar zeros
+              
             const { error: insertError } = await supabase
               .from('estoque_app')
               .insert({
@@ -219,7 +223,8 @@ serve(async (req) => {
                 categoria: produtoData.categoria || 'outros',
                 unidade_medida: produtoData.unidade || 'unidade',
                 quantidade: produtoData.quantidade || 1,
-                preco_unitario_ultimo: produtoData.precoUnitario || 0
+                preco_unitario_ultimo: precoParaSalvar,
+                origem: 'nota_fiscal'
               });
 
             if (insertError) {
@@ -252,6 +257,22 @@ serve(async (req) => {
     }
 
     console.log('✅ Processamento completo da nota fiscal!');
+
+    // 🔧 Executar correção automática de preços zerados
+    try {
+      console.log('🔧 Executando correção automática de preços...');
+      const { data: correcaoResult, error: correcaoError } = await supabase.functions.invoke('fix-precos-automatico', {
+        body: { userId: notaImagem.usuario_id }
+      });
+      
+      if (correcaoError) {
+        console.error('⚠️ Erro na correção automática (não crítico):', correcaoError);
+      } else {
+        console.log('✅ Correção automática executada:', correcaoResult);
+      }
+    } catch (error) {
+      console.error('⚠️ Erro na correção automática (não crítico):', error);
+    }
 
     return new Response(
       JSON.stringify({ 

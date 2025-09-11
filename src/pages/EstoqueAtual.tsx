@@ -42,6 +42,7 @@ const EstoqueAtual = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
   const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
+  const [corrigindoPrecos, setCorrigindoPrecos] = useState(false);
   
   // Estados para inserção de produto
   const [modalInserirAberto, setModalInserirAberto] = useState(false);
@@ -151,30 +152,49 @@ const EstoqueAtual = () => {
     }
   };
 
-  const corrigirPrecosZerados = async () => {
+  const corrigirPrecosAutomaticamente = async () => {
     try {
+      setCorrigindoPrecos(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      console.log('Executando correção de preços zerados...');
+      console.log('🔧 Executando correção automática de preços...');
       
-      const { data, error } = await supabase.functions.invoke('fix-precos-zerados', {
+      const { data, error } = await supabase.functions.invoke('fix-precos-automatico', {
         body: { userId: user.id }
       });
 
       if (error) {
-        console.error('Erro ao corrigir preços:', error);
+        console.error('❌ Erro ao corrigir preços:', error);
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Não foi possível corrigir os preços automaticamente.",
+        });
         return;
       }
 
-      console.log('Correção de preços concluída:', data);
+      console.log('✅ Correção automática concluída:', data);
       
-      // Recarregar preços atuais após correção
-      if (data?.produtosCorrigidos > 0) {
-        await loadPrecosAtuais();
-      }
+      toast({
+        title: "Correção Concluída",
+        description: `${data?.produtosCorrigidos || 0} produtos tiveram seus preços corrigidos.`,
+      });
+      
+      // Recarregar dados após correção
+      await Promise.all([
+        loadEstoque(),
+        loadPrecosAtuais()
+      ]);
     } catch (error) {
-      console.error('Erro ao executar correção de preços:', error);
+      console.error('❌ Erro ao executar correção automática:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro inesperado ao corrigir preços.",
+      });
+    } finally {
+      setCorrigindoPrecos(false);
     }
   };
 
@@ -267,6 +287,23 @@ const EstoqueAtual = () => {
     }
     
     const nomeProdutoNormalizado = nomeProduto.toLowerCase().trim();
+    
+    // 1. PRIMEIRO: verificar se o produto já tem preço próprio no estoque
+    const produtoComPreco = estoque.find(item => 
+      item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
+      item.preco_unitario_ultimo && 
+      item.preco_unitario_ultimo > 0
+    );
+    
+    if (produtoComPreco) {
+      console.log(`💰 Usando preço próprio do produto: R$ ${produtoComPreco.preco_unitario_ultimo}`);
+      return {
+        produto_nome: nomeProduto,
+        valor_unitario: produtoComPreco.preco_unitario_ultimo,
+        data_atualizacao: produtoComPreco.updated_at,
+        origem: 'produto_proprio'
+      };
+    }
     
     // 1. Busca exata nos preços da área
     const buscaExata = precosAtuais.find(preco => 
@@ -1018,6 +1055,20 @@ const EstoqueAtual = () => {
             <DropdownMenuItem onClick={() => setModoEdicao(!modoEdicao)}>
               <Edit3 className="w-4 h-4 mr-2" />
               {modoEdicao ? "Sair da Edição" : "Ajustar Estoque"}
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={corrigirPrecosAutomaticamente}
+              disabled={corrigindoPrecos}
+              className="text-blue-600 focus:text-blue-700"
+            >
+              <div className="w-4 h-4 mr-2">
+                {corrigindoPrecos ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                ) : (
+                  <span className="text-lg">💰</span>
+                )}
+              </div>
+              {corrigindoPrecos ? "Corrigindo..." : "Corrigir Preços"}
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
