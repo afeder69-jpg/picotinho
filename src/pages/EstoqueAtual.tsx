@@ -369,6 +369,7 @@ const EstoqueAtual = () => {
         .from('estoque_app')
         .select('*, origem')
         .eq('user_id', user.id)
+        .gt('quantidade', 0)  // Mostrar apenas produtos com estoque para não poluir a interface
         .order('produto_nome', { ascending: true });
 
       if (error) throw error;
@@ -1210,12 +1211,11 @@ const EstoqueAtual = () => {
                        const precoAtual = encontrarPrecoAtual(item.produto_nome);
                        const precoParaExibir = precoAtual?.valor_unitario || item.preco_unitario_ultimo;
                        const quantidade = parseFloat(item.quantidade.toString());
-                       const isZerado = quantidade === 0;
                        
                          return (
                            <div 
                              key={item.id} 
-                             className={`flex items-center py-2 border-b border-border last:border-0 ${isZerado ? 'opacity-50 bg-muted/30' : ''}`}
+                             className="flex items-center py-2 border-b border-border last:border-0"
                            >
                             <div className="flex-1 overflow-hidden relative">
                                 <h3 className="text-xs font-medium text-foreground leading-tight relative">
@@ -1281,9 +1281,8 @@ const EstoqueAtual = () => {
                            </div>
                            
                               <div className="text-right flex-shrink-0 ml-2">
-                                <div className={`text-xs font-medium ${isZerado ? 'text-muted-foreground' : 'text-foreground'}`}>
+                                <div className="text-xs font-medium text-foreground">
                                   {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
-                                  {isZerado && <span className="block text-xs text-muted-foreground italic">Consumido</span>}
                                 </div>
                                 {/* Texto removido conforme solicitação do usuário */}
                           </div>
