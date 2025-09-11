@@ -372,6 +372,52 @@ console.log("=".repeat(80));
         console.warn('⚠️ Falha na salvaguarda de itens (não crítico):', safeErr);
       }
 
+      // 🛟 Fallback: enriquecer estabelecimento/compra a partir do texto quando IA retorna vazio
+      try {
+        const toNumberBR = (s: string | number | null | undefined) => {
+          if (typeof s === 'number') return s;
+          if (!s) return 0;
+          const t = s.toString().replace(/\./g, '').replace(/,/g, '.');
+          const n = parseFloat(t);
+          return isFinite(n) ? n : 0;
+        };
+
+        // Estabelecimento - nome e CNPJ
+        const cnpjMatch = textoLimpo.match(/CNPJ[:\s]*([\d./-]+)/i);
+        const nomeMatch = textoLimpo.match(/^\s*([^\n]+?)\s+CNPJ\b/i);
+        const estabelecimento = {
+          nome: dadosEstruturados?.estabelecimento?.nome || nomeMatch?.[1]?.trim() || null,
+          cnpj: dadosEstruturados?.estabelecimento?.cnpj || cnpjMatch?.[1]?.trim() || null,
+          endereco: dadosEstruturados?.estabelecimento?.endereco || null
+        };
+
+        if (!dadosEstruturados.estabelecimento) dadosEstruturados.estabelecimento = {} as any;
+        Object.assign(dadosEstruturados.estabelecimento, estabelecimento);
+
+        // Compra - chave, valor_total, data/hora, forma de pagamento
+        const chave = (textoLimpo.match(/\b\d{44}\b/) || [])?.[0] || null;
+        const formaMatch = textoLimpo.match(/Forma de pagamento:\s*([^\n]+)/i);
+        const emissaoMatch = textoLimpo.match(/Emiss[aã]o:\s*([\d/]{8,10})(?:\s+([\d:]{5,8}))/i);
+        const totalMatch = textoLimpo.match(/Valor total R\$:?\s*([\d.,]+)/i);
+
+        // Se ainda não tiver valor_total, soma dos itens capturados por regex
+        let valorTotalCalc = dadosEstruturados?.compra?.valor_total;
+        if (!valorTotalCalc && Array.isArray(dadosEstruturados?.itens) && dadosEstruturados.itens.length > 0) {
+          valorTotalCalc = dadosEstruturados.itens.reduce((acc: number, it: any) => acc + toNumberBR(it.valor_total || 0), 0);
+          // Arredonda a 2 casas
+          valorTotalCalc = Math.round((valorTotalCalc + Number.EPSILON) * 100) / 100;
+        }
+        if (!valorTotalCalc && totalMatch?.[1]) valorTotalCalc = toNumberBR(totalMatch[1]);
+
+        if (!dadosEstruturados.compra) dadosEstruturados.compra = {} as any;
+        dadosEstruturados.compra.chave_acesso = dadosEstruturados.compra.chave_acesso || chave;
+        dadosEstruturados.compra.forma_pagamento = dadosEstruturados.compra.forma_pagamento || (formaMatch?.[1]?.trim() || null);
+        dadosEstruturados.compra.data_emissao = dadosEstruturados.compra.data_emissao || (emissaoMatch ? `${emissaoMatch[1]} ${emissaoMatch[2] || ''}`.trim() : null);
+        dadosEstruturados.compra.valor_total = dadosEstruturados.compra.valor_total || valorTotalCalc || null;
+      } catch (enrichErr) {
+        console.warn('⚠️ Fallback de enriquecimento falhou (não crítico):', enrichErr);
+      }
+
       // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
       if (dadosEstruturados.estabelecimento) {
