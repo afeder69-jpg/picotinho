@@ -283,6 +283,79 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
 
+      // 🔒 Salvaguarda anti-perda de itens em notas multi-página (IA-2)
+      // Re-extrai itens via regex do texto normalizado e reconcilia com os itens da IA
+      try {
+        type ItemBruto = { descricao: string; codigo?: string | null; quantidade: number; unidade: string; valor_unitario: number; valor_total: number; categoria?: string };
+        const toNumberBR = (s: string | number | null | undefined) => {
+          if (typeof s === 'number') return s;
+          if (!s) return 0;
+          const t = s.toString().replace(/\./g, '').replace(/,/g, '.');
+          const n = parseFloat(t);
+          return isFinite(n) ? n : 0;
+        };
+        const normalizaDesc = (d: string) => d?.toUpperCase()?.replace(/\s+/g, ' ')?.trim() || '';
+
+        const parseItemsFromText = (texto: string): ItemBruto[] => {
+          const items: ItemBruto[] = [];
+          const re = /(.*?)\s*\(Código:\s*(\d+)\s*\)\s*Quantidade:\s*([\d.,]+)\s*Unidade:\s*(Unidade|Kg|Gramas|Litros|ML|L|G|KG)\s*Valor Unitário:\s*([\d.,]+)\s*Valor Total\s*([\d.,]+)/gi;
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(texto)) !== null) {
+            const descricao = (m[1] || '').replace(/[\s:]+$/g, '').trim();
+            items.push({
+              descricao,
+              codigo: m[2] || null,
+              quantidade: toNumberBR(m[3]),
+              unidade: m[4] || 'Unidade',
+              valor_unitario: toNumberBR(m[5]),
+              valor_total: toNumberBR(m[6])
+            });
+          }
+          return items;
+        };
+
+        // Gera baseline de itens a partir do texto bruto para capturar fronteiras de página
+        const itensRegex = parseItemsFromText(textoLimpo);
+        if (Array.isArray(dadosEstruturados?.itens)) {
+          const existentes = new Set(
+            dadosEstruturados.itens.map((it: any) => normalizaDesc(it.descricao))
+          );
+
+          // Função de similaridade simples (coeficiente de Jaccard por palavras)
+          const similar = (a: string, b: string) => {
+            const sa = new Set(a.split(' '));
+            const sb = new Set(b.split(' '));
+            const inter = [...sa].filter(x => sb.has(x)).length;
+            const uni = new Set([...sa, ...sb]).size;
+            return uni === 0 ? 0 : inter / uni;
+          };
+
+          let adicionados = 0;
+          for (const raw of itensRegex) {
+            const alvo = normalizaDesc(raw.descricao);
+            const jaExiste = [...existentes].some(e => e === alvo || similar(e, alvo) >= 0.85 || e.includes(alvo) || alvo.includes(e));
+            if (!jaExiste && alvo) {
+              dadosEstruturados.itens.push({
+                descricao: raw.descricao,
+                codigo: raw.codigo || null,
+                quantidade: raw.quantidade || 1,
+                unidade: raw.unidade || 'unidade',
+                valor_unitario: raw.valor_unitario || (raw.valor_total && raw.quantidade ? raw.valor_total / Math.max(raw.quantidade, 1) : 0),
+                valor_total: raw.valor_total || 0,
+                categoria: 'Outros'
+              });
+              existentes.add(alvo);
+              adicionados++;
+            }
+          }
+          if (adicionados > 0) {
+            console.log(`🧩 Salvaguarda adicionou ${adicionados} item(ns) ausente(s) da fronteira de página`);
+          }
+        }
+      } catch (safeErr) {
+        console.warn('⚠️ Falha na salvaguarda de itens (não crítico):', safeErr);
+      }
+
       // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
       if (dadosEstruturados.estabelecimento) {
