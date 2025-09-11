@@ -174,7 +174,17 @@ O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
 
 NUNCA truncar ou cortar no meio — incluir TODOS os itens da nota.
 
-⚖️ 3. Validação de Consistência (OBRIGATÓRIA):
+🔄 3. TRATAMENTO DE NOTAS MULTI-PÁGINA (CRÍTICO):
+
+QUEBRAS DE PÁGINA não indicam fim da lista de produtos.
+
+ÚLTIMO ITEM da página anterior: sempre capturar completamente, mesmo que apareça no final.
+
+ITENS FRAGMENTADOS: se um item estiver dividido entre páginas (parte na página 1, parte na página 2), reconstrua como um único item completo.
+
+CONTINUIDADE: verificar linhas próximas às quebras de página para produtos não capturados.
+
+⚖️ 4. VALIDAÇÃO DE CONSISTÊNCIA (OBRIGATÓRIA):
 
 Após extrair todos os itens, some os valores de cada item (valor_total).
 
@@ -183,9 +193,11 @@ Compare essa soma com o valor_total da compra.
 Se a soma bater (ou a diferença for de poucos centavos por arredondamento), mantenha o resultado.
 
 Se a soma NÃO bater:
-• Reanalise o texto para encontrar itens que possam ter sido ignorados.
-• Refaça a listagem até que a soma dos itens bata com o valor_total oficial da nota.
-• Somente finalize o JSON quando os valores forem consistentes.
+• Reanalise o texto ESPECIFICAMENTE nas linhas próximas às quebras de página (fim da página anterior e início da seguinte).
+• Procure por itens que possam ter sido ignorados, especialmente o último item da página 1.
+• Refaça a listagem incluindo todos os itens encontrados.
+• Continue até que a soma dos itens bata com o valor_total oficial da nota.
+• Somente finalize o JSON quando os valores forem consistentes (tolerando apenas diferenças de centavos por arredondamento).
 
 4. Estrutura OBRIGATÓRIA do retorno:
 \`\`\`json
