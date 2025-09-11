@@ -569,7 +569,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 // Usar a função especializada que considera data/hora e área de atuação
                 await supabase.functions.invoke('update-precos-atuais', {
                   body: {
-                    compraId: novaCompra?.id,
+                    compraId: compraId,
                     produtoNome: descricao,
                     precoUnitario: valor_unitario,
                     estabelecimentoCnpj: dadosEstruturados.estabelecimento.cnpj?.replace(/[^\d]/g, '') || '',
@@ -625,13 +625,17 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                   categoriaId = categoriaExistente.id;
                 } else {
                   // Criar categoria se não existir
-                  const { data: novaCategoria } = await supabase
+                  const { data: novaCategoria, error: errorNovaCategoria } = await supabase
                     .from('categorias_predefinidas')
                     .insert({ nome: categoria })
                     .select('id')
                     .single();
                   
-                  if (novaCategoria) categoriaId = novaCategoria.id;
+                  if (!errorNovaCategoria && novaCategoria) {
+                    categoriaId = novaCategoria.id;
+                  } else {
+                    console.error("❌ Erro ao criar categoria:", errorNovaCategoria);
+                  }
                 }
               }
 
@@ -642,7 +646,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                   nome: descricao || 'Produto',
                   codigo_barras: codigo || null,
                   unidade_medida: unidade || 'unidade',
-                  categoria_id: categoriaId || null
+                  categoria_id: categoriaId // Remover o fallback null que pode estar causando problema
                 })
                 .select('id')
                 .single();

@@ -100,22 +100,32 @@ serve(async (req) => {
     };
 
     // Processa produtos e atualiza estoque automaticamente
-    if (extractedData.produtos && Array.isArray(extractedData.produtos)) {
+    // Verifica tanto 'produtos' quanto 'itens' para compatibilidade
+    const listaItens = extractedData.produtos || extractedData.itens;
+    if (listaItens && Array.isArray(listaItens)) {
       console.log('📦 Atualizando estoque automaticamente...');
       
-      for (let index = 0; index < extractedData.produtos.length; index++) {
-        const produtoData = extractedData.produtos[index];
+      for (let index = 0; index < listaItens.length; index++) {
+        const produtoData = listaItens[index];
         try {
-          console.log(`\n🔍 PROCESSANDO ITEM ${index + 1}: "${produtoData.nome}"`);
-          console.log(`   - Quantidade: ${produtoData.quantidade}`);
-          console.log(`   - Preço unitário: ${produtoData.precoUnitario}`);
-          console.log(`   - Preço total: ${produtoData.precoTotal}`);
-          console.log(`   - Categoria: ${produtoData.categoria}`);
-          
-          const nomeNormalizado = await normalizarNomeProduto(produtoData.nome);
-          console.log(`🏷️ Original: "${produtoData.nome}" -> Normalizado: "${nomeNormalizado}"`);
+          // Compatibilidade entre diferentes formatos de dados (produtos vs itens)
+          const nomeProduto = produtoData.nome || produtoData.descricao;
+          const quantidadeProduto = produtoData.quantidade;
+          const precoUnitario = produtoData.precoUnitario || produtoData.valor_unitario;
+          const precoTotal = produtoData.precoTotal || produtoData.valor_total;
+          const categoriaProduto = produtoData.categoria;
+          const unidadeProduto = produtoData.unidade;
 
-          if (!produtoData.nome || !produtoData.quantidade) {
+          console.log(`\n🔍 PROCESSANDO ITEM ${index + 1}: "${nomeProduto}"`);
+          console.log(`   - Quantidade: ${quantidadeProduto}`);
+          console.log(`   - Preço unitário: ${precoUnitario}`);
+          console.log(`   - Preço total: ${precoTotal}`);
+          console.log(`   - Categoria: ${categoriaProduto}`);
+          
+          const nomeNormalizado = await normalizarNomeProduto(nomeProduto);
+          console.log(`🏷️ Original: "${nomeProduto}" -> Normalizado: "${nomeNormalizado}"`);
+
+          if (!nomeProduto || !quantidadeProduto) {
             console.log(`⚠️ Item ${index + 1} ignorado: dados incompletos`);
             continue;
           }
@@ -166,10 +176,10 @@ serve(async (req) => {
 
           if (produtoSimilar) {
             // 📈 Atualizar produto existente
-            const novaQuantidade = produtoSimilar.quantidade + (produtoData.quantidade || 1);
+            const novaQuantidade = produtoSimilar.quantidade + (quantidadeProduto || 1);
             
             // CORREÇÃO CRÍTICA: SEMPRE usar o preço da nota fiscal se existir
-            const precoAtualizado = produtoData.precoUnitario || produtoSimilar.preco_unitario_ultimo || 0;
+            const precoAtualizado = precoUnitario || produtoSimilar.preco_unitario_ultimo || 0;
             
             console.log(`🔍 COMPARAÇÃO DETALHADA - ITEM ${index + 1}`);
             console.log(`   ✅ PRODUTO ENCONTRADO NO ESTOQUE:`);
@@ -177,12 +187,12 @@ serve(async (req) => {
             console.log(`      - Nome no estoque: "${produtoSimilar.produto_nome}"`);
             console.log(`      - Nome normalizado: "${nomeNormalizado}"`);
             console.log(`   💰 PREÇOS:`);
-            console.log(`      - Preço da nota fiscal: ${produtoData.precoUnitario}`);
+            console.log(`      - Preço da nota fiscal: ${precoUnitario}`);
             console.log(`      - Preço atual no estoque: ${produtoSimilar.preco_unitario_ultimo}`);
             console.log(`      - Preço que será salvo: ${precoAtualizado}`);
             console.log(`   📦 QUANTIDADES:`);
             console.log(`      - Quantidade anterior: ${produtoSimilar.quantidade}`);
-            console.log(`      - Quantidade a adicionar: ${produtoData.quantidade}`);
+            console.log(`      - Quantidade a adicionar: ${quantidadeProduto}`);
             console.log(`      - Nova quantidade total: ${novaQuantidade}`);
             
             const { error: updateError } = await supabase
@@ -201,18 +211,18 @@ serve(async (req) => {
 
             console.log(`✅ SUCESSO - Item ${index + 1} ATUALIZADO:`);
             console.log(`   - Produto: ${nomeNormalizado}`);
-            console.log(`   - Quantidade: ${novaQuantidade} ${produtoData.unidade || 'unidade'}`);
+            console.log(`   - Quantidade: ${novaQuantidade} ${unidadeProduto || 'unidade'}`);
             console.log(`   - Preço: R$ ${precoAtualizado}`);
             
           } else {
             console.log(`🆕 CRIANDO NOVO ITEM ${index + 1} - "${nomeNormalizado}"`);
-            console.log(`   - Preço unitário: ${produtoData.precoUnitario}`);
-            console.log(`   - Quantidade: ${produtoData.quantidade}`);
-            console.log(`   - Categoria: ${produtoData.categoria}`);
+            console.log(`   - Preço unitário: ${precoUnitario}`);
+            console.log(`   - Quantidade: ${quantidadeProduto}`);
+            console.log(`   - Categoria: ${categoriaProduto}`);
             
             // 📈 Criar novo produto no estoque - GARANTIR que sempre tenha preço
-            const precoParaSalvar = produtoData.precoUnitario && produtoData.precoUnitario > 0 
-              ? produtoData.precoUnitario 
+            const precoParaSalvar = precoUnitario && precoUnitario > 0 
+              ? precoUnitario 
               : 0.01; // Preço mínimo para evitar zeros
               
             const { error: insertError } = await supabase
@@ -220,9 +230,9 @@ serve(async (req) => {
               .insert({
                 user_id: notaImagem.usuario_id,
                 produto_nome: nomeNormalizado,
-                categoria: produtoData.categoria || 'outros',
-                unidade_medida: produtoData.unidade || 'unidade',
-                quantidade: produtoData.quantidade || 1,
+                categoria: categoriaProduto || 'outros',
+                unidade_medida: unidadeProduto || 'unidade',
+                quantidade: quantidadeProduto || 1,
                 preco_unitario_ultimo: precoParaSalvar,
                 origem: 'nota_fiscal'
               });
@@ -234,11 +244,11 @@ serve(async (req) => {
 
             console.log(`✅ SUCESSO - Item ${index + 1} CRIADO:`);
             console.log(`   - Produto: ${nomeNormalizado}`);
-            console.log(`   - Quantidade: ${produtoData.quantidade} ${produtoData.unidade || 'unidade'}`);
-            console.log(`   - Preço: R$ ${produtoData.precoUnitario || 0}`);
+            console.log(`   - Quantidade: ${quantidadeProduto} ${unidadeProduto || 'unidade'}`);
+            console.log(`   - Preço: R$ ${precoUnitario || 0}`);
           }
         } catch (error) {
-          console.error(`❌ Erro ao processar item ${index + 1} (${produtoData.nome}):`, error);
+          console.error(`❌ Erro ao processar item ${index + 1} (${nomeProduto}):`, error);
         }
       }
     }
