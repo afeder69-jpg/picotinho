@@ -157,20 +157,9 @@ const ReceiptList = () => {
         .eq('id', id)
         .single();
 
-      if (nota?.processada) {
-        // Se estava processada, marcar como não processada e limpar dados extraídos
-        await supabase
-          .from('notas_imagens')
-          .update({ 
-            processada: false, 
-            dados_extraidos: null 
-          })
-          .eq('id', id);
-        
-        console.log('📝 Nota marcada como não processada para evitar falsos positivos de duplicata');
-      }
-
-      // Deletar registros das tabelas
+      // Deletar registros das tabelas diretamente
+      // IMPORTANTE: A exclusão física remove a nota completamente, 
+      // evitando falsos positivos de duplicata
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').delete().eq('id', id),
         supabase.from('notas_imagens').delete().eq('id', id)

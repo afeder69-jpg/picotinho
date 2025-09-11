@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { formatarQuantidade } from '@/lib/utils';
 import PicotinhoLogo from '@/components/PicotinhoLogo';
+import { FixDuplicateButton } from '@/components/FixDuplicateButton';
 
 interface EstoqueItem {
   id: string;
@@ -1032,6 +1033,9 @@ const EstoqueAtual = () => {
       
       <div className="container mx-auto p-6">
         <div className="space-y-4">
+          {/* Botão para corrigir problema de duplicata */}
+          <FixDuplicateButton />
+          
           {/* Header da página - sem o botão ações */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
