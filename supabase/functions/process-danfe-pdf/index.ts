@@ -38,7 +38,8 @@ function normalizarTextoDanfe(texto: string): string {
   if (!texto) return texto;
 
   return texto
-    // Correções de acentuação
+    // Correções de acentuação e fragmentação de palavras
+    .replace(/C\s*[óo]\s*digo/gi, "Código")
     .replace(/C digo/g, "Código")
     .replace(/Cart o/g, "Cartão")
     .replace(/D bito/g, "Débito")
@@ -53,6 +54,8 @@ function normalizarTextoDanfe(texto: string): string {
     .replace(/Consu midor/g, "Consumidor")
 
     // Normalização de unidades
+    .replace(/UN\s*:/g, "Unidade:")
+    .replace(/\bUN\b/g, "Unidade")
     .replace(/Unidade: Unidade/g, "Unidade")
     .replace(/Unidade: Kg/g, "Kg")
 
@@ -60,7 +63,6 @@ function normalizarTextoDanfe(texto: string): string {
     .replace(/\bQtde\./g, "Quantidade")
     .replace(/\bVl\. Unit\./g, "Valor Unitário")
     .replace(/\bVl\. Total/g, "Valor Total")
-    .replace(/\bUN\b/g, "Unidade")
     .replace(/\bkg\b/gi, "Kg")
     .replace(/\bg\b/gi, "Gramas")
     .replace(/\bLT\b/gi, "Litros")
@@ -314,10 +316,15 @@ console.log("=".repeat(80));
 
         const parseItemsFromText = (texto: string): ItemBruto[] => {
           const items: ItemBruto[] = [];
-          const re = /(.*?)\s*\(Código:\s*(\d+)\s*\)\s*Quantidade:\s*([\d.,]+)\s*Unidade:\s*(Unidade|Kg|Gramas|Litros|ML|L|G|KG)\s*Valor Unitário:\s*([\d.,]+)\s*Valor Total\s*([\d.,]+)/gi;
+          const seen = new Set<string>();
+
+          // Padrão 1: com (Código: 12345) — tolerando quebras/acentos
+          const re1 = /(.*?)\s*\(C\s*[óo]?\s*digo:\s*(\d+)\s*\)\s*Quantidade:\s*([\d.,]+)\s*(?:Unidade:)?\s*(Unidade|Kg|Gramas|Litros|ML|L|G|KG)\s*Valor Unitário:\s*([\d.,]+)\s*Valor Total\s*([\d.,]+)/gi;
           let m: RegExpExecArray | null;
-          while ((m = re.exec(texto)) !== null) {
+          while ((m = re1.exec(texto)) !== null) {
             const descricao = (m[1] || '').replace(/[\s:]+$/g, '').trim();
+            const key = normalizaDesc(descricao) + '|' + m[2];
+            if (seen.has(key)) continue;
             items.push({
               descricao,
               codigo: m[2] || null,
@@ -326,7 +333,26 @@ console.log("=".repeat(80));
               valor_unitario: toNumberBR(m[5]),
               valor_total: toNumberBR(m[6])
             });
+            seen.add(key);
           }
+
+          // Padrão 2: sem código explícito
+          const re2 = /(.*?)\s*Quantidade:\s*([\d.,]+)\s*(?:Unidade:)?\s*(Unidade|Kg|Gramas|Litros|ML|L|G|KG)\s*Valor Unitário:\s*([\d.,]+)\s*Valor Total\s*([\d.,]+)/gi;
+          while ((m = re2.exec(texto)) !== null) {
+            const descricao = (m[1] || '').replace(/[\s:]+$/g, '').trim();
+            const key = normalizaDesc(descricao);
+            if (seen.has(key)) continue;
+            items.push({
+              descricao,
+              codigo: null,
+              quantidade: toNumberBR(m[2]),
+              unidade: m[3] || 'Unidade',
+              valor_unitario: toNumberBR(m[4]),
+              valor_total: toNumberBR(m[5])
+            });
+            seen.add(key);
+          }
+
           return items;
         };
 
