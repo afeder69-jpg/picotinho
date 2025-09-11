@@ -787,6 +787,22 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       console.error("❌ Erro ao salvar debug:", debugError);
     }
 
+    // 📦 CHAMAR PROCESS-RECEIPT-FULL para processar estoque
+    try {
+      console.log("📦 Iniciando processamento de estoque...");
+      const { data: estoqueResult, error: estoqueError } = await supabase.functions.invoke('process-receipt-full', {
+        body: { imagemId: notaImagemId }
+      });
+      
+      if (estoqueError) {
+        console.error('⚠️ Erro no processamento de estoque (não crítico):', estoqueError);
+      } else {
+        console.log('✅ Processamento de estoque concluído:', estoqueResult);
+      }
+    } catch (estoqueError) {
+      console.error('⚠️ Erro ao chamar process-receipt-full (não crítico):', estoqueError);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       message: "Processamento concluído - TODOS os itens extraídos e categorizados",
