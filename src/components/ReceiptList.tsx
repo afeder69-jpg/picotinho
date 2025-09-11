@@ -57,7 +57,11 @@ const ReceiptList = () => {
 
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('notas_imagens').select('*, debug_texto').eq('usuario_id', user.id).order('created_at', { ascending: false })
+        supabase.from('notas_imagens')
+          .select('*, debug_texto')
+          .eq('usuario_id', user.id)
+          .neq('excluida', true) // Excluir notas logicamente excluídas
+          .order('created_at', { ascending: false })
       ]);
 
       if (receiptsResult.error) throw receiptsResult.error;
@@ -157,18 +161,21 @@ const ReceiptList = () => {
         .eq('id', id)
         .single();
 
-      // Deletar registros das tabelas diretamente
-      // IMPORTANTE: A exclusão física remove a nota completamente, 
-      // evitando falsos positivos de duplicata
+      // Marcar nota como logicamente excluída para evitar falsos positivos de duplicata
+      // IMPORTANTE: Usar exclusão lógica em vez de física para manter consistência
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').delete().eq('id', id),
-        supabase.from('notas_imagens').delete().eq('id', id)
+        supabase.from('notas_imagens').update({ 
+          excluida: true, 
+          processada: false,
+          dados_extraidos: null 
+        }).eq('id', id)
       ]);
 
       const receiptsSuccess = !receiptsResult.error;
       const notasSuccess = !notasImagensResult.error;
       if (!receiptsSuccess && !notasSuccess) {
-        throw new Error('Erro ao excluir nota fiscal');
+        throw new Error('Erro ao marcar nota como excluída');
       }
 
       await loadReceipts();
