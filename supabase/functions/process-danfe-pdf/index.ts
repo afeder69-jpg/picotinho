@@ -176,13 +176,17 @@ NUNCA truncar ou cortar no meio — incluir TODOS os itens da nota.
 
 🔄 3. TRATAMENTO DE NOTAS MULTI-PÁGINA (CRÍTICO):
 
-QUEBRAS DE PÁGINA não indicam fim da lista de produtos.
+QUEBRAS DE PÁGINA e cabeçalhos/rodapés como "Página X/Y", "Pág.", "DANFE", "Autorização/Protocolo" NÃO indicam fim da lista de produtos e NÃO devem causar perda de itens.
 
-ÚLTIMO ITEM da página anterior: sempre capturar completamente, mesmo que apareça no final.
+• ÚLTIMO ITEM da página anterior E PRIMEIRO ITEM da página seguinte DEVEM ser capturados integralmente.
 
-ITENS FRAGMENTADOS: se um item estiver dividido entre páginas (parte na página 1, parte na página 2), reconstrua como um único item completo.
+• ITENS FRAGMENTADOS: quando um item for dividido entre páginas (parte da descrição antes e valores/quantidade depois), una as partes e forme UM ÚNICO item completo (descricao, quantidade, unidade, valor_unitario, valor_total).
 
-CONTINUIDADE: verificar linhas próximas às quebras de página para produtos não capturados.
+• JANELA DE FRONTEIRA: para cada ocorrência de linha que contenha "Página"/"Pág."/"Pagina"/"Page" ou similar, reanalise obrigatoriamente as 10 linhas ANTERIORES e as 10 linhas SEGUINTES para detectar itens cortados no limite e uni-los.
+
+• IGNORAR RUÍDO: descarte cabeçalhos/rodapés e textos como "Consulta pela chave", "Emitida", "Autorização", "Protocolo", "DANFE", "Página X/Y" — esses não são itens.
+
+• CONTINUIDADE: se houver numeração de itens (1., 2., 3., ...), garanta sequência contínua através das quebras; se faltar um número, busque-o na janela de fronteira e reconstrua o item.
 
 ⚖️ 4. VALIDAÇÃO DE CONSISTÊNCIA (OBRIGATÓRIA):
 
@@ -193,12 +197,10 @@ Compare essa soma com o valor_total da compra.
 Se a soma bater (ou a diferença for de poucos centavos por arredondamento), mantenha o resultado.
 
 Se a soma NÃO bater:
-• Reanalise o texto ESPECIFICAMENTE nas linhas próximas às quebras de página (fim da página anterior e início da seguinte).
-• Procure por itens que possam ter sido ignorados, especialmente o último item da página 1.
-• Refaça a listagem incluindo todos os itens encontrados.
-• Continue até que a soma dos itens bata com o valor_total oficial da nota.
-• Somente finalize o JSON quando os valores forem consistentes (tolerando apenas diferenças de centavos por arredondamento).
-
+• Reanalise ESPECIFICAMENTE as FRONTEIRAS de página: últimas 10 linhas da página anterior e primeiras 10 da página seguinte.
+• Procure por itens omitidos ou cortados (especialmente o último da pág. 1 e o primeiro da pág. 2) e reconstrua-os.
+• Refaça a listagem incluindo os itens encontrados e repita até que a soma dos itens bata com o valor_total oficial da nota.
+• Somente finalize o JSON quando os valores forem consistentes (tolerância máxima de centavos por arredondamento, ≤ 0,02).
 4. Estrutura OBRIGATÓRIA do retorno:
 \`\`\`json
 {
