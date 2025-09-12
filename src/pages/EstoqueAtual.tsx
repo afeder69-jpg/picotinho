@@ -88,20 +88,20 @@ const EstoqueAtual = () => {
       const { data: precosGerais, error: errorGerais } = await supabase
         .from('precos_atuais')
         .select('*')
-        .order('produto_nome', { ascending: true });
+        .order('data_atualizacao', { ascending: false }); // Mais recentes primeiro
 
       if (errorGerais) throw errorGerais;
 
-      // Combinar preços: aplicar regra de prioridade
+      // Unificar preços: priorizar sempre o mais recente (de qualquer usuário da área)
       const precosUnificados: any[] = [];
       
-      // Primeiro, adicionar todos os preços gerais (base)
+      // Primeiro, adicionar todos os preços gerais (sempre vêm de notas fiscais com data correta)
       (precosGerais || []).forEach(precoGeral => {
         precosUnificados.push({
           id: precoGeral.id,
           produto_nome: precoGeral.produto_nome,
           valor_unitario: precoGeral.valor_unitario,
-          data_atualizacao: precoGeral.data_atualizacao,
+          data_atualizacao: precoGeral.data_atualizacao, // Esta já é a data da nota fiscal
           origem: 'geral'
         });
       });
@@ -114,12 +114,15 @@ const EstoqueAtual = () => {
         );
         
         if (precoGeralExistente) {
-          // Se existe preço geral E é menor que o preço do usuário, manter o geral
-          if (precoGeralExistente.valor_unitario < precoUser.valor_unitario) {
-            // Preço geral já foi adicionado acima, não fazer nada
+          // Comparar por data: usar sempre o mais recente
+          const dataGeral = new Date(precoGeralExistente.data_atualizacao);
+          const dataUsuario = new Date(precoUser.data_atualizacao);
+          
+          if (dataGeral >= dataUsuario) {
+            // Preço geral é mais recente ou igual, manter o geral (já adicionado)
             return;
           } else {
-            // Preço do usuário é menor ou igual, substituir o geral pelo do usuário
+            // Preço do usuário é mais recente, substituir o geral
             const index = precosUnificados.findIndex(p => 
               p.produto_nome.toLowerCase() === precoUser.produto_nome.toLowerCase()
             );
@@ -128,7 +131,7 @@ const EstoqueAtual = () => {
                 id: precoUser.id,
                 produto_nome: precoUser.produto_nome,
                 valor_unitario: precoUser.valor_unitario,
-                data_atualizacao: precoUser.data_atualizacao,
+                data_atualizacao: precoUser.data_atualizacao, // Esta já é a data da nota fiscal
                 origem: 'usuario'
               };
             }
@@ -139,7 +142,7 @@ const EstoqueAtual = () => {
             id: precoUser.id,
             produto_nome: precoUser.produto_nome,
             valor_unitario: precoUser.valor_unitario,
-            data_atualizacao: precoUser.data_atualizacao,
+            data_atualizacao: precoUser.data_atualizacao, // Esta já é a data da nota fiscal
             origem: 'usuario'
           });
         }
@@ -173,7 +176,11 @@ const EstoqueAtual = () => {
       notasImagens?.forEach(nota => {
         const dadosExtraidos = nota.dados_extraidos as any;
         if (dadosExtraidos?.itens) {
-          const dataCompra = dadosExtraidos.compra?.data_emissao || dadosExtraidos.dataCompra;
+          // Buscar data da compra em várias estruturas possíveis
+          const dataCompra = dadosExtraidos.compra?.data_emissao || 
+                           dadosExtraidos.compra?.data_compra ||
+                           dadosExtraidos.dataCompra ||
+                           dadosExtraidos.data_emissao;
           
           dadosExtraidos.itens.forEach((item: any) => {
             const nomeProduto = item.descricao || item.nome;
@@ -187,6 +194,7 @@ const EstoqueAtual = () => {
         }
       });
 
+      console.log('📅 Datas das notas fiscais carregadas:', datasMap);
       setDatasNotasFiscais(datasMap);
     } catch (error) {
       console.error('Erro ao carregar datas das notas fiscais:', error);
@@ -242,34 +250,19 @@ const EstoqueAtual = () => {
     
     const nomeProdutoNormalizado = nomeProduto.toLowerCase().trim();
     
-    // 1. PRIMEIRO: verificar se o produto já tem preço próprio no estoque
-    const produtoComPreco = estoque.find(item => 
-      item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
-      item.preco_unitario_ultimo && 
-      item.preco_unitario_ultimo > 0
-    );
-    
-    if (produtoComPreco) {
-      console.log(`💰 Usando preço próprio do produto: R$ ${produtoComPreco.preco_unitario_ultimo}`);
-      return {
-        produto_nome: nomeProduto,
-        valor_unitario: produtoComPreco.preco_unitario_ultimo,
-        data_atualizacao: produtoComPreco.updated_at,
-        origem: 'produto_proprio'
-      };
-    }
-    
-    // 1. Busca exata nos preços da área
+    // 1. PRIORIDADE: Buscar preços de notas fiscais de outros usuários na área (mais recentes primeiro)
+    // Busca exata nos preços da área
     const buscaExata = precosAtuais.find(preco => 
       preco.produto_nome && 
-      preco.produto_nome.toLowerCase().trim() === nomeProdutoNormalizado
+      preco.produto_nome.toLowerCase().trim() === nomeProdutoNormalizado &&
+      preco.origem === 'geral' // Priorizar preços de outros usuários
     );
     if (buscaExata) {
-      console.log(`✅ Encontrou preço exato na área: R$ ${buscaExata.valor_unitario}`);
+      console.log(`✅ Encontrou preço exato de outro usuário na área: R$ ${buscaExata.valor_unitario}`);
       return buscaExata;
     }
     
-    // 2. Busca por palavras-chave principais (remover tamanhos, marcas específicas)
+    // 2. Busca por palavras-chave nos preços da área
     const palavrasChave = nomeProdutoNormalizado
       .replace(/\b(kg|g|ml|l|un|unidade|lata|pacote|caixa|frasco|100g|200g|300g|400g|500g|1kg|2kg)\b/g, '')
       .replace(/\b(\d+g|\d+ml|\d+l|\d+kg)\b/g, '')
@@ -277,7 +270,7 @@ const EstoqueAtual = () => {
       .trim();
     
     const buscaPorPalavrasChave = precosAtuais.find(preco => {
-      if (!preco.produto_nome) return false;
+      if (!preco.produto_nome || preco.origem !== 'geral') return false;
       
       const precoNormalizado = preco.produto_nome.toLowerCase()
         .replace(/\b(kg|g|ml|l|un|unidade|lata|pacote|caixa|frasco|100g|200g|300g|400g|500g|1kg|2kg)\b/g, '')
@@ -288,13 +281,13 @@ const EstoqueAtual = () => {
       return palavrasChave.includes(precoNormalizado) || precoNormalizado.includes(palavrasChave);
     });
     if (buscaPorPalavrasChave) {
-      console.log(`✅ Encontrou preço por palavras-chave na área: R$ ${buscaPorPalavrasChave.valor_unitario}`);
+      console.log(`✅ Encontrou preço por palavras-chave de outro usuário na área: R$ ${buscaPorPalavrasChave.valor_unitario}`);
       return buscaPorPalavrasChave;
     }
     
-    // 3. Busca por similaridade (contém partes do nome)
+    // 3. Busca por similaridade nos preços da área
     const buscaSimilaridade = precosAtuais.find(preco => {
-      if (!preco.produto_nome) return false;
+      if (!preco.produto_nome || preco.origem !== 'geral') return false;
       
       const precoLower = preco.produto_nome.toLowerCase();
       const produtoLower = nomeProdutoNormalizado;
@@ -314,41 +307,64 @@ const EstoqueAtual = () => {
     });
     
     if (buscaSimilaridade) {
-      console.log(`✅ Encontrou preço por similaridade na área: R$ ${buscaSimilaridade.valor_unitario}`);
+      console.log(`✅ Encontrou preço por similaridade de outro usuário na área: R$ ${buscaSimilaridade.valor_unitario}`);
       return buscaSimilaridade;
     }
     
-    // 4. Se não encontrou na área de atuação, buscar primeiro na tabela precos_atuais_usuario
-    console.log(`🔍 Não encontrou na área, buscando na tabela precos_atuais_usuario...`);
+    // 4. Se não há preço mais recente de outros usuários, usar o próprio preço mais recente
+    // Buscar TODAS as compras do usuário para este produto no estoque (considerando histórico completo)
+    const produtosDoUsuario = estoque.filter(item => 
+      item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() &&
+      item.preco_unitario_ultimo && 
+      item.preco_unitario_ultimo > 0
+    );
+    
+    if (produtosDoUsuario.length > 0) {
+      // Buscar a data da nota fiscal mais recente para este produto
+      const dataNotaFiscalMaisRecente = encontrarDataNotaFiscal(nomeProduto);
+      
+      // Se temos a data da nota, usar ela; senão usar a data de atualização mais recente
+      let produtoMaisRecente = produtosDoUsuario[0];
+      
+      if (dataNotaFiscalMaisRecente) {
+        // Usar o preço associado à data da nota fiscal
+        produtoMaisRecente = produtosDoUsuario.find(p => {
+          const dataNotaProduto = encontrarDataNotaFiscal(p.produto_nome);
+          return dataNotaProduto === dataNotaFiscalMaisRecente;
+        }) || produtoMaisRecente;
+        
+        console.log(`💰 Usando preço próprio mais recente (data da nota): R$ ${produtoMaisRecente.preco_unitario_ultimo} em ${dataNotaFiscalMaisRecente}`);
+        return {
+          produto_nome: nomeProduto,
+          valor_unitario: produtoMaisRecente.preco_unitario_ultimo,
+          data_atualizacao: dataNotaFiscalMaisRecente, // Usar data da nota fiscal
+          origem: 'produto_proprio'
+        };
+      } else {
+        // Usar o produto com updated_at mais recente
+        produtoMaisRecente = produtosDoUsuario.reduce((mais_recente, atual) => 
+          new Date(atual.updated_at) > new Date(mais_recente.updated_at) ? atual : mais_recente
+        );
+        
+        console.log(`💰 Usando preço próprio mais recente (sem data de nota): R$ ${produtoMaisRecente.preco_unitario_ultimo}`);
+        return {
+          produto_nome: nomeProduto,
+          valor_unitario: produtoMaisRecente.preco_unitario_ultimo,
+          data_atualizacao: produtoMaisRecente.updated_at,
+          origem: 'produto_proprio'
+        };
+      }
+    }
+    
+    // 5. Verificar preços do usuário na tabela precos_atuais_usuario
     const precoManualTabela = precosAtuais.find(preco => 
       preco.origem === 'usuario' && 
       preco.produto_nome.toLowerCase() === nomeProduto.toLowerCase()
     );
     
-    console.log(`📦 Produto manual encontrado na tabela:`, precoManualTabela);
-    
     if (precoManualTabela) {
       console.log(`💰 Usando preço da tabela precos_atuais_usuario: R$ ${precoManualTabela.valor_unitario}`);
       return precoManualTabela;
-    }
-    
-    // 5. Se não encontrou na tabela, verificar se é produto manual no estoque e usar seu próprio preço
-    console.log(`🔍 Não encontrou na tabela, verificando no estoque...`);
-    const produtoManual = estoque.find(item => 
-      item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() && 
-      item.origem === 'manual'
-    );
-    
-    console.log(`📦 Produto manual encontrado no estoque:`, produtoManual);
-    
-    if (produtoManual && produtoManual.preco_unitario_ultimo && produtoManual.preco_unitario_ultimo > 0) {
-      console.log(`💰 Usando preço próprio do produto manual: R$ ${produtoManual.preco_unitario_ultimo}`);
-      return {
-        produto_nome: nomeProduto,
-        valor_unitario: produtoManual.preco_unitario_ultimo,
-        data_atualizacao: produtoManual.updated_at,
-        origem: 'manual_proprio'
-      };
     }
     
     console.log(`❌ Nenhum preço encontrado para: "${nomeProduto}"`);
@@ -1253,11 +1269,24 @@ const EstoqueAtual = () => {
                                        Pago- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
                                      </div>
                                      <div className="text-blue-600 font-medium flex items-center gap-1">
-                                       {precoAtual ? (
-                                         <>
-                                            <span>
-                                              {new Date(precoAtual.data_atualizacao).toLocaleDateString('pt-BR')} - {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
-                                            </span>
+                                        {precoAtual ? (
+                                          <>
+                                             <span>
+                                               {(() => {
+                                                 // Se o preço atual vem de uma nota fiscal, usar a data da nota
+                                                 // Se vem do próprio produto, usar a data da nota fiscal do produto ou a data de atualização
+                                                 let dataExibir = precoAtual.data_atualizacao;
+                                                 
+                                                 if (precoAtual.origem === 'produto_proprio') {
+                                                   const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
+                                                   if (dataNotaFiscal) {
+                                                     dataExibir = dataNotaFiscal;
+                                                   }
+                                                 }
+                                                 
+                                                 return new Date(dataExibir).toLocaleDateString('pt-BR');
+                                               })()} - {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
+                                             </span>
                                            {(() => {
                                              const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
                                              const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
