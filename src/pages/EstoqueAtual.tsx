@@ -877,6 +877,18 @@ const EstoqueAtual = () => {
     return Math.round(value * 100) / 100;
   };
 
+  const formatCategoryName = (categoryName: string): string => {
+    // Abreviar categorias longas para manter o alinhamento
+    const abbreviations: { [key: string]: string } = {
+      'Laticínios/Frios': 'Laticínios',
+      'Higiene/Farmácia': 'Higiene',
+      'Carnes/Peixes': 'Carnes',
+      'Frutas/Verduras': 'Frutas/Veg.'
+    };
+    
+    return abbreviations[categoryName] || categoryName;
+  };
+
   const getCategoriaColor = (categoria: string) => {
     const colors: { [key: string]: string } = {
       'açougue': 'bg-red-100 text-red-800 border-red-200',
@@ -1087,12 +1099,12 @@ const EstoqueAtual = () => {
 
                       return (
                         <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 text-xs sm:text-sm items-center py-1">
-                          <button 
-                            onClick={scrollToCategory}
-                            className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium"
-                          >
-                            {categoria}
-                          </button>
+                           <button 
+                             onClick={scrollToCategory}
+                             className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium"
+                           >
+                             {formatCategoryName(categoria)}
+                           </button>
                           <span className="font-medium text-muted-foreground text-center">{quantidadeItens}</span>
                           <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
                            <span className="font-medium text-blue-600 text-right">
