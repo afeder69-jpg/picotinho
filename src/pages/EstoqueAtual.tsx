@@ -221,19 +221,51 @@ const EstoqueAtual = () => {
 
   // Função para encontrar a data da nota fiscal de um produto
   const encontrarDataNotaFiscal = (nomeProduto: string) => {
+    console.log(`🔍 Buscando data para produto: "${nomeProduto}"`);
+    console.log(`📅 Datas disponíveis:`, Object.keys(datasNotasFiscais));
+    
     // Buscar correspondência exata primeiro
     if (datasNotasFiscais[nomeProduto]) {
+      console.log(`✅ Encontrou data exata para "${nomeProduto}": ${datasNotasFiscais[nomeProduto]}`);
       return datasNotasFiscais[nomeProduto];
     }
     
-    // Buscar por correspondência parcial
+    // Normalizar nome do produto para busca
+    const nomeProdutoNormalizado = nomeProduto.toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+      // Remover unidades de medida comuns
+      .replace(/\b(kg|g|ml|l|un|unidade|granel)\b/g, '')
+      .trim();
+    
+    // Buscar por correspondência parcial mais inteligente
     for (const [produto, data] of Object.entries(datasNotasFiscais)) {
-      if (produto.toLowerCase().includes(nomeProduto.toLowerCase()) ||
-          nomeProduto.toLowerCase().includes(produto.toLowerCase())) {
+      const produtoNormalizado = produto.toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim()
+        // Remover unidades de medida comuns
+        .replace(/\b(kg|g|ml|l|un|unidade|granel)\b/g, '')
+        .trim();
+      
+      // Verificar se as palavras principais coincidem
+      const palavrasProdutoEstoque = nomeProdutoNormalizado.split(' ').filter(p => p.length > 2);
+      const palavrasProdutoNota = produtoNormalizado.split(' ').filter(p => p.length > 2);
+      
+      let coincidencias = 0;
+      palavrasProdutoEstoque.forEach(palavra => {
+        if (palavrasProdutoNota.some(p => p.includes(palavra) || palavra.includes(p))) {
+          coincidencias++;
+        }
+      });
+      
+      // Se pelo menos 60% das palavras coincidem
+      if (coincidencias >= Math.max(1, Math.floor(palavrasProdutoEstoque.length * 0.6))) {
+        console.log(`✅ Encontrou data por similaridade para "${nomeProduto}" -> "${produto}": ${data}`);
         return data;
       }
     }
     
+    console.log(`❌ Não encontrou data para "${nomeProduto}"`);
     return null;
   };
 
@@ -882,6 +914,25 @@ const EstoqueAtual = () => {
     });
   };
 
+  // Função para formatar data de forma segura
+  const formatDateSafe = (dateString: string) => {
+    try {
+      // Se a data tem formato "DD/MM/YYYY HH:mm:ss-TZ", converter para ISO
+      if (dateString.includes('/') && dateString.includes(' ')) {
+        const [datePart, timePart] = dateString.split(' ');
+        const [day, month, year] = datePart.split('/');
+        const [time] = timePart.split('-'); // Remove timezone
+        const isoString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${time}`;
+        return new Date(isoString).toLocaleDateString('pt-BR');
+      }
+      // Caso contrário, usar formato padrão
+      return new Date(dateString).toLocaleDateString('pt-BR');
+    } catch (error) {
+      console.error('Erro ao formatar data:', dateString, error);
+      return 'Data inválida';
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -1284,7 +1335,7 @@ const EstoqueAtual = () => {
                                                    }
                                                  }
                                                  
-                                                 return new Date(dataExibir).toLocaleDateString('pt-BR');
+                                                 return formatDateSafe(dataExibir);
                                                })()} - {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
                                              </span>
                                            {(() => {
