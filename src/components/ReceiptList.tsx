@@ -36,9 +36,26 @@ function extractNeighborhood(address?: string | null): string | null {
   if (!address) return null;
   let a = String(address).replace(/\s+/g, ' ').trim();
 
-  // Tenta capturar "BAIRRO: XYZ"
+  // Tenta capturar "BAIRRO: XYZ" ou "BAIRRO XYZ"
   const labelMatch = a.match(/bairro[:\s-]*([A-Za-zÀ-ÿ0-9\s]+?)(?:\s*-\s*|\s*,\s*|$)/i);
   if (labelMatch) return labelMatch[1].trim();
+
+  // Heurística: endereços com " - ": ... - Bairro - Cidade - UF
+  const hyphenParts = a.split(' - ').map(p => p.trim()).filter(Boolean);
+  if (hyphenParts.length >= 3) {
+    const last = hyphenParts[hyphenParts.length - 1];
+    if (/^[A-Za-z]{2}$/.test(last)) {
+      const maybeNeighborhood = hyphenParts[hyphenParts.length - 3];
+      if (
+        maybeNeighborhood &&
+        !/^\d/.test(maybeNeighborhood) &&
+        !/CEP/i.test(maybeNeighborhood) &&
+        !/BRASIL/i.test(maybeNeighborhood)
+      ) {
+        return maybeNeighborhood.replace(/^bairro[:\s-]*/i, '').trim();
+      }
+    }
+  }
 
   // Remove CEP para não confundir a extração
   a = a.replace(/\b\d{5}-\d{3}\b/, '').trim();
@@ -116,9 +133,22 @@ function normalizeUf(value?: string | null): string | null {
 // Coleta Bairro e UF a partir dos dados estruturados ou endereço
 function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; uf: string | null } {
   const est = (receipt.dados_extraidos?.estabelecimento) || (receipt.dados_extraidos?.loja) || {};
-  const endereco: string = est?.endereco || receipt.dados_extraidos?.loja?.endereco || receipt.store_address || '';
-  const neighborhood = (est as any)?.bairro || extractNeighborhood(endereco);
-  let uf = normalizeUf((est as any)?.uf || (est as any)?.estado);
+  const endereco: string =
+    (est as any)?.endereco ||
+    receipt.dados_extraidos?.loja?.endereco ||
+    (receipt.processed_data?.estabelecimento?.endereco ?? '') ||
+    receipt.store_address ||
+    '';
+
+  const neighborhood =
+    (est as any)?.bairro ||
+    (est as any)?.bairroLoja ||
+    (est as any)?.bairro_estabelecimento ||
+    receipt.dados_extraidos?.loja?.bairro ||
+    receipt.processed_data?.estabelecimento?.bairro ||
+    extractNeighborhood(endereco);
+
+  let uf = normalizeUf((est as any)?.uf || (est as any)?.estado || receipt.processed_data?.estabelecimento?.uf);
   if (!uf) uf = normalizeUf(extractState(endereco));
   return { neighborhood: neighborhood || null, uf: uf || null };
 }
