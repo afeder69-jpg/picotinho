@@ -703,20 +703,20 @@ const ReceiptList = () => {
                              </span>
                            </div>
                           
-                          {/* Terceira linha: Total da compra + Quantidade de itens */}
-                          <div className="flex items-center gap-4">
-                            <div className="text-sm">
-                              <span className="font-bold text-black">Total da compra: </span>
-                              <span className="font-bold text-black">
-                                {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
-                              </span>
-                            </div>
-                            {receipt.dados_extraidos.itens && (
-                              <span className="text-sm text-black">
-                                {receipt.dados_extraidos.itens.length} itens
-                              </span>
-                            )}
-                          </div>
+                           {/* Quarta linha: Total da compra + Quantidade de itens */}
+                           <div className="flex items-center gap-4">
+                             <div className="text-xs">
+                               <span className="font-bold text-black">Total da compra: </span>
+                               <span className="font-bold text-black">
+                                 {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
+                               </span>
+                             </div>
+                             {receipt.dados_extraidos.itens && (
+                               <span className="text-xs text-black">
+                                 {receipt.dados_extraidos.itens.length} itens
+                               </span>
+                             )}
+                           </div>
                           
                            {/* Quarta linha: Botão Ver Detalhes */}
                            <div className="pt-2">
@@ -742,27 +742,27 @@ const ReceiptList = () => {
                            )}
                            
                            {/* Terceira linha: Data da compra */}
-                          <div className="text-sm">
-                            <span className="font-bold text-black">Data da compra: </span>
-                            <span className="font-bold text-black">
-                              {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}
-                            </span>
-                          </div>
+                           <div className="text-xs">
+                             <span className="font-bold text-black">Data da compra: </span>
+                             <span className="font-bold text-black">
+                               {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}
+                             </span>
+                           </div>
                           
-                          {/* Terceira linha: Total da compra + Quantidade de itens */}
-                          <div className="flex items-center gap-4">
-                            <div className="text-sm">
-                              <span className="font-bold text-black">Total da compra: </span>
-                              <span className="font-bold text-black">
-                                {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
-                              </span>
-                            </div>
-                            {receipt.dados_extraidos.itens && (
-                              <span className="text-sm text-black">
-                                {receipt.dados_extraidos.itens.length} itens
-                              </span>
-                            )}
-                          </div>
+                           {/* Quarta linha: Total da compra + Quantidade de itens */}
+                           <div className="flex items-center gap-4">
+                             <div className="text-xs">
+                               <span className="font-bold text-black">Total da compra: </span>
+                               <span className="font-bold text-black">
+                                 {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
+                               </span>
+                             </div>
+                             {receipt.dados_extraidos.itens && (
+                               <span className="text-xs text-black">
+                                 {receipt.dados_extraidos.itens.length} itens
+                               </span>
+                             )}
+                           </div>
                           
                            {/* Quarta linha: Botões de ação */}
                            <div className="pt-2 flex gap-2">
@@ -801,21 +801,21 @@ const ReceiptList = () => {
                       {/* Para notas não processadas */}
                       <div className="space-y-2">
                         {/* Primeira linha: Nome do arquivo */}
-                        <h3 className="font-bold text-black text-lg leading-tight">
-                          {receipt.store_name || 'Estabelecimento não identificado'}
-                        </h3>
+                         <h3 className="font-bold text-black text-base leading-tight">
+                           {receipt.store_name || 'Estabelecimento não identificado'}
+                         </h3>
                         
-                        {/* Segunda linha: Data de upload */}
-                        <div className="text-sm">
-                          <span className="font-bold text-black">Enviado em: </span>
-                          <span className="font-bold text-black">
-                            {formatDate(receipt.created_at)}
-                          </span>
-                        </div>
-                        
-                        {/* Terceira linha: Status de processamento */}
-                        <div className="text-sm text-black">
-                          Aguardando processamento...
+                         {/* Segunda linha: Data de upload */}
+                         <div className="text-xs">
+                           <span className="font-bold text-black">Enviado em: </span>
+                           <span className="font-bold text-black">
+                             {formatDate(receipt.created_at)}
+                           </span>
+                         </div>
+                         
+                         {/* Terceira linha: Status de processamento */}
+                         <div className="text-xs text-black">
+                           Aguardando processamento...
                         </div>
                         
                         {/* Quarta linha: Botão de ação */}
