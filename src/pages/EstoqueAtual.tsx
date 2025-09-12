@@ -878,15 +878,14 @@ const EstoqueAtual = () => {
   };
 
   const formatCategoryName = (categoryName: string): string => {
-    // Abreviar categorias longas para manter o alinhamento
-    const abbreviations: { [key: string]: string } = {
-      'Laticínios/Frios': 'Laticínios',
-      'Higiene/Farmácia': 'Higiene',
-      'Carnes/Peixes': 'Carnes',
-      'Frutas/Verduras': 'Frutas/Veg.'
-    };
-    
-    return abbreviations[categoryName] || categoryName;
+    const raw = (categoryName || '').toString().trim();
+    if (!raw) return 'Outros';
+    const lower = raw.toLowerCase();
+    // Se conter barra, usar a primeira parte para encurtar (ex.: "laticínios/frios" -> "laticínios")
+    let short = lower.includes('/') ? lower.split('/')[0] : lower;
+    short = short.replace(/\s+/g, ' ');
+    // Capitalizar palavras
+    return short.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
 
   const getCategoriaColor = (categoria: string) => {
@@ -1101,7 +1100,7 @@ const EstoqueAtual = () => {
                         <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 text-xs sm:text-sm items-center py-1">
                            <button 
                              onClick={scrollToCategory}
-                             className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium"
+                             className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium whitespace-nowrap max-w-[140px] truncate"
                            >
                              {formatCategoryName(categoria)}
                            </button>
