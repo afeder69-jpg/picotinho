@@ -34,6 +34,23 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   }
 }
 
+// Função para extrair bairro do endereço
+function extrairBairro(endereco: string): string | null {
+  if (!endereco) return null;
+  
+  // Padrões comuns de endereços brasileiros
+  // Ex: "AVENIDA CESARIO DE MELO, 5400, CAMPO GRANDE, RIO DE JANEIRO, RJ"
+  // Ex: "RUA DAS FLORES, 123, COPACABANA, RIO DE JANEIRO, RJ"
+  const partes = endereco.split(',').map(p => p.trim());
+  
+  if (partes.length >= 3) {
+    // Geralmente o bairro é a 3ª parte (após rua e número)
+    return partes[2] || null;
+  }
+  
+  return null;
+}
+
 function normalizarTextoDanfe(texto: string): string {
   if (!texto) return texto;
 
@@ -464,7 +481,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               cnpj: dadosEstruturados.estabelecimento?.cnpj || null,
               chave_acesso: null, // Pode ser extraído do texto se disponível
               qtd_itens: dadosEstruturados.itens?.length || 0,
-              bairro: null // Extrair do endereço se necessário
+               bairro: extrairBairro(dadosEstruturados.estabelecimento?.endereco) || null
             })
             .select('id')
             .single();
@@ -538,7 +555,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                user_id: userId,
                mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
                cnpj: cnpjNotaFiscal,
-              bairro: null, // Extrair do endereço se necessário
+              bairro: extrairBairro(dadosEstruturados.estabelecimento?.endereco) || null,
               data_compra: dataCompra,
               valor_total: dadosEstruturados.compra.valor_total || 0,
               qtd_itens: dadosEstruturados.itens?.length || 0,
