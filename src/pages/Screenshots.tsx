@@ -6,8 +6,6 @@ import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogIn } from "lucide-react";
-import { RemoverNotaDuplicada } from "@/components/RemoverNotaDuplicada";
-
 const Screenshots = () => {
   const { user, loading, signInAnonymously } = useAuth();
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -51,9 +49,6 @@ const Screenshots = () => {
         <h1 className="text-2xl font-bold mb-6">Minhas Notas Fiscais</h1>
         <div className="mb-6">
           <UploadNoteButton onUploadSuccess={handleUploadSuccess} />
-        </div>
-        <div className="mb-6">
-          <RemoverNotaDuplicada />
         </div>
         <ReceiptList key={refreshKey} />
       </div>
