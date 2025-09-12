@@ -857,19 +857,18 @@ const ReceiptList = () => {
 
   return (
     <>
-      <div className="space-y-[4px]">
-        <div className="space-y-[4px]">
+      <div style={{ marginBottom: '4px' }}>
+        <div style={{ marginBottom: '4px' }}>
           {receipts.map((receipt) => (
-            <Card key={receipt.id} className="py-[4px] px-[8px]">
+            <Card key={receipt.id} style={{ padding: '4px 8px', marginBottom: '4px' }}>
               <div className="flex justify-between items-start">
-                <div className="flex-1 space-y-[4px]">
+                <div className="flex-1" style={{ marginRight: '8px' }}>
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
                       {/* Para notas processadas com dados estruturados da IA */}
                       {receipt.dados_extraidos.estabelecimento ? (
                         <>
-                           {/* Primeira linha: Nome do mercado */}
-                            {/* Nome do mercado, bairro, UF */}
+                           {/* Nome do mercado, bairro, UF */}
 {(() => {
   const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
   const nome = receipt.dados_extraidos.estabelecimento.nome;
@@ -877,14 +876,14 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="leading-none" style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 700 }}>
+                    <h3 style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 'bold', margin: 0, padding: 0 }}>
                       {texto}
                     </h3>
   );
 })()}
                            
                             {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px' }}>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px', marginTop: '2px' }}>
                               <span className="text-muted-foreground">Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
@@ -897,8 +896,7 @@ const ReceiptList = () => {
                       ) : (
                         /* Fallback para formato antigo */
                         <>
-                           {/* Primeira linha: Nome do mercado */}
-                            {/* Nome do mercado, bairro, UF */}
+                           {/* Nome do mercado, bairro, UF */}
 {(() => {
   const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
   const nome = receipt.dados_extraidos.loja?.nome || 'Mercado N/A';
@@ -906,14 +904,14 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="leading-none" style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 700 }}>
+                    <h3 style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 'bold', margin: 0, padding: 0 }}>
                       {texto}
                     </h3>
   );
 })()}
                            
                             {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px' }}>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px', marginTop: '2px' }}>
                               <span className="text-muted-foreground">Data: {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
@@ -928,8 +926,8 @@ const ReceiptList = () => {
                   ) : (
                     <>
                       {/* Para notas não processadas */}
-                      <div className="space-y-[4px]">
-                        {/* Primeira linha: Nome, bairro, UF (fallback com store_address) */}
+                      <div>
+                        {/* Nome, bairro, UF (fallback com store_address) */}
                          {(() => {
                            const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
                            const nome = receipt.store_name || 'Estabelecimento não identificado';
@@ -937,27 +935,25 @@ const ReceiptList = () => {
                            if (nb) texto += `, ${nb}`;
                            if (uf) texto += `, ${uf}`;
                            return (
-                             <h3 className="leading-none" style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 700 }}>{texto}</h3>
+                             <h3 style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 'bold', margin: 0, padding: 0 }}>{texto}</h3>
                            );
                          })()}
                         
                           {/* Dados da compra em linha compacta */}
-                          <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px' }}>
+                          <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px', marginTop: '2px' }}>
                             <span className="text-muted-foreground">Enviado: {formatDate(receipt.created_at)}</span>
                             <span className="text-orange-600">Processando...</span>
                           </div>
-                        
                       </div>
                     </>
                   )}
                 </div>
                 
                  {/* Botões compactos no lado direito */}
-                <div className="flex items-center gap-[4px] flex-shrink-0 ml-2">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <Badge 
                     variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
-                    className="px-1 py-0" 
-                    style={{ fontSize: '10px', height: '16px', lineHeight: '14px' }}
+                    style={{ fontSize: '10px', height: '16px', padding: '2px 4px', lineHeight: '12px' }}
                   >
                     {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
                   </Badge>
@@ -965,8 +961,7 @@ const ReceiptList = () => {
                     variant="outline" 
                     size="sm" 
                     onClick={() => viewReceipt(receipt)} 
-                    className="px-[6px] py-0" 
-                    style={{ height: '20px', fontSize: '10px' }}
+                    style={{ fontSize: '10px', height: '20px', lineHeight: '20px', padding: '0 6px' }}
                   >
                     <Eye className="w-3 h-3 mr-1" />
                     Ver Detalhes
@@ -975,8 +970,8 @@ const ReceiptList = () => {
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setDeleteConfirmId(receipt.id)} 
-                    className="text-destructive hover:text-destructive px-1 py-0" 
-                    style={{ height: '20px' }}
+                    className="text-destructive hover:text-destructive" 
+                    style={{ fontSize: '10px', height: '20px', lineHeight: '20px', padding: '0 4px' }}
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>
