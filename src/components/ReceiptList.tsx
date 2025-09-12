@@ -85,6 +85,44 @@ function extractState(address?: string | null): string | null {
   return null;
 }
 
+// Normaliza a UF para sigla (RJ, SP, ...), aceita nome completo também
+function normalizeUf(value?: string | null): string | null {
+  if (!value) return null;
+  let s = String(value).trim();
+  if (!s) return null;
+  // Extrai última sigla de 2 letras se existir
+  const m = s.toUpperCase().match(/\b([A-Z]{2})\b(?!.*\b[A-Z]{2}\b)/);
+  if (m) return m[1];
+  // Remover acentos e termos genéricos
+  let noAcc = s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/^ESTADO\s+DO\s+/, '')
+    .replace(/^ESTADO\s+DA\s+/, '')
+    .replace(/\bBRASIL\b/g, '')
+    .trim();
+  const map: Record<string, string> = {
+    'ACRE': 'AC', 'ALAGOAS': 'AL', 'AMAPA': 'AP', 'AMAZONAS': 'AM', 'BAHIA': 'BA', 'CEARA': 'CE',
+    'DISTRITO FEDERAL': 'DF', 'ESPIRITO SANTO': 'ES', 'GOIAS': 'GO', 'MARANHAO': 'MA',
+    'MATO GROSSO': 'MT', 'MATO GROSSO DO SUL': 'MS', 'MINAS GERAIS': 'MG', 'PARA': 'PA',
+    'PARAIBA': 'PB', 'PARANA': 'PR', 'PERNAMBUCO': 'PE', 'PIAUI': 'PI', 'RIO DE JANEIRO': 'RJ',
+    'RIO GRANDE DO NORTE': 'RN', 'RIO GRANDE DO SUL': 'RS', 'RONDONIA': 'RO', 'RORAIMA': 'RR',
+    'SANTA CATARINA': 'SC', 'SAO PAULO': 'SP', 'SERGIPE': 'SE', 'TOCANTINS': 'TO',
+  };
+  return map[noAcc] || null;
+}
+
+// Coleta Bairro e UF a partir dos dados estruturados ou endereço
+function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; uf: string | null } {
+  const est = (receipt.dados_extraidos?.estabelecimento) || (receipt.dados_extraidos?.loja) || {};
+  const endereco: string = est?.endereco || receipt.dados_extraidos?.loja?.endereco || receipt.store_address || '';
+  const neighborhood = (est as any)?.bairro || extractNeighborhood(endereco);
+  let uf = normalizeUf((est as any)?.uf || (est as any)?.estado);
+  if (!uf) uf = normalizeUf(extractState(endereco));
+  return { neighborhood: neighborhood || null, uf: uf || null };
+}
+
 const ReceiptList = () => {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -700,13 +738,7 @@ const ReceiptList = () => {
                            
                            {/* Segunda linha: Bairro, Estado */}
 {(() => {
-  const addr =
-    receipt.dados_extraidos?.estabelecimento?.endereco ||
-    receipt.dados_extraidos?.loja?.endereco ||
-    receipt.store_address ||
-    '';
-  const nb = extractNeighborhood(addr);
-  const uf = extractState(addr);
+  const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
   if (!nb && !uf) return null;
   return (
     <div className="text-sm text-black">
@@ -756,13 +788,7 @@ const ReceiptList = () => {
                            
                            {/* Segunda linha: Bairro, Estado */}
 {(() => {
-  const addr =
-    receipt.dados_extraidos?.estabelecimento?.endereco ||
-    receipt.dados_extraidos?.loja?.endereco ||
-    receipt.store_address ||
-    '';
-  const nb = extractNeighborhood(addr);
-  const uf = extractState(addr);
+  const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
   if (!nb && !uf) return null;
   return (
     <div className="text-sm text-black">
