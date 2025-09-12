@@ -285,7 +285,7 @@ Responda APENAS o JSON:
         .replace(/B/g, '8');
 
       if (normalizedKey.length >= 43) { // Aceitar chaves com 43 ou 44 dígitos
-        console.log('Verificando duplicidade (por usuário) para chave:', normalizedKey);
+        console.log('🔍 Verificando duplicidade (TODOS OS USUÁRIOS) para chave:', normalizedKey);
 
         // Assegurar que a própria nota já armazene a chave para futuras verificações
         try {
@@ -318,7 +318,8 @@ Responda APENAS o JSON:
 
         console.log('Variações de chave para busca:', chaveVariations);
 
-        // 1) Procurar em notas_imagens do MESMO USUÁRIO (independente de estar processada)
+        // 🔥 CORREÇÃO CRÍTICA: Verificar em TODOS OS USUÁRIOS do Picotinho
+        // 1) Procurar em notas_imagens de QUALQUER USUÁRIO (não apenas do atual)
         const orConditions = chaveVariations.flatMap((chave) => [
           `dados_extraidos->chave_acesso.eq."${chave}"`,
           `dados_extraidos->>chave_acesso.eq."${chave}"`,
@@ -328,17 +329,15 @@ Responda APENAS o JSON:
         const { data: existingInImages, error: imgErr } = await supabase
           .from('notas_imagens')
           .select('id, created_at, usuario_id')
-          .eq('usuario_id', userId)
-          .neq('id', notaImagemId)
+          .neq('id', notaImagemId) // Excluir apenas a nota atual
           .or(orConditions);
 
         if (imgErr) console.error('Erro buscando duplicidade em notas_imagens:', imgErr);
 
-        // 2) Procurar em notas_fiscais do MESMO USUÁRIO (quando já processadas)
+        // 2) Procurar em notas_fiscais de QUALQUER USUÁRIO (quando já processadas)
         const { data: existingInNotas, error: nfErr } = await supabase
           .from('notas_fiscais')
-          .select('id')
-          .eq('user_id', userId)
+          .select('id, user_id')
           .in('chave_acesso', chaveVariations);
 
         if (nfErr) console.error('Erro buscando duplicidade em notas_fiscais:', nfErr);
@@ -346,9 +345,16 @@ Responda APENAS o JSON:
         isDuplicate = !!((existingInImages && existingInImages.length > 0) || (existingInNotas && existingInNotas.length > 0));
 
         if (isDuplicate) {
-          console.log('⚠️ DUPLICATA DETECTADA! Chave:', normalizedKey.slice(-6));
+          console.log('⚠️ DUPLICATA DETECTADA! Chave já existe no Picotinho:', normalizedKey.slice(-6));
+          // Logar se encontrada em qual usuário
+          if (existingInImages && existingInImages.length > 0) {
+            console.log('📋 Encontrada em notas_imagens de usuário(s):', existingInImages.map(n => n.usuario_id));
+          }
+          if (existingInNotas && existingInNotas.length > 0) {
+            console.log('📋 Encontrada em notas_fiscais de usuário(s):', existingInNotas.map(n => n.user_id));
+          }
         } else {
-          console.log('✅ Chave única para este usuário - não há duplicatas:', normalizedKey.slice(-6));
+          console.log('✅ Chave única no Picotinho - não há duplicatas:', normalizedKey.slice(-6));
         }
       }
     }
@@ -361,7 +367,7 @@ Responda APENAS o JSON:
         approved: false,
         reason: 'duplicada',
         shouldDelete: true,
-        message: '📋 Esta nota fiscal já consta como processada pelo PICOTINHO!'
+        message: '📋 Esta nota fiscal já foi lançada no PICOTINHO por outro usuário! Cada nota só pode ser processada uma vez no sistema.'
       };
     } else if (analysis.eh_nfse) {
       result = {
