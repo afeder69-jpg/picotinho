@@ -31,6 +31,35 @@ interface Receipt {
   debug_texto?: string;
 }
 
+// Helper para extrair bairro de um endereço brasileiro em formatos variados
+function extractNeighborhood(address?: string | null): string | null {
+  if (!address) return null;
+  let a = String(address).replace(/\s+/g, ' ').trim();
+
+  // Tenta capturar "BAIRRO: XYZ"
+  const labelMatch = a.match(/bairro[:\s-]*([A-Za-zÀ-ÿ0-9\s]+?)(?:\s*-\s*|\s*,\s*|$)/i);
+  if (labelMatch) return labelMatch[1].trim();
+
+  // Remove CEP para não confundir a extração
+  a = a.replace(/\b\d{5}-\d{3}\b/, '').trim();
+
+  // Parte após a primeira vírgula (geralmente número + bairro)
+  const afterComma = a.includes(',') ? a.split(',').slice(1).join(',').trim() : a;
+  // Pega trecho antes do primeiro " - " (antes de CEP/cidade/UF)
+  let candidate = afterComma.split(' - ')[0].trim();
+
+  // Remove números iniciais (ex: "315", "0 ")
+  candidate = candidate.replace(/^[\d\-/]+\s*/, '').trim();
+  candidate = candidate.replace(/\s{2,}/g, ' ').trim();
+
+  if (!candidate) {
+    const m = a.match(/,\s*\d*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)\s*-\s/);
+    if (m) candidate = m[1].trim();
+  }
+
+  return candidate && candidate.length >= 2 ? candidate : null;
+}
+
 const ReceiptList = () => {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -644,9 +673,9 @@ const ReceiptList = () => {
                             <h3 className="font-bold text-black text-lg leading-tight">
                               {receipt.dados_extraidos.estabelecimento.nome}
                             </h3>
-                            {receipt.store_address && (
+{receipt.store_address && (
                               <span className="text-base text-black">
-                                {receipt.store_address.split(',').slice(-3, -2)[0]?.trim() || 'Bairro N/A'}
+                                {extractNeighborhood(receipt.store_address) || 'Bairro N/A'}
                               </span>
                             )}
                           </div>
@@ -690,9 +719,9 @@ const ReceiptList = () => {
                             <h3 className="font-bold text-black text-lg leading-tight">
                               {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
                             </h3>
-                            {receipt.dados_extraidos.loja?.endereco && (
+{receipt.dados_extraidos.loja?.endereco && (
                               <span className="text-base text-black">
-                                {receipt.dados_extraidos.loja.endereco.split(',').slice(-2, -1)[0]?.trim() || 'Bairro N/A'}
+                                {extractNeighborhood(receipt.dados_extraidos.loja.endereco) || 'Bairro N/A'}
                               </span>
                             )}
                           </div>
