@@ -857,12 +857,12 @@ const ReceiptList = () => {
 
   return (
     <>
-      <div className="space-y-1">
-        <div className="space-y-1">
+      <div className="space-y-[4px]">
+        <div className="space-y-[4px]">
           {receipts.map((receipt) => (
-            <Card key={receipt.id} className="p-1">
+            <Card key={receipt.id} className="py-[4px] px-[8px]">
               <div className="flex justify-between items-start">
-                <div className="flex-1 space-y-1">
+                <div className="flex-1 space-y-[4px]">
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
                       {/* Para notas processadas com dados estruturados da IA */}
@@ -877,7 +877,7 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="leading-none" style={{ fontSize: '12px' }}>
+                    <h3 className="leading-none" style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 700 }}>
                       {texto}
                     </h3>
   );
@@ -906,7 +906,7 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="leading-none" style={{ fontSize: '12px' }}>
+                    <h3 className="leading-none" style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 700 }}>
                       {texto}
                     </h3>
   );
@@ -928,7 +928,7 @@ const ReceiptList = () => {
                   ) : (
                     <>
                       {/* Para notas não processadas */}
-                      <div className="space-y-2">
+                      <div className="space-y-[4px]">
                         {/* Primeira linha: Nome, bairro, UF (fallback com store_address) */}
                          {(() => {
                            const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
@@ -937,7 +937,7 @@ const ReceiptList = () => {
                            if (nb) texto += `, ${nb}`;
                            if (uf) texto += `, ${uf}`;
                            return (
-                             <h3 className="leading-none" style={{ fontSize: '12px' }}>{texto}</h3>
+                             <h3 className="leading-none" style={{ fontSize: '12px', lineHeight: '14px', fontWeight: 700 }}>{texto}</h3>
                            );
                          })()}
                         
@@ -953,28 +953,29 @@ const ReceiptList = () => {
                 </div>
                 
                  {/* Botões compactos no lado direito */}
-                <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                <div className="flex items-center gap-[4px] flex-shrink-0 ml-2">
                   <Badge 
                     variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
                     className="px-1 py-0" 
                     style={{ fontSize: '10px', height: '16px', lineHeight: '14px' }}
                   >
-                    {receipt.status === 'processed' || receipt.processada ? 'OK' : '...'}
+                    {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
                   </Badge>
                   <Button 
                     variant="outline" 
                     size="sm" 
                     onClick={() => viewReceipt(receipt)} 
-                    className="px-1.5 py-0.5" 
+                    className="px-[6px] py-0" 
                     style={{ height: '20px', fontSize: '10px' }}
                   >
-                    <Eye className="w-3 h-3" />
+                    <Eye className="w-3 h-3 mr-1" />
+                    Ver Detalhes
                   </Button>
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setDeleteConfirmId(receipt.id)} 
-                    className="text-destructive hover:text-destructive px-1 py-0.5" 
+                    className="text-destructive hover:text-destructive px-1 py-0" 
                     style={{ height: '20px' }}
                   >
                     <Trash2 className="w-3 h-3" />
