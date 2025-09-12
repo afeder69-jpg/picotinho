@@ -60,6 +60,21 @@ function extractNeighborhood(address?: string | null): string | null {
   return candidate && candidate.length >= 2 ? candidate : null;
 }
 
+// Helper para extrair estado de um endereço
+function extractState(address?: string | null): string | null {
+  if (!address) return null;
+  
+  // Procura por padrões de estado no final do endereço
+  const stateMatch = address.match(/\b([A-Z]{2})\s*$/);
+  if (stateMatch) return stateMatch[1];
+  
+  // Procura por estado precedido por hífen
+  const stateWithHyphen = address.match(/\s-\s*([A-Z]{2})\s*$/);
+  if (stateWithHyphen) return stateWithHyphen[1];
+  
+  return null;
+}
+
 const ReceiptList = () => {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -668,19 +683,19 @@ const ReceiptList = () => {
                       {/* Para notas processadas com dados estruturados da IA */}
                       {receipt.dados_extraidos.estabelecimento ? (
                         <>
-                          {/* Primeira linha: Nome do mercado + Bairro */}
-                          <div className="flex items-baseline gap-3">
-                            <h3 className="font-bold text-black text-lg leading-tight">
-                              {receipt.dados_extraidos.estabelecimento.nome}
-                            </h3>
-{receipt.store_address && (
-                              <span className="text-base text-black">
-                                {extractNeighborhood(receipt.store_address) || 'Bairro N/A'}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Segunda linha: Data da compra */}
+                           {/* Primeira linha: Nome do mercado */}
+                           <h3 className="font-bold text-black text-lg leading-tight">
+                             {receipt.dados_extraidos.estabelecimento.nome}
+                           </h3>
+                           
+                           {/* Segunda linha: Bairro, Estado */}
+                           {receipt.store_address && (
+                             <div className="text-base text-black">
+                               {extractNeighborhood(receipt.store_address) || 'N/A'}, {extractState(receipt.store_address) || 'N/A'}
+                             </div>
+                           )}
+                           
+                           {/* Terceira linha: Data da compra */}
                           <div className="text-sm">
                             <span className="font-bold text-black">Data da compra: </span>
                             <span className="font-bold text-black">
@@ -714,19 +729,19 @@ const ReceiptList = () => {
                       ) : (
                         /* Fallback para formato antigo */
                         <>
-                          {/* Primeira linha: Nome do mercado + Bairro */}
-                          <div className="flex items-baseline gap-3">
-                            <h3 className="font-bold text-black text-lg leading-tight">
-                              {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
-                            </h3>
-{receipt.dados_extraidos.loja?.endereco && (
-                              <span className="text-base text-black">
-                                {extractNeighborhood(receipt.dados_extraidos.loja.endereco) || 'Bairro N/A'}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Segunda linha: Data da compra */}
+                           {/* Primeira linha: Nome do mercado */}
+                           <h3 className="font-bold text-black text-lg leading-tight">
+                             {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
+                           </h3>
+                           
+                           {/* Segunda linha: Bairro, Estado */}
+                           {receipt.dados_extraidos.loja?.endereco && (
+                             <div className="text-base text-black">
+                               {extractNeighborhood(receipt.dados_extraidos.loja.endereco) || 'N/A'}, {extractState(receipt.dados_extraidos.loja.endereco) || 'N/A'}
+                             </div>
+                           )}
+                           
+                           {/* Terceira linha: Data da compra */}
                           <div className="text-sm">
                             <span className="font-bold text-black">Data da compra: </span>
                             <span className="font-bold text-black">
