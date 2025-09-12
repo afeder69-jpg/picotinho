@@ -285,40 +285,70 @@ Responda APENAS o JSON:
         .replace(/B/g, '8');
 
       if (normalizedKey.length >= 43) { // Aceitar chaves com 43 ou 44 dígitos
-        console.log('Verificando duplicidade GLOBAL para chave:', normalizedKey);
+        console.log('Verificando duplicidade (por usuário) para chave:', normalizedKey);
+
+        // Assegurar que a própria nota já armazene a chave para futuras verificações
+        try {
+          const { data: notaAtual } = await supabase
+            .from('notas_imagens')
+            .select('dados_extraidos')
+            .eq('id', notaImagemId)
+            .single();
+
+          if (notaAtual) {
+            const dadosAtualizados = {
+              ...(notaAtual.dados_extraidos || {}),
+              chave_acesso: normalizedKey,
+            };
+            await supabase
+              .from('notas_imagens')
+              .update({ dados_extraidos: dadosAtualizados })
+              .eq('id', notaImagemId);
+          }
+        } catch (e) {
+          console.warn('Não foi possível salvar chave na nota atual antes da checagem:', e);
+        }
 
         // BUSCAR CHAVES SIMILARES: tanto exata quanto com 1 dígito a mais/menos
         const chaveVariations = [
           normalizedKey,
           normalizedKey.padEnd(44, '0'), // Adicionar zero se tiver 43 dígitos
           normalizedKey.length === 44 ? normalizedKey.slice(0, 43) : null // Remover último se tiver 44
-        ].filter(Boolean);
+        ].filter(Boolean) as string[];
 
         console.log('Variações de chave para busca:', chaveVariations);
 
-        // BUSCAR EM TODAS AS NOTAS PROCESSADAS DE TODOS OS USUÁRIOS (verificação global)
-        const orConditions = chaveVariations.flatMap(chave => [
+        // 1) Procurar em notas_imagens do MESMO USUÁRIO (independente de estar processada)
+        const orConditions = chaveVariations.flatMap((chave) => [
           `dados_extraidos->chave_acesso.eq."${chave}"`,
           `dados_extraidos->>chave_acesso.eq."${chave}"`,
-          `dados_extraidos->compra->>chave_acesso.eq."${chave}"`
+          `dados_extraidos->compra->>chave_acesso.eq."${chave}"`,
         ]).join(',');
 
-        const { data: existingNotes } = await supabase
+        const { data: existingInImages, error: imgErr } = await supabase
           .from('notas_imagens')
-          .select('id, created_at, usuario_id, dados_extraidos->compra->>chave_acesso as chave_encontrada')
-          .or(orConditions)
-          .eq('processada', true) // Só considerar notas que ainda estão processadas
-          .neq('id', notaImagemId); // Excluir a própria nota
+          .select('id, created_at, usuario_id')
+          .eq('usuario_id', userId)
+          .neq('id', notaImagemId)
+          .or(orConditions);
 
-        console.log('Resultado busca duplicata GLOBAL:', existingNotes);
-        isDuplicate = existingNotes && existingNotes.length > 0;
-        
+        if (imgErr) console.error('Erro buscando duplicidade em notas_imagens:', imgErr);
+
+        // 2) Procurar em notas_fiscais do MESMO USUÁRIO (quando já processadas)
+        const { data: existingInNotas, error: nfErr } = await supabase
+          .from('notas_fiscais')
+          .select('id')
+          .eq('user_id', userId)
+          .in('chave_acesso', chaveVariations);
+
+        if (nfErr) console.error('Erro buscando duplicidade em notas_fiscais:', nfErr);
+
+        isDuplicate = !!((existingInImages && existingInImages.length > 0) || (existingInNotas && existingInNotas.length > 0));
+
         if (isDuplicate) {
-          console.log('⚠️ DUPLICATA DETECTADA GLOBALMENTE! Chave já existe:', normalizedKey.slice(-6));
-          console.log('📊 Encontrada em:', existingNotes.length, 'registro(s)');
-          console.log('🔍 IDs das notas duplicadas:', existingNotes.map(n => n.id));
+          console.log('⚠️ DUPLICATA DETECTADA! Chave:', normalizedKey.slice(-6));
         } else {
-          console.log('✅ Chave única confirmada - não há duplicatas para:', normalizedKey.slice(-6));
+          console.log('✅ Chave única para este usuário - não há duplicatas:', normalizedKey.slice(-6));
         }
       }
     }
