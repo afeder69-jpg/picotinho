@@ -38,8 +38,7 @@ function normalizarTextoDanfe(texto: string): string {
   if (!texto) return texto;
 
   return texto
-    // Correções de acentuação e fragmentação de palavras
-    .replace(/C\s*[óo]\s*digo/gi, "Código")
+    // Correções de acentuação
     .replace(/C digo/g, "Código")
     .replace(/Cart o/g, "Cartão")
     .replace(/D bito/g, "Débito")
@@ -54,8 +53,6 @@ function normalizarTextoDanfe(texto: string): string {
     .replace(/Consu midor/g, "Consumidor")
 
     // Normalização de unidades
-    .replace(/UN\s*:/g, "Unidade:")
-    .replace(/\bUN\b/g, "Unidade")
     .replace(/Unidade: Unidade/g, "Unidade")
     .replace(/Unidade: Kg/g, "Kg")
 
@@ -63,6 +60,7 @@ function normalizarTextoDanfe(texto: string): string {
     .replace(/\bQtde\./g, "Quantidade")
     .replace(/\bVl\. Unit\./g, "Valor Unitário")
     .replace(/\bVl\. Total/g, "Valor Total")
+    .replace(/\bUN\b/g, "Unidade")
     .replace(/\bkg\b/gi, "Kg")
     .replace(/\bg\b/gi, "Gramas")
     .replace(/\bLT\b/gi, "Litros")
@@ -176,21 +174,7 @@ O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
 
 NUNCA truncar ou cortar no meio — incluir TODOS os itens da nota.
 
-🔄 3. TRATAMENTO DE NOTAS MULTI-PÁGINA (CRÍTICO):
-
-QUEBRAS DE PÁGINA e cabeçalhos/rodapés como "Página X/Y", "Pág.", "DANFE", "Autorização/Protocolo" NÃO indicam fim da lista de produtos e NÃO devem causar perda de itens.
-
-• ÚLTIMO ITEM da página anterior E PRIMEIRO ITEM da página seguinte DEVEM ser capturados integralmente.
-
-• ITENS FRAGMENTADOS: quando um item for dividido entre páginas (parte da descrição antes e valores/quantidade depois), una as partes e forme UM ÚNICO item completo (descricao, quantidade, unidade, valor_unitario, valor_total).
-
-• JANELA DE FRONTEIRA: para cada ocorrência de linha que contenha "Página"/"Pág."/"Pagina"/"Page" ou similar, reanalise obrigatoriamente as 10 linhas ANTERIORES e as 10 linhas SEGUINTES para detectar itens cortados no limite e uni-los.
-
-• IGNORAR RUÍDO: descarte cabeçalhos/rodapés e textos como "Consulta pela chave", "Emitida", "Autorização", "Protocolo", "DANFE", "Página X/Y" — esses não são itens.
-
-• CONTINUIDADE: se houver numeração de itens (1., 2., 3., ...), garanta sequência contínua através das quebras; se faltar um número, busque-o na janela de fronteira e reconstrua o item.
-
-⚖️ 4. VALIDAÇÃO DE CONSISTÊNCIA (OBRIGATÓRIA):
+⚖️ 3. Validação de Consistência (OBRIGATÓRIA):
 
 Após extrair todos os itens, some os valores de cada item (valor_total).
 
@@ -199,10 +183,10 @@ Compare essa soma com o valor_total da compra.
 Se a soma bater (ou a diferença for de poucos centavos por arredondamento), mantenha o resultado.
 
 Se a soma NÃO bater:
-• Reanalise ESPECIFICAMENTE as FRONTEIRAS de página: últimas 10 linhas da página anterior e primeiras 10 da página seguinte.
-• Procure por itens omitidos ou cortados (especialmente o último da pág. 1 e o primeiro da pág. 2) e reconstrua-os.
-• Refaça a listagem incluindo os itens encontrados e repita até que a soma dos itens bata com o valor_total oficial da nota.
-• Somente finalize o JSON quando os valores forem consistentes (tolerância máxima de centavos por arredondamento, ≤ 0,02).
+• Reanalise o texto para encontrar itens que possam ter sido ignorados.
+• Refaça a listagem até que a soma dos itens bata com o valor_total oficial da nota.
+• Somente finalize o JSON quando os valores forem consistentes.
+
 4. Estrutura OBRIGATÓRIA do retorno:
 \`\`\`json
 {
@@ -239,49 +223,33 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
 Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANTA que o JSON seja válido e contenha TODOS os itens da nota.`;
 
-let respostaIA = '';
-try {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort('timeout'), 25000);
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
+          { role: 'user', content: aiPrompt }
+        ],
+        max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
+        temperature: 0.1
+      }),
+    });
 
-  const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${openaiApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
-        { role: 'user', content: aiPrompt }
-      ],
-      max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
-      temperature: 0.1
-    }),
-    signal: controller.signal,
-  });
-  clearTimeout(timeoutId);
+    if (!aiResponse.ok) {
+      throw new Error(`Erro na API OpenAI: ${aiResponse.status}`);
+    }
 
-  if (!aiResponse.ok) {
-    throw new Error(`Erro na API OpenAI: ${aiResponse.status}`);
-  }
-
-  const aiData = await aiResponse.json();
-  respostaIA = aiData.choices?.[0]?.message?.content || '';
-} catch (e) {
-  console.error('⚠️ IA-2 falhou ou excedeu o tempo. Usando fallback local:', e);
-  // Fallback mínimo: JSON válido para permitir continuação do processamento e reconciliação via regex
-  respostaIA = JSON.stringify({
-    estabelecimento: { nome: null, cnpj: null, endereco: null },
-    compra: { valor_total: null, forma_pagamento: null, numero: null, serie: null, data_emissao: null, chave_acesso: null },
-    itens: []
-  });
-}
-
-console.log("📝 RESPOSTA_BRUTA da IA (completa):");
-console.log(respostaIA); // RESPOSTA COMPLETA da IA, sem cortar
-console.log("=".repeat(80));
+    const aiData = await aiResponse.json();
+    const respostaIA = aiData.choices[0]?.message?.content || '';
+    
+    console.log("📝 RESPOSTA_BRUTA da IA (completa):");
+    console.log(respostaIA); // RESPOSTA COMPLETA da IA, sem cortar
+    console.log("=".repeat(80));
 
     // 💾 Configurar Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -300,149 +268,6 @@ console.log("=".repeat(80));
       
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
-
-      // 🔒 Salvaguarda anti-perda de itens em notas multi-página (IA-2)
-      // Re-extrai itens via regex do texto normalizado e reconcilia com os itens da IA
-      try {
-        type ItemBruto = { descricao: string; codigo?: string | null; quantidade: number; unidade: string; valor_unitario: number; valor_total: number; categoria?: string };
-        const toNumberBR = (s: string | number | null | undefined) => {
-          if (typeof s === 'number') return s;
-          if (!s) return 0;
-          const t = s.toString().replace(/\./g, '').replace(/,/g, '.');
-          const n = parseFloat(t);
-          return isFinite(n) ? n : 0;
-        };
-        const normalizaDesc = (d: string) => d?.toUpperCase()?.replace(/\s+/g, ' ')?.trim() || '';
-
-        const parseItemsFromText = (texto: string): ItemBruto[] => {
-          const items: ItemBruto[] = [];
-          const seen = new Set<string>();
-
-          // Padrão 1: com (Código: 12345) — tolerando quebras/acentos
-          const re1 = /(.*?)\s*\(C\s*[óo]?\s*digo:\s*(\d+)\s*\)\s*Quantidade:\s*([\d.,]+)\s*(?:Unidade:)?\s*(Unidade|Kg|Gramas|Litros|ML|L|G|KG)\s*Valor Unitário:\s*([\d.,]+)\s*Valor Total\s*([\d.,]+)/gi;
-          let m: RegExpExecArray | null;
-          while ((m = re1.exec(texto)) !== null) {
-            const descricao = (m[1] || '').replace(/[\s:]+$/g, '').trim();
-            const key = normalizaDesc(descricao) + '|' + m[2];
-            if (seen.has(key)) continue;
-            items.push({
-              descricao,
-              codigo: m[2] || null,
-              quantidade: toNumberBR(m[3]),
-              unidade: m[4] || 'Unidade',
-              valor_unitario: toNumberBR(m[5]),
-              valor_total: toNumberBR(m[6])
-            });
-            seen.add(key);
-          }
-
-          // Padrão 2: sem código explícito
-          const re2 = /(.*?)\s*Quantidade:\s*([\d.,]+)\s*(?:Unidade:)?\s*(Unidade|Kg|Gramas|Litros|ML|L|G|KG)\s*Valor Unitário:\s*([\d.,]+)\s*Valor Total\s*([\d.,]+)/gi;
-          while ((m = re2.exec(texto)) !== null) {
-            const descricao = (m[1] || '').replace(/[\s:]+$/g, '').trim();
-            const key = normalizaDesc(descricao);
-            if (seen.has(key)) continue;
-            items.push({
-              descricao,
-              codigo: null,
-              quantidade: toNumberBR(m[2]),
-              unidade: m[3] || 'Unidade',
-              valor_unitario: toNumberBR(m[4]),
-              valor_total: toNumberBR(m[5])
-            });
-            seen.add(key);
-          }
-
-          return items;
-        };
-
-        // Gera baseline de itens a partir do texto bruto para capturar fronteiras de página
-        const itensRegex = parseItemsFromText(textoLimpo);
-        if (Array.isArray(dadosEstruturados?.itens)) {
-          const existentes = new Set(
-            dadosEstruturados.itens.map((it: any) => normalizaDesc(it.descricao))
-          );
-
-          // Função de similaridade simples (coeficiente de Jaccard por palavras)
-          const similar = (a: string, b: string) => {
-            const sa = new Set(a.split(' '));
-            const sb = new Set(b.split(' '));
-            const inter = [...sa].filter(x => sb.has(x)).length;
-            const uni = new Set([...sa, ...sb]).size;
-            return uni === 0 ? 0 : inter / uni;
-          };
-
-          let adicionados = 0;
-          for (const raw of itensRegex) {
-            const alvo = normalizaDesc(raw.descricao);
-            const jaExiste = [...existentes].some(e => e === alvo || similar(e, alvo) >= 0.85 || e.includes(alvo) || alvo.includes(e));
-            if (!jaExiste && alvo) {
-              dadosEstruturados.itens.push({
-                descricao: raw.descricao,
-                codigo: raw.codigo || null,
-                quantidade: raw.quantidade || 1,
-                unidade: raw.unidade || 'unidade',
-                valor_unitario: raw.valor_unitario || (raw.valor_total && raw.quantidade ? raw.valor_total / Math.max(raw.quantidade, 1) : 0),
-                valor_total: raw.valor_total || 0,
-                categoria: 'Outros'
-              });
-              existentes.add(alvo);
-              adicionados++;
-            }
-          }
-          if (adicionados > 0) {
-            console.log(`🧩 Salvaguarda adicionou ${adicionados} item(ns) ausente(s) da fronteira de página`);
-          }
-        }
-      } catch (safeErr) {
-        console.warn('⚠️ Falha na salvaguarda de itens (não crítico):', safeErr);
-      }
-
-      // 🛟 Fallback: enriquecer estabelecimento/compra a partir do texto quando IA retorna vazio
-      try {
-        const toNumberBR = (s: string | number | null | undefined) => {
-          if (typeof s === 'number') return s;
-          if (!s) return 0;
-          const t = s.toString().replace(/\./g, '').replace(/,/g, '.');
-          const n = parseFloat(t);
-          return isFinite(n) ? n : 0;
-        };
-
-        // Estabelecimento - nome e CNPJ
-        const cnpjMatch = textoLimpo.match(/CNPJ[:\s]*([\d./-]+)/i);
-        const nomeMatch = textoLimpo.match(/^\s*([^\n]+?)\s+CNPJ\b/i);
-        const estabelecimento = {
-          nome: dadosEstruturados?.estabelecimento?.nome || nomeMatch?.[1]?.trim() || null,
-          cnpj: dadosEstruturados?.estabelecimento?.cnpj || cnpjMatch?.[1]?.trim() || null,
-          endereco: dadosEstruturados?.estabelecimento?.endereco || null
-        };
-
-        if (!dadosEstruturados.estabelecimento) dadosEstruturados.estabelecimento = {} as any;
-        Object.assign(dadosEstruturados.estabelecimento, estabelecimento);
-
-        // Compra - chave, valor_total, data/hora, forma de pagamento
-        const chave = (textoLimpo.match(/\b\d{44}\b/) || [])?.[0] || null;
-        const formaMatch = textoLimpo.match(/Forma de pagamento:\s*([^\n]+)/i);
-        const emissaoMatch = textoLimpo.match(/Emiss[aã]o:\s*([\d/]{8,10})(?:\s+([\d:]{5,8}))/i);
-        const totalMatch = textoLimpo.match(/Valor total R\$:?\s*([\d.,]+)/i);
-
-        // Se ainda não tiver valor_total, soma dos itens capturados por regex
-        let valorTotalCalc = dadosEstruturados?.compra?.valor_total;
-        if (!valorTotalCalc && Array.isArray(dadosEstruturados?.itens) && dadosEstruturados.itens.length > 0) {
-          valorTotalCalc = dadosEstruturados.itens.reduce((acc: number, it: any) => acc + toNumberBR(it.valor_total || 0), 0);
-          // Arredonda a 2 casas
-          valorTotalCalc = Math.round((valorTotalCalc + Number.EPSILON) * 100) / 100;
-        }
-        if (!valorTotalCalc && totalMatch?.[1]) valorTotalCalc = toNumberBR(totalMatch[1]);
-
-        if (!dadosEstruturados.compra) dadosEstruturados.compra = {} as any;
-        dadosEstruturados.compra.chave_acesso = dadosEstruturados.compra.chave_acesso || chave;
-        dadosEstruturados.compra.forma_pagamento = dadosEstruturados.compra.forma_pagamento || (formaMatch?.[1]?.trim() || null);
-        dadosEstruturados.compra.data_emissao = dadosEstruturados.compra.data_emissao || (emissaoMatch ? `${emissaoMatch[1]} ${emissaoMatch[2] || ''}`.trim() : null);
-        dadosEstruturados.compra.valor_total = dadosEstruturados.compra.valor_total || valorTotalCalc || null;
-      } catch (enrichErr) {
-        console.warn('⚠️ Fallback de enriquecimento falhou (não crítico):', enrichErr);
-      }
 
       // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
@@ -947,27 +772,6 @@ console.log("=".repeat(80));
     } catch (debugError) {
       console.error("❌ Erro ao salvar debug:", debugError);
     }
-
-    // 📦 CHAMAR PROCESS-RECEIPT-FULL para processar estoque
-try {
-  console.log("📦 Agendando processamento de estoque em background...");
-  EdgeRuntime.waitUntil((async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: notaImagemId }
-      });
-      if (error) {
-        console.error('⚠️ Erro no processamento de estoque (bg):', error);
-      } else {
-        console.log('✅ Processamento de estoque (bg) concluído:', data);
-      }
-    } catch (e) {
-      console.error('⚠️ Falha ao chamar process-receipt-full (bg):', e);
-    }
-  })());
-} catch (e) {
-  console.error('⚠️ Erro ao agendar processamento de estoque:', e);
-}
 
     return new Response(JSON.stringify({
       success: true,
