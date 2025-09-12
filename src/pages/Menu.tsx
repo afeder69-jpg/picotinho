@@ -43,11 +43,19 @@ const Menu = () => {
     },
     {
       id: 'current-stock',
-      title: 'Consultar e ajustar produtos em estoque',
+      title: 'Estoque',
       description: 'Consultar e ajustar produtos em estoque',
       icon: Package,
       onClick: () => navigate('/estoque'),
       isActive: true
+    },
+    {
+      id: 'shopping-list',
+      title: 'Lista de Compras',
+      description: 'Organizar próximas compras',
+      icon: ShoppingCart,
+      onClick: () => {},
+      isActive: false
     },
     {
       id: 'reports',
@@ -72,14 +80,6 @@ const Menu = () => {
       icon: Settings,
       onClick: () => navigate('/configuracoes'),
       isActive: true
-    },
-    {
-      id: 'shopping-list',
-      title: 'Lista de Compras',
-      description: 'Organizar próximas compras',
-      icon: ShoppingCart,
-      onClick: () => {},
-      isActive: false
     }
   ];
 
