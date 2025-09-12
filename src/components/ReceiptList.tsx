@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +40,7 @@ const ReceiptList = () => {
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { toast } = useToast();
-  const lastAutoFixRef = useRef<number>(0);
+  
 
   useEffect(() => {
     loadReceipts();
@@ -133,24 +133,6 @@ const ReceiptList = () => {
         ...mappedNotasImagens
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      // Detectar notas possivelmente travadas (sem debug_texto e não processadas há > 2 min)
-      const now = Date.now();
-      const stuckReceipts = allReceipts.filter((r: any) => {
-        const createdAt = new Date(r.created_at).getTime();
-        const ageMs = now - createdAt;
-        const semDebug = !r.debug_texto || r.debug_texto === 'AUSENTE';
-        return r.status !== 'processed' && semDebug && ageMs > 2 * 60 * 1000;
-      });
-
-      if (stuckReceipts.length > 0 && now - lastAutoFixRef.current > 2 * 60 * 1000) {
-        lastAutoFixRef.current = now;
-        console.log(`⚙️ Auto-fix acionado: ${stuckReceipts.length} notas possivelmente travadas`);
-        supabase.functions.invoke('auto-fix-stuck-notes').then((res) => {
-          console.log('📣 Auto-fix retorno:', res.data || res.error);
-        }).catch((err) => {
-          console.error('❌ Erro ao acionar auto-fix:', err);
-        });
-      }
 
       console.log('🔍 Debug texto check:', allReceipts.map(r => ({ 
         id: r.id, 
