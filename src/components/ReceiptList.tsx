@@ -732,18 +732,17 @@ const ReceiptList = () => {
                       {receipt.dados_extraidos.estabelecimento ? (
                         <>
                            {/* Primeira linha: Nome do mercado */}
-                           <h3 className="font-bold text-black text-base leading-tight">
-                             {receipt.dados_extraidos.estabelecimento.nome}
-                           </h3>
-                           
-                           {/* Segunda linha: Bairro, Estado */}
+                            {/* Nome do mercado, bairro, UF */}
 {(() => {
   const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
-  if (!nb && !uf) return null;
+  const nome = receipt.dados_extraidos.estabelecimento.nome;
+  let texto = nome;
+  if (nb) texto += `, ${nb}`;
+  if (uf) texto += `, ${uf}`;
   return (
-    <div className="text-sm text-black">
-      {nb}{nb && uf ? ', ' : ''}{uf}
-    </div>
+    <h3 className="font-bold text-black text-base leading-tight">
+      {texto}
+    </h3>
   );
 })()}
                            
@@ -782,18 +781,17 @@ const ReceiptList = () => {
                         /* Fallback para formato antigo */
                         <>
                            {/* Primeira linha: Nome do mercado */}
-                           <h3 className="font-bold text-black text-base leading-tight">
-                             {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
-                           </h3>
-                           
-                           {/* Segunda linha: Bairro, Estado */}
+                            {/* Nome do mercado, bairro, UF */}
 {(() => {
   const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
-  if (!nb && !uf) return null;
+  const nome = receipt.dados_extraidos.loja?.nome || 'Mercado N/A';
+  let texto = nome;
+  if (nb) texto += `, ${nb}`;
+  if (uf) texto += `, ${uf}`;
   return (
-    <div className="text-sm text-black">
-      {nb}{nb && uf ? ', ' : ''}{uf}
-    </div>
+    <h3 className="font-bold text-black text-base leading-tight">
+      {texto}
+    </h3>
   );
 })()}
                            
