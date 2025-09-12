@@ -857,12 +857,12 @@ const ReceiptList = () => {
 
   return (
     <>
-      <div className="space-y-2">
-        <div className="space-y-2">
+      <div className="space-y-1">
+        <div className="space-y-1">
           {receipts.map((receipt) => (
-            <Card key={receipt.id} className="p-3">
+            <Card key={receipt.id} className="p-2">
               <div className="flex justify-between items-center">
-                <div className="flex-1 space-y-1">
+                <div className="flex-1 space-y-0.5">
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
                       {/* Para notas processadas com dados estruturados da IA */}
@@ -877,17 +877,17 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="font-medium text-sm leading-tight">
+                    <h3 className="font-medium text-xs leading-tight">
                       {texto}
                     </h3>
   );
 })()}
                            
                             {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                              <span>Data da compra: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}</span>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                              <span>Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}</span>
                               <span className="font-medium text-foreground">
-                                Total da compra: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
+                                Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
                               </span>
                               {receipt.dados_extraidos.itens && (
                                 <span>{receipt.dados_extraidos.itens.length} itens</span>
@@ -906,17 +906,17 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="font-medium text-sm leading-tight">
+                    <h3 className="font-medium text-xs leading-tight">
                       {texto}
                     </h3>
   );
 })()}
                            
                             {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                              <span>Data da compra: {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}</span>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                              <span>Data: {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}</span>
                               <span className="font-medium text-foreground">
-                                Total da compra: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
+                                Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
                               </span>
                               {receipt.dados_extraidos.itens && (
                                 <span>{receipt.dados_extraidos.itens.length} itens</span>
@@ -937,14 +937,14 @@ const ReceiptList = () => {
                            if (nb) texto += `, ${nb}`;
                            if (uf) texto += `, ${uf}`;
                            return (
-                             <h3 className="font-medium text-sm leading-tight">{texto}</h3>
+                             <h3 className="font-medium text-xs leading-tight">{texto}</h3>
                            );
                          })()}
                         
                           {/* Dados da compra em linha compacta */}
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span>Enviado em: {formatDate(receipt.created_at)}</span>
-                            <span className="text-orange-600">Aguardando processamento...</span>
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                            <span>Enviado: {formatDate(receipt.created_at)}</span>
+                            <span className="text-orange-600">Processando...</span>
                           </div>
                         
                       </div>
@@ -953,13 +953,17 @@ const ReceiptList = () => {
                 </div>
                 
                  {/* Botões compactos no lado direito */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {getStatusBadge(receipt.status)}
-                  <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
-                    <Eye className="w-3 h-3 mr-1" />
-                    Ver Detalhes
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Badge 
+                    variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
+                    className="text-xs px-1 py-0.5 h-5"
+                  >
+                    {receipt.status === 'processed' || receipt.processada ? 'OK' : '...'}
+                  </Badge>
+                  <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-6 px-1.5 text-xs">
+                    <Eye className="w-3 h-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(receipt.id)} className="text-destructive hover:text-destructive h-7 px-2">
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(receipt.id)} className="text-destructive hover:text-destructive h-6 px-1.5">
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
