@@ -704,18 +704,52 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       
       if (chaveAcessoFinal) {
         const chave = chaveAcessoFinal.toString().replace(/\D/g, '');
-        if (chave.length === 44) {
+        if (chave.length >= 43 && chave.length <= 44) {
           chaveAcessoFinal = chave;
-          console.log("🔑 CHAVE DE 44 DÍGITOS DETECTADA E SERÁ SALVA:", chave.slice(-6));
+          console.log(`🔑 CHAVE DE ${chave.length} DÍGITOS DETECTADA:`, chave.slice(-6));
           
-          // Garantir que seja salva em AMBOS os locais para compatibilidade
+          // VERIFICAÇÃO DE DUPLICATA ANTES DE PROCESSAR
+          const chaveVariations = [
+            chave,
+            chave.padEnd(44, '0'), // Versão com 44 dígitos se tiver 43
+            chave.length === 44 ? chave.slice(0, 43) : null // Versão com 43 se tiver 44
+          ].filter(Boolean);
+
+          console.log('🔍 Verificando duplicatas para chaves:', chaveVariations.map(c => c.slice(-6)));
+          
+          const orConditions = chaveVariations.flatMap(ch => [
+            `dados_extraidos->chave_acesso.eq."${ch}"`,
+            `dados_extraidos->>chave_acesso.eq."${ch}"`,
+            `dados_extraidos->compra->>chave_acesso.eq."${ch}"`
+          ]).join(',');
+
+          const { data: existingNotes } = await supabase
+            .from('notas_imagens')
+            .select('id, created_at, dados_extraidos->compra->>chave_acesso as chave_nota')
+            .or(orConditions)
+            .eq('processada', true)
+            .neq('id', notaImagemId);
+
+          if (existingNotes && existingNotes.length > 0) {
+            console.log('🛑 DUPLICATA DETECTADA! Esta nota já foi processada:', existingNotes);
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'Nota fiscal duplicada - já foi processada anteriormente',
+                details: 'Esta chave de acesso já consta no sistema'
+              }),
+              { headers: corsHeaders, status: 400 }
+            );
+          }
+          
+          // Se chegou aqui, não é duplicata - salvar chave
           dadosEstruturados.chave_acesso = chaveAcessoFinal;
           if (!dadosEstruturados.compra) dadosEstruturados.compra = {};
           dadosEstruturados.compra.chave_acesso = chaveAcessoFinal;
           
           console.log("💾 CHAVE SALVA EM AMBOS OS LOCAIS:", chaveAcessoFinal);
         } else {
-          console.log("⚠️ Chave inválida (não tem 44 dígitos):", chave, "Tamanho:", chave.length);
+          console.log("⚠️ Chave inválida (deve ter 43-44 dígitos):", chave, "Tamanho:", chave.length);
           chaveAcessoFinal = null;
         }
       } else {

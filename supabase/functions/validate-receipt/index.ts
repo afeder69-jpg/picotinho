@@ -284,16 +284,29 @@ Responda APENAS o JSON:
         .replace(/[Il]/g, '1')
         .replace(/B/g, '8');
 
-      if (normalizedKey.length === 44) {
+      if (normalizedKey.length >= 43) { // Aceitar chaves com 43 ou 44 dígitos
         console.log('Verificando duplicidade GLOBAL para chave:', normalizedKey);
 
+        // BUSCAR CHAVES SIMILARES: tanto exata quanto com 1 dígito a mais/menos
+        const chaveVariations = [
+          normalizedKey,
+          normalizedKey.padEnd(44, '0'), // Adicionar zero se tiver 43 dígitos
+          normalizedKey.length === 44 ? normalizedKey.slice(0, 43) : null // Remover último se tiver 44
+        ].filter(Boolean);
+
+        console.log('Variações de chave para busca:', chaveVariations);
+
         // BUSCAR EM TODAS AS NOTAS PROCESSADAS DE TODOS OS USUÁRIOS (verificação global)
-        // CRÍTICO: Verificar tanto no campo direto quanto no campo dentro de "compra"
-        // IMPORTANTE: Só considerar notas que ainda estão processadas (não excluídas logicamente)
+        const orConditions = chaveVariations.flatMap(chave => [
+          `dados_extraidos->chave_acesso.eq."${chave}"`,
+          `dados_extraidos->>chave_acesso.eq."${chave}"`,
+          `dados_extraidos->compra->>chave_acesso.eq."${chave}"`
+        ]).join(',');
+
         const { data: existingNotes } = await supabase
           .from('notas_imagens')
-          .select('id, created_at, usuario_id')
-          .or(`dados_extraidos->chave_acesso.eq."${normalizedKey}",dados_extraidos->>chave_acesso.eq."${normalizedKey}",dados_extraidos->compra->>chave_acesso.eq."${normalizedKey}"`)
+          .select('id, created_at, usuario_id, dados_extraidos->compra->>chave_acesso as chave_encontrada')
+          .or(orConditions)
           .eq('processada', true) // Só considerar notas que ainda estão processadas
           .neq('id', notaImagemId); // Excluir a própria nota
 
