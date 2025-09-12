@@ -89,6 +89,21 @@ serve(async (req) => {
       });
     }
 
+    console.log("📥 Verificando arquivo:", pdfUrl);
+    
+    // VERIFICAR SE É REALMENTE UM PDF
+    if (pdfUrl.toLowerCase().includes('.jpg') || pdfUrl.toLowerCase().includes('.jpeg')) {
+      console.log("❌ ERRO: Tentativa de processar JPG como PDF");
+      return new Response(JSON.stringify({
+        success: false,
+        error: "INVALID_FILE_TYPE",
+        message: "Arquivo JPG não pode ser processado como PDF. Use a função de OCR para imagens."
+      }), { 
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     console.log("📥 Baixando PDF:", pdfUrl);
     const resp = await fetch(pdfUrl);
     if (!resp.ok) throw new Error(`Falha ao baixar PDF: ${resp.status}`);
