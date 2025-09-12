@@ -860,9 +860,9 @@ const ReceiptList = () => {
       <div className="space-y-1">
         <div className="space-y-1">
           {receipts.map((receipt) => (
-            <Card key={receipt.id} className="p-2">
-              <div className="flex justify-between items-center">
-                <div className="flex-1 space-y-0.5">
+            <Card key={receipt.id} className="p-1">
+              <div className="flex justify-between items-start">
+                <div className="flex-1 space-y-1">
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
                       {/* Para notas processadas com dados estruturados da IA */}
@@ -877,20 +877,20 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="font-medium text-xs leading-tight">
+                    <h3 className="leading-none" style={{ fontSize: '12px' }}>
                       {texto}
                     </h3>
   );
 })()}
                            
                             {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                              <span>Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}</span>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px' }}>
+                              <span className="text-muted-foreground">Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
                               </span>
                               {receipt.dados_extraidos.itens && (
-                                <span>{receipt.dados_extraidos.itens.length} itens</span>
+                                <span className="text-muted-foreground">{receipt.dados_extraidos.itens.length} itens</span>
                               )}
                             </div>
                         </>
@@ -906,20 +906,20 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-                    <h3 className="font-medium text-xs leading-tight">
+                    <h3 className="leading-none" style={{ fontSize: '12px' }}>
                       {texto}
                     </h3>
   );
 })()}
                            
                             {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                              <span>Data: {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}</span>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px' }}>
+                              <span className="text-muted-foreground">Data: {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
                               </span>
                               {receipt.dados_extraidos.itens && (
-                                <span>{receipt.dados_extraidos.itens.length} itens</span>
+                                <span className="text-muted-foreground">{receipt.dados_extraidos.itens.length} itens</span>
                               )}
                             </div>
                         </>
@@ -937,13 +937,13 @@ const ReceiptList = () => {
                            if (nb) texto += `, ${nb}`;
                            if (uf) texto += `, ${uf}`;
                            return (
-                             <h3 className="font-medium text-xs leading-tight">{texto}</h3>
+                             <h3 className="leading-none" style={{ fontSize: '12px' }}>{texto}</h3>
                            );
                          })()}
                         
                           {/* Dados da compra em linha compacta */}
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                            <span>Enviado: {formatDate(receipt.created_at)}</span>
+                          <div className="flex flex-wrap gap-x-2 gap-y-0" style={{ fontSize: '10px', lineHeight: '14px' }}>
+                            <span className="text-muted-foreground">Enviado: {formatDate(receipt.created_at)}</span>
                             <span className="text-orange-600">Processando...</span>
                           </div>
                         
@@ -953,17 +953,30 @@ const ReceiptList = () => {
                 </div>
                 
                  {/* Botões compactos no lado direito */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                   <Badge 
                     variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
-                    className="text-xs px-1 py-0.5 h-5"
+                    className="px-1 py-0" 
+                    style={{ fontSize: '10px', height: '16px', lineHeight: '14px' }}
                   >
                     {receipt.status === 'processed' || receipt.processada ? 'OK' : '...'}
                   </Badge>
-                  <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-6 px-1.5 text-xs">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => viewReceipt(receipt)} 
+                    className="px-1.5 py-0.5" 
+                    style={{ height: '20px', fontSize: '10px' }}
+                  >
                     <Eye className="w-3 h-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(receipt.id)} className="text-destructive hover:text-destructive h-6 px-1.5">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setDeleteConfirmId(receipt.id)} 
+                    className="text-destructive hover:text-destructive px-1 py-0.5" 
+                    style={{ height: '20px' }}
+                  >
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
