@@ -60,7 +60,7 @@ const Menu = () => {
     {
       id: 'reports',
       title: 'Relatórios',
-      description: 'Visualizar relatórios de vendas e estoque',
+      description: 'Visualizar Relatórios de Compras, Consumo e Estoque',
       icon: BarChart3,
       onClick: () => {},
       isActive: false
