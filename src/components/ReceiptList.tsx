@@ -132,55 +132,120 @@ function normalizeUf(value?: string | null): string | null {
 
 // Coleta Bairro e UF a partir dos dados estruturados ou endereço
 function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; uf: string | null } {
-  const sanitize = (val?: string | null): string | null => {
-    if (!val) return null;
-    let s = String(val).replace(/\s+/g, ' ').trim();
+  // Função melhorada para extrair e limpar bairros
+  const extractAndCleanNeighborhood = (source?: string | null): string | null => {
+    if (!source) return null;
+    let s = String(source).replace(/\s+/g, ' ').trim();
 
-    // Remover prefixos comuns de logradouro se vierem por engano
-    s = s.replace(/^(RUA|AV|AV\.|AVENIDA|ESTR|ESTR\.|ESTRADA|ROD|ROD\.|RODOVIA|TRAV|TRAV\.|TRAVESSA|ALAMEDA|AL\.|PRAÇA|PRACA)\s+/i, '').trim();
+    // Remover prefixos de logradouro
+    s = s.replace(/^(RUA|AV|AV\.|AVENIDA|ESTR|ESTR\.|ESTRADA|ROD|ROD\.|RODOVIA|TRAV|TRAV\.|TRAVESSA|ALAMEDA|AL\.|PRAÇA|PRACA|R\.|EST\.)\s+/i, '').trim();
 
-    // Se houver hífen, manter apenas o trecho antes (geralmente antes de " - Cidade - UF")
-    s = s.split(' - ')[0].trim();
+    // Remover "Bairro:" do início
+    s = s.replace(/^bairro[:\s-]*/i, '').trim();
 
-    // Se houver vírgulas, pegar a última parte (onde costuma estar o bairro)
-    const commaParts = s.split(',').map(p => p.trim()).filter(Boolean);
-    if (commaParts.length >= 2) {
-      s = commaParts[commaParts.length - 1];
+    // Para endereços com vírgulas, tentar diferentes estratégias
+    if (s.includes(',')) {
+      const parts = s.split(',').map(p => p.trim()).filter(Boolean);
+      
+      // Se tem múltiplas partes, o bairro geralmente está na penúltima ou última
+      if (parts.length >= 3) {
+        // Formato: "Endereço, Bairro, Cidade - UF"
+        s = parts[parts.length - 2];
+      } else if (parts.length === 2) {
+        // Formato: "Endereço, Bairro - Cidade - UF" ou "Endereço, Bairro"
+        s = parts[1];
+      }
     }
 
-    // Remover números e símbolos iniciais
-    s = s.replace(/^[,\s-]+/, '').replace(/^[\d\-/]+\s*/, '').trim();
+    // Para endereços com hífens, pegar parte antes do hífen (cidade/UF)
+    if (s.includes(' - ')) {
+      s = s.split(' - ')[0].trim();
+    }
 
-    // Remover "Bairro" do começo
-    s = s.replace(/^bairro[:\s-]*/i, '').trim();
+    // Remover números iniciais e símbolos
+    s = s.replace(/^[\d\s\-,\/]+/, '').trim();
+
+    // Remover CEP se ainda estiver presente
+    s = s.replace(/\b\d{5}-?\d{3}\b/, '').trim();
 
     // Normalizar espaços
     s = s.replace(/\s{2,}/g, ' ').trim();
 
-    return s && s.length >= 2 ? s : null;
+    // Verificar se é um bairro válido (pelo menos 2 caracteres, não só números)
+    if (s && s.length >= 2 && !/^\d+$/.test(s)) {
+      return s;
+    }
+
+    return null;
   };
 
-  const est = (receipt.dados_extraidos?.estabelecimento) || (receipt.dados_extraidos?.loja) || {};
-  const endereco: string =
-    (est as any)?.endereco ||
-    receipt.dados_extraidos?.loja?.endereco ||
-    (receipt.processed_data?.estabelecimento?.endereco ?? '') ||
-    receipt.store_address ||
-    '';
+  // Buscar dados do estabelecimento em múltiplas estruturas
+  const est = receipt.dados_extraidos?.estabelecimento || 
+               receipt.dados_extraidos?.loja || 
+               receipt.dados_extraidos?.supermercado ||
+               receipt.dados_extraidos?.emitente || {};
 
-  const rawNeighborhood =
+  // Buscar endereço em múltiplas fontes
+  const endereco = (est as any)?.endereco ||
+                   receipt.dados_extraidos?.loja?.endereco ||
+                   receipt.dados_extraidos?.endereco ||
+                   receipt.processed_data?.estabelecimento?.endereco ||
+                   receipt.store_address ||
+                   '';
+
+  // Buscar bairro em múltiplas fontes e extrair do endereço
+  let neighborhood = 
     (est as any)?.bairro ||
     (est as any)?.bairroLoja ||
     (est as any)?.bairro_estabelecimento ||
     receipt.dados_extraidos?.loja?.bairro ||
-    receipt.processed_data?.estabelecimento?.bairro ||
-    extractNeighborhood(endereco);
+    receipt.dados_extraidos?.bairro ||
+    receipt.processed_data?.estabelecimento?.bairro;
 
-  const neighborhood = sanitize(rawNeighborhood) || sanitize(extractNeighborhood(endereco));
+  // Se não encontrou bairro direto, extrair do endereço
+  if (!neighborhood) {
+    neighborhood = extractNeighborhood(endereco);
+  }
 
-  let uf = normalizeUf((est as any)?.uf || (est as any)?.estado || receipt.processed_data?.estabelecimento?.uf);
-  if (!uf) uf = normalizeUf(extractState(endereco));
-  return { neighborhood: neighborhood || null, uf: uf || null };
+  // Limpar e validar o bairro encontrado
+  neighborhood = extractAndCleanNeighborhood(neighborhood);
+
+  // Se ainda não encontrou, tentar mais estratégias no endereço
+  if (!neighborhood && endereco) {
+    // Tentar extrair novamente com lógicas diferentes
+    const enderecoSemCep = endereco.replace(/\b\d{5}-?\d{3}\b/g, '').trim();
+    
+    // Procurar por padrões como "..., CAMPO GRANDE, ..." 
+    const match = enderecoSemCep.match(/,\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)\s*,/);
+    if (match) {
+      neighborhood = extractAndCleanNeighborhood(match[1]);
+    }
+    
+    // Se ainda não achou, tentar pegar última parte antes de cidade/UF
+    if (!neighborhood) {
+      const parts = enderecoSemCep.split(/\s-\s|\s,\s/).filter(Boolean);
+      if (parts.length >= 2) {
+        neighborhood = extractAndCleanNeighborhood(parts[parts.length - 2]);
+      }
+    }
+  }
+
+  // Buscar UF
+  let uf = normalizeUf(
+    (est as any)?.uf || 
+    (est as any)?.estado || 
+    receipt.dados_extraidos?.uf ||
+    receipt.processed_data?.estabelecimento?.uf
+  );
+  
+  if (!uf) {
+    uf = normalizeUf(extractState(endereco));
+  }
+
+  return { 
+    neighborhood: neighborhood || 'Centro', // Fallback para Centro se não encontrar
+    uf: uf || 'BR' 
+  };
 }
 
 const ReceiptList = () => {
