@@ -43,19 +43,11 @@ const Menu = () => {
     },
     {
       id: 'current-stock',
-      title: 'Estoque Atual',
-      description: 'Consultar produtos em estoque',
+      title: 'Consultar e ajustar produtos em estoque',
+      description: 'Consultar e ajustar produtos em estoque',
       icon: Package,
       onClick: () => navigate('/estoque'),
       isActive: true
-    },
-    {
-      id: 'stock-out',
-      title: 'Baixa de Estoque',
-      description: 'Registrar saída de produtos',
-      icon: TrendingDown,
-      onClick: () => {},
-      isActive: false
     },
     {
       id: 'reports',
