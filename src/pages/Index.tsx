@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const [showScanner, setShowScanner] = useState(false);
@@ -28,6 +29,17 @@ const Index = () => {
       toast.success("Logout realizado com sucesso!");
     } catch (error) {
       toast.error("Erro ao fazer logout");
+    }
+  };
+
+  const handleFixNotasTravadas = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('fix-nota-travada');
+      if (error) throw error;
+      toast.success(`Correção executada: ${data.message}`);
+    } catch (error) {
+      toast.error("Erro ao corrigir notas travadas");
+      console.error(error);
     }
   };
 
@@ -92,6 +104,18 @@ const Index = () => {
                 className="w-full"
               >
                 Criar conta ou fazer login
+              </Button>
+            </div>
+          )}
+
+          {user && (
+            <div className="text-center space-y-2">
+              <Button 
+                variant="destructive" 
+                onClick={handleFixNotasTravadas}
+                className="w-full"
+              >
+                🔧 Corrigir Notas Travadas
               </Button>
             </div>
           )}
