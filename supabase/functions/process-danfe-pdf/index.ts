@@ -613,30 +613,35 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
             if (!produtoExistente) {
               // Buscar categoria ou usar padrão
-              let categoriaId = null;
-              if (categoria) {
-                const { data: categoriaExistente } = await supabase
-                  .from('categorias_predefinidas')
+              // Resolver categoria no escopo do usuário (uuid), nunca em categorias_predefinidas (bigint)
+              let categoriaId: string | null = null;
+              const nomeCategoria = (categoria && String(categoria).trim()) || 'outros';
+              try {
+                // Buscar categoria existente do usuário
+                const { data: catExistente } = await supabase
+                  .from('categorias')
                   .select('id')
-                  .ilike('nome', `%${categoria}%`)
-                  .single();
+                  .eq('user_id', userId)
+                  .ilike('nome', `%${nomeCategoria}%`)
+                  .maybeSingle();
 
-                if (categoriaExistente) {
-                  categoriaId = categoriaExistente.id;
+                if (catExistente?.id) {
+                  categoriaId = catExistente.id as string;
                 } else {
-                  // Criar categoria se não existir
-                  const { data: novaCategoria, error: errorNovaCategoria } = await supabase
-                    .from('categorias_predefinidas')
-                    .insert({ nome: categoria })
+                  // Criar categoria do usuário se não existir
+                  const { data: novaCat, error: errCat } = await supabase
+                    .from('categorias')
+                    .insert({ user_id: userId, nome: nomeCategoria })
                     .select('id')
                     .single();
-                  
-                  if (!errorNovaCategoria && novaCategoria) {
-                    categoriaId = novaCategoria.id;
+                  if (errCat) {
+                    console.error('❌ Erro ao criar categoria do usuário:', errCat);
                   } else {
-                    console.error("❌ Erro ao criar categoria:", errorNovaCategoria);
+                    categoriaId = novaCat.id as string;
                   }
                 }
+              } catch (catError) {
+                console.error('❌ Falha ao resolver categoria:', catError);
               }
 
               // Criar produto
@@ -726,6 +731,17 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           dados_extraidos: dadosEstruturados // ← CRÍTICO: Inclui a chave de 44 dígitos
         })
         .eq("id", notaImagemId);
+
+      // Disparar atualização de estoque usando a função dedicada
+      try {
+        console.log("🚀 Invocando process-receipt-full para atualizar estoque...");
+        await supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagemId }
+        });
+        console.log("✅ process-receipt-full executada com sucesso");
+      } catch (estoqueErr) {
+        console.error("❌ Falha ao invocar process-receipt-full:", estoqueErr);
+      }
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
