@@ -132,6 +132,34 @@ function normalizeUf(value?: string | null): string | null {
 
 // Coleta Bairro e UF a partir dos dados estruturados ou endereço
 function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; uf: string | null } {
+  const sanitize = (val?: string | null): string | null => {
+    if (!val) return null;
+    let s = String(val).replace(/\s+/g, ' ').trim();
+
+    // Remover prefixos comuns de logradouro se vierem por engano
+    s = s.replace(/^(RUA|AV|AV\.|AVENIDA|ESTR|ESTR\.|ESTRADA|ROD|ROD\.|RODOVIA|TRAV|TRAV\.|TRAVESSA|ALAMEDA|AL\.|PRAÇA|PRACA)\s+/i, '').trim();
+
+    // Se houver hífen, manter apenas o trecho antes (geralmente antes de " - Cidade - UF")
+    s = s.split(' - ')[0].trim();
+
+    // Se houver vírgulas, pegar a última parte (onde costuma estar o bairro)
+    const commaParts = s.split(',').map(p => p.trim()).filter(Boolean);
+    if (commaParts.length >= 2) {
+      s = commaParts[commaParts.length - 1];
+    }
+
+    // Remover números e símbolos iniciais
+    s = s.replace(/^[,\s-]+/, '').replace(/^[\d\-/]+\s*/, '').trim();
+
+    // Remover "Bairro" do começo
+    s = s.replace(/^bairro[:\s-]*/i, '').trim();
+
+    // Normalizar espaços
+    s = s.replace(/\s{2,}/g, ' ').trim();
+
+    return s && s.length >= 2 ? s : null;
+  };
+
   const est = (receipt.dados_extraidos?.estabelecimento) || (receipt.dados_extraidos?.loja) || {};
   const endereco: string =
     (est as any)?.endereco ||
@@ -140,13 +168,15 @@ function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; 
     receipt.store_address ||
     '';
 
-  const neighborhood =
+  const rawNeighborhood =
     (est as any)?.bairro ||
     (est as any)?.bairroLoja ||
     (est as any)?.bairro_estabelecimento ||
     receipt.dados_extraidos?.loja?.bairro ||
     receipt.processed_data?.estabelecimento?.bairro ||
     extractNeighborhood(endereco);
+
+  const neighborhood = sanitize(rawNeighborhood) || sanitize(extractNeighborhood(endereco));
 
   let uf = normalizeUf((est as any)?.uf || (est as any)?.estado || receipt.processed_data?.estabelecimento?.uf);
   if (!uf) uf = normalizeUf(extractState(endereco));
@@ -896,10 +926,17 @@ const ReceiptList = () => {
                     <>
                       {/* Para notas não processadas */}
                       <div className="space-y-2">
-                        {/* Primeira linha: Nome do arquivo */}
-                         <h3 className="font-bold text-black text-base leading-tight">
-                           {receipt.store_name || 'Estabelecimento não identificado'}
-                         </h3>
+                        {/* Primeira linha: Nome, bairro, UF (fallback com store_address) */}
+                         {(() => {
+                           const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
+                           const nome = receipt.store_name || 'Estabelecimento não identificado';
+                           let texto = nome;
+                           if (nb) texto += `, ${nb}`;
+                           if (uf) texto += `, ${uf}`;
+                           return (
+                             <h3 className="font-bold text-black text-base leading-tight">{texto}</h3>
+                           );
+                         })()}
                         
                          {/* Segunda linha: Data de upload */}
                          <div className="text-xs">
