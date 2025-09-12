@@ -35,10 +35,9 @@ serve(async (req) => {
     
     console.log('Endereço para geocodificação:', enderecoCompleto);
 
-    // Função para geocodificação usando API gratuita de geocodificação
-    async function geocodificarEndereco(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
+    // Função para geocodificação usando Nominatim (prioritário)
+    async function geocodificarNominatim(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
       try {
-        // Usar API do OpenStreetMap Nominatim (gratuita)
         const encodedAddress = encodeURIComponent(endereco);
         const response = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1&countrycodes=br`,
@@ -50,13 +49,14 @@ serve(async (req) => {
         );
 
         if (!response.ok) {
-          throw new Error(`Erro na API de geocodificação: ${response.status}`);
+          throw new Error(`Erro na API Nominatim: ${response.status}`);
         }
 
         const data = await response.json();
         
         if (data && data.length > 0) {
           const location = data[0];
+          console.log('✅ Geocodificação Nominatim bem-sucedida');
           return {
             latitude: parseFloat(location.lat),
             longitude: parseFloat(location.lon)
@@ -65,9 +65,68 @@ serve(async (req) => {
         
         return null;
       } catch (error) {
-        console.error('Erro na geocodificação:', error);
+        console.error('Erro na geocodificação Nominatim:', error);
         return null;
       }
+    }
+
+    // Função para geocodificação usando Mapbox (fallback)
+    async function geocodificarMapbox(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
+      try {
+        const mapboxToken = Deno.env.get('MAPBOX_ACCESS_TOKEN');
+        if (!mapboxToken) {
+          console.log('⚠️ Token do Mapbox não configurado, pulando fallback');
+          return null;
+        }
+
+        const encodedAddress = encodeURIComponent(endereco);
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?access_token=${mapboxToken}&country=BR&limit=1`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Erro na API Mapbox: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+          const location = data.features[0];
+          console.log('✅ Geocodificação Mapbox (fallback) bem-sucedida');
+          return {
+            latitude: location.center[1], // Mapbox retorna [lng, lat]
+            longitude: location.center[0]
+          };
+        }
+        
+        return null;
+      } catch (error) {
+        console.error('Erro na geocodificação Mapbox:', error);
+        return null;
+      }
+    }
+
+    // Função principal de geocodificação (Nominatim primeiro, Mapbox como fallback)
+    async function geocodificarEndereco(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
+      // 1. Tentar primeiro com Nominatim (gratuito)
+      console.log('🔍 Tentando geocodificação com Nominatim...');
+      let coordenadas = await geocodificarNominatim(endereco);
+      
+      if (coordenadas) {
+        return coordenadas;
+      }
+      
+      // 2. Se falhar, tentar com Mapbox (fallback)
+      console.log('🔄 Nominatim falhou, tentando fallback com Mapbox...');
+      coordenadas = await geocodificarMapbox(endereco);
+      
+      if (coordenadas) {
+        console.log('⚠️ Coordenadas obtidas via Mapbox (fallback econômico)');
+        return coordenadas;
+      }
+      
+      console.log('❌ Ambas as APIs falharam na geocodificação');
+      return null;
     }
 
     // Geocodificar o endereço
