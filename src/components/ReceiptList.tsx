@@ -256,6 +256,18 @@ const ReceiptList = () => {
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
 
+      console.log('📜 Lista exibida:', allReceipts.map(r => {
+        const { neighborhood, uf } = getNeighborhoodAndUF(r as Receipt);
+        return {
+          id: r.id,
+          nome: (r as any).store_name || (r as any).dados_extraidos?.estabelecimento?.nome || (r as any).dados_extraidos?.loja?.nome || 'N/A',
+          bairro: neighborhood || 'N/A',
+          uf: uf || 'N/A',
+          data: (r as any).purchase_date || (r as any).created_at,
+          total: (r as any).total_amount || (r as any).dados_extraidos?.compra?.valor_total || (r as any).dados_extraidos?.valorTotal || null,
+        };
+      }));
+
       console.log('🔍 Debug texto check:', allReceipts.map(r => ({ 
         id: r.id, 
         file_name: (r as any).file_name || 'sem nome',
