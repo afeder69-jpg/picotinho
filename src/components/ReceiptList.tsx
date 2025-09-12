@@ -48,14 +48,21 @@ function extractNeighborhood(address?: string | null): string | null {
   // Pega trecho antes do primeiro " - " (antes de CEP/cidade/UF)
   let candidate = afterComma.split(' - ')[0].trim();
 
-  // Remove números iniciais (ex: "315", "0 ")
+  // Se ainda houver múltiplas partes separadas por vírgula, pegar apenas a primeira
+  candidate = candidate.split(',')[0]?.trim() || candidate;
+
+  // Limpa pontuações/números iniciais e espaços duplos
+  candidate = candidate.replace(/^[,\s-]+/, '');
   candidate = candidate.replace(/^[\d\-/]+\s*/, '').trim();
   candidate = candidate.replace(/\s{2,}/g, ' ').trim();
 
-  if (!candidate) {
+  if (!candidate || candidate.length < 2) {
     const m = a.match(/,\s*\d*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)\s*-\s/);
     if (m) candidate = m[1].trim();
   }
+
+  // Remove prefixo "Bairro" se existir
+  candidate = candidate.replace(/^bairro[:\s-]*/i, '').trim();
 
   return candidate && candidate.length >= 2 ? candidate : null;
 }
@@ -63,15 +70,18 @@ function extractNeighborhood(address?: string | null): string | null {
 // Helper para extrair estado de um endereço
 function extractState(address?: string | null): string | null {
   if (!address) return null;
-  
-  // Procura por padrões de estado no final do endereço
-  const stateMatch = address.match(/\b([A-Z]{2})\s*$/);
-  if (stateMatch) return stateMatch[1];
-  
-  // Procura por estado precedido por hífen
-  const stateWithHyphen = address.match(/\s-\s*([A-Z]{2})\s*$/);
-  if (stateWithHyphen) return stateWithHyphen[1];
-  
+  const A = String(address).toUpperCase();
+
+  // Pega o último token de 2 letras (ex.: RJ, SP)
+  const matches = A.match(/\b[A-Z]{2}\b/g);
+  if (matches && matches.length) {
+    return matches[matches.length - 1];
+  }
+
+  // Alternativa: UF com hífen no final
+  const hyphen = A.match(/\s-\s*([A-Z]{2})\s*$/);
+  if (hyphen) return hyphen[1];
+
   return null;
 }
 
@@ -689,11 +699,16 @@ const ReceiptList = () => {
                            </h3>
                            
                            {/* Segunda linha: Bairro, Estado */}
-                           {receipt.store_address && (
-                             <div className="text-sm text-black">
-                               {extractNeighborhood(receipt.store_address) || 'N/A'}, {extractState(receipt.store_address) || 'N/A'}
-                             </div>
-                           )}
+{(() => {
+  const nb = extractNeighborhood(receipt.store_address || '');
+  const uf = extractState(receipt.store_address || '');
+  if (!nb && !uf) return null;
+  return (
+    <div className="text-sm text-black">
+      {nb}{nb && uf ? ', ' : ''}{uf}
+    </div>
+  );
+})()}
                            
                            {/* Terceira linha: Data da compra */}
                            <div className="text-xs">
@@ -735,11 +750,17 @@ const ReceiptList = () => {
                            </h3>
                            
                            {/* Segunda linha: Bairro, Estado */}
-                           {receipt.dados_extraidos.loja?.endereco && (
-                             <div className="text-sm text-black">
-                               {extractNeighborhood(receipt.dados_extraidos.loja.endereco) || 'N/A'}, {extractState(receipt.dados_extraidos.loja.endereco) || 'N/A'}
-                             </div>
-                           )}
+{(() => {
+  const addr = receipt.dados_extraidos.loja?.endereco || '';
+  const nb = extractNeighborhood(addr);
+  const uf = extractState(addr);
+  if (!nb && !uf) return null;
+  return (
+    <div className="text-sm text-black">
+      {nb}{nb && uf ? ', ' : ''}{uf}
+    </div>
+  );
+})()}
                            
                            {/* Terceira linha: Data da compra */}
                            <div className="text-xs">
