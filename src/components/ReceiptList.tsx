@@ -684,24 +684,24 @@ const ReceiptList = () => {
                       {receipt.dados_extraidos.estabelecimento ? (
                         <>
                            {/* Primeira linha: Nome do mercado */}
-                           <h3 className="font-bold text-black text-lg leading-tight">
+                           <h3 className="font-bold text-black text-base leading-tight">
                              {receipt.dados_extraidos.estabelecimento.nome}
                            </h3>
                            
                            {/* Segunda linha: Bairro, Estado */}
                            {receipt.store_address && (
-                             <div className="text-base text-black">
+                             <div className="text-sm text-black">
                                {extractNeighborhood(receipt.store_address) || 'N/A'}, {extractState(receipt.store_address) || 'N/A'}
                              </div>
                            )}
                            
                            {/* Terceira linha: Data da compra */}
-                          <div className="text-sm">
-                            <span className="font-bold text-black">Data da compra: </span>
-                            <span className="font-bold text-black">
-                              {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}
-                            </span>
-                          </div>
+                           <div className="text-xs">
+                             <span className="font-bold text-black">Data da compra: </span>
+                             <span className="font-bold text-black">
+                               {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}
+                             </span>
+                           </div>
                           
                           {/* Terceira linha: Total da compra + Quantidade de itens */}
                           <div className="flex items-center gap-4">
@@ -718,25 +718,25 @@ const ReceiptList = () => {
                             )}
                           </div>
                           
-                          {/* Quarta linha: Botão Ver Detalhes */}
-                          <div className="pt-2">
-                            <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-8 px-3">
-                              <Eye className="w-4 h-4 mr-2" /> 
-                              Ver Detalhes
-                            </Button>
-                          </div>
+                           {/* Quarta linha: Botão Ver Detalhes */}
+                           <div className="pt-2">
+                             <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
+                               <Eye className="w-3 h-3 mr-1" /> 
+                               Ver Detalhes
+                             </Button>
+                           </div>
                         </>
                       ) : (
                         /* Fallback para formato antigo */
                         <>
                            {/* Primeira linha: Nome do mercado */}
-                           <h3 className="font-bold text-black text-lg leading-tight">
+                           <h3 className="font-bold text-black text-base leading-tight">
                              {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
                            </h3>
                            
                            {/* Segunda linha: Bairro, Estado */}
                            {receipt.dados_extraidos.loja?.endereco && (
-                             <div className="text-base text-black">
+                             <div className="text-sm text-black">
                                {extractNeighborhood(receipt.dados_extraidos.loja.endereco) || 'N/A'}, {extractState(receipt.dados_extraidos.loja.endereco) || 'N/A'}
                              </div>
                            )}
@@ -764,35 +764,35 @@ const ReceiptList = () => {
                             )}
                           </div>
                           
-                          {/* Quarta linha: Botões de ação */}
-                          <div className="pt-2 flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-8 px-3">
-                              <Eye className="w-4 h-4 mr-2" /> 
-                              Ver Detalhes
-                            </Button>
-                            
-                            {receipt.dados_extraidos?.itens && (
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => launchToStock(receipt)}
-                                disabled={launchingToStock === receipt.id}
-                                className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
-                              >
-                                {launchingToStock === receipt.id ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Lançando...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Lançar no Estoque
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </div>
+                           {/* Quarta linha: Botões de ação */}
+                           <div className="pt-2 flex gap-2">
+                             <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
+                               <Eye className="w-3 h-3 mr-1" /> 
+                               Ver Detalhes
+                             </Button>
+                             
+                             {receipt.dados_extraidos?.itens && (
+                               <Button
+                                 variant="default"
+                                 size="sm"
+                                 onClick={() => launchToStock(receipt)}
+                                 disabled={launchingToStock === receipt.id}
+                                 className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"
+                               >
+                                 {launchingToStock === receipt.id ? (
+                                   <>
+                                     <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                     Lançando...
+                                   </>
+                                 ) : (
+                                   <>
+                                     <Plus className="w-3 h-3 mr-1" />
+                                     Lançar no Estoque
+                                   </>
+                                 )}
+                               </Button>
+                             )}
+                           </div>
                         </>
                       )}
                     </>
@@ -819,13 +819,13 @@ const ReceiptList = () => {
                         </div>
                         
                         {/* Quarta linha: Botão de ação */}
-                        <div className="pt-2 flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-8 px-3">
-                            <Eye className="w-4 h-4 mr-2" /> 
-                            Ver Detalhes
-                          </Button>
-                          {/* Botão "Extrair com IA" removido - processamento agora é automático */}
-                        </div>
+                           <div className="pt-2 flex gap-2">
+                             <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
+                               <Eye className="w-3 h-3 mr-1" /> 
+                               Ver Detalhes
+                             </Button>
+                             {/* Botão "Extrair com IA" removido - processamento agora é automático */}
+                           </div>
                       </div>
                     </>
                   )}
