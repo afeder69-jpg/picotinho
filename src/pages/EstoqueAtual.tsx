@@ -1094,9 +1094,9 @@ const EstoqueAtual = () => {
                       const subtotalAtualNormalizado = normalizeValue(subtotalAtual);
                       
                       if (subtotalAtualNormalizado > subtotalNormalizado) {
-                        return <ArrowUp className="w-3 h-3 text-green-600" />;
+                        return <ArrowUp className="w-3 h-3 text-red-600" />;
                       } else if (subtotalAtualNormalizado < subtotalNormalizado) {
-                        return <ArrowDown className="w-3 h-3 text-red-600" />;
+                        return <ArrowDown className="w-3 h-3 text-green-600" />;
                       } else {
                         return <Minus className="w-3 h-3 text-gray-400" />;
                       }
@@ -1147,9 +1147,9 @@ const EstoqueAtual = () => {
                               const valorTotalPagoNormalizado = normalizeValue(valorTotalPago);
                               
                               if (totalAtualNormalizado > valorTotalPagoNormalizado) {
-                                return <ArrowUp className="w-3 h-3 text-green-600" />;
+                                return <ArrowUp className="w-3 h-3 text-red-600" />;
                               } else if (totalAtualNormalizado < valorTotalPagoNormalizado) {
-                                return <ArrowDown className="w-3 h-3 text-red-600" />;
+                                return <ArrowDown className="w-3 h-3 text-green-600" />;
                               } else {
                                 return <Minus className="w-3 h-3 text-gray-400" />;
                               }
@@ -1291,10 +1291,10 @@ const EstoqueAtual = () => {
                                              const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
                                              const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
                                              
-                                             if (subtotalAtual > subtotalPago) {
-                                               return <ArrowUp className="w-3 h-3 text-green-600 flex-shrink-0" />;
-                                             } else if (subtotalAtual < subtotalPago) {
-                                               return <ArrowDown className="w-3 h-3 text-red-600 flex-shrink-0" />;
+                                              if (subtotalAtual > subtotalPago) {
+                                                return <ArrowUp className="w-3 h-3 text-red-600 flex-shrink-0" />;
+                                              } else if (subtotalAtual < subtotalPago) {
+                                                return <ArrowDown className="w-3 h-3 text-green-600 flex-shrink-0" />;
                                              } else {
                                                return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
                                              }
