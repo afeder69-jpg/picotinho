@@ -69,8 +69,8 @@ const ReceiptList = () => {
           const dadosExtraidos = nota.dados_extraidos as any;
           const fileName = nota.imagem_path ? nota.imagem_path.split('/').pop() : 'Arquivo sem nome';
           
-          // Se estiver processada e tiver dados da IA, usar dados estruturados
-          if (nota.processada && dadosExtraidos?.estabelecimento) {
+          // Se estiver processada e tiver dados da IA ou chave de acesso, usar dados estruturados
+          if (nota.processada && (dadosExtraidos?.estabelecimento || dadosExtraidos?.chave_acesso)) {
             const estabelecimento = dadosExtraidos.estabelecimento || {};
             const compra = dadosExtraidos.compra || {};
             
