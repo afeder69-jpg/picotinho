@@ -857,12 +857,12 @@ const ReceiptList = () => {
 
   return (
     <>
-      <div className="space-y-3">
-        <div className="space-y-3">
+      <div className="space-y-2">
+        <div className="space-y-2">
           {receipts.map((receipt) => (
-            <Card key={receipt.id} className="p-4">
-              <div className="flex justify-between items-start">
-                <div className="flex-1 space-y-2">
+            <Card key={receipt.id} className="p-3">
+              <div className="flex justify-between items-center">
+                <div className="flex-1 space-y-1">
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
                       {/* Para notas processadas com dados estruturados da IA */}
@@ -877,42 +877,22 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-    <h3 className="font-bold text-black text-base leading-tight">
-      {texto}
-    </h3>
+                    <h3 className="font-medium text-sm leading-tight">
+                      {texto}
+                    </h3>
   );
 })()}
                            
-                           {/* Terceira linha: Data da compra */}
-                           <div className="text-xs">
-                             <span className="font-bold text-black">Data da compra: </span>
-                             <span className="font-bold text-black">
-                               {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}
-                             </span>
-                           </div>
-                          
-                           {/* Quarta linha: Total da compra + Quantidade de itens */}
-                           <div className="flex items-center gap-4">
-                             <div className="text-xs">
-                               <span className="font-bold text-black">Total da compra: </span>
-                               <span className="font-bold text-black">
-                                 {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
-                               </span>
-                             </div>
-                             {receipt.dados_extraidos.itens && (
-                               <span className="text-xs text-black">
-                                 {receipt.dados_extraidos.itens.length} itens
-                               </span>
-                             )}
-                           </div>
-                          
-                           {/* Quarta linha: Botão Ver Detalhes */}
-                           <div className="pt-2">
-                             <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
-                               <Eye className="w-3 h-3 mr-1" /> 
-                               Ver Detalhes
-                             </Button>
-                           </div>
+                            {/* Dados da compra em linha compacta */}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              <span>Data da compra: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'}</span>
+                              <span className="font-medium text-foreground">
+                                Total da compra: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
+                              </span>
+                              {receipt.dados_extraidos.itens && (
+                                <span>{receipt.dados_extraidos.itens.length} itens</span>
+                              )}
+                            </div>
                         </>
                       ) : (
                         /* Fallback para formato antigo */
@@ -926,64 +906,22 @@ const ReceiptList = () => {
   if (nb) texto += `, ${nb}`;
   if (uf) texto += `, ${uf}`;
   return (
-    <h3 className="font-bold text-black text-base leading-tight">
-      {texto}
-    </h3>
+                    <h3 className="font-medium text-sm leading-tight">
+                      {texto}
+                    </h3>
   );
 })()}
                            
-                           {/* Terceira linha: Data da compra */}
-                           <div className="text-xs">
-                             <span className="font-bold text-black">Data da compra: </span>
-                             <span className="font-bold text-black">
-                               {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}
-                             </span>
-                           </div>
-                          
-                           {/* Quarta linha: Total da compra + Quantidade de itens */}
-                           <div className="flex items-center gap-4">
-                             <div className="text-xs">
-                               <span className="font-bold text-black">Total da compra: </span>
-                               <span className="font-bold text-black">
-                                 {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
-                               </span>
-                             </div>
-                             {receipt.dados_extraidos.itens && (
-                               <span className="text-xs text-black">
-                                 {receipt.dados_extraidos.itens.length} itens
-                               </span>
-                             )}
-                           </div>
-                          
-                           {/* Quarta linha: Botões de ação */}
-                           <div className="pt-2 flex gap-2">
-                             <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
-                               <Eye className="w-3 h-3 mr-1" /> 
-                               Ver Detalhes
-                             </Button>
-                             
-                             {receipt.dados_extraidos?.itens && (
-                               <Button
-                                 variant="default"
-                                 size="sm"
-                                 onClick={() => launchToStock(receipt)}
-                                 disabled={launchingToStock === receipt.id}
-                                 className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"
-                               >
-                                 {launchingToStock === receipt.id ? (
-                                   <>
-                                     <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                     Lançando...
-                                   </>
-                                 ) : (
-                                   <>
-                                     <Plus className="w-3 h-3 mr-1" />
-                                     Lançar no Estoque
-                                   </>
-                                 )}
-                               </Button>
-                             )}
-                           </div>
+                            {/* Dados da compra em linha compacta */}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              <span>Data da compra: {receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'}</span>
+                              <span className="font-medium text-foreground">
+                                Total da compra: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
+                              </span>
+                              {receipt.dados_extraidos.itens && (
+                                <span>{receipt.dados_extraidos.itens.length} itens</span>
+                              )}
+                            </div>
                         </>
                       )}
                     </>
@@ -999,39 +937,28 @@ const ReceiptList = () => {
                            if (nb) texto += `, ${nb}`;
                            if (uf) texto += `, ${uf}`;
                            return (
-                             <h3 className="font-bold text-black text-base leading-tight">{texto}</h3>
+                             <h3 className="font-medium text-sm leading-tight">{texto}</h3>
                            );
                          })()}
                         
-                         {/* Segunda linha: Data de upload */}
-                         <div className="text-xs">
-                           <span className="font-bold text-black">Enviado em: </span>
-                           <span className="font-bold text-black">
-                             {formatDate(receipt.created_at)}
-                           </span>
-                         </div>
-                         
-                         {/* Terceira linha: Status de processamento */}
-                         <div className="text-xs text-black">
-                           Aguardando processamento...
-                        </div>
+                          {/* Dados da compra em linha compacta */}
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            <span>Enviado em: {formatDate(receipt.created_at)}</span>
+                            <span className="text-orange-600">Aguardando processamento...</span>
+                          </div>
                         
-                        {/* Quarta linha: Botão de ação */}
-                           <div className="pt-2 flex gap-2">
-                             <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
-                               <Eye className="w-3 h-3 mr-1" /> 
-                               Ver Detalhes
-                             </Button>
-                             {/* Botão "Extrair com IA" removido - processamento agora é automático */}
-                           </div>
                       </div>
                     </>
                   )}
                 </div>
                 
-                {/* Status no canto superior direito */}
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                 {/* Botões compactos no lado direito */}
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {getStatusBadge(receipt.status)}
+                  <Button variant="outline" size="sm" onClick={() => viewReceipt(receipt)} className="h-7 px-2 text-xs">
+                    <Eye className="w-3 h-3 mr-1" />
+                    Ver Detalhes
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(receipt.id)} className="text-destructive hover:text-destructive h-7 px-2">
                     <Trash2 className="w-3 h-3" />
                   </Button>
