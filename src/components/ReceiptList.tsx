@@ -700,8 +700,13 @@ const ReceiptList = () => {
                            
                            {/* Segunda linha: Bairro, Estado */}
 {(() => {
-  const nb = extractNeighborhood(receipt.store_address || '');
-  const uf = extractState(receipt.store_address || '');
+  const addr =
+    receipt.dados_extraidos?.estabelecimento?.endereco ||
+    receipt.dados_extraidos?.loja?.endereco ||
+    receipt.store_address ||
+    '';
+  const nb = extractNeighborhood(addr);
+  const uf = extractState(addr);
   if (!nb && !uf) return null;
   return (
     <div className="text-sm text-black">
@@ -751,7 +756,11 @@ const ReceiptList = () => {
                            
                            {/* Segunda linha: Bairro, Estado */}
 {(() => {
-  const addr = receipt.dados_extraidos.loja?.endereco || '';
+  const addr =
+    receipt.dados_extraidos?.estabelecimento?.endereco ||
+    receipt.dados_extraidos?.loja?.endereco ||
+    receipt.store_address ||
+    '';
   const nb = extractNeighborhood(addr);
   const uf = extractState(addr);
   if (!nb && !uf) return null;
