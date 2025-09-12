@@ -18,8 +18,8 @@ serve(async (req) => {
 
     console.log('🔧 Auto-Fix: Iniciando varredura de notas travadas...');
 
-    // 1. Buscar notas travadas há mais de 10 minutos
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    // 1. Buscar notas travadas há mais de 2 minutos
+    const tenMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
     
     const { data: notasTravadas } = await supabase
       .from('notas_imagens')
