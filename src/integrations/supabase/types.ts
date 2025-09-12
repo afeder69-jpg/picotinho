@@ -603,7 +603,6 @@ export type Database = {
           dados_extraidos: Json | null
           data_criacao: string
           debug_texto: string | null
-          excluida: boolean | null
           id: string
           imagem_path: string
           imagem_url: string
@@ -619,7 +618,6 @@ export type Database = {
           dados_extraidos?: Json | null
           data_criacao?: string
           debug_texto?: string | null
-          excluida?: boolean | null
           id?: string
           imagem_path: string
           imagem_url: string
@@ -635,7 +633,6 @@ export type Database = {
           dados_extraidos?: Json | null
           data_criacao?: string
           debug_texto?: string | null
-          excluida?: boolean | null
           id?: string
           imagem_path?: string
           imagem_url?: string

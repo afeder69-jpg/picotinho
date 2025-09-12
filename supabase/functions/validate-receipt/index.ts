@@ -289,13 +289,12 @@ Responda APENAS o JSON:
 
         // BUSCAR EM TODAS AS NOTAS PROCESSADAS DE TODOS OS USUÁRIOS (verificação global)
         // CRÍTICO: Verificar tanto no campo direto quanto no campo dentro de "compra"
-        // IMPORTANTE: Só considerar notas que ainda estão processadas E não foram logicamente excluídas
+        // IMPORTANTE: Só considerar notas que ainda estão processadas (não excluídas logicamente)
         const { data: existingNotes } = await supabase
           .from('notas_imagens')
           .select('id, created_at, usuario_id')
           .or(`dados_extraidos->chave_acesso.eq."${normalizedKey}",dados_extraidos->>chave_acesso.eq."${normalizedKey}",dados_extraidos->compra->>chave_acesso.eq."${normalizedKey}"`)
           .eq('processada', true) // Só considerar notas que ainda estão processadas
-          .eq('excluida', false) // Só considerar notas que não foram logicamente excluídas
           .neq('id', notaImagemId); // Excluir a própria nota
 
         console.log('Resultado busca duplicata GLOBAL:', existingNotes);
