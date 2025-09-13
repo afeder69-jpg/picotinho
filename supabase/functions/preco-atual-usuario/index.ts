@@ -109,20 +109,63 @@ serve(async (req) => {
       );
     }
 
-    // 4) Buscar todos os preços atuais dos CNPJs no raio
-    const { data: precosArea, error: precosErr } = await supabase
-      .from("precos_atuais")
-      .select("produto_nome, estabelecimento_cnpj, estabelecimento_nome, valor_unitario, data_atualizacao");
+    // 4) Buscar todas as notas fiscais processadas do usuário 
+    const { data: notasUsuario, error: notasErr } = await supabase
+      .from("notas_imagens")
+      .select("dados_extraidos, data_criacao")
+      .eq("usuario_id", userId)
+      .eq("processada", true)
+      .not("dados_extraidos", "is", null);
 
-    if (precosErr) throw precosErr;
+    if (notasErr) throw notasErr;
 
-    // Filtrar por CNPJ no raio (normalizando)
-    const candidatos = (precosArea ?? []).filter(p => {
-      const cnpj = (p.estabelecimento_cnpj || "").replace(/[^\d]/g, "");
-      return cnpjsNoRaio.has(cnpj);
-    });
+    // 5) Extrair produtos das notas que são de estabelecimentos no raio
+    const candidatos: Array<{
+      produto_nome: string;
+      valor_unitario: number;
+      data_atualizacao: string;
+      estabelecimento_cnpj: string;
+      estabelecimento_nome: string;
+    }> = [];
 
-    // 5) Para cada produto do estoque, encontrar o preço conforme a regra: "sempre o menor valor mais recente"
+    for (const nota of notasUsuario ?? []) {
+      const dados = nota.dados_extraidos;
+      if (!dados?.itens) continue;
+
+      // Extrair CNPJ da nota
+      const cnpjNota = (
+        dados.cnpj || 
+        dados.estabelecimento?.cnpj || 
+        dados.supermercado?.cnpj || 
+        dados.emitente?.cnpj || 
+        ""
+      ).replace(/[^\d]/g, "");
+
+      // Verificar se o estabelecimento está no raio
+      if (!cnpjsNoRaio.has(cnpjNota)) continue;
+
+      const nomeEstabelecimento = cnpjParaInfo.get(cnpjNota)?.nome || 
+        dados.estabelecimento?.nome || 
+        dados.supermercado?.nome || 
+        dados.emitente?.nome || 
+        "Estabelecimento";
+
+      // Extrair itens da nota
+      for (const item of dados.itens) {
+        const valorUnitario = Number(item.valor_unitario || item.preco_unitario || 0);
+        if (!item.descricao || valorUnitario <= 0) continue;
+
+        candidatos.push({
+          produto_nome: item.descricao,
+          valor_unitario: valorUnitario,
+          data_atualizacao: nota.data_criacao,
+          estabelecimento_cnpj: cnpjNota,
+          estabelecimento_nome: nomeEstabelecimento,
+        });
+      }
+    }
+
+    // 6) Para cada produto do estoque, encontrar o preço conforme a regra: "sempre o menor valor mais recente"
     const resultados: PrecoResultado[] = [];
 
     const normalizarTexto = (txt: string) => (txt || "")
