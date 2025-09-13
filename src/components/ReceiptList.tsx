@@ -345,10 +345,51 @@ const ReceiptList = () => {
         })
         .filter(nota => nota !== null);
 
+      // Combinar todas as notas e ordenar por data da compra (data_emissao) da mais recente para a mais antiga
       const allReceipts = [
         ...(receiptsResult.data || []),
         ...mappedNotasImagens
-      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      ].sort((a, b) => {
+        // Obter data da compra de cada nota
+        const getCompraDate = (receipt: any) => {
+          // Priorizar data_emissao dos dados extraídos
+          if (receipt.dados_extraidos?.compra?.data_emissao) {
+            return receipt.dados_extraidos.compra.data_emissao;
+          }
+          if (receipt.dados_extraidos?.dataCompra) {
+            return receipt.dados_extraidos.dataCompra;
+          }
+          // Fallback para purchase_date ou created_at
+          return receipt.purchase_date || receipt.created_at;
+        };
+
+        const dateA = getCompraDate(a);
+        const dateB = getCompraDate(b);
+        
+        // Converter para timestamp para comparação, tratando diferentes formatos de data
+        let timestampA, timestampB;
+        
+        try {
+          // Se a data está no formato DD/MM/YYYY, converter para YYYY-MM-DD
+          const formatDate = (dateStr: string) => {
+            if (dateStr && dateStr.includes('/')) {
+              const [day, month, year] = dateStr.split(' ')[0].split('/');
+              return `${year}-${month}-${day}`;
+            }
+            return dateStr;
+          };
+          
+          timestampA = new Date(formatDate(dateA)).getTime();
+          timestampB = new Date(formatDate(dateB)).getTime();
+        } catch (error) {
+          // Em caso de erro na conversão, usar created_at como fallback
+          timestampA = new Date(a.created_at).getTime();
+          timestampB = new Date(b.created_at).getTime();
+        }
+        
+        // Ordenar da mais recente para a mais antiga
+        return timestampB - timestampA;
+      });
 
 
       console.log('📜 Lista exibida:', allReceipts.map(r => {
