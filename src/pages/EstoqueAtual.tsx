@@ -966,17 +966,19 @@ const EstoqueAtual = () => {
 
   const getCategoriaColor = (categoria: string) => {
     const colors: { [key: string]: string } = {
-      'açougue': 'bg-red-100 text-red-800 border-red-200',
-      'frutas e verduras': 'bg-green-100 text-green-800 border-green-200',
-      'padaria': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      'lacticínios': 'bg-blue-100 text-blue-800 border-blue-200',
-      'limpeza': 'bg-purple-100 text-purple-800 border-purple-200',
-      'higiene': 'bg-pink-100 text-pink-800 border-pink-200',
-      'bebidas': 'bg-orange-100 text-orange-800 border-orange-200',
-      'congelados': 'bg-cyan-100 text-cyan-800 border-cyan-200',
-      'outros': 'bg-gray-100 text-gray-800 border-gray-200'
+      'HORTIFRUTI': 'bg-green-100 text-green-800 border-green-200',
+      'MERCEARIA': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'AÇOUGUE': 'bg-red-100 text-red-800 border-red-200',
+      'PADARIA': 'bg-amber-100 text-amber-800 border-amber-200',
+      'LATICÍNIOS/FRIOS': 'bg-blue-100 text-blue-800 border-blue-200',
+      'LIMPEZA': 'bg-purple-100 text-purple-800 border-purple-200',
+      'HIGIENE/FARMÁCIA': 'bg-pink-100 text-pink-800 border-pink-200',
+      'BEBIDAS': 'bg-orange-100 text-orange-800 border-orange-200',
+      'CONGELADOS': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+      'PET': 'bg-teal-100 text-teal-800 border-teal-200',
+      'OUTROS': 'bg-gray-100 text-gray-800 border-gray-200'
     };
-    return colors[categoria.toLowerCase()] || colors['outros'];
+    return colors[categoria.toUpperCase()] || colors['OUTROS'];
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
@@ -994,14 +996,38 @@ const EstoqueAtual = () => {
       return unique;
     }, [] as EstoqueItem[]);
 
-    return uniqueItems.reduce((groups, item) => {
-      const categoria = (item.categoria || 'outros').toLowerCase();
-      if (!groups[categoria]) {
-        groups[categoria] = [];
+    // Mapa de categorias normalizadas
+    const categoriasNormalizadas = {
+      'hortifruti': 'HORTIFRUTI',
+      'bebidas': 'BEBIDAS', 
+      'mercearia': 'MERCEARIA',
+      'açougue': 'AÇOUGUE',
+      'padaria': 'PADARIA',
+      'laticínios/frios': 'LATICÍNIOS/FRIOS',
+      'limpeza': 'LIMPEZA',
+      'higiene/farmácia': 'HIGIENE/FARMÁCIA',
+      'congelados': 'CONGELADOS',
+      'pet': 'PET',
+      'outros': 'OUTROS'
+    };
+
+    // Ordem das categorias para exibição
+    const ordemCategorias = [
+      'hortifruti', 'bebidas', 'mercearia', 'açougue', 'padaria', 
+      'laticínios/frios', 'limpeza', 'higiene/farmácia', 'congelados', 'pet', 'outros'
+    ];
+
+    // Agrupar por categoria usando a ordem definida
+    const grouped: Record<string, EstoqueItem[]> = {};
+    
+    ordemCategorias.forEach(categoria => {
+      const produtosDaCategoria = uniqueItems.filter(item => item.categoria === categoria);
+      if (produtosDaCategoria.length > 0) {
+        grouped[categoriasNormalizadas[categoria as keyof typeof categoriasNormalizadas]] = produtosDaCategoria;
       }
-      groups[categoria].push(item);
-      return groups;
-    }, {} as { [key: string]: EstoqueItem[] });
+    });
+
+    return grouped;
   };
 
   if (loading) {
@@ -1285,7 +1311,7 @@ const EstoqueAtual = () => {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className={`${getCategoriaColor(categoria)} text-sm font-bold`}>
-                      {categoria.charAt(0).toUpperCase() + categoria.slice(1)}
+                      {categoria}
                     </Badge>
                     <span className="text-sm font-medium text-primary">
                       {itens.length} {itens.length === 1 ? 'produto' : 'produtos'}
