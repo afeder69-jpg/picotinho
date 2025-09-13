@@ -189,22 +189,52 @@ serve(async (req) => {
 
     for (const item of estoque ?? []) {
       const alvo = normalizarTexto(item.produto_nome);
-      const candidatosProduto = candidatos.filter(p => normalizarTexto(p.produto_nome) === alvo);
+      console.log(`🔍 Buscando preços para: ${item.produto_nome} (normalizado: ${alvo})`);
+      
+      const candidatosProduto = candidatos.filter(p => {
+        const pNormalizado = normalizarTexto(p.produto_nome);
+        const match = pNormalizado === alvo || 
+                     pNormalizado.includes(alvo) || 
+                     alvo.includes(pNormalizado);
+        if (match) {
+          console.log(`  ✅ Match encontrado: ${p.produto_nome} (${p.valor_unitario}) - ${p.data_atualizacao} - ${p.estabelecimento_nome}`);
+        }
+        return match;
+      });
 
-      if (!candidatosProduto.length) continue;
+      if (!candidatosProduto.length) {
+        console.log(`  ❌ Nenhum candidato encontrado para: ${item.produto_nome}`);
+        continue;
+      }
 
-      // Encontrar a data mais recente (por dia)
-      const datas = candidatosProduto.map(c => new Date(c.data_atualizacao));
-      const maxTime = Math.max(...datas.map(d => new Date(d.toISOString().slice(0,10)).getTime()));
+      console.log(`  📊 ${candidatosProduto.length} candidatos encontrados para ${item.produto_nome}`);
+
+      // Ordenar por data decrescente primeiro (mais recente primeiro)
+      candidatosProduto.sort((a, b) => new Date(b.data_atualizacao).getTime() - new Date(a.data_atualizacao).getTime());
+      
+      // Encontrar a data mais recente
+      const dataMaisRecente = candidatosProduto[0].data_atualizacao;
+      const dataMaisRecenteStr = new Date(dataMaisRecente).toISOString().slice(0,10);
+      
+      console.log(`  📅 Data mais recente encontrada: ${dataMaisRecenteStr}`);
 
       // Selecionar apenas os da data mais recente (considerando o dia)
       const doDiaMaisRecente = candidatosProduto.filter(c => {
-        const day = new Date(new Date(c.data_atualizacao).toISOString().slice(0,10)).getTime();
-        return day === maxTime;
+        const dataCandidata = new Date(c.data_atualizacao).toISOString().slice(0,10);
+        return dataCandidata === dataMaisRecenteStr;
       });
 
+      console.log(`  🎯 ${doDiaMaisRecente.length} candidatos da data mais recente (${dataMaisRecenteStr})`);
+
       // Dentre eles, pegar o menor valor
-      const melhor = doDiaMaisRecente.reduce((best, cur) => Number(cur.valor_unitario) < Number(best.valor_unitario) ? cur : best);
+      const melhor = doDiaMaisRecente.reduce((best, cur) => {
+        const valorCur = Number(cur.valor_unitario);
+        const valorBest = Number(best.valor_unitario);
+        console.log(`    💰 Comparando: ${cur.valor_unitario} vs ${best.valor_unitario}`);
+        return valorCur < valorBest ? cur : best;
+      });
+
+      console.log(`  🏆 Melhor preço selecionado: ${melhor.produto_nome} = R$ ${melhor.valor_unitario} (${melhor.estabelecimento_nome})`);
 
       const cnpjLimpo = (melhor.estabelecimento_cnpj || "").replace(/[^\d]/g, "");
       resultados.push({
