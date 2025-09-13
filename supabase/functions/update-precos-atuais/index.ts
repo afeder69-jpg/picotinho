@@ -58,22 +58,38 @@ serve(async (req) => {
 
     console.log('Preço existente:', precoExistente);
 
-    // 3. Determinar se deve atualizar baseado na data/hora
+    // 3. Determinar se deve atualizar baseado na data/hora e preço
     let deveAtualizar = true;
     
     if (precoExistente) {
       const dataExistente = new Date(precoExistente.data_atualizacao);
       const dataNovaCompra = new Date(`${dataCompra}T${horaCompra || '00:00:00'}`);
+      const precoExistenteValor = parseFloat(precoExistente.valor_unitario);
+      const precoNovoValor = parseFloat(precoUnitario);
       
-      console.log('Comparando datas:', {
-        existente: dataExistente.toISOString(),
-        nova: dataNovaCompra.toISOString()
+      console.log('Comparando preços e datas:', {
+        existente: { 
+          data: dataExistente.toISOString(), 
+          preco: precoExistenteValor 
+        },
+        nova: { 
+          data: dataNovaCompra.toISOString(), 
+          preco: precoNovoValor 
+        }
       });
       
-      // Só atualiza se a nova compra for mais recente
-      if (dataNovaCompra <= dataExistente) {
+      // NOVA REGRA: Atualiza se:
+      // 1. A nova compra for mais recente E o preço for menor, OU
+      // 2. Se não existir preço anterior válido
+      if (dataNovaCompra > dataExistente && precoNovoValor < precoExistenteValor) {
+        console.log('✅ Nova compra é mais recente E preço é menor - atualizando');
+        deveAtualizar = true;
+      } else if (dataNovaCompra <= dataExistente) {
         deveAtualizar = false;
         console.log('❌ Nova compra não é mais recente, mantendo preço existente');
+      } else if (dataNovaCompra > dataExistente && precoNovoValor >= precoExistenteValor) {
+        deveAtualizar = false;
+        console.log('❌ Nova compra é mais recente mas preço não é menor, mantendo preço existente');
       }
     }
 
