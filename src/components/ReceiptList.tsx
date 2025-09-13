@@ -527,7 +527,7 @@ const ReceiptList = () => {
               <span>Número: ${receipt.dados_extraidos.compra?.numero || receipt.dados_extraidos.numeroNota || 'N/A'}</span>
               <span>Série: ${receipt.dados_extraidos.compra?.serie || receipt.dados_extraidos.serie || 'N/A'}</span>
             </div>
-            <p>Data: ${receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || 'N/A'}</p>
+            <p>Data: ${receipt.purchase_date || receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || 'N/A'}</p>
           </div>
           
           <div>
@@ -1011,7 +1011,7 @@ const ReceiptList = () => {
                         <span>Série: {selectedReceipt.dados_extraidos.compra?.serie || selectedReceipt.dados_extraidos.serie || 'N/A'}</span>
                       </div>
                       <p className="text-xs">
-                        Data: {selectedReceipt.dados_extraidos.compra?.data_emissao || selectedReceipt.dados_extraidos.dataCompra || 'N/A'}
+                        Data: {selectedReceipt.purchase_date || selectedReceipt.dados_extraidos.compra?.data_emissao || selectedReceipt.dados_extraidos.dataCompra || 'N/A'}
                       </p>
                     </div>
 
