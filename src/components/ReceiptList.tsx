@@ -297,7 +297,7 @@ const ReceiptList = () => {
               store_address: estabelecimento.endereco || '',
               store_cnpj: estabelecimento.cnpj || null,
               total_amount: compra.valor_total || dadosExtraidos.valorTotal || null,
-              purchase_date: compra.data_emissao || dadosExtraidos.dataCompra || compra.data_compra || nota.created_at,
+              purchase_date: compra.data_emissao || dadosExtraidos.dataCompra || compra.data_compra || nota.data_criacao,
               purchase_time: null,
               qr_url: dadosExtraidos?.url_original || '',
               status: 'processed',
