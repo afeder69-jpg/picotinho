@@ -429,11 +429,38 @@ Responda APENAS o JSON:
         .single();
       
       if (notaAtual?.dados_extraidos) {
-        // Atualizar dados extraídos com a chave de acesso
+        // 🏪 Normalizar nome do estabelecimento nos dados extraídos
+        const dados = notaAtual.dados_extraidos;
+        let estabelecimentoNormalizado = null;
+        
+        // Buscar nome original do estabelecimento
+        const nomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome;
+        
+        if (nomeOriginal) {
+          const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+            nome_input: nomeOriginal
+          });
+          estabelecimentoNormalizado = nomeNormalizado || nomeOriginal.toUpperCase();
+        }
+        
+        // Atualizar dados extraídos com a chave de acesso e nome normalizado
         const dadosAtualizados = {
           ...notaAtual.dados_extraidos,
           chave_acesso: analysis.chave_encontrada
         };
+        
+        // Aplicar normalização do estabelecimento em todos os locais possíveis
+        if (estabelecimentoNormalizado) {
+          if (dadosAtualizados.supermercado) {
+            dadosAtualizados.supermercado.nome = estabelecimentoNormalizado;
+          }
+          if (dadosAtualizados.estabelecimento) {
+            dadosAtualizados.estabelecimento.nome = estabelecimentoNormalizado;
+          }
+          if (dadosAtualizados.emitente) {
+            dadosAtualizados.emitente.nome = estabelecimentoNormalizado;
+          }
+        }
         
         await supabase
           .from('notas_imagens')

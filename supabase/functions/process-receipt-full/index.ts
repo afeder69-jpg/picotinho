@@ -252,7 +252,14 @@ serve(async (req) => {
           try {
             const dados = extractedData || {};
             const cnpjNota = dados?.supermercado?.cnpj || dados?.cnpj || dados?.estabelecimento?.cnpj || dados?.emitente?.cnpj;
-            const estabelecimentoNome = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
+            const estabelecimentoNomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
+            
+            // 🏪 Normalizar nome do estabelecimento usando a função do banco
+            const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+              nome_input: estabelecimentoNomeOriginal
+            });
+            const estabelecimentoNome = nomeNormalizado || estabelecimentoNomeOriginal.toUpperCase();
+            
             const cnpjLimpo = cnpjNota ? String(cnpjNota).replace(/[^\d]/g, '') : null;
 
             // Extrair data/hora da compra e transformar em ISO

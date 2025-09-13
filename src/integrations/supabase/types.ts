@@ -464,6 +464,33 @@ export type Database = {
         }
         Relationships: []
       }
+      normalizacoes_estabelecimentos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado?: string
+          nome_original?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       normalizacoes_nomes: {
         Row: {
           ativo: boolean
@@ -1577,6 +1604,10 @@ export type Database = {
       }
       mask_phone_number: {
         Args: { phone_number: string }
+        Returns: string
+      }
+      normalizar_nome_estabelecimento: {
+        Args: { nome_input: string }
         Returns: string
       }
       recalcular_estoque_completo: {
