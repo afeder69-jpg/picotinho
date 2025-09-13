@@ -45,8 +45,8 @@ serve(async (req) => {
             MERCEARIA: grãos, cereais, massas, conservas, condimentos, óleos, vinagres, açúcar, sal, farinha
             - Exemplos: arroz, feijão, macarrão, óleo, açúcar, café, farinha, molho de tomate, extrato de tomate, vinagre, etc.
             
-            LATICÍNIOS: leite e derivados
-            - Exemplos: leite, queijo, manteiga, margarina, iogurte, requeijão, creme de leite, etc.
+            LATICÍNIOS/FRIOS: leite e derivados, frios, embutidos
+            - Exemplos: leite, queijo, manteiga, margarina, iogurte, requeijão, creme de leite, presunto, mortadela, salame, etc.
             
             BEBIDAS: todas as bebidas exceto leite
             - Exemplos: refrigerante, suco, cerveja, água, energético, vinho, cachaça, etc.
@@ -57,11 +57,17 @@ serve(async (req) => {
             LIMPEZA: produtos de limpeza doméstica
             - Exemplos: detergente, sabão em pó, desinfetante, água sanitária, amaciante, etc.
             
-            HIGIENE: produtos de higiene pessoal
-            - Exemplos: sabonete, shampoo, pasta de dente, desodorante, papel higiênico, etc.
+            HIGIENE/FARMÁCIA: produtos de higiene pessoal e farmácia
+            - Exemplos: sabonete, shampoo, pasta de dente, desodorante, papel higiênico, medicamentos, etc.
             
-            CARNES: carnes, aves, peixes, embutidos
-            - Exemplos: carne bovina, frango, peixe, linguiça, salsicha, presunto, etc.
+            AÇOUGUE: carnes frescas, aves, peixes
+            - Exemplos: carne bovina, frango, peixe, linguiça, salsicha, etc.
+            
+            CONGELADOS: produtos congelados
+            - Exemplos: sorvete, batata frita congelada, nuggets, pizza congelada, etc.
+            
+            PET: produtos para animais de estimação
+            - Exemplos: ração, petiscos para cães/gatos, brinquedos para pet, etc.
             
             OUTROS: apenas se não se encaixar em NENHUMA das categorias acima
             
@@ -119,7 +125,7 @@ serve(async (req) => {
     }
     
     // Validar se a categoria está na lista permitida
-    const validCategories = ['hortifruti', 'laticínios', 'mercearia', 'bebidas', 'limpeza', 'higiene', 'padaria', 'carnes', 'outros'];
+    const validCategories = ['hortifruti', 'bebidas', 'mercearia', 'açougue', 'padaria', 'laticínios/frios', 'limpeza', 'higiene/farmácia', 'congelados', 'pet', 'outros'];
     const finalCategory = validCategories.includes(category) ? category : 'outros';
 
     return new Response(JSON.stringify({ 
