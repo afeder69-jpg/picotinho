@@ -119,10 +119,19 @@ serve(async (req) => {
         const cnpjLimpo = cnpjNota.replace(/[^\d]/g, '');
         if (cnpjLimpo.length >= 14 && cnpjsComNotasAtivas.has(cnpjLimpo)) {
           // Capturar informações do estabelecimento das notas
-          const nomeEstabelecimento = dadosExtraidos?.supermercado?.nome || 
-                                      dadosExtraidos?.estabelecimento?.nome ||
-                                      dadosExtraidos?.emitente?.nome ||
-                                      'Estabelecimento';
+          let nomeEstabelecimento = dadosExtraidos?.supermercado?.nome || 
+                                   dadosExtraidos?.estabelecimento?.nome ||
+                                   dadosExtraidos?.emitente?.nome ||
+                                   'Estabelecimento';
+          
+          // 🏪 APLICAR NORMALIZAÇÃO DO NOME DO ESTABELECIMENTO
+          if (nomeEstabelecimento && typeof nomeEstabelecimento === 'string') {
+            const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+              nome_input: nomeEstabelecimento
+            });
+            nomeEstabelecimento = nomeNormalizado || nomeEstabelecimento.toUpperCase();
+            console.log(`🏪 Nome normalizado: "${dadosExtraidos?.supermercado?.nome || dadosExtraidos?.estabelecimento?.nome || dadosExtraidos?.emitente?.nome}" → "${nomeEstabelecimento}"`);
+          }
           
           const enderecoEstabelecimento = dadosExtraidos?.supermercado?.endereco || 
                                           dadosExtraidos?.estabelecimento?.endereco ||
@@ -170,22 +179,34 @@ serve(async (req) => {
       .not('longitude', 'is', null)
       .eq('ativo', true);
 
-    supermercadosCompletos?.forEach(supermercado => {
+    for (const supermercado of supermercadosCompletos || []) {
       const cnpjSupermercado = supermercado.cnpj?.replace(/[^\d]/g, '');
       if (cnpjSupermercado && cnpjsComNotasAtivas.has(cnpjSupermercado)) {
         const quantidadeNotas = notasPorCnpj.get(cnpjSupermercado) || 0;
-        console.log(`✅ ${supermercado.nome} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas (CADASTRADO)`);
+        
+        // 🏪 APLICAR NORMALIZAÇÃO DO NOME DO ESTABELECIMENTO CADASTRADO
+        let nomeNormalizado = supermercado.nome;
+        if (nomeNormalizado && typeof nomeNormalizado === 'string') {
+          const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
+            nome_input: nomeNormalizado
+          });
+          nomeNormalizado = nomeNormalizadoResult || nomeNormalizado.toUpperCase();
+          console.log(`🏪 Nome normalizado (cadastrado): "${supermercado.nome}" → "${nomeNormalizado}"`);
+        }
+        
+        console.log(`✅ ${nomeNormalizado} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas (CADASTRADO)`);
         
         // Remover dados sensíveis antes de adicionar à resposta
         const { cnpj, telefone, email, ...supermercadoSeguro } = supermercado;
         supermercadosComNotasAtivas.push({
           ...supermercadoSeguro,
+          nome: nomeNormalizado, // Usar nome normalizado
           fonte: 'cadastrado'
         });
         // Remover da lista de estabelecimentos das notas para evitar duplicatas
         estabelecimentosComNotasAtivas.delete(cnpjSupermercado);
       }
-    });
+    }
 
     // 2. Usar geocodificação para estabelecimentos não cadastrados, mas que têm notas ativas
     for (const [cnpjLimpo, estabelecimento] of estabelecimentosComNotasAtivas) {
