@@ -37,39 +37,50 @@ serve(async (req) => {
             role: 'system',
             content: `Você é um especialista em produtos de supermercado. Sua tarefa é:
             
-            1. Categorizar o produto em uma das categorias EXATAS seguindo estas regras:
+            1. Categorizar o produto em uma das categorias EXATAS seguindo este mapa de normalização:
             
-            HORTIFRUTI: frutas, verduras, legumes, ervas, temperos naturais
-            - Exemplos: banana, maçã, alface, tomate, cebola, batata, limão, fruta de conde, pinha, mamão, abacaxi, cenoura, beterraba, abobrinha, etc.
+            HORTIFRUTI: frutas, verduras, legumes, hortaliças, hortifruti, ervas, temperos naturais
+            - Entradas possíveis: Frutas, Verduras, Legumes, Hortaliças, Hortifruti
+            - Exemplos: banana, maçã, alface, tomate, cebola, batata, limão, fruta de conde, pinha, mamão, abacaxi, cenoura, beterraba, abobrinha
             
-            MERCEARIA: grãos, cereais, massas, conservas, condimentos, óleos, vinagres, açúcar, sal, farinha
-            - Exemplos: arroz, feijão, macarrão, óleo, açúcar, café, farinha, molho de tomate, extrato de tomate, vinagre, etc.
+            BEBIDAS: refrigerantes, sucos, água, cerveja, vinhos, destilados, bebidas (exceto leite)
+            - Entradas possíveis: Refrigerantes, Sucos, Água, Cerveja, Vinhos, Destilados, Bebidas
+            - Exemplos: refrigerante, suco, cerveja, água, energético, vinho, cachaça, whisky, vodka
             
-            LATICÍNIOS/FRIOS: leite e derivados, frios, embutidos
-            - Exemplos: leite, queijo, manteiga, margarina, iogurte, requeijão, creme de leite, presunto, mortadela, salame, etc.
+            MERCEARIA: arroz, feijão, macarrão, açúcar, sal, óleo, café, grãos, cereais, massas, conservas, condimentos
+            - Entradas possíveis: Arroz, Feijão, Macarrão, Açúcar, Sal, Óleo, Café, Mercearia
+            - Exemplos: arroz, feijão, macarrão, óleo, açúcar, café, farinha, molho de tomate, extrato de tomate, vinagre
             
-            BEBIDAS: todas as bebidas exceto leite
-            - Exemplos: refrigerante, suco, cerveja, água, energético, vinho, cachaça, etc.
+            AÇOUGUE: açougue, carnes, frango, peixe, suínos, aves, carnes frescas
+            - Entradas possíveis: Açougue, Carnes, Frango, Peixe, Suínos
+            - Exemplos: carne bovina, frango, peixe, linguiça, salsicha, carne suína, picanha
             
-            PADARIA: pães, bolos, biscoitos, salgados
-            - Exemplos: pão de forma, pão francês, bolo, biscoito, torrada, rosquinha, etc.
+            PADARIA: pães, bolos, salgados, padaria, biscoitos
+            - Entradas possíveis: Pães, Bolos, Salgados, Padaria
+            - Exemplos: pão de forma, pão francês, bolo, biscoito, torrada, rosquinha, croissant
             
-            LIMPEZA: produtos de limpeza doméstica
-            - Exemplos: detergente, sabão em pó, desinfetante, água sanitária, amaciante, etc.
+            LATICÍNIOS/FRIOS: laticínios, frios, queijos, leite, iogurte, embutidos, derivados do leite
+            - Entradas possíveis: Laticínios, Frios, Queijos, Leite, Iogurte
+            - Exemplos: leite, queijo, manteiga, margarina, iogurte, requeijão, creme de leite, presunto, mortadela, salame
             
-            HIGIENE/FARMÁCIA: produtos de higiene pessoal e farmácia
-            - Exemplos: sabonete, shampoo, pasta de dente, desodorante, papel higiênico, medicamentos, etc.
+            LIMPEZA: detergente, sabão, desinfetante, amaciante, produtos de limpeza doméstica
+            - Entradas possíveis: Detergente, Sabão, Desinfetante, Amaciante, Produtos de Limpeza
+            - Exemplos: detergente, sabão em pó, desinfetante, água sanitária, amaciante, alvejante
             
-            AÇOUGUE: carnes frescas, aves, peixes
-            - Exemplos: carne bovina, frango, peixe, linguiça, salsicha, etc.
+            HIGIENE/FARMÁCIA: higiene, farmácia, sabonete, shampoo, creme dental, medicamentos, produtos de higiene pessoal
+            - Entradas possíveis: Higiene, Farmácia, Sabonete, Shampoo, Creme dental, Medicamentos
+            - Exemplos: sabonete, shampoo, pasta de dente, desodorante, papel higiênico, medicamentos, vitaminas
             
-            CONGELADOS: produtos congelados
-            - Exemplos: sorvete, batata frita congelada, nuggets, pizza congelada, etc.
+            CONGELADOS: congelados, salgadinhos congelados, peixes congelados, pratos prontos congelados
+            - Entradas possíveis: Congelados, Salgadinhos congelados, Peixes congelados, Pratos prontos congelados
+            - Exemplos: sorvete, batata frita congelada, nuggets, pizza congelada, hambúrguer congelado, peixe congelado
             
-            PET: produtos para animais de estimação
-            - Exemplos: ração, petiscos para cães/gatos, brinquedos para pet, etc.
+            PET: pet, ração, areia de gato, acessórios pet, produtos para animais
+            - Entradas possíveis: Pet, Ração, Areia de gato, Acessórios pet
+            - Exemplos: ração para cães, ração para gatos, petiscos para pet, brinquedos para animais, coleira
             
-            OUTROS: apenas se não se encaixar em NENHUMA das categorias acima
+            OUTROS: qualquer outro item não mapeado nas categorias acima
+            - Entradas possíveis: qualquer item que não se encaixe em nenhuma categoria específica
             
             2. Sugerir um nome padronizado no estilo de supermercado com estas regras:
             - Primeira letra de cada palavra importante em maiúscula
@@ -79,11 +90,15 @@ serve(async (req) => {
             - Formato profissional de supermercado
             - SEMPRE sugerir melhorias mesmo que o nome pareça correto
             
+            IMPORTANTE: Use EXATAMENTE uma das 11 categorias fixas do mapa de normalização:
+            "hortifruti", "bebidas", "mercearia", "açougue", "padaria", "laticínios/frios", "limpeza", "higiene/farmácia", "congelados", "pet", "outros"
+            
             Exemplos de padronização:
-            - "arroz agulhinha cinco quilos" → "Arroz Tipo 1 5Kg"
-            - "fruta de conde" → "Fruta-de-Conde"
-            - "detergente liquido clear" → "Detergente Líquido Clear"
-            - "pao de forma wickbold" → "Pão de Forma Wickbold"
+            - "arroz agulhinha cinco quilos" → Categoria: "mercearia", Nome: "Arroz Tipo 1 5Kg"
+            - "fruta de conde" → Categoria: "hortifruti", Nome: "Fruta-de-Conde"
+            - "detergente liquido clear" → Categoria: "limpeza", Nome: "Detergente Líquido Clear"
+            - "pao de forma wickbold" → Categoria: "padaria", Nome: "Pão de Forma Wickbold"
+            - "carne bovina" → Categoria: "açougue", Nome: "Carne Bovina"
             
             Responda EXATAMENTE neste formato JSON:
             {"category": "categoria", "suggestedName": "Nome Padronizado"}`
