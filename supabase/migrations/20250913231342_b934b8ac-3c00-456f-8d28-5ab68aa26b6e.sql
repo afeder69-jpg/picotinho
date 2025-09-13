@@ -1,0 +1,50 @@
+-- Atualizar a função normalizar_nome_estabelecimento para usar LIKE/contains
+-- em vez de match exato, permitindo normalização por prefixo/substring
+
+CREATE OR REPLACE FUNCTION public.normalizar_nome_estabelecimento(nome_input text)
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    nome_resultado TEXT;
+    normalizacao_record RECORD;
+BEGIN
+    -- Se nome é null ou vazio, retornar vazio
+    IF nome_input IS NULL OR TRIM(nome_input) = '' THEN
+        RETURN '';
+    END IF;
+    
+    -- Começar com o nome em maiúsculas e limpo
+    nome_resultado := UPPER(TRIM(nome_input));
+    
+    -- Aplicar normalizações da tabela usando LIKE para contains/startsWith
+    FOR normalizacao_record IN 
+        SELECT ne.nome_original, ne.nome_normalizado as novo_nome
+        FROM normalizacoes_estabelecimentos ne
+        WHERE ne.ativo = true
+        ORDER BY LENGTH(ne.nome_original) DESC -- Processar nomes mais longos primeiro
+    LOOP
+        -- Verificar se o nome contém o padrão original (usando LIKE para contains)
+        -- Ou se começa com o padrão (para casos como Torre & Cia com sufixos)
+        IF nome_resultado LIKE '%' || UPPER(normalizacao_record.nome_original) || '%' 
+           OR nome_resultado LIKE UPPER(normalizacao_record.nome_original) || '%' THEN
+            nome_resultado := normalizacao_record.nome_normalizado;
+            EXIT; -- Parar no primeiro match
+        END IF;
+    END LOOP;
+    
+    RETURN nome_resultado;
+END;
+$function$;
+
+-- Adicionar regra específica para Torre & Cia usando prefixo
+INSERT INTO normalizacoes_estabelecimentos (nome_original, nome_normalizado, ativo)
+VALUES ('TORRE & CIA SUPERMERCADOS', 'SUPERMARKET', true)
+ON CONFLICT DO NOTHING;
+
+-- Comentário: A função agora usa LIKE para permitir:
+-- 1. Contains: nome_resultado LIKE '%padrão%' 
+-- 2. StartsWith: nome_resultado LIKE 'padrão%'
+-- Isso resolve casos como "TORRE & CIA SUPERMERCADOS S.A. - 18" → "SUPERMARKET"
