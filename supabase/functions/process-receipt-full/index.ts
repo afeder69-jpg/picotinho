@@ -45,6 +45,53 @@ serve(async (req) => {
     const extractedData = notaImagem.dados_extraidos as any;
     console.log('✅ Dados extraídos carregados');
 
+    // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO LOGO NO INÍCIO
+    const nomeOriginalEstabelecimento = extractedData?.supermercado?.nome || 
+                                      extractedData?.estabelecimento?.nome || 
+                                      extractedData?.emitente?.nome;
+    
+    if (nomeOriginalEstabelecimento && typeof nomeOriginalEstabelecimento === 'string') {
+      console.log(`🏪 Normalizando estabelecimento: "${nomeOriginalEstabelecimento}"`);
+      
+      const { data: nomeNormalizado, error: normError } = await supabase.rpc('normalizar_nome_estabelecimento', {
+        nome_input: nomeOriginalEstabelecimento
+      });
+      
+      if (normError) {
+        console.error('❌ Erro na normalização:', normError);
+      }
+      
+      const estabelecimentoNormalizado = nomeNormalizado || nomeOriginalEstabelecimento.toUpperCase();
+      
+      // Aplicar normalização em todos os locais possíveis nos dados extraídos
+      if (extractedData.supermercado) {
+        extractedData.supermercado.nome = estabelecimentoNormalizado;
+      }
+      if (extractedData.estabelecimento) {
+        extractedData.estabelecimento.nome = estabelecimentoNormalizado;
+      }
+      if (extractedData.emitente) {
+        extractedData.emitente.nome = estabelecimentoNormalizado;
+      }
+      
+      // 💾 Salvar dados normalizados de volta na tabela notas_imagens
+      const { error: updateError } = await supabase
+        .from('notas_imagens')
+        .update({ 
+          dados_extraidos: extractedData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', notaImagemId);
+      
+      if (updateError) {
+        console.error('❌ Erro ao salvar dados normalizados:', updateError);
+      } else {
+        console.log(`✅ Estabelecimento normalizado: "${nomeOriginalEstabelecimento}" → "${estabelecimentoNormalizado}"`);
+      }
+    } else {
+      console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
+    }
+
     // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
     const normalizarNomeProduto = async (nome: string): Promise<string> => {
       if (!nome) return '';
