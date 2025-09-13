@@ -325,8 +325,23 @@ serve(async (req) => {
 
         console.log(`🛒 ${supermercado.nome}: ${produtosUnicos.size} produtos únicos de ${notasDoSupermercado.length} notas`);
 
+        // Normalizar o nome do supermercado usando a função do banco
+        let nomeNormalizado = supermercado.nome;
+        try {
+          const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
+            nome_input: supermercado.nome
+          });
+          if (nomeNormalizadoResult) {
+            nomeNormalizado = nomeNormalizadoResult;
+          }
+        } catch (error) {
+          console.log(`Erro ao normalizar nome do supermercado ${supermercado.nome}: ${error.message}`);
+          // Manter nome original em caso de erro
+        }
+
         return {
           ...supermercado,
+          nome: nomeNormalizado,
           produtos_disponiveis: produtosUnicos.size
         };
       })
