@@ -58,6 +58,37 @@ const EstoqueAtual = () => {
   const [sugestaoNome, setSugestaoNome] = useState<string>('');
   const [mostrarSugestao, setMostrarSugestao] = useState(false);
   const [diagnosticando, setDiagnosticando] = useState(false);
+
+  // Função para obter coordenadas do usuário via GPS
+  const obterCoordenadas = (): Promise<{ latitude: number; longitude: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        console.error('Geolocalização não suportada');
+        // Fallback para Rio de Janeiro (região do usuário)
+        resolve({ latitude: -22.9068, longitude: -43.1729 });
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Erro ao obter localização:', error);
+          // Fallback para Rio de Janeiro (região do usuário)
+          resolve({ latitude: -22.9068, longitude: -43.1729 });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutos
+        }
+      );
+    });
+  };
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -84,24 +115,23 @@ const EstoqueAtual = () => {
 
       const raio = config?.raio_busca_km || 5.0;
 
-      // Buscar posição atual do usuário (mockado - em produção vem do GPS)
-      // Por enquanto usando coordenadas de São Paulo (onde temos supermercados)
-      const latitude = -23.5505;
-      const longitude = -46.6333;
-
+      // Buscar posição atual do usuário via GPS
+      const coordenadas = await obterCoordenadas();
+      console.log('🌍 Coordenadas do usuário obtidas:', coordenadas);
+      
       // Chamar função dinâmica que calcula preços por área
       const { data: precosAreaData, error: errorArea } = await supabase.functions.invoke('preco-atual-usuario', {
         body: {
           userId: user.id,
-          latitude,
-          longitude,
+          latitude: coordenadas.latitude,
+          longitude: coordenadas.longitude,
           raioKm: raio
         }
       });
 
       if (errorArea) {
         console.error('Erro ao buscar preços por área:', errorArea);
-        // Fallback para o método antigo
+        // Fallback para o método antigo se as coordenadas não funcionaram
         await loadPrecosAtuaisLegacy();
         return;
       }
