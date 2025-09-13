@@ -247,6 +247,78 @@ serve(async (req) => {
             console.log(`   - Quantidade: ${quantidadeProduto} ${unidadeProduto || 'unidade'}`);
             console.log(`   - Preço: R$ ${precoUnitario || 0}`);
           }
+
+          // === Atualização do Preço Atual (precos_atuais) baseada na nota fiscal ===
+          try {
+            const dados = extractedData || {};
+            const cnpjNota = dados?.supermercado?.cnpj || dados?.cnpj || dados?.estabelecimento?.cnpj || dados?.emitente?.cnpj;
+            const estabelecimentoNome = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
+            const cnpjLimpo = cnpjNota ? String(cnpjNota).replace(/[^\d]/g, '') : null;
+
+            // Extrair data/hora da compra e transformar em ISO
+            const dataStrRaw = dados?.compra?.data_compra || dados?.compra?.data_emissao || dados?.dataCompra || dados?.data || dados?.emissao || null;
+            const horaStr = dados?.compra?.hora_compra || dados?.hora || dados?.horaCompra || null;
+
+            let dataStr = dataStrRaw ? String(dataStrRaw) : '';
+            if (dataStr && /^(\d{2})\/(\d{2})\/(\d{4})$/.test(dataStr)) {
+              const [d, m, y] = dataStr.split('/');
+              dataStr = `${y}-${m}-${d}`;
+            }
+            const dataISO = new Date(`${dataStr || new Date().toISOString().slice(0,10)}T${horaStr || '00:00:00'}`).toISOString();
+
+            if (cnpjLimpo && nomeNormalizado && Number(precoUnitario) > 0) {
+              console.log(`🧾 Atualizando precos_atuais -> ${nomeNormalizado} @ ${cnpjLimpo} (${estabelecimentoNome}) = R$ ${precoUnitario} em ${dataISO}`);
+
+              const { data: existente } = await supabase
+                .from('precos_atuais')
+                .select('id, valor_unitario, data_atualizacao')
+                .eq('produto_nome', nomeNormalizado)
+                .eq('estabelecimento_cnpj', cnpjLimpo)
+                .maybeSingle();
+
+              let deveAtualizar = false;
+              if (!existente) {
+                deveAtualizar = true;
+              } else {
+                const tExist = new Date(existente.data_atualizacao).getTime();
+                const tNova = new Date(dataISO).getTime();
+                const precoExist = Number(existente.valor_unitario);
+                const precoNovo = Number(precoUnitario);
+
+                if (tNova > tExist && precoNovo < precoExist) {
+                  // Nova compra é mais recente e preço menor -> atualizar
+                  deveAtualizar = true;
+                  console.log('✅ Regra: mais recente + menor preço (atualizando)');
+                } else if (tNova === tExist && precoNovo < precoExist) {
+                  // Mesma data, preço menor -> atualizar
+                  deveAtualizar = true;
+                  console.log('✅ Regra: mesma data com preço menor (atualizando)');
+                } else {
+                  console.log('ℹ️ Mantendo preço existente em precos_atuais');
+                }
+              }
+
+              if (deveAtualizar) {
+                const { error: upsertErr } = await supabase
+                  .from('precos_atuais')
+                  .upsert({
+                    produto_nome: nomeNormalizado,
+                    estabelecimento_cnpj: cnpjLimpo,
+                    estabelecimento_nome: estabelecimentoNome,
+                    valor_unitario: Number(precoUnitario),
+                    data_atualizacao: dataISO,
+                  }, { onConflict: 'produto_nome,estabelecimento_cnpj' });
+
+                if (upsertErr) {
+                  console.error('❌ Erro ao atualizar precos_atuais:', upsertErr);
+                } else {
+                  console.log('💾 precos_atuais atualizado com sucesso');
+                }
+              }
+            }
+          } catch (e) {
+            console.error('⚠️ Falha ao atualizar precos_atuais (não crítico):', e);
+          }
         } catch (error) {
           console.error(`❌ Erro ao processar item ${index + 1} (${nomeProduto}):`, error);
         }
