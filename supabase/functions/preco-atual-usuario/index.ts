@@ -218,6 +218,32 @@ serve(async (req) => {
 
     console.log(`✅ Produtos com preço encontrado no raio: ${resultados.length}`);
 
+    // 7) Salvar/atualizar os preços na tabela precos_atuais
+    for (const resultado of resultados) {
+      try {
+        const { error: upsertError } = await supabase
+          .from('precos_atuais')
+          .upsert({
+            produto_nome: resultado.produto_nome,
+            valor_unitario: resultado.valor_unitario,
+            data_atualizacao: resultado.data_atualizacao,
+            estabelecimento_cnpj: resultado.estabelecimento_cnpj,
+            estabelecimento_nome: resultado.estabelecimento_nome,
+            produto_codigo: null
+          }, {
+            onConflict: 'produto_nome,estabelecimento_cnpj'
+          });
+
+        if (upsertError) {
+          console.error(`Erro ao atualizar preço de ${resultado.produto_nome}:`, upsertError);
+        } else {
+          console.log(`💾 Preço atualizado: ${resultado.produto_nome} = R$ ${resultado.valor_unitario}`);
+        }
+      } catch (error) {
+        console.error(`Erro ao processar ${resultado.produto_nome}:`, error);
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true, raio, resultados }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
