@@ -37,35 +37,54 @@ serve(async (req) => {
         const dados = nota.dados_extraidos as any;
         let foiAtualizado = false;
 
-        // Buscar nome original do estabelecimento
-        const nomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome;
+        // Buscar nome original do estabelecimento em todas as possíveis localizações
+        const nomeOriginal = 
+          dados?.supermercado?.nome || 
+          dados?.estabelecimento?.nome || 
+          dados?.emitente?.nome ||
+          dados?.mercado?.nome ||
+          dados?.loja?.nome;
         
         if (nomeOriginal && typeof nomeOriginal === 'string') {
+          console.log(`🔍 Processando estabelecimento: "${nomeOriginal}"`);
+          
           // Normalizar nome do estabelecimento
-          const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+          const { data: nomeNormalizado, error: normalizeError } = await supabase.rpc('normalizar_nome_estabelecimento', {
             nome_input: nomeOriginal
           });
           
+          if (normalizeError) {
+            console.error(`❌ Erro ao normalizar nome "${nomeOriginal}":`, normalizeError);
+            continue;
+          }
+          
           const estabelecimentoNormalizado = nomeNormalizado || nomeOriginal.toUpperCase();
           
-          // Verificar se o nome mudou
-          if (estabelecimentoNormalizado !== nomeOriginal) {
+          // Verificar se o nome mudou (comparar com original, não com já normalizado)
+          if (estabelecimentoNormalizado !== nomeOriginal && estabelecimentoNormalizado !== nomeOriginal.toUpperCase()) {
             console.log(`📝 Normalizando: "${nomeOriginal}" → "${estabelecimentoNormalizado}"`);
             
-            // Atualizar dados extraídos
+            // Atualizar dados extraídos em TODAS as localizações possíveis
             const dadosAtualizados = { ...dados };
             
-            // Aplicar normalização em todos os locais possíveis
-            if (dadosAtualizados.supermercado) {
+            if (dadosAtualizados.supermercado?.nome) {
               dadosAtualizados.supermercado.nome = estabelecimentoNormalizado;
               foiAtualizado = true;
             }
-            if (dadosAtualizados.estabelecimento) {
+            if (dadosAtualizados.estabelecimento?.nome) {
               dadosAtualizados.estabelecimento.nome = estabelecimentoNormalizado;
               foiAtualizado = true;
             }
-            if (dadosAtualizados.emitente) {
+            if (dadosAtualizados.emitente?.nome) {
               dadosAtualizados.emitente.nome = estabelecimentoNormalizado;
+              foiAtualizado = true;
+            }
+            if (dadosAtualizados.mercado?.nome) {
+              dadosAtualizados.mercado.nome = estabelecimentoNormalizado;
+              foiAtualizado = true;
+            }
+            if (dadosAtualizados.loja?.nome) {
+              dadosAtualizados.loja.nome = estabelecimentoNormalizado;
               foiAtualizado = true;
             }
             
@@ -80,10 +99,14 @@ serve(async (req) => {
                 console.error(`❌ Erro ao atualizar nota ${nota.id}:`, updateError);
               } else {
                 contadorAtualizados++;
-                console.log(`✅ Nota ${nota.id} atualizada`);
+                console.log(`✅ Nota ${nota.id} atualizada: "${nomeOriginal}" → "${estabelecimentoNormalizado}"`);
               }
             }
+          } else {
+            console.log(`ℹ️ Nome "${nomeOriginal}" não precisa de normalização ou já está normalizado`);
           }
+        } else {
+          console.log(`⚠️ Nota ${nota.id} não possui nome de estabelecimento identificável`);
         }
       } catch (error) {
         console.error(`❌ Erro ao processar nota ${nota.id}:`, error);
@@ -103,14 +126,24 @@ serve(async (req) => {
       let contadorPrecosAtualizados = 0;
       
       for (const preco of precos || []) {
-        if (preco.estabelecimento_nome) {
-          const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+        if (preco.estabelecimento_nome && preco.estabelecimento_nome.trim()) {
+          console.log(`🏪 Processando preço: "${preco.estabelecimento_nome}"`);
+          
+          const { data: nomeNormalizado, error: normalizeError } = await supabase.rpc('normalizar_nome_estabelecimento', {
             nome_input: preco.estabelecimento_nome
           });
           
+          if (normalizeError) {
+            console.error(`❌ Erro ao normalizar preço ${preco.id}:`, normalizeError);
+            continue;
+          }
+          
           const estabelecimentoNormalizado = nomeNormalizado || preco.estabelecimento_nome.toUpperCase();
           
-          if (estabelecimentoNormalizado !== preco.estabelecimento_nome) {
+          if (estabelecimentoNormalizado !== preco.estabelecimento_nome && 
+              estabelecimentoNormalizado !== preco.estabelecimento_nome.toUpperCase()) {
+            console.log(`💰 Normalizando preço: "${preco.estabelecimento_nome}" → "${estabelecimentoNormalizado}"`);
+            
             const { error: updatePrecoError } = await supabase
               .from('precos_atuais')
               .update({ estabelecimento_nome: estabelecimentoNormalizado })
@@ -119,7 +152,11 @@ serve(async (req) => {
             if (!updatePrecoError) {
               contadorPrecosAtualizados++;
               console.log(`💰 Preço atualizado: "${preco.estabelecimento_nome}" → "${estabelecimentoNormalizado}"`);
+            } else {
+              console.error(`❌ Erro ao atualizar preço ${preco.id}:`, updatePrecoError);
             }
+          } else {
+            console.log(`ℹ️ Preço "${preco.estabelecimento_nome}" não precisa de normalização`);
           }
         }
       }
