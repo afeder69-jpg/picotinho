@@ -75,6 +75,65 @@ const EstoqueAtual = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Buscar configuração de área de atuação do usuário
+      const { data: config } = await supabase
+        .from('configuracoes_usuario')
+        .select('raio_busca_km')
+        .eq('usuario_id', user.id)
+        .maybeSingle();
+
+      const raio = config?.raio_busca_km || 5.0;
+
+      // Buscar posição atual do usuário (mockado - em produção vem do GPS)
+      // Por enquanto usando coordenadas do Brasil central
+      const latitude = -15.7942;
+      const longitude = -47.8822;
+
+      // Chamar função dinâmica que calcula preços por área
+      const { data: precosAreaData, error: errorArea } = await supabase.functions.invoke('preco-atual-usuario', {
+        body: {
+          userId: user.id,
+          latitude,
+          longitude,
+          raioKm: raio
+        }
+      });
+
+      if (errorArea) {
+        console.error('Erro ao buscar preços por área:', errorArea);
+        // Fallback para o método antigo
+        await loadPrecosAtuaisLegacy();
+        return;
+      }
+
+      if (precosAreaData?.success && precosAreaData?.resultados) {
+        const precosFormatados = precosAreaData.resultados.map((item: any) => ({
+          id: `area-${item.produto_nome}`,
+          produto_nome: item.produto_nome,
+          valor_unitario: item.valor_unitario,
+          data_atualizacao: item.data_atualizacao,
+          origem: 'area_dinamica',
+          estabelecimento_nome: item.estabelecimento_nome
+        }));
+
+        console.log(`✅ Preços dinâmicos carregados por área (${raio}km):`, precosFormatados);
+        setPrecosAtuais(precosFormatados);
+      } else {
+        // Fallback se não há resultados na área
+        setPrecosAtuais([]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar preços atuais dinâmicos:', error);
+      // Fallback para o método antigo
+      await loadPrecosAtuaisLegacy();
+    }
+  };
+
+  const loadPrecosAtuaisLegacy = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       // Buscar preços específicos do usuário (produtos inseridos manualmente)
       const { data: precosUsuario, error: errorUsuario } = await supabase
         .from('precos_atuais_usuario')
@@ -150,7 +209,7 @@ const EstoqueAtual = () => {
 
       setPrecosAtuais(precosUnificados);
     } catch (error) {
-      console.error('Erro ao carregar preços atuais:', error);
+      console.error('Erro ao carregar preços atuais (legacy):', error);
     }
   };
 
@@ -269,11 +328,10 @@ const EstoqueAtual = () => {
     return null;
   };
 
-  // Função para encontrar preço atual de um produto
+  // Função para encontrar preço atual de um produto (agora dinamicamente pela área)
   const encontrarPrecoAtual = (nomeProduto: string) => {
-    console.log(`🔍 Buscando preço atual para: "${nomeProduto}"`);
-    console.log(`📊 Preços disponíveis na área: ${precosAtuais.length}`);
-    console.log(`📦 Produtos no estoque: ${estoque.length}`);
+    console.log(`🔍 Buscando preço atual dinâmico para: "${nomeProduto}"`);
+    console.log(`📊 Preços dinâmicos disponíveis na área: ${precosAtuais.length}`);
     
     if (!nomeProduto) {
       console.log('❌ Nome do produto vazio');
@@ -282,44 +340,21 @@ const EstoqueAtual = () => {
     
     const nomeProdutoNormalizado = nomeProduto.toLowerCase().trim();
     
-    // 1. PRIORIDADE: Buscar preços de notas fiscais de outros usuários na área (mais recentes primeiro)
-    // Busca exata nos preços da área
-    const buscaExata = precosAtuais.find(preco => 
+    // Buscar nos preços dinâmicos da área (já calculados pela função de área)
+    const precoAreaDinamica = precosAtuais.find(preco => 
       preco.produto_nome && 
       preco.produto_nome.toLowerCase().trim() === nomeProdutoNormalizado &&
-      preco.origem === 'geral' // Priorizar preços de outros usuários
+      preco.origem === 'area_dinamica'
     );
-    if (buscaExata) {
-      console.log(`✅ Encontrou preço exato de outro usuário na área: R$ ${buscaExata.valor_unitario}`);
-      return buscaExata;
+    
+    if (precoAreaDinamica) {
+      console.log(`✅ Encontrou preço dinâmico na área: R$ ${precoAreaDinamica.valor_unitario} em ${precoAreaDinamica.estabelecimento_nome}`);
+      return precoAreaDinamica;
     }
     
-    // 2. Busca por palavras-chave nos preços da área
-    const palavrasChave = nomeProdutoNormalizado
-      .replace(/\b(kg|g|ml|l|un|unidade|lata|pacote|caixa|frasco|100g|200g|300g|400g|500g|1kg|2kg)\b/g, '')
-      .replace(/\b(\d+g|\d+ml|\d+l|\d+kg)\b/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    const buscaPorPalavrasChave = precosAtuais.find(preco => {
-      if (!preco.produto_nome || preco.origem !== 'geral') return false;
-      
-      const precoNormalizado = preco.produto_nome.toLowerCase()
-        .replace(/\b(kg|g|ml|l|un|unidade|lata|pacote|caixa|frasco|100g|200g|300g|400g|500g|1kg|2kg)\b/g, '')
-        .replace(/\b(\d+g|\d+ml|\d+l|\d+kg)\b/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      return palavrasChave.includes(precoNormalizado) || precoNormalizado.includes(palavrasChave);
-    });
-    if (buscaPorPalavrasChave) {
-      console.log(`✅ Encontrou preço por palavras-chave de outro usuário na área: R$ ${buscaPorPalavrasChave.valor_unitario}`);
-      return buscaPorPalavrasChave;
-    }
-    
-    // 3. Busca por similaridade nos preços da área
+    // Busca por similaridade nos preços dinâmicos
     const buscaSimilaridade = precosAtuais.find(preco => {
-      if (!preco.produto_nome || preco.origem !== 'geral') return false;
+      if (!preco.produto_nome || preco.origem !== 'area_dinamica') return false;
       
       const precoLower = preco.produto_nome.toLowerCase();
       const produtoLower = nomeProdutoNormalizado;
@@ -339,67 +374,11 @@ const EstoqueAtual = () => {
     });
     
     if (buscaSimilaridade) {
-      console.log(`✅ Encontrou preço por similaridade de outro usuário na área: R$ ${buscaSimilaridade.valor_unitario}`);
+      console.log(`✅ Encontrou preço dinâmico por similaridade na área: R$ ${buscaSimilaridade.valor_unitario}`);
       return buscaSimilaridade;
     }
     
-    // 4. Se não há preço mais recente de outros usuários, usar o próprio preço mais recente
-    // Buscar TODAS as compras do usuário para este produto no estoque (considerando histórico completo)
-    const produtosDoUsuario = estoque.filter(item => 
-      item.produto_nome.toLowerCase() === nomeProduto.toLowerCase() &&
-      item.preco_unitario_ultimo && 
-      item.preco_unitario_ultimo > 0
-    );
-    
-    if (produtosDoUsuario.length > 0) {
-      // Buscar a data da nota fiscal mais recente para este produto
-      const dataNotaFiscalMaisRecente = encontrarDataNotaFiscal(nomeProduto);
-      
-      // Se temos a data da nota, usar ela; senão usar a data de atualização mais recente
-      let produtoMaisRecente = produtosDoUsuario[0];
-      
-      if (dataNotaFiscalMaisRecente) {
-        // Usar o preço associado à data da nota fiscal
-        produtoMaisRecente = produtosDoUsuario.find(p => {
-          const dataNotaProduto = encontrarDataNotaFiscal(p.produto_nome);
-          return dataNotaProduto === dataNotaFiscalMaisRecente;
-        }) || produtoMaisRecente;
-        
-        console.log(`💰 Usando preço próprio mais recente (data da nota): R$ ${produtoMaisRecente.preco_unitario_ultimo} em ${dataNotaFiscalMaisRecente}`);
-        return {
-          produto_nome: nomeProduto,
-          valor_unitario: produtoMaisRecente.preco_unitario_ultimo,
-          data_atualizacao: dataNotaFiscalMaisRecente, // Usar data da nota fiscal
-          origem: 'produto_proprio'
-        };
-      } else {
-        // Usar o produto com updated_at mais recente
-        produtoMaisRecente = produtosDoUsuario.reduce((mais_recente, atual) => 
-          new Date(atual.updated_at) > new Date(mais_recente.updated_at) ? atual : mais_recente
-        );
-        
-        console.log(`💰 Usando preço próprio mais recente (sem data de nota): R$ ${produtoMaisRecente.preco_unitario_ultimo}`);
-        return {
-          produto_nome: nomeProduto,
-          valor_unitario: produtoMaisRecente.preco_unitario_ultimo,
-          data_atualizacao: produtoMaisRecente.updated_at,
-          origem: 'produto_proprio'
-        };
-      }
-    }
-    
-    // 5. Verificar preços do usuário na tabela precos_atuais_usuario
-    const precoManualTabela = precosAtuais.find(preco => 
-      preco.origem === 'usuario' && 
-      preco.produto_nome.toLowerCase() === nomeProduto.toLowerCase()
-    );
-    
-    if (precoManualTabela) {
-      console.log(`💰 Usando preço da tabela precos_atuais_usuario: R$ ${precoManualTabela.valor_unitario}`);
-      return precoManualTabela;
-    }
-    
-    console.log(`❌ Nenhum preço encontrado para: "${nomeProduto}"`);
+    console.log(`❌ Nenhum preço dinâmico encontrado para: "${nomeProduto}"`);
     return null;
   };
 
