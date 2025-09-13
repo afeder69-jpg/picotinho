@@ -12,7 +12,8 @@ import {
   LogIn,
   LogOut,
   MapPin,
-  Settings
+  Settings,
+  Database
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -79,6 +80,14 @@ const Menu = () => {
       description: 'Gerenciar configurações pessoais',
       icon: Settings,
       onClick: () => navigate('/configuracoes'),
+      isActive: true
+    },
+    {
+      id: 'test-normalizacao',
+      title: 'Normalização (teste)',
+      description: 'Executar normalização de estabelecimentos - TEMPORÁRIO',
+      icon: Database,
+      onClick: () => navigate('/test-normalizacao'),
       isActive: true
     }
   ];
