@@ -884,7 +884,7 @@ const ReceiptList = () => {
                            
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
-                              <span className="text-muted-foreground">Data: {receipt.dados_extraidos.compra?.data_emissao ? formatPurchaseDateTime(receipt.dados_extraidos.compra.data_emissao) : (receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : (receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : 'N/A'))}</span>
+                              <span className="text-muted-foreground">Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : (receipt.dados_extraidos.compra?.data_emissao ? formatPurchaseDateTime(receipt.dados_extraidos.compra.data_emissao) : (receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'))}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
                               </span>
@@ -912,7 +912,7 @@ const ReceiptList = () => {
                            
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
-                              <span className="text-muted-foreground">Data: {receipt.dados_extraidos.compra?.data_emissao ? formatPurchaseDateTime(receipt.dados_extraidos.compra.data_emissao) : (receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A')}</span>
+                              <span className="text-muted-foreground">Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : (receipt.dados_extraidos.compra?.data_emissao ? formatPurchaseDateTime(receipt.dados_extraidos.compra.data_emissao) : (receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'))}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
                               </span>
