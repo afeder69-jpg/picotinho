@@ -885,14 +885,8 @@ const ReceiptList = () => {
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
                               <span className="text-muted-foreground">Data: {(() => {
-                                const dataFinal = receipt.purchase_date || receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || 'N/A';
-                                console.log(`🗓️ Debug data para receipt ${receipt.id}:`, {
-                                  purchase_date: receipt.purchase_date,
-                                  data_emissao: receipt.dados_extraidos.compra?.data_emissao,
-                                  dataCompra: receipt.dados_extraidos.dataCompra,
-                                  dataFinal,
-                                  formatada: dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A'
-                                });
+                                // Sempre priorizar data_emissao dos dados extraídos
+                                const dataFinal = receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || receipt.purchase_date || 'N/A';
                                 return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
                               })()}</span>
                               <span className="font-medium text-foreground">
@@ -923,14 +917,8 @@ const ReceiptList = () => {
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
                               <span className="text-muted-foreground">Data: {(() => {
-                                const dataFinal = receipt.purchase_date || receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || 'N/A';
-                                console.log(`🗓️ Debug data para receipt ${receipt.id}:`, {
-                                  purchase_date: receipt.purchase_date,
-                                  data_emissao: receipt.dados_extraidos.compra?.data_emissao,
-                                  dataCompra: receipt.dados_extraidos.dataCompra,
-                                  dataFinal,
-                                  formatada: dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A'
-                                });
+                                // Sempre priorizar data_emissao dos dados extraídos
+                                const dataFinal = receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || receipt.purchase_date || 'N/A';
                                 return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
                               })()}</span>
                               <span className="font-medium text-foreground">
