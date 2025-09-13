@@ -63,6 +63,7 @@ serve(async (req) => {
       .gt("quantidade", 0);
 
     if (estoqueErr) throw estoqueErr;
+    console.log(`📦 Produtos no estoque: ${estoque?.length || 0}`);
 
     // 3) Buscar supermercados com coordenadas e filtrar por raio
     const { data: supermercados, error: mercadosErr } = await supabase
@@ -118,6 +119,7 @@ serve(async (req) => {
       .not("dados_extraidos", "is", null);
 
     if (notasErr) throw notasErr;
+    console.log(`📄 Notas fiscais processadas encontradas: ${notasUsuario?.length || 0}`);
 
     // 5) Extrair produtos das notas que são de estabelecimentos no raio
     const candidatos: Array<{
@@ -132,14 +134,15 @@ serve(async (req) => {
       const dados = nota.dados_extraidos;
       if (!dados?.itens) continue;
 
-      // Extrair CNPJ da nota
-      const cnpjNota = (
-        dados.cnpj || 
-        dados.estabelecimento?.cnpj || 
-        dados.supermercado?.cnpj || 
-        dados.emitente?.cnpj || 
-        ""
-      ).replace(/[^\d]/g, "");
+      // Extrair CNPJ da nota (verificando múltiplas possibilidades)
+      let cnpjNota = "";
+      if (dados.cnpj) cnpjNota = dados.cnpj;
+      else if (dados.estabelecimento?.cnpj) cnpjNota = dados.estabelecimento.cnpj;
+      else if (dados.supermercado?.cnpj) cnpjNota = dados.supermercado.cnpj;
+      else if (dados.emitente?.cnpj) cnpjNota = dados.emitente.cnpj;
+      
+      cnpjNota = (cnpjNota || "").replace(/[^\d]/g, "");
+      console.log(`🧾 Nota com CNPJ: ${cnpjNota}, Estabelecimento: ${dados.estabelecimento?.nome || 'Não identificado'}`);
 
       // Verificar se o estabelecimento está no raio
       if (!cnpjsNoRaio.has(cnpjNota)) continue;
@@ -164,6 +167,14 @@ serve(async (req) => {
         });
       }
     }
+
+    console.log(`🏪 Candidatos de produtos encontrados: ${candidatos.length}`);
+    console.log(`💰 Amostra de candidatos:`, candidatos.slice(0, 3).map(c => ({
+      produto: c.produto_nome,
+      valor: c.valor_unitario,
+      data: c.data_atualizacao,
+      estabelecimento: c.estabelecimento_nome
+    })));
 
     // 6) Para cada produto do estoque, encontrar o preço conforme a regra: "sempre o menor valor mais recente"
     const resultados: PrecoResultado[] = [];

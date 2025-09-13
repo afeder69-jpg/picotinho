@@ -85,9 +85,9 @@ const EstoqueAtual = () => {
       const raio = config?.raio_busca_km || 5.0;
 
       // Buscar posição atual do usuário (mockado - em produção vem do GPS)
-      // Por enquanto usando coordenadas do Brasil central
-      const latitude = -15.7942;
-      const longitude = -47.8822;
+      // Por enquanto usando coordenadas de São Paulo (onde temos supermercados)
+      const latitude = -23.5505;
+      const longitude = -46.6333;
 
       // Chamar função dinâmica que calcula preços por área
       const { data: precosAreaData, error: errorArea } = await supabase.functions.invoke('preco-atual-usuario', {
