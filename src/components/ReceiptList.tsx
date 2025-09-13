@@ -884,7 +884,17 @@ const ReceiptList = () => {
                            
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
-                              <span className="text-muted-foreground">Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : (receipt.dados_extraidos.compra?.data_emissao ? formatPurchaseDateTime(receipt.dados_extraidos.compra.data_emissao) : (receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'))}</span>
+                              <span className="text-muted-foreground">Data: {(() => {
+                                const dataFinal = receipt.purchase_date || receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || 'N/A';
+                                console.log(`🗓️ Debug data para receipt ${receipt.id}:`, {
+                                  purchase_date: receipt.purchase_date,
+                                  data_emissao: receipt.dados_extraidos.compra?.data_emissao,
+                                  dataCompra: receipt.dados_extraidos.dataCompra,
+                                  dataFinal,
+                                  formatada: dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A'
+                                });
+                                return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
+                              })()}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
                               </span>
@@ -912,7 +922,17 @@ const ReceiptList = () => {
                            
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
-                              <span className="text-muted-foreground">Data: {receipt.purchase_date ? formatPurchaseDateTime(receipt.purchase_date) : (receipt.dados_extraidos.compra?.data_emissao ? formatPurchaseDateTime(receipt.dados_extraidos.compra.data_emissao) : (receipt.dados_extraidos.dataCompra ? formatPurchaseDateTime(receipt.dados_extraidos.dataCompra) : 'N/A'))}</span>
+                              <span className="text-muted-foreground">Data: {(() => {
+                                const dataFinal = receipt.purchase_date || receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || 'N/A';
+                                console.log(`🗓️ Debug data para receipt ${receipt.id}:`, {
+                                  purchase_date: receipt.purchase_date,
+                                  data_emissao: receipt.dados_extraidos.compra?.data_emissao,
+                                  dataCompra: receipt.dados_extraidos.dataCompra,
+                                  dataFinal,
+                                  formatada: dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A'
+                                });
+                                return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
+                              })()}</span>
                               <span className="font-medium text-foreground">
                                 Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
                               </span>
