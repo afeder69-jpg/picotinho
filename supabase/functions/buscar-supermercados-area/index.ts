@@ -124,8 +124,21 @@ serve(async (req) => {
                                    dadosExtraidos?.emitente?.nome ||
                                    'Estabelecimento';
           
-          // Normalizar nome do estabelecimento
-          nomeEstabelecimento = nomeEstabelecimento.toUpperCase();
+          // 🏪 APLICAR NORMALIZAÇÃO DO NOME DO ESTABELECIMENTO
+          if (nomeEstabelecimento && typeof nomeEstabelecimento === 'string') {
+            try {
+              const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+                nome_input: nomeEstabelecimento
+              });
+              nomeEstabelecimento = nomeNormalizado || nomeEstabelecimento.toUpperCase();
+              console.log(`🏪 Nome normalizado: "${dadosExtraidos?.supermercado?.nome || dadosExtraidos?.estabelecimento?.nome || dadosExtraidos?.emitente?.nome}" → "${nomeEstabelecimento}"`);
+            } catch (error) {
+              console.error('Erro na normalização:', error);
+              nomeEstabelecimento = nomeEstabelecimento.toUpperCase();
+            }
+          } else {
+            nomeEstabelecimento = nomeEstabelecimento.toUpperCase();
+          }
           
           const enderecoEstabelecimento = dadosExtraidos?.supermercado?.endereco || 
                                           dadosExtraidos?.estabelecimento?.endereco ||
@@ -181,8 +194,22 @@ serve(async (req) => {
         if (cnpjSupermercado && cnpjsComNotasAtivas.has(cnpjSupermercado)) {
           const quantidadeNotas = notasPorCnpj.get(cnpjSupermercado) || 0;
           
-          // Normalizar nome do estabelecimento
-          let nomeNormalizado = supermercado.nome?.toUpperCase() || supermercado.nome;
+          // 🏪 APLICAR NORMALIZAÇÃO DO NOME DO ESTABELECIMENTO CADASTRADO
+          let nomeNormalizado = supermercado.nome;
+          if (nomeNormalizado && typeof nomeNormalizado === 'string') {
+            try {
+              const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
+                nome_input: nomeNormalizado
+              });
+              nomeNormalizado = nomeNormalizadoResult || nomeNormalizado.toUpperCase();
+              console.log(`🏪 Nome normalizado (cadastrado): "${supermercado.nome}" → "${nomeNormalizado}"`);
+            } catch (error) {
+              console.error('Erro na normalização:', error);
+              nomeNormalizado = nomeNormalizado.toUpperCase();
+            }
+          } else {
+            nomeNormalizado = nomeNormalizado?.toUpperCase() || supermercado.nome;
+          }
           
           console.log(`✅ ${nomeNormalizado} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas (CADASTRADO)`);
           
