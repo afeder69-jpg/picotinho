@@ -248,7 +248,57 @@ serve(async (req) => {
 
     console.log(`✅ Produtos com preço encontrado no raio: ${resultados.length}`);
 
-    // 7) Salvar/atualizar os preços na tabela precos_atuais
+    // 7) Buscar preços existentes na tabela precos_atuais para produtos do estoque
+    // que não foram encontrados nas notas do usuário
+    console.log('🔍 Buscando preços gerais existentes para produtos sem preço das notas...');
+    
+    for (const item of estoque ?? []) {
+      // Verificar se o produto já tem resultado
+      const jaTemResultado = resultados.some(r => r.produto_nome === item.produto_nome);
+      if (jaTemResultado) continue;
+      
+      console.log(`🔍 Buscando preço geral para: ${item.produto_nome}`);
+      
+      // Buscar na tabela precos_atuais preços existentes de estabelecimentos na área
+      const { data: precosGerais, error: precosErr } = await supabase
+        .from('precos_atuais')
+        .select('*')
+        .in('estabelecimento_cnpj', Array.from(cnpjsNoRaio))
+        .order('data_atualizacao', { ascending: false });
+      
+      if (precosErr) {
+        console.error('Erro ao buscar preços gerais:', precosErr);
+        continue;
+      }
+      
+      // Normalizar e encontrar matches
+      const alvo = normalizarTexto(item.produto_nome);
+      const candidatosGerais = (precosGerais || []).filter(p => {
+        const pNormalizado = normalizarTexto(p.produto_nome);
+        const match = pNormalizado === alvo || 
+                     pNormalizado.includes(alvo) || 
+                     alvo.includes(pNormalizado);
+        if (match) {
+          console.log(`  ✅ Preço geral encontrado: ${p.produto_nome} (${p.valor_unitario}) - ${p.estabelecimento_nome}`);
+        }
+        return match;
+      });
+      
+      if (candidatosGerais.length > 0) {
+        // Pegar o mais recente
+        const melhor = candidatosGerais[0];
+        resultados.push({
+          produto_nome: item.produto_nome,
+          valor_unitario: Number(melhor.valor_unitario),
+          data_atualizacao: melhor.data_atualizacao,
+          estabelecimento_cnpj: melhor.estabelecimento_cnpj,
+          estabelecimento_nome: melhor.estabelecimento_nome,
+        });
+        console.log(`💰 Preço geral adicionado: ${item.produto_nome} = R$ ${melhor.valor_unitario}`);
+      }
+    }
+
+    // 8) Salvar/atualizar os preços na tabela precos_atuais (apenas novos das notas)
     for (const resultado of resultados) {
       try {
         const { error: upsertError } = await supabase
