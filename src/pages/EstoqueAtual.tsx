@@ -358,6 +358,18 @@ const EstoqueAtual = () => {
     return null;
   };
 
+  // Função para normalizar texto removendo acentos
+  const normalizarTexto = (texto: string) => {
+    return texto
+      .toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^a-z0-9\s]/g, ' ') // Remove caracteres especiais
+      .replace(/\s+/g, ' ') // Normaliza espaços
+      .trim();
+  };
+
   // Função para encontrar preço atual de um produto (agora dinamicamente pela área)
   const encontrarPrecoAtual = (nomeProduto: string) => {
     console.log(`🔍 Buscando preço atual dinâmico para: "${nomeProduto}"`);
@@ -368,12 +380,13 @@ const EstoqueAtual = () => {
       return null;
     }
     
-    const nomeProdutoNormalizado = nomeProduto.toLowerCase().trim();
+    const nomeProdutoNormalizado = normalizarTexto(nomeProduto);
+    console.log(`🔄 Nome normalizado: "${nomeProdutoNormalizado}"`);
     
     // Buscar nos preços dinâmicos da área (já calculados pela função de área)
     const precoAreaDinamica = precosAtuais.find(preco => 
       preco.produto_nome && 
-      preco.produto_nome.toLowerCase().trim() === nomeProdutoNormalizado &&
+      normalizarTexto(preco.produto_nome) === nomeProdutoNormalizado &&
       preco.origem === 'area_dinamica'
     );
     
@@ -382,16 +395,22 @@ const EstoqueAtual = () => {
       return precoAreaDinamica;
     }
     
-    // Busca por similaridade nos preços dinâmicos
+    // Busca por similaridade nos preços dinâmicos usando normalização melhorada
     const buscaSimilaridade = precosAtuais.find(preco => {
       if (!preco.produto_nome || preco.origem !== 'area_dinamica') return false;
       
-      const precoLower = preco.produto_nome.toLowerCase();
-      const produtoLower = nomeProdutoNormalizado;
+      const precoNormalizado = normalizarTexto(preco.produto_nome);
       
-      // Dividir em palavras e verificar se pelo menos 2 palavras coincidem
-      const palavrasPreco = precoLower.split(/\s+/).filter(p => p.length > 2);
-      const palavrasProduto = produtoLower.split(/\s+/).filter(p => p.length > 2);
+      // Verificar se são exatamente iguais após normalização
+      if (precoNormalizado === nomeProdutoNormalizado) {
+        return true;
+      }
+      
+      // Dividir em palavras e verificar se pelo menos 70% das palavras coincidem
+      const palavrasPreco = precoNormalizado.split(/\s+/).filter(p => p.length > 2);
+      const palavrasProduto = nomeProdutoNormalizado.split(/\s+/).filter(p => p.length > 2);
+      
+      if (palavrasProduto.length === 0) return false;
       
       let coincidencias = 0;
       palavrasProduto.forEach(palavra => {
@@ -400,7 +419,8 @@ const EstoqueAtual = () => {
         }
       });
       
-      return coincidencias >= 2;
+      const percentualCoincidencia = coincidencias / palavrasProduto.length;
+      return percentualCoincidencia >= 0.7; // 70% de similaridade
     });
     
     if (buscaSimilaridade) {

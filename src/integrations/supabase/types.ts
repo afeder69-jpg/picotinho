@@ -1610,6 +1610,10 @@ export type Database = {
         Args: { nome_input: string }
         Returns: string
       }
+      normalizar_texto: {
+        Args: { texto: string }
+        Returns: string
+      }
       recalcular_estoque_completo: {
         Args: Record<PropertyKey, never>
         Returns: undefined
