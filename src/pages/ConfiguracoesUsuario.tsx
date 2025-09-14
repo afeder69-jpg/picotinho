@@ -29,6 +29,14 @@ const ConfiguracoesUsuario = () => {
       icon: MessageCircle,
       onClick: () => navigate('/whatsapp'),
       isActive: true
+    },
+    {
+      id: 'whatsapp-multi',
+      title: 'Múltiplos Telefones WhatsApp',
+      description: 'Gerencie até 3 telefones autorizados para comandos',
+      icon: MessageCircle,
+      onClick: () => navigate('/whatsapp-multi'),
+      isActive: true
     }
   ];
 

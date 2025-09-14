@@ -12,6 +12,7 @@ import EstoqueAtual from "./pages/EstoqueAtual";
 import AreaAtuacao from "./pages/AreaAtuacao";
 import ConfiguracoesUsuario from "./pages/ConfiguracoesUsuario";
 import WhatsAppConfig from "./pages/WhatsAppConfig";
+import WhatsAppMultiTelefones from "./pages/WhatsAppMultiTelefones";
 import TestNormalizacao from "./pages/TestNormalizacao";
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
@@ -49,6 +50,7 @@ const App = () => {
                 <Route path="/area-atuacao" element={<AreaAtuacao />} />
                 <Route path="/configuracoes" element={<ConfiguracoesUsuario />} />
                 <Route path="/whatsapp" element={<WhatsAppConfig />} />
+                <Route path="/whatsapp-multi" element={<WhatsAppMultiTelefones />} />
                 <Route path="/test-normalizacao" element={<TestNormalizacao />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

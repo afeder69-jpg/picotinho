@@ -1365,6 +1365,48 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_telefones_autorizados: {
+        Row: {
+          api_provider: string | null
+          ativo: boolean
+          codigo_verificacao: string | null
+          created_at: string
+          data_codigo: string | null
+          id: string
+          numero_whatsapp: string
+          tipo: string
+          updated_at: string
+          usuario_id: string
+          verificado: boolean
+        }
+        Insert: {
+          api_provider?: string | null
+          ativo?: boolean
+          codigo_verificacao?: string | null
+          created_at?: string
+          data_codigo?: string | null
+          id?: string
+          numero_whatsapp: string
+          tipo?: string
+          updated_at?: string
+          usuario_id: string
+          verificado?: boolean
+        }
+        Update: {
+          api_provider?: string | null
+          ativo?: boolean
+          codigo_verificacao?: string | null
+          created_at?: string
+          data_codigo?: string | null
+          id?: string
+          numero_whatsapp?: string
+          tipo?: string
+          updated_at?: string
+          usuario_id?: string
+          verificado?: boolean
+        }
+        Relationships: []
+      }
     }
     Views: {
       supermercados_publicos: {

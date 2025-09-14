@@ -51,64 +51,56 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log(`Gerando código ${codigo} para número ${numero_whatsapp} (enviando para ${numeroSemPrefixo})`);
 
-    // Verificar se já existe uma configuração
-    const { data: configExistente, error: configError } = await supabase
-      .from('whatsapp_configuracoes')
+    // Contar quantos telefones o usuário já tem
+    const { data: telefonesExistentes, error: configError } = await supabase
+      .from('whatsapp_telefones_autorizados')
       .select('*')
       .eq('usuario_id', user.id)
-      .maybeSingle();
+      .eq('ativo', true);
 
     if (configError) {
-      console.error('Erro ao verificar configuração existente:', configError);
+      console.error('Erro ao verificar telefones existentes:', configError);
       throw new Error('Erro ao verificar configuração');
     }
 
-    // Se já tem uma configuração verificada e está tentando mudar número
-    if (configExistente?.verificado && configExistente.numero_whatsapp !== numero_whatsapp) {
-      // Salvar o código pendente SEM alterar o número ativo
-      const { error: updateError } = await supabase
-        .from('whatsapp_configuracoes')
-        .update({
-          codigo_verificacao: codigo,
-          data_codigo: new Date().toISOString(),
-          // NÃO atualizar numero_whatsapp aqui - só após verificação
-          updated_at: new Date().toISOString()
-        })
-        .eq('usuario_id', user.id);
-
-      if (updateError) {
-        console.error('Erro ao salvar código para troca:', updateError);
-        throw new Error('Erro ao salvar código de verificação');
+    // Verificar se o usuário já não ultrapassou o limite de 3 telefones
+    if (telefonesExistentes && telefonesExistentes.length >= 3) {
+      // Verificar se este número já está na lista (permitir reenvio de código)
+      const numeroJaExiste = telefonesExistentes.find(t => t.numero_whatsapp === numero_whatsapp);
+      if (!numeroJaExiste) {
+        throw new Error('Você já possui o máximo de 3 telefones autorizados. Remova um telefone para adicionar outro.');
       }
+    }
 
-      // Salvar o número pendente em uma tabela separada ou campo temporário
-      // Para simplificar, vamos usar um campo JSON para armazenar dados temporários
-      const { error: tempError } = await supabase
-        .from('whatsapp_configuracoes')
-        .update({
-          webhook_token: JSON.stringify({ numero_pendente: numero_whatsapp })
-        })
-        .eq('usuario_id', user.id);
+    // Verificar se este número específico já está sendo usado ou pendente
+    const { data: numeroExistente } = await supabase
+      .from('whatsapp_telefones_autorizados')
+      .select('*')
+      .eq('numero_whatsapp', numero_whatsapp)
+      .eq('usuario_id', user.id)
+      .maybeSingle();
 
-    } else {
-      // Primeira configuração ou mesmo número - pode fazer upsert normal
-      const { error: updateError } = await supabase
-        .from('whatsapp_configuracoes')
-        .upsert({
-          usuario_id: user.id,
-          numero_whatsapp,
-          codigo_verificacao: codigo,
-          data_codigo: new Date().toISOString(),
-          verificado: false,
-          api_provider: 'z-api',
-          webhook_token: '',
-          ativo: true
-        }, { onConflict: 'usuario_id' });
+    // Determinar o tipo do telefone (principal ou extra)
+    const telefonePrincipal = telefonesExistentes?.find(t => t.tipo === 'principal');
+    const tipoTelefone = telefonePrincipal ? 'extra' : 'principal';
 
-      if (updateError) {
-        console.error('Erro ao salvar código:', updateError);
-        throw new Error('Erro ao salvar código de verificação');
-      }
+    // Inserir ou atualizar telefone com código de verificação
+    const { error: updateError } = await supabase
+      .from('whatsapp_telefones_autorizados')
+      .upsert({
+        usuario_id: user.id,
+        numero_whatsapp: numero_whatsapp,
+        tipo: tipoTelefone,
+        codigo_verificacao: codigo,
+        data_codigo: new Date().toISOString(),
+        verificado: false,
+        api_provider: 'z-api',
+        ativo: true
+      }, { onConflict: 'usuario_id,numero_whatsapp' });
+
+    if (updateError) {
+      console.error('Erro ao salvar código:', updateError);
+      throw new Error('Erro ao salvar código de verificação');
     }
 
 

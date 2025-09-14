@@ -153,11 +153,12 @@ const handler = async (req: Request): Promise<Response> => {
         });
       }
       
-      // Buscar usuário
-      const { data: usuario } = await supabase
-        .from('whatsapp_configuracoes')
+      // Buscar usuário na nova tabela de telefones autorizados
+      const { data: telefoneAutorizado } = await supabase
+        .from('whatsapp_telefones_autorizados')
         .select('usuario_id')
         .eq('numero_whatsapp', remetente)
+        .eq('verificado', true)
         .eq('ativo', true)
         .maybeSingle();
       
@@ -165,7 +166,7 @@ const handler = async (req: Request): Promise<Response> => {
       const { data: mensagemSalva, error } = await supabase
         .from('whatsapp_mensagens')
         .insert({
-          usuario_id: usuario?.usuario_id || null,
+          usuario_id: telefoneAutorizado?.usuario_id || null,
           remetente,
           conteudo,
           tipo_mensagem: anexoInfo ? anexoInfo.tipo : 'text',
@@ -187,7 +188,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.log('💾 Mensagem salva - aguardando processamento do comando se identificado');
 
       // Verificar se usuário está cadastrado
-      if (!usuario?.usuario_id) {
+      if (!telefoneAutorizado?.usuario_id) {
         console.log('📝 Número não cadastrado - ignorando mensagem');
         return new Response(JSON.stringify({
           ok: true,
@@ -214,7 +215,7 @@ const handler = async (req: Request): Promise<Response> => {
         const { data: sessaoAtiva } = await supabase
           .from('whatsapp_sessions')
           .select('*')
-          .eq('usuario_id', usuario.usuario_id)
+          .eq('usuario_id', telefoneAutorizado.usuario_id)
           .eq('remetente', remetente)
           .gt('expires_at', new Date().toISOString())
           .order('created_at', { ascending: false })

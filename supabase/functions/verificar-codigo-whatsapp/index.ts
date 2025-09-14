@@ -43,96 +43,77 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Código deve ter 6 dígitos');
     }
 
-    // Buscar configuração do usuário
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_configuracoes')
+    // Buscar configuração do usuário (telefone que está sendo verificado)
+    const { data: telefones, error: configError } = await supabase
+      .from('whatsapp_telefones_autorizados')
       .select('*')
       .eq('usuario_id', user.id)
-      .maybeSingle();
+      .eq('verificado', false)
+      .order('created_at', { ascending: false });
 
     if (configError) {
-      console.error('Erro ao buscar configuração:', configError);
+      console.error('Erro ao buscar telefones:', configError);
       throw new Error('Erro ao verificar código');
     }
 
-    if (!config) {
-      throw new Error('Configuração não encontrada. Solicite um novo código.');
+    if (!telefones || telefones.length === 0) {
+      throw new Error('Nenhum telefone pendente de verificação encontrado. Solicite um novo código.');
     }
 
-    // Permitir verificação se há um número pendente (processo de troca)
-    let webhookData = null;
-    try {
-      webhookData = config.webhook_token ? JSON.parse(config.webhook_token) : null;
-    } catch (e) {
-      // webhook_token não é JSON válido, manter como string normal
-    }
+    // Encontrar o telefone com código válido
+    let telefoneParaVerificar = null;
     
-    const numeroPendente = webhookData?.numero_pendente;
-    
-    if (config.verificado && !numeroPendente) {
-      throw new Error('Número já verificado');
+    for (const telefone of telefones) {
+      if (telefone.codigo_verificacao === codigo) {
+        // Verificar se o código não expirou (10 minutos)
+        const agora = new Date();
+        const dataCodigo = new Date(telefone.data_codigo);
+        const diferencaMinutos = (agora.getTime() - dataCodigo.getTime()) / (1000 * 60);
+
+        if (diferencaMinutos <= 10) {
+          telefoneParaVerificar = telefone;
+          break;
+        }
+      }
     }
 
-    if (!config.codigo_verificacao) {
-      const pendingMessage = numeroPendente ? ` para o número ${numeroPendente}` : '';
-      throw new Error(`Nenhum código de verificação encontrado${pendingMessage}. Solicite um novo código.`);
-    }
-
-    // Verificar se o código não expirou (10 minutos)
-    const agora = new Date();
-    const dataCodigo = new Date(config.data_codigo);
-    const diferencaMinutos = (agora.getTime() - dataCodigo.getTime()) / (1000 * 60);
-
-    if (diferencaMinutos > 10) {
-      // Limpar código expirado
+    if (!telefoneParaVerificar) {
+      // Limpar códigos expirados
       await supabase
-        .from('whatsapp_configuracoes')
+        .from('whatsapp_telefones_autorizados')
         .update({
           codigo_verificacao: null,
           data_codigo: null
         })
-        .eq('usuario_id', user.id);
+        .eq('usuario_id', user.id)
+        .eq('verificado', false);
 
-      throw new Error('Código expirado. Solicite um novo código.');
+      throw new Error('Código incorreto ou expirado. Solicite um novo código.');
     }
 
-    // Verificar se o código está correto
-    if (config.codigo_verificacao !== codigo) {
-      throw new Error('Código incorreto. Tente novamente.');
-    }
-
-    // Verificar se há número pendente para ativação
-    let numeroFinal = config.numero_whatsapp;
-
-    // Se há número pendente, usar ele ao verificar
-    if (webhookData?.numero_pendente) {
-      numeroFinal = webhookData.numero_pendente;
-    }
-
-    // Marcar como verificado, ativar novo número e limpar dados temporários
+    // Marcar telefone como verificado
     const { error: updateError } = await supabase
-      .from('whatsapp_configuracoes')
+      .from('whatsapp_telefones_autorizados')
       .update({
-        numero_whatsapp: numeroFinal, // Ativar o número (novo ou atual)
         verificado: true,
         codigo_verificacao: null,
         data_codigo: null,
-        webhook_token: '', // Limpar dados temporários
         updated_at: new Date().toISOString()
       })
-      .eq('usuario_id', user.id);
+      .eq('id', telefoneParaVerificar.id);
 
     if (updateError) {
       console.error('Erro ao marcar como verificado:', updateError);
       throw new Error('Erro ao verificar número');
     }
 
-    console.log(`Número ${numeroFinal} verificado com sucesso para usuário ${user.id}`);
+    console.log(`Número ${telefoneParaVerificar.numero_whatsapp} (${telefoneParaVerificar.tipo}) verificado com sucesso para usuário ${user.id}`);
 
     return new Response(JSON.stringify({ 
       success: true, 
-      message: 'Número verificado com sucesso! Agora você pode receber comandos do Picotinho.',
-      numero_verificado: numeroFinal
+      message: `Número ${telefoneParaVerificar.tipo === 'principal' ? 'principal' : 'extra'} verificado com sucesso! Agora você pode receber comandos do Picotinho.`,
+      numero_verificado: telefoneParaVerificar.numero_whatsapp,
+      tipo_telefone: telefoneParaVerificar.tipo
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
