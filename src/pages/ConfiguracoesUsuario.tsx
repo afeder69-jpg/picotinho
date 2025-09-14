@@ -25,17 +25,9 @@ const ConfiguracoesUsuario = () => {
     {
       id: 'whatsapp',
       title: 'Integração WhatsApp',
-      description: 'Configure comandos do Picotinho via WhatsApp',
+      description: 'Configure comandos do Picotinho via WhatsApp e gerencie múltiplos telefones',
       icon: MessageCircle,
       onClick: () => navigate('/whatsapp'),
-      isActive: true
-    },
-    {
-      id: 'whatsapp-multi',
-      title: 'Múltiplos Telefones WhatsApp',
-      description: 'Gerencie até 3 telefones autorizados para comandos',
-      icon: MessageCircle,
-      onClick: () => navigate('/whatsapp-multi'),
       isActive: true
     }
   ];
