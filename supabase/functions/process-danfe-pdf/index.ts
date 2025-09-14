@@ -278,6 +278,24 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
 
+      // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO
+      if (dadosEstruturados.estabelecimento?.nome) {
+        console.log(`🏪 Normalizando estabelecimento PDF: "${dadosEstruturados.estabelecimento.nome}"`);
+        
+        const { data: nomeNormalizado, error: normError } = await supabase.rpc('normalizar_nome_estabelecimento', {
+          nome_input: dadosEstruturados.estabelecimento.nome
+        });
+        
+        if (normError) {
+          console.error('❌ Erro na normalização PDF:', normError);
+        }
+        
+        const estabelecimentoNormalizado = nomeNormalizado || dadosEstruturados.estabelecimento.nome.toUpperCase();
+        dadosEstruturados.estabelecimento.nome = estabelecimentoNormalizado;
+        
+        console.log(`✅ Estabelecimento PDF normalizado: "${dadosEstruturados.estabelecimento.nome}" → "${estabelecimentoNormalizado}"`);
+      }
+
       // 🏪 CADASTRO AUTOMÁTICO DE SUPERMERCADOS
       let supermercadoId = null;
       if (dadosEstruturados.estabelecimento) {
@@ -788,13 +806,31 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         console.log("⚠️ NENHUMA CHAVE DE ACESSO ENCONTRADA NOS DADOS EXTRAÍDOS");
       }
 
-      // Marcar nota como processada COM chave de acesso
+      // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO ANTES DE SALVAR
+      if (dadosEstruturados.estabelecimento?.nome) {
+        console.log(`🏪 Normalizando estabelecimento PDF: "${dadosEstruturados.estabelecimento.nome}"`);
+        
+        const { data: nomeNormalizado, error: normError } = await supabase.rpc('normalizar_nome_estabelecimento', {
+          nome_input: dadosEstruturados.estabelecimento.nome
+        });
+        
+        if (normError) {
+          console.error('❌ Erro na normalização PDF:', normError);
+        }
+        
+        const estabelecimentoNormalizado = nomeNormalizado || dadosEstruturados.estabelecimento.nome.toUpperCase();
+        dadosEstruturados.estabelecimento.nome = estabelecimentoNormalizado;
+        
+        console.log(`✅ Estabelecimento PDF normalizado: "${dadosEstruturados.estabelecimento.nome}" → "${estabelecimentoNormalizado}"`);
+      }
+
+      // Marcar nota como processada COM chave de acesso E dados normalizados
       await supabase
         .from("notas_imagens")
         .update({
           processada: true,
           compra_id: compraId,
-          dados_extraidos: dadosEstruturados // ← CRÍTICO: Inclui a chave de 44 dígitos
+          dados_extraidos: dadosEstruturados // ← CRÍTICO: Inclui a chave de 44 dígitos E nome normalizado
         })
         .eq("id", notaImagemId);
 

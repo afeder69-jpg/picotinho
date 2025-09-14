@@ -75,13 +75,13 @@ serve(async (req) => {
       }
       
       // 💾 Salvar dados normalizados de volta na tabela notas_imagens
-      const { error: updateError } = await supabase
-        .from('notas_imagens')
-        .update({ 
-          dados_extraidos: extractedData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', notaImagemId);
+        const { error: updateError } = await supabase
+          .from('notas_imagens')
+          .update({ 
+            dados_extraidos: extractedData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', imagemId);
       
       if (updateError) {
         console.error('❌ Erro ao salvar dados normalizados:', updateError);
