@@ -777,9 +777,6 @@ export default function WhatsAppConfig() {
                   <p><strong>Telefones Extras:</strong> Até 2 telefones adicionais (familiares, funcionários, etc.)</p>
                   <p><strong>Comandos:</strong> Todos os telefones verificados podem enviar comandos como "baixar 1kg banana"</p>
                   <p><strong>Acesso ao App:</strong> Apenas o dono da conta tem acesso aos relatórios e configurações</p>
-                  <p className="text-gray-600 mt-3">
-                    💡 Todos os comandos devem começar com "-" para baixar estoque ou "+" para aumentar.
-                  </p>
                 </div>
               </CardContent>
             </Card>
