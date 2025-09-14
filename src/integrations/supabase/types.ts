@@ -1614,6 +1614,10 @@ export type Database = {
         Args: { texto: string }
         Returns: string
       }
+      popular_precos_atuais_das_notas: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       recalcular_estoque_completo: {
         Args: Record<PropertyKey, never>
         Returns: undefined
