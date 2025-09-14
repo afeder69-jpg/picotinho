@@ -1610,6 +1610,10 @@ export type Database = {
         Args: { nome_input: string }
         Returns: string
       }
+      normalizar_produto_completo: {
+        Args: { nome: string }
+        Returns: string
+      }
       normalizar_texto: {
         Args: { texto: string }
         Returns: string
