@@ -179,13 +179,21 @@ serve(async (req) => {
     // 6) Para cada produto do estoque, encontrar o preço conforme a regra: "sempre o menor valor mais recente"
     const resultados: PrecoResultado[] = [];
 
-    const normalizarTexto = (txt: string) => (txt || "")
-      .toUpperCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .replace(/\b(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|SACHE|SACHET|\d+G|\d+ML|\d+L|\d+KG)\b/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    const normalizarTexto = (txt: string) => {
+      return (txt || "")
+        .toUpperCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .trim()
+        // Normalizar IOG para IOGURTE primeiro
+        .replace(/\bIOG\b/g, "IOGURTE")
+        .replace(/\bIOG LACFREE\b/g, "IOGURTE LACFREE")
+        .replace(/\bIOG LIQUIDO\b/g, "IOGURTE LIQUIDO")
+        .replace(/\bIOG LÍQUIDO\b/g, "IOGURTE LIQUIDO")
+        // Remover unidades de medida e variações
+        .replace(/\b(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|SACHE|SACHET|\d+G|\d+ML|\d+L|\d+KG)\b/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    };
 
     for (const item of estoque ?? []) {
       const alvo = normalizarTexto(item.produto_nome);
