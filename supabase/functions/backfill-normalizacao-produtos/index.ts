@@ -82,7 +82,7 @@ async function processarEstoque(supabase: any, limite: number, forcarReprocessam
   // Query conditional: se forçar reprocessamento, pega todos; senão só os não normalizados
   let query = supabase
     .from('estoque_app')
-    .select('id, produto_nome, produto_hash_normalizado, produto_nome_normalizado')
+    .select('id, produto_nome, produto_hash_normalizado, produto_nome_normalizado, user_id, quantidade, created_at, updated_at')
     .limit(limite);
     
   if (!forcarReprocessamento) {
@@ -106,8 +106,11 @@ async function processarEstoque(supabase: any, limite: number, forcarReprocessam
       // Chamar a função de normalização
       const normalizacao = await normalizarProduto(supabase, registro.produto_nome);
       
-      // Verificar se houve mudança real ou se está forçando reprocessamento
-      if (forcarReprocessamento || normalizacao.produto_hash_normalizado !== registro.produto_hash_normalizado) {
+      // Sempre atualizar quando forçar reprocessamento, ou quando hash mudou
+      const hashMudou = normalizacao.produto_hash_normalizado !== registro.produto_hash_normalizado;
+      const nomeMudou = normalizacao.produto_nome_normalizado !== registro.produto_nome_normalizado;
+      
+      if (forcarReprocessamento || hashMudou || nomeMudou) {
         // Atualizar registro com dados normalizados
         const { error: updateError } = await supabase
           .from('estoque_app')
@@ -286,11 +289,14 @@ async function consolidarEstoque(supabase: any) {
   const grupos = new Map();
   
   for (const produto of todosProdutos || []) {
-    const chave = `${produto.produto_hash_normalizado}-${produto.user_id}`;
-    if (!grupos.has(chave)) {
-      grupos.set(chave, []);
+    // Só agrupar produtos que têm hash válido
+    if (produto.produto_hash_normalizado && produto.produto_hash_normalizado.length > 10) {
+      const chave = `${produto.produto_hash_normalizado}-${produto.user_id}`;
+      if (!grupos.has(chave)) {
+        grupos.set(chave, []);
+      }
+      grupos.get(chave).push(produto);
     }
-    grupos.get(chave).push(produto);
   }
   
   console.log(`[CONSOLIDACAO] Total de grupos únicos: ${grupos.size}`);

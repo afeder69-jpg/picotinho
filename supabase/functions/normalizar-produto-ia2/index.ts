@@ -151,6 +151,10 @@ async function normalizarProdutoCompleto(supabase: any, nomeOriginal: string) {
   if (quantidadeDetectada.encontrada) {
     nomeProcessado = nomeProcessado.replace(quantidadeDetectada.regex, '').trim();
   }
+  
+  // 5.1. Remover unidades soltas que ficaram (KG, G, L, etc.)
+  nomeProcessado = nomeProcessado.replace(/\b(KG|QUILO|KILO|G|GR|GRAMAS|L|LT|LTS|LITRO|LITROS|ML|MILILITRO|MILILITROS|UN|UND|UNID|UNIDADE|UNIDADES)\b/gi, '').trim();
+  nomeProcessado = nomeProcessado.replace(/\s+/g, ' ').trim();
 
   // 6. Detectar marca
   const marcaDetectada = await detectarMarca(supabase, nomeProcessado);
@@ -165,7 +169,16 @@ async function normalizarProdutoCompleto(supabase: any, nomeOriginal: string) {
   }
 
   // 8. O que sobrou é o nome base do produto
-  const nomeBase = nomeProcessado.replace(/\s+/g, ' ').trim();
+  let nomeBase = nomeProcessado.replace(/\s+/g, ' ').trim();
+  
+  // 8.1. Expandir nomes base comuns
+  nomeBase = nomeBase.replace(/\bABACTE?\b/gi, 'ABACATE');
+  nomeBase = nomeBase.replace(/\bBANAN\b/gi, 'BANANA');
+  nomeBase = nomeBase.replace(/\bCEBOL\b/gi, 'CEBOLA');
+  nomeBase = nomeBase.replace(/\bTOMAT\b/gi, 'TOMATE');
+  nomeBase = nomeBase.replace(/\bBATA[T]?\b/gi, 'BATATA');
+  nomeBase = nomeBase.replace(/\bLARANJ\b/gi, 'LARANJA');
+  nomeBase = nomeBase.replace(/\bLIMA[O]?\b/gi, 'LIMAO');
 
   // 9. Montar nome final no padrão PRODUTO + MARCA + EMBALAGEM + QUANTIDADE
   let nomeNormalizado = nomeBase;
@@ -267,32 +280,51 @@ function detectarGranel(texto: string): boolean {
 }
 
 function detectarQuantidadeUnidade(texto: string) {
-  // Regex para detectar quantidade + unidade: 1K, 1 K, 1KG, 1,5KG, 250G, 2L, 200ML, etc.
-  const regex = /(\d+(?:[.,]\d+)?)\s*(KG|K|QUILO|KILO|G|GR|ML|MILILITROS?|L|LT|LTS|UN|UND|UNID|UNIDADES?)\b/gi;
-  const match = regex.exec(texto);
-
-  if (!match) {
-    return { encontrada: false, qtd_valor: null, qtd_unidade: null, qtd_base: null, regex: null };
-  }
-
-  const valor = parseFloat(match[1].replace(',', '.'));
-  const unidade = DICIONARIO.unidades_sinonimos[match[2].toUpperCase()] || match[2].toUpperCase();
+  // Regex mais abrangente para detectar quantidade + unidade
+  const regexes = [
+    // Padrões como "1KG", "1 KG", "1,5KG", "250G"
+    /(\d+(?:[.,]\d+)?)\s*(KG|K|QUILO|KILO|G|GR|GRAMAS|ML|MILILITROS?|L|LT|LTS|LITRO|LITROS|UN|UND|UNID|UNIDADES?)\b/gi,
+    // Padrões isolados como "KG" no final
+    /\b(KG|QUILO|KILO|G|GR|GRAMAS|ML|MILILITROS?|L|LT|LTS|LITRO|LITROS|UN|UND|UNID|UNIDADES?)\b/gi
+  ];
   
-  // Converter para unidade base
-  let qtdBase = valor;
-  if (unidade === 'KG') {
-    qtdBase = valor * 1000; // converter para gramas
-  } else if (unidade === 'L') {
-    qtdBase = valor * 1000; // converter para ml
+  for (const regex of regexes) {
+    const match = regex.exec(texto);
+    if (match) {
+      if (match[1]) {
+        // Tem quantidade e unidade
+        const valor = parseFloat(match[1].replace(',', '.'));
+        const unidade = DICIONARIO.unidades_sinonimos[match[2].toUpperCase()] || match[2].toUpperCase();
+        
+        let qtdBase = valor;
+        if (unidade === 'KG') {
+          qtdBase = valor * 1000;
+        } else if (unidade === 'L') {
+          qtdBase = valor * 1000;
+        }
+
+        return {
+          encontrada: true,
+          qtd_valor: valor,
+          qtd_unidade: unidade,
+          qtd_base: qtdBase,
+          regex: new RegExp(regex.source, 'gi')
+        };
+      } else {
+        // Só tem unidade, sem quantidade específica
+        const unidade = DICIONARIO.unidades_sinonimos[match[0].toUpperCase()] || match[0].toUpperCase();
+        return {
+          encontrada: true,
+          qtd_valor: null,
+          qtd_unidade: unidade,
+          qtd_base: null,
+          regex: new RegExp(regex.source, 'gi')
+        };
+      }
+    }
   }
 
-  return {
-    encontrada: true,
-    qtd_valor: valor,
-    qtd_unidade: unidade,
-    qtd_base: qtdBase,
-    regex: new RegExp(regex.source, 'gi')
-  };
+  return { encontrada: false, qtd_valor: null, qtd_unidade: null, qtd_base: null, regex: null };
 }
 
 async function detectarMarca(supabase: any, texto: string): Promise<string | null> {
