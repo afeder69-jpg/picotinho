@@ -49,11 +49,12 @@ export default function TestNormalizacao() {
           
           <Button 
             onClick={() => executarBackfill('estoque_app', true, true)} 
-            disabled={loading}
+            disabled={true}
             size="lg"
             variant="destructive"
+            className="opacity-50 cursor-not-allowed"
           >
-            {loading ? '🔄 Executando...' : '🔥 Forçar Tudo + Consolidar'}
+            🚫 BOTÃO CONGELADO (Evitar perdas)
           </Button>
         </div>
         
