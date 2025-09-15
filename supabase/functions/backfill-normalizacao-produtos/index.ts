@@ -89,6 +89,8 @@ async function processarEstoque(supabase: any, limite: number, forcarReprocessam
     query = query.or('produto_hash_normalizado.is.null,produto_nome_normalizado.is.null');
   }
   
+  console.log(`[BACKFILL-ESTOQUE] Forçar reprocessamento: ${forcarReprocessamento}`);
+  
   const { data: registros, error } = await query;
 
   if (error) {
