@@ -1730,6 +1730,18 @@ export type Database = {
           valor_encontrado: number
         }[]
       }
+      get_current_user_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avatar_url: string
+          created_at: string
+          id: string
+          nome: string
+          telefone: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
       get_my_profile: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1739,18 +1751,6 @@ export type Database = {
           nome: string
           provider: string
           provider_id: string
-          telefone: string
-          updated_at: string
-          user_id: string
-        }[]
-      }
-      get_my_profile_safe: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          avatar_url: string
-          created_at: string
-          id: string
-          nome: string
           telefone: string
           updated_at: string
           user_id: string
@@ -1775,23 +1775,6 @@ export type Database = {
           created_at: string
           nome: string
           user_id: string
-        }[]
-      }
-      get_supermercados_basicos: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          ativo: boolean
-          cep: string
-          cidade: string
-          cnpj: string
-          created_at: string
-          endereco: string
-          estado: string
-          id: string
-          latitude: number
-          longitude: number
-          nome: string
-          updated_at: string
         }[]
       }
       get_user_email: {
