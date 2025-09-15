@@ -269,33 +269,39 @@ async function normalizarProduto(supabase: any, nomeOriginal: string) {
 async function consolidarEstoque(supabase: any) {
   console.log('[CONSOLIDACAO] Iniciando consolidação de produtos duplicados...');
   
-  // Buscar produtos agrupados por hash normalizado
-  const { data: grupos, error } = await supabase
+  // Buscar todos os produtos com hash normalizado
+  const { data: todosProdutos, error } = await supabase
     .from('estoque_app')
-    .select('produto_hash_normalizado, user_id')
-    .not('produto_hash_normalizado', 'is', null)
-    .group('produto_hash_normalizado, user_id');
+    .select('*')
+    .not('produto_hash_normalizado', 'is', null);
     
   if (error) {
-    console.error('[CONSOLIDACAO] Erro ao buscar grupos:', error);
+    console.error('[CONSOLIDACAO] Erro ao buscar produtos:', error);
     return;
   }
   
-  for (const grupo of grupos || []) {
+  // Agrupar produtos por hash e user_id usando JavaScript
+  const grupos = new Map();
+  
+  for (const produto of todosProdutos || []) {
+    const chave = `${produto.produto_hash_normalizado}-${produto.user_id}`;
+    if (!grupos.has(chave)) {
+      grupos.set(chave, []);
+    }
+    grupos.get(chave).push(produto);
+  }
+  
+  // Processar apenas grupos com duplicatas
+  for (const [chave, produtos] of grupos.entries()) {
+    if (produtos.length <= 1) {
+      continue; // Sem duplicatas para este grupo
+    }
+    
     try {
-      // Buscar todos os produtos do mesmo hash para o mesmo usuário
-      const { data: produtos, error: produtosError } = await supabase
-        .from('estoque_app')
-        .select('*')
-        .eq('produto_hash_normalizado', grupo.produto_hash_normalizado)
-        .eq('user_id', grupo.user_id)
-        .order('created_at', { ascending: true });
-        
-      if (produtosError || !produtos || produtos.length <= 1) {
-        continue; // Sem duplicatas para este grupo
-      }
-      
       console.log(`[CONSOLIDACAO] Consolidando ${produtos.length} produtos: ${produtos[0].produto_nome_normalizado}`);
+      
+      // Ordenar por data de criação (mais antigo primeiro)
+      produtos.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       // Manter o primeiro produto e somar quantidades
       const produtoPrincipal = produtos[0];
@@ -303,6 +309,7 @@ async function consolidarEstoque(supabase: any) {
       const precoMaisRecente = produtos.reduce((ultimoPreco, p) => 
         p.updated_at > ultimoPreco.updated_at ? p : ultimoPreco
       ).preco_unitario_ultimo;
+      
       
       // Atualizar produto principal com dados consolidados
       const { error: updateError } = await supabase
