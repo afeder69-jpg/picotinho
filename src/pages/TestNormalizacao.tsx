@@ -6,7 +6,7 @@ export default function TestNormalizacao() {
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
 
-  const executarBackfill = async (tabela: string) => {
+  const executarBackfill = async (tabela: string, forcarReprocessamento = false, consolidar = false) => {
     setLoading(true);
     setResultado(null);
     
@@ -14,7 +14,7 @@ export default function TestNormalizacao() {
       console.log(`🔄 Executando normalização em massa para ${tabela}...`);
       
       const { data, error } = await supabase.functions.invoke('backfill-normalizacao-produtos', {
-        body: { tabela, limite: 1000 }
+        body: { tabela, limite: 1000, forcarReprocessamento, consolidar }
       });
       
       if (error) {
@@ -37,16 +37,27 @@ export default function TestNormalizacao() {
       <h1 className="text-2xl font-bold mb-4">🔧 Normalização de Produtos</h1>
       
       <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Button 
             onClick={() => executarBackfill('estoque_app')} 
             disabled={loading}
             size="lg"
             variant="default"
           >
-            {loading ? '🔄 Executando...' : '📦 Normalizar Estoque'}
+            {loading ? '🔄 Executando...' : '📦 Normalizar Novos'}
           </Button>
           
+          <Button 
+            onClick={() => executarBackfill('estoque_app', true, true)} 
+            disabled={loading}
+            size="lg"
+            variant="destructive"
+          >
+            {loading ? '🔄 Executando...' : '🔥 Forçar Tudo + Consolidar'}
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Button 
             onClick={() => executarBackfill('precos_atuais')} 
             disabled={loading}
