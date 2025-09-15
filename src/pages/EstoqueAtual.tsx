@@ -1398,13 +1398,8 @@ const EstoqueAtual = () => {
                              className="flex items-center py-2 border-b border-border last:border-0"
                            >
                              <div className="flex-1 overflow-hidden relative">
-                                  <h3 className="text-xs font-medium text-foreground leading-tight relative">
-                                    {item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome}
-                                    {item.itens_originais && item.itens_originais > 1 && (
-                                      <Badge variant="secondary" className="ml-2 text-xs">
-                                        {item.itens_originais} consolidados
-                                      </Badge>
-                                    )}
+                                   <h3 className="text-xs font-medium text-foreground leading-tight relative">
+                                     {item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome}
                                     {item.origem === 'manual' && (
                                       <span className="text-red-500 text-xs ml-1">(manual)</span>
                                     )}
