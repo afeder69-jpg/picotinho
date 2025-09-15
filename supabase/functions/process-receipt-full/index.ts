@@ -172,7 +172,8 @@ serve(async (req) => {
     // Verifica tanto 'produtos' quanto 'itens' para compatibilidade
     const listaItens = extractedData.produtos || extractedData.itens;
     if (listaItens && Array.isArray(listaItens)) {
-      console.log('📦 Atualizando estoque automaticamente...');
+      console.log(`📦 Atualizando estoque automaticamente - TOTAL DE ${listaItens.length} ITENS na nota...`);
+      console.log(`🔍 Estrutura dos dados extraídos:`, JSON.stringify(extractedData, null, 2));
       
       for (let index = 0; index < listaItens.length; index++) {
         const produtoData = listaItens[index];
@@ -196,10 +197,15 @@ serve(async (req) => {
           const dadosNormalizados = resultadoNormalizacao.dadosCompletos;
           console.log(`🏷️ Original: "${nomeProduto}" -> Normalizado: "${nomeNormalizado}"`);
 
-          if (!nomeProduto || !quantidadeProduto) {
-            console.log(`⚠️ Item ${index + 1} ignorado: dados incompletos`);
+          // ✅ CORREÇÃO: Ser mais flexível com dados incompletos - não pular itens por falta de quantidade
+          if (!nomeProduto || nomeProduto.trim() === '') {
+            console.log(`⚠️ Item ${index + 1} ignorado: nome do produto vazio ou inválido`);
             continue;
           }
+          
+          // Se não tem quantidade, usar 1 como padrão
+          const quantidadeSegura = quantidadeProduto || 1;
+          console.log(`🔧 Quantidade ajustada para item ${index + 1}: ${quantidadeSegura} (original: ${quantidadeProduto})`);
 
           // Buscar lista completa do estoque do usuário
           const { data: estoqueLista, error: estoqueListaError } = await supabase
@@ -254,7 +260,7 @@ serve(async (req) => {
 
           if (produtoSimilar) {
             // 📈 Atualizar produto existente
-            const novaQuantidade = produtoSimilar.quantidade + (quantidadeProduto || 1);
+            const novaQuantidade = produtoSimilar.quantidade + quantidadeSegura;
             
             // CORREÇÃO CRÍTICA: SEMPRE usar o preço da nota fiscal se existir
             const precoAtualizado = precoUnitario || produtoSimilar.preco_unitario_ultimo || 0;
@@ -270,7 +276,7 @@ serve(async (req) => {
             console.log(`      - Preço que será salvo: ${precoAtualizado}`);
             console.log(`   📦 QUANTIDADES:`);
             console.log(`      - Quantidade anterior: ${produtoSimilar.quantidade}`);
-            console.log(`      - Quantidade a adicionar: ${quantidadeProduto}`);
+            console.log(`      - Quantidade a adicionar: ${quantidadeSegura}`);
             console.log(`      - Nova quantidade total: ${novaQuantidade}`);
             
             const { error: updateError } = await supabase
@@ -295,7 +301,7 @@ serve(async (req) => {
           } else {
             console.log(`🆕 CRIANDO NOVO ITEM ${index + 1} - "${nomeNormalizado}"`);
             console.log(`   - Preço unitário: ${precoUnitario}`);
-            console.log(`   - Quantidade: ${quantidadeProduto}`);
+            console.log(`   - Quantidade: ${quantidadeSegura}`);
             console.log(`   - Categoria: ${categoriaProduto}`);
             
             // 📈 Criar novo produto no estoque - GARANTIR que sempre tenha preço
@@ -309,7 +315,7 @@ serve(async (req) => {
               produto_nome: nomeNormalizado,
               categoria: categoriaProduto || 'outros',
               unidade_medida: unidadeProduto || 'unidade',
-              quantidade: quantidadeProduto || 1,
+              quantidade: quantidadeSegura,
               preco_unitario_ultimo: precoParaSalvar,
               origem: 'nota_fiscal'
             };
@@ -338,7 +344,7 @@ serve(async (req) => {
 
             console.log(`✅ SUCESSO - Item ${index + 1} CRIADO:`);
             console.log(`   - Produto: ${nomeNormalizado}`);
-            console.log(`   - Quantidade: ${quantidadeProduto} ${unidadeProduto || 'unidade'}`);
+            console.log(`   - Quantidade: ${quantidadeSegura} ${unidadeProduto || 'unidade'}`);
             console.log(`   - Preço: R$ ${precoUnitario || 0}`);
           }
 
@@ -437,9 +443,19 @@ serve(async (req) => {
             console.error('⚠️ Falha ao atualizar precos_atuais (não crítico):', e);
           }
         } catch (error) {
-          console.error(`❌ Erro ao processar item ${index + 1} (${nomeProduto}):`, error);
+          console.error(`❌ ERRO crítico ao processar item ${index + 1}:`, error);
+          console.error(`🔍 Dados do item com erro:`, JSON.stringify(produtoData));
+          console.error(`🔍 Nome original: "${nomeProduto}"`);
+          console.error(`🔍 Stack trace completo:`, error.stack);
+          // ✅ CORREÇÃO: Não parar o processamento por causa de um item com erro
+          console.log(`⚠️ Continuando processamento dos próximos itens...`);
         }
       }
+      
+      console.log(`🏁 PROCESSAMENTO FINALIZADO - ${listaItens.length} itens processados da nota fiscal`);
+    } else {
+      console.log(`⚠️ AVISO: Nenhum item encontrado na nota fiscal!`);
+      console.log(`🔍 Estrutura dos dados extraídos (sem itens):`, JSON.stringify(extractedData, null, 2));
     }
 
     // Atualizar dados da nota

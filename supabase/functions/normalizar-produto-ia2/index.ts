@@ -127,7 +127,10 @@ serve(async (req) => {
 });
 
 async function normalizarProdutoCompleto(supabase: any, nomeOriginal: string) {
-  // 1. Normalizar caixa/acentos
+  // 🚨 CORREÇÃO CRÍTICA: Preservar TODAS as informações do produto original
+  // NÃO remover informações como "1 UNIDADE", "170G", etc. que fazem parte da descrição
+  
+  // 1. Apenas normalizar caixa/acentos SEM remover informações
   let nomeProcessado = normalizarTexto(nomeOriginal);
   
   // 2. Buscar normalizações manuais no banco (precedem sobre IA)
@@ -137,7 +140,7 @@ async function normalizarProdutoCompleto(supabase: any, nomeOriginal: string) {
     return normalizacaoManual;
   }
 
-  // 3. Expandir abreviações usando dicionário
+  // 3. Expandir APENAS abreviações óbvias, preservando informações de peso/tamanho
   nomeProcessado = expandirAbreviacoes(nomeProcessado);
 
   // 4. Detectar granel
@@ -146,71 +149,52 @@ async function normalizarProdutoCompleto(supabase: any, nomeOriginal: string) {
     nomeProcessado = nomeProcessado.replace(/\b(A\s+)?GRANEL\b/gi, '').trim();
   }
 
-  // 5. Detectar quantidade e unidade
+  // 5. Detectar quantidade APENAS para peso/volume específico (170G, 1KG), NÃO para "1 UNIDADE"
   const quantidadeDetectada = detectarQuantidadeUnidade(nomeProcessado);
-  if (quantidadeDetectada.encontrada) {
-    nomeProcessado = nomeProcessado.replace(quantidadeDetectada.regex, '').trim();
-  }
   
-  // 5.1. Remover unidades soltas que ficaram (KG, G, L, etc.)
-  nomeProcessado = nomeProcessado.replace(/\b(KG|QUILO|KILO|G|GR|GRAMAS|L|LT|LTS|LITRO|LITROS|ML|MILILITRO|MILILITROS|UN|UND|UNID|UNIDADE|UNIDADES)\b/gi, '').trim();
-  nomeProcessado = nomeProcessado.replace(/\s+/g, ' ').trim();
-
-  // 6. Detectar marca
+  // 🚨 CORREÇÃO: NÃO remover a quantidade do nome - ela faz parte da descrição do produto
+  // Exemplo: "Milho Verde 170G" != "Milho Verde 300G" - são produtos diferentes!
+  
+  // 6. Detectar marca (mas NÃO remover do nome)
   const marcaDetectada = await detectarMarca(supabase, nomeProcessado);
-  if (marcaDetectada) {
-    nomeProcessado = nomeProcessado.replace(new RegExp(`\\b${marcaDetectada}\\b`, 'gi'), '').trim();
-  }
 
-  // 7. Detectar tipo de embalagem
+  // 7. Detectar tipo de embalagem (mas NÃO remover do nome)
   const embalagemDetectada = detectarEmbalagem(nomeProcessado);
-  if (embalagemDetectada) {
-    nomeProcessado = nomeProcessado.replace(new RegExp(`\\b${embalagemDetectada}\\b`, 'gi'), '').trim();
-  }
 
-  // 8. O que sobrou é o nome base do produto
-  let nomeBase = nomeProcessado.replace(/\s+/g, ' ').trim();
+  // 8. ✅ PRESERVAR O NOME COMPLETO - apenas limpar espaços extras
+  let nomeNormalizado = nomeProcessado.replace(/\s+/g, ' ').trim();
   
-  // 8.1. Expandir nomes base comuns
-  nomeBase = nomeBase.replace(/\bABACTE?\b/gi, 'ABACATE');
-  nomeBase = nomeBase.replace(/\bBANAN\b/gi, 'BANANA');
-  nomeBase = nomeBase.replace(/\bCEBOL\b/gi, 'CEBOLA');
-  nomeBase = nomeBase.replace(/\bTOMAT\b/gi, 'TOMATE');
-  nomeBase = nomeBase.replace(/\bBATA[T]?\b/gi, 'BATATA');
-  nomeBase = nomeBase.replace(/\bLARANJ\b/gi, 'LARANJA');
-  nomeBase = nomeBase.replace(/\bLIMA[O]?\b/gi, 'LIMAO');
+  // 8.1. Aplicar apenas correções ortográficas menores
+  nomeNormalizado = nomeNormalizado.replace(/\bABACTE\b/gi, 'ABACATE');
+  nomeNormalizado = nomeNormalizado.replace(/\bBANAN\b/gi, 'BANANA');
+  nomeNormalizado = nomeNormalizado.replace(/\bCEBOL\b/gi, 'CEBOLA');
+  nomeNormalizado = nomeNormalizado.replace(/\bTOMAT\b/gi, 'TOMATE');
+  nomeNormalizado = nomeNormalizado.replace(/\bBATA[T]?\b/gi, 'BATATA');
+  nomeNormalizado = nomeNormalizado.replace(/\bLARANJ\b/gi, 'LARANJA');
+  nomeNormalizado = nomeNormalizado.replace(/\bLIMA[O]?\b/gi, 'LIMAO');
 
-  // 9. Montar nome final no padrão PRODUTO + MARCA + EMBALAGEM + QUANTIDADE
-  let nomeNormalizado = nomeBase;
+  // 9. Gerar hash baseado no nome completo (preservando todas as características)
+  const produtoHash = await gerarHash(nomeNormalizado);
+
+  // 10. Identificar nome base (sem marca/embalagem/peso para agrupamento)
+  let nomeBase = nomeNormalizado;
   if (marcaDetectada) {
-    nomeNormalizado += ` ${marcaDetectada}`;
+    nomeBase = nomeBase.replace(new RegExp(`\\b${marcaDetectada}\\b`, 'gi'), '').trim();
   }
   if (embalagemDetectada) {
-    nomeNormalizado += ` ${embalagemDetectada}`;
+    nomeBase = nomeBase.replace(new RegExp(`\\b${embalagemDetectada}\\b`, 'gi'), '').trim();
   }
-  if (quantidadeDetectada.encontrada) {
-    nomeNormalizado += ` ${quantidadeDetectada.qtd_valor} ${quantidadeDetectada.qtd_unidade}`;
+  if (quantidadeDetectada.encontrada && quantidadeDetectada.regex) {
+    nomeBase = nomeBase.replace(quantidadeDetectada.regex, '').trim();
   }
-  if (granel) {
-    nomeNormalizado += ' GRANEL';
-  }
-
-  // 10. Gerar hash determinístico baseado em características básicas (sem quantidade)
-  const hashComponents = [
-    nomeBase,
-    marcaDetectada || '',
-    embalagemDetectada || '',
-    granel ? 'GRANEL' : ''
-  ].join('|');
-  
-  const produtoHash = await gerarHash(hashComponents);
+  nomeBase = nomeBase.replace(/\s+/g, ' ').trim();
 
   return {
-    produto_nome_normalizado: nomeNormalizado,
+    produto_nome_normalizado: nomeNormalizado, // ✅ NOME COMPLETO PRESERVADO
     nome_base: nomeBase,
     marca: marcaDetectada,
     tipo_embalagem: embalagemDetectada,
-    qtd_valor: quantidadeDetectada.qtd_base,
+    qtd_valor: quantidadeDetectada.qtd_valor,
     qtd_unidade: quantidadeDetectada.qtd_unidade,
     qtd_base: quantidadeDetectada.qtd_base,
     granel: granel,
@@ -280,47 +264,35 @@ function detectarGranel(texto: string): boolean {
 }
 
 function detectarQuantidadeUnidade(texto: string) {
-  // Regex mais abrangente para detectar quantidade + unidade
+  // Regex mais restrita para não detectar erroneamente "1 UNIDADE" como quantidade
   const regexes = [
-    // Padrões como "1KG", "1 KG", "1,5KG", "250G"
-    /(\d+(?:[.,]\d+)?)\s*(KG|K|QUILO|KILO|G|GR|GRAMAS|ML|MILILITROS?|L|LT|LTS|LITRO|LITROS|UN|UND|UNID|UNIDADES?)\b/gi,
-    // Padrões isolados como "KG" no final
-    /\b(KG|QUILO|KILO|G|GR|GRAMAS|ML|MILILITROS?|L|LT|LTS|LITRO|LITROS|UN|UND|UNID|UNIDADES?)\b/gi
+    // Padrões como "170G", "1KG", "1,5KG", "250ML" (SEM espaço antes da unidade)
+    /(\d+(?:[.,]\d+)?)\s*(G|GR|GRAMAS|KG|K|QUILO|KILO|ML|MILILITROS?|L|LT|LTS|LITRO|LITROS)\b/gi,
+    // Padrões isolados apenas para unidades de peso/volume, NÃO unidade
+    /\b(\d+(?:[.,]\d+)?)\s*(G|GR|GRAMAS|KG|K|QUILO|KILO|ML|MILILITROS?|L|LT|LTS|LITRO|LITROS)\b/gi
   ];
   
   for (const regex of regexes) {
     const match = regex.exec(texto);
-    if (match) {
-      if (match[1]) {
-        // Tem quantidade e unidade
-        const valor = parseFloat(match[1].replace(',', '.'));
-        const unidade = DICIONARIO.unidades_sinonimos[match[2].toUpperCase()] || match[2].toUpperCase();
-        
-        let qtdBase = valor;
-        if (unidade === 'KG') {
-          qtdBase = valor * 1000;
-        } else if (unidade === 'L') {
-          qtdBase = valor * 1000;
-        }
-
-        return {
-          encontrada: true,
-          qtd_valor: valor,
-          qtd_unidade: unidade,
-          qtd_base: qtdBase,
-          regex: new RegExp(regex.source, 'gi')
-        };
-      } else {
-        // Só tem unidade, sem quantidade específica
-        const unidade = DICIONARIO.unidades_sinonimos[match[0].toUpperCase()] || match[0].toUpperCase();
-        return {
-          encontrada: true,
-          qtd_valor: null,
-          qtd_unidade: unidade,
-          qtd_base: null,
-          regex: new RegExp(regex.source, 'gi')
-        };
+    if (match && match[1]) {
+      // Tem quantidade e unidade de peso/volume
+      const valor = parseFloat(match[1].replace(',', '.'));
+      const unidade = DICIONARIO.unidades_sinonimos[match[2]?.toUpperCase()] || match[2]?.toUpperCase();
+      
+      let qtdBase = valor;
+      if (unidade === 'KG') {
+        qtdBase = valor * 1000;
+      } else if (unidade === 'L') {
+        qtdBase = valor * 1000;
       }
+
+      return {
+        encontrada: true,
+        qtd_valor: valor,
+        qtd_unidade: unidade,
+        qtd_base: qtdBase,
+        regex: new RegExp(match[0], 'gi')
+      };
     }
   }
 
