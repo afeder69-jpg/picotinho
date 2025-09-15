@@ -280,6 +280,8 @@ async function consolidarEstoque(supabase: any) {
     return;
   }
   
+  console.log(`[CONSOLIDACAO] Total de produtos encontrados: ${todosProdutos?.length || 0}`);
+  
   // Agrupar produtos por hash e user_id usando JavaScript
   const grupos = new Map();
   
@@ -291,14 +293,18 @@ async function consolidarEstoque(supabase: any) {
     grupos.get(chave).push(produto);
   }
   
+  console.log(`[CONSOLIDACAO] Total de grupos únicos: ${grupos.size}`);
+  
   // Processar apenas grupos com duplicatas
+  let consolidacoes = 0;
   for (const [chave, produtos] of grupos.entries()) {
     if (produtos.length <= 1) {
       continue; // Sem duplicatas para este grupo
     }
     
     try {
-      console.log(`[CONSOLIDACAO] Consolidando ${produtos.length} produtos: ${produtos[0].produto_nome_normalizado}`);
+      console.log(`[CONSOLIDACAO] Consolidando ${produtos.length} produtos: ${produtos[0].produto_nome_normalizado || produtos[0].produto_nome}`);
+      console.log(`[CONSOLIDACAO] Produtos: ${produtos.map(p => p.produto_nome).join(', ')}`);
       
       // Ordenar por data de criação (mais antigo primeiro)
       produtos.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -341,10 +347,12 @@ async function consolidarEstoque(supabase: any) {
         }
       }
       
+      consolidacoes++;
+      
     } catch (error) {
       console.error(`[CONSOLIDACAO] Erro ao processar grupo:`, error);
     }
   }
   
-  console.log('[CONSOLIDACAO] Consolidação concluída');
+  console.log(`[CONSOLIDACAO] Consolidação concluída: ${consolidacoes} produtos consolidados`);
 }
