@@ -15,6 +15,7 @@ import WhatsAppConfig from "./pages/WhatsAppConfig";
 import CleanupUserData from "./pages/CleanupUserData";
 
 import TestNormalizacao from "./pages/TestNormalizacao";
+import TestNormalizacaoCasos from "./pages/TestNormalizacaoCasos";
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
 
@@ -54,6 +55,7 @@ const App = () => {
                 <Route path="/cleanup" element={<CleanupUserData />} />
                 
                 <Route path="/test-normalizacao" element={<TestNormalizacao />} />
+                <Route path="/test-casos" element={<TestNormalizacaoCasos />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <BottomNavigation />
