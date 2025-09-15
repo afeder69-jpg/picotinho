@@ -24,6 +24,15 @@ interface EstoqueItem {
   preco_unitario_ultimo: number | null;
   updated_at: string;
   origem: string; // 'manual' ou 'nota_fiscal'
+  produto_nome_normalizado?: string | null;
+  produto_hash_normalizado?: string | null;
+  nome_base?: string | null;
+  marca?: string | null;
+  tipo_embalagem?: string | null;
+  qtd_valor?: number | null;
+  qtd_base?: number | null;
+  granel?: boolean | null;
+  qtd_unidade?: string | null;
 }
 
 interface ProdutoSugestao {
@@ -447,7 +456,7 @@ const EstoqueAtual = () => {
         .select('*, origem')
         .eq('user_id', user.id)
         .gt('quantidade', 0)  // Mostrar apenas produtos com estoque para não poluir a interface
-        .order('produto_nome', { ascending: true });
+        .order('produto_nome_normalizado', { ascending: true });
 
       if (error) throw error;
 
@@ -1002,18 +1011,34 @@ const EstoqueAtual = () => {
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
-    // Primeiro, remover duplicatas baseado no nome do produto
-    const uniqueItems = items.reduce((unique, item) => {
-      const existingIndex = unique.findIndex(u => u.produto_nome === item.produto_nome);
+    // Consolidar produtos por hash normalizado (evita duplicatas como "ABACATE" e "ABACATE KG GRANEL")
+    const consolidatedItems = items.reduce((consolidated, item) => {
+      // Usar produto_hash_normalizado se disponível, caso contrário usar produto_nome como fallback
+      const chaveUnificacao = item.produto_hash_normalizado || item.produto_nome;
+      const nomeExibicao = item.produto_nome_normalizado || item.produto_nome;
+      
+      const existingIndex = consolidated.findIndex(u => 
+        (u.produto_hash_normalizado && item.produto_hash_normalizado && u.produto_hash_normalizado === item.produto_hash_normalizado) ||
+        (!u.produto_hash_normalizado && !item.produto_hash_normalizado && u.produto_nome === item.produto_nome)
+      );
+      
       if (existingIndex >= 0) {
-        // Se encontrou duplicata, manter apenas o mais recente
-        if (new Date(item.updated_at) > new Date(unique[existingIndex].updated_at)) {
-          unique[existingIndex] = item;
-        }
+        // Se encontrou produto com mesmo hash, somar quantidades e manter o mais recente
+        const existing = consolidated[existingIndex];
+        consolidated[existingIndex] = {
+          ...existing,
+          quantidade: parseFloat(existing.quantidade.toString()) + parseFloat(item.quantidade.toString()),
+          updated_at: new Date(item.updated_at) > new Date(existing.updated_at) ? item.updated_at : existing.updated_at,
+          produto_nome: nomeExibicao, // Usar nome normalizado para exibição
+          preco_unitario_ultimo: new Date(item.updated_at) > new Date(existing.updated_at) ? item.preco_unitario_ultimo : existing.preco_unitario_ultimo
+        };
       } else {
-        unique.push(item);
+        consolidated.push({
+          ...item,
+          produto_nome: nomeExibicao // Usar nome normalizado para exibição
+        });
       }
-      return unique;
+      return consolidated;
     }, [] as EstoqueItem[]);
 
     // Mapa de categorias normalizadas
@@ -1041,7 +1066,7 @@ const EstoqueAtual = () => {
     const grouped: Record<string, EstoqueItem[]> = {};
     
     ordemCategorias.forEach(categoria => {
-      const produtosDaCategoria = uniqueItems.filter(item => item.categoria === categoria);
+      const produtosDaCategoria = consolidatedItems.filter(item => item.categoria === categoria);
       if (produtosDaCategoria.length > 0) {
         grouped[categoriasNormalizadas[categoria as keyof typeof categoriasNormalizadas]] = produtosDaCategoria;
       }
@@ -1098,7 +1123,7 @@ const EstoqueAtual = () => {
     
     // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
     const subtotalAtual = itens.reduce((sum, item) => {
-      const precoAtual = encontrarPrecoAtual(item.produto_nome);
+      const precoAtual = encontrarPrecoAtual(item.produto_nome_normalizado || item.produto_nome);
       // REGRA: Apenas usar preços atuais (de notas fiscais), não preços pagos manuais
       const preco = precoAtual?.valor_unitario || 0; // Se não há preço atual, não somar
       const quantidade = parseFloat(item.quantidade.toString());
@@ -1341,7 +1366,7 @@ const EstoqueAtual = () => {
                 <CardContent className="py-3">
                   <div className="space-y-1">
                      {itens.map((item) => {
-                       const precoAtual = encontrarPrecoAtual(item.produto_nome);
+                        const precoAtual = encontrarPrecoAtual(item.produto_nome_normalizado || item.produto_nome);
                        const precoParaExibir = precoAtual?.valor_unitario || item.preco_unitario_ultimo;
                        const quantidade = parseFloat(item.quantidade.toString());
                        
@@ -1350,9 +1375,9 @@ const EstoqueAtual = () => {
                              key={item.id} 
                              className="flex items-center py-2 border-b border-border last:border-0"
                            >
-                            <div className="flex-1 overflow-hidden relative">
-                                <h3 className="text-xs font-medium text-foreground leading-tight relative">
-                                  {item.produto_nome}
+                             <div className="flex-1 overflow-hidden relative">
+                                 <h3 className="text-xs font-medium text-foreground leading-tight relative">
+                                   {item.produto_nome_normalizado || item.produto_nome}
                                    {item.origem === 'manual' && (
                                      <span className="text-red-500 text-xs ml-1">(manual)</span>
                                    )}
@@ -1384,7 +1409,7 @@ const EstoqueAtual = () => {
                                                  let dataExibir = precoAtual.data_atualizacao;
                                                  
                                                  if (precoAtual.origem === 'produto_proprio') {
-                                                   const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome);
+                                                   const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome_normalizado || item.produto_nome);
                                                    if (dataNotaFiscal) {
                                                      dataExibir = dataNotaFiscal;
                                                    }
@@ -1454,8 +1479,8 @@ const EstoqueAtual = () => {
           
           {itemEditando && (
             <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="font-semibold text-lg">{itemEditando.produto_nome}</h3>
+               <div className="text-center">
+                 <h3 className="font-semibold text-lg">{itemEditando.produto_nome_normalizado || itemEditando.produto_nome}</h3>
                 <p className="text-sm text-muted-foreground">
                   Quantidade atual: {formatarQuantidade(itemEditando.quantidade)} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
                 </p>
