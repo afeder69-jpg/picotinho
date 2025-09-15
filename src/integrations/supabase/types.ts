@@ -1742,20 +1742,6 @@ export type Database = {
           user_id: string
         }[]
       }
-      get_my_profile: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          avatar_url: string
-          created_at: string
-          id: string
-          nome: string
-          provider: string
-          provider_id: string
-          telefone: string
-          updated_at: string
-          user_id: string
-        }[]
-      }
       get_profile_safe: {
         Args: { target_user_id: string }
         Returns: {
