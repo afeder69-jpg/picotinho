@@ -16,14 +16,24 @@ import { formatarQuantidade } from '@/lib/utils';
 import PicotinhoLogo from '@/components/PicotinhoLogo';
 
 interface EstoqueItem {
-  id: string;
-  produto_nome: string;
+  id?: string;
+  produto_nome?: string;
+  produto_nome_exibicao: string;
+  hash_agrupamento: string;
   categoria: string;
   unidade_medida: string;
+  quantidade_total: number;
+  preco_unitario_mais_recente: number | null;
+  ultima_atualizacao: string;
+  itens_originais: number;
+  nomes_originais: string[];
+  ids_originais: string[];
+  user_id: string;
+  // Campos de compatibilidade
   quantidade: number;
   preco_unitario_ultimo: number | null;
   updated_at: string;
-  origem: string; // 'manual' ou 'nota_fiscal'
+  origem?: string;
   produto_nome_normalizado?: string | null;
   produto_hash_normalizado?: string | null;
   nome_base?: string | null;
@@ -451,24 +461,36 @@ const EstoqueAtual = () => {
         return;
       }
 
+      // Usar a view consolidada para evitar duplicatas
       const { data, error } = await supabase
-        .from('estoque_app')
-        .select('*, origem')
+        .from('estoque_consolidado')
+        .select('*')
         .eq('user_id', user.id)
-        .gt('quantidade', 0)  // Mostrar apenas produtos com estoque para não poluir a interface
-        .order('produto_nome_normalizado', { ascending: true });
+        .order('produto_nome_exibicao', { ascending: true });
 
       if (error) throw error;
 
-      console.log('📦 Estoque carregado:', data);
-      setEstoque(data || []);
+      console.log('📦 Estoque consolidado carregado:', data);
+      
+      // Adaptar dados da view para a interface
+      const estoqueFormatado = (data || []).map(item => ({
+        ...item,
+        id: item.hash_agrupamento, // Usar hash como ID
+        produto_nome: item.produto_nome_exibicao,
+        quantidade: item.quantidade_total,
+        preco_unitario_ultimo: item.preco_unitario_mais_recente,
+        updated_at: item.ultima_atualizacao,
+        origem: item.itens_originais > 1 ? 'consolidado' : 'nota_fiscal'
+      }));
+      
+      setEstoque(estoqueFormatado);
       
       // Encontrar a última atualização
-      if (data && data.length > 0) {
-        const ultimaData = data.reduce((latest, item) => {
+      if (estoqueFormatado && estoqueFormatado.length > 0) {
+        const ultimaData = estoqueFormatado.reduce((latest, item) => {
           const itemDate = new Date(item.updated_at);
           return itemDate > new Date(latest) ? item.updated_at : latest;
-        }, data[0].updated_at);
+        }, estoqueFormatado[0].updated_at);
         setUltimaAtualizacao(ultimaData);
       }
     } catch (error) {
@@ -1376,11 +1398,16 @@ const EstoqueAtual = () => {
                              className="flex items-center py-2 border-b border-border last:border-0"
                            >
                              <div className="flex-1 overflow-hidden relative">
-                                 <h3 className="text-xs font-medium text-foreground leading-tight relative">
-                                   {item.produto_nome_normalizado || item.produto_nome}
-                                   {item.origem === 'manual' && (
-                                     <span className="text-red-500 text-xs ml-1">(manual)</span>
-                                   )}
+                                  <h3 className="text-xs font-medium text-foreground leading-tight relative">
+                                    {item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome}
+                                    {item.itens_originais && item.itens_originais > 1 && (
+                                      <Badge variant="secondary" className="ml-2 text-xs">
+                                        {item.itens_originais} consolidados
+                                      </Badge>
+                                    )}
+                                    {item.origem === 'manual' && (
+                                      <span className="text-red-500 text-xs ml-1">(manual)</span>
+                                    )}
                                  {/* Botão de ajuste sobreposto ao título do produto */}
                                  {modoEdicao && (
                                    <Button
@@ -1480,7 +1507,7 @@ const EstoqueAtual = () => {
           {itemEditando && (
             <div className="space-y-4">
                <div className="text-center">
-                 <h3 className="font-semibold text-lg">{itemEditando.produto_nome_normalizado || itemEditando.produto_nome}</h3>
+                 <h3 className="font-semibold text-lg">{itemEditando.produto_nome_exibicao || itemEditando.produto_nome_normalizado || itemEditando.produto_nome}</h3>
                 <p className="text-sm text-muted-foreground">
                   Quantidade atual: {formatarQuantidade(itemEditando.quantidade)} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
                 </p>

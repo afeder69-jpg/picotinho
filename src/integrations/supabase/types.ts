@@ -1595,6 +1595,22 @@ export type Database = {
       }
     }
     Views: {
+      estoque_consolidado: {
+        Row: {
+          categoria: string | null
+          hash_agrupamento: string | null
+          ids_originais: string[] | null
+          itens_originais: number | null
+          nomes_originais: string[] | null
+          preco_unitario_mais_recente: number | null
+          produto_nome_exibicao: string | null
+          quantidade_total: number | null
+          ultima_atualizacao: string | null
+          unidade_medida: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       supermercados_publicos: {
         Row: {
           ativo: boolean | null
