@@ -1614,43 +1614,34 @@ export type Database = {
       supermercados_publicos: {
         Row: {
           ativo: boolean | null
-          cep: string | null
           cidade: string | null
-          cnpj_display: string | null
           created_at: string | null
-          endereco: string | null
           estado: string | null
           id: string | null
-          latitude: number | null
-          longitude: number | null
+          latitude_aproximada: number | null
+          longitude_aproximada: number | null
           nome: string | null
           updated_at: string | null
         }
         Insert: {
           ativo?: boolean | null
-          cep?: string | null
           cidade?: string | null
-          cnpj_display?: never
           created_at?: string | null
-          endereco?: string | null
           estado?: string | null
           id?: string | null
-          latitude?: number | null
-          longitude?: number | null
+          latitude_aproximada?: never
+          longitude_aproximada?: never
           nome?: string | null
           updated_at?: string | null
         }
         Update: {
           ativo?: boolean | null
-          cep?: string | null
           cidade?: string | null
-          cnpj_display?: never
           created_at?: string | null
-          endereco?: string | null
           estado?: string | null
           id?: string | null
-          latitude?: number | null
-          longitude?: number | null
+          latitude_aproximada?: never
+          longitude_aproximada?: never
           nome?: string | null
           updated_at?: string | null
         }
@@ -1761,6 +1752,25 @@ export type Database = {
           created_at: string
           nome: string
           user_id: string
+        }[]
+      }
+      get_supermercados_for_area: {
+        Args: {
+          requesting_user_id?: string
+          search_latitude: number
+          search_longitude: number
+          search_radius_km: number
+        }
+        Returns: {
+          cidade: string
+          distancia_km: number
+          estado: string
+          id: string
+          latitude_publica: number
+          longitude_publica: number
+          nome: string
+          produtos_disponiveis: number
+          tem_acesso_completo: boolean
         }[]
       }
       get_user_email: {
