@@ -304,18 +304,20 @@ async function consolidarEstoque(supabase: any) {
     
     try {
       console.log(`[CONSOLIDACAO] Consolidando ${produtos.length} produtos: ${produtos[0].produto_nome_normalizado || produtos[0].produto_nome}`);
-      console.log(`[CONSOLIDACAO] Produtos: ${produtos.map(p => p.produto_nome).join(', ')}`);
+      console.log(`[CONSOLIDACAO] Produtos originais: ${produtos.map(p => p.produto_nome).join(' + ')}`);
       
-      // Ordenar por data de criação (mais antigo primeiro)
+      // Ordenar por data de criação (mais antigo primeiro, mas usar o melhor nome normalizado)
       produtos.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
-      // Manter o primeiro produto e somar quantidades
-      const produtoPrincipal = produtos[0];
+      // Manter o produto com o melhor nome normalizado como principal
+      const produtoPrincipal = produtos.find(p => p.produto_nome_normalizado && p.produto_nome_normalizado.trim() !== '') || produtos[0];
+      const outrosProdutos = produtos.filter(p => p.id !== produtoPrincipal.id);
+      
+      // Somar quantidades
       const quantidadeTotal = produtos.reduce((total, p) => total + (p.quantidade || 0), 0);
       const precoMaisRecente = produtos.reduce((ultimoPreco, p) => 
         p.updated_at > ultimoPreco.updated_at ? p : ultimoPreco
       ).preco_unitario_ultimo;
-      
       
       // Atualizar produto principal com dados consolidados
       const { error: updateError } = await supabase
@@ -332,9 +334,9 @@ async function consolidarEstoque(supabase: any) {
         continue;
       }
       
-      // Deletar produtos duplicados (todos exceto o primeiro)
-      const idsParaDeletar = produtos.slice(1).map(p => p.id);
-      if (idsParaDeletar.length > 0) {
+      // Deletar produtos duplicados
+      if (outrosProdutos.length > 0) {
+        const idsParaDeletar = outrosProdutos.map(p => p.id);
         const { error: deleteError } = await supabase
           .from('estoque_app')
           .delete()
@@ -343,7 +345,7 @@ async function consolidarEstoque(supabase: any) {
         if (deleteError) {
           console.error(`[CONSOLIDACAO] Erro ao deletar duplicatas:`, deleteError);
         } else {
-          console.log(`[CONSOLIDACAO] Consolidado: ${produtoPrincipal.produto_nome_normalizado} (${quantidadeTotal} ${produtoPrincipal.unidade_medida})`);
+          console.log(`[CONSOLIDACAO] ✅ Consolidado: ${produtoPrincipal.produto_nome_normalizado || produtoPrincipal.produto_nome} (${quantidadeTotal} ${produtoPrincipal.unidade_medida})`);
         }
       }
       
@@ -354,5 +356,5 @@ async function consolidarEstoque(supabase: any) {
     }
   }
   
-  console.log(`[CONSOLIDACAO] Consolidação concluída: ${consolidacoes} produtos consolidados`);
+  console.log(`[CONSOLIDACAO] 🎉 Consolidação concluída: ${consolidacoes} grupos de produtos consolidados`);
 }

@@ -57,8 +57,8 @@ const DICIONARIO = {
   "pontuacao_ruido": ["-", "_", ".", ","]
 };
 
-// Feature flag para normalização
-const NORMALIZACAO_PRODUTOS_V1 = Deno.env.get('NORMALIZACAO_PRODUTOS_V1') === 'true';
+// Feature flag para normalização - HABILITADA POR PADRÃO
+const NORMALIZACAO_PRODUTOS_V1 = Deno.env.get('NORMALIZACAO_PRODUTOS_V1') !== 'false';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -167,26 +167,25 @@ async function normalizarProdutoCompleto(supabase: any, nomeOriginal: string) {
   // 8. O que sobrou é o nome base do produto
   const nomeBase = nomeProcessado.replace(/\s+/g, ' ').trim();
 
-  // 9. Montar nome final no padrão PRODUTO + MARCA + EMBALAGEM
+  // 9. Montar nome final no padrão PRODUTO + MARCA + EMBALAGEM + QUANTIDADE
   let nomeNormalizado = nomeBase;
   if (marcaDetectada) {
     nomeNormalizado += ` ${marcaDetectada}`;
   }
-  if (embalagemDetectada && quantidadeDetectada.encontrada) {
-    nomeNormalizado += ` ${embalagemDetectada} ${quantidadeDetectada.qtd_valor} ${quantidadeDetectada.qtd_unidade}`;
-  } else if (quantidadeDetectada.encontrada) {
+  if (embalagemDetectada) {
+    nomeNormalizado += ` ${embalagemDetectada}`;
+  }
+  if (quantidadeDetectada.encontrada) {
     nomeNormalizado += ` ${quantidadeDetectada.qtd_valor} ${quantidadeDetectada.qtd_unidade}`;
   }
   if (granel) {
     nomeNormalizado += ' GRANEL';
   }
 
-  // 10. Gerar hash determinístico
+  // 10. Gerar hash determinístico baseado em características básicas (sem quantidade)
   const hashComponents = [
     nomeBase,
     marcaDetectada || '',
-    quantidadeDetectada.qtd_base || '',
-    quantidadeDetectada.qtd_unidade || '',
     embalagemDetectada || '',
     granel ? 'GRANEL' : ''
   ].join('|');
@@ -230,6 +229,21 @@ async function buscarNormalizacaoManual(supabase: any, nomeProcessado: string) {
 
 function expandirAbreviacoes(texto: string): string {
   let resultado = texto;
+
+  // Expansões de produtos específicos primeiro
+  resultado = resultado.replace(/\bFILE?\b/gi, 'FILÉ');
+  resultado = resultado.replace(/\bPTO\b/gi, 'PEITO');
+  resultado = resultado.replace(/\bFRGO?\b/gi, 'FRANGO');
+  resultado = resultado.replace(/\bLIMPEZ\b/gi, 'LIMPEZA');
+  resultado = resultado.replace(/\bCREMOS?\b/gi, 'CREMOSO');
+  resultado = resultado.replace(/\bACHOCOL\b/gi, 'ACHOCOLATADO');
+  resultado = resultado.replace(/\bBISC\b/gi, 'BISCOITO');
+  resultado = resultado.replace(/\bMANT\b/gi, 'MANTEIGA');
+  resultado = resultado.replace(/\bREQUEIJ\b/gi, 'REQUEIJÃO');
+  resultado = resultado.replace(/\bDETERG\b/gi, 'DETERGENTE');
+  resultado = resultado.replace(/\bSAB\b/gi, 'SABÃO');
+  resultado = resultado.replace(/\bEXPLO?\b/gi, 'EXPLOSÃO');
+  resultado = resultado.replace(/\bFLORES?\b/gi, 'FLORES');
 
   // Expandir abreviações de embalagem
   Object.entries(DICIONARIO.embalagem_sinonimos).forEach(([abrev, completo]) => {
