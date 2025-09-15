@@ -1905,6 +1905,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      validar_telefone_whatsapp: {
+        Args: { telefone_numero: string }
+        Returns: boolean
+      }
       validate_security_setup: {
         Args: Record<PropertyKey, never>
         Returns: string
