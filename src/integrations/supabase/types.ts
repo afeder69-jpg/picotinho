@@ -172,11 +172,20 @@ export type Database = {
         Row: {
           categoria: string
           created_at: string
+          granel: boolean | null
           id: string
+          marca: string | null
+          nome_base: string | null
           origem: string | null
           preco_unitario_ultimo: number | null
+          produto_hash_normalizado: string | null
           produto_nome: string
+          produto_nome_normalizado: string | null
+          qtd_base: number | null
+          qtd_unidade: string | null
+          qtd_valor: number | null
           quantidade: number
+          tipo_embalagem: string | null
           unidade_medida: string
           updated_at: string
           user_id: string
@@ -184,11 +193,20 @@ export type Database = {
         Insert: {
           categoria: string
           created_at?: string
+          granel?: boolean | null
           id?: string
+          marca?: string | null
+          nome_base?: string | null
           origem?: string | null
           preco_unitario_ultimo?: number | null
+          produto_hash_normalizado?: string | null
           produto_nome: string
+          produto_nome_normalizado?: string | null
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
           quantidade?: number
+          tipo_embalagem?: string | null
           unidade_medida?: string
           updated_at?: string
           user_id: string
@@ -196,11 +214,20 @@ export type Database = {
         Update: {
           categoria?: string
           created_at?: string
+          granel?: boolean | null
           id?: string
+          marca?: string | null
+          nome_base?: string | null
           origem?: string | null
           preco_unitario_ultimo?: number | null
+          produto_hash_normalizado?: string | null
           produto_nome?: string
+          produto_nome_normalizado?: string | null
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
           quantidade?: number
+          tipo_embalagem?: string | null
           unidade_medida?: string
           updated_at?: string
           user_id?: string
@@ -428,6 +455,30 @@ export type Database = {
           },
         ]
       }
+      marcas_conhecidas: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mercados: {
         Row: {
           bairro: string | null
@@ -464,7 +515,61 @@ export type Database = {
         }
         Relationships: []
       }
+      normalizacoes_embalagens: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado?: string
+          nome_original?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       normalizacoes_estabelecimentos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado?: string
+          nome_original?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      normalizacoes_marcas: {
         Row: {
           ativo: boolean
           created_at: string
@@ -512,6 +617,33 @@ export type Database = {
           id?: string
           termo_correto?: string
           termo_errado?: string
+        }
+        Relationships: []
+      }
+      normalizacoes_produtos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado: string
+          nome_original: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_normalizado?: string
+          nome_original?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -680,9 +812,18 @@ export type Database = {
           data_atualizacao: string
           estabelecimento_cnpj: string
           estabelecimento_nome: string
+          granel: boolean | null
           id: string
+          marca: string | null
+          nome_base: string | null
           produto_codigo: string | null
+          produto_hash_normalizado: string | null
           produto_nome: string
+          produto_nome_normalizado: string | null
+          qtd_base: number | null
+          qtd_unidade: string | null
+          qtd_valor: number | null
+          tipo_embalagem: string | null
           valor_unitario: number
         }
         Insert: {
@@ -690,9 +831,18 @@ export type Database = {
           data_atualizacao?: string
           estabelecimento_cnpj: string
           estabelecimento_nome: string
+          granel?: boolean | null
           id?: string
+          marca?: string | null
+          nome_base?: string | null
           produto_codigo?: string | null
+          produto_hash_normalizado?: string | null
           produto_nome: string
+          produto_nome_normalizado?: string | null
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
+          tipo_embalagem?: string | null
           valor_unitario: number
         }
         Update: {
@@ -700,9 +850,18 @@ export type Database = {
           data_atualizacao?: string
           estabelecimento_cnpj?: string
           estabelecimento_nome?: string
+          granel?: boolean | null
           id?: string
+          marca?: string | null
+          nome_base?: string | null
           produto_codigo?: string | null
+          produto_hash_normalizado?: string | null
           produto_nome?: string
+          produto_nome_normalizado?: string | null
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
+          tipo_embalagem?: string | null
           valor_unitario?: number
         }
         Relationships: []
@@ -711,9 +870,18 @@ export type Database = {
         Row: {
           created_at: string
           data_atualizacao: string
+          granel: boolean | null
           id: string
+          marca: string | null
+          nome_base: string | null
           origem: string
+          produto_hash_normalizado: string | null
           produto_nome: string
+          produto_nome_normalizado: string | null
+          qtd_base: number | null
+          qtd_unidade: string | null
+          qtd_valor: number | null
+          tipo_embalagem: string | null
           updated_at: string
           user_id: string
           valor_unitario: number
@@ -721,9 +889,18 @@ export type Database = {
         Insert: {
           created_at?: string
           data_atualizacao?: string
+          granel?: boolean | null
           id?: string
+          marca?: string | null
+          nome_base?: string | null
           origem?: string
+          produto_hash_normalizado?: string | null
           produto_nome: string
+          produto_nome_normalizado?: string | null
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
+          tipo_embalagem?: string | null
           updated_at?: string
           user_id: string
           valor_unitario?: number
@@ -731,9 +908,18 @@ export type Database = {
         Update: {
           created_at?: string
           data_atualizacao?: string
+          granel?: boolean | null
           id?: string
+          marca?: string | null
+          nome_base?: string | null
           origem?: string
+          produto_hash_normalizado?: string | null
           produto_nome?: string
+          produto_nome_normalizado?: string | null
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
+          tipo_embalagem?: string | null
           updated_at?: string
           user_id?: string
           valor_unitario?: number
@@ -1655,6 +1841,10 @@ export type Database = {
       normalizar_produto_completo: {
         Args: { nome: string }
         Returns: string
+      }
+      normalizar_produto_v1: {
+        Args: { nome_original: string }
+        Returns: Json
       }
       normalizar_texto: {
         Args: { texto: string }

@@ -92,10 +92,32 @@ serve(async (req) => {
       console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
     }
 
-    // 🧠 Função avançada para normalizar nomes de produtos usando tabela dinâmica
-    const normalizarNomeProduto = async (nome: string): Promise<string> => {
-      if (!nome) return '';
+    // 🧠 Função avançada para normalizar nomes de produtos usando IA-2
+    const normalizarNomeProduto = async (nome: string): Promise<{ nomeNormalizado: string, dadosCompletos?: any }> => {
+      if (!nome) return { nomeNormalizado: '' };
       
+      try {
+        // Tentar normalização com IA-2 primeiro
+        console.log(`🤖 Tentando normalização IA-2 para: ${nome}`);
+        
+        const { data: normalizacaoResponse, error: normalizacaoError } = await supabase.functions.invoke('normalizar-produto-ia2', {
+          body: { nomeOriginal: nome }
+        });
+
+        if (!normalizacaoError && normalizacaoResponse?.produto_nome_normalizado) {
+          console.log(`✅ IA-2 normalizou: ${nome} -> ${normalizacaoResponse.produto_nome_normalizado}`);
+          return { 
+            nomeNormalizado: normalizacaoResponse.produto_nome_normalizado,
+            dadosCompletos: normalizacaoResponse
+          };
+        }
+        
+        console.log(`⚠️ IA-2 falhou para "${nome}", usando fallback básico`);
+      } catch (error) {
+        console.log(`⚠️ Erro na IA-2 para "${nome}": ${error.message}, usando fallback`);
+      }
+
+      // Fallback: normalização básica
       let nomeNormalizado = nome.toUpperCase().trim();
       
       // 1. Aplicar normalizações da tabela
@@ -119,7 +141,7 @@ serve(async (req) => {
         .replace(/\s+/g, ' ')
         .trim();
       
-      return nomeNormalizado;
+      return { nomeNormalizado };
     };
 
     // Função para calcular similaridade entre strings
@@ -169,7 +191,9 @@ serve(async (req) => {
           console.log(`   - Preço total: ${precoTotal}`);
           console.log(`   - Categoria: ${categoriaProduto}`);
           
-          const nomeNormalizado = await normalizarNomeProduto(nomeProduto);
+          const resultadoNormalizacao = await normalizarNomeProduto(nomeProduto);
+          const nomeNormalizado = resultadoNormalizacao.nomeNormalizado;
+          const dadosNormalizados = resultadoNormalizacao.dadosCompletos;
           console.log(`🏷️ Original: "${nomeProduto}" -> Normalizado: "${nomeNormalizado}"`);
 
           if (!nomeProduto || !quantidadeProduto) {
@@ -193,10 +217,17 @@ serve(async (req) => {
           if (estoqueLista && estoqueLista.length > 0) {
             console.log(`🔍 Buscando produto similar para "${nomeNormalizado}" em ${estoqueLista.length} itens do estoque...`);
             
-            // Primeiro: tentar match exato com o nome normalizado
+            // Primeiro: tentar match exato com o nome normalizado ou hash
             for (const prod of estoqueLista) {
-              const produtoNomeNormalizado = await normalizarNomeProduto(prod.produto_nome);
-              if (produtoNomeNormalizado === nomeNormalizado) {
+              const resultadoNormalizacaoEstoque = await normalizarNomeProduto(prod.produto_nome);
+              const produtoNomeNormalizado = resultadoNormalizacaoEstoque.nomeNormalizado;
+              
+              // Match por nome normalizado ou hash (se disponível)
+              const matchExato = produtoNomeNormalizado === nomeNormalizado ||
+                (dadosNormalizados?.produto_hash_normalizado && 
+                 prod.produto_hash_normalizado === dadosNormalizados.produto_hash_normalizado);
+              
+              if (matchExato) {
                 produtoSimilar = prod;
                 console.log(`✅ Match EXATO encontrado: "${prod.produto_nome}" (ID: ${prod.id})`);
                 break;
@@ -272,17 +303,33 @@ serve(async (req) => {
               ? precoUnitario 
               : 0.01; // Preço mínimo para evitar zeros
               
+            // Preparar dados para inserção (com campos normalizados)
+            const dadosParaInserir = {
+              user_id: notaImagem.usuario_id,
+              produto_nome: nomeNormalizado,
+              categoria: categoriaProduto || 'outros',
+              unidade_medida: unidadeProduto || 'unidade',
+              quantidade: quantidadeProduto || 1,
+              preco_unitario_ultimo: precoParaSalvar,
+              origem: 'nota_fiscal'
+            };
+
+            // Adicionar campos normalizados se disponíveis
+            if (dadosNormalizados) {
+              dadosParaInserir.produto_nome_normalizado = dadosNormalizados.produto_nome_normalizado;
+              dadosParaInserir.nome_base = dadosNormalizados.nome_base;
+              dadosParaInserir.marca = dadosNormalizados.marca;
+              dadosParaInserir.tipo_embalagem = dadosNormalizados.tipo_embalagem;
+              dadosParaInserir.qtd_valor = dadosNormalizados.qtd_valor;
+              dadosParaInserir.qtd_unidade = dadosNormalizados.qtd_unidade;
+              dadosParaInserir.qtd_base = dadosNormalizados.qtd_base;
+              dadosParaInserir.granel = dadosNormalizados.granel;
+              dadosParaInserir.produto_hash_normalizado = dadosNormalizados.produto_hash_normalizado;
+            }
+              
             const { error: insertError } = await supabase
               .from('estoque_app')
-              .insert({
-                user_id: notaImagem.usuario_id,
-                produto_nome: nomeNormalizado,
-                categoria: categoriaProduto || 'outros',
-                unidade_medida: unidadeProduto || 'unidade',
-                quantidade: quantidadeProduto || 1,
-                preco_unitario_ultimo: precoParaSalvar,
-                origem: 'nota_fiscal'
-              });
+              .insert(dadosParaInserir);
 
             if (insertError) {
               console.error(`❌ ERRO ao criar produto - Item ${index + 1}:`, insertError);
@@ -353,15 +400,31 @@ serve(async (req) => {
               }
 
               if (deveAtualizar) {
+                // Preparar dados para upsert com campos normalizados
+                const dadosPreco = {
+                  produto_nome: nomeNormalizado,
+                  estabelecimento_cnpj: cnpjLimpo,
+                  estabelecimento_nome: estabelecimentoNome,
+                  valor_unitario: Number(precoUnitario),
+                  data_atualizacao: dataISO,
+                };
+
+                // Adicionar campos normalizados se disponíveis
+                if (dadosNormalizados) {
+                  dadosPreco.produto_nome_normalizado = dadosNormalizados.produto_nome_normalizado;
+                  dadosPreco.nome_base = dadosNormalizados.nome_base;
+                  dadosPreco.marca = dadosNormalizados.marca;
+                  dadosPreco.tipo_embalagem = dadosNormalizados.tipo_embalagem;
+                  dadosPreco.qtd_valor = dadosNormalizados.qtd_valor;
+                  dadosPreco.qtd_unidade = dadosNormalizados.qtd_unidade;
+                  dadosPreco.qtd_base = dadosNormalizados.qtd_base;
+                  dadosPreco.granel = dadosNormalizados.granel;
+                  dadosPreco.produto_hash_normalizado = dadosNormalizados.produto_hash_normalizado;
+                }
+
                 const { error: upsertErr } = await supabase
                   .from('precos_atuais')
-                  .upsert({
-                    produto_nome: nomeNormalizado,
-                    estabelecimento_cnpj: cnpjLimpo,
-                    estabelecimento_nome: estabelecimentoNome,
-                    valor_unitario: Number(precoUnitario),
-                    data_atualizacao: dataISO,
-                  }, { onConflict: 'produto_nome,estabelecimento_cnpj' });
+                  .upsert(dadosPreco, { onConflict: 'produto_nome,estabelecimento_cnpj' });
 
                 if (upsertErr) {
                   console.error('❌ Erro ao atualizar precos_atuais:', upsertErr);
