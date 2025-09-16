@@ -56,12 +56,40 @@ const AreaAtuacao = () => {
   useEffect(() => {
     const handleFocus = () => {
       if (configuracaoCarregada) {
+        console.log('Página ganhou foco - recarregando localização...');
+        obterLocalizacao();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && configuracaoCarregada) {
+        console.log('Página se tornou visível - recarregando localização...');
         obterLocalizacao();
       }
     };
 
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [configuracaoCarregada]);
+
+  // Polling periódico para detectar mudanças no CEP (a cada 5 segundos quando ativo)
+  useEffect(() => {
+    if (!configuracaoCarregada) return;
+
+    const interval = setInterval(() => {
+      // Verificar se há mudanças no perfil apenas se a página estiver visível
+      if (!document.hidden) {
+        console.log('Verificando atualizações automáticas do perfil...');
+        obterLocalizacao();
+      }
+    }, 5000); // Verifica a cada 5 segundos
+
+    return () => clearInterval(interval);
   }, [configuracaoCarregada]);
 
   // Buscar supermercados quando raio ou localização mudarem
@@ -98,6 +126,7 @@ const AreaAtuacao = () => {
   };
 
   const obterLocalizacao = async () => {
+    console.log('📍 Iniciando obtenção de localização...');
     setCarregandoLocalizacao(true);
     
     try {
@@ -113,16 +142,22 @@ const AreaAtuacao = () => {
 
       // Verificar se tem CEP cadastrado
       const cepExiste = profile?.cep && profile?.cep.trim().length > 0;
+      console.log(`📋 CEP encontrado no perfil: ${profile?.cep || 'NENHUM'}`);
+      console.log(`🗺️ Coordenadas atuais: ${profile?.latitude}, ${profile?.longitude}`);
+      console.log(`🏙️ Cidade: ${profile?.cidade || 'NÃO INFORMADA'}`);
+      
       setTemCepCadastrado(cepExiste);
 
       if (!cepExiste) {
         // Se não tem CEP, não mostrar supermercados
+        console.log('❌ Nenhum CEP cadastrado - área de atuação desabilitada');
         setCarregandoLocalizacao(false);
         return;
       }
 
       if (profile?.latitude && profile?.longitude) {
         // Usar localização do CEP cadastrado
+        console.log(`✅ Usando coordenadas do CEP: ${profile.latitude}, ${profile.longitude}`);
         setLocalizacaoUsuario({
           latitude: profile.latitude,
           longitude: profile.longitude
