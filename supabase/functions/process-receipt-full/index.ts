@@ -92,7 +92,7 @@ serve(async (req) => {
       console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
     }
 
-    // 🧠 IA-2 COMO MOTOR ÚNICO DE NORMALIZAÇÃO (SEM FALLBACK)
+    // 🧠 IA-2 COMO MOTOR ÚNICO DE NORMALIZAÇÃO (COM FALLBACK PARA CONTINUAR)
     const normalizarNomeProduto = async (nome: string): Promise<{ nomeNormalizado: string, dadosCompletos?: any, status: string }> => {
       if (!nome) return { nomeNormalizado: '', status: 'ERRO_NOME_VAZIO' };
       
@@ -103,10 +103,22 @@ serve(async (req) => {
           body: { nomeOriginal: nome, debug: false }
         });
 
-        // FAIL-CLOSED: Se IA-2 falhar, PARAR processamento
+        // Se IA-2 falhar, usar normalização básica para não perder o produto
         if (normalizacaoError || !normalizacaoResponse?.produto_nome_normalizado) {
-          console.error(`❌ [CRÍTICO] IA-2 FALHOU para "${nome}":`, normalizacaoError);
-          throw new Error(`IA-2_INDISPONIVEL: ${normalizacaoError?.message || 'Resposta inválida da IA'}`);
+          console.error(`⚠️ [IA-2] FALHOU para "${nome}":`, normalizacaoError);
+          console.log(`🔄 [FALLBACK] Usando normalização básica para "${nome}"`);
+          
+          // Normalização básica como fallback
+          const nomeBasico = nome.toUpperCase().trim()
+            .replace(/\s+/g, ' ')
+            .replace(/\b(GRAENC|GRANEL)\b/gi, 'GRANEL')
+            .replace(/\b(\d+G|\d+ML|\d+L|\d+KG)\b/gi, '');
+          
+          return { 
+            nomeNormalizado: nomeBasico,
+            dadosCompletos: null,
+            status: 'FALLBACK_BASICO'
+          };
         }
 
         // ✅ SUCESSO da IA-2
@@ -120,10 +132,21 @@ serve(async (req) => {
         };
 
       } catch (error) {
-        console.error(`💥 [CRÍTICO] Erro fatal na IA-2 para "${nome}":`, error);
+        console.error(`⚠️ [FALLBACK] Erro na IA-2 para "${nome}":`, error);
         
-        // FAIL-CLOSED: Propagar erro para interromper processamento
-        throw new Error(`NORMALIZACAO_FALHOU: ${error.message}`);
+        // FALLBACK: Usar normalização básica para não perder o produto
+        const nomeBasico = nome.toUpperCase().trim()
+          .replace(/\s+/g, ' ')
+          .replace(/\b(GRAENC|GRANEL)\b/gi, 'GRANEL')
+          .replace(/\b(\d+G|\d+ML|\d+L|\d+KG)\b/gi, '');
+        
+        console.log(`🔄 [FALLBACK] "${nome}" → "${nomeBasico}"`);
+        
+        return { 
+          nomeNormalizado: nomeBasico,
+          dadosCompletos: null,
+          status: 'FALLBACK_ERRO'
+        };
       }
     };
 
@@ -156,7 +179,12 @@ serve(async (req) => {
     const listaItens = extractedData.produtos || extractedData.itens;
     if (listaItens && Array.isArray(listaItens)) {
       console.log(`📦 Atualizando estoque automaticamente - TOTAL DE ${listaItens.length} ITENS na nota...`);
-      console.log(`🔍 Estrutura dos dados extraídos:`, JSON.stringify(extractedData, null, 2));
+      console.log(`🔍 Lista completa de itens:`, listaItens.map((item, i) => `${i+1}. ${item.nome || item.descricao}`).join(', '));
+      
+      let itensProcessados = 0;
+      let itensAtualizados = 0;
+      let itensCriados = 0;
+      let itensComErro = 0;
       
       for (let index = 0; index < listaItens.length; index++) {
         const produtoData = listaItens[index];
@@ -200,33 +228,43 @@ serve(async (req) => {
             .eq('user_id', notaImagem.usuario_id);
 
           if (estoqueListaError) {
-            console.error(`❌ Erro ao buscar lista de estoque para item ${index + 1}:`, estoqueListaError);
-            continue;
+            console.error(`⚠️ Erro ao buscar lista de estoque para item ${index + 1}:`, estoqueListaError);
+            console.log(`🔄 Continuando processamento sem busca de similares...`);
+            // Não usar continue - processar como produto novo mesmo com erro na busca
           }
 
-          // 🎯 Procurar produto similar usando algoritmo inteligente
+          // 🎯 Procurar produto similar usando algoritmo inteligente (ROBUSTO)
           let produtoSimilar = null;
-          if (estoqueLista && estoqueLista.length > 0) {
+          if (estoqueLista && estoqueLista.length > 0 && !estoqueListaError) {
             console.log(`🔍 Buscando produto similar para "${nomeNormalizado}" em ${estoqueLista.length} itens do estoque...`);
             
-            // Primeiro: tentar match exato com o nome normalizado ou hash
-            for (const prod of estoqueLista) {
-              const resultadoNormalizacaoEstoque = await normalizarNomeProduto(prod.produto_nome);
-              const produtoNomeNormalizado = resultadoNormalizacaoEstoque.nomeNormalizado;
-              
-              // Match por nome normalizado ou hash (se disponível)
-              const matchExato = produtoNomeNormalizado === nomeNormalizado ||
-                (dadosNormalizados?.produto_hash_normalizado && 
-                 prod.produto_hash_normalizado === dadosNormalizados.produto_hash_normalizado);
-              
-              if (matchExato) {
-                produtoSimilar = prod;
-                console.log(`✅ Match EXATO encontrado: "${prod.produto_nome}" (ID: ${prod.id})`);
-                break;
+            // ESTRATÉGIA 1: Match por hash normalizado (mais confiável)
+            if (dadosNormalizados?.produto_hash_normalizado) {
+              for (const prod of estoqueLista) {
+                if (prod.produto_hash_normalizado === dadosNormalizados.produto_hash_normalizado) {
+                  produtoSimilar = prod;
+                  console.log(`✅ Match por HASH encontrado: "${prod.produto_nome}" (ID: ${prod.id})`);
+                  break;
+                }
               }
             }
 
-            // Se não encontrou match exato, usar similaridade
+            // ESTRATÉGIA 2: Match exato por nome normalizado
+            if (!produtoSimilar) {
+              for (const prod of estoqueLista) {
+                // Comparação simples e direta - evitar re-normalização que pode falhar
+                const nomeEstoqueNorm = prod.produto_nome_normalizado || prod.produto_nome.toUpperCase().trim();
+                const nomeItemNorm = nomeNormalizado.toUpperCase().trim();
+                
+                if (nomeEstoqueNorm === nomeItemNorm) {
+                  produtoSimilar = prod;
+                  console.log(`✅ Match EXATO por nome: "${prod.produto_nome}" (ID: ${prod.id})`);
+                  break;
+                }
+              }
+            }
+
+            // ESTRATÉGIA 3: Similaridade textual (fallback)
             if (!produtoSimilar) {
               let melhorSimilaridade = 0;
               for (const item of estoqueLista) {
@@ -238,10 +276,16 @@ serve(async (req) => {
                 if (similaridade >= 0.85 && similaridade > melhorSimilaridade) {
                   melhorSimilaridade = similaridade;
                   produtoSimilar = item;
-                  console.log(`   🎯 Novo melhor match: "${item.produto_nome}" (${(similaridade * 100).toFixed(1)}%)`);
+                  console.log(`   🎯 Novo melhor match por similaridade: "${item.produto_nome}" (${(similaridade * 100).toFixed(1)}%)`);
                 }
               }
             }
+            
+            if (!produtoSimilar) {
+              console.log(`❌ Nenhum produto similar encontrado para "${nomeNormalizado}" - será criado novo item`);
+            }
+          } else {
+            console.log(`⚠️ Sem estoque para comparar ou erro na busca - criando produto novo`);
           }
 
           if (produtoSimilar) {
@@ -283,6 +327,8 @@ serve(async (req) => {
             console.log(`   - Produto: ${nomeNormalizado}`);
             console.log(`   - Quantidade: ${novaQuantidade} ${unidadeProduto || 'unidade'}`);
             console.log(`   - Preço: R$ ${precoAtualizado}`);
+            itensProcessados++;
+            itensAtualizados++;
             
           } else {
             console.log(`🆕 CRIANDO NOVO ITEM ${index + 1} - "${nomeNormalizado}"`);
@@ -367,6 +413,8 @@ serve(async (req) => {
             console.log(`   - Produto: ${nomeNormalizado}`);
             console.log(`   - Quantidade: ${quantidadeSegura} ${unidadeProduto || 'unidade'}`);
             console.log(`   - Preço: R$ ${precoUnitario || 0}`);
+            itensProcessados++;
+            itensCriados++;
           }
 
           // === Atualização do Preço Atual (precos_atuais) baseada na nota fiscal ===
@@ -464,16 +512,51 @@ serve(async (req) => {
             console.error('⚠️ Falha ao atualizar precos_atuais (não crítico):', e);
           }
         } catch (error) {
-          console.error(`❌ ERRO crítico ao processar item ${index + 1}:`, error);
+          console.error(`⚠️ ERRO ao processar item ${index + 1} (CONTINUANDO):`, error);
           console.error(`🔍 Dados do item com erro:`, JSON.stringify(produtoData));
           console.error(`🔍 Nome original: "${nomeProduto}"`);
-          console.error(`🔍 Stack trace completo:`, error.stack);
-          // ✅ CORREÇÃO: Não parar o processamento por causa de um item com erro
+          
+          // 🔄 FALLBACK ROBUSTO: Tentar salvar pelo menos o nome básico
+          try {
+            const nomeBasico = nomeProduto ? nomeProduto.toUpperCase().trim() : `PRODUTO_${index + 1}`;
+            console.log(`🔄 Tentando fallback para "${nomeBasico}"`);
+            
+            const { error: fallbackError } = await supabase
+              .from('estoque_app')
+              .insert({
+                user_id: notaImagem.usuario_id,
+                produto_nome: nomeBasico,
+                categoria: 'outros',
+                unidade_medida: 'unidade',
+                quantidade: quantidadeProduto || 1,
+                preco_unitario_ultimo: precoUnitario || 0,
+                origem: 'nota_fiscal'
+              });
+            
+            if (!fallbackError) {
+              console.log(`✅ FALLBACK bem-sucedido para item ${index + 1}: "${nomeBasico}"`);
+              itensProcessados++;
+              itensCriados++;
+            } else {
+              console.error(`❌ FALLBACK também falhou para item ${index + 1}:`, fallbackError);
+              itensComErro++;
+            }
+          } catch (fallbackErr) {
+            console.error(`💥 FALLBACK CRÍTICO falhou para item ${index + 1}:`, fallbackErr);
+            itensComErro++;
+          }
+          
           console.log(`⚠️ Continuando processamento dos próximos itens...`);
         }
       }
       
-      console.log(`🏁 PROCESSAMENTO FINALIZADO - ${listaItens.length} itens processados da nota fiscal`);
+      console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
+      console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
+      console.log(`   ✅ Itens processados com sucesso: ${itensProcessados}`);
+      console.log(`   🔄 Itens atualizados: ${itensAtualizados}`);
+      console.log(`   🆕 Itens criados: ${itensCriados}`);
+      console.log(`   ❌ Itens com erro: ${itensComErro}`);
+      console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
     } else {
       console.log(`⚠️ AVISO: Nenhum item encontrado na nota fiscal!`);
       console.log(`🔍 Estrutura dos dados extraídos (sem itens):`, JSON.stringify(extractedData, null, 2));
