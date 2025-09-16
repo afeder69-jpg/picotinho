@@ -155,6 +155,30 @@ const CadastroUsuario = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Se não temos coordenadas, buscar antes de salvar
+      let latitude = profile.latitude;
+      let longitude = profile.longitude;
+      
+      if (!latitude || !longitude) {
+        try {
+          const { data } = await supabase.functions.invoke('geocodificar-endereco', {
+            body: {
+              cep: profile.cep.replace(/\D/g, ''),
+              endereco: `${profile.bairro}, ${profile.cidade}`,
+              cidade: profile.cidade,
+              estado: 'BR'
+            }
+          });
+          
+          if (data?.latitude && data?.longitude) {
+            latitude = data.latitude;
+            longitude = data.longitude;
+          }
+        } catch (error) {
+          console.error('Erro ao buscar coordenadas:', error);
+        }
+      }
+
       // Verificar se perfil já existe
       const { data: existingProfile } = await supabase
         .from('profiles')
@@ -170,8 +194,8 @@ const CadastroUsuario = () => {
         bairro: profile.bairro,
         cidade: profile.cidade,
         cep: profile.cep,
-        latitude: profile.latitude,
-        longitude: profile.longitude,
+        latitude: latitude,
+        longitude: longitude,
         updated_at: new Date().toISOString()
       };
 
@@ -194,7 +218,9 @@ const CadastroUsuario = () => {
 
       toast({
         title: "Perfil salvo",
-        description: "Seus dados foram atualizados com sucesso!",
+        description: latitude && longitude 
+          ? "Seus dados e localização foram atualizados com sucesso!"
+          : "Perfil salvo, mas não foi possível obter a localização via CEP.",
       });
 
       // Voltar para configurações
