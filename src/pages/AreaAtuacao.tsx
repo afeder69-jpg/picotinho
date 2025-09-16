@@ -52,6 +52,18 @@ const AreaAtuacao = () => {
     carregarConfiguracaoUsuario();
   }, []);
 
+  // Recarregar localização quando a página ganhar foco (detecta mudanças do CEP)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (configuracaoCarregada) {
+        obterLocalizacao();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [configuracaoCarregada]);
+
   // Buscar supermercados quando raio ou localização mudarem
   useEffect(() => {
     if (localizacaoUsuario && configuracaoCarregada && temCepCadastrado) {
@@ -321,6 +333,9 @@ const AreaAtuacao = () => {
                   <Badge variant="outline" className="text-xs">
                     {localizacaoUsuario.latitude.toFixed(4)}, {localizacaoUsuario.longitude.toFixed(4)}
                   </Badge>
+                  <Button size="sm" variant="outline" onClick={obterLocalizacao}>
+                    Atualizar
+                  </Button>
                 </>
               ) : (
                 <>
