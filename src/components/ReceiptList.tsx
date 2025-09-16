@@ -435,7 +435,7 @@ const ReceiptList = () => {
           .from('notas_imagens')
           .update({ 
             processada: false, 
-            dados_extraidos: null 
+            dados_extraidos: null
           })
           .eq('id', id);
         
