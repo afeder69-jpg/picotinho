@@ -344,9 +344,6 @@ const AreaAtuacao = () => {
                   <Badge variant="outline" className="text-xs">
                     {localizacaoUsuario.latitude.toFixed(4)}, {localizacaoUsuario.longitude.toFixed(4)}
                   </Badge>
-                  <Button size="sm" variant="outline" onClick={obterLocalizacao}>
-                    Atualizar
-                  </Button>
                 </>
               ) : (
                 <>
