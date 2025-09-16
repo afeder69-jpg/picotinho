@@ -294,12 +294,47 @@ serve(async (req) => {
             const precoParaSalvar = precoUnitario && precoUnitario > 0 
               ? precoUnitario 
               : 0.01; // Preço mínimo para evitar zeros
+            
+            // 🎯 MAPEAR CATEGORIA DA IA-2 PARA VALORES ACEITOS PELA CONSTRAINT
+            const mapearCategoria = (categoriaIA2: string): string => {
+              if (!categoriaIA2) return 'outros';
+              
+              const categoria = String(categoriaIA2).toLowerCase().trim();
+              
+              // Mapeamento das categorias da IA-2 para valores aceitos pela constraint
+              const mapeamento = {
+                'bebidas': 'bebidas',
+                'limpeza': 'limpeza', 
+                'hortifruti': 'hortifruti',
+                'carnes': 'açougue',
+                'açougue': 'açougue',
+                'padaria': 'padaria',
+                'laticínios': 'laticínios/frios',
+                'laticínios/frios': 'laticínios/frios',
+                'frios': 'laticínios/frios',
+                'higiene': 'higiene/farmácia',
+                'farmácia': 'higiene/farmácia',
+                'higiene/farmácia': 'higiene/farmácia',
+                'congelados': 'congelados',
+                'pet': 'pet',
+                'mercearia': 'mercearia',
+                'outros': 'outros'
+              };
+              
+              return mapeamento[categoria] || 'outros';
+            };
+            
+            // Usar categoria mapeada tanto da categoria do produto quanto da IA-2
+            const categoriaOriginal = categoriaProduto || dadosNormalizados?.categoria || 'outros';
+            const categoriaMapeada = mapearCategoria(categoriaOriginal);
+            
+            console.log(`🎯 Categoria mapeada: "${categoriaOriginal}" → "${categoriaMapeada}"`);
               
             // Preparar dados para inserção (com campos normalizados)
             const dadosParaInserir = {
               user_id: notaImagem.usuario_id,
               produto_nome: nomeNormalizado,
-              categoria: categoriaProduto || 'outros',
+              categoria: categoriaMapeada,
               unidade_medida: unidadeProduto || 'unidade',
               quantidade: quantidadeSegura,
               preco_unitario_ultimo: precoParaSalvar,
