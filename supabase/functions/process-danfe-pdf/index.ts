@@ -834,16 +834,19 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-      // Disparar atualização de estoque usando a função dedicada
-      try {
-        console.log("🚀 Invocando process-receipt-full para atualizar estoque...");
-        await supabase.functions.invoke('process-receipt-full', {
+      // Disparar atualização de estoque usando a função dedicada em background
+      console.log("🚀 Invocando process-receipt-full para atualizar estoque...");
+      
+      // CRITICAL FIX: Executar em background para não travar o processo principal
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
           body: { imagemId: notaImagemId }
-        });
-        console.log("✅ process-receipt-full executada com sucesso");
-      } catch (estoqueErr) {
-        console.error("❌ Falha ao invocar process-receipt-full:", estoqueErr);
-      }
+        }).then((result) => {
+          console.log("✅ process-receipt-full executada com sucesso em background:", result);
+        }).catch((estoqueErr) => {
+          console.error("❌ Falha ao invocar process-receipt-full em background:", estoqueErr);
+        })
+      );
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
