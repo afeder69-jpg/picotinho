@@ -184,15 +184,39 @@ serve(async (req) => {
         .toUpperCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
         .trim()
-        // Normalizar IOG para IOGURTE primeiro
+        // Remover números e unidades de medida PRIMEIRO (compatível com IA-2)
+        .replace(/\b(\d+(?:[\.,]\d+)?\s*(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|SACHE|SACHET|BANDEJA))\b/g, "")
+        .replace(/\b(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|SACHE|SACHET|BANDEJA)\b/g, "")
+        // Remover números soltos
+        .replace(/\b\d+(?:[\.,]\d+)?\b/g, "")
+        // Normalizar IOG para IOGURTE
         .replace(/\bIOG\b/g, "IOGURTE")
         .replace(/\bIOG LACFREE\b/g, "IOGURTE LACFREE")
         .replace(/\bIOG LIQUIDO\b/g, "IOGURTE LIQUIDO")
         .replace(/\bIOG LÍQUIDO\b/g, "IOGURTE LIQUIDO")
-        // Remover unidades de medida e variações
-        .replace(/\b(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|SACHE|SACHET|\d+G|\d+ML|\d+L|\d+KG)\b/g, "")
+        // Normalizar RUCULA/RÚCULA
+        .replace(/\bRUCULA\b/g, "RUCULA")
+        .replace(/\bRÚCULA\b/g, "RUCULA")
+        // Normalizar espaços múltiplos
         .replace(/\s+/g, " ")
         .trim();
+    };
+
+    // Função para calcular similaridade entre palavras
+    const calcularSimilaridadePalavras = (texto1: string, texto2: string): number => {
+      const palavras1 = texto1.split(' ').filter(p => p.length > 2);
+      const palavras2 = texto2.split(' ').filter(p => p.length > 2);
+      
+      if (palavras1.length === 0 || palavras2.length === 0) return 0;
+      
+      let palavrasComuns = 0;
+      palavras1.forEach(palavra => {
+        if (palavras2.some(p => p.includes(palavra) || palavra.includes(p))) {
+          palavrasComuns++;
+        }
+      });
+      
+      return palavrasComuns / Math.max(palavras1.length, palavras2.length);
     };
 
     for (const item of estoque ?? []) {
@@ -201,9 +225,17 @@ serve(async (req) => {
       
       const candidatosProduto = candidatos.filter(p => {
         const pNormalizado = normalizarTexto(p.produto_nome);
-        const match = pNormalizado === alvo || 
-                     pNormalizado.includes(alvo) || 
-                     alvo.includes(pNormalizado);
+        
+        // Múltiplas tentativas de matching
+        const match = 
+          // 1. Match exato
+          pNormalizado === alvo ||
+          // 2. Um contém o outro (mínimo 3 caracteres)
+          (alvo.length >= 3 && pNormalizado.includes(alvo)) ||
+          (pNormalizado.length >= 3 && alvo.includes(pNormalizado)) ||
+          // 3. Verificar palavras-chave em comum (similaridade)
+          calcularSimilaridadePalavras(alvo, pNormalizado) >= 0.6;
+        
         if (match) {
           console.log(`  ✅ Match encontrado: ${p.produto_nome} (${p.valor_unitario}) - ${p.data_atualizacao} - ${p.estabelecimento_nome}`);
         }
@@ -283,9 +315,14 @@ serve(async (req) => {
       const alvo = normalizarTexto(item.produto_nome);
       const candidatosGerais = (precosGerais || []).filter(p => {
         const pNormalizado = normalizarTexto(p.produto_nome);
-        const match = pNormalizado === alvo || 
-                     pNormalizado.includes(alvo) || 
-                     alvo.includes(pNormalizado);
+        
+        // Mesma lógica de matching melhorada
+        const match = 
+          pNormalizado === alvo ||
+          (alvo.length >= 3 && pNormalizado.includes(alvo)) ||
+          (pNormalizado.length >= 3 && alvo.includes(pNormalizado)) ||
+          calcularSimilaridadePalavras(alvo, pNormalizado) >= 0.6;
+        
         if (match) {
           console.log(`  ✅ Preço geral encontrado: ${p.produto_nome} (${p.valor_unitario}) - ${p.estabelecimento_nome}`);
         }

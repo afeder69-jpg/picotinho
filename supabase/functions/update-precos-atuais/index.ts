@@ -63,7 +63,24 @@ serve(async (req) => {
     
     if (precoExistente) {
       const dataExistente = new Date(precoExistente.data_atualizacao);
-      const dataNovaCompra = new Date(`${dataCompra}T${horaCompra || '00:00:00'}`);
+      
+      // CORREÇÃO: Melhor parsing da data - lidar com diferentes formatos
+      let dataNovaCompra;
+      try {
+        // Se dataCompra já vem em formato ISO, usar direto
+        if (dataCompra.includes('T')) {
+          dataNovaCompra = new Date(dataCompra);
+        } else {
+          // Se vem em formato DD/MM/YYYY, converter
+          const [dia, mes, ano] = dataCompra.split('/');
+          const horaFormatada = horaCompra || '00:00:00';
+          dataNovaCompra = new Date(`${ano}-${mes}-${dia}T${horaFormatada}`);
+        }
+      } catch (error) {
+        console.error('Erro ao parsear data:', { dataCompra, horaCompra, error });
+        dataNovaCompra = new Date(); // Fallback para data atual
+      }
+      
       const precoExistenteValor = parseFloat(precoExistente.valor_unitario);
       const precoNovoValor = parseFloat(precoUnitario);
       
@@ -102,7 +119,7 @@ serve(async (req) => {
           estabelecimento_cnpj: estabelecimentoCnpj,
           estabelecimento_nome: estabelecimentoNome,
           valor_unitario: precoUnitario,
-          data_atualizacao: new Date(`${dataCompra}T${horaCompra || '00:00:00'}`).toISOString()
+          data_atualizacao: dataNovaCompra.toISOString()
         }, {
           onConflict: 'produto_nome,estabelecimento_cnpj'
         })
@@ -187,26 +204,48 @@ serve(async (req) => {
 
 // Função auxiliar para verificar similaridade entre produtos
 function verificarSimilaridadeProduto(nome1: string, nome2: string): boolean {
-  // Normalizar nomes para comparação
+  // Normalizar nomes para comparação - usar a mesma lógica da IA-2
   const normalizar = (nome: string) => nome
     .toUpperCase()
     .trim()
-    .replace(/\b(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|\d+G|\d+ML|\d+L|\d+KG)\b/g, '')
+    // Remover acentos
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    // Remover unidades de medida e quantidades
+    .replace(/\b(\d+(?:\.\d+)?\s*(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|BANDEJA))\b/g, '')
+    .replace(/\b(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|BANDEJA)\b/g, '')
+    // Remover números soltos
+    .replace(/\b\d+(?:\.\d+)?\b/g, '')
+    // Normalizar espaços
     .replace(/\s+/g, ' ')
     .trim();
 
   const nome1Norm = normalizar(nome1);
   const nome2Norm = normalizar(nome2);
   
-  // Verificar se são iguais após normalização
-  if (nome1Norm === nome2Norm) return true;
+  console.log(`🔍 Comparando similaridade: "${nome1}" (${nome1Norm}) vs "${nome2}" (${nome2Norm})`);
   
-  // Verificar se um contém o outro
-  if (nome1Norm.includes(nome2Norm) || nome2Norm.includes(nome1Norm)) return true;
+  // Verificar se são iguais após normalização
+  if (nome1Norm === nome2Norm) {
+    console.log('✅ Match exato');
+    return true;
+  }
+  
+  // Verificar se um contém o outro (mínimo 3 caracteres)
+  if (nome1Norm.length >= 3 && nome2Norm.length >= 3) {
+    if (nome1Norm.includes(nome2Norm) || nome2Norm.includes(nome1Norm)) {
+      console.log('✅ Match por contenção');
+      return true;
+    }
+  }
   
   // Verificar palavras-chave em comum
   const palavras1 = nome1Norm.split(' ').filter(p => p.length > 2);
   const palavras2 = nome2Norm.split(' ').filter(p => p.length > 2);
+  
+  if (palavras1.length === 0 || palavras2.length === 0) {
+    console.log('❌ Sem palavras suficientes para comparar');
+    return false;
+  }
   
   let palavrasComuns = 0;
   palavras1.forEach(palavra => {
@@ -215,7 +254,12 @@ function verificarSimilaridadeProduto(nome1: string, nome2: string): boolean {
     }
   });
   
-  // Se pelo menos 70% das palavras coincidem, considera similar
+  // Se pelo menos 60% das palavras coincidem, considera similar
   const percentualSimilaridade = palavrasComuns / Math.max(palavras1.length, palavras2.length);
-  return percentualSimilaridade >= 0.7;
+  console.log(`📊 Similaridade: ${palavrasComuns}/${Math.max(palavras1.length, palavras2.length)} = ${(percentualSimilaridade * 100).toFixed(1)}%`);
+  
+  const isSimilar = percentualSimilaridade >= 0.6;
+  console.log(isSimilar ? '✅ Match por similaridade' : '❌ Não similar o suficiente');
+  
+  return isSimilar;
 }
