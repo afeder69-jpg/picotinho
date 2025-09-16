@@ -359,11 +359,36 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 variant: "destructive",
               });
             } else {
-              console.log('✅ Processamento concluído');
-              toast({
-                title: "✅ Processamento concluído",
-                description: `${file.name} processado com sucesso`,
-              });
+              console.log('✅ Processamento concluído - chamando process-receipt-full');
+              
+              // Chamar process-receipt-full imediatamente após a extração
+              try {
+                const stockResponse = await supabase.functions.invoke('process-receipt-full', {
+                  body: { imagemId: notaData.id }
+                });
+                
+                if (stockResponse.error) {
+                  console.error('❌ Erro ao atualizar estoque:', stockResponse.error);
+                  toast({
+                    title: "⚠️ Nota processada",
+                    description: `${file.name} processado, mas erro ao atualizar estoque`,
+                    variant: "destructive",
+                  });
+                } else {
+                  console.log('✅ Estoque atualizado com sucesso');
+                  toast({
+                    title: "✅ Processamento concluído",
+                    description: `${file.name} processado e estoque atualizado!`,
+                  });
+                }
+              } catch (stockError) {
+                console.error('❌ Erro ao chamar process-receipt-full:', stockError);
+                toast({
+                  title: "⚠️ Nota processada",
+                  description: `${file.name} processado, mas erro ao atualizar estoque`,
+                  variant: "destructive",
+                });
+              }
             }
           } catch (processError) {
             console.log('❌ Erro no processamento: ' + (processError.message || 'Erro de conexão'));

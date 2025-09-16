@@ -265,67 +265,6 @@ const ReceiptList = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Verificar automaticamente notas processadas que ainda não foram lançadas ao estoque
-  useEffect(() => {
-    const checkAndProcessPendingNotes = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Buscar notas processadas que podem precisar ser lançadas no estoque
-        const { data: notasProcessadas } = await supabase
-          .from('notas_imagens')
-          .select('id, dados_extraidos')
-          .eq('usuario_id', user.id)
-          .eq('processada', true)
-          .not('dados_extraidos', 'is', null);
-
-        if (!notasProcessadas || notasProcessadas.length === 0) return;
-
-        // Verificar se há produtos no estoque
-        const { data: estoqueData } = await supabase
-          .from('estoque_app')
-          .select('id')
-          .eq('user_id', user.id)
-          .limit(1);
-
-        // Se não há produtos no estoque mas há notas processadas, processar automaticamente
-        if ((!estoqueData || estoqueData.length === 0) && notasProcessadas.length > 0) {
-          console.log('📦 Detectadas notas processadas sem estoque. Processando automaticamente...');
-          
-          for (const nota of notasProcessadas) {
-            try {
-              console.log('🚀 Processando nota automaticamente:', nota.id);
-              const { error } = await supabase.functions.invoke('process-receipt-full', {
-                body: { imagemId: nota.id }
-              });
-              
-              if (error) {
-                console.error('❌ Erro ao processar nota automaticamente:', nota.id, error);
-              } else {
-                console.log('✅ Nota processada automaticamente para o estoque:', nota.id);
-                toast({
-                  title: "Estoque Atualizado",
-                  description: "Produtos da nota fiscal foram adicionados ao estoque automaticamente!",
-                });
-              }
-            } catch (err) {
-              console.error('❌ Erro geral ao processar nota:', nota.id, err);
-            }
-          }
-          
-          // Recarregar lista após processamento
-          setTimeout(() => loadReceipts(), 1000);
-        }
-      } catch (error) {
-        console.error('❌ Erro na verificação automática:', error);
-      }
-    };
-
-    // Executar verificação após carregar as notas (com delay para não conflitar)
-    const timer = setTimeout(checkAndProcessPendingNotes, 3000);
-    return () => clearTimeout(timer);
-  }, [receipts]);
 
   const loadReceipts = async () => {
     try {
