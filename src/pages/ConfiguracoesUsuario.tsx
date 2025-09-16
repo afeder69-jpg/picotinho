@@ -15,6 +15,14 @@ const ConfiguracoesUsuario = () => {
 
   const configOptions = [
     {
+      id: 'cadastro-usuario',
+      title: 'Cadastro do Usuário',
+      description: 'Complete suas informações pessoais e endereço',
+      icon: Settings,
+      onClick: () => navigate('/cadastro-usuario'),
+      isActive: true
+    },
+    {
       id: 'area-atuacao',
       title: 'Área de Atuação',
       description: 'Configurar raio geográfico dos supermercados',

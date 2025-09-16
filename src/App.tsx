@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import EstoqueAtual from "./pages/EstoqueAtual";
 import AreaAtuacao from "./pages/AreaAtuacao";
 import ConfiguracoesUsuario from "./pages/ConfiguracoesUsuario";
+import CadastroUsuario from "./pages/CadastroUsuario";
 import WhatsAppConfig from "./pages/WhatsAppConfig";
 import CleanupUserData from "./pages/CleanupUserData";
 
@@ -51,6 +52,7 @@ const App = () => {
                 <Route path="/estoque" element={<EstoqueAtual />} />
                 <Route path="/area-atuacao" element={<AreaAtuacao />} />
                 <Route path="/configuracoes" element={<ConfiguracoesUsuario />} />
+                <Route path="/cadastro-usuario" element={<CadastroUsuario />} />
                 <Route path="/whatsapp" element={<WhatsAppConfig />} />
                 <Route path="/cleanup" element={<CleanupUserData />} />
                 

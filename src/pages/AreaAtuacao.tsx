@@ -84,14 +84,44 @@ const AreaAtuacao = () => {
     }
   };
 
-  const obterLocalizacao = () => {
+  const obterLocalizacao = async () => {
     setCarregandoLocalizacao(true);
     
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Primeiro tentar buscar localização do perfil do usuário (via CEP)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('latitude, longitude, cep, cidade')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profile?.latitude && profile?.longitude) {
+        // Usar localização do CEP cadastrado
+        setLocalizacaoUsuario({
+          latitude: profile.latitude,
+          longitude: profile.longitude
+        });
+        setCarregandoLocalizacao(false);
+        
+        toast({
+          title: "Localização obtida via CEP",
+          description: `Usando localização cadastrada: ${profile.cidade || 'Seu endereço'}`,
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Erro ao buscar perfil:', error);
+    }
+    
+    // Fallback para GPS se não tiver CEP cadastrado
     if (!navigator.geolocation) {
       toast({
         variant: "destructive",
-        title: "Geolocalização não suportada",
-        description: "Seu navegador não suporta geolocalização.",
+        title: "Configure seu CEP",
+        description: "Vá em Configurações > Cadastro do Usuário para definir sua localização via CEP.",
       });
       setCarregandoLocalizacao(false);
       return;
@@ -106,8 +136,8 @@ const AreaAtuacao = () => {
         setCarregandoLocalizacao(false);
         
         toast({
-          title: "Localização obtida",
-          description: "Sua localização foi detectada com sucesso!",
+          title: "Localização GPS obtida",
+          description: "Recomendamos cadastrar seu CEP em Configurações para maior precisão.",
         });
       },
       (error) => {
@@ -122,8 +152,8 @@ const AreaAtuacao = () => {
         
         toast({
           variant: "destructive",
-          title: "Erro de localização",
-          description: "Não foi possível obter sua localização. Usando localização padrão (São Paulo).",
+          title: "Configure seu CEP",
+          description: "Vá em Configurações > Cadastro do Usuário para definir sua localização.",
         });
       },
       {
