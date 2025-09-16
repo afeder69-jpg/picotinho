@@ -208,6 +208,17 @@ const AreaAtuacao = () => {
 
       if (error) throw error;
 
+      console.log('🔍 DEBUG - Supermercados recebidos da API:', {
+        total: data.supermercados?.length || 0,
+        raioConsultado: data.raioConsultado,
+        coordenadas: data.coordenadas,
+        supermercados: data.supermercados?.map(s => ({
+          nome: s.nome,
+          distancia: s.distancia,
+          produtos: s.produtos_disponiveis
+        }))
+      });
+
       setSupermercados(data.supermercados || []);
       
     } catch (error) {
