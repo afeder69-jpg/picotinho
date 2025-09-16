@@ -45,6 +45,7 @@ const AreaAtuacao = () => {
   const [carregandoLocalizacao, setCarregandoLocalizacao] = useState(false);
   const [carregandoSupermercados, setCarregandoSupermercados] = useState(false);
   const [configuracaoCarregada, setConfiguracaoCarregada] = useState(false);
+  const [temCepCadastrado, setTemCepCadastrado] = useState<boolean | null>(null);
 
   // Carregar configuração atual do usuário
   useEffect(() => {
@@ -53,10 +54,10 @@ const AreaAtuacao = () => {
 
   // Buscar supermercados quando raio ou localização mudarem
   useEffect(() => {
-    if (localizacaoUsuario && configuracaoCarregada) {
+    if (localizacaoUsuario && configuracaoCarregada && temCepCadastrado) {
       buscarSupermercados();
     }
-  }, [raioAtual, localizacaoUsuario, configuracaoCarregada]);
+  }, [raioAtual, localizacaoUsuario, configuracaoCarregada, temCepCadastrado]);
 
   const carregarConfiguracaoUsuario = async () => {
     try {
@@ -98,6 +99,16 @@ const AreaAtuacao = () => {
         .eq('user_id', user.id)
         .single();
 
+      // Verificar se tem CEP cadastrado
+      const cepExiste = profile?.cep && profile?.cep.trim().length > 0;
+      setTemCepCadastrado(cepExiste);
+
+      if (!cepExiste) {
+        // Se não tem CEP, não mostrar supermercados
+        setCarregandoLocalizacao(false);
+        return;
+      }
+
       if (profile?.latitude && profile?.longitude) {
         // Usar localização do CEP cadastrado
         setLocalizacaoUsuario({
@@ -114,6 +125,7 @@ const AreaAtuacao = () => {
       }
     } catch (error) {
       console.error('Erro ao buscar perfil:', error);
+      setTemCepCadastrado(false);
     }
     
     // Fallback para GPS se não tiver CEP cadastrado
@@ -294,10 +306,18 @@ const AreaAtuacao = () => {
                   <Navigation className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm">Obtendo sua localização...</span>
                 </>
+              ) : temCepCadastrado === false ? (
+                <>
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm">CEP necessário para localização</span>
+                  <Button size="sm" variant="outline" onClick={() => navigate('/configuracoes-usuario/cadastro-usuario')}>
+                    Cadastrar CEP
+                  </Button>
+                </>
               ) : localizacaoUsuario ? (
                 <>
                   <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span className="text-sm">Localização detectada</span>
+                  <span className="text-sm">Localização detectada via CEP</span>
                   <Badge variant="outline" className="text-xs">
                     {localizacaoUsuario.latitude.toFixed(4)}, {localizacaoUsuario.longitude.toFixed(4)}
                   </Badge>
@@ -348,7 +368,7 @@ const AreaAtuacao = () => {
             <CardTitle className="flex items-center gap-2">
               <Store className="w-5 h-5 text-primary" />
               Supermercados na Área
-              {!carregandoSupermercados && (
+              {!carregandoSupermercados && temCepCadastrado && (
                 <Badge variant="outline">
                   {supermercados.length} encontrados
                 </Badge>
@@ -356,7 +376,25 @@ const AreaAtuacao = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {carregandoSupermercados ? (
+            {temCepCadastrado === false ? (
+              // Mensagem para usuários sem CEP cadastrado
+              <div className="text-center py-12">
+                <MapPin className="w-16 h-16 mx-auto text-muted-foreground mb-6" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  CEP necessário para continuar
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Para visualizar sua área de atuação, cadastre primeiro o seu CEP em Configurações do Usuário.
+                </p>
+                <Button 
+                  onClick={() => navigate('/configuracoes-usuario/cadastro-usuario')}
+                  className="gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Cadastrar CEP
+                </Button>
+              </div>
+            ) : carregandoSupermercados ? (
               <div className="flex items-center justify-center p-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 <span className="ml-2">Buscando supermercados...</span>
