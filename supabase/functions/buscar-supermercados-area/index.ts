@@ -151,9 +151,9 @@ serve(async (req) => {
     // IMPORTANTE: Não expor dados sensíveis (CNPJ, telefone, email) na resposta
     const { data: todosSupermercados, error: supermercadosError } = await supabase
       .from('supermercados_publicos')  // MUDANÇA: usando view segura
-      .select('id, nome, endereco, cidade, estado, cep, latitude, longitude, ativo, created_at, updated_at')
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null)
+      .select('id, nome, cidade, estado, latitude_aproximada, longitude_aproximada, ativo, created_at, updated_at')
+      .not('latitude_aproximada', 'is', null)
+      .not('longitude_aproximada', 'is', null)
       .eq('ativo', true);
 
     if (supermercadosError) {
@@ -191,6 +191,8 @@ serve(async (req) => {
           supermercadosComNotasAtivas.push({
             ...supermercadoSeguro,
             nome: nomeNormalizado, // Usar nome normalizado
+            latitude_aproximada: supermercado.latitude,
+            longitude_aproximada: supermercado.longitude,
             fonte: 'cadastrado'
           });
           // Remover da lista de estabelecimentos das notas para evitar duplicatas
@@ -241,8 +243,8 @@ serve(async (req) => {
       const distancia = calcularDistancia(
         latitude,
         longitude,
-        parseFloat(supermercado.latitude),
-        parseFloat(supermercado.longitude)
+        parseFloat(supermercado.latitude_aproximada || supermercado.latitude),
+        parseFloat(supermercado.longitude_aproximada || supermercado.longitude)
       );
       
       console.log(`${supermercado.nome}: ${distancia.toFixed(3)}km`);
@@ -252,8 +254,8 @@ serve(async (req) => {
       distancia: calcularDistancia(
         latitude,
         longitude,
-        parseFloat(supermercado.latitude),
-        parseFloat(supermercado.longitude)
+        parseFloat(supermercado.latitude_aproximada || supermercado.latitude),
+        parseFloat(supermercado.longitude_aproximada || supermercado.longitude)
       )
     })).sort((a, b) => a.distancia - b.distancia);
 
