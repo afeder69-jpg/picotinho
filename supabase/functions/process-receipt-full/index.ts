@@ -92,56 +92,39 @@ serve(async (req) => {
       console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
     }
 
-    // 🧠 Função avançada para normalizar nomes de produtos usando IA-2
-    const normalizarNomeProduto = async (nome: string): Promise<{ nomeNormalizado: string, dadosCompletos?: any }> => {
-      if (!nome) return { nomeNormalizado: '' };
+    // 🧠 IA-2 COMO MOTOR ÚNICO DE NORMALIZAÇÃO (SEM FALLBACK)
+    const normalizarNomeProduto = async (nome: string): Promise<{ nomeNormalizado: string, dadosCompletos?: any, status: string }> => {
+      if (!nome) return { nomeNormalizado: '', status: 'ERRO_NOME_VAZIO' };
       
       try {
-        // Tentar normalização com IA-2 primeiro
-        console.log(`🤖 Tentando normalização IA-2 para: ${nome}`);
+        console.log(`🤖 [CRÍTICO] Normalizando com IA-2: "${nome}"`);
         
         const { data: normalizacaoResponse, error: normalizacaoError } = await supabase.functions.invoke('normalizar-produto-ia2', {
-          body: { nomeOriginal: nome }
+          body: { nomeOriginal: nome, debug: false }
         });
 
-        if (!normalizacaoError && normalizacaoResponse?.produto_nome_normalizado) {
-          console.log(`✅ IA-2 normalizou: ${nome} -> ${normalizacaoResponse.produto_nome_normalizado}`);
-          return { 
-            nomeNormalizado: normalizacaoResponse.produto_nome_normalizado,
-            dadosCompletos: normalizacaoResponse
-          };
+        // FAIL-CLOSED: Se IA-2 falhar, PARAR processamento
+        if (normalizacaoError || !normalizacaoResponse?.produto_nome_normalizado) {
+          console.error(`❌ [CRÍTICO] IA-2 FALHOU para "${nome}":`, normalizacaoError);
+          throw new Error(`IA-2_INDISPONIVEL: ${normalizacaoError?.message || 'Resposta inválida da IA'}`);
         }
-        
-        console.log(`⚠️ IA-2 falhou para "${nome}", usando fallback básico`);
-      } catch (error) {
-        console.log(`⚠️ Erro na IA-2 para "${nome}": ${error.message}, usando fallback`);
-      }
 
-      // Fallback: normalização básica
-      let nomeNormalizado = nome.toUpperCase().trim();
-      
-      // 1. Aplicar normalizações da tabela
-      const { data: normalizacoes } = await supabase
-        .from('normalizacoes_nomes')
-        .select('termo_errado, termo_correto')
-        .eq('ativo', true);
-      
-      if (normalizacoes) {
-        for (const norm of normalizacoes) {
-          const regex = new RegExp(`\\b${norm.termo_errado}\\b`, 'gi');
-          nomeNormalizado = nomeNormalizado.replace(regex, norm.termo_correto);
-        }
+        // ✅ SUCESSO da IA-2
+        console.log(`✅ [IA-2] Sucesso: "${nome}" → "${normalizacaoResponse.produto_nome_normalizado}"`);
+        console.log(`📊 [IA-2] Detalhes: marca=${normalizacaoResponse.marca}, categoria=${normalizacaoResponse.categoria}, qtd=${normalizacaoResponse.qtd_valor}${normalizacaoResponse.qtd_unidade}`);
+        
+        return { 
+          nomeNormalizado: normalizacaoResponse.produto_nome_normalizado,
+          dadosCompletos: normalizacaoResponse,
+          status: 'SUCESSO_IA2'
+        };
+
+      } catch (error) {
+        console.error(`💥 [CRÍTICO] Erro fatal na IA-2 para "${nome}":`, error);
+        
+        // FAIL-CLOSED: Propagar erro para interromper processamento
+        throw new Error(`NORMALIZACAO_FALHOU: ${error.message}`);
       }
-      
-      // 2. Aplicar normalizações específicas
-      nomeNormalizado = nomeNormalizado
-        .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO|INTEGRAL|10\s*GRAOS|ORIGINAL)?\b/gi, 'PAO DE FORMA')
-        .replace(/\b(ACHOCOLATADO EM PO NESCAU)\s*(380G|3\.0|30KG|\d+G)?\b/gi, 'ACHOCOLATADO EM PO')
-        .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|INTEGRAL|10\s*GRAOS|ORIGINAL|\d+G|\d+ML|\d+L|\d+KG)\b/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      return { nomeNormalizado };
     };
 
     // Função para calcular similaridade entre strings
@@ -195,7 +178,10 @@ serve(async (req) => {
           const resultadoNormalizacao = await normalizarNomeProduto(nomeProduto);
           const nomeNormalizado = resultadoNormalizacao.nomeNormalizado;
           const dadosNormalizados = resultadoNormalizacao.dadosCompletos;
-          console.log(`🏷️ Original: "${nomeProduto}" -> Normalizado: "${nomeNormalizado}"`);
+          const statusNormalizacao = resultadoNormalizacao.status;
+          
+          console.log(`🏷️ [IA-2] Original: "${nomeProduto}" → Normalizado: "${nomeNormalizado}" [${statusNormalizacao}]`);
+          console.log(`📋 [IA-2] Categoria: ${dadosNormalizados?.categoria}, SKU: ${dadosNormalizados?.produto_hash_normalizado?.slice(0,8)}...`);
 
           // ✅ CORREÇÃO: Ser mais flexível com dados incompletos - não pular itens por falta de quantidade
           if (!nomeProduto || nomeProduto.trim() === '') {
