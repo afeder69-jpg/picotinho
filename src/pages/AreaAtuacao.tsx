@@ -56,14 +56,14 @@ const AreaAtuacao = () => {
   useEffect(() => {
     const handleFocus = () => {
       if (configuracaoCarregada) {
-        console.log('Página ganhou foco - recarregando localização...');
+        console.log('Página ganhou foco - verificando atualizações do CEP...');
         obterLocalizacao();
       }
     };
 
     const handleVisibilityChange = () => {
       if (!document.hidden && configuracaoCarregada) {
-        console.log('Página se tornou visível - recarregando localização...');
+        console.log('Página se tornou visível - verificando atualizações do CEP...');
         obterLocalizacao();
       }
     };
@@ -75,21 +75,6 @@ const AreaAtuacao = () => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [configuracaoCarregada]);
-
-  // Polling periódico para detectar mudanças no CEP (a cada 5 segundos quando ativo)
-  useEffect(() => {
-    if (!configuracaoCarregada) return;
-
-    const interval = setInterval(() => {
-      // Verificar se há mudanças no perfil apenas se a página estiver visível
-      if (!document.hidden) {
-        console.log('Verificando atualizações automáticas do perfil...');
-        obterLocalizacao();
-      }
-    }, 5000); // Verifica a cada 5 segundos
-
-    return () => clearInterval(interval);
   }, [configuracaoCarregada]);
 
   // Buscar supermercados quando raio ou localização mudarem
