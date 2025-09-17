@@ -93,8 +93,8 @@ const CadastroUsuario = () => {
       const { data, error } = await supabase.functions.invoke('geocodificar-endereco', {
         body: {
           cep: cep.replace(/\D/g, ''), // Remove caracteres não numéricos
-          endereco: '', // Deixar vazio para buscar apenas por CEP
-          cidade: '',
+          endereco: profile.bairro || '', // Incluir bairro para contexto
+          cidade: profile.cidade || '',
           estado: 'RJ'
         }
       });
@@ -179,8 +179,8 @@ const CadastroUsuario = () => {
         const { data, error } = await supabase.functions.invoke('geocodificar-endereco', {
           body: {
             cep: profile.cep.replace(/\D/g, ''),
-            endereco: '',
-            cidade: '',
+            endereco: profile.bairro || '',
+            cidade: profile.cidade || '',
             estado: 'RJ'
           }
         });

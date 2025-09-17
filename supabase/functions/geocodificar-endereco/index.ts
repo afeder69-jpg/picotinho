@@ -29,8 +29,20 @@ serve(async (req) => {
     if (endereco && !supermercadoId && !cidade && !estado && !cep) {
       enderecoCompleto = `${endereco}, Brasil`;
     } else {
-      // Lógica original para supermercados cadastrados
-      enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, ${cep || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
+      // Priorizar CEP para geocodificação mais precisa
+      if (cep) {
+        // Se tem CEP, usar CEP + estado para maior precisão
+        enderecoCompleto = `${cep}, ${estado || 'Brasil'}`;
+        // Se também tem endereço e cidade, incluir no início para mais contexto
+        if (endereco && cidade) {
+          enderecoCompleto = `${endereco}, ${cidade}, ${cep}, ${estado || 'Brasil'}`;
+        } else if (cidade) {
+          enderecoCompleto = `${cidade}, ${cep}, ${estado || 'Brasil'}`;
+        }
+      } else {
+        // Fallback para endereço sem CEP
+        enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
+      }
     }
     
     console.log('Endereço para geocodificação:', enderecoCompleto);
