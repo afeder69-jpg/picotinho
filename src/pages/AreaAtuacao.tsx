@@ -77,12 +77,12 @@ const AreaAtuacao = () => {
     };
   }, [configuracaoCarregada]);
 
-  // Buscar supermercados quando raio ou localização mudarem
+  // Buscar supermercados quando localização mudar (não durante arrasto do raio)
   useEffect(() => {
     if (localizacaoUsuario && configuracaoCarregada && temCepCadastrado) {
       buscarSupermercados();
     }
-  }, [raioAtual, localizacaoUsuario, configuracaoCarregada, temCepCadastrado]);
+  }, [localizacaoUsuario, configuracaoCarregada, temCepCadastrado]);
 
   const carregarConfiguracaoUsuario = async () => {
     try {
@@ -310,6 +310,10 @@ const AreaAtuacao = () => {
   const handleRaioChangeComplete = (values: number[]) => {
     const novoRaio = values[0];
     salvarConfiguracaoAutomaticamente(novoRaio);
+    // Buscar supermercados apenas quando o usuário terminar de arrastar
+    if (localizacaoUsuario && configuracaoCarregada && temCepCadastrado) {
+      buscarSupermercados();
+    }
   };
 
 
