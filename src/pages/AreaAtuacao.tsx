@@ -149,10 +149,6 @@ const AreaAtuacao = () => {
         });
         setCarregandoLocalizacao(false);
         
-        toast({
-          title: "Localização obtida via CEP",
-          description: `Usando localização cadastrada: ${profile.cidade || 'Seu endereço'}`,
-        });
         return;
       }
     } catch (error) {
@@ -288,10 +284,6 @@ const AreaAtuacao = () => {
         if (error) throw error;
       }
 
-      toast({
-        title: "Configuração atualizada",
-        description: `Área de atuação definida para ${novoRaio}km de raio.`,
-      });
     } catch (error) {
       console.error('Erro ao salvar configuração:', error);
       toast({
