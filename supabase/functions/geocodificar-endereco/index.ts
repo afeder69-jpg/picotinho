@@ -45,28 +45,40 @@ serve(async (req) => {
     async function geocodificarNominatim(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
       try {
         const encodedAddress = encodeURIComponent(endereco);
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1&countrycodes=br`,
-          {
-            headers: {
-              'User-Agent': 'Picotinho-App/1.0 (https://picotinho.app)'
-            }
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1&countrycodes=br`;
+        
+        console.log('🌐 URL Nominatim:', url);
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Picotinho-App/1.0 (https://picotinho.app)'
           }
-        );
+        });
 
         if (!response.ok) {
           throw new Error(`Erro na API Nominatim: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('📍 Resposta Nominatim:', JSON.stringify(data, null, 2));
         
         if (data && data.length > 0) {
           const location = data[0];
-          console.log('✅ Geocodificação Nominatim bem-sucedida');
-          return {
+          const coords = {
             latitude: parseFloat(location.lat),
             longitude: parseFloat(location.lon)
           };
+          
+          console.log('✅ Geocodificação Nominatim bem-sucedida:', coords);
+          console.log('🏷️ Display name:', location.display_name);
+          
+          // Verificar se as coordenadas são do Brasil (aproximadamente)
+          if (coords.latitude >= -35 && coords.latitude <= 5 && coords.longitude >= -75 && coords.longitude <= -30) {
+            return coords;
+          } else {
+            console.log('❌ Coordenadas fora do Brasil detectadas:', coords);
+            return null;
+          }
         }
         
         return null;
@@ -86,23 +98,36 @@ serve(async (req) => {
         }
 
         const encodedAddress = encodeURIComponent(endereco);
-        const response = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?access_token=${mapboxToken}&country=BR&limit=1`
-        );
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?access_token=${mapboxToken}&country=BR&limit=1`;
+        
+        console.log('🗺️ URL Mapbox:', url);
+        
+        const response = await fetch(url);
 
         if (!response.ok) {
           throw new Error(`Erro na API Mapbox: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('📍 Resposta Mapbox:', JSON.stringify(data, null, 2));
         
         if (data.features && data.features.length > 0) {
           const location = data.features[0];
-          console.log('✅ Geocodificação Mapbox (fallback) bem-sucedida');
-          return {
+          const coords = {
             latitude: location.center[1], // Mapbox retorna [lng, lat]
             longitude: location.center[0]
           };
+          
+          console.log('✅ Geocodificação Mapbox (fallback) bem-sucedida:', coords);
+          console.log('🏷️ Place name:', location.place_name);
+          
+          // Verificar se as coordenadas são do Brasil
+          if (coords.latitude >= -35 && coords.latitude <= 5 && coords.longitude >= -75 && coords.longitude <= -30) {
+            return coords;
+          } else {
+            console.log('❌ Coordenadas fora do Brasil detectadas:', coords);
+            return null;
+          }
         }
         
         return null;
