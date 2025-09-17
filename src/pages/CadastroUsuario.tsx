@@ -95,22 +95,31 @@ const CadastroUsuario = () => {
           cep: cep.replace(/\D/g, ''), // Remove caracteres não numéricos
           endereco: `${profile.bairro}, ${profile.cidade}`,
           cidade: profile.cidade,
-          estado: 'BR' // Pode ser expandido para incluir estado no futuro
+          estado: 'RJ'
         }
       });
 
-      if (error) throw error;
+      console.log('🔍 Resposta buscarCoordenadas:', { data, error });
 
-      if (data?.latitude && data?.longitude) {
+      if (error) {
+        console.error('❌ Erro na função de geocodificação:', error);
+      } else if (data?.success && data?.coordenadas) {
         setProfile(prev => ({
           ...prev,
-          latitude: data.latitude,
-          longitude: data.longitude
+          latitude: data.coordenadas.latitude,
+          longitude: data.coordenadas.longitude
         }));
         
         toast({
           title: "Localização encontrada",
           description: "Coordenadas atualizadas com base no CEP.",
+        });
+      } else {
+        console.log('❌ Não foi possível obter coordenadas:', data);
+        toast({
+          variant: "destructive",
+          title: "Erro na localização", 
+          description: "Não foi possível obter coordenadas do CEP.",
         });
       }
     } catch (error) {
@@ -161,7 +170,7 @@ const CadastroUsuario = () => {
       let longitude = null;
       
       try {
-        const { data } = await supabase.functions.invoke('geocodificar-endereco', {
+        const { data, error } = await supabase.functions.invoke('geocodificar-endereco', {
           body: {
             cep: profile.cep.replace(/\D/g, ''),
             endereco: `${profile.bairro}, ${profile.cidade}`,
@@ -170,12 +179,16 @@ const CadastroUsuario = () => {
           }
         });
         
-        if (data?.latitude && data?.longitude) {
-          latitude = data.latitude;
-          longitude = data.longitude;
+        console.log('🔍 Resposta da geocodificação:', { data, error });
+        
+        if (error) {
+          console.error('❌ Erro na função de geocodificação:', error);
+        } else if (data?.success && data?.coordenadas) {
+          latitude = data.coordenadas.latitude;
+          longitude = data.coordenadas.longitude;
           console.log('✅ Coordenadas obtidas:', { latitude, longitude });
         } else {
-          console.log('❌ Não foi possível obter coordenadas do CEP');
+          console.log('❌ Não foi possível obter coordenadas do CEP:', data);
         }
       } catch (error) {
         console.error('❌ Erro ao buscar coordenadas:', error);
