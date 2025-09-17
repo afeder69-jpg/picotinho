@@ -1437,7 +1437,24 @@ const EstoqueAtual = () => {
                                                    }
                                                  }
                                                  
-                                                 return formatDateSafe(dataExibir);
+                                                  // Debug específico para sabão YPE
+                                                  if (item.produto_nome.toUpperCase().includes('SABAO') && item.produto_nome.toUpperCase().includes('YPE')) {
+                                                    console.log(`🧼 DEBUG SABÃO YPE:`, {
+                                                      produto: item.produto_nome,
+                                                      precoAtual,
+                                                      dataOriginal: dataExibir,
+                                                      dataFormatada: formatDateSafe(dataExibir)
+                                                    });
+                                                  }
+                                                  
+                                                  const dataFormatada = formatDateSafe(dataExibir);
+                                                  // Verificar se contém data problemática
+                                                  if (dataFormatada.includes('11/09/2025')) {
+                                                    console.error(`❌ ERRO: Data 11/09/2025 detectada para ${item.produto_nome}:`, { precoAtual, dataExibir, dataFormatada });
+                                                    return 'ERRO: Data inválida';
+                                                  }
+                                                  
+                                                  return dataFormatada;
                                                })()} - {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
                                              </span>
                                            {(() => {
