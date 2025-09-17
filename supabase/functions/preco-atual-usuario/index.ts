@@ -157,7 +157,28 @@ serve(async (req) => {
         dataRealCompra = nota.data_criacao;
       }
 
-      console.log(`🧾 Nota com CNPJ: ${cnpjNota}, Data Real da Compra: ${dataRealCompra}, Estabelecimento: ${dados.estabelecimento?.nome || 'Não identificado'}`);
+      // ✅ NOVA CORREÇÃO: Converter para formato ISO válido
+      let dataRealCompraISO = "";
+      try {
+        // Se já está em formato ISO, usar direto
+        if (dataRealCompra.includes('T')) {
+          dataRealCompraISO = new Date(dataRealCompra).toISOString();
+        } else if (dataRealCompra.includes('/')) {
+          // Formato DD/MM/YYYY HH:MM:SS
+          const [datePart, timePart] = dataRealCompra.split(' ');
+          const [dia, mes, ano] = datePart.split('/');
+          const horaFormatada = timePart || '00:00:00';
+          dataRealCompraISO = new Date(`${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${horaFormatada}`).toISOString();
+        } else {
+          // Fallback para data atual se não conseguir parsear
+          dataRealCompraISO = new Date().toISOString();
+        }
+      } catch (error) {
+        console.error(`❌ Erro ao converter data: ${dataRealCompra}`, error);
+        dataRealCompraISO = new Date().toISOString();
+      }
+
+      console.log(`🧾 Nota com CNPJ: ${cnpjNota}, Data Real da Compra: ${dataRealCompra}, ISO: ${dataRealCompraISO}, Estabelecimento: ${dados.estabelecimento?.nome || 'Não identificado'}`);
 
       // Verificar se o estabelecimento está no raio
       if (!cnpjsNoRaio.has(cnpjNota)) continue;
@@ -176,7 +197,7 @@ serve(async (req) => {
         candidatos.push({
           produto_nome: item.descricao,
           valor_unitario: valorUnitario,
-          data_atualizacao: dataRealCompra, // ✅ CORRIGIDO: usando data real da compra
+          data_atualizacao: dataRealCompraISO, // ✅ CORRIGIDO: usando data ISO válida
           estabelecimento_cnpj: cnpjNota,
           estabelecimento_nome: nomeEstabelecimento,
         });
