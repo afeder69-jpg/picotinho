@@ -42,6 +42,22 @@ serve(async (req) => {
       throw new Error('Nota ainda não foi processada pela IA');
     }
 
+    // 🛡️ PROTEÇÃO CONTRA PROCESSAMENTO DUPLO
+    // Verificar se já foi processada pela IA-2 (evitar duplicação)
+    if (notaImagem.processada) {
+      console.log(`⚠️ AVISO: Nota ${imagemId} já foi processada anteriormente pela IA-2`);
+      console.log(`🔄 Pulando processamento para evitar duplicação`);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: 'Nota já foi processada anteriormente (evitando duplicação)',
+          skipped: true
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const extractedData = notaImagem.dados_extraidos as any;
     console.log('✅ Dados extraídos carregados');
 
