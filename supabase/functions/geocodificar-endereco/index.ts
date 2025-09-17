@@ -22,32 +22,124 @@ serve(async (req) => {
 
     console.log('Geocodificando endereço:', { supermercadoId, endereco, cidade, estado, cep });
 
+    // Função para obter dados do CEP via ViaCEP
+    async function obterDadosCEP(cep: string): Promise<{ logradouro: string; bairro: string; localidade: string; uf: string } | null> {
+      try {
+        const cepLimpo = cep.replace(/\D/g, '');
+        const url = `https://viacep.com.br/ws/${cepLimpo}/json/`;
+        
+        console.log('🔍 Consultando ViaCEP:', url);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Erro na ViaCEP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📍 Resposta ViaCEP:', JSON.stringify(data, null, 2));
+        
+        if (data.erro) {
+          console.log('❌ CEP não encontrado na ViaCEP');
+          return null;
+        }
+        
+        return {
+          logradouro: data.logradouro || '',
+          bairro: data.bairro || '',
+          localidade: data.localidade || '',
+          uf: data.uf || ''
+        };
+      } catch (error) {
+        console.error('Erro ao consultar ViaCEP:', error);
+        return null;
+      }
+    }
+
     // Construir endereço completo para geocodificação
     let enderecoCompleto;
+    let dadosCEP = null;
     
     // Se apenas 'endereco' foi fornecido (novo uso para estabelecimentos das notas)
     if (endereco && !supermercadoId && !cidade && !estado && !cep) {
       enderecoCompleto = `${endereco}, Brasil`;
-    } else {
-      // Priorizar CEP para geocodificação mais precisa
-      if (cep) {
-        // Para CEPs do Rio de Janeiro (22xxx-xxx), tentar formatos específicos
-        if (cep.startsWith('227')) {
-          // Tentar com formato específico para RJ
-          enderecoCompleto = `CEP ${cep}, Rio de Janeiro, RJ, Brasil`;
-        } else {
-          // Usar apenas o CEP para outros casos
-          enderecoCompleto = `${cep}, Brasil`;
-        }
+    } else if (cep) {
+      // Para CEPs, primeiro obter dados oficiais via ViaCEP
+      dadosCEP = await obterDadosCEP(cep);
+      
+      if (dadosCEP) {
+        // Construir endereço completo com dados oficiais do ViaCEP
+        const partes = [
+          dadosCEP.logradouro,
+          dadosCEP.bairro,
+          dadosCEP.localidade,
+          dadosCEP.uf,
+          'Brasil'
+        ].filter(parte => parte && parte.trim() !== '');
+        
+        enderecoCompleto = partes.join(', ');
+        console.log('✅ Endereço construído com ViaCEP:', enderecoCompleto);
       } else {
-        // Fallback para endereço sem CEP
-        enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
+        // Fallback se ViaCEP falhar
+        enderecoCompleto = `${cep}, Brasil`;
+        console.log('⚠️ Usando fallback para CEP:', enderecoCompleto);
       }
+    } else {
+      // Fallback para endereço sem CEP
+      enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
     }
     
-    console.log('Endereço para geocodificação:', enderecoCompleto);
+    console.log('📍 Endereço final para geocodificação:', enderecoCompleto);
 
-    // Função para geocodificação usando Nominatim (prioritário)
+    // Função para geocodificação usando Google Maps API (prioritário para CEPs)
+    async function geocodificarGoogleMaps(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
+      try {
+        const googleMapsToken = Deno.env.get('GOOGLE_MAPS_API_KEY');
+        if (!googleMapsToken) {
+          console.log('⚠️ Token do Google Maps não configurado, pulando Google Maps');
+          return null;
+        }
+
+        const encodedAddress = encodeURIComponent(endereco);
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${googleMapsToken}`;
+        
+        console.log('🗺️ URL Google Maps:', url.replace(googleMapsToken, 'HIDDEN_KEY'));
+        
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`Erro na API Google Maps: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('📍 Resposta Google Maps:', JSON.stringify(data, null, 2));
+        
+        if (data.results && data.results.length > 0) {
+          const location = data.results[0];
+          const coords = {
+            latitude: location.geometry.location.lat,
+            longitude: location.geometry.location.lng
+          };
+          
+          console.log('✅ Geocodificação Google Maps bem-sucedida:', coords);
+          console.log('🏷️ Formatted address:', location.formatted_address);
+          
+          // Verificar se as coordenadas são do Brasil
+          if (coords.latitude >= -35 && coords.latitude <= 5 && coords.longitude >= -75 && coords.longitude <= -30) {
+            return coords;
+          } else {
+            console.log('❌ Coordenadas fora do Brasil detectadas:', coords);
+            return null;
+          }
+        }
+        
+        return null;
+      } catch (error) {
+        console.error('Erro na geocodificação Google Maps:', error);
+        return null;
+      }
+    }
+
+    // Função para geocodificação usando Nominatim (fallback)
     async function geocodificarNominatim(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
       try {
         const encodedAddress = encodeURIComponent(endereco);
@@ -77,18 +169,6 @@ serve(async (req) => {
           
           console.log('✅ Geocodificação Nominatim bem-sucedida:', coords);
           console.log('🏷️ Display name:', location.display_name);
-          
-          // Verificar se as coordenadas são do Rio de Janeiro para CEPs 22xxx
-          if (cep && cep.startsWith('227')) {
-            // CEPs do Rio de Janeiro devem estar entre estas coordenadas aproximadas
-            if (coords.latitude >= -23.1 && coords.latitude <= -22.8 && 
-                coords.longitude >= -43.8 && coords.longitude <= -43.1) {
-              return coords;
-            } else {
-              console.log('❌ Coordenadas não condizem com Rio de Janeiro para CEP', cep, ':', coords);
-              return null;
-            }
-          }
           
           // Verificar se as coordenadas são do Brasil (aproximadamente)
           if (coords.latitude >= -35 && coords.latitude <= 5 && coords.longitude >= -75 && coords.longitude <= -30) {
@@ -167,26 +247,38 @@ serve(async (req) => {
       }
     }
 
-    // Função principal de geocodificação (Nominatim primeiro, Mapbox como fallback)
+    // Função principal de geocodificação (Google Maps primeiro, depois fallbacks)
     async function geocodificarEndereco(endereco: string): Promise<{ latitude: number; longitude: number } | null> {
-      // 1. Tentar primeiro com Nominatim (gratuito)
-      console.log('🔍 Tentando geocodificação com Nominatim...');
+      // 1. Para CEPs com dados do ViaCEP, tentar primeiro com Google Maps (mais preciso)
+      if (cep && dadosCEP) {
+        console.log('🔍 Tentando geocodificação com Google Maps (CEP + ViaCEP)...');
+        let coordenadas = await geocodificarGoogleMaps(endereco);
+        
+        if (coordenadas) {
+          console.log('✅ Coordenadas obtidas via Google Maps (mais preciso)');
+          return coordenadas;
+        }
+      }
+      
+      // 2. Fallback com Nominatim
+      console.log('🔄 Tentando fallback com Nominatim...');
       let coordenadas = await geocodificarNominatim(endereco);
       
       if (coordenadas) {
+        console.log('⚠️ Coordenadas obtidas via Nominatim (fallback)');
         return coordenadas;
       }
       
-      // 2. Se falhar, tentar com Mapbox (fallback)
+      // 3. Último fallback com Mapbox
       console.log('🔄 Nominatim falhou, tentando fallback com Mapbox...');
       coordenadas = await geocodificarMapbox(endereco);
       
       if (coordenadas) {
-        console.log('⚠️ Coordenadas obtidas via Mapbox (fallback econômico)');
+        console.log('⚠️ Coordenadas obtidas via Mapbox (último fallback)');
         return coordenadas;
       }
       
-      console.log('❌ Ambas as APIs falharam na geocodificação');
+      console.log('❌ Todas as APIs falharam na geocodificação');
       return null;
     }
 
