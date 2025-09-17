@@ -31,14 +31,8 @@ serve(async (req) => {
     } else {
       // Priorizar CEP para geocodificação mais precisa
       if (cep) {
-        // Se tem CEP, usar CEP + estado para maior precisão
-        enderecoCompleto = `${cep}, ${estado || 'Brasil'}`;
-        // Se também tem endereço e cidade, incluir no início para mais contexto
-        if (endereco && cidade) {
-          enderecoCompleto = `${endereco}, ${cidade}, ${cep}, ${estado || 'Brasil'}`;
-        } else if (cidade) {
-          enderecoCompleto = `${cidade}, ${cep}, ${estado || 'Brasil'}`;
-        }
+        // Usar APENAS o CEP para maior precisão, sem bairro que pode confundir
+        enderecoCompleto = `${cep}, Brasil`;
       } else {
         // Fallback para endereço sem CEP
         enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
