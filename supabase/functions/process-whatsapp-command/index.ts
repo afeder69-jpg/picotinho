@@ -1535,49 +1535,15 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
       return `❌ ${validacao.message}`;
     }
     
-    // Para PDFs, chamar primeiro process-danfe-pdf para extrair dados estruturados
-    if (anexo.tipo === 'document' && mimetype === 'application/pdf') {
-      console.log('🔍 Iniciando extração de dados do PDF...');
-      
-      supabase.functions.invoke('process-danfe-pdf', {
-        body: { 
-          pdfUrl: publicUrl,
-          notaImagemId: notaImagem.id,
-          userId: mensagem.usuario_id
-        }
-      }).then((extractResult) => {
-        console.log('✅ Extração de dados concluída:', extractResult);
-        
-        // Após extração, chamar process-receipt-full
-        return supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        });
-      }).then((processResult) => {
-        console.log('✅ Processamento completo iniciado:', processResult);
-        
-        // Enviar mensagem de sucesso
-        enviarRespostaWhatsApp(mensagem.remetente, "✅ Nota processada com sucesso! Os produtos foram adicionados ao seu estoque.");
-      }).catch((processError) => {
-        console.error('❌ Erro no processamento:', processError);
-        
-        // Enviar mensagem de erro
-        enviarRespostaWhatsApp(mensagem.remetente, "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente.");
-      });
+    // Processar em background usando EdgeRuntime.waitUntil para garantir execução
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      EdgeRuntime.waitUntil(
+        processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
+      );
     } else {
-      // Para imagens, usar o fluxo original
-      supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: notaImagem.id }
-      }).then((processResult) => {
-        console.log('✅ Processamento completo iniciado:', processResult);
-        
-        // Enviar mensagem de sucesso
-        enviarRespostaWhatsApp(mensagem.remetente, "✅ Nota processada com sucesso! Os produtos foram adicionados ao seu estoque.");
-      }).catch((processError) => {
-        console.error('❌ Erro no processamento completo:', processError);
-        
-        // Enviar mensagem de erro
-        enviarRespostaWhatsApp(mensagem.remetente, "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente.");
-      });
+      // Fallback para ambientes sem EdgeRuntime
+      processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
+        .catch(error => console.error('❌ Erro no processamento em background:', error));
     }
     
     return "📂 Nota recebida, iniciando avaliação...";
@@ -1585,6 +1551,88 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
   } catch (error: any) {
     console.error('❌ Erro geral ao processar nota:', error);
     return "❌ Erro interno ao processar a nota. Tente novamente.";
+  }
+}
+
+/**
+ * Processa nota fiscal em background enviando mensagem final após conclusão
+ */
+async function processarNotaEmBackground(
+  supabase: any, 
+  anexo: any, 
+  mimetype: string, 
+  publicUrl: string, 
+  notaImagem: any, 
+  mensagem: any
+) {
+  console.log('🔄 Iniciando processamento em background...');
+  
+  try {
+    if (anexo.tipo === 'document' && mimetype === 'application/pdf') {
+      console.log('📄 Processando PDF...');
+      
+      // Etapa 1: Extração de dados do PDF
+      const extractResult = await supabase.functions.invoke('process-danfe-pdf', {
+        body: { 
+          pdfUrl: publicUrl,
+          notaImagemId: notaImagem.id,
+          userId: mensagem.usuario_id
+        }
+      });
+      
+      console.log('✅ Extração de dados concluída:', extractResult);
+      
+      if (extractResult.error) {
+        throw new Error(`Erro na extração: ${extractResult.error.message}`);
+      }
+      
+      // Etapa 2: Processamento completo com IA-2
+      console.log('🤖 Iniciando processamento completo com IA-2...');
+      const processResult = await supabase.functions.invoke('process-receipt-full', {
+        body: { imagemId: notaImagem.id }
+      });
+      
+      console.log('✅ Processamento completo concluído:', processResult);
+      
+      if (processResult.error) {
+        throw new Error(`Erro no processamento: ${processResult.error.message}`);
+      }
+      
+    } else {
+      console.log('🖼️ Processando imagem...');
+      
+      // Para imagens, processar diretamente
+      const processResult = await supabase.functions.invoke('process-receipt-full', {
+        body: { imagemId: notaImagem.id }
+      });
+      
+      console.log('✅ Processamento de imagem concluído:', processResult);
+      
+      if (processResult.error) {
+        throw new Error(`Erro no processamento: ${processResult.error.message}`);
+      }
+    }
+    
+    // Aguardar um pouco para garantir que tudo foi persistido
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Enviar mensagem de sucesso final
+    console.log('📱 Enviando mensagem de confirmação final...');
+    await enviarRespostaWhatsApp(
+      mensagem.remetente, 
+      "✅ Nota processada com sucesso! Os produtos foram adicionados ao seu estoque."
+    );
+    
+    console.log('🎉 Processamento completo e confirmação enviada!');
+    
+  } catch (error) {
+    console.error('❌ Erro no processamento em background:', error);
+    
+    // Enviar mensagem de erro
+    await enviarRespostaWhatsApp(
+      mensagem.remetente, 
+      "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente."
+    );
   }
 }
 
