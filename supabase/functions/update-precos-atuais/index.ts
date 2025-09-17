@@ -64,20 +64,24 @@ serve(async (req) => {
     if (precoExistente) {
       const dataExistente = new Date(precoExistente.data_atualizacao);
       
-      // CORREÇÃO: Melhor parsing da data - lidar com diferentes formatos
+      // ✅ CORREÇÃO: Melhor parsing da data da nota fiscal (não data de lançamento)
       let dataNovaCompra;
       try {
         // Se dataCompra já vem em formato ISO, usar direto
         if (dataCompra.includes('T')) {
           dataNovaCompra = new Date(dataCompra);
+        } else if (dataCompra.includes('-')) {
+          // Se vem em formato YYYY-MM-DD
+          const horaFormatada = horaCompra || '00:00:00';
+          dataNovaCompra = new Date(`${dataCompra}T${horaFormatada}`);
         } else {
           // Se vem em formato DD/MM/YYYY, converter
           const [dia, mes, ano] = dataCompra.split('/');
           const horaFormatada = horaCompra || '00:00:00';
-          dataNovaCompra = new Date(`${ano}-${mes}-${dia}T${horaFormatada}`);
+          dataNovaCompra = new Date(`${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${horaFormatada}`);
         }
       } catch (error) {
-        console.error('Erro ao parsear data:', { dataCompra, horaCompra, error });
+        console.error('Erro ao parsear data da nota fiscal:', { dataCompra, horaCompra, error });
         dataNovaCompra = new Date(); // Fallback para data atual
       }
       
@@ -119,7 +123,7 @@ serve(async (req) => {
           estabelecimento_cnpj: estabelecimentoCnpj,
           estabelecimento_nome: estabelecimentoNome,
           valor_unitario: precoUnitario,
-          data_atualizacao: dataNovaCompra.toISOString()
+          data_atualizacao: dataNovaCompra.toISOString() // ✅ Data real da nota fiscal
         }, {
           onConflict: 'produto_nome,estabelecimento_cnpj'
         })

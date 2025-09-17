@@ -142,7 +142,22 @@ serve(async (req) => {
       else if (dados.emitente?.cnpj) cnpjNota = dados.emitente.cnpj;
       
       cnpjNota = (cnpjNota || "").replace(/[^\d]/g, "");
-      console.log(`🧾 Nota com CNPJ: ${cnpjNota}, Estabelecimento: ${dados.estabelecimento?.nome || 'Não identificado'}`);
+
+      // ✅ CORREÇÃO CRÍTICA: Extrair data REAL da compra da nota fiscal
+      let dataRealCompra = "";
+      if (dados.compra?.data_emissao) dataRealCompra = dados.compra.data_emissao;
+      else if (dados.compra?.data_compra) dataRealCompra = dados.compra.data_compra;
+      else if (dados.dataCompra) dataRealCompra = dados.dataCompra;
+      else if (dados.data_emissao) dataRealCompra = dados.data_emissao;
+      else if (dados.data_compra) dataRealCompra = dados.data_compra;
+      
+      // Se não conseguir extrair data da nota, usar data de criação como fallback
+      if (!dataRealCompra) {
+        console.log(`⚠️ Data da compra não encontrada na nota, usando data de criação como fallback`);
+        dataRealCompra = nota.data_criacao;
+      }
+
+      console.log(`🧾 Nota com CNPJ: ${cnpjNota}, Data Real da Compra: ${dataRealCompra}, Estabelecimento: ${dados.estabelecimento?.nome || 'Não identificado'}`);
 
       // Verificar se o estabelecimento está no raio
       if (!cnpjsNoRaio.has(cnpjNota)) continue;
@@ -161,7 +176,7 @@ serve(async (req) => {
         candidatos.push({
           produto_nome: item.descricao,
           valor_unitario: valorUnitario,
-          data_atualizacao: nota.data_criacao,
+          data_atualizacao: dataRealCompra, // ✅ CORRIGIDO: usando data real da compra
           estabelecimento_cnpj: cnpjNota,
           estabelecimento_nome: nomeEstabelecimento,
         });
