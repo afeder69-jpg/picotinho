@@ -233,6 +233,9 @@ serve(async (req) => {
         .replace(/\bIOG LACFREE\b/g, "IOGURTE LACFREE")
         .replace(/\bIOG LIQUIDO\b/g, "IOGURTE LIQUIDO")
         .replace(/\bIOG LÍQUIDO\b/g, "IOGURTE LIQUIDO")
+        // Normalizar SABÃO YPE (TIXAN YPE -> YPE)
+        .replace(/\bTIXAN\s*YPE\b/g, "YPE")
+        .replace(/\bSABAO\s*EM\s*PO\b/g, "SABAO EM PO")
         // Normalizar RUCULA/RÚCULA
         .replace(/\bRUCULA\b/g, "RUCULA")
         .replace(/\bRÚCULA\b/g, "RUCULA")
