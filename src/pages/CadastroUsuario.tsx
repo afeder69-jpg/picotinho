@@ -155,28 +155,30 @@ const CadastroUsuario = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Se não temos coordenadas, buscar antes de salvar
-      let latitude = profile.latitude;
-      let longitude = profile.longitude;
+      // SEMPRE buscar coordenadas atualizadas baseadas no CEP
+      console.log('🔍 Buscando coordenadas para CEP:', profile.cep);
+      let latitude = null;
+      let longitude = null;
       
-      if (!latitude || !longitude) {
-        try {
-          const { data } = await supabase.functions.invoke('geocodificar-endereco', {
-            body: {
-              cep: profile.cep.replace(/\D/g, ''),
-              endereco: `${profile.bairro}, ${profile.cidade}`,
-              cidade: profile.cidade,
-              estado: 'BR'
-            }
-          });
-          
-          if (data?.latitude && data?.longitude) {
-            latitude = data.latitude;
-            longitude = data.longitude;
+      try {
+        const { data } = await supabase.functions.invoke('geocodificar-endereco', {
+          body: {
+            cep: profile.cep.replace(/\D/g, ''),
+            endereco: `${profile.bairro}, ${profile.cidade}`,
+            cidade: profile.cidade,
+            estado: 'RJ'
           }
-        } catch (error) {
-          console.error('Erro ao buscar coordenadas:', error);
+        });
+        
+        if (data?.latitude && data?.longitude) {
+          latitude = data.latitude;
+          longitude = data.longitude;
+          console.log('✅ Coordenadas obtidas:', { latitude, longitude });
+        } else {
+          console.log('❌ Não foi possível obter coordenadas do CEP');
         }
+      } catch (error) {
+        console.error('❌ Erro ao buscar coordenadas:', error);
       }
 
       // Verificar se perfil já existe
