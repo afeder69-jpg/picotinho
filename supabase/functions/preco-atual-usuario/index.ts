@@ -220,7 +220,10 @@ serve(async (req) => {
         .toUpperCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
         .trim()
-        // Remover números e unidades de medida PRIMEIRO (compatível com IA-2)
+        // Normalizar abreviações específicas PRIMEIRO
+        .replace(/\bCOZ\b/g, "COZIDO")
+        .replace(/\bFATIADO\b/g, "")
+        // Remover números e unidades de medida
         .replace(/\b(\d+(?:[\.,]\d+)?\s*(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|SACHE|SACHET|BANDEJA))\b/g, "")
         .replace(/\b(KG|G|ML|L|UN|UNIDADE|LATA|PACOTE|CAIXA|FRASCO|SACHE|SACHET|BANDEJA)\b/g, "")
         // Remover números soltos
