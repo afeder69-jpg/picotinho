@@ -64,82 +64,47 @@ serve(async (req) => {
 
     console.log(`📝 CNPJs válidos encontrados: ${Array.from(cnpjsValidos).join(', ')}`);
 
-    // 2. Buscar todos os preços na tabela precos_atuais que NÃO correspondem a estabelecimentos das notas do usuário
-    const { data: precosResiduais, error: precosError } = await supabase
+    // 2. Remover preços residuais específicos do SUPERDELLI (dados de teste)
+    const { data: precosSuperdelli, error: precosError } = await supabase
       .from('precos_atuais')
-      .select('*');
+      .select('id, produto_nome, estabelecimento_nome, data_atualizacao')
+      .eq('estabelecimento_nome', 'SUPERDELLI ATACADO E SUPERMERCADOS SA');
 
     if (precosError) {
       throw precosError;
     }
 
     let precosRemovidosCount = 0;
-    const precosParaRemover: string[] = [];
 
-    for (const preco of precosResiduais || []) {
-      const cnpjPreco = (preco.estabelecimento_cnpj || "").replace(/[^\d]/g, "");
-      
-      // Se o CNPJ do preço não está nas notas do usuário, é residual
-      if (cnpjPreco && !cnpjsValidos.has(cnpjPreco)) {
-        precosParaRemover.push(preco.id);
-        console.log(`🗑️ Preço residual: ${preco.produto_nome} - ${preco.estabelecimento_nome} (CNPJ: ${cnpjPreco})`);
-      }
-    }
+    // Remover apenas os preços do SUPERDELLI que são claramente residuais (data 11/09/2025)
+    if (precosSuperdelli && precosSuperdelli.length > 0) {
+      const idsParaRemover = precosSuperdelli
+        .filter(p => p.data_atualizacao.includes('2025-09-11'))
+        .map(p => p.id);
 
-    // 3. Remover preços residuais
-    if (precosParaRemover.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('precos_atuais')
-        .delete()
-        .in('id', precosParaRemover);
+      if (idsParaRemover.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('precos_atuais')
+          .delete()
+          .in('id', idsParaRemover);
 
-      if (deleteError) {
-        throw deleteError;
-      }
-
-      precosRemovidosCount = precosParaRemover.length;
-      console.log(`✅ Removidos ${precosRemovidosCount} preços residuais`);
-    }
-
-    // 4. Verificar se há preços do usuário com datas inconsistentes
-    const { data: precosUsuario, error: precosUsuarioError } = await supabase
-      .from('precos_atuais_usuario')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (precosUsuarioError) {
-      throw precosUsuarioError;
-    }
-
-    let precosUsuarioCorrigidos = 0;
-    for (const preco of precosUsuario || []) {
-      // Verificar se a data é muito antiga ou no futuro
-      const dataPreco = new Date(preco.data_atualizacao);
-      const hoje = new Date();
-      const umMesAtras = new Date();
-      umMesAtras.setMonth(hoje.getMonth() - 1);
-
-      if (dataPreco < umMesAtras || dataPreco > hoje) {
-        // Corrigir data para hoje
-        const { error: updateError } = await supabase
-          .from('precos_atuais_usuario')
-          .update({ data_atualizacao: hoje.toISOString() })
-          .eq('id', preco.id);
-
-        if (!updateError) {
-          precosUsuarioCorrigidos++;
-          console.log(`📅 Data corrigida para: ${preco.produto_nome}`);
+        if (deleteError) {
+          throw deleteError;
         }
+
+        precosRemovidosCount = idsParaRemover.length;
+        console.log(`✅ Removidos ${precosRemovidosCount} preços residuais do SUPERDELLI`);
       }
     }
+
+    // 3. Não precisamos verificar precos_atuais_usuario pois o problema específico é nos preços gerais
 
     return new Response(JSON.stringify({
       success: true,
       message: 'Limpeza de dados residuais concluída',
       detalhes: {
         cnpjsValidos: Array.from(cnpjsValidos),
-        precosResiduaisRemovidos: precosRemovidosCount,
-        precosUsuarioCorrigidos: precosUsuarioCorrigidos
+        precosResiduaisRemovidos: precosRemovidosCount
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
