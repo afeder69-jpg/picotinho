@@ -31,8 +31,14 @@ serve(async (req) => {
     } else {
       // Priorizar CEP para geocodificação mais precisa
       if (cep) {
-        // Usar APENAS o CEP para maior precisão, sem bairro que pode confundir
-        enderecoCompleto = `${cep}, Brasil`;
+        // Para CEPs do Rio de Janeiro (22xxx-xxx), tentar formatos específicos
+        if (cep.startsWith('227')) {
+          // Tentar com formato específico para RJ
+          enderecoCompleto = `CEP ${cep}, Rio de Janeiro, RJ, Brasil`;
+        } else {
+          // Usar apenas o CEP para outros casos
+          enderecoCompleto = `${cep}, Brasil`;
+        }
       } else {
         // Fallback para endereço sem CEP
         enderecoCompleto = `${endereco || ''}, ${cidade || ''}, ${estado || ''}, Brasil`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
@@ -71,6 +77,18 @@ serve(async (req) => {
           
           console.log('✅ Geocodificação Nominatim bem-sucedida:', coords);
           console.log('🏷️ Display name:', location.display_name);
+          
+          // Verificar se as coordenadas são do Rio de Janeiro para CEPs 22xxx
+          if (cep && cep.startsWith('227')) {
+            // CEPs do Rio de Janeiro devem estar entre estas coordenadas aproximadas
+            if (coords.latitude >= -23.1 && coords.latitude <= -22.8 && 
+                coords.longitude >= -43.8 && coords.longitude <= -43.1) {
+              return coords;
+            } else {
+              console.log('❌ Coordenadas não condizem com Rio de Janeiro para CEP', cep, ':', coords);
+              return null;
+            }
+          }
           
           // Verificar se as coordenadas são do Brasil (aproximadamente)
           if (coords.latitude >= -35 && coords.latitude <= 5 && coords.longitude >= -75 && coords.longitude <= -30) {
@@ -120,6 +138,18 @@ serve(async (req) => {
           
           console.log('✅ Geocodificação Mapbox (fallback) bem-sucedida:', coords);
           console.log('🏷️ Place name:', location.place_name);
+          
+          // Verificar se as coordenadas são do Rio de Janeiro para CEPs 22xxx
+          if (cep && cep.startsWith('227')) {
+            // CEPs do Rio de Janeiro devem estar entre estas coordenadas aproximadas
+            if (coords.latitude >= -23.1 && coords.latitude <= -22.8 && 
+                coords.longitude >= -43.8 && coords.longitude <= -43.1) {
+              return coords;
+            } else {
+              console.log('❌ Mapbox retornou coordenadas fora do RJ para CEP', cep, ':', coords);
+              return null;
+            }
+          }
           
           // Verificar se as coordenadas são do Brasil
           if (coords.latitude >= -35 && coords.latitude <= 5 && coords.longitude >= -75 && coords.longitude <= -30) {
