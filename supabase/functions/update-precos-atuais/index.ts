@@ -58,33 +58,32 @@ serve(async (req) => {
 
     console.log('Preço existente:', precoExistente);
 
-    // 3. Determinar se deve atualizar baseado na data/hora e preço
+    // 3. Determinar se deve atualizar baseado na data/hora
     let deveAtualizar = true;
+    let dataNovaCompra;
+    
+    // Parsing da data da nota fiscal fora do if para estar sempre disponível
+    try {
+      // Se dataCompra já vem em formato ISO, usar direto
+      if (dataCompra.includes('T')) {
+        dataNovaCompra = new Date(dataCompra);
+      } else if (dataCompra.includes('-')) {
+        // Se vem em formato YYYY-MM-DD
+        const horaFormatada = horaCompra || '00:00:00';
+        dataNovaCompra = new Date(`${dataCompra}T${horaFormatada}`);
+      } else {
+        // Se vem em formato DD/MM/YYYY, converter
+        const [dia, mes, ano] = dataCompra.split('/');
+        const horaFormatada = horaCompra || '00:00:00';
+        dataNovaCompra = new Date(`${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${horaFormatada}`);
+      }
+    } catch (error) {
+      console.error('Erro ao parsear data da nota fiscal:', { dataCompra, horaCompra, error });
+      dataNovaCompra = new Date(); // Fallback para data atual
+    }
     
     if (precoExistente) {
       const dataExistente = new Date(precoExistente.data_atualizacao);
-      
-      // ✅ CORREÇÃO: Melhor parsing da data da nota fiscal (não data de lançamento)
-      let dataNovaCompra;
-      try {
-        // Se dataCompra já vem em formato ISO, usar direto
-        if (dataCompra.includes('T')) {
-          dataNovaCompra = new Date(dataCompra);
-        } else if (dataCompra.includes('-')) {
-          // Se vem em formato YYYY-MM-DD
-          const horaFormatada = horaCompra || '00:00:00';
-          dataNovaCompra = new Date(`${dataCompra}T${horaFormatada}`);
-        } else {
-          // Se vem em formato DD/MM/YYYY, converter
-          const [dia, mes, ano] = dataCompra.split('/');
-          const horaFormatada = horaCompra || '00:00:00';
-          dataNovaCompra = new Date(`${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${horaFormatada}`);
-        }
-      } catch (error) {
-        console.error('Erro ao parsear data da nota fiscal:', { dataCompra, horaCompra, error });
-        dataNovaCompra = new Date(); // Fallback para data atual
-      }
-      
       const precoExistenteValor = parseFloat(precoExistente.valor_unitario);
       const precoNovoValor = parseFloat(precoUnitario);
       
@@ -99,19 +98,16 @@ serve(async (req) => {
         }
       });
       
-      // NOVA REGRA: Atualiza se:
-      // 1. A nova compra for mais recente E o preço for menor, OU
-      // 2. Se não existir preço anterior válido
-      if (dataNovaCompra > dataExistente && precoNovoValor < precoExistenteValor) {
-        console.log('✅ Nova compra é mais recente E preço é menor - atualizando');
+      // ✅ REGRA CORRIGIDA: Se a nova compra for mais recente, SEMPRE atualiza (independente do preço)
+      if (dataNovaCompra > dataExistente) {
+        console.log('✅ Nova compra é mais recente - atualizando preço');
         deveAtualizar = true;
-      } else if (dataNovaCompra <= dataExistente) {
+      } else {
         deveAtualizar = false;
         console.log('❌ Nova compra não é mais recente, mantendo preço existente');
-      } else if (dataNovaCompra > dataExistente && precoNovoValor >= precoExistenteValor) {
-        deveAtualizar = false;
-        console.log('❌ Nova compra é mais recente mas preço não é menor, mantendo preço existente');
       }
+    } else {
+      console.log('✅ Primeiro preço para este produto/estabelecimento - inserindo');
     }
 
     if (deveAtualizar) {
