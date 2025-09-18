@@ -341,8 +341,8 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 }
               });
             } else {
-              // Para imagens, usar process-receipt para extração completa
-              processResponse = await supabase.functions.invoke('process-receipt', {
+              // Para imagens, usar apenas extração (sem processamento de estoque aqui)
+              processResponse = await supabase.functions.invoke('validate-receipt', {
                 body: {
                   notaImagemId: notaData.id,
                   imageUrl: urlData.publicUrl,
