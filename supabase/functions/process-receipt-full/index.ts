@@ -288,153 +288,7 @@ serve(async (req) => {
 
     // ✅ Marcar nota como processada
     if (!notaImagem.processada) {
-                'hortifruti': 'hortifruti',
-                'carnes': 'açougue',
-                'açougue': 'açougue',
-                'padaria': 'padaria',
-                'laticínios': 'laticínios/frios',
-                'laticínios/frios': 'laticínios/frios',
-                'frios': 'laticínios/frios',
-                'higiene': 'higiene/farmácia',
-                'farmácia': 'higiene/farmácia',
-                'higiene/farmácia': 'higiene/farmácia',
-                'congelados': 'congelados',
-                'pet': 'pet',
-                'mercearia': 'mercearia',
-                'outros': 'outros'
-              };
-              
-              return mapeamento[categoria] || 'outros';
-            };
-            
-            // Usar categoria mapeada tanto da categoria do produto quanto da IA-2
-            const categoriaOriginal = categoriaProduto || dadosNormalizados?.categoria || 'outros';
-            const categoriaMapeada = mapearCategoria(categoriaOriginal);
-            
-            console.log(`🎯 Categoria mapeada: "${categoriaOriginal}" → "${categoriaMapeada}"`);
-              
-            // 🎯 CRÍTICO: Usar EXATAMENTE os dados da IA-2 sem modificações
-            // A IA-2 já entrega os nomes no formato final correto
-            const produtoNomeFinal = dadosNormalizados?.produto_nome_normalizado || nomeNormalizado;
-            const categoriaFinal = dadosNormalizados?.categoria ? mapearCategoria(dadosNormalizados.categoria) : categoriaMapeada;
-            const unidadeFinal = dadosNormalizados?.qtd_unidade || unidadeProduto || 'unidade';
-
-            console.log(`🔍 DADOS FINAIS PARA INSERÇÃO (EXATOS DA IA-2):`);
-            console.log(`   - Nome da IA-2: "${produtoNomeFinal}"`);
-            console.log(`   - Quantidade FINAL da IA-2: ${quantidadeFinalIA2}`);
-            console.log(`   - Preço Unitário FINAL da IA-2: R$ ${precoUnitarioFinalIA2}`);
-            console.log(`   - Categoria da IA-2: ${categoriaFinal}`);
-            console.log(`   - Unidade da IA-2: ${unidadeFinal}`);
-
-            // Preparar dados para inserção (com valores EXATOS da IA-2)
-            const dadosParaInserir = {
-              user_id: notaImagem.usuario_id,
-              produto_nome: produtoNomeFinal,
-              categoria: categoriaFinal,
-              unidade_medida: unidadeFinal,
-              quantidade: quantidadeFinalIA2, // Valor EXATO da IA-2
-              preco_unitario_ultimo: precoUnitarioFinalIA2, // Valor EXATO da IA-2
-              origem: 'nota_fiscal'
-            };
-
-            // Adicionar campos normalizados se disponíveis
-            if (dadosNormalizados) {
-              dadosParaInserir.produto_nome_normalizado = dadosNormalizados.produto_nome_normalizado;
-              dadosParaInserir.nome_base = dadosNormalizados.nome_base;
-              dadosParaInserir.marca = dadosNormalizados.marca;
-              dadosParaInserir.tipo_embalagem = dadosNormalizados.tipo_embalagem;
-              dadosParaInserir.qtd_valor = dadosNormalizados.qtd_valor;
-              dadosParaInserir.qtd_unidade = dadosNormalizados.qtd_unidade;
-              dadosParaInserir.qtd_base = dadosNormalizados.qtd_base;
-              dadosParaInserir.granel = dadosNormalizados.granel;
-              dadosParaInserir.produto_hash_normalizado = dadosNormalizados.produto_hash_normalizado;
-            }
-              
-            const { error: insertError } = await supabase
-              .from('estoque_app')
-              .insert(dadosParaInserir);
-
-            if (insertError) {
-              console.error(`❌ ERRO ao criar produto - Item ${index + 1}:`, insertError);
-              console.error(`❌ Dados que tentou inserir:`, JSON.stringify(dadosParaInserir, null, 2));
-              itensComErro++;
-              continue;
-            }
-
-            console.log(`✅ SUCESSO - Item ${index + 1} CRIADO:`);
-            console.log(`   - Produto: ${produtoNomeFinal}`);
-            console.log(`   - Quantidade: ${quantidadeFinalIA2} ${unidadeFinal} (EXATO DA IA-2)`);
-            console.log(`   - Preço: R$ ${precoUnitarioFinalIA2} (EXATO DA IA-2)`);
-            itensProcessados++;
-            itensCriados++;
-          }
-
-        // 🚀 OTIMIZAÇÃO: Atualizar precos_atuais apenas se necessário
-        try {
-          const dados = extractedData || {};
-          const cnpjNota = dados?.supermercado?.cnpj || dados?.cnpj || dados?.estabelecimento?.cnpj || dados?.emitente?.cnpj;
-          const estabelecimentoNomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
-          
-          if (cnpjNota && estabelecimentoNomeOriginal && precoUnitario > 0) {
-            // 🏪 Normalizar nome do estabelecimento
-            const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
-              nome_input: estabelecimentoNomeOriginal
-            });
-            const estabelecimentoNome = nomeNormalizado || estabelecimentoNomeOriginal.toUpperCase();
-            const cnpjLimpo = String(cnpjNota).replace(/[^\d]/g, '');
-
-            const produtoNomePreco = dadosNormalizados?.produto_nome_normalizado || nomeNormalizado;
-            console.log(`💾 Atualizando precos_atuais: ${produtoNomePreco} @ ${estabelecimentoNome} = R$ ${precoUnitario}`);
-
-            const dadosPreco = {
-              produto_nome: produtoNomePreco,
-              estabelecimento_cnpj: cnpjLimpo,
-              estabelecimento_nome: estabelecimentoNome,
-              valor_unitario: Number(precoUnitario),
-              data_atualizacao: new Date().toISOString(),
-            };
-
-            if (dadosNormalizados) {
-              dadosPreco.produto_nome_normalizado = dadosNormalizados.produto_nome_normalizado;
-              dadosPreco.nome_base = dadosNormalizados.nome_base;
-              dadosPreco.marca = dadosNormalizados.marca;
-              dadosPreco.tipo_embalagem = dadosNormalizados.tipo_embalagem;
-              dadosPreco.qtd_valor = dadosNormalizados.qtd_valor;
-              dadosPreco.qtd_unidade = dadosNormalizados.qtd_unidade;
-              dadosPreco.qtd_base = dadosNormalizados.qtd_base;
-              dadosPreco.granel = dadosNormalizados.granel;
-              dadosPreco.produto_hash_normalizado = dadosNormalizados.produto_hash_normalizado;
-            }
-
-            await supabase
-              .from('precos_atuais')
-              .upsert(dadosPreco, { onConflict: 'produto_nome,estabelecimento_cnpj' });
-          }
-        } catch (e) {
-          console.error('⚠️ Erro ao atualizar precos_atuais (não crítico):', e);
-        }
-      } // Fechamento do for loop
-
-      // Verificar se há itens para processar
-      if (listaItens.length > 0) {
-        console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
-        console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
-        console.log(`   ✅ Itens inseridos com sucesso: ${itensProcessados}`);
-        console.log(`   ❌ Itens com erro: ${itensComErro}`);
-        console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
-        
-        // 🚨 VALIDAÇÃO: Se nenhum item foi inserido, há problema
-        if (itensProcessados === 0) {
-          console.error(`🚨 ERRO CRÍTICO: Nenhum item foi inserido no estoque!`);
-          throw new Error(`Falha crítica: 0 de ${listaItens.length} itens foram inseridos no estoque.`);
-        }
-      } else {
-        console.log(`⚠️ AVISO: Nenhum item encontrado na nota fiscal!`);
-        throw new Error('Nota não contém produtos válidos para processar');
-      }
-
-    // ✅ Marcar nota como processada
-    const { error: updateError } = await supabase
+      const { error: updateError } = await supabase
         .from('notas_imagens')
         .update({
           processada: true,
@@ -478,21 +332,9 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro geral:', error);
     
-    // Verificar se é erro da IA-2 indisponível
-    if (error.message && error.message.includes('IA-2 indisponível')) {
-      return new Response(JSON.stringify({ 
-        error: 'IA-2 INDISPONÍVEL',
-        message: 'A IA está temporariamente indisponível. Por favor, aguarde alguns minutos e tente novamente.',
-        user_message: 'Aguardando disponibilidade da IA para processar a nota fiscal.',
-        can_retry: true
-      }), {
-        status: 503, // Service Unavailable
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
