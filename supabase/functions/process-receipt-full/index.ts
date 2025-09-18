@@ -464,21 +464,23 @@ serve(async (req) => {
         } catch (e) {
           console.error('⚠️ Erro ao atualizar precos_atuais (não crítico):', e);
         }
-      console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
-      console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
-      console.log(`   ✅ Itens inseridos com sucesso: ${itensProcessados}`);
-      console.log(`   ❌ Itens com erro: ${itensComErro}`);
-      console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
-      
-      // 🚨 VALIDAÇÃO: Se nenhum item foi inserido, há problema
-      if (itensProcessados === 0 && listaItens.length > 0) {
-        console.error(`🚨 ERRO CRÍTICO: Nenhum item foi inserido no estoque!`);
-        throw new Error(`Falha crítica: 0 de ${listaItens.length} itens foram inseridos no estoque.`);
+      // Verificar se há itens para processar
+      if (listaItens.length > 0) {
+        console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
+        console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
+        console.log(`   ✅ Itens inseridos com sucesso: ${itensProcessados}`);
+        console.log(`   ❌ Itens com erro: ${itensComErro}`);
+        console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
+        
+        // 🚨 VALIDAÇÃO: Se nenhum item foi inserido, há problema
+        if (itensProcessados === 0) {
+          console.error(`🚨 ERRO CRÍTICO: Nenhum item foi inserido no estoque!`);
+          throw new Error(`Falha crítica: 0 de ${listaItens.length} itens foram inseridos no estoque.`);
+        }
+      } else {
+        console.log(`⚠️ AVISO: Nenhum item encontrado na nota fiscal!`);
+        throw new Error('Nota não contém produtos válidos para processar');
       }
-    } else {
-      console.log(`⚠️ AVISO: Nenhum item encontrado na nota fiscal!`);
-      throw new Error('Nota não contém produtos válidos para processar');
-    }
 
     // ✅ Marcar nota como processada
     const { error: updateError } = await supabase
