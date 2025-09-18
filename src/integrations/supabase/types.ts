@@ -1818,6 +1818,10 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      limpar_dados_usuario_completo: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       limpar_estoque_usuario: {
         Args: { usuario_uuid: string }
         Returns: undefined

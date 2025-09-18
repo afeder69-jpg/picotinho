@@ -1,6 +1,5 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,107 +16,58 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { userId } = await req.json();
-    
-    if (!userId) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'userId é obrigatório' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // Buscar o usuário autenticado do header de autorização
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      throw new Error('Token de autorização necessário');
     }
 
-    console.log(`🧹 Iniciando limpeza de dados residuais para usuário ${userId}`);
-
-    // 1. Buscar todos os CNPJs das notas fiscais do usuário
-    const { data: notasUsuario, error: notasError } = await supabase
-      .from('notas_imagens')
-      .select('dados_extraidos')
-      .eq('usuario_id', userId)
-      .eq('processada', true)
-      .not('dados_extraidos', 'is', null);
-
-    if (notasError) {
-      throw notasError;
-    }
-
-    const cnpjsValidos = new Set<string>();
-    
-    for (const nota of notasUsuario || []) {
-      const dados = nota.dados_extraidos;
-      if (!dados) continue;
-
-      // Extrair CNPJ da nota
-      let cnpjNota = "";
-      if (dados.cnpj) cnpjNota = dados.cnpj;
-      else if (dados.estabelecimento?.cnpj) cnpjNota = dados.estabelecimento.cnpj;
-      else if (dados.supermercado?.cnpj) cnpjNota = dados.supermercado.cnpj;
-      else if (dados.emitente?.cnpj) cnpjNota = dados.emitente.cnpj;
-      
-      const cnpjLimpo = (cnpjNota || "").replace(/[^\d]/g, "");
-      if (cnpjLimpo) {
-        cnpjsValidos.add(cnpjLimpo);
-      }
-    }
-
-    console.log(`📝 CNPJs válidos encontrados: ${Array.from(cnpjsValidos).join(', ')}`);
-
-    // 2. Remover preços residuais específicos do SUPERDELLI (dados de teste)
-    const { data: precosSuperdelli, error: precosError } = await supabase
-      .from('precos_atuais')
-      .select('id, produto_nome, estabelecimento_nome, data_atualizacao')
-      .eq('estabelecimento_nome', 'SUPERDELLI ATACADO E SUPERMERCADOS SA');
-
-    if (precosError) {
-      throw precosError;
-    }
-
-    let precosRemovidosCount = 0;
-
-    // Remover apenas os preços do SUPERDELLI que são claramente residuais (data 11/09/2025)
-    if (precosSuperdelli && precosSuperdelli.length > 0) {
-      const idsParaRemover = precosSuperdelli
-        .filter(p => p.data_atualizacao.includes('2025-09-11'))
-        .map(p => p.id);
-
-      if (idsParaRemover.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('precos_atuais')
-          .delete()
-          .in('id', idsParaRemover);
-
-        if (deleteError) {
-          throw deleteError;
+    // Criar um cliente com o token do usuário para garantir que só limpe dados do usuário correto
+    const supabaseClient = createClient(
+      supabaseUrl, 
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      {
+        global: {
+          headers: {
+            authorization: authHeader
+          }
         }
-
-        precosRemovidosCount = idsParaRemover.length;
-        console.log(`✅ Removidos ${precosRemovidosCount} preços residuais do SUPERDELLI`);
       }
+    );
+
+    // Verificar se o usuário está autenticado
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      throw new Error('Usuário não autenticado');
     }
 
-    // 3. Não precisamos verificar precos_atuais_usuario pois o problema específico é nos preços gerais
+    console.log(`🧹 Iniciando limpeza completa dos dados para usuário: ${user.id}`);
 
-    return new Response(JSON.stringify({
+    // Executar a função de limpeza usando o service key para ter privilégios
+    const { error: limpezaError } = await supabase.rpc('limpar_dados_usuario_completo');
+
+    if (limpezaError) {
+      throw new Error(`Erro na limpeza: ${limpezaError.message}`);
+    }
+
+    console.log('✅ Limpeza completa dos dados concluída');
+
+    return new Response(JSON.stringify({ 
       success: true,
-      message: 'Limpeza de dados residuais concluída',
-      detalhes: {
-        cnpjsValidos: Array.from(cnpjsValidos),
-        precosResiduaisRemovidos: precosRemovidosCount
-      }
+      message: 'Todos os dados do usuário foram limpos com sucesso',
+      usuario_id: user.id,
+      timestamp: new Date().toISOString()
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('❌ Erro na limpeza:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
+    console.error('❌ Erro na limpeza dos dados:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message 
     }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
