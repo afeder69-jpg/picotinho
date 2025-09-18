@@ -67,40 +67,12 @@ serve(async (req) => {
       (item.nome || item.descricao || '').trim().toUpperCase()
     ));
     
-    // ⚠️ LÓGICA MAIS RESTRITIVA - Só bloquear se:
-    // 1. A nota já foi marcada como processada no banco
-    // 2. E realmente tem produtos correspondentes no estoque
-    // 3. E a data de criação dos produtos é recente (últimas 2 horas)
-    if (notaImagem.processada && itensEstoqueExistentes && itensEstoqueExistentes.length > 0) {
-      let produtosRecentesEncontrados = 0;
-      const dataLimite = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 horas atrás
-      
-      for (const produtoNota of produtosUnicos) {
-        const existe = itensEstoqueExistentes.some(item => {
-          const isMatch = item.produto_nome.toUpperCase().includes(produtoNota) || 
-                         produtoNota.includes(item.produto_nome.toUpperCase());
-          const isRecent = new Date(item.created_at) > dataLimite;
-          return isMatch && isRecent;
-        });
-        if (existe) produtosRecentesEncontrados++;
-      }
-      
-      const percentualRecente = produtosRecentesEncontrados / produtosUnicos.size;
-      
-      // Só bloquear se 90% dos produtos são recentes (mais restritivo)
-      if (percentualRecente >= 0.9) {
-        console.log(`⚠️ BLOQUEIO: Nota ${imagemId} já processada recentemente (${produtosRecentesEncontrados}/${produtosUnicos.size} produtos recentes)`);
-        
-        return new Response(JSON.stringify({ 
-          success: true,
-          message: 'Nota já foi processada recentemente - evitando duplicação',
-          nota_id: imagemId,
-          produtos_recentes: produtosRecentesEncontrados,
-          total_produtos: produtosUnicos.size
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    // 🚨 PROTEÇÃO SIMPLIFICADA: Se nota já processada, permite reprocessamento 
+    // mas com lógica de SUBSTITUIÇÃO ao invés de SOMA para evitar duplicação
+    if (notaImagem.processada) {
+      console.log(`🔄 REPROCESSAMENTO: Nota ${imagemId} já foi processada, usando modo SUBSTITUIÇÃO`);
+    } else {
+      console.log(`🆕 PRIMEIRA VEZ: Processando nota ${imagemId} pela primeira vez`);
     }
     
     console.log(`✅ Nota ${imagemId} liberada para processamento do estoque (processada: ${notaImagem.processada}, estoque: ${itensEstoqueExistentes ? itensEstoqueExistentes.length : 0} itens)`);
@@ -327,8 +299,18 @@ serve(async (req) => {
           }
 
           if (produtoSimilar) {
-            // 📈 Atualizar produto existente
-            const novaQuantidade = produtoSimilar.quantidade + quantidadeSegura;
+            // 🚨 CORREÇÃO CRÍTICA: SUBSTITUIR ao invés de SOMAR para evitar duplicação
+            // Se a nota já foi processada, substitui a quantidade ao invés de somar
+            let novaQuantidade;
+            if (notaImagem.processada) {
+              // Nota já processada = SUBSTITUIR quantidade (não somar)
+              novaQuantidade = quantidadeSegura;
+              console.log(`🔄 SUBSTITUINDO quantidade (nota já processada): ${produtoSimilar.quantidade} → ${quantidadeSegura}`);
+            } else {
+              // Primeira vez processando = SOMAR quantidade
+              novaQuantidade = produtoSimilar.quantidade + quantidadeSegura;
+              console.log(`➕ SOMANDO quantidade (primeira vez): ${produtoSimilar.quantidade} + ${quantidadeSegura} = ${novaQuantidade}`);
+            }
             
             // CORREÇÃO CRÍTICA: SEMPRE usar o preço da nota fiscal se existir
             const precoAtualizado = precoUnitario || produtoSimilar.preco_unitario_ultimo || 0;
@@ -462,71 +444,31 @@ serve(async (req) => {
             itensCriados++;
           }
 
-          // === Atualização do Preço Atual (precos_atuais) baseada na nota fiscal ===
-          try {
-            const dados = extractedData || {};
-            const cnpjNota = dados?.supermercado?.cnpj || dados?.cnpj || dados?.estabelecimento?.cnpj || dados?.emitente?.cnpj;
-            const estabelecimentoNomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
-            
-            // 🏪 Normalizar nome do estabelecimento usando a função do banco
-            const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
-              nome_input: estabelecimentoNomeOriginal
-            });
-            const estabelecimentoNome = nomeNormalizado || estabelecimentoNomeOriginal.toUpperCase();
-            
-            const cnpjLimpo = cnpjNota ? String(cnpjNota).replace(/[^\d]/g, '') : null;
+          // 🚀 OTIMIZAÇÃO: Só atualizar precos_atuais se não foi processada antes (evita demora)
+          if (!notaImagem.processada) {
+            try {
+              const dados = extractedData || {};
+              const cnpjNota = dados?.supermercado?.cnpj || dados?.cnpj || dados?.estabelecimento?.cnpj || dados?.emitente?.cnpj;
+              const estabelecimentoNomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
+              
+              // 🏪 Normalizar nome do estabelecimento usando a função do banco
+              const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+                nome_input: estabelecimentoNomeOriginal
+              });
+              const estabelecimentoNome = nomeNormalizado || estabelecimentoNomeOriginal.toUpperCase();
+              
+              const cnpjLimpo = cnpjNota ? String(cnpjNota).replace(/[^\d]/g, '') : null;
 
-            // Extrair data/hora da compra e transformar em ISO
-            const dataStrRaw = dados?.compra?.data_compra || dados?.compra?.data_emissao || dados?.dataCompra || dados?.data || dados?.emissao || null;
-            const horaStr = dados?.compra?.hora_compra || dados?.hora || dados?.horaCompra || null;
+              if (cnpjLimpo && nomeNormalizado && Number(precoUnitario) > 0) {
+                console.log(`🧾 Atualizando precos_atuais -> ${nomeNormalizado} @ ${cnpjLimpo} (${estabelecimentoNome}) = R$ ${precoUnitario}`);
 
-            let dataStr = dataStrRaw ? String(dataStrRaw) : '';
-            if (dataStr && /^(\d{2})\/(\d{2})\/(\d{4})$/.test(dataStr)) {
-              const [d, m, y] = dataStr.split('/');
-              dataStr = `${y}-${m}-${d}`;
-            }
-            const dataISO = new Date(`${dataStr || new Date().toISOString().slice(0,10)}T${horaStr || '00:00:00'}`).toISOString();
-
-            if (cnpjLimpo && nomeNormalizado && Number(precoUnitario) > 0) {
-              console.log(`🧾 Atualizando precos_atuais -> ${nomeNormalizado} @ ${cnpjLimpo} (${estabelecimentoNome}) = R$ ${precoUnitario} em ${dataISO}`);
-
-              const { data: existente } = await supabase
-                .from('precos_atuais')
-                .select('id, valor_unitario, data_atualizacao')
-                .eq('produto_nome', nomeNormalizado)
-                .eq('estabelecimento_cnpj', cnpjLimpo)
-                .maybeSingle();
-
-              let deveAtualizar = false;
-              if (!existente) {
-                deveAtualizar = true;
-              } else {
-                const tExist = new Date(existente.data_atualizacao).getTime();
-                const tNova = new Date(dataISO).getTime();
-                const precoExist = Number(existente.valor_unitario);
-                const precoNovo = Number(precoUnitario);
-
-                if (tNova > tExist && precoNovo < precoExist) {
-                  // Nova compra é mais recente e preço menor -> atualizar
-                  deveAtualizar = true;
-                  console.log('✅ Regra: mais recente + menor preço (atualizando)');
-                } else if (tNova === tExist && precoNovo < precoExist) {
-                  // Mesma data, preço menor -> atualizar
-                  deveAtualizar = true;
-                  console.log('✅ Regra: mesma data com preço menor (atualizando)');
-                } else {
-                  console.log('ℹ️ Mantendo preço existente em precos_atuais');
-                }
-              }
-
-              if (deveAtualizar) {
                 // Preparar dados para upsert com campos normalizados
                 const dadosPreco = {
                   produto_nome: nomeNormalizado,
                   estabelecimento_cnpj: cnpjLimpo,
                   estabelecimento_nome: estabelecimentoNome,
                   valor_unitario: Number(precoUnitario),
-                  data_atualizacao: dataISO,
+                  data_atualizacao: new Date().toISOString(),
                 };
 
                 // Adicionar campos normalizados se disponíveis
@@ -552,9 +494,11 @@ serve(async (req) => {
                   console.log('💾 precos_atuais atualizado com sucesso');
                 }
               }
+            } catch (e) {
+              console.error('⚠️ Falha ao atualizar precos_atuais (não crítico):', e);
             }
-          } catch (e) {
-            console.error('⚠️ Falha ao atualizar precos_atuais (não crítico):', e);
+          } else {
+            console.log('⏭️ Nota já processada - pulando atualização de precos_atuais para otimizar velocidade');
           }
         } catch (error) {
           console.error(`❌ ERRO CRÍTICO ao processar item ${index + 1}:`, error);
