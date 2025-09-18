@@ -45,39 +45,16 @@ serve(async (req) => {
     // Extrair dados da nota uma única vez
     const extractedData = notaImagem.dados_extraidos as any;
     
-    // 🛡️ PROTEÇÃO MAIS INTELIGENTE CONTRA DUPLICAÇÃO
-    // Só bloquear se realmente houve um processamento completo anterior
-    
-    const listaItensNota = extractedData.produtos || extractedData.itens || [];
-    console.log(`📊 Nota tem ${listaItensNota.length} produtos para processar`);
-    
-    // Se não há produtos na nota, não há o que processar
-    if (!listaItensNota || listaItensNota.length === 0) {
+    // ✅ SIMPLIFICADO: Confiar na IA-1 para validação de duplicidade
+    // Se a nota chegou aqui, ela é inédita e deve ser processada normalmente
+    console.log(`🚀 Processando nota inédita validada pela IA-1: ${imagemId}`);
+    console.log('✅ Dados extraídos carregados - iniciando inserção direta no estoque');
+
+    // Verificar se há produtos para processar
+    const listaItens = extractedData.produtos || extractedData.itens;
+    if (!listaItens || !Array.isArray(listaItens) || listaItens.length === 0) {
       throw new Error('Nota não contém produtos válidos para processar');
     }
-    
-    // Buscar estoque atual do usuário
-    const { data: itensEstoqueExistentes, error: estoqueCheckError } = await supabase
-      .from('estoque_app')
-      .select('id, produto_nome, quantidade, created_at')
-      .eq('user_id', notaImagem.usuario_id);
-    
-    // Criar produtos únicos da nota
-    const produtosUnicos = new Set(listaItensNota.map((item: any) => 
-      (item.nome || item.descricao || '').trim().toUpperCase()
-    ));
-    
-    // 🚨 PROTEÇÃO SIMPLIFICADA: Se nota já processada, permite reprocessamento 
-    // mas com lógica de SUBSTITUIÇÃO ao invés de SOMA para evitar duplicação
-    if (notaImagem.processada) {
-      console.log(`🔄 REPROCESSAMENTO: Nota ${imagemId} já foi processada, usando modo SUBSTITUIÇÃO`);
-    } else {
-      console.log(`🆕 PRIMEIRA VEZ: Processando nota ${imagemId} pela primeira vez`);
-    }
-    
-    console.log(`✅ Nota ${imagemId} liberada para processamento do estoque (processada: ${notaImagem.processada}, estoque: ${itensEstoqueExistentes ? itensEstoqueExistentes.length : 0} itens)`);
-
-    console.log('✅ Dados extraídos carregados');
 
     // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO LOGO NO INÍCIO
     const nomeOriginalEstabelecimento = extractedData?.supermercado?.nome || 
@@ -444,103 +421,67 @@ serve(async (req) => {
             itensCriados++;
           }
 
-          // 🚀 OTIMIZAÇÃO: Só atualizar precos_atuais se não foi processada antes (evita demora)
-          if (!notaImagem.processada) {
-            try {
-              const dados = extractedData || {};
-              const cnpjNota = dados?.supermercado?.cnpj || dados?.cnpj || dados?.estabelecimento?.cnpj || dados?.emitente?.cnpj;
-              const estabelecimentoNomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
-              
-              // 🏪 Normalizar nome do estabelecimento usando a função do banco
-              const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
-                nome_input: estabelecimentoNomeOriginal
-              });
-              const estabelecimentoNome = nomeNormalizado || estabelecimentoNomeOriginal.toUpperCase();
-              
-              const cnpjLimpo = cnpjNota ? String(cnpjNota).replace(/[^\d]/g, '') : null;
+        // 🚀 OTIMIZAÇÃO: Atualizar precos_atuais apenas se necessário
+        try {
+          const dados = extractedData || {};
+          const cnpjNota = dados?.supermercado?.cnpj || dados?.cnpj || dados?.estabelecimento?.cnpj || dados?.emitente?.cnpj;
+          const estabelecimentoNomeOriginal = dados?.supermercado?.nome || dados?.estabelecimento?.nome || dados?.emitente?.nome || 'DESCONHECIDO';
+          
+          if (cnpjNota && estabelecimentoNomeOriginal && precoUnitario > 0) {
+            // 🏪 Normalizar nome do estabelecimento
+            const { data: nomeNormalizado } = await supabase.rpc('normalizar_nome_estabelecimento', {
+              nome_input: estabelecimentoNomeOriginal
+            });
+            const estabelecimentoNome = nomeNormalizado || estabelecimentoNomeOriginal.toUpperCase();
+            const cnpjLimpo = String(cnpjNota).replace(/[^\d]/g, '');
 
-              if (cnpjLimpo && nomeNormalizado && Number(precoUnitario) > 0) {
-                console.log(`🧾 Atualizando precos_atuais -> ${nomeNormalizado} @ ${cnpjLimpo} (${estabelecimentoNome}) = R$ ${precoUnitario}`);
+            console.log(`💾 Atualizando precos_atuais: ${nomeNormalizado} @ ${estabelecimentoNome} = R$ ${precoUnitario}`);
 
-                // Preparar dados para upsert com campos normalizados
-                const dadosPreco = {
-                  produto_nome: nomeNormalizado,
-                  estabelecimento_cnpj: cnpjLimpo,
-                  estabelecimento_nome: estabelecimentoNome,
-                  valor_unitario: Number(precoUnitario),
-                  data_atualizacao: new Date().toISOString(),
-                };
+            const dadosPreco = {
+              produto_nome: nomeNormalizado,
+              estabelecimento_cnpj: cnpjLimpo,
+              estabelecimento_nome: estabelecimentoNome,
+              valor_unitario: Number(precoUnitario),
+              data_atualizacao: new Date().toISOString(),
+            };
 
-                // Adicionar campos normalizados se disponíveis
-                if (dadosNormalizados) {
-                  dadosPreco.produto_nome_normalizado = dadosNormalizados.produto_nome_normalizado;
-                  dadosPreco.nome_base = dadosNormalizados.nome_base;
-                  dadosPreco.marca = dadosNormalizados.marca;
-                  dadosPreco.tipo_embalagem = dadosNormalizados.tipo_embalagem;
-                  dadosPreco.qtd_valor = dadosNormalizados.qtd_valor;
-                  dadosPreco.qtd_unidade = dadosNormalizados.qtd_unidade;
-                  dadosPreco.qtd_base = dadosNormalizados.qtd_base;
-                  dadosPreco.granel = dadosNormalizados.granel;
-                  dadosPreco.produto_hash_normalizado = dadosNormalizados.produto_hash_normalizado;
-                }
-
-                const { error: upsertErr } = await supabase
-                  .from('precos_atuais')
-                  .upsert(dadosPreco, { onConflict: 'produto_nome,estabelecimento_cnpj' });
-
-                if (upsertErr) {
-                  console.error('❌ Erro ao atualizar precos_atuais:', upsertErr);
-                } else {
-                  console.log('💾 precos_atuais atualizado com sucesso');
-                }
-              }
-            } catch (e) {
-              console.error('⚠️ Falha ao atualizar precos_atuais (não crítico):', e);
+            if (dadosNormalizados) {
+              dadosPreco.produto_nome_normalizado = dadosNormalizados.produto_nome_normalizado;
+              dadosPreco.nome_base = dadosNormalizados.nome_base;
+              dadosPreco.marca = dadosNormalizados.marca;
+              dadosPreco.tipo_embalagem = dadosNormalizados.tipo_embalagem;
+              dadosPreco.qtd_valor = dadosNormalizados.qtd_valor;
+              dadosPreco.qtd_unidade = dadosNormalizados.qtd_unidade;
+              dadosPreco.qtd_base = dadosNormalizados.qtd_base;
+              dadosPreco.granel = dadosNormalizados.granel;
+              dadosPreco.produto_hash_normalizado = dadosNormalizados.produto_hash_normalizado;
             }
-          } else {
-            console.log('⏭️ Nota já processada - pulando atualização de precos_atuais para otimizar velocidade');
+
+            await supabase
+              .from('precos_atuais')
+              .upsert(dadosPreco, { onConflict: 'produto_nome,estabelecimento_cnpj' });
           }
-        } catch (error) {
-          console.error(`❌ ERRO CRÍTICO ao processar item ${index + 1}:`, error);
-          console.error(`🔍 Dados do item com erro:`, JSON.stringify(produtoData));
-          console.error(`🔍 Nome original: "${nomeProduto}"`);
-          
-          // ⚠️ SEM FALLBACK - Se IA-2 falhar, interromper processamento
-          if (error.message && error.message.includes('IA-2 indisponível')) {
-            console.error(`🚫 IA-2 INDISPONÍVEL - Interrompendo processamento para manter consistência`);
-            throw new Error(`Processamento interrompido: IA-2 indisponível para normalizar "${nomeProduto}". Aguarde o retorno da IA para processar a nota fiscal.`);
-          }
-          
-          // Outros erros também devem parar o processamento para manter consistência
-          throw error;
+        } catch (e) {
+          console.error('⚠️ Erro ao atualizar precos_atuais (não crítico):', e);
         }
-      }
-      
       console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
       console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
-      console.log(`   ✅ Itens processados com sucesso: ${itensProcessados}`);
-      console.log(`   🔄 Itens atualizados: ${itensAtualizados}`);
-      console.log(`   🆕 Itens criados: ${itensCriados}`);
+      console.log(`   ✅ Itens inseridos com sucesso: ${itensProcessados}`);
       console.log(`   ❌ Itens com erro: ${itensComErro}`);
       console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
       
-      // 🚨 VALIDAÇÃO CRÍTICA: Se nenhum item foi inserido, há problema
+      // 🚨 VALIDAÇÃO: Se nenhum item foi inserido, há problema
       if (itensProcessados === 0 && listaItens.length > 0) {
         console.error(`🚨 ERRO CRÍTICO: Nenhum item foi inserido no estoque!`);
-        console.error(`🔍 Dados extraídos recebidos:`, JSON.stringify(extractedData, null, 2));
-        throw new Error(`Falha crítica: 0 de ${listaItens.length} itens foram inseridos no estoque. Verificar logs detalhados.`);
+        throw new Error(`Falha crítica: 0 de ${listaItens.length} itens foram inseridos no estoque.`);
       }
     } else {
       console.log(`⚠️ AVISO: Nenhum item encontrado na nota fiscal!`);
-      console.log(`🔍 Estrutura dos dados extraídos (sem itens):`, JSON.stringify(extractedData, null, 2));
+      throw new Error('Nota não contém produtos válidos para processar');
     }
 
-    // ⚠️ CRÍTICO: Sempre marcar como processada já que chegou até aqui sem erros críticos
-    const deveMarcarComoProcessada = true;
-
-    // Atualizar dados da nota (só se o processamento foi bem-sucedido)
-    if (deveMarcarComoProcessada) {
-      const { error: updateError } = await supabase
+    // ✅ Marcar nota como processada
+    const { error: updateError } = await supabase
         .from('notas_imagens')
         .update({
           processada: true,
