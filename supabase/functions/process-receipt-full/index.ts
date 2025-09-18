@@ -289,12 +289,10 @@ serve(async (req) => {
               console.log(`➕ SOMANDO quantidade (primeira vez): ${produtoSimilar.quantidade} + ${quantidadeSegura} = ${novaQuantidade}`);
             }
             
-            // 🎯 CRÍTICO: Usar dados da IA-2 para atualizar produto existente
+            // 🎯 CRÍTICO: Usar EXATAMENTE os dados finais da IA-2 
             const produtoNomeFinal = dadosNormalizados?.produto_nome_normalizado || nomeNormalizado;
-            const quantidadeFinal = dadosNormalizados?.qtd_valor || quantidadeSegura;
-            const precoAtualizado = precoUnitario || produtoSimilar.preco_unitario_ultimo || 0;
             
-            // Recalcular quantidade usando a quantidade correta da IA-2
+            // Recalcular quantidade usando os valores EXATOS da IA-2
             let novaQuantidadeFinal;
             if (notaImagem.processada) {
               // Nota já processada = SUBSTITUIR quantidade (não somar)
@@ -311,20 +309,20 @@ serve(async (req) => {
             console.log(`      - ID do produto: ${produtoSimilar.id}`);
             console.log(`      - Nome no estoque: "${produtoSimilar.produto_nome}"`);
             console.log(`      - Nome normalizado: "${produtoNomeFinal}"`);
-            console.log(`   💰 PREÇOS:`);
-            console.log(`      - Preço da nota fiscal: ${precoUnitario}`);
+            console.log(`   💰 PREÇOS (EXATOS DA IA-2):`);
+            console.log(`      - Preço da nota fiscal (original): ${precoUnitario}`);
+            console.log(`      - Preço unitário FINAL (IA-2): ${precoUnitarioFinal}`);
             console.log(`      - Preço atual no estoque: ${produtoSimilar.preco_unitario_ultimo}`);
-            console.log(`      - Preço que será salvo: ${precoAtualizado}`);
-            console.log(`   📦 QUANTIDADES:`);
+            console.log(`   📦 QUANTIDADES (EXATAS DA IA-2):`);
             console.log(`      - Quantidade anterior: ${produtoSimilar.quantidade}`);
-            console.log(`      - Quantidade a adicionar: ${quantidadeFinal}`);
+            console.log(`      - Quantidade FINAL (IA-2): ${quantidadeFinal}`);
             console.log(`      - Nova quantidade total: ${novaQuantidadeFinal}`);
             
             const { error: updateError } = await supabase
               .from('estoque_app')
               .update({
                 quantidade: novaQuantidadeFinal,
-                preco_unitario_ultimo: precoAtualizado,
+                preco_unitario_ultimo: precoUnitarioFinal, // Usar valor EXATO da IA-2
                 updated_at: new Date().toISOString()
               })
               .eq('id', produtoSimilar.id);
@@ -342,7 +340,7 @@ serve(async (req) => {
             console.log(`✅ SUCESSO - Item ${index + 1} ATUALIZADO:`);
             console.log(`   - Produto: ${produtoNomeFinal}`);
             console.log(`   - Quantidade: ${novaQuantidadeFinal} ${dadosNormalizados?.qtd_unidade || unidadeProduto || 'unidade'}`);
-            console.log(`   - Preço: R$ ${precoAtualizado}`);
+            console.log(`   - Preço: R$ ${precoUnitarioFinal} (EXATO DA IA-2)`);
             itensProcessados++;
             itensAtualizados++;
             
@@ -352,10 +350,12 @@ serve(async (req) => {
             console.log(`   - Quantidade: ${quantidadeSegura}`);
             console.log(`   - Categoria: ${categoriaProduto}`);
             
-            // 📈 Criar novo produto no estoque - GARANTIR que sempre tenha preço
-            const precoParaSalvar = precoUnitario && precoUnitario > 0 
-              ? precoUnitario 
-              : 0.01; // Preço mínimo para evitar zeros
+            // 🚨 CRÍTICO: Usar valores EXATOS da IA-2 preservados
+            const quantidadeFinalIA2 = dadosNormalizados?.quantidade_final || quantidadeSegura;
+            const precoUnitarioFinalIA2 = dadosNormalizados?.valor_unitario_final || precoUnitario;
+            const precoTotalFinalIA2 = dadosNormalizados?.valor_total_final || (quantidadeFinalIA2 * precoUnitarioFinalIA2);
+            
+            console.log(`💰 VALORES PRESERVADOS DA IA-2: Qtd=${quantidadeFinalIA2}, Unit=R$${precoUnitarioFinalIA2}, Total=R$${precoTotalFinalIA2}`);
             
             // 🎯 MAPEAR CATEGORIA DA IA-2 PARA VALORES ACEITOS PELA CONSTRAINT
             const mapearCategoria = (categoriaIA2: string): string => {
@@ -397,22 +397,22 @@ serve(async (req) => {
             const produtoNomeFinal = dadosNormalizados?.produto_nome_normalizado || nomeNormalizado;
             const categoriaFinal = dadosNormalizados?.categoria ? mapearCategoria(dadosNormalizados.categoria) : categoriaMapeada;
             const unidadeFinal = dadosNormalizados?.qtd_unidade || unidadeProduto || 'unidade';
-            const quantidadeFinal = dadosNormalizados?.qtd_valor || quantidadeSegura;
 
-            console.log(`🔍 DADOS FINAIS PARA INSERÇÃO:`);
+            console.log(`🔍 DADOS FINAIS PARA INSERÇÃO (EXATOS DA IA-2):`);
             console.log(`   - Nome da IA-2: "${produtoNomeFinal}"`);
-            console.log(`   - Quantidade da IA-2: ${quantidadeFinal}`);
+            console.log(`   - Quantidade FINAL da IA-2: ${quantidadeFinalIA2}`);
+            console.log(`   - Preço Unitário FINAL da IA-2: R$ ${precoUnitarioFinalIA2}`);
             console.log(`   - Categoria da IA-2: ${categoriaFinal}`);
             console.log(`   - Unidade da IA-2: ${unidadeFinal}`);
 
-            // Preparar dados para inserção (com campos da IA-2)
+            // Preparar dados para inserção (com valores EXATOS da IA-2)
             const dadosParaInserir = {
               user_id: notaImagem.usuario_id,
               produto_nome: produtoNomeFinal,
               categoria: categoriaFinal,
               unidade_medida: unidadeFinal,
-              quantidade: quantidadeFinal,
-              preco_unitario_ultimo: precoParaSalvar,
+              quantidade: quantidadeFinalIA2, // Valor EXATO da IA-2
+              preco_unitario_ultimo: precoUnitarioFinalIA2, // Valor EXATO da IA-2
               origem: 'nota_fiscal'
             };
 
@@ -442,8 +442,8 @@ serve(async (req) => {
 
             console.log(`✅ SUCESSO - Item ${index + 1} CRIADO:`);
             console.log(`   - Produto: ${produtoNomeFinal}`);
-            console.log(`   - Quantidade: ${quantidadeFinal} ${unidadeFinal}`);
-            console.log(`   - Preço: R$ ${precoUnitario || 0}`);
+            console.log(`   - Quantidade: ${quantidadeFinalIA2} ${unidadeFinal} (EXATO DA IA-2)`);
+            console.log(`   - Preço: R$ ${precoUnitarioFinalIA2} (EXATO DA IA-2)`);
             itensProcessados++;
             itensCriados++;
           }

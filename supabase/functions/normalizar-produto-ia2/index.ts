@@ -22,7 +22,7 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    const { nomeOriginal, debug = false } = await req.json();
+    const { nomeOriginal, quantidadeOriginal, valorUnitarioOriginal, valorTotalOriginal, debug = false } = await req.json();
 
     if (!nomeOriginal) {
       throw new Error('nomeOriginal é obrigatório');
@@ -45,6 +45,11 @@ serve(async (req) => {
     // 3. Gerar hash determinístico para SKU
     const produtoHash = await gerarHashSKU(resultadoIA2);
     resultadoIA2.produto_hash_normalizado = produtoHash;
+
+    // 4. CRÍTICO: Preservar valores originais da nota sem alteração
+    resultadoIA2.quantidade_final = quantidadeOriginal || 1;
+    resultadoIA2.valor_unitario_final = valorUnitarioOriginal || 0;
+    resultadoIA2.valor_total_final = valorTotalOriginal || 0;
 
     console.log(`[IA-2] Resultado final: ${JSON.stringify(resultadoIA2)}`);
 
