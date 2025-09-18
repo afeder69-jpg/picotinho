@@ -49,7 +49,6 @@ serve(async (req) => {
       console.log(`🔄 Reprocessando apenas o estoque da nota já processada`);
       // Não retorna - continua o processamento para garantir que o estoque seja atualizado
     }
-    }
 
     const extractedData = notaImagem.dados_extraidos as any;
     console.log('✅ Dados extraídos carregados');
