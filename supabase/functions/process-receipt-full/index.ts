@@ -103,19 +103,8 @@ serve(async (req) => {
       console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
     }
 
-    // 🗑️ GRAVADOR CEGO: LIMPAR ESTOQUE ANTES DE GRAVAR NOVA NOTA
-    console.log(`🗑️ LIMPANDO estoque atual do usuário para gravação da nova nota...`);
-    const { error: deleteError } = await supabase
-      .from('estoque_app')
-      .delete()
-      .eq('user_id', notaImagem.usuario_id);
-
-    if (deleteError) {
-      console.error('❌ Erro ao limpar estoque:', deleteError);
-      throw new Error(`Erro ao limpar estoque: ${deleteError.message}`);
-    }
-    
-    console.log(`✅ Estoque limpo. Iniciando gravação da nova nota...`);
+    // ✅ GRAVADOR CEGO: Inserir apenas os itens da nota atual no estoque
+    console.log(`📦 Iniciando inserção dos ${listaItens.length} itens da nota no estoque...`);
 
     // ✅ PROCESSA PRODUTOS - APENAS GRAVA EXATAMENTE O QUE A IA-2 ENTREGOU
     if (listaItens && Array.isArray(listaItens)) {
@@ -227,31 +216,22 @@ serve(async (req) => {
         }
       }
 
-      // 🏁 VALIDAÇÃO FINAL DOS TOTAIS
-      console.log(`🏁 VALIDAÇÃO FINAL - VERIFICANDO CONSISTÊNCIA:`);
-      
-      // Buscar estoque atualizado para validar
-      const { data: estoqueValidacao } = await supabase
-        .from('estoque_app')
-        .select('produto_nome, quantidade, preco_unitario_ultimo')
-        .eq('user_id', notaImagem.usuario_id);
-      
-      let totalEstoqueCalculado = 0;
-      if (estoqueValidacao) {
-        for (const item of estoqueValidacao) {
-          const valorItem = item.quantidade * item.preco_unitario_ultimo;
-          totalEstoqueCalculado += valorItem;
-        }
+      // 🏁 VALIDAÇÃO FINAL: Comparar apenas os itens inseridos desta nota
+      let totalItensInseridos = 0;
+      for (const item of listaItens) {
+        const valorItem = item.valor_total || item.precoTotal || (item.quantidade * (item.valor_unitario || item.precoUnitario)) || 0;
+        totalItensInseridos += valorItem;
       }
       
       const totalNota = extractedData.compra?.valor_total || extractedData.valorTotal || 0;
+      console.log(`🏁 VALIDAÇÃO FINAL:`);
       console.log(`   📊 Total da nota: R$ ${totalNota}`);
-      console.log(`   📦 Total do estoque: R$ ${totalEstoqueCalculado.toFixed(2)}`);
+      console.log(`   📦 Total dos itens inseridos: R$ ${totalItensInseridos.toFixed(2)}`);
       
-      if (Math.abs(totalEstoqueCalculado - totalNota) > 0.01) {
-        console.log(`❌ ERRO CRÍTICO: Divergência de R$ ${Math.abs(totalEstoqueCalculado - totalNota).toFixed(2)}`);
+      if (Math.abs(totalItensInseridos - totalNota) > 0.01) {
+        console.log(`❌ ERRO CRÍTICO: Divergência de R$ ${Math.abs(totalItensInseridos - totalNota).toFixed(2)}`);
       } else {
-        console.log(`✅ SUCESSO: Totais são idênticos!`);
+        console.log(`✅ SUCESSO: Itens inseridos coincidem com o total da nota!`);
       }
       
       console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
