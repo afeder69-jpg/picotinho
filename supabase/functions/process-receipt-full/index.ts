@@ -43,11 +43,19 @@ serve(async (req) => {
     }
 
     // 🛡️ PROTEÇÃO CONTRA PROCESSAMENTO DUPLO 
-    // Verificar se ESTA NOTA ESPECÍFICA já foi processada pela IA-2 (mas ainda permite reprocessamento do estoque)
+    // Verificar se ESTA NOTA ESPECÍFICA já foi processada pela IA-2
     if (notaImagem.processada) {
       console.log(`⚠️ AVISO: Esta nota específica ${imagemId} já foi processada anteriormente pela IA-2`);
-      console.log(`🔄 Reprocessando apenas o estoque da nota já processada`);
-      // Não retorna - continua o processamento para garantir que o estoque seja atualizado
+      console.log(`🚫 BLOQUEANDO reprocessamento para evitar duplicação no estoque`);
+      
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Nota já foi processada anteriormente - processamento bloqueado para evitar duplicação',
+        nota_id: imagemId,
+        ja_processada: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const extractedData = notaImagem.dados_extraidos as any;
