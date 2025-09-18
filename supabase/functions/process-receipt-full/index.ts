@@ -103,70 +103,19 @@ serve(async (req) => {
       console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
     }
 
-    // 🧠 IA-2 COMO MOTOR ÚNICO E EXCLUSIVO DE NORMALIZAÇÃO
-    const normalizarNomeProduto = async (nome: string): Promise<{ nomeNormalizado: string, dadosCompletos?: any, status: string }> => {
-      if (!nome) throw new Error('Nome do produto é obrigatório');
-      
-      try {
-        console.log(`🤖 [IA-2 EXCLUSIVA] Normalizando: "${nome}"`);
-        
-        const { data: normalizacaoResponse, error: normalizacaoError } = await supabase.functions.invoke('normalizar-produto-ia2', {
-          body: { nomeOriginal: nome, debug: false }
-        });
+    // Buscar estoque do usuário uma única vez para otimizar performance
+    const { data: estoqueCompleto, error: estoqueError } = await supabase
+      .from('estoque_app')
+      .select('*')
+      .eq('user_id', notaImagem.usuario_id);
 
-        // ⚠️ CRÍTICO: Se IA-2 falhar, PARAR o processamento
-        if (normalizacaoError || !normalizacaoResponse?.produto_nome_normalizado) {
-          console.error(`❌ [IA-2] FALHA CRÍTICA para "${nome}":`, normalizacaoError);
-          throw new Error(`IA-2 indisponível para normalizar "${nome}". Processamento interrompido para manter consistência.`);
-        }
+    if (estoqueError) {
+      console.error('⚠️ Erro ao buscar estoque:', estoqueError);
+    }
 
-        // ✅ SUCESSO da IA-2
-        console.log(`✅ [IA-2] Sucesso: "${nome}" → "${normalizacaoResponse.produto_nome_normalizado}"`);
-        console.log(`📊 [IA-2] Detalhes: marca=${normalizacaoResponse.marca}, categoria=${normalizacaoResponse.categoria}, qtd=${normalizacaoResponse.qtd_valor}${normalizacaoResponse.qtd_unidade}`);
-        
-        return { 
-          nomeNormalizado: normalizacaoResponse.produto_nome_normalizado,
-          dadosCompletos: normalizacaoResponse,
-          status: 'SUCESSO_IA2'
-        };
-
-      } catch (error) {
-        console.error(`❌ [IA-2] Erro crítico para "${nome}":`, error);
-        // SEM FALLBACK - Propagar o erro para interromper o processamento
-        throw error;
-      }
-    };
-
-    // Função para calcular similaridade entre strings
-    const calcularSimilaridade = (str1: string, str2: string): number => {
-      const len1 = str1.length;
-      const len2 = str2.length;
-      const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(null));
-      
-      for (let i = 0; i <= len1; i++) matrix[i][0] = i;
-      for (let j = 0; j <= len2; j++) matrix[0][j] = j;
-      
-      for (let i = 1; i <= len1; i++) {
-        for (let j = 1; j <= len2; j++) {
-          const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j] + 1,     // deletar
-            matrix[i][j - 1] + 1,     // inserir
-            matrix[i - 1][j - 1] + cost // substituir
-          );
-        }
-      }
-      
-      const maxLen = Math.max(len1, len2);
-      return (maxLen - matrix[len1][len2]) / maxLen;
-    };
-
-    // Processa produtos e atualiza estoque automaticamente
-    // Verifica tanto 'produtos' quanto 'itens' para compatibilidade
-    const listaItens = extractedData.produtos || extractedData.itens;
+    // ✅ PROCESSA PRODUTOS - APENAS GRAVA EXATAMENTE O QUE A IA-2 ENTREGOU
     if (listaItens && Array.isArray(listaItens)) {
-      console.log(`📦 Atualizando estoque automaticamente - TOTAL DE ${listaItens.length} ITENS na nota...`);
-      console.log(`🔍 Lista completa de itens:`, listaItens.map((item, i) => `${i+1}. ${item.nome || item.descricao}`).join(', '));
+      console.log(`📦 Gravando no estoque EXATAMENTE como a IA-2 entregou - ${listaItens.length} itens...`);
       
       let itensProcessados = 0;
       let itensAtualizados = 0;
@@ -174,199 +123,171 @@ serve(async (req) => {
       let itensComErro = 0;
       
       for (let index = 0; index < listaItens.length; index++) {
-        const produtoData = listaItens[index];
+        const item = listaItens[index];
         try {
-          // Compatibilidade entre diferentes formatos de dados (produtos vs itens)
-          const nomeProduto = produtoData.nome || produtoData.descricao;
-          const quantidadeProduto = produtoData.quantidade;
-          const precoUnitario = produtoData.precoUnitario || produtoData.valor_unitario;
-          const precoTotal = produtoData.precoTotal || produtoData.valor_total;
-          const categoriaProduto = produtoData.categoria;
-          const unidadeProduto = produtoData.unidade;
+          // ✅ USAR EXATAMENTE OS DADOS DA IA-2 - SEM REINTERPRETAÇÃO
+          const nomeExato = item.nome || item.descricao;
+          const quantidadeExata = item.quantidade;
+          const precoUnitarioExato = item.precoUnitario || item.valor_unitario;
+          const precoTotalExato = item.precoTotal || item.valor_total;
+          const categoriaExata = item.categoria || 'outros';
+          const unidadeExata = item.unidade || 'UN';
 
-          console.log(`\n🔍 PROCESSANDO ITEM ${index + 1}: "${nomeProduto}"`);
-          console.log(`   - Quantidade: ${quantidadeProduto}`);
-          console.log(`   - Preço unitário: ${precoUnitario}`);
-          console.log(`   - Preço total: ${precoTotal}`);
-          console.log(`   - Categoria: ${categoriaProduto}`);
-          
-          const resultadoNormalizacao = await normalizarNomeProduto(nomeProduto);
-          const nomeNormalizado = resultadoNormalizacao.nomeNormalizado;
-          const dadosNormalizados = resultadoNormalizacao.dadosCompletos;
-          const statusNormalizacao = resultadoNormalizacao.status;
-          
-          console.log(`🏷️ [IA-2] Original: "${nomeProduto}" → Normalizado: "${nomeNormalizado}" [${statusNormalizacao}]`);
-          console.log(`📋 [IA-2] Categoria: ${dadosNormalizados?.categoria}, SKU: ${dadosNormalizados?.produto_hash_normalizado?.slice(0,8)}...`);
+          console.log(`\n🔍 PROCESSANDO ITEM ${index + 1}: "${nomeExato}"`);
+          console.log(`   - Quantidade: ${quantidadeExata}`);
+          console.log(`   - Preço unitário: ${precoUnitarioExato}`);
+          console.log(`   - Preço total: ${precoTotalExato}`);
+          console.log(`   - Categoria: ${categoriaExata}`);
 
-          // ✅ CORREÇÃO: Ser mais flexível com dados incompletos - não pular itens por falta de quantidade
-          if (!nomeProduto || nomeProduto.trim() === '') {
-            console.log(`⚠️ Item ${index + 1} ignorado: nome do produto vazio ou inválido`);
+          if (!nomeExato || nomeExato.trim() === '') {
+            console.log(`⚠️ Item ${index + 1} ignorado: nome vazio`);
             continue;
           }
-          
-          // Se não tem quantidade, usar 1 como padrão
-          const quantidadeSegura = quantidadeProduto || 1;
-          console.log(`🔧 Quantidade ajustada para item ${index + 1}: ${quantidadeSegura} (original: ${quantidadeProduto})`);
 
-          // Buscar lista completa do estoque do usuário
-          const { data: estoqueLista, error: estoqueListaError } = await supabase
-            .from('estoque_app')
-            .select('*')
-            .eq('user_id', notaImagem.usuario_id);
-
-          if (estoqueListaError) {
-            console.error(`⚠️ Erro ao buscar lista de estoque para item ${index + 1}:`, estoqueListaError);
-            console.log(`🔄 Continuando processamento sem busca de similares...`);
-            // Não usar continue - processar como produto novo mesmo com erro na busca
+          // 🔍 Buscar produto existente no estoque (sem reprocessar)
+          let produtoExistente = null;
+          if (estoqueCompleto && !estoqueError) {
+            // Busca por nome exato (sem normalização adicional)
+            produtoExistente = estoqueCompleto.find(p => 
+              p.produto_nome.toUpperCase().trim() === nomeExato.toUpperCase().trim()
+            );
+            
+            if (produtoExistente) {
+              console.log(`✅ Produto encontrado no estoque: "${produtoExistente.produto_nome}" (ID: ${produtoExistente.id})`);
+            }
           }
 
-          // 🎯 Procurar produto similar usando algoritmo inteligente (ROBUSTO)
-          let produtoSimilar = null;
-          if (estoqueLista && estoqueLista.length > 0 && !estoqueListaError) {
-            console.log(`🔍 Buscando produto similar para "${nomeNormalizado}" em ${estoqueLista.length} itens do estoque...`);
-            
-            // ESTRATÉGIA 1: Match por hash normalizado (mais confiável)
-            if (dadosNormalizados?.produto_hash_normalizado) {
-              for (const prod of estoqueLista) {
-                if (prod.produto_hash_normalizado === dadosNormalizados.produto_hash_normalizado) {
-                  produtoSimilar = prod;
-                  console.log(`✅ Match por HASH encontrado: "${prod.produto_nome}" (ID: ${prod.id})`);
-                  break;
-                }
-              }
-            }
-
-            // ESTRATÉGIA 2: Match exato por nome normalizado
-            if (!produtoSimilar) {
-              for (const prod of estoqueLista) {
-                // Comparação simples e direta - evitar re-normalização que pode falhar
-                const nomeEstoqueNorm = prod.produto_nome_normalizado || prod.produto_nome.toUpperCase().trim();
-                const nomeItemNorm = nomeNormalizado.toUpperCase().trim();
-                
-                if (nomeEstoqueNorm === nomeItemNorm) {
-                  produtoSimilar = prod;
-                  console.log(`✅ Match EXATO por nome: "${prod.produto_nome}" (ID: ${prod.id})`);
-                  break;
-                }
-              }
-            }
-
-            // ESTRATÉGIA 3: Similaridade textual (fallback)
-            if (!produtoSimilar) {
-              let melhorSimilaridade = 0;
-              for (const item of estoqueLista) {
-                const similaridade = calcularSimilaridade(
-                  nomeNormalizado.toLowerCase(),
-                  item.produto_nome.toLowerCase()
-                );
-                console.log(`   📊 Similaridade com "${item.produto_nome}": ${(similaridade * 100).toFixed(1)}%`);
-                if (similaridade >= 0.85 && similaridade > melhorSimilaridade) {
-                  melhorSimilaridade = similaridade;
-                  produtoSimilar = item;
-                  console.log(`   🎯 Novo melhor match por similaridade: "${item.produto_nome}" (${(similaridade * 100).toFixed(1)}%)`);
-                }
-              }
-            }
-            
-            if (!produtoSimilar) {
-              console.log(`❌ Nenhum produto similar encontrado para "${nomeNormalizado}" - será criado novo item`);
-            }
-          } else {
-            console.log(`⚠️ Sem estoque para comparar ou erro na busca - criando produto novo`);
-          }
-
-          if (produtoSimilar) {
-            // 🚨 CORREÇÃO CRÍTICA: SUBSTITUIR ao invés de SOMAR para evitar duplicação
-            // Se a nota já foi processada, substitui a quantidade ao invés de somar
+          if (produtoExistente) {
+            // ✅ ATUALIZAR PRODUTO EXISTENTE - VALORES EXATOS DA IA-2
             let novaQuantidade;
             if (notaImagem.processada) {
-              // Nota já processada = SUBSTITUIR quantidade (não somar)
-              novaQuantidade = quantidadeSegura;
-              console.log(`🔄 SUBSTITUINDO quantidade (nota já processada): ${produtoSimilar.quantidade} → ${quantidadeSegura}`);
+              // Nota já processada = SUBSTITUIR quantidade
+              novaQuantidade = quantidadeExata;
+              console.log(`🔄 SUBSTITUINDO quantidade (nota já processada): ${produtoExistente.quantidade} → ${quantidadeExata}`);
             } else {
-              // Primeira vez processando = SOMAR quantidade
-              novaQuantidade = produtoSimilar.quantidade + quantidadeSegura;
-              console.log(`➕ SOMANDO quantidade (primeira vez): ${produtoSimilar.quantidade} + ${quantidadeSegura} = ${novaQuantidade}`);
-            }
-            
-            // 🎯 CRÍTICO: Usar EXATAMENTE os dados finais da IA-2 
-            const produtoNomeFinal = dadosNormalizados?.produto_nome_normalizado || nomeNormalizado;
-            
-            // Recalcular quantidade usando os valores EXATOS da IA-2
-            let novaQuantidadeFinal;
-            if (notaImagem.processada) {
-              // Nota já processada = SUBSTITUIR quantidade (não somar)
-              novaQuantidadeFinal = quantidadeFinal;
-              console.log(`🔄 SUBSTITUINDO quantidade (nota já processada): ${produtoSimilar.quantidade} → ${quantidadeFinal}`);
-            } else {
-              // Primeira vez processando = SOMAR quantidade
-              novaQuantidadeFinal = produtoSimilar.quantidade + quantidadeFinal;
-              console.log(`➕ SOMANDO quantidade (primeira vez): ${produtoSimilar.quantidade} + ${quantidadeFinal} = ${novaQuantidadeFinal}`);
+              // Primeira vez = SOMAR quantidade
+              novaQuantidade = produtoExistente.quantidade + quantidadeExata;
+              console.log(`➕ SOMANDO quantidade (primeira vez): ${produtoExistente.quantidade} + ${quantidadeExata} = ${novaQuantidade}`);
             }
             
             console.log(`🔍 COMPARAÇÃO DETALHADA - ITEM ${index + 1}`);
             console.log(`   ✅ PRODUTO ENCONTRADO NO ESTOQUE:`);
-            console.log(`      - ID do produto: ${produtoSimilar.id}`);
-            console.log(`      - Nome no estoque: "${produtoSimilar.produto_nome}"`);
-            console.log(`      - Nome normalizado: "${produtoNomeFinal}"`);
-            console.log(`   💰 PREÇOS (EXATOS DA IA-2):`);
-            console.log(`      - Preço da nota fiscal (original): ${precoUnitario}`);
-            console.log(`      - Preço unitário FINAL (IA-2): ${precoUnitarioFinal}`);
-            console.log(`      - Preço atual no estoque: ${produtoSimilar.preco_unitario_ultimo}`);
-            console.log(`   📦 QUANTIDADES (EXATAS DA IA-2):`);
-            console.log(`      - Quantidade anterior: ${produtoSimilar.quantidade}`);
-            console.log(`      - Quantidade FINAL (IA-2): ${quantidadeFinal}`);
-            console.log(`      - Nova quantidade total: ${novaQuantidadeFinal}`);
+            console.log(`      - ID do produto: ${produtoExistente.id}`);
+            console.log(`      - Nome no estoque: "${produtoExistente.produto_nome}"`);
+            console.log(`      - Nome normalizado: "${nomeExato}"`);
+            console.log(`   💰 PREÇOS:`);
+            console.log(`      - Preço da nota fiscal: ${precoUnitarioExato}`);
+            console.log(`      - Preço atual no estoque: ${produtoExistente.preco_unitario_ultimo}`);
+            console.log(`      - Preço que será salvo: ${precoUnitarioExato}`);
+            console.log(`   📦 QUANTIDADES:`);
+            console.log(`      - Quantidade anterior: ${produtoExistente.quantidade}`);
+            console.log(`      - Quantidade a adicionar: ${quantidadeExata}`);
+            console.log(`      - Nova quantidade total: ${novaQuantidade}`);
             
             const { error: updateError } = await supabase
               .from('estoque_app')
               .update({
-                quantidade: novaQuantidadeFinal,
-                preco_unitario_ultimo: precoUnitarioFinal, // Usar valor EXATO da IA-2
+                quantidade: novaQuantidade,
+                preco_unitario_ultimo: precoUnitarioExato,
                 updated_at: new Date().toISOString()
               })
-              .eq('id', produtoSimilar.id);
+              .eq('id', produtoExistente.id);
 
             if (updateError) {
               console.error(`❌ ERRO ao atualizar estoque - Item ${index + 1}:`, updateError);
-              console.error(`❌ Tentou atualizar produto ID: ${produtoSimilar.id} com dados:`, {
-                quantidade: novaQuantidade,
-                preco_unitario_ultimo: precoAtualizado
-              });
               itensComErro++;
               continue;
             }
 
             console.log(`✅ SUCESSO - Item ${index + 1} ATUALIZADO:`);
-            console.log(`   - Produto: ${produtoNomeFinal}`);
-            console.log(`   - Quantidade: ${novaQuantidadeFinal} ${dadosNormalizados?.qtd_unidade || unidadeProduto || 'unidade'}`);
-            console.log(`   - Preço: R$ ${precoUnitarioFinal} (EXATO DA IA-2)`);
+            console.log(`   - Produto: ${nomeExato}`);
+            console.log(`   - Quantidade: ${novaQuantidade} ${unidadeExata}`);
+            console.log(`   - Preço: R$ ${precoUnitarioExato}`);
             itensProcessados++;
             itensAtualizados++;
             
           } else {
-            console.log(`🆕 CRIANDO NOVO ITEM ${index + 1} - "${nomeNormalizado}"`);
-            console.log(`   - Preço unitário: ${precoUnitario}`);
-            console.log(`   - Quantidade: ${quantidadeSegura}`);
-            console.log(`   - Categoria: ${categoriaProduto}`);
+            // ✅ CRIAR NOVO PRODUTO - VALORES EXATOS DA IA-2
+            console.log(`🆕 CRIANDO NOVO ITEM ${index + 1} - "${nomeExato}"`);
+            console.log(`   - Preço unitário: ${precoUnitarioExato}`);
+            console.log(`   - Quantidade: ${quantidadeExata}`);
+            console.log(`   - Categoria: ${categoriaExata}`);
             
-            // 🚨 CRÍTICO: Usar valores EXATOS da IA-2 preservados
-            const quantidadeFinalIA2 = dadosNormalizados?.quantidade_final || quantidadeSegura;
-            const precoUnitarioFinalIA2 = dadosNormalizados?.valor_unitario_final || precoUnitario;
-            const precoTotalFinalIA2 = dadosNormalizados?.valor_total_final || (quantidadeFinalIA2 * precoUnitarioFinalIA2);
-            
-            console.log(`💰 VALORES PRESERVADOS DA IA-2: Qtd=${quantidadeFinalIA2}, Unit=R$${precoUnitarioFinalIA2}, Total=R$${precoTotalFinalIA2}`);
-            
-            // 🎯 MAPEAR CATEGORIA DA IA-2 PARA VALORES ACEITOS PELA CONSTRAINT
-            const mapearCategoria = (categoriaIA2: string): string => {
-              if (!categoriaIA2) return 'outros';
+            // Mapear categoria para valores aceitos pela constraint
+            const mapearCategoria = (categoria: string): string => {
+              if (!categoria) return 'outros';
               
-              const categoria = String(categoriaIA2).toLowerCase().trim();
-              
-              // Mapeamento das categorias da IA-2 para valores aceitos pela constraint
+              const cat = String(categoria).toLowerCase().trim();
               const mapeamento = {
                 'bebidas': 'bebidas',
-                'limpeza': 'limpeza', 
+                'limpeza': 'limpeza',
+                'higiene': 'higiene',
+                'alimentação': 'alimentacao',
+                'alimentacao': 'alimentacao',
+                'padaria': 'padaria',
+                'açougue': 'acougue',
+                'acougue': 'acougue',
+                'frutas': 'frutas',
+                'verduras': 'verduras',
+                'frios': 'frios',
+                'congelados': 'congelados',
+                'casa': 'casa',
+                'papelaria': 'papelaria'
+              };
+              
+              return mapeamento[cat] || 'outros';
+            };
+            
+            const categoriaFinal = mapearCategoria(categoriaExata);
+            
+            const { error: insertError } = await supabase
+              .from('estoque_app')
+              .insert({
+                user_id: notaImagem.usuario_id,
+                produto_nome: nomeExato,
+                categoria: categoriaFinal,
+                quantidade: quantidadeExata,
+                unidade_medida: unidadeExata,
+                preco_unitario_ultimo: precoUnitarioExato,
+                origem: 'nota_fiscal'
+              });
+
+            if (insertError) {
+              console.error(`❌ ERRO ao criar produto - Item ${index + 1}:`, insertError);
+              itensComErro++;
+              continue;
+            }
+
+            console.log(`✅ SUCESSO - Item ${index + 1} CRIADO:`);
+            console.log(`   - Produto: ${nomeExato}`);
+            console.log(`   - Quantidade: ${quantidadeExata} ${unidadeExata}`);
+            console.log(`   - Preço: R$ ${precoUnitarioExato}`);
+            console.log(`   - Categoria: ${categoriaFinal}`);
+            itensProcessados++;
+            itensCriados++;
+          }
+
+          // ⏭️ Nota já processada - pulando atualização de precos_atuais para otimizar velocidade
+          console.log('⏭️ Nota já processada - pulando atualização de precos_atuais para otimizar velocidade');
+
+        } catch (error) {
+          console.error(`❌ Erro ao processar item ${index + 1}:`, error);
+          itensComErro++;
+        }
+      }
+
+      // 🏁 RESUMO FINAL
+      console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
+      console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
+      console.log(`   ✅ Itens processados com sucesso: ${itensProcessados}`);
+      console.log(`   🔄 Itens atualizados: ${itensAtualizados}`);
+      console.log(`   🆕 Itens criados: ${itensCriados}`);
+      console.log(`   ❌ Itens com erro: ${itensComErro}`);
+      console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
+    }
+
+    // ✅ Marcar nota como processada
+    if (!notaImagem.processada) {
                 'hortifruti': 'hortifruti',
                 'carnes': 'açougue',
                 'açougue': 'açougue',
