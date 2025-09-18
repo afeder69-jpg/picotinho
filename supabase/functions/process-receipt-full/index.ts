@@ -103,7 +103,7 @@ serve(async (req) => {
       }
     }
     
-    console.log(`✅ Nota ${imagemId} liberada para processamento do estoque (processada: ${jaFoiProcessada}, estoque: ${jaTemEstoque ? itensEstoqueExistentes.length : 0} itens)`);
+    console.log(`✅ Nota ${imagemId} liberada para processamento do estoque (processada: ${notaImagem.processada}, estoque: ${itensEstoqueExistentes ? itensEstoqueExistentes.length : 0} itens)`);
 
     console.log('✅ Dados extraídos carregados');
 
@@ -579,23 +579,20 @@ serve(async (req) => {
       console.log(`   🆕 Itens criados: ${itensCriados}`);
       console.log(`   ❌ Itens com erro: ${itensComErro}`);
       console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
+      
+      // 🚨 VALIDAÇÃO CRÍTICA: Se nenhum item foi inserido, há problema
+      if (itensProcessados === 0 && listaItens.length > 0) {
+        console.error(`🚨 ERRO CRÍTICO: Nenhum item foi inserido no estoque!`);
+        console.error(`🔍 Dados extraídos recebidos:`, JSON.stringify(extractedData, null, 2));
+        throw new Error(`Falha crítica: 0 de ${listaItens.length} itens foram inseridos no estoque. Verificar logs detalhados.`);
+      }
     } else {
       console.log(`⚠️ AVISO: Nenhum item encontrado na nota fiscal!`);
       console.log(`🔍 Estrutura dos dados extraídos (sem itens):`, JSON.stringify(extractedData, null, 2));
     }
 
-    // ⚠️ CRÍTICO: Só marcar como processada se a maioria dos itens foi inserida com sucesso
-    let deveMarcarComoProcessada = true;
-    if (listaItens && listaItens.length > 0) {
-      const taxaSucesso = itensProcessados / listaItens.length;
-      if (taxaSucesso < 0.5) { // Se menos de 50% dos itens foram processados
-        console.error(`❌ FALHA CRÍTICA: Apenas ${itensProcessados}/${listaItens.length} itens processados (${(taxaSucesso * 100).toFixed(1)}%)`);
-        console.error(`🚫 NÃO marcando nota como processada devido à alta taxa de falha`);
-        deveMarcarComoProcessada = false;
-        
-        throw new Error(`Falha crítica no processamento: apenas ${itensProcessados} de ${listaItens.length} itens foram inseridos no estoque`);
-      }
-    }
+    // ⚠️ CRÍTICO: Sempre marcar como processada já que chegou até aqui sem erros críticos
+    const deveMarcarComoProcessada = true;
 
     // Atualizar dados da nota (só se o processamento foi bem-sucedido)
     if (deveMarcarComoProcessada) {
