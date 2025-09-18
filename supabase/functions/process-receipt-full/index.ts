@@ -158,31 +158,14 @@ serve(async (req) => {
           }
 
           if (produtoExistente) {
-            // ✅ ATUALIZAR PRODUTO EXISTENTE - VALORES EXATOS DA IA-2
-            let novaQuantidade;
-            if (notaImagem.processada) {
-              // Nota já processada = SUBSTITUIR quantidade
-              novaQuantidade = quantidadeExata;
-              console.log(`🔄 SUBSTITUINDO quantidade (nota já processada): ${produtoExistente.quantidade} → ${quantidadeExata}`);
-            } else {
-              // Primeira vez = SOMAR quantidade
-              novaQuantidade = produtoExistente.quantidade + quantidadeExata;
-              console.log(`➕ SOMANDO quantidade (primeira vez): ${produtoExistente.quantidade} + ${quantidadeExata} = ${novaQuantidade}`);
-            }
+            // ✅ GRAVADOR CEGO - USAR APENAS OS VALORES EXATOS DA IA-2
+            // SEMPRE substituir com valor exato da nota - sem somar nem interpretar
+            const novaQuantidade = quantidadeExata;
+            console.log(`🔄 GRAVANDO valor exato da IA-2: ${quantidadeExata} (substituindo ${produtoExistente.quantidade})`)
             
-            console.log(`🔍 COMPARAÇÃO DETALHADA - ITEM ${index + 1}`);
-            console.log(`   ✅ PRODUTO ENCONTRADO NO ESTOQUE:`);
-            console.log(`      - ID do produto: ${produtoExistente.id}`);
-            console.log(`      - Nome no estoque: "${produtoExistente.produto_nome}"`);
-            console.log(`      - Nome normalizado: "${nomeExato}"`);
-            console.log(`   💰 PREÇOS:`);
-            console.log(`      - Preço da nota fiscal: ${precoUnitarioExato}`);
-            console.log(`      - Preço atual no estoque: ${produtoExistente.preco_unitario_ultimo}`);
-            console.log(`      - Preço que será salvo: ${precoUnitarioExato}`);
-            console.log(`   📦 QUANTIDADES:`);
-            console.log(`      - Quantidade anterior: ${produtoExistente.quantidade}`);
-            console.log(`      - Quantidade a adicionar: ${quantidadeExata}`);
-            console.log(`      - Nova quantidade total: ${novaQuantidade}`);
+            console.log(`🔄 ATUALIZANDO produto existente: "${produtoExistente.produto_nome}"`);
+            console.log(`   - Quantidade: ${produtoExistente.quantidade} → ${novaQuantidade}`);
+            console.log(`   - Preço: ${produtoExistente.preco_unitario_ultimo} → ${precoUnitarioExato}`);
             
             const { error: updateError } = await supabase
               .from('estoque_app')
@@ -267,8 +250,7 @@ serve(async (req) => {
             itensCriados++;
           }
 
-          // ⏭️ Nota já processada - pulando atualização de precos_atuais para otimizar velocidade
-          console.log('⏭️ Nota já processada - pulando atualização de precos_atuais para otimizar velocidade');
+          // ✅ Item processado com sucesso
 
         } catch (error) {
           console.error(`❌ Erro ao processar item ${index + 1}:`, error);
