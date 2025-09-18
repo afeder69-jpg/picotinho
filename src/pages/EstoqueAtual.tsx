@@ -461,27 +461,41 @@ const EstoqueAtual = () => {
         return;
       }
 
-      // Usar a view consolidada para evitar duplicatas
+      console.log('🔍 Buscando estoque para usuário:', user.id);
+
+      // MUDANÇA: buscar diretamente da tabela estoque_app para debugging
       const { data, error } = await supabase
-        .from('estoque_consolidado')
+        .from('estoque_app')
         .select('*')
         .eq('user_id', user.id)
-        .order('produto_nome_exibicao', { ascending: true });
+        .gt('quantidade', 0) // Apenas produtos com quantidade > 0
+        .order('produto_nome', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erro ao buscar estoque:', error);
+        throw error;
+      }
 
-      console.log('📦 Estoque consolidado carregado:', data);
+      console.log('📦 Dados do estoque encontrados:', data?.length || 0, 'produtos');
+      console.log('📦 Amostra dos produtos:', data?.slice(0, 3));
       
-      // Adaptar dados da view para a interface
-      const estoqueFormatado = (data || []).map(item => ({
-        ...item,
-        id: item.hash_agrupamento, // Usar hash como ID
-        produto_nome: item.produto_nome_exibicao,
-        quantidade: item.quantidade_total,
-        preco_unitario_ultimo: item.preco_unitario_mais_recente,
-        updated_at: item.ultima_atualizacao,
-        origem: item.itens_originais > 1 ? 'consolidado' : 'nota_fiscal'
-      }));
+      // Consolidar produtos similares manualmente
+      const produtosConsolidados = new Map();
+      
+      (data || []).forEach(item => {
+        const key = item.produto_nome.toUpperCase();
+        if (produtosConsolidados.has(key)) {
+          const existing = produtosConsolidados.get(key);
+          existing.quantidade += item.quantidade;
+          existing.preco_unitario_ultimo = Math.max(existing.preco_unitario_ultimo || 0, item.preco_unitario_ultimo || 0);
+          existing.updated_at = new Date(existing.updated_at) > new Date(item.updated_at) ? existing.updated_at : item.updated_at;
+        } else {
+          produtosConsolidados.set(key, { ...item });
+        }
+      });
+      
+      const estoqueFormatado = Array.from(produtosConsolidados.values());
+      console.log('📦 Produtos consolidados:', estoqueFormatado.length);
       
       setEstoque(estoqueFormatado);
       
