@@ -43,16 +43,17 @@ serve(async (req) => {
     }
 
     // 🛡️ PROTEÇÃO CONTRA PROCESSAMENTO DUPLO
-    // Verificar se já foi processada pela IA-2 (evitar duplicação)
+    // Verificar se ESTA NOTA ESPECÍFICA já foi processada pela IA-2 (evitar duplicação)
     if (notaImagem.processada) {
-      console.log(`⚠️ AVISO: Nota ${imagemId} já foi processada anteriormente pela IA-2`);
-      console.log(`🔄 Pulando processamento para evitar duplicação`);
+      console.log(`⚠️ AVISO: Esta nota específica ${imagemId} já foi processada anteriormente pela IA-2`);
+      console.log(`🔄 Pulando processamento para evitar duplicação da mesma nota`);
       
       return new Response(
         JSON.stringify({ 
           success: true,
-          message: 'Nota já foi processada anteriormente (evitando duplicação)',
-          skipped: true
+          message: 'Esta nota específica já foi processada anteriormente (evitando duplicação)',
+          skipped: true,
+          noteId: imagemId
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
