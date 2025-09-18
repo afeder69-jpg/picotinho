@@ -22,38 +22,49 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    const { nomeOriginal, quantidadeOriginal, valorUnitarioOriginal, valorTotalOriginal, debug = false } = await req.json();
+    const { 
+      nomeOriginal, 
+      quantidadeOriginal, 
+      valorUnitarioOriginal, 
+      valorTotalOriginal, 
+      usuarioId,
+      inserirNoEstoque = false,
+      debug = false 
+    } = await req.json();
 
     if (!nomeOriginal) {
       throw new Error('nomeOriginal é obrigatório');
     }
 
-    console.log(`[IA-2] Processando: "${nomeOriginal}"`);
+    console.log(`[IA-2] Processando: "${nomeOriginal}" | Inserir no estoque: ${inserirNoEstoque}`);
 
     // 1. Buscar normalização manual prioritária
     const normalizacaoManual = await buscarNormalizacaoManual(supabase, nomeOriginal);
-    if (normalizacaoManual) {
-      console.log(`[IA-2] Usando normalização manual: ${JSON.stringify(normalizacaoManual)}`);
-      return new Response(JSON.stringify(normalizacaoManual), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    let resultadoFinal = normalizacaoManual;
+
+    if (!normalizacaoManual) {
+      // 2. Processar com IA-2 (OpenAI)
+      resultadoFinal = await processarComIA2(openaiApiKey, nomeOriginal, debug);
+      
+      // 3. Gerar hash determinístico para SKU
+      const produtoHash = await gerarHashSKU(resultadoFinal);
+      resultadoFinal.produto_hash_normalizado = produtoHash;
     }
 
-    // 2. Processar com IA-2 (OpenAI)
-    const resultadoIA2 = await processarComIA2(openaiApiKey, nomeOriginal, debug);
-    
-    // 3. Gerar hash determinístico para SKU
-    const produtoHash = await gerarHashSKU(resultadoIA2);
-    resultadoIA2.produto_hash_normalizado = produtoHash;
-
     // 4. CRÍTICO: Preservar valores originais da nota sem alteração
-    resultadoIA2.quantidade_final = quantidadeOriginal || 1;
-    resultadoIA2.valor_unitario_final = valorUnitarioOriginal || 0;
-    resultadoIA2.valor_total_final = valorTotalOriginal || 0;
+    resultadoFinal.quantidade_final = quantidadeOriginal || 1;
+    resultadoFinal.valor_unitario_final = valorUnitarioOriginal || 0;
+    resultadoFinal.valor_total_final = valorTotalOriginal || 0;
 
-    console.log(`[IA-2] Resultado final: ${JSON.stringify(resultadoIA2)}`);
+    // 5. NOVO: Inserir diretamente no estoque se solicitado
+    if (inserirNoEstoque && usuarioId) {
+      await inserirProdutoNoEstoque(supabase, resultadoFinal, usuarioId);
+      console.log(`✅ [IA-2] Produto inserido no estoque: ${resultadoFinal.produto_nome_normalizado}`);
+    }
 
-    return new Response(JSON.stringify(resultadoIA2), {
+    console.log(`[IA-2] Resultado final: ${JSON.stringify(resultadoFinal)}`);
+
+    return new Response(JSON.stringify(resultadoFinal), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
@@ -249,6 +260,61 @@ Processe: "${nomeOriginal}"`;
 
   } catch (parseError) {
     throw new Error(`Erro ao parsear JSON da IA: ${parseError.message}`);
+  }
+}
+
+async function inserirProdutoNoEstoque(supabase: any, produto: any, usuarioId: string) {
+  try {
+    // Verificar se produto já existe no estoque
+    const { data: produtoExistente } = await supabase
+      .from('estoque_app')
+      .select('*')
+      .eq('user_id', usuarioId)
+      .eq('produto_nome', produto.produto_nome_normalizado)
+      .single();
+
+    if (produtoExistente) {
+      // Atualizar quantidade existente
+      const { error: updateError } = await supabase
+        .from('estoque_app')
+        .update({
+          quantidade: produtoExistente.quantidade + produto.quantidade_final,
+          preco_unitario_ultimo: produto.valor_unitario_final,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', produtoExistente.id);
+
+      if (updateError) throw updateError;
+      console.log(`✅ Quantidade atualizada: ${produto.produto_nome_normalizado} (+${produto.quantidade_final})`);
+    } else {
+      // Inserir novo produto
+      const { error: insertError } = await supabase
+        .from('estoque_app')
+        .insert({
+          user_id: usuarioId,
+          produto_nome: produto.produto_nome_normalizado,
+          produto_nome_normalizado: produto.produto_nome_normalizado,
+          nome_base: produto.nome_base,
+          marca: produto.marca,
+          tipo_embalagem: produto.tipo_embalagem,
+          qtd_valor: produto.qtd_valor,
+          qtd_unidade: produto.qtd_unidade,
+          qtd_base: produto.qtd_base,
+          granel: produto.granel,
+          categoria: produto.categoria,
+          quantidade: produto.quantidade_final,
+          unidade_medida: produto.qtd_unidade || 'UN',
+          preco_unitario_ultimo: produto.valor_unitario_final,
+          produto_hash_normalizado: produto.produto_hash_normalizado,
+          origem: 'nota_fiscal'
+        });
+
+      if (insertError) throw insertError;
+      console.log(`✅ Novo produto inserido: ${produto.produto_nome_normalizado} (${produto.quantidade_final})`);
+    }
+  } catch (error) {
+    console.error(`❌ Erro ao inserir produto no estoque:`, error);
+    throw error;
   }
 }
 
