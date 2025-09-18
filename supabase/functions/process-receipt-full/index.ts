@@ -42,21 +42,55 @@ serve(async (req) => {
       throw new Error('Nota ainda não foi processada pela IA');
     }
 
-    // 🛡️ PROTEÇÃO CONTRA PROCESSAMENTO DUPLO 
-    // Verificar se ESTA NOTA ESPECÍFICA já foi processada pela IA-2
-    if (notaImagem.processada) {
-      console.log(`⚠️ AVISO: Esta nota específica ${imagemId} já foi processada anteriormente pela IA-2`);
-      console.log(`🚫 BLOQUEANDO reprocessamento para evitar duplicação no estoque`);
+    // 🛡️ PROTEÇÃO INTELIGENTE CONTRA PROCESSAMENTO DUPLO 
+    // Verificar se ESTA NOTA já foi processada para o estoque (não apenas extraída)
+    
+    // Buscar se já existem itens no estoque desta nota específica
+    const { data: itensEstoqueExistentes, error: estoqueCheckError } = await supabase
+      .from('estoque_app')
+      .select('id, produto_nome, quantidade')
+      .eq('user_id', notaImagem.usuario_id);
+    
+    // Contar quantos produtos únicos a nota tem
+    const extractedData = notaImagem.dados_extraidos as any;
+    const listaItensNota = extractedData.produtos || extractedData.itens || [];
+    const produtosUnicos = new Set(listaItensNota.map((item: any) => (item.nome || item.descricao || '').trim().toUpperCase()));
+    
+    // Se já existe estoque E a nota foi processada, pode ser duplicação
+    const jaTemEstoque = itensEstoqueExistentes && itensEstoqueExistentes.length > 0;
+    const jaFoiProcessada = notaImagem.processada;
+    
+    if (jaFoiProcessada && jaTemEstoque && produtosUnicos.size > 0) {
+      // Verificar se pelo menos 80% dos produtos da nota já existem no estoque
+      let produtosEncontrados = 0;
+      for (const produtoNota of produtosUnicos) {
+        const existe = itensEstoqueExistentes.some(item => 
+          item.produto_nome.toUpperCase().includes(produtoNota) || 
+          produtoNota.includes(item.produto_nome.toUpperCase())
+        );
+        if (existe) produtosEncontrados++;
+      }
       
-      return new Response(JSON.stringify({ 
-        success: true,
-        message: 'Nota já foi processada anteriormente - processamento bloqueado para evitar duplicação',
-        nota_id: imagemId,
-        ja_processada: true
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const percentualEncontrado = produtosEncontrados / produtosUnicos.size;
+      
+      if (percentualEncontrado >= 0.8) {
+        console.log(`⚠️ AVISO: Nota ${imagemId} já foi processada para o estoque (${produtosEncontrados}/${produtosUnicos.size} produtos encontrados)`);
+        console.log(`🚫 BLOQUEANDO reprocessamento para evitar duplicação`);
+        
+        return new Response(JSON.stringify({ 
+          success: true,
+          message: 'Nota já foi processada para o estoque - bloqueado para evitar duplicação',
+          nota_id: imagemId,
+          ja_processada: true,
+          produtos_no_estoque: produtosEncontrados,
+          produtos_na_nota: produtosUnicos.size
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
+    
+    console.log(`✅ Nota ${imagemId} liberada para processamento do estoque (processada: ${jaFoiProcessada}, estoque: ${jaTemEstoque ? itensEstoqueExistentes.length : 0} itens)`);
 
     const extractedData = notaImagem.dados_extraidos as any;
     console.log('✅ Dados extraídos carregados');
