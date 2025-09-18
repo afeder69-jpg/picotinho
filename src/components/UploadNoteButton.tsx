@@ -341,8 +341,8 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 }
               });
             } else {
-              // Para imagens, usar process-receipt-full
-              processResponse = await supabase.functions.invoke('process-receipt-full', {
+              // Para imagens, usar apenas extração (sem processamento de estoque aqui)
+              processResponse = await supabase.functions.invoke('validate-receipt', {
                 body: {
                   notaImagemId: notaData.id,
                   imageUrl: urlData.publicUrl,
@@ -359,9 +359,9 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 variant: "destructive",
               });
             } else {
-              console.log('✅ Processamento concluído - chamando process-receipt-full');
+              console.log('✅ Extração concluída - chamando process-receipt-full UMA ÚNICA VEZ');
               
-              // Chamar process-receipt-full imediatamente após a extração
+              // 🛡️ CORREÇÃO CRÍTICA: Chamar process-receipt-full apenas UMA VEZ após extração
               try {
                 const stockResponse = await supabase.functions.invoke('process-receipt-full', {
                   body: { imagemId: notaData.id }
@@ -370,12 +370,12 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 if (stockResponse.error) {
                   console.error('❌ Erro ao atualizar estoque:', stockResponse.error);
                   toast({
-                    title: "⚠️ Nota processada",
-                    description: `${file.name} processado, mas erro ao atualizar estoque`,
+                    title: "⚠️ Nota extraída",
+                    description: `${file.name} extraído, mas erro ao processar estoque`,
                     variant: "destructive",
                   });
                 } else {
-                  console.log('✅ Estoque atualizado com sucesso');
+                  console.log('✅ Estoque processado com sucesso (UMA VEZ APENAS)');
                   toast({
                     title: "✅ Processamento concluído",
                     description: `${file.name} processado e estoque atualizado!`,
@@ -384,8 +384,8 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               } catch (stockError) {
                 console.error('❌ Erro ao chamar process-receipt-full:', stockError);
                 toast({
-                  title: "⚠️ Nota processada",
-                  description: `${file.name} processado, mas erro ao atualizar estoque`,
+                  title: "⚠️ Nota extraída",
+                  description: `${file.name} extraído, mas erro ao processar estoque`,
                   variant: "destructive",
                 });
               }
