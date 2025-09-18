@@ -463,33 +463,35 @@ const EstoqueAtual = () => {
 
       console.log('🔍 Buscando estoque para usuário:', user.id);
 
-      // CORREÇÃO: buscar TODOS os produtos primeiro para debug
+      // BUSCAR ESTOQUE DO USUÁRIO
       const { data, error } = await supabase
         .from('estoque_app')
         .select('*')
-        .gt('quantidade', 0) // Apenas produtos com quantidade > 0
+        .eq('user_id', user.id)
+        .gt('quantidade', 0)
         .order('produto_nome', { ascending: true });
-
-      console.log('📊 TODOS os produtos no DB:', data?.length);
-      console.log('🔍 USER ID atual:', user.id);
-      console.log('🔍 USER IDs no DB:', [...new Set(data?.map(p => p.user_id))]);
-      
-      // Agora filtrar pelo usuário correto
-      const produtosDoUsuario = data?.filter(p => p.user_id === user.id) || [];
-      console.log('📦 Produtos do usuário encontrados:', produtosDoUsuario.length);
 
       if (error) {
         console.error('❌ Erro ao buscar estoque:', error);
+        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
-      console.log('📦 Dados do estoque encontrados:', data?.length || 0, 'produtos');
-      console.log('📦 Amostra dos produtos:', data?.slice(0, 3));
+      console.log('📦 Raw data from DB:', data);
+      console.log('📦 Data length:', data?.length || 0);
+      console.log('📦 First 3 items:', data?.slice(0, 3));
       
+      if (!data || data.length === 0) {
+        console.warn('⚠️ Nenhum dado retornado do estoque!');
+        setEstoque([]);
+        setLoading(false);
+        return;
+      }
+
       // Consolidar produtos similares manualmente
       const produtosConsolidados = new Map();
       
-      produtosDoUsuario.forEach(item => {
+      data.forEach(item => {
         const key = item.produto_nome.toUpperCase();
         if (produtosConsolidados.has(key)) {
           const existing = produtosConsolidados.get(key);
