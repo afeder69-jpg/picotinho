@@ -464,6 +464,8 @@ serve(async (req) => {
         } catch (e) {
           console.error('⚠️ Erro ao atualizar precos_atuais (não crítico):', e);
         }
+      } // Fechamento do for loop
+
       // Verificar se há itens para processar
       if (listaItens.length > 0) {
         console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
