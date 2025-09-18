@@ -463,13 +463,20 @@ const EstoqueAtual = () => {
 
       console.log('🔍 Buscando estoque para usuário:', user.id);
 
-      // MUDANÇA: buscar diretamente da tabela estoque_app para debugging
+      // CORREÇÃO: buscar TODOS os produtos primeiro para debug
       const { data, error } = await supabase
         .from('estoque_app')
         .select('*')
-        .eq('user_id', user.id)
         .gt('quantidade', 0) // Apenas produtos com quantidade > 0
         .order('produto_nome', { ascending: true });
+
+      console.log('📊 TODOS os produtos no DB:', data?.length);
+      console.log('🔍 USER ID atual:', user.id);
+      console.log('🔍 USER IDs no DB:', [...new Set(data?.map(p => p.user_id))]);
+      
+      // Agora filtrar pelo usuário correto
+      const produtosDoUsuario = data?.filter(p => p.user_id === user.id) || [];
+      console.log('📦 Produtos do usuário encontrados:', produtosDoUsuario.length);
 
       if (error) {
         console.error('❌ Erro ao buscar estoque:', error);
@@ -482,7 +489,7 @@ const EstoqueAtual = () => {
       // Consolidar produtos similares manualmente
       const produtosConsolidados = new Map();
       
-      (data || []).forEach(item => {
+      produtosDoUsuario.forEach(item => {
         const key = item.produto_nome.toUpperCase();
         if (produtosConsolidados.has(key)) {
           const existing = produtosConsolidados.get(key);

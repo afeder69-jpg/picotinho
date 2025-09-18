@@ -88,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Simula login anônimo para modo de teste
     setIsTestMode(true);
     const mockUser = {
-      id: 'test-user-123',
+      id: 'ae5b5501-7f8a-46da-9cba-b9955a84e697', // USER ID que tem os dados na base
       aud: 'authenticated',
       role: 'authenticated',
       email: 'teste@picotinho.app',
