@@ -1625,11 +1625,22 @@ async function processarNotaEmBackground(
   } catch (error) {
     console.error('❌ Erro no processamento em background:', error);
     
-    // Enviar mensagem de erro
-    await enviarRespostaWhatsApp(
-      mensagem.remetente, 
-      "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente."
-    );
+    // Mensagem de erro mais específica baseada no tipo de falha
+    let mensagemErro = "❌ Erro ao processar a nota fiscal.";
+    
+    const errorStr = String(error).toLowerCase();
+    if (errorStr.includes('estoque') || errorStr.includes('inserção') || errorStr.includes('insert')) {
+      mensagemErro = "❌ Erro ao salvar produtos no estoque. A nota foi lida corretamente, mas houve falha na gravação dos itens.\n\nTente novamente em alguns instantes.";
+    } else if (errorStr.includes('ia-2') || errorStr.includes('normalizar') || errorStr.includes('indisponível')) {
+      mensagemErro = "❌ Aguardando disponibilidade da IA para processar a nota fiscal.\n\nTente novamente em alguns instantes.";
+    } else if (errorStr.includes('legível') || errorStr.includes('arquivo')) {
+      mensagemErro = "❌ Erro ao processar a nota fiscal. Verifique se o arquivo está legível e tente novamente.";
+    } else {
+      mensagemErro = "❌ Erro inesperado ao processar a nota fiscal.\n\nTente novamente em alguns instantes.";
+    }
+    
+    // Enviar mensagem de erro específica
+    await enviarRespostaWhatsApp(mensagem.remetente, mensagemErro);
   }
 }
 

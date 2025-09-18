@@ -42,48 +42,61 @@ serve(async (req) => {
       throw new Error('Nota ainda não foi processada pela IA');
     }
 
-    // 🛡️ PROTEÇÃO INTELIGENTE CONTRA PROCESSAMENTO DUPLO 
-    // Verificar se ESTA NOTA já foi processada para o estoque (não apenas extraída)
+    // Extrair dados da nota uma única vez
+    const extractedData = notaImagem.dados_extraidos as any;
     
-    // Buscar se já existem itens no estoque desta nota específica
+    // 🛡️ PROTEÇÃO MAIS INTELIGENTE CONTRA DUPLICAÇÃO
+    // Só bloquear se realmente houve um processamento completo anterior
+    
+    const listaItensNota = extractedData.produtos || extractedData.itens || [];
+    console.log(`📊 Nota tem ${listaItensNota.length} produtos para processar`);
+    
+    // Se não há produtos na nota, não há o que processar
+    if (!listaItensNota || listaItensNota.length === 0) {
+      throw new Error('Nota não contém produtos válidos para processar');
+    }
+    
+    // Buscar estoque atual do usuário
     const { data: itensEstoqueExistentes, error: estoqueCheckError } = await supabase
       .from('estoque_app')
-      .select('id, produto_nome, quantidade')
+      .select('id, produto_nome, quantidade, created_at')
       .eq('user_id', notaImagem.usuario_id);
     
-    // Contar quantos produtos únicos a nota tem
-    const extractedData = notaImagem.dados_extraidos as any;
-    const listaItensNota = extractedData.produtos || extractedData.itens || [];
-    const produtosUnicos = new Set(listaItensNota.map((item: any) => (item.nome || item.descricao || '').trim().toUpperCase()));
+    // Criar produtos únicos da nota
+    const produtosUnicos = new Set(listaItensNota.map((item: any) => 
+      (item.nome || item.descricao || '').trim().toUpperCase()
+    ));
     
-    // Se já existe estoque E a nota foi processada, pode ser duplicação
-    const jaTemEstoque = itensEstoqueExistentes && itensEstoqueExistentes.length > 0;
-    const jaFoiProcessada = notaImagem.processada;
-    
-    if (jaFoiProcessada && jaTemEstoque && produtosUnicos.size > 0) {
-      // Verificar se pelo menos 80% dos produtos da nota já existem no estoque
-      let produtosEncontrados = 0;
+    // ⚠️ LÓGICA MAIS RESTRITIVA - Só bloquear se:
+    // 1. A nota já foi marcada como processada no banco
+    // 2. E realmente tem produtos correspondentes no estoque
+    // 3. E a data de criação dos produtos é recente (últimas 2 horas)
+    if (notaImagem.processada && itensEstoqueExistentes && itensEstoqueExistentes.length > 0) {
+      let produtosRecentesEncontrados = 0;
+      const dataLimite = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 horas atrás
+      
       for (const produtoNota of produtosUnicos) {
-        const existe = itensEstoqueExistentes.some(item => 
-          item.produto_nome.toUpperCase().includes(produtoNota) || 
-          produtoNota.includes(item.produto_nome.toUpperCase())
-        );
-        if (existe) produtosEncontrados++;
+        const existe = itensEstoqueExistentes.some(item => {
+          const isMatch = item.produto_nome.toUpperCase().includes(produtoNota) || 
+                         produtoNota.includes(item.produto_nome.toUpperCase());
+          const isRecent = new Date(item.created_at) > dataLimite;
+          return isMatch && isRecent;
+        });
+        if (existe) produtosRecentesEncontrados++;
       }
       
-      const percentualEncontrado = produtosEncontrados / produtosUnicos.size;
+      const percentualRecente = produtosRecentesEncontrados / produtosUnicos.size;
       
-      if (percentualEncontrado >= 0.8) {
-        console.log(`⚠️ AVISO: Nota ${imagemId} já foi processada para o estoque (${produtosEncontrados}/${produtosUnicos.size} produtos encontrados)`);
-        console.log(`🚫 BLOQUEANDO reprocessamento para evitar duplicação`);
+      // Só bloquear se 90% dos produtos são recentes (mais restritivo)
+      if (percentualRecente >= 0.9) {
+        console.log(`⚠️ BLOQUEIO: Nota ${imagemId} já processada recentemente (${produtosRecentesEncontrados}/${produtosUnicos.size} produtos recentes)`);
         
         return new Response(JSON.stringify({ 
           success: true,
-          message: 'Nota já foi processada para o estoque - bloqueado para evitar duplicação',
+          message: 'Nota já foi processada recentemente - evitando duplicação',
           nota_id: imagemId,
-          ja_processada: true,
-          produtos_no_estoque: produtosEncontrados,
-          produtos_na_nota: produtosUnicos.size
+          produtos_recentes: produtosRecentesEncontrados,
+          total_produtos: produtosUnicos.size
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -92,7 +105,6 @@ serve(async (req) => {
     
     console.log(`✅ Nota ${imagemId} liberada para processamento do estoque (processada: ${jaFoiProcessada}, estoque: ${jaTemEstoque ? itensEstoqueExistentes.length : 0} itens)`);
 
-    const extractedData = notaImagem.dados_extraidos as any;
     console.log('✅ Dados extraídos carregados');
 
     // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO LOGO NO INÍCIO
@@ -346,6 +358,11 @@ serve(async (req) => {
 
             if (updateError) {
               console.error(`❌ ERRO ao atualizar estoque - Item ${index + 1}:`, updateError);
+              console.error(`❌ Tentou atualizar produto ID: ${produtoSimilar.id} com dados:`, {
+                quantidade: novaQuantidade,
+                preco_unitario_ultimo: precoAtualizado
+              });
+              itensComErro++;
               continue;
             }
 
@@ -432,6 +449,8 @@ serve(async (req) => {
 
             if (insertError) {
               console.error(`❌ ERRO ao criar produto - Item ${index + 1}:`, insertError);
+              console.error(`❌ Dados que tentou inserir:`, JSON.stringify(dadosParaInserir, null, 2));
+              itensComErro++;
               continue;
             }
 
@@ -565,17 +584,34 @@ serve(async (req) => {
       console.log(`🔍 Estrutura dos dados extraídos (sem itens):`, JSON.stringify(extractedData, null, 2));
     }
 
-    // Atualizar dados da nota
-    const { error: updateError } = await supabase
-      .from('notas_imagens')
-      .update({
-        processada: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', imagemId);
+    // ⚠️ CRÍTICO: Só marcar como processada se a maioria dos itens foi inserida com sucesso
+    let deveMarcarComoProcessada = true;
+    if (listaItens && listaItens.length > 0) {
+      const taxaSucesso = itensProcessados / listaItens.length;
+      if (taxaSucesso < 0.5) { // Se menos de 50% dos itens foram processados
+        console.error(`❌ FALHA CRÍTICA: Apenas ${itensProcessados}/${listaItens.length} itens processados (${(taxaSucesso * 100).toFixed(1)}%)`);
+        console.error(`🚫 NÃO marcando nota como processada devido à alta taxa de falha`);
+        deveMarcarComoProcessada = false;
+        
+        throw new Error(`Falha crítica no processamento: apenas ${itensProcessados} de ${listaItens.length} itens foram inseridos no estoque`);
+      }
+    }
 
-    if (updateError) {
-      console.error('❌ Erro ao atualizar nota:', updateError);
+    // Atualizar dados da nota (só se o processamento foi bem-sucedido)
+    if (deveMarcarComoProcessada) {
+      const { error: updateError } = await supabase
+        .from('notas_imagens')
+        .update({
+          processada: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', imagemId);
+
+      if (updateError) {
+        console.error('❌ Erro ao atualizar nota:', updateError);
+      } else {
+        console.log('✅ Nota marcada como processada com sucesso');
+      }
     }
 
     console.log('✅ Processamento completo da nota fiscal!');
