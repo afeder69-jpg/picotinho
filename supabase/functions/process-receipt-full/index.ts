@@ -142,33 +142,21 @@ serve(async (req) => {
       console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
     }
 
-    // 🧠 IA-2 COMO MOTOR ÚNICO DE NORMALIZAÇÃO (COM FALLBACK PARA CONTINUAR)
+    // 🧠 IA-2 COMO MOTOR ÚNICO E EXCLUSIVO DE NORMALIZAÇÃO
     const normalizarNomeProduto = async (nome: string): Promise<{ nomeNormalizado: string, dadosCompletos?: any, status: string }> => {
-      if (!nome) return { nomeNormalizado: '', status: 'ERRO_NOME_VAZIO' };
+      if (!nome) throw new Error('Nome do produto é obrigatório');
       
       try {
-        console.log(`🤖 [CRÍTICO] Normalizando com IA-2: "${nome}"`);
+        console.log(`🤖 [IA-2 EXCLUSIVA] Normalizando: "${nome}"`);
         
         const { data: normalizacaoResponse, error: normalizacaoError } = await supabase.functions.invoke('normalizar-produto-ia2', {
           body: { nomeOriginal: nome, debug: false }
         });
 
-        // Se IA-2 falhar, usar normalização básica para não perder o produto
+        // ⚠️ CRÍTICO: Se IA-2 falhar, PARAR o processamento
         if (normalizacaoError || !normalizacaoResponse?.produto_nome_normalizado) {
-          console.error(`⚠️ [IA-2] FALHOU para "${nome}":`, normalizacaoError);
-          console.log(`🔄 [FALLBACK] Usando normalização básica para "${nome}"`);
-          
-          // Normalização básica como fallback
-          const nomeBasico = nome.toUpperCase().trim()
-            .replace(/\s+/g, ' ')
-            .replace(/\b(GRAENC|GRANEL)\b/gi, 'GRANEL')
-            .replace(/\b(\d+G|\d+ML|\d+L|\d+KG)\b/gi, '');
-          
-          return { 
-            nomeNormalizado: nomeBasico,
-            dadosCompletos: null,
-            status: 'FALLBACK_BASICO'
-          };
+          console.error(`❌ [IA-2] FALHA CRÍTICA para "${nome}":`, normalizacaoError);
+          throw new Error(`IA-2 indisponível para normalizar "${nome}". Processamento interrompido para manter consistência.`);
         }
 
         // ✅ SUCESSO da IA-2
@@ -182,21 +170,9 @@ serve(async (req) => {
         };
 
       } catch (error) {
-        console.error(`⚠️ [FALLBACK] Erro na IA-2 para "${nome}":`, error);
-        
-        // FALLBACK: Usar normalização básica para não perder o produto
-        const nomeBasico = nome.toUpperCase().trim()
-          .replace(/\s+/g, ' ')
-          .replace(/\b(GRAENC|GRANEL)\b/gi, 'GRANEL')
-          .replace(/\b(\d+G|\d+ML|\d+L|\d+KG)\b/gi, '');
-        
-        console.log(`🔄 [FALLBACK] "${nome}" → "${nomeBasico}"`);
-        
-        return { 
-          nomeNormalizado: nomeBasico,
-          dadosCompletos: null,
-          status: 'FALLBACK_ERRO'
-        };
+        console.error(`❌ [IA-2] Erro crítico para "${nome}":`, error);
+        // SEM FALLBACK - Propagar o erro para interromper o processamento
+        throw error;
       }
     };
 
@@ -562,41 +538,18 @@ serve(async (req) => {
             console.error('⚠️ Falha ao atualizar precos_atuais (não crítico):', e);
           }
         } catch (error) {
-          console.error(`⚠️ ERRO ao processar item ${index + 1} (CONTINUANDO):`, error);
+          console.error(`❌ ERRO CRÍTICO ao processar item ${index + 1}:`, error);
           console.error(`🔍 Dados do item com erro:`, JSON.stringify(produtoData));
           console.error(`🔍 Nome original: "${nomeProduto}"`);
           
-          // 🔄 FALLBACK ROBUSTO: Tentar salvar pelo menos o nome básico
-          try {
-            const nomeBasico = nomeProduto ? nomeProduto.toUpperCase().trim() : `PRODUTO_${index + 1}`;
-            console.log(`🔄 Tentando fallback para "${nomeBasico}"`);
-            
-            const { error: fallbackError } = await supabase
-              .from('estoque_app')
-              .insert({
-                user_id: notaImagem.usuario_id,
-                produto_nome: nomeBasico,
-                categoria: 'outros',
-                unidade_medida: 'unidade',
-                quantidade: quantidadeProduto || 1,
-                preco_unitario_ultimo: precoUnitario || 0,
-                origem: 'nota_fiscal'
-              });
-            
-            if (!fallbackError) {
-              console.log(`✅ FALLBACK bem-sucedido para item ${index + 1}: "${nomeBasico}"`);
-              itensProcessados++;
-              itensCriados++;
-            } else {
-              console.error(`❌ FALLBACK também falhou para item ${index + 1}:`, fallbackError);
-              itensComErro++;
-            }
-          } catch (fallbackErr) {
-            console.error(`💥 FALLBACK CRÍTICO falhou para item ${index + 1}:`, fallbackErr);
-            itensComErro++;
+          // ⚠️ SEM FALLBACK - Se IA-2 falhar, interromper processamento
+          if (error.message && error.message.includes('IA-2 indisponível')) {
+            console.error(`🚫 IA-2 INDISPONÍVEL - Interrompendo processamento para manter consistência`);
+            throw new Error(`Processamento interrompido: IA-2 indisponível para normalizar "${nomeProduto}". Aguarde o retorno da IA para processar a nota fiscal.`);
           }
           
-          console.log(`⚠️ Continuando processamento dos próximos itens...`);
+          // Outros erros também devem parar o processamento para manter consistência
+          throw error;
         }
       }
       
@@ -653,6 +606,20 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Erro geral:', error);
+    
+    // Verificar se é erro da IA-2 indisponível
+    if (error.message && error.message.includes('IA-2 indisponível')) {
+      return new Response(JSON.stringify({ 
+        error: 'IA-2 INDISPONÍVEL',
+        message: 'A IA está temporariamente indisponível. Por favor, aguarde alguns minutos e tente novamente.',
+        user_message: 'Aguardando disponibilidade da IA para processar a nota fiscal.',
+        can_retry: true
+      }), {
+        status: 503, // Service Unavailable
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

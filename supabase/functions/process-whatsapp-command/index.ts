@@ -350,14 +350,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 };
 
-// Função auxiliar para normalizar nomes de produtos
-function normalizarNomeProduto(texto: string): string {
-  return texto
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-    .replace(/[^\w\s]/gi, "") // Remove pontuação
-    .trim();
-}
+// ⚠️ FUNÇÃO REMOVIDA - Normalização agora é EXCLUSIVA da IA-2
+// A normalização de produtos não deve mais ser feita aqui para evitar inconsistências
+// Para comandos WhatsApp, usar comparação por similaridade simples
 
 // Função auxiliar para normalizar unidades
 function normalizarUnidade(unidade: string): string {
@@ -379,8 +374,8 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
   try {
     console.log('📦 Processando comando baixar estoque...');
     
-    // Extrair produto e quantidade do texto com normalização
-    const texto = normalizarNomeProduto(mensagem.conteudo);
+    // Extrair produto e quantidade do texto (sem normalização)
+    const texto = mensagem.conteudo.toLowerCase().trim();
     
     // Regex para extrair quantidade e produto (incluindo "k" e "gr")
     const regexQuantidade = /(\d+(?:[.,]\d+)?)\s*(kg|k|kilos?|quilos?|g|gr|gramas?|l|litros?|ml|unidade|unid|und|un|pacote)?\s*(?:de\s+)?(.+)/i;
@@ -398,7 +393,7 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     let quantidade = parseFloat(match[1].replace(',', '.'));
     let unidadeExtraida = match[2] ? normalizarUnidade(match[2]) : null;
     const produtoNomeOriginal = match[3].trim();
-    const produtoNomeNormalizado = normalizarNomeProduto(produtoNomeOriginal);
+    const produtoNomeSimples = produtoNomeOriginal.toLowerCase().trim();
     
     console.log(`📊 Extraído: ${quantidade} ${unidadeExtraida || 'sem unidade'} de ${produtoNomeOriginal}`);
     
@@ -413,11 +408,11 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
       return "Erro ao consultar estoque. Tente novamente.";
     }
     
-    // Buscar produto comparando nomes normalizados
+    // Buscar produto comparando nomes (similaridade simples)
     const estoque = estoques?.find((item: any) => {
-      const nomeEstoqueNormalizado = normalizarNomeProduto(item.produto_nome);
-      return nomeEstoqueNormalizado.includes(produtoNomeNormalizado) || 
-             produtoNomeNormalizado.includes(nomeEstoqueNormalizado);
+      const nomeEstoqueSimples = item.produto_nome.toLowerCase().trim();
+      return nomeEstoqueSimples.includes(produtoNomeSimples) || 
+             produtoNomeSimples.includes(nomeEstoqueSimples);
     });
     
     if (erroEstoque) {
@@ -596,11 +591,12 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         return "❌ Erro ao consultar estoque.";
       }
       
-      // Buscar produto comparando nomes normalizados
+      // Buscar produto comparando nomes (similaridade simples)
       const data = estoques?.find((item: any) => {
-        const nomeEstoqueNormalizado = normalizarNomeProduto(item.produto_nome);
-        return nomeEstoqueNormalizado.includes(produto) || 
-               produto.includes(nomeEstoqueNormalizado);
+        const nomeEstoqueSimples = item.produto_nome.toLowerCase().trim();
+        const produtoSimples = produto.toLowerCase().trim();
+        return nomeEstoqueSimples.includes(produtoSimples) || 
+               produtoSimples.includes(nomeEstoqueSimples);
       });
 
       console.log(`📋 [STEP 6] Resultado do banco:`);
@@ -679,11 +675,12 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       .select('*')
       .eq('user_id', mensagem.usuario_id);
     
-    // Buscar produto comparando nomes normalizados
+    // Buscar produto comparando nomes (similaridade simples)
     const estoque = estoques?.find((item: any) => {
-      const nomeEstoqueNormalizado = normalizarNomeProduto(item.produto_nome);
-      return nomeEstoqueNormalizado.includes(produtoNomeNormalizado) || 
-             produtoNomeNormalizado.includes(nomeEstoqueNormalizado);
+      const nomeEstoqueSimples = item.produto_nome.toLowerCase().trim();
+      const produtoSimples = produtoNomeNormalizado.toLowerCase().trim();
+      return nomeEstoqueSimples.includes(produtoSimples) || 
+             produtoSimples.includes(nomeEstoqueSimples);
     });
     
     if (erroEstoque) {
