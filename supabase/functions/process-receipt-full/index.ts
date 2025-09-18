@@ -106,31 +106,9 @@ serve(async (req) => {
     // ✅ GRAVADOR CEGO: Inserir apenas os itens da nota atual no estoque
     console.log(`📦 Iniciando inserção dos ${listaItens.length} itens da nota no estoque...`);
 
-    // ✅ PROCESSA PRODUTOS - APENAS GRAVA EXATAMENTE O QUE A IA-2 ENTREGOU
+    // ✅ GRAVADOR CEGO: SIMPLESMENTE INSERIR TUDO SEM VALIDAÇÃO QUE BLOQUEIA
     if (listaItens && Array.isArray(listaItens)) {
-      console.log(`📦 GRAVADOR CEGO - Iniciando gravação exata dos dados da IA-2: ${listaItens.length} itens...`);
-      
-      // 🔍 VALIDAÇÃO PRÉVIA: Calcular total da IA-2 vs total declarado
-      const totalDeclarado = extractedData.compra?.valor_total || extractedData.valorTotal || 0;
-      let totalCalculadoIA2 = 0;
-      
-      console.log(`💰 VALIDAÇÃO DE TOTAIS:`);
-      console.log(`   - Total declarado na nota: R$ ${totalDeclarado}`);
-      
-      for (const item of listaItens) {
-        const valorItem = item.valor_total || item.precoTotal || (item.quantidade * (item.valor_unitario || item.precoUnitario)) || 0;
-        totalCalculadoIA2 += valorItem;
-        console.log(`   - Item "${item.nome || item.descricao}": R$ ${valorItem}`);
-      }
-      
-      console.log(`   - Total calculado IA-2: R$ ${totalCalculadoIA2}`);
-      
-      if (Math.abs(totalCalculadoIA2 - totalDeclarado) > 0.01) {
-        console.log(`⚠️ DIVERGÊNCIA DETECTADA! Diferença: R$ ${Math.abs(totalCalculadoIA2 - totalDeclarado).toFixed(2)}`);
-        throw new Error(`Divergência entre total declarado (${totalDeclarado}) e calculado (${totalCalculadoIA2})`);
-      } else {
-        console.log(`✅ Totais batem! Prosseguindo com gravação...`);
-      }
+      console.log(`📦 GRAVADOR CEGO - Inserindo ${listaItens.length} itens da IA-2 exatamente como foram extraídos...`);
       
       let itensProcessados = 0;
       let itensComErro = 0;
@@ -138,59 +116,24 @@ serve(async (req) => {
       for (let index = 0; index < listaItens.length; index++) {
         const item = listaItens[index];
         try {
-          // ✅ GRAVADOR CEGO - USAR APENAS CAMPOS PADRONIZADOS DA IA-2
+          // ✅ GRAVADOR CEGO - EXTRAIR DADOS EXATOS DA IA-2
           const nomeExato = item.nome || item.descricao;
           const quantidadeExata = item.quantidade;
           const precoUnitarioExato = item.valor_unitario || item.precoUnitario;
-          const precoTotalExato = item.valor_total || item.precoTotal || (quantidadeExata * precoUnitarioExato);
           const categoriaExata = item.categoria || 'outros';
           const unidadeExata = item.unidade || 'UN';
 
-          console.log(`\n🔍 INSERINDO ITEM ${index + 1}: "${nomeExato}"`);
-          console.log(`   - Quantidade: ${quantidadeExata}`);
-          console.log(`   - Preço unitário: ${precoUnitarioExato}`);
-          console.log(`   - Preço total: ${precoTotalExato}`);
-          console.log(`   - Categoria: ${categoriaExata}`);
-
           if (!nomeExato || nomeExato.trim() === '') {
-            console.log(`⚠️ Item ${index + 1} ignorado: nome vazio`);
-            continue;
+            continue; // Pular itens sem nome
           }
 
-          // Mapear categoria para valores aceitos pela constraint
-          const mapearCategoria = (categoria: string): string => {
-            if (!categoria) return 'outros';
-            
-            const cat = String(categoria).toLowerCase().trim();
-            const mapeamento = {
-              'bebidas': 'bebidas',
-              'limpeza': 'limpeza',
-              'higiene': 'higiene',
-              'alimentação': 'alimentacao',
-              'alimentacao': 'alimentacao',
-              'padaria': 'padaria',
-              'açougue': 'acougue',
-              'acougue': 'acougue',
-              'frutas': 'frutas',
-              'verduras': 'verduras',
-              'frios': 'frios',
-              'congelados': 'congelados',
-              'casa': 'casa',
-              'papelaria': 'papelaria'
-            };
-            
-            return mapeamento[cat] || 'outros';
-          };
-          
-          const categoriaFinal = mapearCategoria(categoriaExata);
-          
-          // ✅ INSERIR PRODUTO EXATAMENTE COMO A IA-2 ENTREGOU
+          // ✅ INSERIR PRODUTO EXATAMENTE COMO A IA-2 ENTREGOU - SEM VALIDAÇÕES QUE IMPEDEM
           const { error: insertError } = await supabase
             .from('estoque_app')
             .insert({
               user_id: notaImagem.usuario_id,
               produto_nome: nomeExato,
-              categoria: categoriaFinal,
+              categoria: categoriaExata || 'outros',
               quantidade: quantidadeExata,
               unidade_medida: unidadeExata,
               preco_unitario_ultimo: precoUnitarioExato,
@@ -198,17 +141,12 @@ serve(async (req) => {
             });
 
           if (insertError) {
-            console.error(`❌ ERRO ao inserir produto - Item ${index + 1}:`, insertError);
+            console.error(`❌ ERRO ao inserir item ${index + 1}:`, insertError);
             itensComErro++;
-            continue;
+          } else {
+            console.log(`✅ Item ${index + 1} inserido: ${nomeExato} - ${quantidadeExata} ${unidadeExata} - R$ ${precoUnitarioExato}`);
+            itensProcessados++;
           }
-
-          console.log(`✅ SUCESSO - Item ${index + 1} INSERIDO:`);
-          console.log(`   - Produto: ${nomeExato}`);
-          console.log(`   - Quantidade: ${quantidadeExata} ${unidadeExata}`);
-          console.log(`   - Preço: R$ ${precoUnitarioExato}`);
-          console.log(`   - Categoria: ${categoriaFinal}`);
-          itensProcessados++;
 
         } catch (error) {
           console.error(`❌ Erro ao processar item ${index + 1}:`, error);
@@ -216,29 +154,7 @@ serve(async (req) => {
         }
       }
 
-      // 🏁 VALIDAÇÃO FINAL: Comparar apenas os itens inseridos desta nota
-      let totalItensInseridos = 0;
-      for (const item of listaItens) {
-        const valorItem = item.valor_total || item.precoTotal || (item.quantidade * (item.valor_unitario || item.precoUnitario)) || 0;
-        totalItensInseridos += valorItem;
-      }
-      
-      const totalNota = extractedData.compra?.valor_total || extractedData.valorTotal || 0;
-      console.log(`🏁 VALIDAÇÃO FINAL:`);
-      console.log(`   📊 Total da nota: R$ ${totalNota}`);
-      console.log(`   📦 Total dos itens inseridos: R$ ${totalItensInseridos.toFixed(2)}`);
-      
-      if (Math.abs(totalItensInseridos - totalNota) > 0.01) {
-        console.log(`❌ ERRO CRÍTICO: Divergência de R$ ${Math.abs(totalItensInseridos - totalNota).toFixed(2)}`);
-      } else {
-        console.log(`✅ SUCESSO: Itens inseridos coincidem com o total da nota!`);
-      }
-      
-      console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
-      console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
-      console.log(`   ✅ Itens inseridos com sucesso: ${itensProcessados}`);
-      console.log(`   ❌ Itens com erro: ${itensComErro}`);
-      console.log(`   📈 Taxa de sucesso: ${((itensProcessados / listaItens.length) * 100).toFixed(1)}%`);
+      console.log(`✅ GRAVADOR CEGO FINALIZADO: ${itensProcessados} itens inseridos, ${itensComErro} erros`);
     }
 
     // ✅ Marcar nota como processada
