@@ -77,33 +77,14 @@ Deno.serve(async (req) => {
 
     const validationPrompt = `Analise este documento e responda APENAS com um JSON no formato especificado.
 
-VOCÊ DEVE ANALISAR:
+CRITÉRIOS DE VALIDAÇÃO:
 1. CHAVE DE ACESSO: Procure por sequência de 44 dígitos (pode ter espaços, pontos, quebras). Normalize: O→0, I/l→1, B→8.
-2. TIPO DE DOCUMENTO: Identifique se é NFS-e, Prestação de Serviços, ISS, documento municipal, etc.
-3. SETOR DO ESTABELECIMENTO: Nome/descrição do emissor.
-4. SINAIS DE COMPRA: Presença de itens com descrição+quantidade+valor OU valor total OU forma de pagamento.
+2. ESTABELECIMENTO: Identifique o nome/tipo do emissor.
+3. SINAIS DE COMPRA: Verifique se há itens com descrição+quantidade+valor, valor total, ou forma de pagamento.
 
-IMPORTANTE - DIFERENÇAS ENTRE DOCUMENTOS:
-- NFS-e = Nota Fiscal de SERVIÇOS (limpeza, consultoria, reparos, etc.) - tem ISS, não ICMS
-- NFCe/NFe = Nota Fiscal de PRODUTOS (supermercado, farmácia, etc.) - tem ICMS, itens físicos
-
-SETORES ACEITOS (varejo de produtos):
-- supermercado, hipermercado, mercado, mercadinho, atacadista, atacadão
-- assaí, carrefour, extra, dia, guanabara, zona sul, supermarket, costa azul
-- açougue, padaria, hortifruti, sacolão
-- farmácia, drogaria, droga(qualquer coisa)
-- distribuidora/depósito de alimentos/bebidas
-- mantimentos
-
-SETORES REJEITADOS:
-- roupas, confecção, moda, calçados
-- telefonia, celular, eletro, eletrônicos, móveis
-- material de construção, autopeças, oficina
-- bicicleta, moto, carro, concessionária
-
-DECISÃO:
-- APROVAR se: (Chave 44 dígitos válida) OU (Setor aceito + sinais de compra) OU (é NFCe/NFe de produtos)
-- BLOQUEAR APENAS se: (É claramente NFS-e de SERVIÇOS com ISS) OU (setor rejeitado) OU (nem chave nem setor+compra)
+REGRA SIMPLES:
+- APROVAR se: Há chave de 44 dígitos OU (é nota de compra de produtos com itens e valores)
+- REPROVAR apenas se: Claramente não é uma nota fiscal de compra (ex: recibo de serviços sem produtos)
 
 Responda APENAS o JSON:
 {
