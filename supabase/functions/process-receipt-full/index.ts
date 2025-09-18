@@ -115,8 +115,28 @@ serve(async (req) => {
 
     // ✅ PROCESSA PRODUTOS - APENAS GRAVA EXATAMENTE O QUE A IA-2 ENTREGOU
     if (listaItens && Array.isArray(listaItens)) {
-      console.log(`📦 Gravando no estoque EXATAMENTE como a IA-2 entregou - ${listaItens.length} itens...`);
+      console.log(`📦 GRAVADOR CEGO - Iniciando gravação exata dos dados da IA-2: ${listaItens.length} itens...`);
       
+      // 🔍 VALIDAÇÃO PRÉVIA: Calcular total da IA-2 vs total declarado
+      const totalDeclarado = extractedData.compra?.valor_total || extractedData.valorTotal || 0;
+      let totalCalculadoIA2 = 0;
+      
+      console.log(`💰 VALIDAÇÃO DE TOTAIS:`);
+      console.log(`   - Total declarado na nota: R$ ${totalDeclarado}`);
+      
+      for (const item of listaItens) {
+        const valorItem = item.valor_total || item.precoTotal || (item.quantidade * (item.valor_unitario || item.precoUnitario)) || 0;
+        totalCalculadoIA2 += valorItem;
+        console.log(`   - Item "${item.nome || item.descricao}": R$ ${valorItem}`);
+      }
+      
+      console.log(`   - Total calculado IA-2: R$ ${totalCalculadoIA2}`);
+      
+      if (Math.abs(totalCalculadoIA2 - totalDeclarado) > 0.01) {
+        console.log(`⚠️ DIVERGÊNCIA DETECTADA! Diferença: R$ ${Math.abs(totalCalculadoIA2 - totalDeclarado).toFixed(2)}`);
+      } else {
+        console.log(`✅ Totais batem! Prosseguindo com gravação...`);
+      }
       let itensProcessados = 0;
       let itensAtualizados = 0;
       let itensCriados = 0;
@@ -125,11 +145,11 @@ serve(async (req) => {
       for (let index = 0; index < listaItens.length; index++) {
         const item = listaItens[index];
         try {
-          // ✅ USAR EXATAMENTE OS DADOS DA IA-2 - SEM REINTERPRETAÇÃO
+          // ✅ GRAVADOR CEGO - USAR APENAS CAMPOS PADRONIZADOS DA IA-2
           const nomeExato = item.nome || item.descricao;
           const quantidadeExata = item.quantidade;
-          const precoUnitarioExato = item.precoUnitario || item.valor_unitario;
-          const precoTotalExato = item.precoTotal || item.valor_total;
+          const precoUnitarioExato = item.valor_unitario || item.precoUnitario;
+          const precoTotalExato = item.valor_total || item.precoTotal || (quantidadeExata * precoUnitarioExato);
           const categoriaExata = item.categoria || 'outros';
           const unidadeExata = item.unidade || 'UN';
 
@@ -258,7 +278,33 @@ serve(async (req) => {
         }
       }
 
-      // 🏁 RESUMO FINAL
+      // 🏁 VALIDAÇÃO FINAL DOS TOTAIS
+      console.log(`🏁 VALIDAÇÃO FINAL - VERIFICANDO CONSISTÊNCIA:`);
+      
+      // Buscar estoque atualizado para validar
+      const { data: estoqueValidacao } = await supabase
+        .from('estoque_app')
+        .select('produto_nome, quantidade, preco_unitario_ultimo')
+        .eq('user_id', notaImagem.usuario_id);
+      
+      let totalEstoqueCalculado = 0;
+      if (estoqueValidacao) {
+        for (const item of estoqueValidacao) {
+          const valorItem = item.quantidade * item.preco_unitario_ultimo;
+          totalEstoqueCalculado += valorItem;
+        }
+      }
+      
+      const totalNota = extractedData.compra?.valor_total || extractedData.valorTotal || 0;
+      console.log(`   📊 Total da nota: R$ ${totalNota}`);
+      console.log(`   📦 Total do estoque: R$ ${totalEstoqueCalculado.toFixed(2)}`);
+      
+      if (Math.abs(totalEstoqueCalculado - totalNota) > 0.01) {
+        console.log(`❌ ERRO CRÍTICO: Divergência de R$ ${Math.abs(totalEstoqueCalculado - totalNota).toFixed(2)}`);
+      } else {
+        console.log(`✅ SUCESSO: Totais são idênticos!`);
+      }
+      
       console.log(`🏁 PROCESSAMENTO FINALIZADO:`);
       console.log(`   📊 Total de itens na nota: ${listaItens.length}`);
       console.log(`   ✅ Itens processados com sucesso: ${itensProcessados}`);
