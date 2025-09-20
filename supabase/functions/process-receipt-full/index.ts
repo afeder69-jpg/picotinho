@@ -88,34 +88,32 @@ serve(async (req) => {
     // Processar cada item EXATAMENTE como está no cuponzinho
     for (const item of itens) {
       try {
-        // ✅ HOTFIX: Espelho exato do JSON da IA-2
+        // ✅ ESPELHO FIEL: Conversão correta sem descartes
         const descricao = String(item.descricao || '').trim();
-        const quantidade = Number(item.quantidade || 0);
-        const valorUnitario = Number(item.valor_unitario || 0);
-        const unidade = String(item.unidade || 'UN');
+        const quantidade = parseFloat(item.quantidade) || 0;
+        const valorUnitario = parseFloat(item.valor_unitario) || 0;
+        const unidade = String(item.unidade || 'UN').trim();
         const categoria = String(item.categoria || 'OUTROS');
         
-        // Log mínimo antes do insert
-        console.log('INSERT', {descricao, quantidade, unidade, valor_unitario: valorUnitario});
+        // Normalizar unidade sem mexer na quantidade
+        const unidadeNormalizada = unidade === 'Unidade' ? 'UN' : unidade.toUpperCase();
         
-        // Validações básicas
+        // Log antes do insert
+        console.log('INSERT', {descricao, quantidade, unidade: unidadeNormalizada, valor_unitario: valorUnitario});
+        
+        // Única validação: descrição obrigatória
         if (!descricao) {
           console.log(`⚠️ Item sem descrição - pulando`);
           continue;
         }
-        
-        if (quantidade <= 0) {
-          console.log(`⚠️ Item com quantidade inválida: ${descricao} - Qtd: ${quantidade}`);
-          continue;
-        }
 
-        // ✅ HOTFIX: Espelho exato sem transformações
+        // ✅ ESPELHO FIEL: Objeto exato baseado na IA-2
         const produto = {
           user_id: notaImagem.usuario_id,
           produto_nome: descricao,
           categoria: categoria,
           quantidade: quantidade,
-          unidade_medida: unidade === 'Unidade' ? 'UN' : unidade,
+          unidade_medida: unidadeNormalizada,
           preco_unitario_ultimo: valorUnitario,
           origem: 'nota_fiscal'
         };
