@@ -870,6 +870,23 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       console.error("❌ Erro ao salvar debug:", debugError);
     }
 
+    // 🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...
+    console.log('🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...');
+    
+    try {
+      const { data: ia2Result, error: ia2Error } = await supabase.functions.invoke('process-receipt-full', {
+        body: { imagemId: notaId }
+      });
+      
+      if (ia2Error) {
+        console.error('❌ Erro na IA-2:', ia2Error);
+      } else {
+        console.log('✅ IA-2 executada automaticamente com sucesso:', ia2Result);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao executar IA-2:', error);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       message: "Processamento concluído - TODOS os itens extraídos e categorizados",
