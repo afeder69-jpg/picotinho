@@ -26,7 +26,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`📋 INSERÇÃO DIRETA - Processando nota: ${notaId}`);
+    console.log(`📋 ESPELHO PERFEITO - Processando nota: ${notaId}`);
 
     // Buscar dados extraídos da nota
     const { data: nota, error: notaError } = await supabase
@@ -40,9 +40,9 @@ serve(async (req) => {
       throw new Error(`Nota não encontrada: ${notaError?.message}`);
     }
 
-    // VERIFICAÇÃO CRUCIAL: Se a nota já foi processada pela IA-2, não processar novamente
+    // Se a nota já foi processada, não processar novamente
     if (nota.processada) {
-      console.log('⚠️ Nota já foi processada pela IA-2, evitando duplicação');
+      console.log('⚠️ Nota já foi processada, evitando duplicação');
       return new Response(
         JSON.stringify({ 
           success: true,
@@ -54,9 +54,6 @@ serve(async (req) => {
       );
     }
 
-    // IA-2: Processar nota sem verificações de duplicidade  
-    // Se chegou até aqui, a IA-1 já validou que é uma nota inédita
-
     const dadosExtraidos = nota.dados_extraidos;
     const itens = dadosExtraidos?.itens || [];
 
@@ -64,88 +61,54 @@ serve(async (req) => {
       throw new Error('Nenhum item encontrado na nota');
     }
 
-    console.log(`📦 Inserindo ${itens.length} produtos diretamente do cuponzinho...`);
+    console.log(`📦 Criando espelho perfeito: ${itens.length} produtos EXATAMENTE como na nota...`);
 
     let itensInseridos = 0;
     const resultados = [];
 
-    // Processar cada item EXATAMENTE como está no cuponzinho
+    // Inserir cada item EXATAMENTE como está na nota - SEM NENHUMA MODIFICAÇÃO
     for (const item of itens) {
       try {
-        const nomeOriginal = item.descricao || item.nome;
-        const quantidade = parseFloat(item.quantidade || 0);
-        const precoUnitario = parseFloat(item.valor_unitario || 0);
-        const categoria = item.categoria || 'OUTROS';
-        const unidade = item.unidade || 'UN';
+        // Pegar dados EXATOS da nota - zero modificação
+        const nomeExato = item.descricao || item.nome;
+        const quantidadeExata = parseFloat(item.quantidade || 0);
+        const precoExato = parseFloat(item.valor_unitario || 0);
+        const categoriaExata = item.categoria || 'OUTROS';
+        const unidadeExata = item.unidade || 'UN';
 
-        if (!nomeOriginal || quantidade <= 0) {
-          console.log(`⚠️ Item inválido ignorado: ${nomeOriginal} | Qtd: ${quantidade}`);
+        if (!nomeExato || quantidadeExata <= 0) {
+          console.log(`⚠️ Item inválido ignorado: ${nomeExato} | Qtd: ${quantidadeExata}`);
           continue;
         }
 
-        console.log(`💾 Inserindo: ${nomeOriginal} | ${quantidade} ${unidade} | R$ ${precoUnitario}`);
+        console.log(`💾 ESPELHO: ${nomeExato} | ${quantidadeExata} ${unidadeExata} | R$ ${precoExato}`);
 
-        // USAR SERVICE ROLE - verificar se produto já existe no estoque (busca por nome exato)
-        const { data: produtoExistente, error: selectError } = await supabase
+        // INSERIR DIRETO - sem verificar duplicatas, sem normalizar, sem modificar NADA
+        const { data: insertData, error: insertError } = await supabase
           .from('estoque_app')
-          .select('*')
-          .eq('user_id', usuarioId)
-          .eq('produto_nome', nomeOriginal.toUpperCase().trim())
-          .maybeSingle();
+          .insert({
+            user_id: usuarioId,
+            produto_nome: nomeExato, // EXATO como na nota
+            categoria: categoriaExata,
+            quantidade: quantidadeExata,
+            unidade_medida: unidadeExata,
+            preco_unitario_ultimo: precoExato,
+            origem: 'nota_fiscal'
+          })
+          .select();
 
-        if (selectError) {
-          console.error(`❌ Erro ao buscar produto ${nomeOriginal}:`, selectError);
-          throw selectError;
+        if (insertError) {
+          console.error(`❌ Erro ao inserir ${nomeExato}:`, insertError);
+          throw insertError;
         }
-
-        if (produtoExistente) {
-          // Atualizar quantidade existente
-          const novaQuantidade = parseFloat(produtoExistente.quantidade) + quantidade;
-          
-          const { data: updateData, error: updateError } = await supabase
-            .from('estoque_app')
-            .update({
-              quantidade: novaQuantidade,
-              preco_unitario_ultimo: precoUnitario,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', produtoExistente.id)
-            .select();
-
-          if (updateError) {
-            console.error(`❌ Erro ao atualizar ${nomeOriginal}:`, updateError);
-            throw updateError;
-          }
-          
-          console.log(`✅ Quantidade atualizada: ${nomeOriginal} (${produtoExistente.quantidade} + ${quantidade} = ${novaQuantidade})`);
-        } else {
-          // Inserir novo produto - USANDO SERVICE ROLE
-          const { data: insertData, error: insertError } = await supabase
-            .from('estoque_app')
-            .insert({
-              user_id: usuarioId,
-              produto_nome: nomeOriginal.toUpperCase().trim(),
-              categoria: categoria.toUpperCase(),
-              quantidade: quantidade,
-              unidade_medida: unidade.toUpperCase(),
-              preco_unitario_ultimo: precoUnitario,
-              origem: 'nota_fiscal'
-            })
-            .select();
-
-          if (insertError) {
-            console.error(`❌ Erro ao inserir ${nomeOriginal}:`, insertError);
-            throw insertError;
-          }
-          
-          console.log(`✅ Novo produto inserido: ${nomeOriginal} (${quantidade} ${unidade}) - ID: ${insertData?.[0]?.id}`);
-        }
+        
+        console.log(`✅ ESPELHO CRIADO: ${nomeExato} - ID: ${insertData?.[0]?.id}`);
 
         itensInseridos++;
         resultados.push({
-          produto: nomeOriginal,
-          quantidade: quantidade,
-          preco: precoUnitario,
+          produto: nomeExato,
+          quantidade: quantidadeExata,
+          preco: precoExato,
           status: 'inserido'
         });
 
@@ -172,12 +135,12 @@ serve(async (req) => {
       console.error('❌ Erro ao marcar nota como processada:', updateError);
     }
 
-    console.log(`🎯 INSERÇÃO DIRETA COMPLETA: ${itensInseridos} produtos inseridos`);
+    console.log(`🎯 ESPELHO PERFEITO CRIADO: ${itensInseridos} produtos idênticos à nota`);
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: `${itensInseridos} produtos inseridos diretamente do cuponzinho no estoque`,
+        message: `${itensInseridos} produtos inseridos como espelho perfeito da nota`,
         itens_inseridos: itensInseridos,
         resultados: resultados
       }),
@@ -185,7 +148,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Erro na inserção direta:', error);
+    console.error('❌ Erro na criação do espelho:', error);
     
     return new Response(
       JSON.stringify({ error: error.message }),
