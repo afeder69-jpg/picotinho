@@ -61,6 +61,7 @@ const EstoqueAtual = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
   const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
+  const [mostrarItensZerados, setMostrarItensZerados] = useState(false);
   
   // Estados para inserção de produto
   const [modalInserirAberto, setModalInserirAberto] = useState(false);
@@ -1203,7 +1204,12 @@ const EstoqueAtual = () => {
     );
   }
 
-  const groupedEstoque = groupByCategory(estoque);
+  // Filtrar estoque baseado na opção de mostrar itens zerados
+  const estoqueParaExibir = mostrarItensZerados 
+    ? estoque 
+    : estoque.filter(item => parseFloat(item.quantidade.toString()) > 0);
+  
+  const groupedEstoque = groupByCategory(estoqueParaExibir);
   
   // Contagem real de produtos únicos considerando todas as categorias
   const totalProdutosUnicos = Object.values(groupedEstoque).reduce((total, itens) => total + itens.length, 0);
@@ -1264,6 +1270,20 @@ const EstoqueAtual = () => {
             <DropdownMenuItem onClick={() => setModoEdicao(!modoEdicao)}>
               <Edit3 className="w-4 h-4 mr-2" />
               {modoEdicao ? "Sair da Edição" : "Ajustar Estoque"}
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => setMostrarItensZerados(!mostrarItensZerados)}
+              className="justify-between"
+            >
+              <div className="flex items-center">
+                <Package className="w-4 h-4 mr-2" />
+                Mostrar itens zerados
+              </div>
+              <div className={`w-4 h-4 border-2 border-gray-400 rounded-sm flex items-center justify-center ${mostrarItensZerados ? 'bg-green-600 border-green-600' : ''}`}>
+                {mostrarItensZerados && (
+                  <div className="w-2 h-2 bg-white rounded-sm"></div>
+                )}
+              </div>
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
