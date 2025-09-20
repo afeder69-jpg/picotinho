@@ -40,11 +40,28 @@ serve(async (req) => {
       throw new Error(`Nota não encontrada: ${notaError?.message}`);
     }
 
+    // PERMITIR REPROCESSAMENTO SE ESTOQUE ESTIVER VAZIO
     if (nota.processada) {
-      return new Response(
-        JSON.stringify({ success: true, message: 'Nota já foi processada anteriormente' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Verificar se há produtos no estoque para este usuário
+      const { data: estoqueExistente, error: estoqueError } = await supabase
+        .from('estoque_app')
+        .select('id')
+        .eq('user_id', usuarioId)
+        .limit(1);
+      
+      if (estoqueError) {
+        console.error('❌ Erro ao verificar estoque:', estoqueError);
+      }
+      
+      if (estoqueExistente && estoqueExistente.length > 0) {
+        console.log('⚠️ Nota já processada e estoque contém produtos, evitando duplicação');
+        return new Response(
+          JSON.stringify({ success: true, message: 'Nota já foi processada anteriormente e estoque não está vazio' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        console.log('🔄 Nota processada mas estoque vazio, reprocessando...');
+      }
     }
 
     const dadosExtraidos = nota.dados_extraidos;

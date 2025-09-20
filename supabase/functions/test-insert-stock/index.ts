@@ -21,7 +21,7 @@ serve(async (req) => {
     // Executar inserção direta para a nota mais recente
     const { data: insertResult, error: insertError } = await supabase.functions.invoke('inserir-estoque-direto', {
       body: {
-        notaId: '605f35b7-adc4-4d8e-9254-3fbd6e302d94',
+        notaId: '3c261f57-ebf1-4a92-8beb-f1f87b6ab595',
         usuarioId: 'ae5b5501-7f8a-46da-9cba-b9955a84e697'
       }
     });
