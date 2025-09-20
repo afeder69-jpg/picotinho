@@ -92,6 +92,10 @@ serve(async (req) => {
     let itensProcessados = 0;
     let itensComErro = 0;
     const resultados = [];
+    
+    // Cache para evitar processar o mesmo produto múltiplas vezes
+    const cacheProcessamento = new Map();
+    const hashesExistentes = new Set();
 
     // Processar cada item da nota
     for (let index = 0; index < listaItens.length; index++) {
@@ -99,6 +103,18 @@ serve(async (req) => {
       try {
         const nomeOriginal = item.nome || item.descricao;
         if (!nomeOriginal || nomeOriginal.trim() === '') {
+          continue;
+        }
+
+        // Verificar se já processamos este produto nesta sessão
+        const nomeNormalizado = nomeOriginal.trim().toUpperCase();
+        if (cacheProcessamento.has(nomeNormalizado)) {
+          console.log(`⏭️ Item já processado nesta sessão: ${nomeOriginal}`);
+          const produtoExistente = cacheProcessamento.get(nomeNormalizado);
+          
+          // Apenas atualizar quantidade se for o mesmo produto
+          await atualizarQuantidadeExistente(supabase, produtoExistente, item, usuarioId);
+          itensProcessados++;
           continue;
         }
 
@@ -116,6 +132,16 @@ serve(async (req) => {
         if (!produtoNormalizado.produto_hash_normalizado) {
           const hashSKU = await gerarHashSKU(produtoNormalizado);
           produtoNormalizado.produto_hash_normalizado = hashSKU;
+        }
+        
+        // Verificar se este hash já foi processado nesta sessão
+        if (hashesExistentes.has(produtoNormalizado.produto_hash_normalizado)) {
+          console.log(`⚠️ Hash duplicado detectado para: ${nomeOriginal} - pulando`);
+          continue;
+        }
+        
+        hashesExistentes.add(produtoNormalizado.produto_hash_normalizado);
+        cacheProcessamento.set(nomeNormalizado, produtoNormalizado);
           
           // 🔍 DEBUG: Log detalhado para diagnóstico de SKU
           console.log(`🔍 DEBUG SKU para "${nomeOriginal}":`);
@@ -149,10 +175,15 @@ serve(async (req) => {
         };
 
         // 5. ✅ IA-2 INSERE NO ESTOQUE USANDO HASH SKU ÚNICO
+        const quantidadeItem = parseFloat(item.quantidade || 0);
+        const valorUnitario = parseFloat(item.valor_unitario || 0);
+        
+        console.log(`📊 Dados extraídos da nota - Nome: "${item.descricao || item.nome}" | Qtd: ${quantidadeItem} | Valor: R$ ${valorUnitario}`);
+        
         await inserirProdutoNoEstoque(supabase, {
           ...produtoNormalizado,
-          quantidade_final: item.quantidade || item.qtd_valor || 1,
-          valor_unitario_final: item.valor_unitario || item.precoUnitario || item.valorUnitario || 0,
+          quantidade_final: quantidadeItem,
+          valor_unitario_final: valorUnitario,
           categoria: produtoNormalizado.categoria || 'OUTROS'
         }, usuarioId);
 
@@ -466,4 +497,41 @@ async function gerarHashSKU(dados: any): Promise<string> {
   
   console.log(`🔑 Hash gerado: ${hash}`);
   return hash;
+}
+
+async function atualizarQuantidadeExistente(supabase: any, produtoNormalizado: any, item: any, usuarioId: string) {
+  try {
+    const quantidadeItem = parseFloat(item.quantidade || 0);
+    
+    // Buscar produto existente no estoque
+    const { data: produtoExistente, error: erroConsulta } = await supabase
+      .from('estoque_app')
+      .select('*')
+      .eq('user_id', usuarioId)
+      .eq('produto_hash_normalizado', produtoNormalizado.produto_hash_normalizado)
+      .single();
+
+    if (erroConsulta && erroConsulta.code !== 'PGRST116') {
+      throw erroConsulta;
+    }
+
+    if (produtoExistente) {
+      // Atualizar quantidade do produto existente
+      const novaQuantidade = parseFloat(produtoExistente.quantidade) + quantidadeItem;
+      
+      const { error: erroUpdate } = await supabase
+        .from('estoque_app')
+        .update({
+          quantidade: novaQuantidade,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', produtoExistente.id);
+
+      if (erroUpdate) throw erroUpdate;
+      
+      console.log(`➕ Quantidade atualizada para ${produtoNormalizado.produto_nome_normalizado}: ${produtoExistente.quantidade} + ${quantidadeItem} = ${novaQuantidade}`);
+    }
+  } catch (error) {
+    console.error(`❌ Erro ao atualizar quantidade existente:`, error);
+  }
 }
