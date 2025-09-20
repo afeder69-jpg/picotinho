@@ -43,32 +43,8 @@ serve(async (req) => {
       throw new Error('Nota ainda não foi processada pela IA de extração');
     }
 
-    // PERMITIR REPROCESSAMENTO SE ESTOQUE ESTIVER VAZIO
-    if (notaImagem.processada) {
-      // Verificar se há produtos no estoque para este usuário
-      const { data: estoqueExistente, error: estoqueError } = await supabase
-        .from('estoque_app')
-        .select('id')
-        .eq('user_id', notaImagem.usuario_id)
-        .limit(1);
-      
-      if (estoqueError) {
-        console.error('❌ Erro ao verificar estoque:', estoqueError);
-      }
-      
-      if (estoqueExistente && estoqueExistente.length > 0) {
-        console.log('⚠️ Nota já processada e estoque contém produtos, evitando duplicação');
-        return new Response(
-          JSON.stringify({ 
-            success: true,
-            message: 'Nota já foi processada anteriormente e estoque não está vazio'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } else {
-        console.log('🔄 Nota processada mas estoque vazio, reprocessando...');
-      }
-    }
+    // Se chegou até aqui, a IA-1 já validou que é uma nota inédita
+    // Processar sempre, sem verificações de duplicidade
 
     // ✅ INSERÇÃO DIRETA - SEM IA, SEM NORMALIZAÇÃO
     console.log(`📋 Inserindo produtos diretamente do cuponzinho...`);
