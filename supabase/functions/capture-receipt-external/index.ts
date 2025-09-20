@@ -241,8 +241,18 @@ serve(async (req) => {
     
     if (dbError) throw dbError;
     
-    // 5. PROCESSAMENTO REMOVIDO - APENAS IA-2 AUTORIZADA
-    console.log('📦 Captura salva. Processamento de estoque via IA-2 quando solicitado.');
+    // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
+    console.log("🚀 IA-1 finalizou captura, disparando IA-2 automaticamente...");
+    
+    EdgeRuntime.waitUntil(
+      supabase.functions.invoke('process-receipt-full', {
+        body: { imagemId: notaImagem.id }
+      }).then((result) => {
+        console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+      }).catch((error) => {
+        console.error('❌ Falha na execução automática da IA-2:', error);
+      })
+    );
     
     console.log('Captura externa concluída com sucesso:', notaImagem.id);
     

@@ -833,8 +833,19 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-      // ✅ APENAS SALVAR OS DADOS - PROCESSAMENTO SERÁ FEITO PELA IA-2 QUANDO NECESSÁRIO
-      console.log("✅ PDF processado e dados salvos. Processamento de estoque via IA-2 quando solicitado.");
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
+      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+      
+      // Executar IA-2 em background após salvar os dados
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagemId }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        }).catch((estoqueErr) => {
+          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+        })
+      );
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);

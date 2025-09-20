@@ -1418,8 +1418,8 @@ const EstoqueAtual = () => {
                </Card>
              </div>
 
-          {/* Botões de administração */}
-          <div className="flex justify-center gap-2 mb-4 flex-wrap">
+          {/* Botão de limpeza (quando necessário) */}
+          <div className="flex justify-center mb-4">
             <Button 
               onClick={async () => {
                 if (corrigindoPrecos) return;
@@ -1440,7 +1440,6 @@ const EstoqueAtual = () => {
                       title: "Duplicações Limpas",
                       description: `${data?.length || 0} problemas corrigidos. Atualizando estoque...`,
                     });
-                    // Recarregar estoque
                     loadEstoque();
                   }
                 } catch (error) {
@@ -1457,69 +1456,15 @@ const EstoqueAtual = () => {
               disabled={corrigindoPrecos}
               variant="outline" 
               size="sm"
+              className="text-xs"
             >
               {corrigindoPrecos ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1"></div>
                   Limpando...
                 </>
               ) : (
                 "🧹 Limpar Duplicações"
-              )}
-            </Button>
-
-            <Button 
-              onClick={async () => {
-                if (corrigindoPrecos) return;
-                setCorrigindoPrecos(true);
-                try {
-                  const { data: { user } } = await supabase.auth.getUser();
-                  if (!user) throw new Error('Usuário não autenticado');
-
-                  const { data, error } = await supabase.functions.invoke('teste-processamento-ia2', {
-                    body: { usuario_id: user.id }
-                  });
-                  
-                  if (error) {
-                    console.error('Erro no teste IA-2:', error);
-                    toast({
-                      title: "Erro",
-                      description: "Erro ao processar notas via IA-2. Tente novamente.",
-                      variant: "destructive",
-                    });
-                  } else {
-                    console.log('Teste IA-2 concluído:', data);
-                    toast({
-                      title: "IA-2 Concluída",
-                      description: data.message || "Processamento via IA-2 concluído",
-                    });
-                    // Recarregar estoque se houve processamento
-                    if (data.processadas > 0) {
-                      loadEstoque();
-                    }
-                  }
-                } catch (error) {
-                  console.error('Erro geral:', error);
-                  toast({
-                    title: "Erro",
-                    description: "Erro interno. Tente novamente.",
-                    variant: "destructive",
-                  });
-                } finally {
-                  setCorrigindoPrecos(false);
-                }
-              }}
-              disabled={corrigindoPrecos}
-              variant="default" 
-              size="sm"
-            >
-              {corrigindoPrecos ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground mr-2"></div>
-                  Processando...
-                </>
-              ) : (
-                "🤖 Processar via IA-2"
               )}
             </Button>
           </div>

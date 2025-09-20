@@ -1583,12 +1583,32 @@ async function processarNotaEmBackground(
         throw new Error(`Erro na extração: ${extractResult.error.message}`);
       }
       
-      // ✅ DADOS EXTRAÍDOS E SALVOS - PROCESSAMENTO VIA IA-2 QUANDO SOLICITADO
-      console.log('📦 PDF processado e dados salvos. Estoque via IA-2 quando necessário.');
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2  
+      console.log('🚀 PDF processado, disparando IA-2 automaticamente...');
+      
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagem.id }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente:", result);
+        }).catch((error) => {
+          console.error('❌ Falha na IA-2 automática:', error);
+        })
+      );
       
     } else {
-      // ✅ IMAGEM SALVA - PROCESSAMENTO VIA IA-2 QUANDO SOLICITADO  
-      console.log('📦 Imagem salva. Estoque via IA-2 quando necessário.');
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
+      console.log('🚀 Imagem processada, disparando IA-2 automaticamente...');
+      
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagem.id }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente:", result);
+        }).catch((error) => {
+          console.error('❌ Falha na IA-2 automática:', error);
+        })
+      );
     }
     
     // Aguardar um pouco para garantir que tudo foi persistido
