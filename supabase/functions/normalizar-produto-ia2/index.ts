@@ -163,27 +163,7 @@ serve(async (req) => {
           console.log(`  - hash_gerado: ${hashSKU}`);
         }
 
-        // 4. ✅ USAR EXATAMENTE OS DADOS DA IA-2/NORMALIZAÇÃO - SEM MANIPULAÇÃO
-        const dadosProduto = {
-          user_id: usuarioId,
-          produto_nome: produtoNormalizado.produto_nome_normalizado,
-          categoria: produtoNormalizado.categoria || 'OUTROS',
-          quantidade: item.quantidade || 1,
-          unidade_medida: produtoNormalizado.qtd_unidade || item.unidade || 'UN',
-          preco_unitario_ultimo: item.valor_unitario || item.precoUnitario || 0,
-          origem: 'nota_fiscal',
-          produto_nome_normalizado: produtoNormalizado.produto_nome_normalizado,
-          nome_base: produtoNormalizado.nome_base,
-          marca: produtoNormalizado.marca,
-          tipo_embalagem: produtoNormalizado.tipo_embalagem,
-          qtd_valor: produtoNormalizado.qtd_valor,
-          qtd_unidade: produtoNormalizado.qtd_unidade,
-          qtd_base: produtoNormalizado.qtd_base,
-          granel: produtoNormalizado.granel || false,
-          produto_hash_normalizado: produtoNormalizado.produto_hash_normalizado
-        };
-
-        // 5. ✅ IA-2 INSERE NO ESTOQUE USANDO HASH SKU ÚNICO
+        // 4. ✅ IA-2 INSERE NO ESTOQUE USANDO HASH SKU ÚNICO
         const quantidadeItem = parseFloat(item.quantidade || 0);
         const valorUnitario = parseFloat(item.valor_unitario || 0);
         
