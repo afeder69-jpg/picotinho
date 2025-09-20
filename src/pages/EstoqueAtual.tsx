@@ -1137,10 +1137,11 @@ const EstoqueAtual = () => {
     
     ordemCategorias.forEach(categoria => {
       const produtosDaCategoria = consolidatedItems.filter(item => {
-        console.log(`🎯 FILTERING - Item categoria: "${item.categoria}" vs "${categoria}"`);
-        return item.categoria === categoria;
+        // Comparar em maiúsculas para fazer match
+        const categoriaUpperCase = categoria.toUpperCase();
+        const itemCategoriaUpperCase = item.categoria?.toUpperCase();
+        return itemCategoriaUpperCase === categoriaUpperCase;
       });
-      console.log(`🎯 FILTERING - Categoria "${categoria}" tem ${produtosDaCategoria.length} produtos`);
       if (produtosDaCategoria.length > 0) {
         grouped[categoriasNormalizadas[categoria as keyof typeof categoriasNormalizadas]] = produtosDaCategoria;
       }
