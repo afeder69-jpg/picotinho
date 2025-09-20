@@ -875,7 +875,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     
     try {
       const { data: ia2Result, error: ia2Error } = await supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: notaId }
+        body: { imagemId: imagemId }
       });
       
       if (ia2Error) {
