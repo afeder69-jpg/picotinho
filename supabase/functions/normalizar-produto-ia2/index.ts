@@ -118,8 +118,8 @@ serve(async (req) => {
         // 5. ✅ IA-2 INSERE NO ESTOQUE USANDO HASH SKU ÚNICO
         await inserirProdutoNoEstoque(supabase, {
           ...produtoNormalizado,
-          quantidade_final: item.quantidade || 1,
-          valor_unitario_final: item.valor_unitario || item.precoUnitario || 0,
+          quantidade_final: item.quantidade || item.qtd_valor || 1,
+          valor_unitario_final: item.valor_unitario || item.precoUnitario || item.valorUnitario || 0,
           categoria: produtoNormalizado.categoria || 'OUTROS'
         }, usuarioId);
 
