@@ -115,24 +115,22 @@ serve(async (req) => {
           produto_hash_normalizado: produtoNormalizado.produto_hash_normalizado
         };
 
-        // 5. ✅ IA-2 FAZ INSERT DIRETO NO BANCO - SEM INTERMEDIÁRIOS
-        const { error: insertError } = await supabase
-          .from('estoque_app')
-          .insert(dadosProduto);
+        // 5. ✅ IA-2 INSERE NO ESTOQUE USANDO HASH SKU ÚNICO
+        await inserirProdutoNoEstoque(supabase, {
+          ...produtoNormalizado,
+          quantidade_final: item.quantidade || 1,
+          valor_unitario_final: item.valor_unitario || item.precoUnitario || 0,
+          categoria: produtoNormalizado.categoria || 'OUTROS'
+        }, usuarioId);
 
-        if (insertError) {
-          console.error(`❌ IA-2 erro ao inserir item ${index + 1}:`, insertError);
-          itensComErro++;
-        } else {
-          console.log(`✅ IA-2 inseriu item ${index + 1}: ${dadosProduto.produto_nome} - ${dadosProduto.quantidade} ${dadosProduto.unidade_medida} - R$ ${dadosProduto.preco_unitario_ultimo}`);
-          itensProcessados++;
-          resultados.push({
-            produto_original: nomeOriginal,
-            produto_normalizado: dadosProduto.produto_nome,
-            quantidade: dadosProduto.quantidade,
-            preco: dadosProduto.preco_unitario_ultimo
-          });
-        }
+        console.log(`✅ IA-2 inseriu item ${index + 1}: ${dadosProduto.produto_nome} - ${dadosProduto.quantidade} ${dadosProduto.unidade_medida} - R$ ${dadosProduto.preco_unitario_ultimo}`);
+        itensProcessados++;
+        resultados.push({
+          produto_original: nomeOriginal,
+          produto_normalizado: dadosProduto.produto_nome,
+          quantidade: dadosProduto.quantidade,
+          preco: dadosProduto.preco_unitario_ultimo
+        });
 
       } catch (error) {
         console.error(`❌ IA-2 erro ao processar item ${index + 1}:`, error);
@@ -359,16 +357,16 @@ Processe: "${nomeOriginal}"`;
 
 async function inserirProdutoNoEstoque(supabase: any, produto: any, usuarioId: string) {
   try {
-    // Verificar se produto já existe no estoque
+    // Buscar produto existente usando SKU hash único
     const { data: produtoExistente } = await supabase
       .from('estoque_app')
       .select('*')
       .eq('user_id', usuarioId)
-      .eq('produto_nome', produto.produto_nome_normalizado)
+      .eq('produto_hash_normalizado', produto.produto_hash_normalizado)
       .single();
 
     if (produtoExistente) {
-      // Atualizar quantidade existente
+      // Atualizar quantidade existente (SOMA)
       const { error: updateError } = await supabase
         .from('estoque_app')
         .update({
@@ -379,9 +377,9 @@ async function inserirProdutoNoEstoque(supabase: any, produto: any, usuarioId: s
         .eq('id', produtoExistente.id);
 
       if (updateError) throw updateError;
-      console.log(`✅ Quantidade atualizada: ${produto.produto_nome_normalizado} (+${produto.quantidade_final})`);
+      console.log(`✅ SKU existente atualizado: ${produto.produto_nome_normalizado} (${produtoExistente.quantidade} + ${produto.quantidade_final} = ${produtoExistente.quantidade + produto.quantidade_final})`);
     } else {
-      // Inserir novo produto
+      // Inserir novo produto no estoque
       const { error: insertError } = await supabase
         .from('estoque_app')
         .insert({
@@ -404,7 +402,7 @@ async function inserirProdutoNoEstoque(supabase: any, produto: any, usuarioId: s
         });
 
       if (insertError) throw insertError;
-      console.log(`✅ Novo produto inserido: ${produto.produto_nome_normalizado} (${produto.quantidade_final})`);
+      console.log(`✅ Novo SKU inserido: ${produto.produto_nome_normalizado} (${produto.quantidade_final} ${produto.qtd_unidade || 'UN'})`);
     }
   } catch (error) {
     console.error(`❌ Erro ao inserir produto no estoque:`, error);
