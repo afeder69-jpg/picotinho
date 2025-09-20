@@ -116,6 +116,16 @@ serve(async (req) => {
         if (!produtoNormalizado.produto_hash_normalizado) {
           const hashSKU = await gerarHashSKU(produtoNormalizado);
           produtoNormalizado.produto_hash_normalizado = hashSKU;
+          
+          // 🔍 DEBUG: Log detalhado para diagnóstico de SKU
+          console.log(`🔍 DEBUG SKU para "${nomeOriginal}":`);
+          console.log(`  - nome_base: "${produtoNormalizado.nome_base}"`);
+          console.log(`  - marca: "${produtoNormalizado.marca}"`);
+          console.log(`  - qtd_base: ${produtoNormalizado.qtd_base}`);
+          console.log(`  - qtd_unidade: "${produtoNormalizado.qtd_unidade}"`);
+          console.log(`  - tipo_embalagem: "${produtoNormalizado.tipo_embalagem}"`);
+          console.log(`  - granel: ${produtoNormalizado.granel}`);
+          console.log(`  - hash_gerado: ${hashSKU}`);
         }
 
         // 4. ✅ USAR EXATAMENTE OS DADOS DA IA-2/NORMALIZAÇÃO - SEM MANIPULAÇÃO
@@ -380,13 +390,15 @@ Processe: "${nomeOriginal}"`;
 
 async function inserirProdutoNoEstoque(supabase: any, produto: any, usuarioId: string) {
   try {
+    console.log(`🔍 Buscando produto existente com hash: ${produto.produto_hash_normalizado}`);
+    
     // Buscar produto existente usando SKU hash único
     const { data: produtoExistente } = await supabase
       .from('estoque_app')
       .select('*')
       .eq('user_id', usuarioId)
       .eq('produto_hash_normalizado', produto.produto_hash_normalizado)
-      .single();
+      .maybeSingle();
 
     if (produtoExistente) {
       // Atualizar quantidade existente (SOMA)
@@ -444,9 +456,14 @@ async function gerarHashSKU(dados: any): Promise<string> {
     dados.granel ? 'GRANEL' : ''
   ].join('|').toUpperCase();
 
+  console.log(`🔑 Gerando hash para chave: "${chaveSKU}"`);
+
   const encoder = new TextEncoder();
   const data = encoder.encode(chaveSKU);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  console.log(`🔑 Hash gerado: ${hash}`);
+  return hash;
 }
