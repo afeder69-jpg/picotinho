@@ -15,7 +15,7 @@ export const testProcessReceiptFunction = async () => {
     
     const { data, error } = await supabase.functions.invoke('process-receipt-full', {
       body: {
-        imagemId: '12b186ce-a6fb-408e-be95-f793ec38d9ba'
+        imagemId: 'bfb8097d-dc10-4739-8182-b00f95730148'
       }
     });
     
