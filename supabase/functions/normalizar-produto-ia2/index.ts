@@ -196,13 +196,13 @@ serve(async (req) => {
           categoria: produtoNormalizado.categoria || 'OUTROS'
         }, usuarioId);
 
-        console.log(`✅ IA-2 inseriu item ${index + 1}: ${dadosProduto.produto_nome} - ${dadosProduto.quantidade} ${dadosProduto.unidade_medida} - R$ ${dadosProduto.preco_unitario_ultimo}`);
+        console.log(`✅ IA-2 inseriu item ${index + 1}: ${produtoNormalizado.produto_nome_normalizado} - ${quantidadeItem} ${produtoNormalizado.qtd_unidade || 'UN'} - R$ ${valorUnitario}`);
         itensProcessados++;
         resultados.push({
           produto_original: nomeOriginal,
-          produto_normalizado: dadosProduto.produto_nome,
-          quantidade: dadosProduto.quantidade,
-          preco: dadosProduto.preco_unitario_ultimo
+          produto_normalizado: produtoNormalizado.produto_nome_normalizado,
+          quantidade: quantidadeItem,
+          preco: valorUnitario
         });
 
       } catch (error) {
