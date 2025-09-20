@@ -1217,10 +1217,12 @@ const EstoqueAtual = () => {
     // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
     const subtotalAtual = itens.reduce((sum, item) => {
       const precoAtual = encontrarPrecoAtual(item.produto_nome_normalizado || item.produto_nome);
+      console.log(`💰 Produto: ${item.produto_nome} -> Preço atual:`, precoAtual);
       // REGRA: Apenas usar preços atuais (de notas fiscais), não preços pagos manuais
       const preco = precoAtual?.valor_unitario || 0; // Se não há preço atual, não somar
       const quantidade = parseFloat(item.quantidade.toString());
       const subtotalItem = Math.round((preco * quantidade) * 100) / 100;
+      console.log(`💰 ${item.produto_nome}: preço=${preco} x qtd=${quantidade} = ${subtotalItem}`);
       return sum + subtotalItem;
     }, 0);
     
