@@ -86,38 +86,48 @@ serve(async (req) => {
         const unidade = item.unidade || 'UN';
 
         if (!nomeOriginal || quantidade <= 0) {
+          console.log(`⚠️ Item inválido ignorado: ${nomeOriginal} | Qtd: ${quantidade}`);
           continue;
         }
 
         console.log(`💾 Inserindo: ${nomeOriginal} | ${quantidade} ${unidade} | R$ ${precoUnitario}`);
 
-        // Verificar se produto já existe no estoque (busca por nome exato)
-        const { data: produtoExistente } = await supabase
+        // USAR SERVICE ROLE - verificar se produto já existe no estoque (busca por nome exato)
+        const { data: produtoExistente, error: selectError } = await supabase
           .from('estoque_app')
           .select('*')
           .eq('user_id', usuarioId)
           .eq('produto_nome', nomeOriginal.toUpperCase().trim())
           .maybeSingle();
 
+        if (selectError) {
+          console.error(`❌ Erro ao buscar produto ${nomeOriginal}:`, selectError);
+          throw selectError;
+        }
+
         if (produtoExistente) {
           // Atualizar quantidade existente
           const novaQuantidade = parseFloat(produtoExistente.quantidade) + quantidade;
           
-          const { error: updateError } = await supabase
+          const { data: updateData, error: updateError } = await supabase
             .from('estoque_app')
             .update({
               quantidade: novaQuantidade,
               preco_unitario_ultimo: precoUnitario,
               updated_at: new Date().toISOString()
             })
-            .eq('id', produtoExistente.id);
+            .eq('id', produtoExistente.id)
+            .select();
 
-          if (updateError) throw updateError;
+          if (updateError) {
+            console.error(`❌ Erro ao atualizar ${nomeOriginal}:`, updateError);
+            throw updateError;
+          }
           
           console.log(`✅ Quantidade atualizada: ${nomeOriginal} (${produtoExistente.quantidade} + ${quantidade} = ${novaQuantidade})`);
         } else {
-          // Inserir novo produto
-          const { error: insertError } = await supabase
+          // Inserir novo produto - USANDO SERVICE ROLE
+          const { data: insertData, error: insertError } = await supabase
             .from('estoque_app')
             .insert({
               user_id: usuarioId,
@@ -127,11 +137,15 @@ serve(async (req) => {
               unidade_medida: unidade.toUpperCase(),
               preco_unitario_ultimo: precoUnitario,
               origem: 'nota_fiscal'
-            });
+            })
+            .select();
 
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.error(`❌ Erro ao inserir ${nomeOriginal}:`, insertError);
+            throw insertError;
+          }
           
-          console.log(`✅ Novo produto inserido: ${nomeOriginal} (${quantidade} ${unidade})`);
+          console.log(`✅ Novo produto inserido: ${nomeOriginal} (${quantidade} ${unidade}) - ID: ${insertData?.[0]?.id}`);
         }
 
         itensInseridos++;
