@@ -103,58 +103,32 @@ serve(async (req) => {
       console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
     }
 
-    // ✅ GRAVADOR CEGO: Inserir apenas os itens da nota atual no estoque
-    console.log(`📦 Iniciando inserção dos ${listaItens.length} itens da nota no estoque...`);
+    // 🎯 IA-2 ASSUME TODO O PROCESSO - EXTRAIR, NORMALIZAR E GRAVAR DIRETAMENTE
+    console.log(`🎯 Delegando processo completo para IA-2...`);
 
-    // ✅ GRAVADOR CEGO: SIMPLESMENTE INSERIR TUDO SEM VALIDAÇÃO QUE BLOQUEIA
-    if (listaItens && Array.isArray(listaItens)) {
-      console.log(`📦 GRAVADOR CEGO - Inserindo ${listaItens.length} itens da IA-2 exatamente como foram extraídos...`);
-      
-      let itensProcessados = 0;
-      let itensComErro = 0;
-      
-      for (let index = 0; index < listaItens.length; index++) {
-        const item = listaItens[index];
-        try {
-          // ✅ GRAVADOR CEGO - EXTRAIR DADOS EXATOS DA IA-2
-          const nomeExato = item.nome || item.descricao;
-          const quantidadeExata = item.quantidade;
-          const precoUnitarioExato = item.valor_unitario || item.precoUnitario;
-          const categoriaExata = item.categoria || 'outros';
-          const unidadeExata = item.unidade || 'UN';
-
-          if (!nomeExato || nomeExato.trim() === '') {
-            continue; // Pular itens sem nome
-          }
-
-          // ✅ INSERIR PRODUTO EXATAMENTE COMO A IA-2 ENTREGOU - SEM VALIDAÇÕES QUE IMPEDEM
-          const { error: insertError } = await supabase
-            .from('estoque_app')
-            .insert({
-              user_id: notaImagem.usuario_id,
-              produto_nome: nomeExato,
-              categoria: categoriaExata || 'outros',
-              quantidade: quantidadeExata,
-              unidade_medida: unidadeExata,
-              preco_unitario_ultimo: precoUnitarioExato,
-              origem: 'nota_fiscal'
-            });
-
-          if (insertError) {
-            console.error(`❌ ERRO ao inserir item ${index + 1}:`, insertError);
-            itensComErro++;
-          } else {
-            console.log(`✅ Item ${index + 1} inserido: ${nomeExato} - ${quantidadeExata} ${unidadeExata} - R$ ${precoUnitarioExato}`);
-            itensProcessados++;
-          }
-
-        } catch (error) {
-          console.error(`❌ Erro ao processar item ${index + 1}:`, error);
-          itensComErro++;
+    try {
+      const { data: ia2Response, error: ia2Error } = await supabase.functions.invoke('normalizar-produto-ia2', {
+        body: {
+          notaId: imagemId,
+          usuarioId: notaImagem.usuario_id,
+          dadosExtraidos: extractedData,
+          debug: true
         }
+      });
+
+      if (ia2Error) {
+        throw new Error(`Erro na IA-2: ${ia2Error.message}`);
       }
 
-      console.log(`✅ GRAVADOR CEGO FINALIZADO: ${itensProcessados} itens inseridos, ${itensComErro} erros`);
+      if (!ia2Response?.success) {
+        throw new Error(`IA-2 falhou: ${ia2Response?.error || 'Erro desconhecido'}`);
+      }
+
+      console.log(`✅ IA-2 processou completamente: ${ia2Response.itens_processados} produtos inseridos`);
+
+    } catch (error) {
+      console.error('❌ Erro ao chamar IA-2:', error);
+      throw error;
     }
 
     // ✅ Marcar nota como processada

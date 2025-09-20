@@ -23,64 +23,158 @@ serve(async (req) => {
     }
 
     const { 
-      nomeOriginal, 
-      quantidadeOriginal, 
-      valorUnitarioOriginal, 
-      valorTotalOriginal, 
+      notaId,
       usuarioId,
-      inserirNoEstoque = false,
+      dadosExtraidos,
       debug = false 
     } = await req.json();
 
-    if (!nomeOriginal) {
-      throw new Error('nomeOriginal é obrigatório');
+    if (!notaId || !usuarioId) {
+      return new Response(
+        JSON.stringify({ error: 'notaId e usuarioId são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    console.log(`[IA-2] Processando: "${nomeOriginal}" | Inserir no estoque: ${inserirNoEstoque}`);
+    console.log(`🎯 IA-2 assumindo processo completo para nota: ${notaId}`);
 
-    // 1. Buscar normalização manual prioritária
-    const normalizacaoManual = await buscarNormalizacaoManual(supabase, nomeOriginal);
-    let resultadoFinal = normalizacaoManual;
+    // Buscar dados da nota se não foram fornecidos
+    let extractedData = dadosExtraidos;
+    if (!extractedData) {
+      const { data: notaImagem, error: notaError } = await supabase
+        .from('notas_imagens')
+        .select('dados_extraidos')
+        .eq('id', notaId)
+        .single();
 
-    if (!normalizacaoManual) {
-      // 2. Processar com IA-2 (OpenAI)
-      resultadoFinal = await processarComIA2(openaiApiKey, nomeOriginal, debug);
-      
-      // 3. Gerar hash determinístico para SKU
-      const produtoHash = await gerarHashSKU(resultadoFinal);
-      resultadoFinal.produto_hash_normalizado = produtoHash;
+      if (notaError || !notaImagem) {
+        throw new Error(`Nota não encontrada: ${notaError?.message}`);
+      }
+
+      extractedData = notaImagem.dados_extraidos;
     }
 
-    // 4. CRÍTICO: Preservar valores originais da nota sem alteração
-    resultadoFinal.quantidade_final = quantidadeOriginal || 1;
-    resultadoFinal.valor_unitario_final = valorUnitarioOriginal || 0;
-    resultadoFinal.valor_total_final = valorTotalOriginal || 0;
-
-    // 5. NOVO: Inserir diretamente no estoque se solicitado
-    if (inserirNoEstoque && usuarioId) {
-      await inserirProdutoNoEstoque(supabase, resultadoFinal, usuarioId);
-      console.log(`✅ [IA-2] Produto inserido no estoque: ${resultadoFinal.produto_nome_normalizado}`);
+    if (!extractedData) {
+      throw new Error('Dados extraídos não encontrados');
     }
 
-    console.log(`[IA-2] Resultado final: ${JSON.stringify(resultadoFinal)}`);
+    // Verificar se há produtos para processar
+    const listaItens = extractedData.produtos || extractedData.itens;
+    if (!listaItens || !Array.isArray(listaItens) || listaItens.length === 0) {
+      throw new Error('Nota não contém produtos válidos para processar');
+    }
 
-    return new Response(JSON.stringify(resultadoFinal), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    console.log(`📦 IA-2 processando ${listaItens.length} produtos da nota...`);
+
+    let itensProcessados = 0;
+    let itensComErro = 0;
+    const resultados = [];
+
+    // Processar cada item da nota
+    for (let index = 0; index < listaItens.length; index++) {
+      const item = listaItens[index];
+      try {
+        const nomeOriginal = item.nome || item.descricao;
+        if (!nomeOriginal || nomeOriginal.trim() === '') {
+          continue;
+        }
+
+        console.log(`🔄 IA-2 processando item ${index + 1}: ${nomeOriginal}`);
+
+        // 1. Verificar normalização manual primeiro
+        let produtoNormalizado = await buscarNormalizacaoManual(supabase, nomeOriginal);
+        
+        if (!produtoNormalizado) {
+          // 2. Processar com IA-2 se não encontrou normalização manual
+          produtoNormalizado = await processarComIA2(openaiApiKey, nomeOriginal, debug);
+        }
+
+        // 3. Gerar hash SKU determinístico
+        if (!produtoNormalizado.produto_hash_normalizado) {
+          const hashSKU = await gerarHashSKU(produtoNormalizado);
+          produtoNormalizado.produto_hash_normalizado = hashSKU;
+        }
+
+        // 4. ✅ USAR EXATAMENTE OS DADOS DA IA-2/NORMALIZAÇÃO - SEM MANIPULAÇÃO
+        const dadosProduto = {
+          user_id: usuarioId,
+          produto_nome: produtoNormalizado.produto_nome_normalizado,
+          categoria: produtoNormalizado.categoria || 'OUTROS',
+          quantidade: item.quantidade || 1,
+          unidade_medida: produtoNormalizado.qtd_unidade || item.unidade || 'UN',
+          preco_unitario_ultimo: item.valor_unitario || item.precoUnitario || 0,
+          origem: 'nota_fiscal',
+          produto_nome_normalizado: produtoNormalizado.produto_nome_normalizado,
+          nome_base: produtoNormalizado.nome_base,
+          marca: produtoNormalizado.marca,
+          tipo_embalagem: produtoNormalizado.tipo_embalagem,
+          qtd_valor: produtoNormalizado.qtd_valor,
+          qtd_unidade: produtoNormalizado.qtd_unidade,
+          qtd_base: produtoNormalizado.qtd_base,
+          granel: produtoNormalizado.granel || false,
+          produto_hash_normalizado: produtoNormalizado.produto_hash_normalizado
+        };
+
+        // 5. ✅ IA-2 FAZ INSERT DIRETO NO BANCO - SEM INTERMEDIÁRIOS
+        const { error: insertError } = await supabase
+          .from('estoque_app')
+          .insert(dadosProduto);
+
+        if (insertError) {
+          console.error(`❌ IA-2 erro ao inserir item ${index + 1}:`, insertError);
+          itensComErro++;
+        } else {
+          console.log(`✅ IA-2 inseriu item ${index + 1}: ${dadosProduto.produto_nome} - ${dadosProduto.quantidade} ${dadosProduto.unidade_medida} - R$ ${dadosProduto.preco_unitario_ultimo}`);
+          itensProcessados++;
+          resultados.push({
+            produto_original: nomeOriginal,
+            produto_normalizado: dadosProduto.produto_nome,
+            quantidade: dadosProduto.quantidade,
+            preco: dadosProduto.preco_unitario_ultimo
+          });
+        }
+
+      } catch (error) {
+        console.error(`❌ IA-2 erro ao processar item ${index + 1}:`, error);
+        itensComErro++;
+      }
+    }
+
+    // 6. Marcar nota como processada
+    const { error: updateError } = await supabase
+      .from('notas_imagens')
+      .update({
+        processada: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', notaId);
+
+    if (updateError) {
+      console.error('❌ IA-2 erro ao atualizar nota:', updateError);
+    } else {
+      console.log('✅ IA-2 marcou nota como processada');
+    }
+
+    console.log(`🎯 IA-2 PROCESSO COMPLETO: ${itensProcessados} produtos inseridos, ${itensComErro} erros`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        message: `IA-2 processou completamente: ${itensProcessados} produtos inseridos no estoque`,
+        itens_processados: itensProcessados,
+        itens_com_erro: itensComErro,
+        resultados: resultados
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
-    console.error('[IA-2] ERRO CRÍTICO:', error);
+    console.error('❌ IA-2 erro geral:', error);
     
-    // FAIL-CLOSED: Se IA falhar, retornar erro explícito
-    return new Response(JSON.stringify({
-      erro: 'IA_INDISPONIVEL',
-      motivo: error.message,
-      status: 'PENDENTE_NORMALIZACAO',
-      instrucoes: 'Aguarde a IA voltar e reprocesse esta nota'
-    }), {
-      status: 503, // Service Unavailable
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
 
