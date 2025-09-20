@@ -44,17 +44,8 @@ serve(async (req) => {
       throw new Error('Nota não foi processada pela IA de extração');
     }
 
-    if (notaImagem.processada) {
-      console.log('⚠️ Nota já processada - evitando duplicação');
-      return new Response(
-        JSON.stringify({ 
-          success: true,
-          message: 'Nota já foi processada anteriormente',
-          itens_inseridos: 0
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // ⚠️ HOTFIX: Removido bloqueio por processada
+    // A IA-1 é responsável pela duplicidade (44 dígitos)
 
     console.log(`📋 Nota encontrada - Usuário: ${notaImagem.usuario_id}`);
     console.log(`📦 Dados extraídos:`, JSON.stringify(notaImagem.dados_extraidos, null, 2));
@@ -74,14 +65,15 @@ serve(async (req) => {
     // Processar cada item EXATAMENTE como está no cuponzinho
     for (const item of itens) {
       try {
-        console.log(`🔍 Processando item:`, JSON.stringify(item, null, 2));
-        
-        const descricao = String(item.descricao || item.nome || '').trim();
+        // ✅ HOTFIX: Espelho exato do JSON da IA-2
+        const descricao = String(item.descricao || '').trim();
         const quantidade = Number(item.quantidade || 0);
         const valorUnitario = Number(item.valor_unitario || 0);
+        const unidade = String(item.unidade || 'UN');
+        const categoria = String(item.categoria || 'OUTROS');
         
-        // Log dos valores extraídos
-        console.log(`📋 Dados extraídos: ${descricao} | Qtd: ${quantidade} | Preço: ${valorUnitario}`);
+        // Log mínimo antes do insert
+        console.log('INSERT', {descricao, quantidade, unidade, valor_unitario: valorUnitario});
         
         // Validações básicas
         if (!descricao) {
@@ -94,17 +86,16 @@ serve(async (req) => {
           continue;
         }
 
+        // ✅ HOTFIX: Espelho exato sem transformações
         const produto = {
           user_id: notaImagem.usuario_id,
           produto_nome: descricao,
-          categoria: String(item.categoria || 'OUTROS').toUpperCase(),
+          categoria: categoria,
           quantidade: quantidade,
-          unidade_medida: String(item.unidade || 'Unidade').toUpperCase() === 'UNIDADE' ? 'UN' : String(item.unidade || 'UN').toUpperCase(),
+          unidade_medida: unidade === 'Unidade' ? 'UN' : unidade,
           preco_unitario_ultimo: valorUnitario,
           origem: 'nota_fiscal'
         };
-
-        console.log(`📦 Objeto produto preparado:`, JSON.stringify(produto, null, 2));
 
         // INSERÇÃO DIRETA 
         const { data: insertData, error: insertError } = await supabase
@@ -113,8 +104,7 @@ serve(async (req) => {
           .select();
 
         if (insertError) {
-          console.error(`❌ Erro ao inserir ${produto.produto_nome}:`, insertError);
-          console.error(`❌ Detalhes do erro:`, JSON.stringify(insertError, null, 2));
+          console.error('INSERT_ERR', insertError);
           resultados.push({
             produto: produto.produto_nome,
             status: 'erro',
@@ -123,7 +113,7 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`✅ Inserido com sucesso: ${produto.produto_nome} - ID: ${insertData[0]?.id}`);
+        console.log('INSERT_OK', insertData[0]?.id);
         sucessos++;
         resultados.push({
           produto: produto.produto_nome,
