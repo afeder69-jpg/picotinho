@@ -457,11 +457,21 @@ const EstoqueAtual = () => {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
+        console.log('❌ Usuário não autenticado');
         setLoading(false);
         return;
       }
 
       console.log('🔍 Buscando estoque para usuário:', user.id);
+
+      // PRIMEIRO: Testar se consegue buscar QUALQUER dado do estoque
+      const { data: testData, error: testError } = await supabase
+        .from('estoque_app')
+        .select('count')
+        .eq('user_id', user.id);
+      
+      console.log('🧪 Teste de acesso ao estoque - count:', testData);
+      console.log('🧪 Teste de acesso ao estoque - error:', testError);
 
       // BUSCAR ESTOQUE DO USUÁRIO
       const { data, error } = await supabase
