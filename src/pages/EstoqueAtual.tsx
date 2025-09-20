@@ -1136,7 +1136,11 @@ const EstoqueAtual = () => {
     const grouped: Record<string, EstoqueItem[]> = {};
     
     ordemCategorias.forEach(categoria => {
-      const produtosDaCategoria = consolidatedItems.filter(item => item.categoria === categoria);
+      const produtosDaCategoria = consolidatedItems.filter(item => {
+        console.log(`🎯 FILTERING - Item categoria: "${item.categoria}" vs "${categoria}"`);
+        return item.categoria === categoria;
+      });
+      console.log(`🎯 FILTERING - Categoria "${categoria}" tem ${produtosDaCategoria.length} produtos`);
       if (produtosDaCategoria.length > 0) {
         grouped[categoriasNormalizadas[categoria as keyof typeof categoriasNormalizadas]] = produtosDaCategoria;
       }
