@@ -61,7 +61,7 @@ const EstoqueAtual = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
   const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
-  const [corrigindoPrecos, setCorrigindoPrecos] = useState(false);
+  
   // Estados para inserção de produto
   const [modalInserirAberto, setModalInserirAberto] = useState(false);
   const [produtosSugeridos, setProdutosSugeridos] = useState<ProdutoSugestao[]>([]);
@@ -1417,56 +1417,6 @@ const EstoqueAtual = () => {
                </Card>
              </div>
 
-          {/* Botão de limpeza (quando necessário) */}
-          <div className="flex justify-center mb-4">
-            <Button 
-              onClick={async () => {
-                if (corrigindoPrecos) return;
-                setCorrigindoPrecos(true);
-                try {
-                  const { data, error } = await supabase.rpc('limpar_duplicacoes_processamento');
-                  
-                  if (error) {
-                    console.error('Erro ao limpar duplicações:', error);
-                    toast({
-                      title: "Erro",
-                      description: "Erro ao limpar duplicações. Tente novamente.",
-                      variant: "destructive",
-                    });
-                  } else {
-                    console.log('Duplicações limpas:', data);
-                    toast({
-                      title: "Duplicações Limpas",
-                      description: `${data?.length || 0} problemas corrigidos. Atualizando estoque...`,
-                    });
-                    loadEstoque();
-                  }
-                } catch (error) {
-                  console.error('Erro geral:', error);
-                  toast({
-                    title: "Erro",
-                    description: "Erro interno. Tente novamente.",
-                    variant: "destructive",
-                  });
-                } finally {
-                  setCorrigindoPrecos(false);
-                }
-              }}
-              disabled={corrigindoPrecos}
-              variant="outline" 
-              size="sm"
-              className="text-xs"
-            >
-              {corrigindoPrecos ? (
-                <>
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1"></div>
-                  Limpando...
-                </>
-              ) : (
-                "🧹 Limpar Duplicações"
-              )}
-            </Button>
-          </div>
 
           {/* Modal de confirmação para limpar estoque (invisível, acionado pelo dropdown) */}
           <AlertDialog>
