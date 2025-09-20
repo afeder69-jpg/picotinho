@@ -359,33 +359,48 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 variant: "destructive",
               });
             } else {
-              console.log('✅ Extração concluída - chamando process-receipt-full UMA ÚNICA VEZ');
+              console.log('✅ Extração concluída - chamando IA-2 diretamente para normalização e inserção');
               
-              // 🛡️ CORREÇÃO CRÍTICA: Chamar process-receipt-full apenas UMA VEZ após extração
+              // 🎯 CORREÇÃO CRÍTICA: Chamar IA-2 diretamente após extração
               try {
-                const stockResponse = await supabase.functions.invoke('process-receipt-full', {
-                  body: { imagemId: notaData.id }
+                console.log('🎯 Chamando IA-2 para processar nota:', notaData.id);
+                
+                const ia2Response = await supabase.functions.invoke('normalizar-produto-ia2', {
+                  body: { 
+                    notaId: notaData.id,
+                    usuarioId: currentUser.id,
+                    debug: true
+                  }
                 });
                 
-                if (stockResponse.error) {
-                  console.error('❌ Erro ao atualizar estoque:', stockResponse.error);
+                console.log('=== RESPOSTA DA IA-2 ===', ia2Response);
+                
+                if (ia2Response.error) {
+                  console.error('❌ Erro na IA-2:', ia2Response.error);
                   toast({
                     title: "⚠️ Nota extraída",
-                    description: `${file.name} extraído, mas erro ao processar estoque`,
+                    description: `${file.name} extraído, mas erro na normalização: ${ia2Response.error.message}`,
                     variant: "destructive",
                   });
-                } else {
-                  console.log('✅ Estoque processado com sucesso (UMA VEZ APENAS)');
+                } else if (ia2Response.data?.success) {
+                  console.log(`✅ IA-2 processou ${ia2Response.data.itens_processados} produtos no estoque`);
                   toast({
                     title: "✅ Processamento concluído",
-                    description: `${file.name} processado e estoque atualizado!`,
+                    description: `${file.name}: ${ia2Response.data.itens_processados} produtos adicionados ao estoque!`,
+                  });
+                } else {
+                  console.error('❌ IA-2 falhou:', ia2Response.data);
+                  toast({
+                    title: "⚠️ Erro na IA-2",
+                    description: `Falha na normalização: ${ia2Response.data?.error || 'Erro desconhecido'}`,
+                    variant: "destructive",
                   });
                 }
-              } catch (stockError) {
-                console.error('❌ Erro ao chamar process-receipt-full:', stockError);
+              } catch (ia2Error) {
+                console.error('❌ Erro ao chamar IA-2:', ia2Error);
                 toast({
                   title: "⚠️ Nota extraída",
-                  description: `${file.name} extraído, mas erro ao processar estoque`,
+                  description: `${file.name} extraído, mas erro na IA-2: ${ia2Error.message}`,
                   variant: "destructive",
                 });
               }
