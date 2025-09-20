@@ -38,6 +38,29 @@ serve(async (req) => {
 
     console.log(`🎯 IA-2 assumindo processo completo para nota: ${notaId}`);
 
+    // ✅ PROTEÇÃO CONTRA PROCESSAMENTO DUPLO
+    const { data: notaExistente, error: notaError } = await supabase
+      .from('notas_imagens')
+      .select('processada')
+      .eq('id', notaId)
+      .single();
+
+    if (notaError) {
+      throw new Error(`Nota não encontrada: ${notaError.message}`);
+    }
+
+    if (notaExistente.processada) {
+      console.log('⚠️ IA-2 BLOQUEADO: Nota já foi processada anteriormente');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          message: 'Nota já foi processada anteriormente - bloqueado para evitar duplicação',
+          error: 'ALREADY_PROCESSED'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Buscar dados da nota se não foram fornecidos
     let extractedData = dadosExtraidos;
     if (!extractedData) {
