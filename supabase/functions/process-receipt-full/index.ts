@@ -97,21 +97,7 @@ serve(async (req) => {
           origem: 'nota_fiscal'
         };
 
-    // ✅ INSERÇÃO ÚNICA - Verificar se já existe para evitar duplicação
-        const { data: existingItem } = await supabase
-          .from('estoque_app')
-          .select('id')
-          .eq('user_id', notaImagem.usuario_id)
-          .eq('produto_nome', descricao)
-          .eq('quantidade', quantidade)
-          .eq('preco_unitario_ultimo', valorUnitario);
-        
-        if (existingItem && existingItem.length > 0) {
-          console.log('SKIP_DUPLICATE', descricao);
-          continue;
-        }
-
-        // INSERÇÃO DIRETA 
+        // INSERÇÃO DIRETA
         const { data: insertData, error: insertError } = await supabase
           .from('estoque_app')
           .insert(produto)
