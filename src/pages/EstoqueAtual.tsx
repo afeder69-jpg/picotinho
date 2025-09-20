@@ -489,7 +489,11 @@ const EstoqueAtual = () => {
 
       console.log('📦 Raw data from DB:', data);
       console.log('📦 Data length:', data?.length || 0);
-      console.log('📦 First 3 items:', data?.slice(0, 3));
+      console.log('📦 First 3 items com quantidades:', data?.slice(0, 3).map(item => ({
+        nome: item.produto_nome,
+        quantidade: item.quantidade,
+        preco: item.preco_unitario_ultimo
+      })));
       
       if (!data || data.length === 0) {
         console.warn('⚠️ Nenhum dado retornado do estoque!');
@@ -515,6 +519,12 @@ const EstoqueAtual = () => {
       
       const estoqueFormatado = Array.from(produtosConsolidados.values());
       console.log('📦 Produtos consolidados:', estoqueFormatado.length);
+      console.log('📦 Dados finais que vão para estado:', estoqueFormatado.slice(0, 3).map(item => ({
+        nome: item.produto_nome,
+        quantidade: item.quantidade,
+        preco: item.preco_unitario_ultimo
+      })));
+      console.log('📦 SETANDO ESTOQUE COM:', estoqueFormatado.length, 'itens');
       
       setEstoque(estoqueFormatado);
       
@@ -1130,7 +1140,14 @@ const EstoqueAtual = () => {
     return grouped;
   };
 
+  console.log('🎯 RENDERIZAÇÃO - Estado atual:', {
+    loading,
+    estoqueLength: estoque.length,
+    estoque: estoque.slice(0, 2)
+  });
+
   if (loading) {
+    console.log('⏳ Mostrando loading...');
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1139,6 +1156,7 @@ const EstoqueAtual = () => {
   }
 
   if (estoque.length === 0) {
+    console.log('❌ Mostrando estoque vazio - length:', estoque.length);
     return (
       <div className="min-h-screen bg-background text-foreground">
         {/* Header com logo */}
