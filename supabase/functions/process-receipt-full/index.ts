@@ -27,7 +27,27 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🏗️ NOVA INSERÇÃO SIMPLES - ID: ${finalImagemId}`);
+    console.log(`🏗️ [${new Date().toISOString()}] NOVA INSERÇÃO SIMPLES - ID: ${finalImagemId} - EXECUÇÃO INICIADA`);
+    
+    // ✅ PROTEÇÃO CONTRA EXECUÇÃO DUPLICADA
+    // Verificar se a nota já está sendo processada ou foi processada recentemente
+    const { data: recentProcessing } = await supabase
+      .from('notas_imagens')
+      .select('processada, updated_at')
+      .eq('id', finalImagemId)
+      .single();
+    
+    if (recentProcessing?.processada) {
+      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA - ID: ${finalImagemId} - ABORTANDO`);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Nota já foi processada',
+          nota_id: finalImagemId
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Buscar a nota com dados extraídos
     const { data: notaImagem, error: notaError } = await supabase
@@ -139,7 +159,7 @@ serve(async (req) => {
       .update({ processada: true })
       .eq('id', finalImagemId);
 
-    console.log(`🎯 INSERÇÃO CONCLUÍDA: ${sucessos}/${itens.length} produtos inseridos`);
+    console.log(`🎯 [${new Date().toISOString()}] INSERÇÃO CONCLUÍDA: ${sucessos}/${itens.length} produtos inseridos - ID: ${finalImagemId}`);
 
     return new Response(
       JSON.stringify({
