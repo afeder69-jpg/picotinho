@@ -40,32 +40,8 @@ serve(async (req) => {
       throw new Error(`Nota não encontrada: ${notaError?.message}`);
     }
 
-    // PERMITIR REPROCESSAMENTO SE ESTOQUE ESTIVER VAZIO OU COM QUANTIDADES ZERADAS
-    if (nota.processada) {
-      // Verificar se há produtos no estoque com quantidades > 0
-      const { data: estoqueComQuantidade, error: estoqueError } = await supabase
-        .from('estoque_app')
-        .select('id, produto_nome, quantidade')
-        .eq('user_id', usuarioId)
-        .gt('quantidade', 0);
-      
-      if (estoqueError) {
-        console.error('❌ Erro ao verificar estoque:', estoqueError);
-      }
-      
-      console.log(`🔍 Produtos com quantidade > 0 no estoque: ${estoqueComQuantidade?.length || 0}`);
-      
-      if (estoqueComQuantidade && estoqueComQuantidade.length > 0) {
-        console.log('⚠️ Nota já processada e estoque contém produtos com quantidade, evitando duplicação');
-        console.log('📦 Produtos existentes:', estoqueComQuantidade.map(p => `${p.produto_nome} (${p.quantidade})`));
-        return new Response(
-          JSON.stringify({ success: true, message: 'Nota já foi processada anteriormente e estoque contém produtos com quantidade' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } else {
-        console.log('🔄 Nota processada mas estoque sem produtos com quantidade > 0, reprocessando...');
-      }
-    }
+    // IA-2: Processar nota sem verificações de duplicidade
+    // Se chegou até aqui, a IA-1 já validou que é uma nota inédita
 
     const dadosExtraidos = nota.dados_extraidos;
     const itens = dadosExtraidos?.itens || [];
