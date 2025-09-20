@@ -40,7 +40,21 @@ serve(async (req) => {
       throw new Error(`Nota não encontrada: ${notaError?.message}`);
     }
 
-    // IA-2: Processar nota sem verificações de duplicidade
+    // VERIFICAÇÃO CRUCIAL: Se a nota já foi processada pela IA-2, não processar novamente
+    if (nota.processada) {
+      console.log('⚠️ Nota já foi processada pela IA-2, evitando duplicação');
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: 'Nota já foi processada anteriormente',
+          itens_inseridos: 0,
+          resultados: []
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // IA-2: Processar nota sem verificações de duplicidade  
     // Se chegou até aqui, a IA-1 já validou que é uma nota inédita
 
     const dadosExtraidos = nota.dados_extraidos;
