@@ -16,22 +16,23 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { imagemId } = await req.json();
+    const { imagemId, notaImagemId } = await req.json();
+    const finalImagemId = imagemId || notaImagemId;
 
-    if (!imagemId) {
+    if (!finalImagemId) {
       return new Response(
         JSON.stringify({ error: 'ID da imagem é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`🔍 Processando nota fiscal: ${imagemId}`);
+    console.log(`🎯 PROCESSO UNIFICADO IA-2: ${finalImagemId}`);
 
     // Buscar nota existente
     const { data: notaImagem, error: notaError } = await supabase
       .from('notas_imagens')
       .select('*')
-      .eq('id', imagemId)
+      .eq('id', finalImagemId)
       .single();
 
     if (notaError || !notaImagem) {
@@ -39,79 +40,29 @@ serve(async (req) => {
     }
 
     if (!notaImagem.dados_extraidos) {
-      throw new Error('Nota ainda não foi processada pela IA');
+      throw new Error('Nota ainda não foi processada pela IA de extração');
     }
 
-    // Extrair dados da nota uma única vez
-    const extractedData = notaImagem.dados_extraidos as any;
-    
-    // ✅ SIMPLIFICADO: Confiar na IA-1 para validação de duplicidade
-    // Se a nota chegou aqui, ela é inédita e deve ser processada normalmente
-    console.log(`🚀 Processando nota inédita validada pela IA-1: ${imagemId}`);
-    console.log('✅ Dados extraídos carregados - iniciando inserção direta no estoque');
-
-    // Verificar se há produtos para processar
-    const listaItens = extractedData.produtos || extractedData.itens;
-    if (!listaItens || !Array.isArray(listaItens) || listaItens.length === 0) {
-      throw new Error('Nota não contém produtos válidos para processar');
+    if (notaImagem.processada) {
+      console.log('⚠️ Nota já processada, evitando duplicação');
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: 'Nota já foi processada anteriormente'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO LOGO NO INÍCIO
-    const nomeOriginalEstabelecimento = extractedData?.supermercado?.nome || 
-                                      extractedData?.estabelecimento?.nome || 
-                                      extractedData?.emitente?.nome;
-    
-    if (nomeOriginalEstabelecimento && typeof nomeOriginalEstabelecimento === 'string') {
-      console.log(`🏪 Normalizando estabelecimento: "${nomeOriginalEstabelecimento}"`);
-      
-      const { data: nomeNormalizado, error: normError } = await supabase.rpc('normalizar_nome_estabelecimento', {
-        nome_input: nomeOriginalEstabelecimento
-      });
-      
-      if (normError) {
-        console.error('❌ Erro na normalização:', normError);
-      }
-      
-      const estabelecimentoNormalizado = nomeNormalizado || nomeOriginalEstabelecimento.toUpperCase();
-      
-      // Aplicar normalização em todos os locais possíveis nos dados extraídos
-      if (extractedData.supermercado) {
-        extractedData.supermercado.nome = estabelecimentoNormalizado;
-      }
-      if (extractedData.estabelecimento) {
-        extractedData.estabelecimento.nome = estabelecimentoNormalizado;
-      }
-      if (extractedData.emitente) {
-        extractedData.emitente.nome = estabelecimentoNormalizado;
-      }
-      
-      // 💾 Salvar dados normalizados de volta na tabela notas_imagens
-        const { error: updateError } = await supabase
-          .from('notas_imagens')
-          .update({ 
-            dados_extraidos: extractedData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', imagemId);
-      
-      if (updateError) {
-        console.error('❌ Erro ao salvar dados normalizados:', updateError);
-      } else {
-        console.log(`✅ Estabelecimento normalizado: "${nomeOriginalEstabelecimento}" → "${estabelecimentoNormalizado}"`);
-      }
-    } else {
-      console.log('⚠️ Nome do estabelecimento não encontrado ou inválido');
-    }
-
-    // 🎯 IA-2 ASSUME TODO O PROCESSO - EXTRAIR, NORMALIZAR E GRAVAR DIRETAMENTE
-    console.log(`🎯 Delegando processo completo para IA-2...`);
+    // ✅ ÚNICO PROCESSAMENTO AUTORIZADO: IA-2
+    console.log(`🎯 Delegando EXCLUSIVAMENTE para IA-2...`);
 
     try {
       const { data: ia2Response, error: ia2Error } = await supabase.functions.invoke('normalizar-produto-ia2', {
         body: {
-          notaId: imagemId,
+          notaId: finalImagemId,
           usuarioId: notaImagem.usuario_id,
-          dadosExtraidos: extractedData,
+          dadosExtraidos: notaImagem.dados_extraidos,
           debug: true
         }
       });
@@ -126,37 +77,19 @@ serve(async (req) => {
 
       console.log(`✅ IA-2 processou completamente: ${ia2Response.itens_processados} produtos inseridos`);
 
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: `IA-2 processou nota: ${ia2Response.itens_processados} produtos no estoque`,
+          itens_processados: ia2Response.itens_processados
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+
     } catch (error) {
       console.error('❌ Erro ao chamar IA-2:', error);
       throw error;
     }
-
-    // ✅ Marcar nota como processada
-    if (!notaImagem.processada) {
-      const { error: updateError } = await supabase
-        .from('notas_imagens')
-        .update({
-          processada: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', imagemId);
-
-      if (updateError) {
-        console.error('❌ Erro ao atualizar nota:', updateError);
-      } else {
-        console.log('✅ Nota marcada como processada com sucesso');
-      }
-    }
-
-    console.log('✅ Processamento completo da nota fiscal!');
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Nota fiscal processada e estoque atualizado com sucesso!'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
 
   } catch (error) {
     console.error('❌ Erro geral:', error);

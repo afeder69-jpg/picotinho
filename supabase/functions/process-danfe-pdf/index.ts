@@ -643,9 +643,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         }
       }
 
-      // 📦 REMOVIDO: Não atualizar estoque aqui para evitar duplicação
-      // O estoque será atualizado pela function process-receipt-full usando normalização consistente
-      console.log("📦 Processamento de estoque será feito pela process-receipt-full");
+      // 📦 PROCESSAMENTO DE ESTOQUE REMOVIDO - APENAS IA-2 AUTORIZADA
+      console.log("📦 Estoque será processado apenas via IA-2");
 
       // 🛍️ Processar itens da compra
       if (dadosEstruturados.itens && compraId) {
@@ -834,19 +833,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-      // Disparar atualização de estoque usando a função dedicada em background
-      console.log("🚀 Invocando process-receipt-full para atualizar estoque...");
-      
-      // CRITICAL FIX: Executar em background para não travar o processo principal
-      EdgeRuntime.waitUntil(
-        supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagemId }
-        }).then((result) => {
-          console.log("✅ process-receipt-full executada com sucesso em background:", result);
-        }).catch((estoqueErr) => {
-          console.error("❌ Falha ao invocar process-receipt-full em background:", estoqueErr);
-        })
-      );
+      // ✅ APENAS SALVAR OS DADOS - PROCESSAMENTO SERÁ FEITO PELA IA-2 QUANDO NECESSÁRIO
+      console.log("✅ PDF processado e dados salvos. Processamento de estoque via IA-2 quando solicitado.");
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);

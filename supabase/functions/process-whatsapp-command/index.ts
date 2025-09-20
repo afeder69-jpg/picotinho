@@ -1583,31 +1583,12 @@ async function processarNotaEmBackground(
         throw new Error(`Erro na extração: ${extractResult.error.message}`);
       }
       
-      // Etapa 2: Processamento completo com IA-2
-      console.log('🤖 Iniciando processamento completo com IA-2...');
-      const processResult = await supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: notaImagem.id }
-      });
-      
-      console.log('✅ Processamento completo concluído:', processResult);
-      
-      if (processResult.error) {
-        throw new Error(`Erro no processamento: ${processResult.error.message}`);
-      }
+      // ✅ DADOS EXTRAÍDOS E SALVOS - PROCESSAMENTO VIA IA-2 QUANDO SOLICITADO
+      console.log('📦 PDF processado e dados salvos. Estoque via IA-2 quando necessário.');
       
     } else {
-      console.log('🖼️ Processando imagem...');
-      
-      // Para imagens, processar diretamente
-      const processResult = await supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: notaImagem.id }
-      });
-      
-      console.log('✅ Processamento de imagem concluído:', processResult);
-      
-      if (processResult.error) {
-        throw new Error(`Erro no processamento: ${processResult.error.message}`);
-      }
+      // ✅ IMAGEM SALVA - PROCESSAMENTO VIA IA-2 QUANDO SOLICITADO  
+      console.log('📦 Imagem salva. Estoque via IA-2 quando necessário.');
     }
     
     // Aguardar um pouco para garantir que tudo foi persistido

@@ -241,17 +241,8 @@ serve(async (req) => {
     
     if (dbError) throw dbError;
     
-    // 5. Processar com IA em segundo plano
-    supabase.functions.invoke('process-receipt-full', {
-      body: {
-        notaImagemId: notaImagem.id,
-        imageUrl: imageUrl,
-        qrUrl: receiptUrl,
-        htmlContent: html
-      }
-    }).catch(error => {
-      console.error('Erro no processamento em segundo plano:', error);
-    });
+    // 5. PROCESSAMENTO REMOVIDO - APENAS IA-2 AUTORIZADA
+    console.log('📦 Captura salva. Processamento de estoque via IA-2 quando solicitado.');
     
     console.log('Captura externa concluída com sucesso:', notaImagem.id);
     
