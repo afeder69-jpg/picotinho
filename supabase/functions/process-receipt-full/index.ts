@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
@@ -26,9 +27,9 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🎯 PROCESSO UNIFICADO IA-2: ${finalImagemId}`);
+    console.log(`🏗️ NOVA INSERÇÃO SIMPLES - ID: ${finalImagemId}`);
 
-    // Buscar nota existente
+    // Buscar a nota com dados extraídos
     const { data: notaImagem, error: notaError } = await supabase
       .from('notas_imagens')
       .select('*')
@@ -40,53 +41,118 @@ serve(async (req) => {
     }
 
     if (!notaImagem.dados_extraidos) {
-      throw new Error('Nota ainda não foi processada pela IA de extração');
+      throw new Error('Nota não foi processada pela IA de extração');
     }
 
-    // Se chegou até aqui, a IA-1 já validou que é uma nota inédita
-    // Processar sempre, sem verificações de duplicidade
-
-    // ✅ INSERÇÃO DIRETA - SEM IA, SEM NORMALIZAÇÃO
-    console.log(`📋 Inserindo produtos diretamente do cuponzinho...`);
-
-    try {
-      const { data: insertResult, error: insertError } = await supabase.functions.invoke('inserir-estoque-direto', {
-        body: {
-          notaId: finalImagemId,
-          usuarioId: notaImagem.usuario_id
-        }
-      });
-
-      if (insertError) {
-        throw new Error(`Erro na inserção direta: ${insertError.message}`);
-      }
-
-      if (!insertResult?.success) {
-        throw new Error(`Inserção direta falhou: ${insertResult?.error || 'Erro desconhecido'}`);
-      }
-
-      console.log(`✅ Inserção direta completa: ${insertResult.itens_inseridos} produtos inseridos`);
-
+    if (notaImagem.processada) {
+      console.log('⚠️ Nota já processada - evitando duplicação');
       return new Response(
         JSON.stringify({ 
           success: true,
-          message: `Produtos inseridos diretamente do cuponzinho: ${insertResult.itens_inseridos} itens no estoque`,
-          itens_inseridos: insertResult.itens_inseridos,
-          resultados: insertResult.resultados
+          message: 'Nota já foi processada anteriormente',
+          itens_inseridos: 0
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-
-    } catch (error) {
-      console.error('❌ Erro na inserção direta:', error);
-      throw error;
     }
 
-  } catch (error) {
-    console.error('❌ Erro geral:', error);
+    console.log(`📋 Nota encontrada - Usuário: ${notaImagem.usuario_id}`);
+    console.log(`📦 Dados extraídos:`, JSON.stringify(notaImagem.dados_extraidos, null, 2));
+
+    // ✅ INSERÇÃO SIMPLES - ESPELHO DIRETO DO CUPONZINHO
+    const itens = notaImagem.dados_extraidos.itens || [];
     
+    if (itens.length === 0) {
+      throw new Error('Nenhum item encontrado na nota');
+    }
+
+    console.log(`📋 Processando ${itens.length} itens para inserção direta...`);
+
+    let sucessos = 0;
+    const resultados = [];
+
+    // Processar cada item EXATAMENTE como está no cuponzinho
+    for (const item of itens) {
+      try {
+        const produto = {
+          user_id: notaImagem.usuario_id,
+          produto_nome: String(item.descricao || item.nome || '').trim(),
+          categoria: String(item.categoria || 'OUTROS').toUpperCase(),
+          quantidade: Number(item.quantidade || 0),
+          unidade_medida: String(item.unidade || 'UN').toUpperCase(),
+          preco_unitario_ultimo: Number(item.valor_unitario || 0),
+          origem: 'nota_fiscal'
+        };
+
+        // Validações mínimas
+        if (!produto.produto_nome || produto.quantidade <= 0) {
+          console.log(`⚠️ Item inválido: ${produto.produto_nome} - Qtd: ${produto.quantidade}`);
+          continue;
+        }
+
+        console.log(`📦 Inserindo: ${produto.produto_nome} | ${produto.quantidade} ${produto.unidade_medida} | R$ ${produto.preco_unitario_ultimo}`);
+
+        // INSERÇÃO DIRETA SEM VERIFICAÇÕES
+        const { data: insertData, error: insertError } = await supabase
+          .from('estoque_app')
+          .insert(produto)
+          .select();
+
+        if (insertError) {
+          console.error(`❌ Erro ao inserir ${produto.produto_nome}:`, insertError);
+          resultados.push({
+            produto: produto.produto_nome,
+            status: 'erro',
+            erro: insertError.message
+          });
+          continue;
+        }
+
+        console.log(`✅ Inserido: ${produto.produto_nome} - ID: ${insertData[0]?.id}`);
+        sucessos++;
+        resultados.push({
+          produto: produto.produto_nome,
+          quantidade: produto.quantidade,
+          preco: produto.preco_unitario_ultimo,
+          status: 'sucesso'
+        });
+
+      } catch (error) {
+        console.error(`❌ Erro no item:`, error);
+        resultados.push({
+          produto: item.descricao || item.nome || 'Item desconhecido',
+          status: 'erro',
+          erro: error.message
+        });
+      }
+    }
+
+    // Marcar nota como processada
+    await supabase
+      .from('notas_imagens')
+      .update({ processada: true })
+      .eq('id', finalImagemId);
+
+    console.log(`🎯 INSERÇÃO CONCLUÍDA: ${sucessos}/${itens.length} produtos inseridos`);
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        success: true,
+        message: `${sucessos} produtos inseridos no estoque`,
+        itens_processados: itens.length,
+        itens_inseridos: sucessos,
+        resultados
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('❌ Erro na inserção:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false,
+        error: error.message 
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
