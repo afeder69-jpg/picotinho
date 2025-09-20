@@ -29,25 +29,28 @@ serve(async (req) => {
 
     console.log(`🏗️ [${new Date().toISOString()}] NOVA INSERÇÃO SIMPLES - ID: ${finalImagemId} - EXECUÇÃO INICIADA`);
     
-    // ✅ PROTEÇÃO CONTRA EXECUÇÃO DUPLICADA
-    // Verificar se a nota já está sendo processada ou foi processada recentemente
-    const { data: recentProcessing } = await supabase
+    // ✅ PROTEÇÃO CONTRA EXECUÇÃO DUPLICADA + LOCK IMEDIATO
+    // Marcar a nota como processada IMEDIATAMENTE para evitar execuções simultâneas
+    const { data: lockResult, error: lockError } = await supabase
       .from('notas_imagens')
-      .select('processada, updated_at')
+      .update({ processada: true, updated_at: new Date().toISOString() })
       .eq('id', finalImagemId)
-      .single();
+      .eq('processada', false) // Só atualizar se ainda estiver false
+      .select('id');
     
-    if (recentProcessing?.processada) {
-      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA - ID: ${finalImagemId} - ABORTANDO`);
+    if (lockError || !lockResult || lockResult.length === 0) {
+      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA OU ERRO NO LOCK - ID: ${finalImagemId} - ABORTANDO`);
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Nota já foi processada',
+          error: 'Nota já foi processada ou erro no lock',
           nota_id: finalImagemId
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    console.log(`🔒 [${new Date().toISOString()}] LOCK OBTIDO - PROCESSANDO NOTA: ${finalImagemId}`);
 
     // Buscar a nota com dados extraídos
     const { data: notaImagem, error: notaError } = await supabase
@@ -153,11 +156,7 @@ serve(async (req) => {
       }
     }
 
-    // Marcar nota como processada
-    await supabase
-      .from('notas_imagens')
-      .update({ processada: true })
-      .eq('id', finalImagemId);
+    // Nota já foi marcada como processada no início (lock)
 
     console.log(`🎯 [${new Date().toISOString()}] INSERÇÃO CONCLUÍDA: ${sucessos}/${itens.length} produtos inseridos - ID: ${finalImagemId}`);
 
