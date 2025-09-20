@@ -1158,8 +1158,25 @@ const EstoqueAtual = () => {
     );
   }
 
+  console.log('🎯 RENDERIZAÇÃO - Estado atual:', {
+    loading,
+    estoqueLength: estoque.length,
+    estoque: estoque.slice(0, 2)
+  });
+
+  if (loading) {
+    console.log('⏳ Mostrando loading...');
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   if (estoque.length === 0) {
     console.log('❌ Mostrando estoque vazio - length:', estoque.length);
+    console.log('❌ Array estoque completo:', estoque);
+    console.log('❌ Tipo do estoque:', typeof estoque, Array.isArray(estoque));
     return (
       <div className="min-h-screen bg-background text-foreground">
         {/* Header com logo */}
