@@ -1850,6 +1850,10 @@ export type Database = {
           produto_afetado: string
         }[]
       }
+      limpar_produtos_inconsistentes: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       limpar_sessoes_expiradas: {
         Args: Record<PropertyKey, never>
         Returns: undefined
