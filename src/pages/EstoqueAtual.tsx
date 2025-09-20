@@ -452,6 +452,8 @@ const EstoqueAtual = () => {
   };
 
   const loadEstoque = async () => {
+    const loadId = Math.random().toString(36).substr(2, 9);
+    console.log(`🚀 INICIANDO loadEstoque [${loadId}] - loading atual:`, loading);
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
@@ -544,6 +546,7 @@ const EstoqueAtual = () => {
         description: "Não foi possível carregar o estoque.",
       });
     } finally {
+      console.log('🔚 FINALIZANDO loadEstoque - setando loading=false');
       setLoading(false);
     }
   };
