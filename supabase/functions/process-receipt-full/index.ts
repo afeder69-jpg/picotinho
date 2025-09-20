@@ -74,25 +74,39 @@ serve(async (req) => {
     // Processar cada item EXATAMENTE como está no cuponzinho
     for (const item of itens) {
       try {
-        const produto = {
-          user_id: notaImagem.usuario_id,
-          produto_nome: String(item.descricao || item.nome || '').trim(),
-          categoria: String(item.categoria || 'OUTROS').toUpperCase(),
-          quantidade: Number(item.quantidade || 0),
-          unidade_medida: String(item.unidade || 'UN').toUpperCase(),
-          preco_unitario_ultimo: Number(item.valor_unitario || 0),
-          origem: 'nota_fiscal'
-        };
-
-        // Validações mínimas
-        if (!produto.produto_nome || produto.quantidade <= 0) {
-          console.log(`⚠️ Item inválido: ${produto.produto_nome} - Qtd: ${produto.quantidade}`);
+        console.log(`🔍 Processando item:`, JSON.stringify(item, null, 2));
+        
+        const descricao = String(item.descricao || item.nome || '').trim();
+        const quantidade = Number(item.quantidade || 0);
+        const valorUnitario = Number(item.valor_unitario || 0);
+        
+        // Log dos valores extraídos
+        console.log(`📋 Dados extraídos: ${descricao} | Qtd: ${quantidade} | Preço: ${valorUnitario}`);
+        
+        // Validações básicas
+        if (!descricao) {
+          console.log(`⚠️ Item sem descrição - pulando`);
+          continue;
+        }
+        
+        if (quantidade <= 0) {
+          console.log(`⚠️ Item com quantidade inválida: ${descricao} - Qtd: ${quantidade}`);
           continue;
         }
 
-        console.log(`📦 Inserindo: ${produto.produto_nome} | ${produto.quantidade} ${produto.unidade_medida} | R$ ${produto.preco_unitario_ultimo}`);
+        const produto = {
+          user_id: notaImagem.usuario_id,
+          produto_nome: descricao,
+          categoria: String(item.categoria || 'OUTROS').toUpperCase(),
+          quantidade: quantidade,
+          unidade_medida: String(item.unidade || 'Unidade').toUpperCase() === 'UNIDADE' ? 'UN' : String(item.unidade || 'UN').toUpperCase(),
+          preco_unitario_ultimo: valorUnitario,
+          origem: 'nota_fiscal'
+        };
 
-        // INSERÇÃO DIRETA SEM VERIFICAÇÕES
+        console.log(`📦 Objeto produto preparado:`, JSON.stringify(produto, null, 2));
+
+        // INSERÇÃO DIRETA 
         const { data: insertData, error: insertError } = await supabase
           .from('estoque_app')
           .insert(produto)
@@ -100,6 +114,7 @@ serve(async (req) => {
 
         if (insertError) {
           console.error(`❌ Erro ao inserir ${produto.produto_nome}:`, insertError);
+          console.error(`❌ Detalhes do erro:`, JSON.stringify(insertError, null, 2));
           resultados.push({
             produto: produto.produto_nome,
             status: 'erro',
@@ -108,7 +123,7 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`✅ Inserido: ${produto.produto_nome} - ID: ${insertData[0]?.id}`);
+        console.log(`✅ Inserido com sucesso: ${produto.produto_nome} - ID: ${insertData[0]?.id}`);
         sucessos++;
         resultados.push({
           produto: produto.produto_nome,
@@ -118,7 +133,8 @@ serve(async (req) => {
         });
 
       } catch (error) {
-        console.error(`❌ Erro no item:`, error);
+        console.error(`❌ Erro no processamento do item:`, error);
+        console.error(`❌ Item que causou erro:`, JSON.stringify(item, null, 2));
         resultados.push({
           produto: item.descricao || item.nome || 'Item desconhecido',
           status: 'erro',
