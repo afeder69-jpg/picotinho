@@ -1079,6 +1079,8 @@ const EstoqueAtual = () => {
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
+    console.log('🎯 GROUPING - Input items:', items?.length, items);
+    
     // Consolidar produtos por hash normalizado (evita duplicatas como "ABACATE" e "ABACATE KG GRANEL")
     const consolidatedItems = items.reduce((consolidated, item) => {
       // Usar produto_hash_normalizado se disponível, caso contrário usar produto_nome como fallback
@@ -1140,6 +1142,7 @@ const EstoqueAtual = () => {
       }
     });
 
+    console.log('🎯 GROUPING - Final grouped result:', grouped);
     return grouped;
   };
 
@@ -1200,6 +1203,7 @@ const EstoqueAtual = () => {
   }
 
   const groupedEstoque = groupByCategory(estoque);
+  console.log('🎯 FINAL RESULT - groupedEstoque:', groupedEstoque);
   
   // Contagem real de produtos únicos considerando todas as categorias
   const totalProdutosUnicos = Object.values(groupedEstoque).reduce((total, itens) => total + itens.length, 0);
