@@ -54,40 +54,39 @@ serve(async (req) => {
       );
     }
 
-    // ✅ ÚNICO PROCESSAMENTO AUTORIZADO: IA-2
-    console.log(`🎯 Delegando EXCLUSIVAMENTE para IA-2...`);
+    // ✅ INSERÇÃO DIRETA - SEM IA, SEM NORMALIZAÇÃO
+    console.log(`📋 Inserindo produtos diretamente do cuponzinho...`);
 
     try {
-      const { data: ia2Response, error: ia2Error } = await supabase.functions.invoke('normalizar-produto-ia2', {
+      const { data: insertResult, error: insertError } = await supabase.functions.invoke('inserir-estoque-direto', {
         body: {
           notaId: finalImagemId,
-          usuarioId: notaImagem.usuario_id,
-          dadosExtraidos: notaImagem.dados_extraidos,
-          debug: true
+          usuarioId: notaImagem.usuario_id
         }
       });
 
-      if (ia2Error) {
-        throw new Error(`Erro na IA-2: ${ia2Error.message}`);
+      if (insertError) {
+        throw new Error(`Erro na inserção direta: ${insertError.message}`);
       }
 
-      if (!ia2Response?.success) {
-        throw new Error(`IA-2 falhou: ${ia2Response?.error || 'Erro desconhecido'}`);
+      if (!insertResult?.success) {
+        throw new Error(`Inserção direta falhou: ${insertResult?.error || 'Erro desconhecido'}`);
       }
 
-      console.log(`✅ IA-2 processou completamente: ${ia2Response.itens_processados} produtos inseridos`);
+      console.log(`✅ Inserção direta completa: ${insertResult.itens_inseridos} produtos inseridos`);
 
       return new Response(
         JSON.stringify({ 
           success: true,
-          message: `IA-2 processou nota: ${ia2Response.itens_processados} produtos no estoque`,
-          itens_processados: ia2Response.itens_processados
+          message: `Produtos inseridos diretamente do cuponzinho: ${insertResult.itens_inseridos} itens no estoque`,
+          itens_inseridos: insertResult.itens_inseridos,
+          resultados: insertResult.resultados
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
     } catch (error) {
-      console.error('❌ Erro ao chamar IA-2:', error);
+      console.error('❌ Erro na inserção direta:', error);
       throw error;
     }
 
