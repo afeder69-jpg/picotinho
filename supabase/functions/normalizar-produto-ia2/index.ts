@@ -107,13 +107,13 @@ serve(async (req) => {
         }
 
         // Verificar se já processamos este produto nesta sessão
-        const nomeNormalizado = nomeOriginal.trim().toUpperCase();
-        if (cacheProcessamento.has(nomeNormalizado)) {
+        const chaveCache = nomeOriginal.trim().toUpperCase();
+        if (cacheProcessamento.has(chaveCache)) {
           console.log(`⏭️ Item já processado nesta sessão: ${nomeOriginal}`);
-          const produtoExistente = cacheProcessamento.get(nomeNormalizado);
+          const produtoCache = cacheProcessamento.get(chaveCache);
           
           // Apenas atualizar quantidade se for o mesmo produto
-          await atualizarQuantidadeExistente(supabase, produtoExistente, item, usuarioId);
+          await atualizarQuantidadeExistente(supabase, produtoCache, item, usuarioId);
           itensProcessados++;
           continue;
         }
@@ -124,7 +124,16 @@ serve(async (req) => {
         let produtoNormalizado = await buscarNormalizacaoManual(supabase, nomeOriginal);
         
         if (!produtoNormalizado) {
-          // 2. Processar com IA-2 se não encontrou normalização manual
+          // 2. Verificar se já existe um produto similar no estoque (evitar IA desnecessária)
+          const produtoSimilar = await buscarProdutoSimilarNoEstoque(supabase, nomeOriginal, usuarioId);
+          if (produtoSimilar) {
+            console.log(`♻️ Produto similar encontrado no estoque: ${produtoSimilar.produto_nome}`);
+            await atualizarQuantidadeExistente(supabase, produtoSimilar, item, usuarioId);
+            itensProcessados++;
+            continue;
+          }
+          
+          // 3. Processar com IA-2 se não encontrou normalização manual nem produto similar
           produtoNormalizado = await processarComIA2(openaiApiKey, nomeOriginal, debug);
         }
 
@@ -141,7 +150,7 @@ serve(async (req) => {
         }
         
         hashesExistentes.add(produtoNormalizado.produto_hash_normalizado);
-        cacheProcessamento.set(nomeNormalizado, produtoNormalizado);
+        cacheProcessamento.set(chaveCache, produtoNormalizado);
           
           // 🔍 DEBUG: Log detalhado para diagnóstico de SKU
           console.log(`🔍 DEBUG SKU para "${nomeOriginal}":`);
@@ -533,5 +542,56 @@ async function atualizarQuantidadeExistente(supabase: any, produtoNormalizado: a
     }
   } catch (error) {
     console.error(`❌ Erro ao atualizar quantidade existente:`, error);
+  }
+}
+
+async function buscarProdutoSimilarNoEstoque(supabase: any, nomeOriginal: string, usuarioId: string) {
+  try {
+    // Normalizar nome para busca (remover pontuação, espaços extras, etc.)
+    const nomeNormalizado = nomeOriginal
+      .trim()
+      .toUpperCase()
+      .replace(/[^\w\s]/g, ' ')  // Remove pontuação
+      .replace(/\s+/g, ' ')      // Remove espaços extras
+      .trim();
+
+    // Buscar produtos similares no estoque
+    const { data: produtos, error } = await supabase
+      .from('estoque_app')
+      .select('*')
+      .eq('user_id', usuarioId)
+      .gt('quantidade', 0);  // Apenas produtos com estoque
+
+    if (error) {
+      console.error('Erro ao buscar produtos similares:', error);
+      return null;
+    }
+
+    // Procurar por similaridade alta
+    for (const produto of produtos || []) {
+      const nomeProdutoNormalizado = produto.produto_nome
+        .trim()
+        .toUpperCase()
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      // Verificar se é o mesmo produto com variações pequenas
+      const palavrasOriginal = nomeNormalizado.split(' ').filter(p => p.length > 2);
+      const palavrasProduto = nomeProdutoNormalizado.split(' ').filter(p => p.length > 2);
+      
+      const palavrasComuns = palavrasOriginal.filter(p => palavrasProduto.includes(p));
+      const percentualSimilaridade = palavrasComuns.length / Math.max(palavrasOriginal.length, palavrasProduto.length);
+      
+      if (percentualSimilaridade >= 0.7) {  // 70% de similaridade
+        console.log(`🎯 Produto similar encontrado: "${nomeOriginal}" ≈ "${produto.produto_nome}" (${Math.round(percentualSimilaridade * 100)}%)`);
+        return produto;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Erro ao buscar produto similar:', error);
+    return null;
   }
 }
