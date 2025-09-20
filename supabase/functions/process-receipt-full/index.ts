@@ -80,76 +80,59 @@ serve(async (req) => {
       throw new Error('Nenhum item encontrado na nota');
     }
 
-    console.log(`📋 Processando ${itens.length} itens para consolidação e inserção...`);
+    console.log(`📋 Processando ${itens.length} itens para inserção direta...`);
 
     let sucessos = 0;
     const resultados = [];
     
-    // ✅ CONSOLIDAÇÃO: Agrupar itens iguais (mesma descrição + preço unitário)
-    const itensConsolidados = new Map();
-    
+    // ✅ INSERÇÃO DIRETA: Espelho fiel do JSON da IA-2
     for (const item of itens) {
       try {
-        // ✅ CORREÇÃO: Conversão com vírgulas brasileiras
+        // ✅ PRESERVAR DADOS ORIGINAIS: Sem forçar zeros
         const descricaoOriginal = String(item.descricao || '').trim();
         const descricao = descricaoOriginal || 'DESCRIÇÃO INVÁLIDA';
         
-        const quantidadeStr = String(item.quantidade || "0").replace(",", ".");
-        const quantidade = parseFloat(quantidadeStr) || 0;
+        // ✅ QUANTIDADE: Manter exatamente como vem da IA-2
+        let quantidade = 0;
+        if (item.quantidade !== null && item.quantidade !== undefined && item.quantidade !== '') {
+          const quantidadeStr = String(item.quantidade).replace(",", ".");
+          quantidade = parseFloat(quantidadeStr);
+          // Se não conseguir converter, manter como 0
+          if (isNaN(quantidade)) quantidade = 0;
+        }
         
-        const valorUnitarioStr = String(item.valor_unitario || "0").replace(",", ".");
-        const valorUnitario = parseFloat(valorUnitarioStr) || 0;
+        // ✅ VALOR UNITÁRIO: Manter exatamente como vem da IA-2
+        let valorUnitario = 0;
+        if (item.valor_unitario !== null && item.valor_unitario !== undefined && item.valor_unitario !== '') {
+          const valorUnitarioStr = String(item.valor_unitario).replace(",", ".");
+          valorUnitario = parseFloat(valorUnitarioStr);
+          // Se não conseguir converter, manter como 0
+          if (isNaN(valorUnitario)) valorUnitario = 0;
+        }
         
         const unidade = String(item.unidade || 'UN').trim();
         const categoria = String(item.categoria || 'OUTROS');
         
-        // Normalizar unidade
+        // Normalizar unidade sem alterar quantidade
         const unidadeNormalizada = unidade === 'Unidade' ? 'UN' : unidade.toUpperCase();
         
-        // Chave única para consolidação: descrição + preço unitário + unidade
-        const chaveConsolidacao = `${descricao}|${valorUnitario}|${unidadeNormalizada}`;
-        
-        if (itensConsolidados.has(chaveConsolidacao)) {
-          // Somar quantidade ao item existente
-          const itemExistente = itensConsolidados.get(chaveConsolidacao);
-          itemExistente.quantidade += quantidade;
-          console.log(`🔄 Consolidando: ${descricao} - Nova qtd: ${itemExistente.quantidade}`);
-        } else {
-          // Criar novo item consolidado
-          itensConsolidados.set(chaveConsolidacao, {
-            produto_nome: descricao,
-            categoria: categoria,
-            quantidade: quantidade,
-            unidade_medida: unidadeNormalizada,
-            preco_unitario_ultimo: valorUnitario,
-            user_id: notaImagem.usuario_id,
-            origem: 'nota_fiscal'
-          });
-          console.log(`➕ Novo item: ${descricao} - Qtd: ${quantidade}`);
-        }
-
-      } catch (error) {
-        console.error(`❌ Erro no processamento do item:`, error);
-        console.error(`❌ Item que causou erro:`, JSON.stringify(item, null, 2));
-        resultados.push({
-          produto: item.descricao || 'Item com erro',
-          status: 'erro',
-          erro: error.message
+        console.log('INSERT_DIRETO', {
+          produto: descricao,
+          quantidade: quantidade,
+          unidade: unidadeNormalizada,
+          preco: valorUnitario
         });
-      }
-    }
 
-    console.log(`📦 Itens consolidados: ${itensConsolidados.size} (de ${itens.length} originais)`);
-
-    // INSERÇÃO DOS ITENS CONSOLIDADOS
-    for (const [chave, produto] of itensConsolidados) {
-      try {
-        console.log('INSERT_CONSOLIDADO', {
-          produto: produto.produto_nome,
-          quantidade: produto.quantidade,
-          unidade: produto.unidade_medida,
-          preco: produto.preco_unitario_ultimo
-        });
+        // ✅ ESPELHO FIEL: Objeto exato da IA-2
+        const produto = {
+          produto_nome: descricao,
+          categoria: categoria,
+          quantidade: quantidade,
+          unidade_medida: unidadeNormalizada,
+          preco_unitario_ultimo: valorUnitario,
+          user_id: notaImagem.usuario_id,
+          origem: 'nota_fiscal'
+        };
 
         const { data: insertData, error: insertError } = await supabase
           .from('estoque_app')
@@ -159,7 +142,7 @@ serve(async (req) => {
         if (insertError) {
           console.error('INSERT_ERR', insertError);
           resultados.push({
-            produto: produto.produto_nome,
+            produto: descricao,
             status: 'erro',
             erro: insertError.message
           });
@@ -169,16 +152,17 @@ serve(async (req) => {
         console.log('INSERT_OK', insertData[0]?.id);
         sucessos++;
         resultados.push({
-          produto: produto.produto_nome,
-          quantidade: produto.quantidade,
-          preco: produto.preco_unitario_ultimo,
+          produto: descricao,
+          quantidade: quantidade,
+          preco: valorUnitario,
           status: 'sucesso'
         });
 
       } catch (error) {
-        console.error(`❌ Erro na inserção consolidada:`, error);
+        console.error(`❌ Erro na inserção direta:`, error);
+        console.error(`❌ Item que causou erro:`, JSON.stringify(item, null, 2));
         resultados.push({
-          produto: produto.produto_nome,
+          produto: item.descricao || 'Item com erro',
           status: 'erro',
           erro: error.message
         });
