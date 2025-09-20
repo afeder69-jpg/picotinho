@@ -1822,6 +1822,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      limpar_duplicacoes_processamento: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          acao_realizada: string
+          detalhes: string
+          quantidade: number
+        }[]
+      }
       limpar_estoque_usuario: {
         Args: { usuario_uuid: string }
         Returns: undefined
