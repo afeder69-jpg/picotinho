@@ -14,6 +14,19 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+// Função de normalização completa
+function normalizar(texto: string): string {
+  if (!texto) return "";
+  
+  return texto
+    .normalize("NFD") // Remove acentos
+    .replace(/[\u0300-\u036f]/g, "") // Remove marcas diacríticas
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ") // Remove caracteres especiais, mantém letras, números e espaços
+    .replace(/\s+/g, " ") // Múltiplos espaços vira um
+    .trim();
+}
+
 // Converte números no padrão BR e mistos ("1.000,00", "2,48", "0.435", 3.69)
 function parseNumberBR(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -69,10 +82,48 @@ function pickUnidade(item: any): string {
   return normUnidade(cand);
 }
 function pickCategoria(item: any): string {
-  const c = String(item?.categoria ?? "OUTROS").trim();
-  // Se quiser forçar maiúsculas, descomentar:
-  // return c.toUpperCase();
+  const c = String(item?.categoria ?? "OUTROS").trim().toUpperCase();
   return c;
+}
+
+// Função para buscar ou criar produto no catálogo único
+async function buscarOuCriarProduto(supabase: any, descricaoNormalizada: string, categoria: string, unidadeMedida: string) {
+  console.log(`🔍 Buscando produto: "${descricaoNormalizada}"`);
+  
+  // 1. Buscar produto existente por nome normalizado
+  const { data: produtoExistente } = await supabase
+    .from("produtos_app")
+    .select("id, nome")
+    .eq("nome", descricaoNormalizada)
+    .single();
+
+  if (produtoExistente) {
+    console.log(`✅ Produto encontrado: ${produtoExistente.id} - ${produtoExistente.nome}`);
+    return produtoExistente.id;
+  }
+
+  // 2. Criar novo produto no catálogo
+  console.log(`🆕 Criando novo produto: "${descricaoNormalizada}"`);
+  
+  const { data: novoProduto, error: erroProduto } = await supabase
+    .from("produtos_app")
+    .insert({
+      nome: descricaoNormalizada,
+      categoria_id: null, // Por enquanto sem categoria específica
+      unidade_medida: unidadeMedida,
+      ativo: true,
+      descricao: `Produto criado automaticamente: ${descricaoNormalizada}`
+    })
+    .select("id")
+    .single();
+
+  if (erroProduto) {
+    console.error(`❌ Erro ao criar produto: ${erroProduto.message}`);
+    throw new Error(`Erro ao criar produto: ${erroProduto.message}`);
+  }
+
+  console.log(`✅ Novo produto criado: ${novoProduto.id} - ${descricaoNormalizada}`);
+  return novoProduto.id;
 }
 
 // ================== EDGE FUNCTION ==================
@@ -148,12 +199,14 @@ serve(async (req) => {
       }
     }
 
-    // ------- Montar array de produtos (espelho 1:1 do cuponzinho) -------
+    // ------- Processar itens com normalização e SKU único -------
     const produtos: any[] = [];
+    const itensCompra: any[] = [];
     const rejeitados: any[] = [];
+    const produtosNovos: string[] = [];
 
     for (const raw of itens) {
-      const descricao = pickDescricao(raw);
+      const descricaoOriginal = pickDescricao(raw);
       const quantidade = pickQuantidade(raw);
       const valorUnitario = pickValorUnitario(raw);
       const unidade_medida = pickUnidade(raw);
@@ -161,7 +214,7 @@ serve(async (req) => {
 
       if (quantidade === null || valorUnitario === null) {
         rejeitados.push({
-          descricao,
+          descricao: descricaoOriginal,
           qtdRaw: raw?.quantidade ?? raw?.qtd_valor ?? raw?.qtd ?? raw?.qtdValor,
           valRaw: raw?.valor_unitario ?? raw?.precoUnitario ?? raw?.preco_unitario ?? raw?.valorUnit,
           observacao: "Quantidade/valor inválidos após parsing",
@@ -169,25 +222,92 @@ serve(async (req) => {
         continue;
       }
 
-      const base = {
-        user_id: notaImagem.usuario_id,
-        produto_nome: descricao,
-        categoria,
-        quantidade,
-        unidade_medida,
-        preco_unitario_ultimo: valorUnitario,
-        compra_id: notaImagem.compra_id,
-        origem: "nota_fiscal",
-      };
+      // 1. FORÇAR normalização (nunca NULL)
+      const descricaoNormalizada = normalizar(descricaoOriginal) || descricaoOriginal.toUpperCase();
+      
+      try {
+        // 2. Buscar/criar produto no catálogo único
+        const produtoId = await buscarOuCriarProduto(supabase, descricaoNormalizada, categoria, unidade_medida);
+        
+        // Track se é produto novo
+        if (!produtosNovos.includes(descricaoNormalizada)) {
+          produtosNovos.push(descricaoNormalizada);
+        }
+        
+        // 3. Inserir em itens_nota (com descricao_normalizada sempre preenchida)
+        const { data: itemNota, error: erroItemNota } = await supabase
+          .from("itens_nota")
+          .insert({
+            nota_id: notaImagem.id,
+            descricao: descricaoOriginal,
+            descricao_normalizada: descricaoNormalizada,
+            produto_normalizado_id: produtoId,
+            quantidade,
+            valor_unitario: valorUnitario,
+            valor_total: quantidade * valorUnitario,
+            unidade: unidade_medida,
+            categoria
+          })
+          .select("id")
+          .single();
 
-      if (supportsNotaId) {
-        produtos.push({ ...base, nota_id: notaImagem.id });
-      } else {
-        produtos.push(base);
+        if (erroItemNota) {
+          console.warn(`⚠️ Erro ao inserir item_nota: ${erroItemNota.message}`);
+        }
+
+        // 4. Preparar para itens_compra_app (se há compra_id)
+        if (notaImagem.compra_id) {
+          itensCompra.push({
+            compra_id: notaImagem.compra_id,
+            produto_id: produtoId,
+            quantidade,
+            preco_unitario: valorUnitario,
+            preco_total: quantidade * valorUnitario,
+            observacoes: `Item da nota ${notaImagem.id}`
+          });
+        }
+
+        // 5. Preparar para estoque_app (compatibilidade)
+        const baseEstoque = {
+          user_id: notaImagem.usuario_id,
+          produto_nome: descricaoNormalizada, // Usar nome normalizado
+          categoria,
+          quantidade,
+          unidade_medida,
+          preco_unitario_ultimo: valorUnitario,
+          compra_id: notaImagem.compra_id,
+          origem: "nota_fiscal",
+          // Campos da normalização
+          produto_nome_normalizado: descricaoNormalizada,
+          nome_base: descricaoNormalizada,
+          marca: null,
+          tipo_embalagem: null,
+          qtd_valor: null,
+          qtd_unidade: null,
+          qtd_base: null,
+          granel: false,
+          produto_hash_normalizado: null
+        };
+
+        if (supportsNotaId) {
+          produtos.push({ ...baseEstoque, nota_id: notaImagem.id });
+        } else {
+          produtos.push(baseEstoque);
+        }
+
+        console.log(`✅ Processado: "${descricaoOriginal}" -> "${descricaoNormalizada}" (SKU: ${produtoId})`);
+
+      } catch (error: any) {
+        console.error(`❌ Erro ao processar item "${descricaoOriginal}": ${error.message}`);
+        rejeitados.push({
+          descricao: descricaoOriginal,
+          observacao: `Erro ao processar: ${error.message}`
+        });
       }
     }
 
-    console.log(`✅ Preparados ${produtos.length} itens para insert. Rejeitados: ${rejeitados.length}`);
+    console.log(`✅ Preparados ${produtos.length} itens para estoque. Rejeitados: ${rejeitados.length}`);
+    console.log(`🛒 Preparados ${itensCompra.length} itens para compra.`);
     if (rejeitados.length) console.log("⚠️ Rejeitados (amostra):", JSON.stringify(rejeitados.slice(0, 3), null, 2));
 
     if (produtos.length === 0) {
@@ -203,7 +323,6 @@ serve(async (req) => {
     }
 
     // ------- Idempotência por nota: apagar antes de inserir (apenas os itens dessa nota) -------
-    // Se tiver nota_id => apaga por (user_id, nota_id). Caso contrário, segue sem apagar (e loga recomendação)
     if (supportsNotaId) {
       const { error: delErr } = await supabase
         .from("estoque_app")
@@ -222,18 +341,34 @@ serve(async (req) => {
       );
     }
 
-    // ------- Insert em lote -------
+    // ------- Insert estoque em lote -------
     const { data: inserted, error: insertErr } = await supabase
       .from("estoque_app")
       .insert(produtos)
       .select();
 
     if (insertErr) {
-      console.error("❌ INSERT_ERR_LOTE:", insertErr);
+      console.error("❌ INSERT_ERR_ESTOQUE:", insertErr);
       return new Response(
         JSON.stringify({ success: false, error: insertErr.message, nota_id: finalImagemId }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // ------- Insert itens_compra_app (se há compra) -------
+    let itensCompraInseridos = 0;
+    if (itensCompra.length > 0) {
+      const { data: compraInserted, error: compraErr } = await supabase
+        .from("itens_compra_app")
+        .insert(itensCompra)
+        .select();
+
+      if (compraErr) {
+        console.warn(`⚠️ Erro ao inserir itens_compra_app: ${compraErr.message}`);
+      } else {
+        itensCompraInseridos = compraInserted?.length || 0;
+        console.log(`🛒 ${itensCompraInseridos} itens inseridos em itens_compra_app`);
+      }
     }
 
     // ------- Marcar como processada (informativo) -------
@@ -246,14 +381,18 @@ serve(async (req) => {
     // ------- Log financeiro para conferência -------
     const totalInserido = inserted.reduce((acc: number, it: any) => acc + Number(it.quantidade) * Number(it.preco_unitario_ultimo), 0);
     console.log(`💰 Total inserido (somatório qtd*unit): ${totalInserido.toFixed(2)} - itens: ${inserted.length}`);
+    console.log(`📊 Resumo: ${inserted.length} estoque + ${itensCompraInseridos} compra + ${rejeitados.length} rejeitados`);
 
     return new Response(
       JSON.stringify({
         success: true,
         nota_id: finalImagemId,
         itens_do_cupom: itens.length,
-        itens_inseridos: inserted.length,
+        itens_inseridos_estoque: inserted.length,
+        itens_inseridos_compra: itensCompraInseridos,
         rejeitados: rejeitados.length,
+        total_financeiro: totalInserido,
+        produtos_novos_criados: produtosNovos.length,
         aviso: supportsNotaId ? null : "Recomendo adicionar a coluna 'nota_id' em estoque_app para idempotência perfeita.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
