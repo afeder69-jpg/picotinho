@@ -1830,6 +1830,10 @@ export type Database = {
           quantidade: number
         }[]
       }
+      limpar_duplicados_estoque_temporario: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       limpar_estoque_completo_usuario: {
         Args: Record<PropertyKey, never>
         Returns: undefined

@@ -1,0 +1,7 @@
+-- LIMPEZA COMPLETA DO ESTOQUE PARA TESTE
+DELETE FROM estoque_app WHERE user_id = 'ae5b5501-7f8a-46da-9cba-b9955a84e697';
+
+-- MARCAR NOTA COMO NÃO PROCESSADA PARA REPROCESSAMENTO
+UPDATE notas_imagens 
+SET processada = false, updated_at = now()
+WHERE id = 'bfb8097d-dc10-4739-8182-b00f95730148';
