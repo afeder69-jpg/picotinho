@@ -176,6 +176,7 @@ export type Database = {
           id: string
           marca: string | null
           nome_base: string | null
+          nota_id: string | null
           origem: string | null
           preco_unitario_ultimo: number | null
           produto_hash_normalizado: string | null
@@ -197,6 +198,7 @@ export type Database = {
           id?: string
           marca?: string | null
           nome_base?: string | null
+          nota_id?: string | null
           origem?: string | null
           preco_unitario_ultimo?: number | null
           produto_hash_normalizado?: string | null
@@ -218,6 +220,7 @@ export type Database = {
           id?: string
           marca?: string | null
           nome_base?: string | null
+          nota_id?: string | null
           origem?: string | null
           preco_unitario_ultimo?: number | null
           produto_hash_normalizado?: string | null
