@@ -29,44 +29,41 @@ serve(async (req) => {
 
     console.log(`🏗️ [${new Date().toISOString()}] NOVA INSERÇÃO SIMPLES - ID: ${finalImagemId} - EXECUÇÃO INICIADA`);
     
-    // ✅ LOCK ATÔMICO VERDADEIRO - Marcar como processada IMEDIATAMENTE
-    const { data: lockResult, error: lockError } = await supabase
+    // ✅ BUSCAR NOTA E VERIFICAR SE PODE SER PROCESSADA
+    const { data: notaImagem, error: notaError } = await supabase
       .from('notas_imagens')
-      .update({ 
-        processada: true, 
-        updated_at: new Date().toISOString() 
-      })
+      .select('id, dados_extraidos, processada')
       .eq('id', finalImagemId)
-      .eq('processada', false) // CRÍTICO: só se ainda não foi processada
-      .select('id, dados_extraidos');
+      .single();
     
-    if (lockError) {
-      console.log(`❌ [${new Date().toISOString()}] ERRO NO LOCK - ID: ${finalImagemId} - ${lockError.message}`);
+    if (notaError || !notaImagem) {
+      console.log(`❌ [${new Date().toISOString()}] NOTA NÃO ENCONTRADA - ID: ${finalImagemId} - ${notaError?.message}`);
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Erro no sistema de lock',
+          error: 'Nota não encontrada',
           nota_id: finalImagemId
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    if (!lockResult || lockResult.length === 0) {
-      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA - ID: ${finalImagemId} - ABORTANDO`);
+    console.log(`🔍 [${new Date().toISOString()}] NOTA ENCONTRADA - Processada: ${notaImagem.processada} - Tem dados: ${!!notaImagem.dados_extraidos}`);
+    
+    // Permitir reprocessamento se houver dados extraídos
+    if (notaImagem.processada && !notaImagem.dados_extraidos) {
+      console.log(`⚠️ [${new Date().toISOString()}] NOTA PROCESSADA SEM DADOS - ID: ${finalImagemId} - ABORTANDO`);
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Nota já foi processada anteriormente',
+          error: 'Nota processada mas sem dados extraídos',
           nota_id: finalImagemId
         }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log(`🔒 [${new Date().toISOString()}] LOCK OBTIDO - PROCESSANDO NOTA: ${finalImagemId}`);
-    
-    const notaImagem = lockResult[0]; // Usar dados do lock
+    console.log(`🔒 [${new Date().toISOString()}] PROCESSANDO NOTA: ${finalImagemId}`)
 
     if (!notaImagem.dados_extraidos) {
       throw new Error('Nota não foi processada pela IA de extração');
