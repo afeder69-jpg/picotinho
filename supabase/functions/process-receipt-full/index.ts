@@ -29,50 +29,44 @@ serve(async (req) => {
 
     console.log(`🏗️ [${new Date().toISOString()}] NOVA INSERÇÃO SIMPLES - ID: ${finalImagemId} - EXECUÇÃO INICIADA`);
     
-    // ✅ VERIFICAR SE JÁ FOI PROCESSADA (sem bloquear reprocessamento)
-    const { data: notaExistente, error: checkError } = await supabase
+    // ✅ LOCK ATÔMICO VERDADEIRO - Marcar como processada IMEDIATAMENTE
+    const { data: lockResult, error: lockError } = await supabase
       .from('notas_imagens')
-      .select('processada, dados_extraidos')
+      .update({ 
+        processada: true, 
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', finalImagemId)
-      .single();
+      .eq('processada', false) // CRÍTICO: só se ainda não foi processada
+      .select('id, dados_extraidos');
     
-    if (checkError) {
-      console.log(`❌ [${new Date().toISOString()}] ERRO AO VERIFICAR NOTA - ID: ${finalImagemId}`);
+    if (lockError) {
+      console.log(`❌ [${new Date().toISOString()}] ERRO NO LOCK - ID: ${finalImagemId} - ${lockError.message}`);
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Erro ao verificar nota',
+          error: 'Erro no sistema de lock',
           nota_id: finalImagemId
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    // Permitir reprocessamento se a nota tem dados extraídos
-    if (notaExistente?.processada && !notaExistente?.dados_extraidos) {
-      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA SEM DADOS - ID: ${finalImagemId} - ABORTANDO`);
+    if (!lockResult || lockResult.length === 0) {
+      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA - ID: ${finalImagemId} - ABORTANDO`);
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Nota já foi processada sem dados extraídos',
+          error: 'Nota já foi processada anteriormente',
           nota_id: finalImagemId
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     console.log(`🔒 [${new Date().toISOString()}] LOCK OBTIDO - PROCESSANDO NOTA: ${finalImagemId}`);
-
-    // Buscar a nota com dados extraídos
-    const { data: notaImagem, error: notaError } = await supabase
-      .from('notas_imagens')
-      .select('*')
-      .eq('id', finalImagemId)
-      .single();
-
-    if (notaError || !notaImagem) {
-      throw new Error(`Nota não encontrada: ${notaError?.message}`);
-    }
+    
+    const notaImagem = lockResult[0]; // Usar dados do lock
 
     if (!notaImagem.dados_extraidos) {
       throw new Error('Nota não foi processada pela IA de extração');
@@ -197,15 +191,7 @@ serve(async (req) => {
       }
     }
 
-    // ✅ MARCAR COMO PROCESSADA APÓS INSERÇÃO SUCESSFUL
-    if (sucessos > 0) {
-      await supabase
-        .from('notas_imagens')
-        .update({ processada: true, updated_at: new Date().toISOString() })
-        .eq('id', finalImagemId);
-      console.log(`✅ Nota marcada como processada após ${sucessos} inserções`);
-    }
-
+    // ✅ Nota já foi marcada como processada no início (lock atômico)
     console.log(`🎯 [${new Date().toISOString()}] INSERÇÃO CONCLUÍDA: ${sucessos}/${itens.length} produtos inseridos - ID: ${finalImagemId}`);
 
     return new Response(
