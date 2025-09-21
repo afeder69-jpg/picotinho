@@ -6,8 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.0";
 // ================== CONFIG CORS ==================
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 // ================== HELPERS ==================
@@ -15,7 +14,6 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-// Normalização de texto
 function normalizar(texto: string): string {
   if (!texto) return "";
   return texto
@@ -27,7 +25,6 @@ function normalizar(texto: string): string {
     .trim();
 }
 
-// Parse de número no padrão BR
 function parseNumberBR(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v !== "string") return null;
@@ -38,7 +35,6 @@ function parseNumberBR(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Normalização de unidade
 function normUnidade(u: unknown): string {
   const s = String(u ?? "").trim().toUpperCase();
   if (!s) return "UN";
@@ -50,7 +46,6 @@ function normUnidade(u: unknown): string {
   return s;
 }
 
-// Safe pickers
 function pickDescricao(item: any): string {
   return (
     String(
@@ -63,37 +58,25 @@ function pickDescricao(item: any): string {
   );
 }
 function pickQuantidade(item: any): number | null {
-  return parseNumberBR(
-    item?.quantidade ?? item?.qtd_valor ?? item?.qtd ?? item?.qtdValor,
-  );
+  return parseNumberBR(item?.quantidade ?? item?.qtd_valor ?? item?.qtd ?? item?.qtdValor);
 }
 function pickValorUnitario(item: any): number | null {
   return parseNumberBR(
     item?.valor_unitario ??
       item?.precoUnitario ??
       item?.preco_unitario ??
-      item?.valorUnit,
+      item?.valorUnit
   );
 }
 function pickUnidade(item: any): string {
-  return normUnidade(
-    item?.unidade ??
-      item?.qtd_unidade ??
-      item?.unid ??
-      item?.unidade_medida,
-  );
+  return normUnidade(item?.unidade ?? item?.qtd_unidade ?? item?.unid ?? item?.unidade_medida);
 }
 function pickCategoria(item: any): string {
   return String(item?.categoria ?? "OUTROS").trim().toUpperCase();
 }
 
 // Buscar ou criar produto no catálogo
-async function buscarOuCriarProduto(
-  supabase: any,
-  descricaoNormalizada: string,
-  categoria: string,
-  unidadeMedida: string,
-) {
+async function buscarOuCriarProduto(supabase: any, descricaoNormalizada: string, categoria: string, unidadeMedida: string) {
   const { data: existente } = await supabase
     .from("produtos_app")
     .select("id")
@@ -102,14 +85,11 @@ async function buscarOuCriarProduto(
 
   if (existente) return existente.id;
 
-  // Categoria nunca pode ser nula
-  const categoriaFinal = categoria && categoria !== "" ? categoria : "OUTROS";
-
+  // 🔑 Ajuste importante: não tenta preencher categoria_id
   const { data: novo, error } = await supabase
     .from("produtos_app")
     .insert({
       nome: descricaoNormalizada,
-      categoria_id: categoriaFinal, // nunca null
       unidade_medida: unidadeMedida,
       ativo: true,
       descricao: `Produto criado automaticamente: ${descricaoNormalizada}`,
@@ -123,9 +103,7 @@ async function buscarOuCriarProduto(
 
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const startedAt = nowIso();
   try {
@@ -138,20 +116,15 @@ serve(async (req) => {
     const finalImagemId: string | null = imagemId || notaImagemId || null;
 
     if (!finalImagemId) {
-      return new Response(
-        JSON.stringify({ success: false, error: "ID da imagem é obrigatório" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ success: false, error: "ID da imagem é obrigatório" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log(
-      `🏁 [${startedAt}] process-receipt-full START - nota_id=${finalImagemId}`,
-    );
+    console.log(`🏁 [${startedAt}] process-receipt-full START - nota_id=${finalImagemId}`);
 
-    // Carregar nota
+    // Carregar nota + dados extraídos
     const { data: notaImagem, error: notaError } = await supabase
       .from("notas_imagens")
       .select("id, dados_extraidos, processada, usuario_id, compra_id")
@@ -159,43 +132,29 @@ serve(async (req) => {
       .single();
 
     if (notaError || !notaImagem) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Nota não encontrada" }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ success: false, error: "Nota não encontrada" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const itens: any[] = notaImagem.dados_extraidos?.itens ?? [];
     if (itens.length === 0) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Nenhum item encontrado" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ success: false, error: "Nenhum item encontrado" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Consolidar itens iguais
     const mapaConsolidado = new Map<
       string,
-      {
-        descricaoOriginal: string;
-        descricaoNormalizada: string;
-        quantidade: number;
-        valorUnitario: number;
-        unidade: string;
-        categoria: string;
-      }
+      { descricaoOriginal: string; descricaoNormalizada: string; quantidade: number; valorUnitario: number; unidade: string; categoria: string }
     >();
 
     for (const raw of itens) {
       const descricaoOriginal = pickDescricao(raw);
-      const descricaoNormalizada =
-        normalizar(descricaoOriginal) || descricaoOriginal.toUpperCase();
+      const descricaoNormalizada = normalizar(descricaoOriginal) || descricaoOriginal.toUpperCase();
       const quantidade = pickQuantidade(raw);
       const valorUnitario = pickValorUnitario(raw);
       const unidade = pickUnidade(raw);
@@ -216,7 +175,7 @@ serve(async (req) => {
       } else {
         const existente = mapaConsolidado.get(chave)!;
         existente.quantidade += quantidade;
-        existente.valorUnitario = valorUnitario; // mantém último valor
+        existente.valorUnitario = valorUnitario; // mantém último valor unitário
       }
     }
 
@@ -224,32 +183,21 @@ serve(async (req) => {
     console.log(`📦 Itens consolidados: ${itensConsolidados.length}`);
 
     if (itensConsolidados.length === 0) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Todos os itens inválidos" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ success: false, error: "Todos os itens inválidos" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Limpar estoque anterior
-    await supabase.from("estoque_app")
-      .delete()
-      .eq("nota_id", notaImagem.id)
-      .eq("user_id", notaImagem.usuario_id);
+    // Apagar itens antigos da mesma nota
+    await supabase.from("estoque_app").delete().eq("nota_id", notaImagem.id).eq("user_id", notaImagem.usuario_id);
 
-    // Inserir novos
+    // Preparar inserts
     const produtos: any[] = [];
     const itensCompra: any[] = [];
 
     for (const item of itensConsolidados) {
-      const produtoId = await buscarOuCriarProduto(
-        supabase,
-        item.descricaoNormalizada,
-        item.categoria,
-        item.unidade,
-      );
+      const produtoId = await buscarOuCriarProduto(supabase, item.descricaoNormalizada, item.categoria, item.unidade);
 
       produtos.push({
         user_id: notaImagem.usuario_id,
@@ -274,25 +222,19 @@ serve(async (req) => {
       }
     }
 
-    const { data: inserted, error: insertErr } = await supabase
-      .from("estoque_app")
-      .insert(produtos)
-      .select();
+    // Inserir no estoque
+    const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtos).select();
     if (insertErr) throw new Error(insertErr.message);
 
+    // Inserir em itens_compra_app
     if (itensCompra.length > 0) {
       await supabase.from("itens_compra_app").insert(itensCompra);
     }
 
-    await supabase.from("notas_imagens")
-      .update({ processada: true, updated_at: nowIso() })
-      .eq("id", finalImagemId);
+    // Marcar nota como processada
+    await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", finalImagemId);
 
-    const totalFinanceiro = inserted.reduce(
-      (acc: number, it: any) =>
-        acc + it.quantidade * it.preco_unitario_ultimo,
-      0,
-    );
+    const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
     return new Response(
       JSON.stringify({
@@ -302,14 +244,13 @@ serve(async (req) => {
         itens_inseridos_estoque: inserted.length,
         total_financeiro: totalFinanceiro.toFixed(2),
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("❌ Erro geral:", error?.message || error);
-    return new Response(
-      JSON.stringify({ success: false, error: error?.message || String(error) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
-
