@@ -171,6 +171,7 @@ export type Database = {
       estoque_app: {
         Row: {
           categoria: string
+          compra_id: string | null
           created_at: string
           granel: boolean | null
           id: string
@@ -193,6 +194,7 @@ export type Database = {
         }
         Insert: {
           categoria: string
+          compra_id?: string | null
           created_at?: string
           granel?: boolean | null
           id?: string
@@ -215,6 +217,7 @@ export type Database = {
         }
         Update: {
           categoria?: string
+          compra_id?: string | null
           created_at?: string
           granel?: boolean | null
           id?: string
@@ -235,7 +238,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_estoque_app_compra_id"
+            columns: ["compra_id"]
+            isOneToOne: false
+            referencedRelation: "compras_app"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       historico_precos_app: {
         Row: {
