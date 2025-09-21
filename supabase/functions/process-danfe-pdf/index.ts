@@ -599,12 +599,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
              .eq('data_compra', dataCompra)
              .eq('valor_total', dadosEstruturados.compra.valor_total || 0)
              .limit(1);
-           
-           if (existingNotaFiscal && existingNotaFiscal.length > 0) {
-             console.log("✅ Nota fiscal já existe, reutilizando:", existingNotaFiscal[0].id);
-             notaFiscalId = existingNotaFiscal[0].id;
-           } else {
-             const { data: notaFiscal, error: errorNotaFiscal } = await supabase
+            const { data: notaFiscal, error: errorNotaFiscal } = await supabase
                .from('notas_fiscais')
                .insert({
                  user_id: userId,
@@ -621,16 +616,14 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               
              if (errorNotaFiscal) {
                console.error("❌ Erro ao criar nota fiscal:", errorNotaFiscal);
-             } else {
-               notaFiscalId = notaFiscal.id;
-               console.log("✅ Nova nota fiscal criada:", notaFiscalId);
-             }
-           }
+              } else {
+                notaFiscalId = notaFiscal.id;
+                console.log("✅ Nova nota fiscal criada:", notaFiscalId);
+              }
 
         } catch (notaError) {
           console.error("❌ Erro ao processar nota fiscal:", notaError);
-        }
-      }
+              }
 
       // 📊 Salvar itens da nota
       if (dadosEstruturados.itens && notaFiscalId) {
@@ -649,20 +642,6 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         for (const item of dadosEstruturados.itens) {
           try {
             const { descricao, codigo, quantidade, unidade, valor_unitario, valor_total, categoria } = item;
-
-            // Verificar se item já existe para evitar duplicação
-            const { data: existingItem } = await supabase
-              .from('itens_nota')
-              .select('id')
-              .eq('nota_id', notaFiscalId)
-              .eq('descricao', descricao || 'Item não identificado')
-              .eq('codigo', codigo || '')
-              .limit(1);
-            
-            if (existingItem && existingItem.length > 0) {
-              console.log("✅ Item já existe, pulando:", descricao);
-              continue;
-            }
 
             // Salvar item da nota
             await supabase
