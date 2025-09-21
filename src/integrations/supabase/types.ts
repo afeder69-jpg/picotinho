@@ -23,7 +23,6 @@ export type Database = {
           icone: string | null
           id: string
           nome: string | null
-          user_id: string
         }
         Insert: {
           ativa?: boolean | null
@@ -33,7 +32,6 @@ export type Database = {
           icone?: string | null
           id?: string
           nome?: string | null
-          user_id: string
         }
         Update: {
           ativa?: boolean | null
@@ -43,25 +41,6 @@ export type Database = {
           icone?: string | null
           id?: string
           nome?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      categorias_predefinidas: {
-        Row: {
-          created_at: string
-          id: number
-          nome: string
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          nome: string
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          nome?: string
         }
         Relationships: []
       }
@@ -289,13 +268,6 @@ export type Database = {
             referencedColumns: ["produto_id"]
           },
           {
-            foreignKeyName: "historico_precos_app_produto_id_fkey"
-            columns: ["produto_id"]
-            isOneToOne: false
-            referencedRelation: "view_preco_medio_produto_app"
-            referencedColumns: ["produto_id"]
-          },
-          {
             foreignKeyName: "historico_precos_app_supermercado_id_fkey"
             columns: ["supermercado_id"]
             isOneToOne: false
@@ -407,13 +379,6 @@ export type Database = {
             referencedRelation: "view_comparacao_supermercados_app"
             referencedColumns: ["produto_id"]
           },
-          {
-            foreignKeyName: "itens_compra_app_produto_id_fkey"
-            columns: ["produto_id"]
-            isOneToOne: false
-            referencedRelation: "view_preco_medio_produto_app"
-            referencedColumns: ["produto_id"]
-          },
         ]
       }
       itens_nota: {
@@ -421,6 +386,7 @@ export type Database = {
           categoria: string | null
           codigo: string | null
           created_at: string
+          data_compra: string | null
           descricao: string
           descricao_normalizada: string | null
           id: string
@@ -435,6 +401,7 @@ export type Database = {
           categoria?: string | null
           codigo?: string | null
           created_at?: string
+          data_compra?: string | null
           descricao: string
           descricao_normalizada?: string | null
           id?: string
@@ -449,6 +416,7 @@ export type Database = {
           categoria?: string | null
           codigo?: string | null
           created_at?: string
+          data_compra?: string | null
           descricao?: string
           descricao_normalizada?: string | null
           id?: string
@@ -1014,13 +982,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "categorias"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "produtos_app_categoria_id_fkey"
-            columns: ["categoria_id"]
-            isOneToOne: false
-            referencedRelation: "view_gastos_categoria_app"
-            referencedColumns: ["categoria_id"]
           },
         ]
       }
@@ -1691,28 +1652,6 @@ export type Database = {
           supermercado_nome: string | null
           ultima_compra: string | null
           vezes_comprado: number | null
-        }
-        Relationships: []
-      }
-      view_gastos_categoria_app: {
-        Row: {
-          categoria_id: string | null
-          categoria_nome: string | null
-          gasto_medio: number | null
-          total_gasto: number | null
-          total_itens: number | null
-        }
-        Relationships: []
-      }
-      view_preco_medio_produto_app: {
-        Row: {
-          categoria_nome: string | null
-          maior_preco: number | null
-          menor_preco: number | null
-          preco_medio: number | null
-          produto_id: string | null
-          produto_nome: string | null
-          total_compras: number | null
         }
         Relationships: []
       }

@@ -530,7 +530,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                   unidade: item.unidade || 'unidade',
                   valor_unitario: item.valor_unitario || 0,
                   valor_total: item.valor_total || 0,
-                  categoria: item.categoria || 'outros'
+                  categoria: item.categoria || 'outros',
+                  data_compra: dataCompra
                 };
               });
 
@@ -610,7 +611,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 unidade: unidade || 'unidade',
                 valor_unitario: valor_unitario || 0,
                 valor_total: valor_total || 0,
-                categoria: categoria || 'outros'
+                categoria: categoria || 'outros',
+                data_compra: dataCompra
               });
 
             // Atualizar preços atuais de forma inteligente considerando data/hora
