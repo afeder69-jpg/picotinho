@@ -38,7 +38,7 @@ serve(async (req) => {
     // Buscar nota
     const { data: nota, error: notaError } = await supabase
       .from("notas_imagens")
-      .select("id, usuario_id, compra_id")
+      .select("id, usuario_id, compra_id, dados_extraidos")
       .eq("id", notaId)
       .single();
 
@@ -49,20 +49,40 @@ serve(async (req) => {
       });
     }
 
-    // Buscar itens já processados da nota
-    const { data: itens, error: itensError } = await supabase
+    // Buscar itens - primeiro tenta itens_nota, depois dados_extraidos
+    let itens: any[] = [];
+    
+    const { data: itensNota, error: itensError } = await supabase
       .from("itens_nota")
       .select("descricao, categoria, quantidade, valor_unitario, unidade, data_compra")
       .eq("nota_id", notaId);
 
-    if (itensError || !itens || itens.length === 0) {
-      return new Response(JSON.stringify({ success: false, error: "Nenhum item encontrado em itens_nota" }), {
+    if (itensNota && itensNota.length > 0) {
+      itens = itensNota;
+      console.log(`📦 Itens carregados de itens_nota: ${itens.length}`);
+    } else {
+      // Se não há itens em itens_nota, buscar de dados_extraidos
+      if (nota.dados_extraidos?.itens && Array.isArray(nota.dados_extraidos.itens)) {
+        itens = nota.dados_extraidos.itens.map((item: any) => ({
+          descricao: item.descricao,
+          categoria: item.categoria || 'outros',
+          quantidade: parseFloat(item.quantidade) || 0,
+          valor_unitario: parseFloat(item.valor_unitario) || 0,
+          unidade: item.unidade || 'unidade',
+          data_compra: nota.dados_extraidos?.compra?.data_emissao ? 
+            new Date(nota.dados_extraidos.compra.data_emissao).toISOString().split('T')[0] : 
+            new Date().toISOString().split('T')[0]
+        }));
+        console.log(`📦 Itens carregados de dados_extraidos: ${itens.length}`);
+      }
+    }
+
+    if (!itens || itens.length === 0) {
+      return new Response(JSON.stringify({ success: false, error: "Nenhum item encontrado na nota" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    console.log(`📦 Itens carregados de itens_nota: ${itens.length}`);
 
     // Limpar estoque anterior dessa nota
     await supabase.from("estoque_app").delete().eq("nota_id", notaId).eq("user_id", nota.usuario_id);
