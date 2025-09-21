@@ -32,7 +32,7 @@ serve(async (req) => {
     // ✅ BUSCAR NOTA E VERIFICAR SE PODE SER PROCESSADA
     const { data: notaImagem, error: notaError } = await supabase
       .from('notas_imagens')
-      .select('id, dados_extraidos, processada')
+      .select('id, dados_extraidos, processada, usuario_id, compra_id')
       .eq('id', finalImagemId)
       .single();
     
@@ -142,7 +142,7 @@ serve(async (req) => {
           categoria: categoria
         });
 
-        // ✅ ESPELHO FIEL: Objeto exato da IA-2
+        // ✅ ESPELHO FIEL: Objeto exato da IA-2 + MERCADO_ID
         const produto = {
           produto_nome: descricao,
           categoria: categoria,
@@ -150,6 +150,7 @@ serve(async (req) => {
           unidade_medida: unidadeNormalizada,
           preco_unitario_ultimo: valorUnitario,
           user_id: notaImagem.usuario_id,
+          compra_id: notaImagem.compra_id, // 🎯 MERCADO VINCULADO À NOTA
           origem: 'nota_fiscal'
         };
 
