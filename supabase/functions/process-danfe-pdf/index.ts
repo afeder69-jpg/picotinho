@@ -549,27 +549,6 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         }
       }
 
-      // ⚡ EXTRAIR CHAVE DE ACESSO ANTES DE SALVAR DADOS  
-      let chaveAcessoFinal = null;
-      
-      // Buscar chave de acesso nos dados estruturados (múltiplos locais possíveis)
-      if (dadosEstruturados?.compra?.chave_acesso) {
-        chaveAcessoFinal = dadosEstruturados.compra.chave_acesso;
-      } else if (dadosEstruturados?.chave_acesso) {
-        chaveAcessoFinal = dadosEstruturados.chave_acesso;
-      }
-      
-      if (chaveAcessoFinal) {
-        const chave = chaveAcessoFinal.toString().replace(/\D/g, '');
-        if (chave.length >= 43 && chave.length <= 44) {
-          chaveAcessoFinal = chave;
-          console.log(`🔑 CHAVE DE ${chave.length} DÍGITOS DETECTADA:`, chave.slice(-6));
-        } else {
-          console.log("⚠️ Chave inválida (deve ter 43-44 dígitos):", chave);
-          chaveAcessoFinal = null;
-        }
-      }
-
       // 📊 Salvar dados na estrutura de notas_fiscais e itens_nota
       let notaFiscalId = null;
       if (dadosEstruturados.estabelecimento && dadosEstruturados.compra) {
@@ -586,44 +565,34 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
             }
           }
 
-           // Criar registro na tabela notas_fiscais (verificar se já existe primeiro)
+           // Criar registro na tabela notas_fiscais
            const cnpjNotaFiscal = dadosEstruturados.estabelecimento.cnpj ? 
              dadosEstruturados.estabelecimento.cnpj.replace(/[^\d]/g, '') : '';
-           
-           // Verificar se nota fiscal já existe para este usuário baseada em CNPJ + data + valor
-           const { data: existingNotaFiscal } = await supabase
+           const { data: notaFiscal, error: errorNotaFiscal } = await supabase
              .from('notas_fiscais')
-             .select('id')
-             .eq('user_id', userId)
-             .eq('cnpj', cnpjNotaFiscal)
-             .eq('data_compra', dataCompra)
-             .eq('valor_total', dadosEstruturados.compra.valor_total || 0)
-             .limit(1);
-            const { data: notaFiscal, error: errorNotaFiscal } = await supabase
-               .from('notas_fiscais')
-               .insert({
-                 user_id: userId,
-                 mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
-                 cnpj: cnpjNotaFiscal,
-                bairro: extrairBairro(dadosEstruturados.estabelecimento?.endereco) || null,
-                data_compra: dataCompra,
-                valor_total: dadosEstruturados.compra.valor_total || 0,
-                qtd_itens: dadosEstruturados.itens?.length || 0,
-                chave_acesso: chaveAcessoFinal // Usar a chave extraída
-              })
-              .select('id')
-              .single();
-              
-             if (errorNotaFiscal) {
-               console.error("❌ Erro ao criar nota fiscal:", errorNotaFiscal);
-              } else {
-                notaFiscalId = notaFiscal.id;
-                console.log("✅ Nova nota fiscal criada:", notaFiscalId);
-              }
+             .insert({
+               user_id: userId,
+               mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
+               cnpj: cnpjNotaFiscal,
+              bairro: extrairBairro(dadosEstruturados.estabelecimento?.endereco) || null,
+              data_compra: dataCompra,
+              valor_total: dadosEstruturados.compra.valor_total || 0,
+              qtd_itens: dadosEstruturados.itens?.length || 0,
+              chave_acesso: null // Adicionar se disponível na nota
+            })
+            .select('id')
+            .single();
 
+          if (errorNotaFiscal) {
+            console.error("❌ Erro ao criar nota fiscal:", errorNotaFiscal);
+          } else {
+            notaFiscalId = notaFiscal.id;
+            console.log("✅ Nota fiscal criada:", notaFiscalId);
+          }
         } catch (notaError) {
           console.error("❌ Erro ao processar nota fiscal:", notaError);
-              }
+        }
+      }
 
       // 📊 Salvar itens da nota
       if (dadosEstruturados.itens && notaFiscalId) {
@@ -802,8 +771,41 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           chaveAcessoFinal = chave;
           console.log(`🔑 CHAVE DE ${chave.length} DÍGITOS DETECTADA:`, chave.slice(-6));
           
-          // VERIFICAÇÃO DE DUPLICATA MOVIDA PARA O INÍCIO (já foi feita acima)
-          // Se chegou aqui, não é duplicata - salvar chave nos dados estruturados
+          // VERIFICAÇÃO DE DUPLICATA ANTES DE PROCESSAR
+          const chaveVariations = [
+            chave,
+            chave.padEnd(44, '0'), // Versão com 44 dígitos se tiver 43
+            chave.length === 44 ? chave.slice(0, 43) : null // Versão com 43 se tiver 44
+          ].filter(Boolean);
+
+          console.log('🔍 Verificando duplicatas para chaves:', chaveVariations.map(c => c.slice(-6)));
+          
+          const orConditions = chaveVariations.flatMap(ch => [
+            `dados_extraidos->chave_acesso.eq."${ch}"`,
+            `dados_extraidos->>chave_acesso.eq."${ch}"`,
+            `dados_extraidos->compra->>chave_acesso.eq."${ch}"`
+          ]).join(',');
+
+          const { data: existingNotes } = await supabase
+            .from('notas_imagens')
+            .select('id, created_at, dados_extraidos->compra->>chave_acesso as chave_nota')
+            .or(orConditions)
+            .eq('processada', true)
+            .neq('id', notaImagemId);
+
+          if (existingNotes && existingNotes.length > 0) {
+            console.log('🛑 DUPLICATA DETECTADA! Esta nota já foi processada:', existingNotes);
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'Nota fiscal duplicada - já foi processada anteriormente',
+                details: 'Esta chave de acesso já consta no sistema'
+              }),
+              { headers: corsHeaders, status: 400 }
+            );
+          }
+          
+          // Se chegou aqui, não é duplicata - salvar chave
           dadosEstruturados.chave_acesso = chaveAcessoFinal;
           if (!dadosEstruturados.compra) dadosEstruturados.compra = {};
           dadosEstruturados.compra.chave_acesso = chaveAcessoFinal;
