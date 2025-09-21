@@ -29,21 +29,32 @@ serve(async (req) => {
 
     console.log(`🏗️ [${new Date().toISOString()}] NOVA INSERÇÃO SIMPLES - ID: ${finalImagemId} - EXECUÇÃO INICIADA`);
     
-    // ✅ PROTEÇÃO CONTRA EXECUÇÃO DUPLICADA + LOCK IMEDIATO
-    // Marcar a nota como processada IMEDIATAMENTE para evitar execuções simultâneas
-    const { data: lockResult, error: lockError } = await supabase
+    // ✅ VERIFICAR SE JÁ FOI PROCESSADA (sem bloquear reprocessamento)
+    const { data: notaExistente, error: checkError } = await supabase
       .from('notas_imagens')
-      .update({ processada: true, updated_at: new Date().toISOString() })
+      .select('processada, dados_extraidos')
       .eq('id', finalImagemId)
-      .eq('processada', false) // Só atualizar se ainda estiver false
-      .select('id');
+      .single();
     
-    if (lockError || !lockResult || lockResult.length === 0) {
-      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA OU ERRO NO LOCK - ID: ${finalImagemId} - ABORTANDO`);
+    if (checkError) {
+      console.log(`❌ [${new Date().toISOString()}] ERRO AO VERIFICAR NOTA - ID: ${finalImagemId}`);
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Nota já foi processada ou erro no lock',
+          error: 'Erro ao verificar nota',
+          nota_id: finalImagemId
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Permitir reprocessamento se a nota tem dados extraídos
+    if (notaExistente?.processada && !notaExistente?.dados_extraidos) {
+      console.log(`⚠️ [${new Date().toISOString()}] NOTA JÁ PROCESSADA SEM DADOS - ID: ${finalImagemId} - ABORTANDO`);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Nota já foi processada sem dados extraídos',
           nota_id: finalImagemId
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -92,22 +103,36 @@ serve(async (req) => {
         const descricaoOriginal = String(item.descricao || '').trim();
         const descricao = descricaoOriginal || 'DESCRIÇÃO INVÁLIDA';
         
-        // ✅ QUANTIDADE: Manter exatamente como vem da IA-2
-        let quantidade = 0;
-        if (item.quantidade !== null && item.quantidade !== undefined && item.quantidade !== '') {
-          const quantidadeStr = String(item.quantidade).replace(",", ".");
-          quantidade = parseFloat(quantidadeStr);
-          // Se não conseguir converter, manter como 0
-          if (isNaN(quantidade)) quantidade = 0;
+        // ✅ QUANTIDADE: Preservar valor exato da IA-2
+        let quantidade = item.quantidade;
+        if (quantidade !== null && quantidade !== undefined && quantidade !== '') {
+          // Tentar converter string com vírgula para número
+          if (typeof quantidade === 'string') {
+            quantidade = parseFloat(quantidade.replace(",", "."));
+          } else if (typeof quantidade === 'number') {
+            // Já é número, manter como está
+            quantidade = quantidade;
+          }
+          // Se não conseguir converter, manter o valor original
+          if (isNaN(quantidade)) {
+            quantidade = item.quantidade;
+          }
         }
         
-        // ✅ VALOR UNITÁRIO: Manter exatamente como vem da IA-2
-        let valorUnitario = 0;
-        if (item.valor_unitario !== null && item.valor_unitario !== undefined && item.valor_unitario !== '') {
-          const valorUnitarioStr = String(item.valor_unitario).replace(",", ".");
-          valorUnitario = parseFloat(valorUnitarioStr);
-          // Se não conseguir converter, manter como 0
-          if (isNaN(valorUnitario)) valorUnitario = 0;
+        // ✅ VALOR UNITÁRIO: Preservar valor exato da IA-2  
+        let valorUnitario = item.valor_unitario;
+        if (valorUnitario !== null && valorUnitario !== undefined && valorUnitario !== '') {
+          // Tentar converter string com vírgula para número
+          if (typeof valorUnitario === 'string') {
+            valorUnitario = parseFloat(valorUnitario.replace(",", "."));
+          } else if (typeof valorUnitario === 'number') {
+            // Já é número, manter como está
+            valorUnitario = valorUnitario;
+          }
+          // Se não conseguir converter, manter o valor original
+          if (isNaN(valorUnitario)) {
+            valorUnitario = item.valor_unitario;
+          }
         }
         
         const unidade = String(item.unidade || 'UN').trim();
@@ -118,9 +143,12 @@ serve(async (req) => {
         
         console.log('INSERT_DIRETO', {
           produto: descricao,
-          quantidade: quantidade,
+          quantidade_original: item.quantidade,
+          quantidade_processada: quantidade,
+          valor_original: item.valor_unitario,
+          valor_processado: valorUnitario,
           unidade: unidadeNormalizada,
-          preco: valorUnitario
+          categoria: categoria
         });
 
         // ✅ ESPELHO FIEL: Objeto exato da IA-2
@@ -169,7 +197,14 @@ serve(async (req) => {
       }
     }
 
-    // Nota já foi marcada como processada no início (lock)
+    // ✅ MARCAR COMO PROCESSADA APÓS INSERÇÃO SUCESSFUL
+    if (sucessos > 0) {
+      await supabase
+        .from('notas_imagens')
+        .update({ processada: true, updated_at: new Date().toISOString() })
+        .eq('id', finalImagemId);
+      console.log(`✅ Nota marcada como processada após ${sucessos} inserções`);
+    }
 
     console.log(`🎯 [${new Date().toISOString()}] INSERÇÃO CONCLUÍDA: ${sucessos}/${itens.length} produtos inseridos - ID: ${finalImagemId}`);
 
