@@ -596,6 +596,18 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
       // 📊 Salvar itens da nota
       if (dadosEstruturados.itens && notaFiscalId) {
+        // Parse da data para o formato correto (mesmo código do bloco anterior)
+        let dataCompraItens = null;
+        if (dadosEstruturados.compra?.data_emissao) {
+          try {
+            const [dataParte] = dadosEstruturados.compra.data_emissao.split(' ');
+            const [dia, mes, ano] = dataParte.split('/');
+            dataCompraItens = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+          } catch (e) {
+            console.warn("⚠️ Erro ao parsear data para itens da nota");
+          }
+        }
+        
         for (const item of dadosEstruturados.itens) {
           try {
             const { descricao, codigo, quantidade, unidade, valor_unitario, valor_total, categoria } = item;
@@ -612,7 +624,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 valor_unitario: valor_unitario || 0,
                 valor_total: valor_total || 0,
                 categoria: categoria || 'outros',
-                data_compra: dataCompra
+                data_compra: dataCompraItens
               });
 
             // Atualizar preços atuais de forma inteligente considerando data/hora
