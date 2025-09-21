@@ -20,7 +20,7 @@ function normalizar(texto: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, " ")
+    .replace(/[^A-Z0-9\s/]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -43,7 +43,7 @@ function normUnidade(u: unknown): string {
   if (["G", "GR", "GRAMAS"].includes(s)) return "G";
   if (["L", "LT", "LITRO", "LITROS"].includes(s)) return "L";
   if (["ML", "MILILITRO", "MILILITROS"].includes(s)) return "ML";
-  return "UN"; // fallback final
+  return s;
 }
 
 function pickDescricao(item: any): string {
@@ -72,14 +72,29 @@ function pickUnidade(item: any): string {
   return normUnidade(item?.unidade ?? item?.qtd_unidade ?? item?.unid ?? item?.unidade_medida);
 }
 function pickCategoria(item: any): string {
-  const c = String(item?.categoria ?? "").trim().toUpperCase();
-  return c || "OUTROS";
+  return String(item?.categoria ?? "OUTROS").trim();
 }
+
+// ================== LISTA OFICIAL DE CATEGORIAS ==================
+const categoriasOficiais = [
+  "HORTIFRUTI",
+  "BEBIDAS",
+  "MERCEARIA",
+  "AÇOUGUE",
+  "PADARIA",
+  "LATICÍNIOS/FRIOS",
+  "LIMPEZA",
+  "HIGIENE/FARMÁCIA",
+  "CONGELADOS",
+  "PET",
+  "OUTROS",
+];
 
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const startedAt = nowIso();
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -95,6 +110,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log(`🏁 [${startedAt}] process-receipt-full START - nota_id=${finalImagemId}`);
 
     const { data: notaImagem, error: notaError } = await supabase
       .from("notas_imagens")
@@ -118,35 +135,50 @@ serve(async (req) => {
     }
 
     // Consolidar itens iguais
-    const mapa = new Map<string, any>();
+    const mapaConsolidado = new Map<
+      string,
+      { descricaoOriginal: string; descricaoNormalizada: string; quantidade: number; valorUnitario: number; unidade: string; categoria: string }
+    >();
+
     for (const raw of itens) {
-      const descricao = pickDescricao(raw);
-      const normalizada = normalizar(descricao) || descricao.toUpperCase();
+      const descricaoOriginal = pickDescricao(raw);
+      const descricaoNormalizada = normalizar(descricaoOriginal) || descricaoOriginal.toUpperCase();
       const quantidade = pickQuantidade(raw);
-      const valorUnit = pickValorUnitario(raw);
+      const valorUnitario = pickValorUnitario(raw);
       const unidade = pickUnidade(raw);
-      const categoria = pickCategoria(raw);
 
-      if (quantidade === null || valorUnit === null) continue;
+      // 🔎 Categoria validada
+      let categoria = pickCategoria(raw);
+      let categoriaNorm = normalizar(categoria);
 
-      const chave = `${normalizada}__${unidade}`;
-      if (!mapa.has(chave)) {
-        mapa.set(chave, {
-          descricaoOriginal: descricao,
-          descricaoNormalizada: normalizada,
+      // Verifica se está na lista oficial
+      if (!categoriasOficiais.includes(categoriaNorm)) {
+        console.log(`⚠️ Categoria fora do padrão: "${categoria}" -> forçando OUTROS`);
+        categoria = "OUTROS";
+      } else {
+        categoria = categoriaNorm;
+      }
+
+      if (quantidade === null || valorUnitario === null) continue;
+
+      const chave = `${descricaoNormalizada}__${unidade}`;
+      if (!mapaConsolidado.has(chave)) {
+        mapaConsolidado.set(chave, {
+          descricaoOriginal,
+          descricaoNormalizada,
           quantidade,
-          valorUnitario: valorUnit,
+          valorUnitario,
           unidade,
           categoria,
         });
       } else {
-        const existente = mapa.get(chave)!;
+        const existente = mapaConsolidado.get(chave)!;
         existente.quantidade += quantidade;
-        existente.valorUnitario = valorUnit;
+        existente.valorUnitario = valorUnitario;
       }
     }
 
-    const itensConsolidados = Array.from(mapa.values());
+    const itensConsolidados = Array.from(mapaConsolidado.values());
     console.log(`📦 Itens consolidados: ${itensConsolidados.length}`);
 
     if (itensConsolidados.length === 0) {
@@ -156,38 +188,46 @@ serve(async (req) => {
       });
     }
 
-    // Limpar itens antigos da nota
+    // Apagar itens antigos da mesma nota
     await supabase.from("estoque_app").delete().eq("nota_id", notaImagem.id).eq("user_id", notaImagem.usuario_id);
 
-    // Inserir estoque
-    const produtos = itensConsolidados.map((it) => ({
-      user_id: notaImagem.usuario_id,
-      nota_id: notaImagem.id,
-      produto_nome: it.descricaoNormalizada,
-      categoria: it.categoria || "OUTROS",
-      quantidade: it.quantidade,
-      unidade_medida: it.unidade || "UN",
-      preco_unitario_ultimo: it.valorUnitario,
-      compra_id: notaImagem.compra_id,
-      origem: "nota_fiscal",
-    }));
+    const produtos: any[] = [];
+    const itensCompra: any[] = [];
 
-    console.log("📥 Preparando para insert no estoque_app:", JSON.stringify(produtos, null, 2));
-
-    const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtos).select();
-
-    if (insertErr) {
-      console.error("❌ INSERT_ERR_ESTOQUE:", insertErr);
-      return new Response(JSON.stringify({ success: false, error: insertErr.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    for (const item of itensConsolidados) {
+      produtos.push({
+        user_id: notaImagem.usuario_id,
+        nota_id: notaImagem.id,
+        produto_nome: item.descricaoNormalizada,
+        categoria: item.categoria,
+        quantidade: item.quantidade,
+        unidade_medida: item.unidade,
+        preco_unitario_ultimo: item.valorUnitario,
+        compra_id: notaImagem.compra_id,
+        origem: "nota_fiscal",
       });
+
+      if (notaImagem.compra_id) {
+        itensCompra.push({
+          compra_id: notaImagem.compra_id,
+          produto_nome: item.descricaoNormalizada,
+          quantidade: item.quantidade,
+          preco_unitario: item.valorUnitario,
+          preco_total: item.quantidade * item.valorUnitario,
+        });
+      }
     }
 
-    const totalFinanceiro = inserted.reduce(
-      (acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo,
-      0
-    );
+    const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtos).select();
+    if (insertErr) throw new Error(insertErr.message);
+
+    if (itensCompra.length > 0) {
+      await supabase.from("itens_compra_app").insert(itensCompra);
+    }
+
+    await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", finalImagemId);
+
+    const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
     return new Response(
       JSON.stringify({
