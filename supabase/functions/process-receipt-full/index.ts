@@ -20,7 +20,7 @@ function normalizar(texto: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
-    .replace(/[^A-Z0-9\s/]/g, " ")
+    .replace(/[^A-Z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -72,23 +72,73 @@ function pickUnidade(item: any): string {
   return normUnidade(item?.unidade ?? item?.qtd_unidade ?? item?.unid ?? item?.unidade_medida);
 }
 function pickCategoria(item: any): string {
-  return String(item?.categoria ?? "OUTROS").trim();
+  return String(item?.categoria ?? "OUTROS").trim().toUpperCase();
 }
 
-// ================== LISTA OFICIAL DE CATEGORIAS ==================
-const categoriasOficiais = [
-  "HORTIFRUTI",
-  "BEBIDAS",
-  "MERCEARIA",
-  "AÇOUGUE",
-  "PADARIA",
-  "LATICÍNIOS/FRIOS",
-  "LIMPEZA",
-  "HIGIENE/FARMÁCIA",
-  "CONGELADOS",
-  "PET",
-  "OUTROS",
-];
+// ================== NORMALIZAR CATEGORIA ==================
+function normalizarCategoria(descricao: string, categoriaIa: string): string {
+  const texto = (descricao || "").toUpperCase();
+  const catIa = (categoriaIa || "").toUpperCase();
+
+  if (/ALHO|CEBOLA|RUCULA|TOMATE|BANANA|MAÇA|HORTIFRUTI|VERDURA|LEGUME|FRUTA|TEMPER[O|OS] VERDE/.test(texto) || catIa.includes("HORTIFRUTI")) {
+    return "HORTIFRUTI";
+  }
+  if (/CARNE|FRANGO|PEITO|FILÉ|FILE|PEIXE|BOVINO|SUINO|SUÍNO|AVES|LINGUIÇA|SALSICHA/.test(texto) || catIa.includes("CARNE")) {
+    return "AÇOUGUE";
+  }
+  if (/LEITE|QUEIJO|IOGURTE|MANTEIGA|MARGARINA|REQUEIJÃO|CREME DE LEITE|FRIOS/.test(texto) || catIa.includes("LATIC")) {
+    return "LATICÍNIOS/FRIOS";
+  }
+  if (/PÃO|BOLO|PADARIA|BISCOITO|SALGADO|TORRADA|ROSQUINHA|CROISSANT/.test(texto) || catIa.includes("PADARIA")) {
+    return "PADARIA";
+  }
+  if (/REFRIGERANTE|SUCO|CERVEJA|VINHO|ÁGUA|ENERGÉTICO|CACHAÇA|WHISKY|VODKA|BEBIDA|CHÁ/.test(texto) || catIa.includes("BEBIDA")) {
+    return "BEBIDAS";
+  }
+  if (/ARROZ|FEIJÃO|MACARRÃO|MASSA|CAFÉ|AÇÚCAR|SAL|ÓLEO|AZEITE|GRÃO|CEREAL|FARINHA|EXTRATO|MOLHO|VINAGRE|AVEIA|OVO/.test(texto) || catIa.includes("MERCEARIA")) {
+    return "MERCEARIA";
+  }
+  if (/DETERGENTE|SABÃO|DESINFETANTE|AMACIANTE|ÁGUA SANITÁRIA|CLORO|LIMPADOR/.test(texto) || catIa.includes("LIMPEZA")) {
+    return "LIMPEZA";
+  }
+  if (/SABONETE|SHAMPOO|CREME DENTAL|PASTA DE DENTE|DESODORANTE|PAPEL HIGIÊNICO|REMÉDIO|MEDICAMENTO|HIGIENE|FARMÁCIA/.test(texto) || catIa.includes("HIGIENE")) {
+    return "HIGIENE/FARMÁCIA";
+  }
+  if (/CONGELADO|SORVETE|PIZZA|NUGGET|HAMBURGUER|PRATO PRONTO/.test(texto) || catIa.includes("CONGELADO")) {
+    return "CONGELADOS";
+  }
+  if (/RAÇÃO|PET|CACHORRO|GATO|AREIA DE GATO|BRINQUEDO PET|COLEIRA/.test(texto) || catIa.includes("PET")) {
+    return "PET";
+  }
+
+  return "OUTROS";
+}
+
+// Buscar ou criar produto no catálogo
+async function buscarOuCriarProduto(supabase: any, descricaoNormalizada: string, categoria: string, unidadeMedida: string) {
+  const { data: existente } = await supabase
+    .from("produtos_app")
+    .select("id")
+    .eq("nome", descricaoNormalizada)
+    .single();
+
+  if (existente) return existente.id;
+
+  const { data: novo, error } = await supabase
+    .from("produtos_app")
+    .insert({
+      nome: descricaoNormalizada,
+      categoria_id: null,
+      unidade_medida: unidadeMedida,
+      ativo: true,
+      descricao: `Produto criado automaticamente: ${descricaoNormalizada}`,
+    })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return novo.id;
+}
 
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
@@ -135,10 +185,7 @@ serve(async (req) => {
     }
 
     // Consolidar itens iguais
-    const mapaConsolidado = new Map<
-      string,
-      { descricaoOriginal: string; descricaoNormalizada: string; quantidade: number; valorUnitario: number; unidade: string; categoria: string }
-    >();
+    const mapaConsolidado = new Map<string, any>();
 
     for (const raw of itens) {
       const descricaoOriginal = pickDescricao(raw);
@@ -146,18 +193,8 @@ serve(async (req) => {
       const quantidade = pickQuantidade(raw);
       const valorUnitario = pickValorUnitario(raw);
       const unidade = pickUnidade(raw);
-
-      // 🔎 Categoria validada
-      let categoria = pickCategoria(raw);
-      let categoriaNorm = normalizar(categoria);
-
-      // Verifica se está na lista oficial
-      if (!categoriasOficiais.includes(categoriaNorm)) {
-        console.log(`⚠️ Categoria fora do padrão: "${categoria}" -> forçando OUTROS`);
-        categoria = "OUTROS";
-      } else {
-        categoria = categoriaNorm;
-      }
+      const categoriaIa = pickCategoria(raw);
+      const categoria = normalizarCategoria(descricaoOriginal, categoriaIa);
 
       if (quantidade === null || valorUnitario === null) continue;
 
@@ -181,20 +218,14 @@ serve(async (req) => {
     const itensConsolidados = Array.from(mapaConsolidado.values());
     console.log(`📦 Itens consolidados: ${itensConsolidados.length}`);
 
-    if (itensConsolidados.length === 0) {
-      return new Response(JSON.stringify({ success: false, error: "Todos os itens inválidos" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Apagar itens antigos da mesma nota
     await supabase.from("estoque_app").delete().eq("nota_id", notaImagem.id).eq("user_id", notaImagem.usuario_id);
 
     const produtos: any[] = [];
     const itensCompra: any[] = [];
 
     for (const item of itensConsolidados) {
+      const produtoId = await buscarOuCriarProduto(supabase, item.descricaoNormalizada, item.categoria, item.unidade);
+
       produtos.push({
         user_id: notaImagem.usuario_id,
         nota_id: notaImagem.id,
@@ -210,7 +241,7 @@ serve(async (req) => {
       if (notaImagem.compra_id) {
         itensCompra.push({
           compra_id: notaImagem.compra_id,
-          produto_nome: item.descricaoNormalizada,
+          produto_id: produtoId,
           quantidade: item.quantidade,
           preco_unitario: item.valorUnitario,
           preco_total: item.quantidade * item.valorUnitario,
