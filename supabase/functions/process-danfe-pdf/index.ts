@@ -841,7 +841,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       // Executar IA-2 em background após salvar os dados
       EdgeRuntime.waitUntil(
         supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagemId }
+          body: { notaId: notaImagemId }
         }).then((result) => {
           console.log("✅ IA-2 executada automaticamente com sucesso:", result);
         }).catch((estoqueErr) => {
@@ -877,7 +877,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     
     try {
       const { data: ia2Result, error: ia2Error } = await supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: imagemId }
+        body: { notaId: notaImagemId }
       });
       
       if (ia2Error) {
