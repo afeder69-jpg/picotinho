@@ -9,7 +9,7 @@ const executeTeste = async () => {
     console.log('🔧 Chamando process-receipt-full para nota:', notaId);
     
     const { data, error } = await supabase.functions.invoke('process-receipt-full', {
-      body: { imagemId: notaId }
+      body: { notaId: notaId }
     });
     
     if (error) {
