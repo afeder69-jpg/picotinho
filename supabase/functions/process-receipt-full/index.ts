@@ -43,7 +43,7 @@ function normUnidade(u: unknown): string {
   if (["G", "GR", "GRAMAS"].includes(s)) return "G";
   if (["L", "LT", "LITRO", "LITROS"].includes(s)) return "L";
   if (["ML", "MILILITRO", "MILILITROS"].includes(s)) return "ML";
-  return s;
+  return "UN"; // fallback final
 }
 
 function pickDescricao(item: any): string {
@@ -72,40 +72,14 @@ function pickUnidade(item: any): string {
   return normUnidade(item?.unidade ?? item?.qtd_unidade ?? item?.unid ?? item?.unidade_medida);
 }
 function pickCategoria(item: any): string {
-  return String(item?.categoria ?? "OUTROS").trim().toUpperCase();
-}
-
-// Buscar ou criar produto no catálogo
-async function buscarOuCriarProduto(supabase: any, descricaoNormalizada: string, categoria: string, unidadeMedida: string) {
-  const { data: existente } = await supabase
-    .from("produtos_app")
-    .select("id")
-    .eq("nome", descricaoNormalizada)
-    .single();
-
-  if (existente) return existente.id;
-
-  // 🔑 Ajuste importante: não tenta preencher categoria_id
-  const { data: novo, error } = await supabase
-    .from("produtos_app")
-    .insert({
-      nome: descricaoNormalizada,
-      unidade_medida: unidadeMedida,
-      ativo: true,
-      descricao: `Produto criado automaticamente: ${descricaoNormalizada}`,
-    })
-    .select("id")
-    .single();
-
-  if (error) throw new Error(error.message);
-  return novo.id;
+  const c = String(item?.categoria ?? "").trim().toUpperCase();
+  return c || "OUTROS";
 }
 
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const startedAt = nowIso();
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -122,9 +96,6 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🏁 [${startedAt}] process-receipt-full START - nota_id=${finalImagemId}`);
-
-    // Carregar nota + dados extraídos
     const { data: notaImagem, error: notaError } = await supabase
       .from("notas_imagens")
       .select("id, dados_extraidos, processada, usuario_id, compra_id")
@@ -147,39 +118,35 @@ serve(async (req) => {
     }
 
     // Consolidar itens iguais
-    const mapaConsolidado = new Map<
-      string,
-      { descricaoOriginal: string; descricaoNormalizada: string; quantidade: number; valorUnitario: number; unidade: string; categoria: string }
-    >();
-
+    const mapa = new Map<string, any>();
     for (const raw of itens) {
-      const descricaoOriginal = pickDescricao(raw);
-      const descricaoNormalizada = normalizar(descricaoOriginal) || descricaoOriginal.toUpperCase();
+      const descricao = pickDescricao(raw);
+      const normalizada = normalizar(descricao) || descricao.toUpperCase();
       const quantidade = pickQuantidade(raw);
-      const valorUnitario = pickValorUnitario(raw);
+      const valorUnit = pickValorUnitario(raw);
       const unidade = pickUnidade(raw);
       const categoria = pickCategoria(raw);
 
-      if (quantidade === null || valorUnitario === null) continue;
+      if (quantidade === null || valorUnit === null) continue;
 
-      const chave = `${descricaoNormalizada}__${unidade}`;
-      if (!mapaConsolidado.has(chave)) {
-        mapaConsolidado.set(chave, {
-          descricaoOriginal,
-          descricaoNormalizada,
+      const chave = `${normalizada}__${unidade}`;
+      if (!mapa.has(chave)) {
+        mapa.set(chave, {
+          descricaoOriginal: descricao,
+          descricaoNormalizada: normalizada,
           quantidade,
-          valorUnitario,
+          valorUnitario: valorUnit,
           unidade,
           categoria,
         });
       } else {
-        const existente = mapaConsolidado.get(chave)!;
+        const existente = mapa.get(chave)!;
         existente.quantidade += quantidade;
-        existente.valorUnitario = valorUnitario; // mantém último valor unitário
+        existente.valorUnitario = valorUnit;
       }
     }
 
-    const itensConsolidados = Array.from(mapaConsolidado.values());
+    const itensConsolidados = Array.from(mapa.values());
     console.log(`📦 Itens consolidados: ${itensConsolidados.length}`);
 
     if (itensConsolidados.length === 0) {
@@ -189,52 +156,38 @@ serve(async (req) => {
       });
     }
 
-    // Apagar itens antigos da mesma nota
+    // Limpar itens antigos da nota
     await supabase.from("estoque_app").delete().eq("nota_id", notaImagem.id).eq("user_id", notaImagem.usuario_id);
 
-    // Preparar inserts
-    const produtos: any[] = [];
-    const itensCompra: any[] = [];
+    // Inserir estoque
+    const produtos = itensConsolidados.map((it) => ({
+      user_id: notaImagem.usuario_id,
+      nota_id: notaImagem.id,
+      produto_nome: it.descricaoNormalizada,
+      categoria: it.categoria || "OUTROS",
+      quantidade: it.quantidade,
+      unidade_medida: it.unidade || "UN",
+      preco_unitario_ultimo: it.valorUnitario,
+      compra_id: notaImagem.compra_id,
+      origem: "nota_fiscal",
+    }));
 
-    for (const item of itensConsolidados) {
-      const produtoId = await buscarOuCriarProduto(supabase, item.descricaoNormalizada, item.categoria, item.unidade);
+    console.log("📥 Preparando para insert no estoque_app:", JSON.stringify(produtos, null, 2));
 
-      produtos.push({
-        user_id: notaImagem.usuario_id,
-        nota_id: notaImagem.id,
-        produto_nome: item.descricaoNormalizada,
-        categoria: item.categoria,
-        quantidade: item.quantidade,
-        unidade_medida: item.unidade,
-        preco_unitario_ultimo: item.valorUnitario,
-        compra_id: notaImagem.compra_id,
-        origem: "nota_fiscal",
-      });
-
-      if (notaImagem.compra_id) {
-        itensCompra.push({
-          compra_id: notaImagem.compra_id,
-          produto_id: produtoId,
-          quantidade: item.quantidade,
-          preco_unitario: item.valorUnitario,
-          preco_total: item.quantidade * item.valorUnitario,
-        });
-      }
-    }
-
-    // Inserir no estoque
     const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtos).select();
-    if (insertErr) throw new Error(insertErr.message);
 
-    // Inserir em itens_compra_app
-    if (itensCompra.length > 0) {
-      await supabase.from("itens_compra_app").insert(itensCompra);
+    if (insertErr) {
+      console.error("❌ INSERT_ERR_ESTOQUE:", insertErr);
+      return new Response(JSON.stringify({ success: false, error: insertErr.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Marcar nota como processada
-    await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", finalImagemId);
-
-    const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
+    const totalFinanceiro = inserted.reduce(
+      (acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo,
+      0
+    );
 
     return new Response(
       JSON.stringify({
