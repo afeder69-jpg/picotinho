@@ -143,6 +143,29 @@ const EstoqueAtual = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      console.log('🔄 Carregando preços atuais - TODOS os dados disponíveis');
+
+      // PRIMEIRO: Buscar TODOS os preços atuais diretamente do banco (para debug)
+      const { data: todosPrecos, error: errorTodos } = await supabase
+        .from('precos_atuais')
+        .select('*')
+        .order('data_atualizacao', { ascending: false });
+
+      if (errorTodos) {
+        console.error('Erro ao buscar todos os preços:', errorTodos);
+      } else {
+        console.log('📊 TODOS OS PREÇOS NO BANCO:', todosPrecos?.length || 0);
+        console.log('📊 Primeiros 5 preços:', todosPrecos?.slice(0, 5));
+        
+        // Buscar especificamente os produtos que estão com problema
+        const produtosProblematicos = todosPrecos?.filter(p => 
+          p.produto_nome.toLowerCase().includes('creme') || 
+          p.produto_nome.toLowerCase().includes('chá') ||
+          p.produto_nome.toLowerCase().includes('cha')
+        );
+        console.log('🔍 PRODUTOS PROBLEMÁTICOS ENCONTRADOS:', produtosProblematicos);
+      }
+
       // Buscar configuração de área de atuação do usuário
       const { data: config } = await supabase
         .from('configuracoes_usuario')
@@ -168,8 +191,17 @@ const EstoqueAtual = () => {
 
       if (errorArea) {
         console.error('Erro ao buscar preços por área:', errorArea);
-        // Fallback para o método antigo se as coordenadas não funcionaram
-        await loadPrecosAtuaisLegacy();
+        // Fallback para TODOS os preços disponíveis
+        const precosFormatados = (todosPrecos || []).map((item: any) => ({
+          id: `fallback-${item.id}`,
+          produto_nome: item.produto_nome,
+          valor_unitario: item.valor_unitario,
+          data_atualizacao: item.data_atualizacao,
+          origem: 'area_dinamica', // Marcar como área dinâmica para funcionar
+          estabelecimento_nome: item.estabelecimento_nome
+        }));
+        console.log('⚠️ FALLBACK: Usando todos os preços do banco:', precosFormatados.length);
+        setPrecosAtuais(precosFormatados);
         return;
       }
 
@@ -184,10 +216,20 @@ const EstoqueAtual = () => {
         }));
 
         console.log(`✅ Preços dinâmicos carregados por área (${raio}km):`, precosFormatados);
+        console.log(`📊 Total de preços carregados:`, precosFormatados.length);
         setPrecosAtuais(precosFormatados);
       } else {
-        // Fallback se não há resultados na área
-        setPrecosAtuais([]);
+        // Fallback para TODOS os preços se não há resultados na área
+        const precosFormatados = (todosPrecos || []).map((item: any) => ({
+          id: `fallback-${item.id}`,
+          produto_nome: item.produto_nome,
+          valor_unitario: item.valor_unitario,
+          data_atualizacao: item.data_atualizacao,
+          origem: 'area_dinamica', // Marcar como área dinâmica para funcionar
+          estabelecimento_nome: item.estabelecimento_nome
+        }));
+        console.log('⚠️ Sem resultados na área, usando todos os preços:', precosFormatados.length);
+        setPrecosAtuais(precosFormatados);
       }
     } catch (error) {
       console.error('Erro ao carregar preços atuais dinâmicos:', error);
@@ -542,7 +584,7 @@ const EstoqueAtual = () => {
       return precoAreaDinamica;
     }
     
-    // Busca por similaridade nos preços dinâmicos usando normalização melhorada
+    // NOVA BUSCA INTELIGENTE: buscar por similaridade mais avançada
     const buscaSimilaridade = precosAtuais.find(preco => {
       if (!preco.produto_nome || preco.origem !== 'area_dinamica') return false;
       
@@ -553,9 +595,28 @@ const EstoqueAtual = () => {
         return true;
       }
       
+      // BUSCA AVANÇADA: tratar casos específicos conhecidos
+      const produtoLimpo = nomeProdutoNormalizado
+        .replace(/\b(pronto|de|da|do)\b/g, '') // Remove palavras conectoras
+        .replace(/\b(1,5l|1.5l|15l)\b/g, '15l') // Normaliza volumes
+        .replace(/\b(200g|200gr)\b/g, '200g') // Normaliza pesos
+        .replace(/\s+/g, ' ').trim();
+        
+      const precoLimpo = precoNormalizado
+        .replace(/\b(pronto|de|da|do)\b/g, '') // Remove palavras conectoras
+        .replace(/\b(1,5l|1.5l|15l)\b/g, '15l') // Normaliza volumes
+        .replace(/\b(200g|200gr)\b/g, '200g') // Normaliza pesos
+        .replace(/\s+/g, ' ').trim();
+      
+      // Verificar correspondência após limpeza avançada
+      if (produtoLimpo === precoLimpo) {
+        console.log(`✅ Match por limpeza avançada: "${produtoLimpo}" = "${precoLimpo}"`);
+        return true;
+      }
+      
       // Dividir em palavras e verificar se pelo menos 70% das palavras coincidem
-      const palavrasPreco = precoNormalizado.split(/\s+/).filter(p => p.length > 2);
-      const palavrasProduto = nomeProdutoNormalizado.split(/\s+/).filter(p => p.length > 2);
+      const palavrasPreco = precoLimpo.split(/\s+/).filter(p => p.length > 2);
+      const palavrasProduto = produtoLimpo.split(/\s+/).filter(p => p.length > 2);
       
       if (palavrasProduto.length === 0) return false;
       
@@ -567,7 +628,13 @@ const EstoqueAtual = () => {
       });
       
       const percentualCoincidencia = coincidencias / palavrasProduto.length;
-      return percentualCoincidencia >= 0.7; // 70% de similaridade
+      const isMatch = percentualCoincidencia >= 0.7; // 70% de similaridade
+      
+      if (isMatch) {
+        console.log(`✅ Match por similaridade (${(percentualCoincidencia*100).toFixed(0)}%): "${produtoLimpo}" ~= "${precoLimpo}"`);
+      }
+      
+      return isMatch;
     });
     
     if (buscaSimilaridade) {
@@ -576,6 +643,7 @@ const EstoqueAtual = () => {
     }
     
     console.log(`❌ Nenhum preço dinâmico encontrado para: "${nomeProduto}"`);
+    console.log(`🔍 Preços disponíveis:`, precosAtuais.map(p => p.produto_nome));
     return null;
   };
 
@@ -1717,72 +1785,108 @@ const EstoqueAtual = () => {
                                  )}
                                </h3>
                                 <div className="space-y-1 text-xs">
-                                  {(() => {
-                                    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                                    const historicoProduto = historicoPrecos[nomeExibicao];
-                                    const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
+                                   {(() => {
+                                     const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                     const historicoProduto = historicoPrecos[nomeExibicao];
+                                     const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
 
-                                    return (
-                                      <>
-                                        {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
-                                        <div className="text-primary font-medium">
-                                          {(() => {
-                                            // Prioridade: dados do estoque SEMPRE primeiro
-                                            const precoExibir = item.preco_unitario_ultimo || 0;
-                                            const totalExibir = (precoExibir * quantidade).toFixed(2);
-                                            
-                                            // Buscar data da nota fiscal
-                                            const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
-                                            const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
-                                            
-                                            return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
-                                          })()}
-                                        </div>
+                                     // DEBUG: Log detalhado para entender o problema
+                                     console.log(`🐛 DEBUG PRODUTO: ${nomeExibicao}`);
+                                     console.log(`🐛 - Preço estoque: ${item.preco_unitario_ultimo}`);
+                                     console.log(`🐛 - Data nota fiscal:`, encontrarDataNotaFiscal(nomeExibicao));
+                                     console.log(`🐛 - Histórico disponível:`, historicoProduto);
+                                     console.log(`🐛 - Preço atual:`, precoAtual);
+
+                                     return (
+                                       <>
+                                         {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
+                                         <div className="text-primary font-medium">
+                                           {(() => {
+                                             // Prioridade: dados do estoque SEMPRE primeiro
+                                             const precoExibir = item.preco_unitario_ultimo || 0;
+                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
+                                             
+                                             // Buscar data da nota fiscal
+                                             const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
+                                             const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
+                                             
+                                             console.log(`🐛 LINHA 1 - ${nomeExibicao}: ${dataExibir} - R$ ${precoExibir.toFixed(2)}`);
+                                             
+                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
+                                           })()}
+                                         </div>
 
                                          {/* Linha 2: Menor preço na área (somente se diferente da linha 1) */}
                                          {(() => {
                                            // Verificar se há histórico válido
                                            if (historicoProduto?.menorPrecoArea) {
-                                             const precoAreaDifferente = historicoProduto.menorPrecoArea.preco !== item.preco_unitario_ultimo ||
-                                                                       historicoProduto.menorPrecoArea.data !== encontrarDataNotaFiscal(nomeExibicao);
+                                             const dataHistorico = historicoProduto.menorPrecoArea.data;
+                                             const precoHistorico = historicoProduto.menorPrecoArea.preco;
+                                             const dataUsuario = encontrarDataNotaFiscal(nomeExibicao);
+                                             const precoUsuario = item.preco_unitario_ultimo;
                                              
-                                             if (precoAreaDifferente) {
+                                             console.log(`🐛 HISTÓRICO - ${nomeExibicao}:`);
+                                             console.log(`🐛 - Data histórico: ${dataHistorico} vs Data usuário: ${dataUsuario}`);
+                                             console.log(`🐛 - Preço histórico: ${precoHistorico} vs Preço usuário: ${precoUsuario}`);
+                                             
+                                             const precosDiferentes = Math.abs(precoHistorico - precoUsuario) > 0.01;
+                                             const datasDiferentes = dataHistorico !== dataUsuario;
+                                             
+                                             console.log(`🐛 - Preços diferentes: ${precosDiferentes}, Datas diferentes: ${datasDiferentes}`);
+                                             
+                                             if (precosDiferentes || datasDiferentes) {
+                                               console.log(`🐛 LINHA 2 MOSTRADA - ${nomeExibicao}: ${formatDateSafe(dataHistorico)} - R$ ${precoHistorico}`);
                                                return (
                                                  <div className="text-muted-foreground">
-                                                   {historicoProduto.menorPrecoArea.data ? 
-                                                     formatDateSafe(historicoProduto.menorPrecoArea.data) : 
+                                                   {dataHistorico ? 
+                                                     formatDateSafe(dataHistorico) : 
                                                      'Sem data'
-                                                   } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
+                                                   } - R$ {(precoHistorico || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoHistorico || 0) * quantidade).toFixed(2)}
                                                  </div>
                                                );
+                                             } else {
+                                               console.log(`🐛 LINHA 2 OCULTADA (dados iguais) - ${nomeExibicao}`);
                                              }
                                            }
                                            
                                            // Verificar se há preço atual diferente do usuário
                                            if (precoAtual && precoAtual.valor_unitario) {
-                                             const precoAtualDifferente = precoAtual.valor_unitario !== item.preco_unitario_ultimo ||
-                                                                        precoAtual.data_atualizacao !== encontrarDataNotaFiscal(nomeExibicao);
+                                             const dataAtual = precoAtual.data_atualizacao;
+                                             const precoAtualVal = precoAtual.valor_unitario;
+                                             const dataUsuario = encontrarDataNotaFiscal(nomeExibicao);
+                                             const precoUsuario = item.preco_unitario_ultimo;
                                              
-                                             if (precoAtualDifferente) {
+                                             console.log(`🐛 PREÇO ATUAL - ${nomeExibicao}:`);
+                                             console.log(`🐛 - Data atual: ${dataAtual} vs Data usuário: ${dataUsuario}`);
+                                             console.log(`🐛 - Preço atual: ${precoAtualVal} vs Preço usuário: ${precoUsuario}`);
+                                             
+                                             const precosDiferentes = Math.abs(precoAtualVal - precoUsuario) > 0.01;
+                                             const datasDiferentes = dataAtual !== dataUsuario;
+                                             
+                                             if (precosDiferentes || datasDiferentes) {
+                                               console.log(`🐛 LINHA 2 ATUAL MOSTRADA - ${nomeExibicao}: ${formatDateSafe(dataAtual)} - R$ ${precoAtualVal}`);
                                                return (
                                                  <div className="text-muted-foreground">
-                                                   {precoAtual.data_atualizacao ? 
-                                                     formatDateSafe(precoAtual.data_atualizacao) : 
+                                                   {dataAtual ? 
+                                                     formatDateSafe(dataAtual) : 
                                                      'Sem data'
-                                                   } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
+                                                   } - R$ {(precoAtualVal || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtualVal || 0) * quantidade).toFixed(2)}
                                                  </div>
                                                );
+                                             } else {
+                                               console.log(`🐛 LINHA 2 ATUAL OCULTADA (dados iguais) - ${nomeExibicao}`);
                                              }
                                            }
                                            
+                                           console.log(`🐛 NENHUMA LINHA 2 MOSTRADA - ${nomeExibicao}`);
                                            // Se não há dados diferentes, não mostrar segunda linha
                                            return null;
                                          })()}
 
-                                        {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
-                                      </>
-                                    );
-                                  })()}
+                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
+                                       </>
+                                     );
+                                   })()}
                                 </div>
                            </div>
                            
