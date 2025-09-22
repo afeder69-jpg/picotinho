@@ -124,6 +124,25 @@ serve(async (req) => {
     const produtosEstoque = Array.from(produtosConsolidados.values());
     
     console.log(`📦 Itens únicos para inserir no estoque: ${produtosEstoque.length} (de ${itens.length} itens originais)`);
+    
+    // 🚨 DEBUG CRÍTICO: Verificar se os produtos problemáticos estão na lista
+    const produtosProblematicos = ['Queijo Parmesão President', 'Filé de Peito de Frango', 'Creme de Leite Italac', 'Requeijão Cremoso Tirolez'];
+    
+    console.log('🔍 AUDITORIA DOS PRODUTOS PROBLEMÁTICOS:');
+    produtosProblematicos.forEach(produtoTeste => {
+      const encontrado = produtosEstoque.find(p => p.produto_nome.includes(produtoTeste.split(' ')[0]));
+      if (encontrado) {
+        console.log(`✅ ${produtoTeste}: ENCONTRADO - ${encontrado.produto_nome} | Cat: ${encontrado.categoria} | Qtd: ${encontrado.quantidade}`);
+      } else {
+        console.log(`❌ ${produtoTeste}: NÃO ENCONTRADO na lista de inserção!`);
+      }
+    });
+    
+    // Mostrar todos os produtos que vão ser inseridos
+    console.log('📋 Lista completa para inserção:');
+    produtosEstoque.forEach((produto, index) => {
+      console.log(`${index + 1}. ${produto.produto_nome} | Cat: ${produto.categoria} | Qtd: ${produto.quantidade} | Preço: ${produto.preco_unitario_ultimo}`);
+    });
 
     // Inserir no estoque
     const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtosEstoque).select();
