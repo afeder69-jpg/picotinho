@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const executeTeste = async () => {
   try {
-    const notaId = 'c0fcbecd-0a1b-49bb-a026-5f335ed7774c'; // Nota mais recente processada
+    const notaId = 'b88ad5a2-cb35-4db4-b482-25e72f8069f4'; // Nota com 22 produtos únicos
     
     console.log('🔧 Chamando process-receipt-full para nota:', notaId);
     

@@ -89,30 +89,38 @@ serve(async (req) => {
     // Limpar estoque anterior dessa nota
     await supabase.from("estoque_app").delete().eq("nota_id", notaId).eq("user_id", nota.usuario_id);
 
-    // Preparar inserts
-    const produtosEstoque: any[] = [];
-    const itensCompra: any[] = [];
-
+    // Consolidar itens duplicados antes de inserir no estoque
+    const produtosConsolidados = new Map<string, any>();
+    
     for (const item of itens) {
-      produtosEstoque.push({
-        user_id: nota.usuario_id,
-        nota_id: nota.id,
-        produto_nome: item.descricao,
-        categoria: item.categoria || 'outros',
-        quantidade: item.quantidade,
-        unidade_medida: item.unidade || 'unidade',
-        preco_unitario_ultimo: item.valor_unitario,
-        compra_id: nota.compra_id,
-        origem: "nota_fiscal",
-      });
-
-      if (nota.compra_id) {
-        // Primeiro precisamos verificar se existe um produto_id correspondente
-        // Como não temos produto_id direto, vamos pular a inserção em itens_compra_app por enquanto
-        // ou criar uma lógica para buscar/criar o produto_id
-        console.log(`⚠️ Pulando inserção em itens_compra_app - produto_id necessário para ${item.descricao}`);
+      const key = item.descricao; // usar descrição como chave para consolidar
+      
+      if (produtosConsolidados.has(key)) {
+        // Item já existe, somar quantidades
+        const itemExistente = produtosConsolidados.get(key);
+        itemExistente.quantidade += item.quantidade;
+        // Manter o preço unitário mais recente (último item)
+        itemExistente.preco_unitario_ultimo = item.valor_unitario;
+      } else {
+        // Novo item
+        produtosConsolidados.set(key, {
+          user_id: nota.usuario_id,
+          nota_id: nota.id,
+          produto_nome: item.descricao,
+          categoria: item.categoria || 'outros',
+          quantidade: item.quantidade,
+          unidade_medida: item.unidade || 'unidade',
+          preco_unitario_ultimo: item.valor_unitario,
+          compra_id: nota.compra_id,
+          origem: "nota_fiscal",
+        });
       }
     }
+
+    // Converter Map para Array
+    const produtosEstoque = Array.from(produtosConsolidados.values());
+    
+    console.log(`📦 Itens únicos para inserir no estoque: ${produtosEstoque.length} (de ${itens.length} itens originais)`);
 
     // Inserir no estoque
     const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtosEstoque).select();
