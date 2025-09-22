@@ -1834,12 +1834,28 @@ export type Database = {
         Returns: undefined
       }
       log_profile_access: {
-        Args: { access_type: string; accessed_user_id: string }
+        Args: { action_type: string; target_user_id: string }
+        Returns: undefined
+      }
+      log_security_violation: {
+        Args: {
+          details: string
+          target_user_id: string
+          violation_type: string
+        }
         Returns: undefined
       }
       mask_phone_number: {
         Args: { phone_number: string }
         Returns: string
+      }
+      mask_sensitive_profile_data: {
+        Args: {
+          email_val?: string
+          nome_completo_val?: string
+          telefone_val?: string
+        }
+        Returns: Json
       }
       normalizar_nome_estabelecimento: {
         Args: { nome_input: string }
