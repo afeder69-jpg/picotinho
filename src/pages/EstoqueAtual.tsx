@@ -257,7 +257,7 @@ const EstoqueAtual = () => {
         console.warn('⚠️ Erro na função de histórico, usando fallback:', error);
       }
 
-      // Fallback: usar função de preços atuais
+      // Fallback: usar função de preços atuais - mas só para dados DIFERENTES do usuário
       const { data: precoAtualData } = await supabase.functions.invoke('preco-atual-usuario', {
         body: {
           userId: user.id,
@@ -268,25 +268,35 @@ const EstoqueAtual = () => {
       });
       
       if (precoAtualData?.success) {
-        // Converter dados do fallback para o formato esperado
+        // Converter dados do fallback, mas verificar se são diferentes dos dados do próprio usuário
         const historicoMap: {[key: string]: any} = {};
         
         precoAtualData.resultados?.forEach((item: any) => {
-          historicoMap[item.produto_nome] = {
-            ultimaCompraUsuario: {
-              data: item.data_atualizacao,
-              preco: item.valor_unitario,
-              quantidade: 1
-            },
-            menorPrecoArea: {
-              data: item.data_atualizacao,
-              preco: item.valor_unitario,
-              quantidade: 1
+          // Buscar se o usuário tem este produto no estoque para comparar
+          const produtoEstoque = estoque.find(e => 
+            e.produto_nome === item.produto_nome || 
+            e.produto_nome_exibicao === item.produto_nome
+          );
+          
+          // Só adicionar ao histórico se for diferente do que o usuário já tem
+          if (produtoEstoque) {
+            const dataUsuario = encontrarDataNotaFiscal(item.produto_nome);
+            const precosDiferentes = item.valor_unitario !== produtoEstoque.preco_unitario_ultimo;
+            const datasDiferentes = item.data_atualizacao !== dataUsuario;
+            
+            if (precosDiferentes || datasDiferentes) {
+              historicoMap[item.produto_nome] = {
+                menorPrecoArea: {
+                  data: item.data_atualizacao,
+                  preco: item.valor_unitario,
+                  quantidade: 1
+                }
+              };
             }
-          };
+          }
         });
 
-        console.log('⚠️ FALLBACK: Histórico carregado via fallback:', historicoMap);
+        console.log('⚠️ FALLBACK: Histórico carregado via fallback (somente dados diferentes):', historicoMap);
         setHistoricoPrecos(historicoMap);
       }
     } catch (error) {
@@ -1729,22 +1739,45 @@ const EstoqueAtual = () => {
                                           })()}
                                         </div>
 
-                                        {/* Linha 2: Menor preço na área */}
-                                        {historicoProduto?.menorPrecoArea ? (
-                                          <div className="text-muted-foreground">
-                                            {historicoProduto.menorPrecoArea.data ? 
-                                              formatDateSafe(historicoProduto.menorPrecoArea.data) : 
-                                              'Sem data'
-                                            } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
-                                          </div>
-                                        ) : precoAtual && precoAtual.valor_unitario && (
-                                          <div className="text-muted-foreground">
-                                            {precoAtual.data_atualizacao ? 
-                                              formatDateSafe(precoAtual.data_atualizacao) : 
-                                              'Sem data'
-                                            } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
-                                          </div>
-                                        )}
+                                         {/* Linha 2: Menor preço na área (somente se diferente da linha 1) */}
+                                         {(() => {
+                                           // Verificar se há histórico válido
+                                           if (historicoProduto?.menorPrecoArea) {
+                                             const precoAreaDifferente = historicoProduto.menorPrecoArea.preco !== item.preco_unitario_ultimo ||
+                                                                       historicoProduto.menorPrecoArea.data !== encontrarDataNotaFiscal(nomeExibicao);
+                                             
+                                             if (precoAreaDifferente) {
+                                               return (
+                                                 <div className="text-muted-foreground">
+                                                   {historicoProduto.menorPrecoArea.data ? 
+                                                     formatDateSafe(historicoProduto.menorPrecoArea.data) : 
+                                                     'Sem data'
+                                                   } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
+                                                 </div>
+                                               );
+                                             }
+                                           }
+                                           
+                                           // Verificar se há preço atual diferente do usuário
+                                           if (precoAtual && precoAtual.valor_unitario) {
+                                             const precoAtualDifferente = precoAtual.valor_unitario !== item.preco_unitario_ultimo ||
+                                                                        precoAtual.data_atualizacao !== encontrarDataNotaFiscal(nomeExibicao);
+                                             
+                                             if (precoAtualDifferente) {
+                                               return (
+                                                 <div className="text-muted-foreground">
+                                                   {precoAtual.data_atualizacao ? 
+                                                     formatDateSafe(precoAtual.data_atualizacao) : 
+                                                     'Sem data'
+                                                   } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
+                                                 </div>
+                                               );
+                                             }
+                                           }
+                                           
+                                           // Se não há dados diferentes, não mostrar segunda linha
+                                           return null;
+                                         })()}
 
                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
                                       </>
