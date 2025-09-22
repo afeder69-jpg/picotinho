@@ -63,15 +63,17 @@ serve(async (req) => {
     } else {
       // Se não há itens em itens_nota, buscar de dados_extraidos
       if (nota.dados_extraidos?.itens && Array.isArray(nota.dados_extraidos.itens)) {
+        const dataCompra = nota.dados_extraidos?.compra?.data_emissao || 
+                          nota.dados_extraidos?.data_emissao ||
+                          new Date().toISOString().split('T')[0];
+        
         itens = nota.dados_extraidos.itens.map((item: any) => ({
           descricao: item.descricao,
           categoria: item.categoria || 'outros',
           quantidade: parseFloat(item.quantidade) || 0,
           valor_unitario: parseFloat(item.valor_unitario) || 0,
           unidade: item.unidade || 'unidade',
-          data_compra: nota.dados_extraidos?.compra?.data_emissao ? 
-            new Date(nota.dados_extraidos.compra.data_emissao).toISOString().split('T')[0] : 
-            new Date().toISOString().split('T')[0]
+          data_compra: dataCompra
         }));
         console.log(`📦 Itens carregados de dados_extraidos: ${itens.length}`);
       }
@@ -96,12 +98,11 @@ serve(async (req) => {
         user_id: nota.usuario_id,
         nota_id: nota.id,
         produto_nome: item.descricao,
-        categoria: item.categoria,
+        categoria: item.categoria || 'outros',
         quantidade: item.quantidade,
-        unidade_medida: item.unidade,
+        unidade_medida: item.unidade || 'unidade',
         preco_unitario_ultimo: item.valor_unitario,
         compra_id: nota.compra_id,
-        data_compra: item.data_compra, // agora com a data correta da compra
         origem: "nota_fiscal",
       });
 
