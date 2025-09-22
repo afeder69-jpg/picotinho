@@ -1193,76 +1193,87 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     
     console.log(`📝 [STEP 1] Texto normalizado: "${texto}"`);
     
-    // Extrair nome da categoria da mensagem
-    let categoria = '';
+    // Extrair termo da categoria da mensagem (remover "consulta categoria")
+    const termoCategoria = texto
+      .replace(/\b(consulta|consultar)\b/g, '')
+      .replace(/\bcategoria\b/g, '')
+      .trim();
     
-    // Lista de categorias válidas (baseadas nos dados reais do banco)
-    const categoriasValidas = [
-      'hortifruti', 'bebidas', 'padaria', 'mercearia', 
-      'carnes', 'limpeza', 'higiene', 'farmacia', 
-      'higienefarmacia', 'laticinios', 'outros'
-    ];
+    console.log(`📝 [STEP 2] Termo da categoria extraído: "${termoCategoria}"`);
     
-    // Buscar categoria na mensagem
-    for (const cat of categoriasValidas) {
-      if (texto.includes(cat)) {
-        categoria = cat;
-        break;
+    if (!termoCategoria) {
+      console.log(`❌ [STEP 2] Categoria não especificada - retornando ajuda`);
+      return "❌ Categoria não especificada. Use: 'categoria [nome]'\n\nExemplos:\n• categoria carnes\n• categoria bebidas\n• categoria hortifruti\n• categoria mercearia\n• categoria limpeza";
+    }
+    
+    // Buscar categoria usando a função do banco de dados
+    console.log(`🔍 [STEP 3] Buscando categoria "${termoCategoria}" no banco...`);
+    
+    const { data: categoriaEncontrada, error: errorCategoria } = await supabase.rpc('buscar_categoria_por_termo', {
+      termo_busca: termoCategoria
+    });
+    
+    if (errorCategoria) {
+      console.error('❌ [ERRO] Erro ao buscar categoria:', errorCategoria);
+      return "❌ Erro ao buscar categoria. Tente novamente.";
+    }
+    
+    if (!categoriaEncontrada || categoriaEncontrada.length === 0) {
+      console.log(`❌ [STEP 3] Categoria "${termoCategoria}" não encontrada`);
+      
+      // Buscar todas as categorias disponíveis para ajuda
+      const { data: todasCategorias } = await supabase
+        .from('categorias')
+        .select('nome, sinonimos')
+        .eq('ativa', true)
+        .order('nome');
+      
+      let ajuda = `❌ Categoria "${termoCategoria}" não encontrada.\n\n📂 **CATEGORIAS DISPONÍVEIS:**\n\n`;
+      
+      if (todasCategorias) {
+        todasCategorias.forEach(cat => {
+          const exemplos = cat.sinonimos ? cat.sinonimos.slice(0, 2).join(', ') : '';
+          ajuda += `• ${cat.nome.toUpperCase()}${exemplos ? ` (ex: ${exemplos})` : ''}\n`;
+        });
       }
+      
+      ajuda += '\n💡 Use: *categoria [nome]* para consultar uma categoria específica';
+      return ajuda;
     }
     
-    // Mapear categorias do texto para formato EXATO do banco (case-sensitive)
-    const mapCategoria: { [key: string]: string } = {
-      'hortifruti': 'Hortifruti',
-      'bebidas': 'Bebidas',
-      'padaria': 'Padaria',
-      'mercearia': 'Mercearia',
-      'carnes': 'Carnes',
-      'limpeza': 'Limpeza',
-      'higiene': 'Higie./Farm.',
-      'farmacia': 'Higie./Farm.',
-      'higienefarmacia': 'Higie./Farm.',
-      'laticinios': 'Laticínios',
-      'outros': 'Outros'
-    };
+    const categoria = categoriaEncontrada[0];
+    const categoriaNome = categoria.nome;
     
-    const categoriaFinal = mapCategoria[categoria];
+    console.log(`✅ [STEP 3] Categoria encontrada: "${categoriaNome}"`);
+    console.log(`🔍 [STEP 4] Iniciando busca de produtos...`);
     
-    if (!categoriaFinal) {
-      console.log(`❌ [STEP 2] Categoria não identificada - retornando ajuda`);
-      return "❌ Categoria não identificada. Use: 'categoria [nome]'\n\nCategorias disponíveis:\n🥬 Hortifruti\n🥤 Bebidas\n🍞 Padaria\n🛒 Mercearia\n🥩 Carnes\n🧽 Limpeza\n🧴 Higiene/Farmácia\n🥛 Laticínios\n📦 Outros";
-    }
-    
-    console.log(`📝 [STEP 2] Categoria identificada: "${categoriaFinal}"`);
-    console.log(`🔍 [STEP 3] Iniciando busca no banco...`);
-    
-    // Buscar todos os produtos da categoria
+    // Buscar produtos da categoria usando ILIKE para case-insensitive
     const { data, error } = await supabase
       .from("estoque_app")
       .select("produto_nome, quantidade, unidade_medida, preco_unitario_ultimo")
       .eq("user_id", mensagem.usuario_id)
-      .eq("categoria", categoriaFinal)
+      .ilike("categoria", categoriaNome)
       .gt("quantidade", 0) // Apenas produtos com estoque
       .order("produto_nome");
     
-    console.log(`📋 [STEP 4] Resultado do banco:`);
+    console.log(`📋 [STEP 5] Resultado do banco:`);
     console.log(`📋 [RESULT] Data:`, data);
     console.log(`📋 [RESULT] Error:`, error);
     
     if (error) {
-      console.error('❌ [ERRO] Erro ao buscar categoria:', error);
+      console.error('❌ [ERRO] Erro ao buscar produtos da categoria:', error);
       return "❌ Erro ao consultar estoque da categoria. Tente novamente.";
     }
     
     if (!data || data.length === 0) {
-      console.log(`❌ [STEP 5] Nenhum produto encontrado na categoria`);
-      return `❌ Nenhum produto encontrado na categoria "${categoriaFinal}".`;
+      console.log(`❌ [STEP 6] Nenhum produto encontrado na categoria`);
+      return `❌ Nenhum produto encontrado na categoria "${categoriaNome}".`;
     }
     
-    console.log(`✅ [STEP 5] ${data.length} produtos encontrados - preparando resposta`);
+    console.log(`✅ [STEP 6] ${data.length} produtos encontrados - preparando resposta`);
     
     // Montar resposta organizada
-    let resposta = `📂 **${categoriaFinal.toUpperCase()}** (${data.length} item${data.length > 1 ? 'ns' : ''})\n\n`;
+    let resposta = `📂 **${categoriaNome.toUpperCase()}** (${data.length} item${data.length > 1 ? 'ns' : ''})\n\n`;
     
     let valorTotal = 0;
     
@@ -1290,7 +1301,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       resposta += `💰 **VALOR TOTAL**: R$ ${valorTotal.toFixed(2).replace('.', ',')}`;
     }
     
-    console.log(`📤 [STEP 6] Resposta final preparada`);
+    console.log(`📤 [STEP 7] Resposta final preparada`);
     return resposta;
     
   } catch (err) {
