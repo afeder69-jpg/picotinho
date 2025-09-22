@@ -250,11 +250,10 @@ const CadastroUsuario = () => {
         console.error('❌ Erro ao buscar coordenadas:', error);
       }
 
-      // Preparar dados do perfil
+      // Preparar dados do perfil (sem email - gerenciado pelo sistema de auth)
       const profileData = {
         user_id: user.id,
         nome_completo: profile.nome_completo,
-        email: profile.email,
         telefone: profile.telefone,
         bairro: profile.bairro,
         cidade: profile.cidade,
@@ -382,16 +381,20 @@ const CadastroUsuario = () => {
                 />
               </div>
 
-              {/* E-mail */}
+              {/* E-mail (somente leitura - vem do sistema de autenticação) */}
               <div className="space-y-2">
                 <Label htmlFor="email">E-mail</Label>
                 <Input
                   id="email"
                   type="email"
                   value={profile.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  placeholder="seu@email.com"
+                  disabled
+                  className="bg-muted"
+                  placeholder="Será preenchido automaticamente"
                 />
+                <p className="text-xs text-muted-foreground">
+                  O email é gerenciado pelo sistema de autenticação
+                </p>
               </div>
 
               {/* Telefone */}
