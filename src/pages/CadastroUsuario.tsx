@@ -17,7 +17,6 @@ import PicotinhoLogo from "@/components/PicotinhoLogo";
 
 interface UserProfile {
   nome_completo: string;
-  email: string;
   telefone: string;
   bairro: string;
   cidade: string;
@@ -34,7 +33,6 @@ const CadastroUsuario = () => {
   const [cepLoading, setCepLoading] = useState(false);
   const [profile, setProfile] = useState<UserProfile>({
     nome_completo: '',
-    email: '',
     telefone: '',
     bairro: '',
     cidade: '',
@@ -74,7 +72,6 @@ const CadastroUsuario = () => {
       if (profileData) {
         setProfile({
           nome_completo: profileData.nome_completo || '',
-          email: profileData.email || user.email || '',
           telefone: profileData.telefone || '',
           bairro: profileData.bairro || '',
           cidade: profileData.cidade || '',
@@ -82,12 +79,6 @@ const CadastroUsuario = () => {
           latitude: profileData.latitude,
           longitude: profileData.longitude
         });
-      } else {
-        // Se não existe perfil, usar email do auth
-        setProfile(prev => ({
-          ...prev,
-          email: user.email || ''
-        }));
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
@@ -381,19 +372,18 @@ const CadastroUsuario = () => {
                 />
               </div>
 
-              {/* E-mail (somente leitura - vem do sistema de autenticação) */}
+              {/* E-mail (informativo apenas) */}
               <div className="space-y-2">
                 <Label htmlFor="email">E-mail</Label>
                 <Input
                   id="email"
                   type="email"
-                  value={profile.email}
+                  value="Será preenchido automaticamente após o login"
                   disabled
-                  className="bg-muted"
-                  placeholder="Será preenchido automaticamente"
+                  className="bg-muted text-muted-foreground"
                 />
                 <p className="text-xs text-muted-foreground">
-                  O email é gerenciado pelo sistema de autenticação
+                  O email é gerenciado automaticamente pelo sistema de autenticação
                 </p>
               </div>
 
