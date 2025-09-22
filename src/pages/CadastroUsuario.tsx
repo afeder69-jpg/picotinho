@@ -197,13 +197,7 @@ const CadastroUsuario = () => {
         console.error('❌ Erro ao buscar coordenadas:', error);
       }
 
-      // Verificar se perfil já existe
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
+      // Preparar dados do perfil
       const profileData = {
         user_id: user.id,
         nome_completo: profile.nome_completo,
@@ -217,21 +211,42 @@ const CadastroUsuario = () => {
         updated_at: new Date().toISOString()
       };
 
+      console.log('💾 Tentando salvar perfil:', profileData);
+
+      // Verificar se perfil já existe
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      console.log('👤 Perfil existente encontrado:', existingProfile);
+
       if (existingProfile) {
         // Atualizar perfil existente
+        console.log('🔄 Atualizando perfil existente...');
         const { error } = await supabase
           .from('profiles')
           .update(profileData)
           .eq('user_id', user.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Erro ao atualizar perfil:', error);
+          throw error;
+        }
+        console.log('✅ Perfil atualizado com sucesso');
       } else {
         // Criar novo perfil
+        console.log('➕ Criando novo perfil...');
         const { error } = await supabase
           .from('profiles')
           .insert(profileData);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Erro ao criar perfil:', error);
+          throw error;
+        }
+        console.log('✅ Novo perfil criado com sucesso');
       }
 
       toast({
@@ -244,12 +259,20 @@ const CadastroUsuario = () => {
       // Voltar para configurações
       navigate('/configuracoes');
       
-    } catch (error) {
-      console.error('Erro ao salvar perfil:', error);
+    } catch (error: any) {
+      console.error('❌ Erro ao salvar perfil:', error);
+      console.error('❌ Detalhes do erro:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+        userProfile: profile
+      });
+      
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: "Não foi possível salvar seus dados.",
+        description: error?.message || "Não foi possível salvar seus dados. Verifique se todos os dados estão corretos.",
       });
     } finally {
       setLoading(false);
