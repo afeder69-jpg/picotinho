@@ -1175,18 +1175,41 @@ const EstoqueAtual = () => {
   };
 
   // Função para formatar data de forma segura
-  const formatDateSafe = (dateString: string) => {
+  const formatDateSafe = (dateString: string | null | undefined) => {
     try {
+      // Validar se a data não é nula ou indefinida
+      if (!dateString || dateString === 'null' || dateString === 'undefined') {
+        console.warn('Data nula ou indefinida recebida:', dateString);
+        return 'Sem data';
+      }
+
+      // Converter para string se não for
+      const dateStr = String(dateString);
+      
+      // Log para debug
+      console.log('Formatando data:', dateStr);
+
       // Se a data tem formato "DD/MM/YYYY HH:mm:ss-TZ", converter para ISO
-      if (dateString.includes('/') && dateString.includes(' ')) {
-        const [datePart, timePart] = dateString.split(' ');
+      if (dateStr.includes('/') && dateStr.includes(' ')) {
+        const [datePart, timePart] = dateStr.split(' ');
         const [day, month, year] = datePart.split('/');
         const [time] = timePart.split('-'); // Remove timezone
         const isoString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${time}`;
-        return new Date(isoString).toLocaleDateString('pt-BR');
+        const formattedDate = new Date(isoString).toLocaleDateString('pt-BR');
+        console.log('Data formatada (formato DD/MM/YYYY):', formattedDate);
+        return formattedDate;
       }
+      
       // Caso contrário, usar formato padrão
-      return new Date(dateString).toLocaleDateString('pt-BR');
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        console.warn('Data inválida:', dateStr);
+        return 'Data inválida';
+      }
+      
+      const formattedDate = date.toLocaleDateString('pt-BR');
+      console.log('Data formatada (formato padrão):', formattedDate);
+      return formattedDate;
     } catch (error) {
       console.error('Erro ao formatar data:', dateString, error);
       return 'Data inválida';
@@ -1664,22 +1687,34 @@ const EstoqueAtual = () => {
                                         {/* Linha 1: Última compra do próprio usuário */}
                                         {historicoProduto?.ultimaCompraUsuario ? (
                                           <div className="text-primary font-medium">
-                                            {formatDateSafe(historicoProduto.ultimaCompraUsuario.data)} - R$ {(historicoProduto.ultimaCompraUsuario.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.ultimaCompraUsuario.preco || 0) * quantidade).toFixed(2)}
+                                            {historicoProduto.ultimaCompraUsuario.data ? 
+                                              formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
+                                              'Sem data'
+                                            } - R$ {(historicoProduto.ultimaCompraUsuario.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.ultimaCompraUsuario.preco || 0) * quantidade).toFixed(2)}
                                           </div>
                                         ) : item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0 && (
                                           <div className="text-primary font-medium">
-                                            {formatDateSafe(item.updated_at)} - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
+                                            {item.updated_at ? 
+                                              formatDateSafe(item.updated_at) : 
+                                              'Sem data'
+                                            } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
                                           </div>
                                         )}
 
                                         {/* Linha 2: Menor preço na área */}
                                         {historicoProduto?.menorPrecoArea ? (
                                           <div className="text-muted-foreground">
-                                            {formatDateSafe(historicoProduto.menorPrecoArea.data)} - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
+                                            {historicoProduto.menorPrecoArea.data ? 
+                                              formatDateSafe(historicoProduto.menorPrecoArea.data) : 
+                                              'Sem data'
+                                            } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
                                           </div>
                                         ) : precoAtual && precoAtual.valor_unitario && (
                                           <div className="text-muted-foreground">
-                                            {formatDateSafe(precoAtual.data_atualizacao)} - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
+                                            {precoAtual.data_atualizacao ? 
+                                              formatDateSafe(precoAtual.data_atualizacao) : 
+                                              'Sem data'
+                                            } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
                                           </div>
                                         )}
 
