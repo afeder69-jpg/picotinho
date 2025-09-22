@@ -1617,6 +1617,30 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles_public_safe: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          id: string | null
+          nome: string | null
+          user_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       supermercados_publicos: {
         Row: {
           ativo: boolean | null
@@ -1889,6 +1913,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      safe_mask_personal_data: {
+        Args: {
+          cep_input?: string
+          email_input?: string
+          nome_completo_input?: string
+          telefone_input?: string
+        }
+        Returns: Json
+      }
       secure_profile_access: {
         Args: { target_user_id: string }
         Returns: boolean
@@ -1918,6 +1951,10 @@ export type Database = {
       }
       validar_telefone_whatsapp: {
         Args: { telefone_numero: string }
+        Returns: boolean
+      }
+      validate_profile_access_strict: {
+        Args: { operation_type: string; target_user_id: string }
         Returns: boolean
       }
       validate_security_setup: {
