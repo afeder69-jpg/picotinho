@@ -145,7 +145,7 @@ const EstoqueAtual = () => {
 
       console.log('🔄 Carregando preços atuais - TODOS os dados disponíveis');
 
-      // PRIMEIRO: Buscar TODOS os preços atuais diretamente do banco (para debug)
+      // BUSCAR TODOS OS PREÇOS DIRETAMENTE (incluindo de outros usuários)
       const { data: todosPrecos, error: errorTodos } = await supabase
         .from('precos_atuais')
         .select('*')
@@ -153,88 +153,38 @@ const EstoqueAtual = () => {
 
       if (errorTodos) {
         console.error('Erro ao buscar todos os preços:', errorTodos);
-      } else {
-        console.log('📊 TODOS OS PREÇOS NO BANCO:', todosPrecos?.length || 0);
-        console.log('📊 Primeiros 5 preços:', todosPrecos?.slice(0, 5));
-        
-        // Buscar especificamente os produtos que estão com problema
-        const produtosProblematicos = todosPrecos?.filter(p => 
-          p.produto_nome.toLowerCase().includes('creme') || 
-          p.produto_nome.toLowerCase().includes('chá') ||
-          p.produto_nome.toLowerCase().includes('cha')
-        );
-        console.log('🔍 PRODUTOS PROBLEMÁTICOS ENCONTRADOS:', produtosProblematicos);
-      }
-
-      // Buscar configuração de área de atuação do usuário
-      const { data: config } = await supabase
-        .from('configuracoes_usuario')
-        .select('raio_busca_km')
-        .eq('usuario_id', user.id)
-        .maybeSingle();
-
-      const raio = config?.raio_busca_km || 5.0;
-
-      // Buscar posição atual do usuário via GPS
-      const coordenadas = await obterCoordenadas();
-      console.log('🌍 Coordenadas do usuário obtidas:', coordenadas);
-      
-      // Chamar função dinâmica que calcula preços por área
-      const { data: precosAreaData, error: errorArea } = await supabase.functions.invoke('preco-atual-usuario', {
-        body: {
-          userId: user.id,
-          latitude: coordenadas.latitude,
-          longitude: coordenadas.longitude,
-          raioKm: raio
-        }
-      });
-
-      if (errorArea) {
-        console.error('Erro ao buscar preços por área:', errorArea);
-        // Fallback para TODOS os preços disponíveis
-        const precosFormatados = (todosPrecos || []).map((item: any) => ({
-          id: `fallback-${item.id}`,
-          produto_nome: item.produto_nome,
-          valor_unitario: item.valor_unitario,
-          data_atualizacao: item.data_atualizacao,
-          origem: 'area_dinamica', // Marcar como área dinâmica para funcionar
-          estabelecimento_nome: item.estabelecimento_nome
-        }));
-        console.log('⚠️ FALLBACK: Usando todos os preços do banco:', precosFormatados.length);
-        setPrecosAtuais(precosFormatados);
+        setPrecosAtuais([]);
         return;
       }
 
-      if (precosAreaData?.success && precosAreaData?.resultados) {
-        const precosFormatados = precosAreaData.resultados.map((item: any) => ({
-          id: `area-${item.produto_nome}`,
-          produto_nome: item.produto_nome,
-          valor_unitario: item.valor_unitario,
-          data_atualizacao: item.data_atualizacao,
-          origem: 'area_dinamica',
-          estabelecimento_nome: item.estabelecimento_nome
-        }));
+      console.log('📊 TODOS OS PREÇOS NO BANCO:', todosPrecos?.length || 0);
+      
+      // Buscar especificamente os produtos que estão com problema
+      const produtosProblematicos = todosPrecos?.filter(p => 
+        p.produto_nome.toLowerCase().includes('creme') || 
+        p.produto_nome.toLowerCase().includes('chá') ||
+        p.produto_nome.toLowerCase().includes('cha')
+      );
+      console.log('🔍 PRODUTOS PROBLEMÁTICOS ENCONTRADOS:', produtosProblematicos);
 
-        console.log(`✅ Preços dinâmicos carregados por área (${raio}km):`, precosFormatados);
-        console.log(`📊 Total de preços carregados:`, precosFormatados.length);
-        setPrecosAtuais(precosFormatados);
-      } else {
-        // Fallback para TODOS os preços se não há resultados na área
-        const precosFormatados = (todosPrecos || []).map((item: any) => ({
-          id: `fallback-${item.id}`,
-          produto_nome: item.produto_nome,
-          valor_unitario: item.valor_unitario,
-          data_atualizacao: item.data_atualizacao,
-          origem: 'area_dinamica', // Marcar como área dinâmica para funcionar
-          estabelecimento_nome: item.estabelecimento_nome
-        }));
-        console.log('⚠️ Sem resultados na área, usando todos os preços:', precosFormatados.length);
-        setPrecosAtuais(precosFormatados);
-      }
+      // Formatar TODOS os preços para área dinâmica
+      const precosFormatados = (todosPrecos || []).map((item: any) => ({
+        id: `geral-${item.id}`,
+        produto_nome: item.produto_nome,
+        valor_unitario: item.valor_unitario,
+        data_atualizacao: item.data_atualizacao,
+        origem: 'area_dinamica', // Marcar como área dinâmica para funcionar
+        estabelecimento_nome: item.estabelecimento_nome,
+        estabelecimento_cnpj: item.estabelecimento_cnpj
+      }));
+
+      console.log('✅ Preços carregados diretamente do banco:', precosFormatados.length);
+      console.log('📊 Primeiros 5 preços:', precosFormatados?.slice(0, 5));
+      setPrecosAtuais(precosFormatados);
+
     } catch (error) {
-      console.error('Erro ao carregar preços atuais dinâmicos:', error);
-      // Fallback para o método antigo
-      await loadPrecosAtuaisLegacy();
+      console.error('Erro ao carregar preços atuais:', error);
+      setPrecosAtuais([]);
     }
   };
 
