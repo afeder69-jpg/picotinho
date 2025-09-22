@@ -1876,6 +1876,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      log_profile_access: {
+        Args: { access_type: string; user_uuid: string }
+        Returns: undefined
+      }
       log_profile_access_secure: {
         Args: { operation_type: string; target_user_id: string }
         Returns: undefined
