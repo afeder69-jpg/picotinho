@@ -107,14 +107,10 @@ serve(async (req) => {
       });
 
       if (nota.compra_id) {
-        itensCompra.push({
-          compra_id: nota.compra_id,
-          produto_nome: item.descricao,
-          quantidade: item.quantidade,
-          preco_unitario: item.valor_unitario,
-          preco_total: item.quantidade * item.valor_unitario,
-          data_compra: item.data_compra,
-        });
+        // Primeiro precisamos verificar se existe um produto_id correspondente
+        // Como não temos produto_id direto, vamos pular a inserção em itens_compra_app por enquanto
+        // ou criar uma lógica para buscar/criar o produto_id
+        console.log(`⚠️ Pulando inserção em itens_compra_app - produto_id necessário para ${item.descricao}`);
       }
     }
 
@@ -122,11 +118,7 @@ serve(async (req) => {
     const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtosEstoque).select();
     if (insertErr) throw new Error(insertErr.message);
 
-    // Inserir em itens_compra_app (se houver compra vinculada)
-    if (itensCompra.length > 0) {
-      const { error: compraErr } = await supabase.from("itens_compra_app").insert(itensCompra);
-      if (compraErr) throw new Error(compraErr.message);
-    }
+    console.log(`✅ ${inserted.length} itens inseridos no estoque`);
 
     // Marcar nota como processada
     await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", notaId);
