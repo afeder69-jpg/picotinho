@@ -631,23 +631,22 @@ const EstoqueAtual = () => {
         const chave = item.produto_nome; // Usar nome exato como chave
         
         if (produtosMap.has(chave)) {
-          // Produto já existe, manter apenas o mais recente por created_at
+          // Produto já existe, somar quantidades e manter o preço mais recente
           const itemExistente = produtosMap.get(chave);
-          if (item.created_at > itemExistente.created_at) {
-            produtosMap.set(chave, {
-              ...item,
-              produto_nome_exibicao: item.produto_nome,
-              hash_agrupamento: item.produto_nome,
-              quantidade_total: item.quantidade,
-              preco_unitario_mais_recente: item.preco_unitario_ultimo,
-              ultima_atualizacao: item.updated_at,
-              ids_originais: [item.id],
-              nomes_originais: [item.produto_nome],
-              itens_originais: 1
-            });
-          }
+          produtosMap.set(chave, {
+            ...itemExistente,
+            quantidade_total: itemExistente.quantidade_total + item.quantidade,
+            quantidade: itemExistente.quantidade_total + item.quantidade, // Para compatibilidade
+            preco_unitario_mais_recente: item.preco_unitario_ultimo || itemExistente.preco_unitario_mais_recente,
+            preco_unitario_ultimo: item.preco_unitario_ultimo || itemExistente.preco_unitario_ultimo, // Para compatibilidade
+            ultima_atualizacao: item.updated_at > itemExistente.ultima_atualizacao ? item.updated_at : itemExistente.ultima_atualizacao,
+            updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at, // Para compatibilidade
+            ids_originais: [...itemExistente.ids_originais, item.id],
+            nomes_originais: [...itemExistente.nomes_originais, item.produto_nome],
+            itens_originais: itemExistente.itens_originais + 1
+          });
         } else {
-          // Produto novo, adicionar
+          // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)
           produtosMap.set(chave, {
             ...item,
             produto_nome_exibicao: item.produto_nome,
