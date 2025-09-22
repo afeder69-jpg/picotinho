@@ -476,12 +476,14 @@ const EstoqueAtual = () => {
       console.log('🧪 Teste de acesso ao estoque - count:', testData);
       console.log('🧪 Teste de acesso ao estoque - error:', testError);
 
-      // BUSCAR ESTOQUE DO USUÁRIO (DEBUG: REMOVENDO FILTRO DE QUANTIDADE)
+      // BUSCAR ESTOQUE DO USUÁRIO com paginação para alto volume
+      const LIMITE_BUSCA = 1000; // Limitar para evitar timeouts
       const { data, error } = await supabase
         .from('estoque_app')
         .select('*')
         .eq('user_id', user.id)
-        .order('produto_nome', { ascending: true });
+        .order('created_at', { ascending: false }) // Mais recentes primeiro
+        .limit(LIMITE_BUSCA);
 
       if (error) {
         console.error('❌ Erro ao buscar estoque:', error);

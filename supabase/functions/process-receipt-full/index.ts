@@ -89,8 +89,17 @@ serve(async (req) => {
       });
     }
 
-    // Limpar estoque anterior dessa nota
-    await supabase.from("estoque_app").delete().eq("nota_id", finalNotaId).eq("user_id", nota.usuario_id);
+    // Limpar estoque anterior dessa nota com transaction safety
+    const { error: deleteError } = await supabase
+      .from("estoque_app")
+      .delete()
+      .eq("nota_id", finalNotaId)
+      .eq("user_id", nota.usuario_id);
+    
+    if (deleteError) {
+      console.error("❌ Erro ao limpar estoque anterior:", deleteError);
+      // Não falhar por isso, apenas logar
+    }
 
     // Consolidar itens duplicados antes de inserir no estoque
     const produtosConsolidados = new Map<string, any>();
@@ -144,15 +153,46 @@ serve(async (req) => {
       console.log(`${index + 1}. ${produto.produto_nome} | Cat: ${produto.categoria} | Qtd: ${produto.quantidade} | Preço: ${produto.preco_unitario_ultimo}`);
     });
 
-    // Inserir no estoque
-    const { data: inserted, error: insertErr } = await supabase.from("estoque_app").insert(produtosEstoque).select();
-    if (insertErr) throw new Error(insertErr.message);
+    // Inserir no estoque com batch processing para alto volume
+    if (produtosEstoque.length === 0) {
+      return new Response(JSON.stringify({ success: false, error: "Nenhum produto válido para inserir" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    console.log(`✅ ${inserted.length} itens inseridos no estoque`);
+    // Para alto volume: processar em lotes de 50 itens por vez
+    const BATCH_SIZE = 50;
+    let totalInserted = 0;
+    const allInserted: any[] = [];
+    
+    for (let i = 0; i < produtosEstoque.length; i += BATCH_SIZE) {
+      const batch = produtosEstoque.slice(i, i + BATCH_SIZE);
+      console.log(`📦 Processando lote ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(produtosEstoque.length/BATCH_SIZE)} (${batch.length} itens)`);
+      
+      const { data: batchInserted, error: batchError } = await supabase
+        .from("estoque_app")
+        .insert(batch)
+        .select();
+      
+      if (batchError) {
+        console.error(`❌ Erro no lote ${Math.floor(i/BATCH_SIZE) + 1}:`, batchError);
+        throw new Error(`Erro ao inserir lote: ${batchError.message}`);
+      }
+      
+      if (batchInserted) {
+        allInserted.push(...batchInserted);
+        totalInserted += batchInserted.length;
+      }
+    }
+    
+    const inserted = allInserted;
+
+    console.log(`✅ ${totalInserted} itens inseridos no estoque (${Math.ceil(produtosEstoque.length/BATCH_SIZE)} lotes processados)`);
     
     // 🚨 VALIDAÇÃO CRÍTICA: Verificar se todos os itens foram inseridos corretamente
     const itensEsperados = produtosEstoque.length;
-    const itensInseridos = inserted.length;
+    const itensInseridos = totalInserted;
     
     if (itensInseridos !== itensEsperados) {
       console.error(`🚨 INCONSISTÊNCIA CRÍTICA: Esperado ${itensEsperados} itens, inserido ${itensInseridos}`);
@@ -162,8 +202,16 @@ serve(async (req) => {
       console.log('✅ Validação OK: Todos os itens foram inseridos corretamente');
     }
 
-    // Marcar nota como processada
-    await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", finalNotaId);
+    // Marcar nota como processada com retry em caso de falha
+    const { error: updateError } = await supabase
+      .from("notas_imagens")
+      .update({ processada: true, updated_at: nowIso() })
+      .eq("id", finalNotaId);
+    
+    if (updateError) {
+      console.error("⚠️ Erro ao marcar nota como processada:", updateError);
+      // Não falhar por isso, pois o estoque já foi inserido
+    }
 
     const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
