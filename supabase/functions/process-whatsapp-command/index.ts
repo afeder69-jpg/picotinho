@@ -1241,13 +1241,10 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       return ajuda;
     }
     
-    const categoria = categoriaEncontrada[0];
-    const categoriaNome = categoria.nome;
-    
     console.log(`✅ [STEP 3] Categoria encontrada: "${categoriaNome}"`);
     console.log(`🔍 [STEP 4] Iniciando busca de produtos...`);
     
-    // Buscar produtos da categoria usando ILIKE para case-insensitive
+    // Buscar produtos da categoria usando ILIKE e agrupando para evitar duplicatas
     const { data, error } = await supabase
       .from("estoque_app")
       .select("produto_nome, quantidade, unidade_medida, preco_unitario_ultimo")
@@ -1256,7 +1253,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       .gt("quantidade", 0) // Apenas produtos com estoque
       .order("produto_nome");
     
-    console.log(`📋 [STEP 5] Resultado do banco:`);
+    console.log(`📋 [STEP 5] Resultado do banco (antes da consolidação):`);
     console.log(`📋 [RESULT] Data:`, data);
     console.log(`📋 [RESULT] Error:`, error);
     
@@ -1270,14 +1267,47 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       return `❌ Nenhum produto encontrado na categoria "${categoriaNome}".`;
     }
     
-    console.log(`✅ [STEP 6] ${data.length} produtos encontrados - preparando resposta`);
+    // Consolidar produtos duplicados (mesmo nome)
+    const produtosConsolidados = new Map();
+    
+    data.forEach(produto => {
+      const chave = produto.produto_nome.trim().toUpperCase();
+      
+      if (produtosConsolidados.has(chave)) {
+        // Produto já existe - somar quantidade e manter preço mais recente
+        const existente = produtosConsolidados.get(chave);
+        existente.quantidade += produto.quantidade;
+        
+        // Manter o preço mais recente (maior valor, assumindo que é mais atual)
+        if (produto.preco_unitario_ultimo && produto.preco_unitario_ultimo > (existente.preco_unitario_ultimo || 0)) {
+          existente.preco_unitario_ultimo = produto.preco_unitario_ultimo;
+        }
+      } else {
+        // Produto novo - adicionar ao mapa
+        produtosConsolidados.set(chave, {
+          produto_nome: produto.produto_nome,
+          quantidade: produto.quantidade,
+          unidade_medida: produto.unidade_medida,
+          preco_unitario_ultimo: produto.preco_unitario_ultimo
+        });
+      }
+    });
+    
+    // Converter mapa de volta para array
+    const produtosFinais = Array.from(produtosConsolidados.values())
+      .sort((a, b) => a.produto_nome.localeCompare(b.produto_nome));
+    
+    console.log(`🔄 [STEP 6] Produtos consolidados: ${produtosFinais.length} (eram ${data.length})`);
+    console.log(`📋 [CONSOLIDATED] Data:`, produtosFinais);
+    
+    console.log(`✅ [STEP 7] ${produtosFinais.length} produtos únicos encontrados - preparando resposta`);
     
     // Montar resposta organizada
-    let resposta = `📂 **${categoriaNome.toUpperCase()}** (${data.length} item${data.length > 1 ? 'ns' : ''})\n\n`;
+    let resposta = `📂 **${categoriaNome.toUpperCase()}** (${produtosFinais.length} item${produtosFinais.length > 1 ? 'ns' : ''})\n\n`;
     
     let valorTotal = 0;
     
-    data.forEach((produto, index) => {
+    produtosFinais.forEach((produto, index) => {
       const produtoNomeLimpo = limparNomeProduto(produto.produto_nome);
       const quantidadeFormatada = formatarQuantidade(produto.quantidade, produto.unidade_medida);
       
@@ -1301,7 +1331,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       resposta += `💰 **VALOR TOTAL**: R$ ${valorTotal.toFixed(2).replace('.', ',')}`;
     }
     
-    console.log(`📤 [STEP 7] Resposta final preparada`);
+    console.log(`📤 [STEP 8] Resposta final preparada`);
     return resposta;
     
   } catch (err) {
