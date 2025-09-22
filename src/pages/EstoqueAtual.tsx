@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { formatarQuantidade } from '@/lib/utils';
 import PicotinhoLogo from '@/components/PicotinhoLogo';
+import { normalizarCategoria, categoriasEquivalentes, ordemCategorias, categoriasNormalizadas } from '@/lib/categorias';
 
 interface EstoqueItem {
   id?: string;
@@ -1274,41 +1275,18 @@ const EstoqueAtual = () => {
       quantidade: item.quantidade
     })));
 
-    // Mapa de categorias normalizadas
-    const categoriasNormalizadas = {
-      'hortifruti': 'HORTIFRUTI',
-      'bebidas': 'BEBIDAS', 
-      'mercearia': 'MERCEARIA',
-      'açougue': 'AÇOUGUE',
-      'carnes': 'CARNES', // Adicionar mapeamento para "Carnes"
-      'padaria': 'PADARIA',
-      'laticínios/frios': 'LATICÍNIOS/FRIOS',
-      'laticínios': 'LATICÍNIOS', // Adicionar mapeamento para "Laticínios" 
-      'limpeza': 'LIMPEZA',
-      'higiene/farmácia': 'HIGIENE/FARMÁCIA',
-      'congelados': 'CONGELADOS',
-      'pet': 'PET',
-      'outros': 'OUTROS'
-    };
-
-    // Ordem das categorias para exibição
-    const ordemCategorias = [
-      'hortifruti', 'bebidas', 'mercearia', 'açougue', 'carnes', 'padaria', 
-      'laticínios/frios', 'laticínios', 'limpeza', 'higiene/farmácia', 'congelados', 'pet', 'outros'
-    ];
+    // Usar as funções utilitárias para categorias (case-insensitive)
 
     // Agrupar por categoria usando a ordem definida
     const grouped: Record<string, EstoqueItem[]> = {};
     
     ordemCategorias.forEach(categoria => {
-      const produtosDaCategoria = items.filter(item => {
-        // Comparar em minúsculas para fazer match
-        const categoriaLowerCase = categoria.toLowerCase();
-        const itemCategoriaLowerCase = item.categoria?.toLowerCase();
-        return itemCategoriaLowerCase === categoriaLowerCase;
-      });
+      const produtosDaCategoria = items.filter(item => 
+        categoriasEquivalentes(item.categoria, categoria)
+      );
+      
       if (produtosDaCategoria.length > 0) {
-        const categoriaNormalizada = categoriasNormalizadas[categoria as keyof typeof categoriasNormalizadas];
+        const categoriaNormalizada = normalizarCategoria(categoria);
         grouped[categoriaNormalizada] = produtosDaCategoria;
         console.log(`🏷️ Categoria ${categoriaNormalizada}: ${produtosDaCategoria.length} produtos`);
       }
