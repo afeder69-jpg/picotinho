@@ -1681,11 +1681,13 @@ const EstoqueAtual = () => {
                        const precoParaExibir = precoAtual?.valor_unitario || item.preco_unitario_ultimo;
                        const quantidade = parseFloat(item.quantidade.toString());
                        
-                         return (
-                           <div 
-                             key={item.id} 
-                             className="flex items-center py-2 border-b border-border last:border-0"
-                           >
+                          return (
+                            <div 
+                              key={item.id} 
+                              className={`flex items-center py-2 border-b border-border last:border-0 ${
+                                quantidade === 0 ? 'bg-red-50 border-red-200' : ''
+                              }`}
+                            >
                              <div className="flex-1 overflow-hidden relative">
                                    <h3 className="text-xs font-medium text-foreground leading-tight relative">
                                      {item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome}
@@ -1751,10 +1753,12 @@ const EstoqueAtual = () => {
                                 </div>
                            </div>
                            
-                              <div className="text-right flex-shrink-0 ml-2">
-                                <div className="text-xs font-medium text-foreground">
-                                  {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
-                                </div>
+                               <div className="text-right flex-shrink-0 ml-2">
+                                 <div className={`text-xs font-medium ${
+                                   quantidade === 0 ? 'text-red-600' : 'text-foreground'
+                                 }`}>
+                                   {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
+                                 </div>
                                 {/* Texto removido conforme solicitação do usuário */}
                           </div>
                        </div>
