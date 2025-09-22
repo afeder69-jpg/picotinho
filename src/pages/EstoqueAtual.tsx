@@ -124,7 +124,10 @@ const EstoqueAtual = () => {
   useEffect(() => {
     if (estoque.length > 0) {
       console.log('🔄 useEffect: Chamando loadHistoricoPrecos com estoque.length:', estoque.length);
-      loadHistoricoPrecos();
+      // Timeout para evitar conflito com outros carregamentos
+      setTimeout(() => {
+        loadHistoricoPrecos();
+      }, 1000);
     }
   }, [estoque]);
 
@@ -1688,42 +1691,20 @@ const EstoqueAtual = () => {
 
                                     return (
                                       <>
-                                        {/* Linha 1: Última compra do próprio usuário */}
-                                        {(() => {
-                                          // Debug logging
-                                          console.log(`🔍 RENDERIZAÇÃO PRODUTO: "${nomeExibicao}"`);
-                                          console.log(`📊 historicoProduto:`, historicoProduto);
-                                          console.log(`💰 preco_unitario_ultimo:`, item.preco_unitario_ultimo);
-                                          
-                                          const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
-                                          console.log(`📅 dataRealCompra encontrada:`, dataRealCompra);
-                                          
-                                          // Prioridade: historico > dados do item
-                                          if (historicoProduto?.ultimaCompraUsuario) {
-                                            return (
-                                              <div className="text-primary font-medium">
-                                                {historicoProduto.ultimaCompraUsuario.data ? 
-                                                  formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
-                                                  'Sem data'
-                                                } - R$ {(historicoProduto.ultimaCompraUsuario.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.ultimaCompraUsuario.preco || 0) * quantidade).toFixed(2)}
-                                              </div>
-                                            );
-                                          } 
-                                          
-                                          // Se há preço mas não histórico, usar data da nota fiscal
-                                          if (item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
-                                            return (
-                                              <div className="text-primary font-medium">
-                                                {dataRealCompra ? 
-                                                  formatDateSafe(dataRealCompra) : 
-                                                  'Sem data'
-                                                } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
-                                              </div>
-                                            );
-                                          }
-                                          
-                                          return null;
-                                        })()}
+                                        {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
+                                        <div className="text-primary font-medium">
+                                          {(() => {
+                                            // Prioridade: dados do estoque SEMPRE primeiro
+                                            const precoExibir = item.preco_unitario_ultimo || 0;
+                                            const totalExibir = (precoExibir * quantidade).toFixed(2);
+                                            
+                                            // Buscar data da nota fiscal
+                                            const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
+                                            const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
+                                            
+                                            return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
+                                          })()}
+                                        </div>
 
                                         {/* Linha 2: Menor preço na área */}
                                         {historicoProduto?.menorPrecoArea ? (
@@ -1742,10 +1723,7 @@ const EstoqueAtual = () => {
                                           </div>
                                         )}
 
-                                        {/* Fallback: mostrar aviso se não há dados */}
-                                        {!historicoProduto && (!item.preco_unitario_ultimo || item.preco_unitario_ultimo <= 0) && (
-                                          <div className="text-red-600">Sem histórico de preços</div>
-                                        )}
+                                        {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
                                       </>
                                     );
                                   })()}
