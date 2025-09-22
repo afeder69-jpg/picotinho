@@ -24,22 +24,25 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json().catch(() => ({}));
-    const { notaId } = body || {};
+    const { notaId, imagemId } = body || {};
+    
+    // Aceitar tanto notaId quanto imagemId para compatibilidade
+    const finalNotaId = notaId || imagemId;
 
-    if (!notaId) {
+    if (!finalNotaId) {
       return new Response(JSON.stringify({ success: false, error: "ID da nota é obrigatório" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`🏁 process-receipt-full START - nota_id=${notaId}`);
+    console.log(`🏁 process-receipt-full START - nota_id=${finalNotaId}`);
 
     // Buscar nota
     const { data: nota, error: notaError } = await supabase
       .from("notas_imagens")
       .select("id, usuario_id, compra_id, dados_extraidos")
-      .eq("id", notaId)
+      .eq("id", finalNotaId)
       .single();
 
     if (notaError || !nota) {
@@ -55,7 +58,7 @@ serve(async (req) => {
     const { data: itensNota, error: itensError } = await supabase
       .from("itens_nota")
       .select("descricao, categoria, quantidade, valor_unitario, unidade, data_compra")
-      .eq("nota_id", notaId);
+      .eq("nota_id", finalNotaId);
 
     if (itensNota && itensNota.length > 0) {
       itens = itensNota;
@@ -87,7 +90,7 @@ serve(async (req) => {
     }
 
     // Limpar estoque anterior dessa nota
-    await supabase.from("estoque_app").delete().eq("nota_id", notaId).eq("user_id", nota.usuario_id);
+    await supabase.from("estoque_app").delete().eq("nota_id", finalNotaId).eq("user_id", nota.usuario_id);
 
     // Consolidar itens duplicados antes de inserir no estoque
     const produtosConsolidados = new Map<string, any>();
@@ -129,14 +132,14 @@ serve(async (req) => {
     console.log(`✅ ${inserted.length} itens inseridos no estoque`);
 
     // Marcar nota como processada
-    await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", notaId);
+    await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", finalNotaId);
 
     const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
     return new Response(
       JSON.stringify({
         success: true,
-        nota_id: notaId,
+        nota_id: finalNotaId,
         itens_inseridos: inserted.length,
         total_financeiro: totalFinanceiro.toFixed(2),
       }),
