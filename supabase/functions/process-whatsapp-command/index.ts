@@ -467,14 +467,17 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     novaQuantidade = Math.round(novaQuantidade * 1000) / 1000;
     
     if (novaQuantidade <= 0) {
-      // Remover produto do estoque se ficou zerado
+      // Zerar produto do estoque (não deletar) - manter consistência com o app
       await supabase
         .from('estoque_app')
-        .delete()
+        .update({
+          quantidade: 0,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', estoque.id);
         
       const baixadoFormatado = formatarQuantidade(quantidade, unidadeFinal || estoque.unidade_medida);
-      return `✅ Produto retirado do estoque!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: 0 (produto removido)`;
+      return `✅ Produto retirado do estoque!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: 0 (produto zerado)`;
     } else {
       // Atualizar quantidade
       await supabase
