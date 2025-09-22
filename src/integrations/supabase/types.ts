@@ -1617,26 +1617,26 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles_public_safe: {
+      profiles_secure_view: {
         Row: {
-          avatar_url: string | null
+          avatar_url_safe: string | null
           created_at: string | null
           id: string | null
-          nome: string | null
+          nome_display: string | null
           user_id: string | null
         }
         Insert: {
-          avatar_url?: string | null
+          avatar_url_safe?: never
           created_at?: string | null
           id?: string | null
-          nome?: string | null
+          nome_display?: never
           user_id?: string | null
         }
         Update: {
-          avatar_url?: string | null
+          avatar_url_safe?: never
           created_at?: string | null
           id?: string | null
-          nome?: string | null
+          nome_display?: never
           user_id?: string | null
         }
         Relationships: []
@@ -1691,6 +1691,10 @@ export type Database = {
       }
     }
     Functions: {
+      anonymize_user_profile: {
+        Args: { profile_user_id: string }
+        Returns: boolean
+      }
       cleanup_old_ingestion_jobs: {
         Args: { days_old?: number }
         Returns: number
@@ -1857,8 +1861,8 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      log_profile_access: {
-        Args: { action_type: string; target_user_id: string }
+      log_profile_access_secure: {
+        Args: { operation_type: string; target_user_id: string }
         Returns: undefined
       }
       log_security_violation: {
