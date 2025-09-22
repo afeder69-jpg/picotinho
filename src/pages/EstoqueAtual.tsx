@@ -80,6 +80,10 @@ const EstoqueAtual = () => {
   const [sugestaoNome, setSugestaoNome] = useState<string>('');
   const [mostrarSugestao, setMostrarSugestao] = useState(false);
   const [diagnosticando, setDiagnosticando] = useState(false);
+  
+  // Estados para modal de confirmação de exclusão
+  const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
+  const [itemParaExcluir, setItemParaExcluir] = useState<EstoqueItem | null>(null);
 
   // Função para obter coordenadas do usuário via GPS
   const obterCoordenadas = (): Promise<{ latitude: number; longitude: number }> => {
@@ -1170,6 +1174,46 @@ const EstoqueAtual = () => {
     }
   };
 
+  // Funções para exclusão de produto
+  const abrirModalExclusao = (item: EstoqueItem) => {
+    setItemParaExcluir(item);
+    setModalExclusaoAberto(true);
+  };
+
+  const fecharModalExclusao = () => {
+    setModalExclusaoAberto(false);
+    setItemParaExcluir(null);
+  };
+
+  const excluirProdutoDefinitivamente = async () => {
+    if (!itemParaExcluir) return;
+
+    try {
+      const { error } = await supabase
+        .from('estoque_app')
+        .delete()
+        .eq('id', itemParaExcluir.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Produto excluído",
+        description: `${itemParaExcluir.produto_nome} foi removido definitivamente do estoque.`,
+      });
+
+      fecharModalExclusao();
+      fecharModalEdicao();
+      loadEstoque();
+    } catch (error) {
+      console.error('Erro ao excluir produto:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível excluir o produto.",
+      });
+    }
+  };
+
   // Funções utilitárias
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('pt-BR', {
@@ -1784,6 +1828,19 @@ const EstoqueAtual = () => {
                 }
               </div>
               
+              {/* Botão Excluir Item */}
+              <div className="mt-4 pt-4 border-t border-border">
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => abrirModalExclusao(itemEditando)}
+                  className="w-full text-xs h-8"
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Excluir Item
+                </Button>
+              </div>
+              
               <div className="flex gap-2 mt-6">
                 <Button variant="outline" onClick={fecharModalEdicao} className="flex-1">
                   Cancelar
@@ -1796,6 +1853,46 @@ const EstoqueAtual = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <AlertDialog open={modalExclusaoAberto} onOpenChange={setModalExclusaoAberto}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              {itemParaExcluir && (
+                <>
+                  <div className="font-medium text-foreground">
+                    📦 {itemParaExcluir.produto_nome}
+                  </div>
+                  <div className="text-sm">
+                    {parseFloat(itemParaExcluir.quantidade.toString()) === 0 ? (
+                      <span>
+                        👉 Este item será definitivamente excluído do estoque. Você confirma a exclusão?
+                      </span>
+                    ) : (
+                      <span>
+                        👉 Este item ainda possui produtos em estoque. Ao excluí-lo, o saldo atual será zerado e o item será removido definitivamente. Você confirma a exclusão?
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={fecharModalExclusao}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={excluirProdutoDefinitivamente}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal de Inserir Produto */}
       <Dialog open={modalInserirAberto} onOpenChange={fecharModalInserir}>
