@@ -41,8 +41,22 @@ const CadastroUsuario = () => {
     cep: ''
   });
 
-  // Carregar perfil atual do usuário
+  // Detectar se é mobile e carregar perfil
   useEffect(() => {
+    // Detectar dispositivo móvel
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const screenWidth = window.screen.width;
+    const viewport = window.innerWidth;
+    
+    console.log('📱 Detecção de dispositivo:', {
+      userAgent: navigator.userAgent,
+      isMobile,
+      screenWidth,
+      viewport,
+      platform: navigator.platform,
+      maxTouchPoints: navigator.maxTouchPoints
+    });
+    
     carregarPerfil();
   }, []);
 
@@ -90,11 +104,23 @@ const CadastroUsuario = () => {
     
     setCepLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('geocodificar-endereco', {
+      console.log('🌐 Chamando geocodificação para CEP:', cep);
+      
+      // Timeout específico para mobile (conexões mais lentas)
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const timeoutMs = isMobile ? 15000 : 10000; // 15s para mobile, 10s para desktop
+      
+      const geocodingPromise = supabase.functions.invoke('geocodificar-endereco', {
         body: {
           cep: cep.replace(/\D/g, '') // Usar apenas o CEP para geocodificação precisa
         }
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout na geocodificação')), timeoutMs)
+      );
+      
+      const { data, error } = await Promise.race([geocodingPromise, timeoutPromise]) as any;
 
       console.log('🔍 Resposta buscarCoordenadas:', { data, error });
 
@@ -142,12 +168,17 @@ const CadastroUsuario = () => {
   };
 
   const handleCepChange = (value: string) => {
+    console.log('📍 CEP input change:', { value, length: value.length });
+    
     // Formatar CEP automaticamente
     const formatted = value.replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
+    console.log('📍 CEP formatado:', { formatted, length: formatted.length });
+    
     setProfile(prev => ({ ...prev, cep: formatted }));
     
     // Buscar coordenadas quando CEP estiver completo
     if (formatted.length === 9) {
+      console.log('📍 CEP completo, buscando coordenadas...');
       buscarCoordenadas(formatted);
     }
   };
@@ -163,9 +194,31 @@ const CadastroUsuario = () => {
     }
 
     setLoading(true);
+    
+    // Log específico para mobile
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    console.log('📱 Iniciando salvamento mobile:', {
+      isMobile,
+      connectionType: (navigator as any).connection?.effectiveType,
+      onLine: navigator.onLine,
+      profile: profile
+    });
+    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      console.log('🔐 Verificando autenticação...');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('❌ Erro de autenticação:', authError);
+        throw new Error(`Erro de autenticação: ${authError.message}`);
+      }
+      
+      if (!user) {
+        console.error('❌ Usuário não encontrado');
+        throw new Error('Usuário não autenticado. Faça login novamente.');
+      }
+      
+      console.log('✅ Usuário autenticado:', user.id);
 
       // SEMPRE buscar coordenadas atualizadas baseadas no CEP
       console.log('🔍 Buscando coordenadas para CEP:', profile.cep);
