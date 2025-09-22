@@ -1664,22 +1664,22 @@ const EstoqueAtual = () => {
                                         {/* Linha 1: Última compra do próprio usuário */}
                                         {historicoProduto?.ultimaCompraUsuario ? (
                                           <div className="text-primary font-medium">
-                                            {formatDateSafe(historicoProduto.ultimaCompraUsuario.data)} - R$ {historicoProduto.ultimaCompraUsuario.preco.toFixed(2)}/{unidadeFormatada} - T: R$ {(historicoProduto.ultimaCompraUsuario.preco * quantidade).toFixed(2)}
+                                            {formatDateSafe(historicoProduto.ultimaCompraUsuario.data)} - R$ {(historicoProduto.ultimaCompraUsuario.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.ultimaCompraUsuario.preco || 0) * quantidade).toFixed(2)}
                                           </div>
                                         ) : item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0 && (
                                           <div className="text-primary font-medium">
-                                            {formatDateSafe(item.updated_at)} - R$ {item.preco_unitario_ultimo.toFixed(2)}/{unidadeFormatada} - T: R$ {(item.preco_unitario_ultimo * quantidade).toFixed(2)}
+                                            {formatDateSafe(item.updated_at)} - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
                                           </div>
                                         )}
 
                                         {/* Linha 2: Menor preço na área */}
                                         {historicoProduto?.menorPrecoArea ? (
                                           <div className="text-muted-foreground">
-                                            {formatDateSafe(historicoProduto.menorPrecoArea.data)} - R$ {historicoProduto.menorPrecoArea.preco.toFixed(2)}/{unidadeFormatada} - T: R$ {(historicoProduto.menorPrecoArea.preco * quantidade).toFixed(2)}
+                                            {formatDateSafe(historicoProduto.menorPrecoArea.data)} - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
                                           </div>
                                         ) : precoAtual && precoAtual.valor_unitario && (
                                           <div className="text-muted-foreground">
-                                            {formatDateSafe(precoAtual.data_atualizacao)} - R$ {precoAtual.valor_unitario.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoAtual.valor_unitario * quantidade).toFixed(2)}
+                                            {formatDateSafe(precoAtual.data_atualizacao)} - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
                                           </div>
                                         )}
 
