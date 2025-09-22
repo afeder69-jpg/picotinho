@@ -1126,35 +1126,16 @@ const EstoqueAtual = () => {
   };
 
   const groupByCategory = (items: EstoqueItem[]) => {
-    // Consolidar produtos por hash normalizado (evita duplicatas como "ABACATE" e "ABACATE KG GRANEL")
-    const consolidatedItems = items.reduce((consolidated, item) => {
-      // Usar produto_hash_normalizado se disponível, caso contrário usar produto_nome como fallback
-      const chaveUnificacao = item.produto_hash_normalizado || item.produto_nome;
-      const nomeExibicao = item.produto_nome_normalizado || item.produto_nome;
-      
-      const existingIndex = consolidated.findIndex(u => 
-        (u.produto_hash_normalizado && item.produto_hash_normalizado && u.produto_hash_normalizado === item.produto_hash_normalizado) ||
-        (!u.produto_hash_normalizado && !item.produto_hash_normalizado && u.produto_nome === item.produto_nome)
-      );
-      
-      if (existingIndex >= 0) {
-        // Se encontrou produto com mesmo hash, somar quantidades e manter o mais recente
-        const existing = consolidated[existingIndex];
-        consolidated[existingIndex] = {
-          ...existing,
-          quantidade: parseFloat(existing.quantidade.toString()) + parseFloat(item.quantidade.toString()),
-          updated_at: new Date(item.updated_at) > new Date(existing.updated_at) ? item.updated_at : existing.updated_at,
-          produto_nome: nomeExibicao, // Usar nome normalizado para exibição
-          preco_unitario_ultimo: new Date(item.updated_at) > new Date(existing.updated_at) ? item.preco_unitario_ultimo : existing.preco_unitario_ultimo
-        };
-      } else {
-        consolidated.push({
-          ...item,
-          produto_nome: nomeExibicao // Usar nome normalizado para exibição
-        });
-      }
-      return consolidated;
-    }, [] as EstoqueItem[]);
+    // 🚨 CORREÇÃO CRÍTICA: NÃO CONSOLIDAR AQUI!
+    // A consolidação já foi feita corretamente em loadEstoque()
+    // Apenas agrupar por categoria sem perder produtos
+    
+    console.log('🏷️ groupByCategory - Itens recebidos:', items.length);
+    console.log('🏷️ Primeiros 3 produtos para categorização:', items.slice(0, 3).map(item => ({
+      nome: item.produto_nome,
+      categoria: item.categoria,
+      quantidade: item.quantidade
+    })));
 
     // Mapa de categorias normalizadas
     const categoriasNormalizadas = {
@@ -1162,8 +1143,10 @@ const EstoqueAtual = () => {
       'bebidas': 'BEBIDAS', 
       'mercearia': 'MERCEARIA',
       'açougue': 'AÇOUGUE',
+      'carnes': 'CARNES', // Adicionar mapeamento para "Carnes"
       'padaria': 'PADARIA',
       'laticínios/frios': 'LATICÍNIOS/FRIOS',
+      'laticínios': 'LATICÍNIOS', // Adicionar mapeamento para "Laticínios" 
       'limpeza': 'LIMPEZA',
       'higiene/farmácia': 'HIGIENE/FARMÁCIA',
       'congelados': 'CONGELADOS',
@@ -1173,24 +1156,29 @@ const EstoqueAtual = () => {
 
     // Ordem das categorias para exibição
     const ordemCategorias = [
-      'hortifruti', 'bebidas', 'mercearia', 'açougue', 'padaria', 
-      'laticínios/frios', 'limpeza', 'higiene/farmácia', 'congelados', 'pet', 'outros'
+      'hortifruti', 'bebidas', 'mercearia', 'açougue', 'carnes', 'padaria', 
+      'laticínios/frios', 'laticínios', 'limpeza', 'higiene/farmácia', 'congelados', 'pet', 'outros'
     ];
 
     // Agrupar por categoria usando a ordem definida
     const grouped: Record<string, EstoqueItem[]> = {};
     
     ordemCategorias.forEach(categoria => {
-      const produtosDaCategoria = consolidatedItems.filter(item => {
-        // Comparar em maiúsculas para fazer match
-        const categoriaUpperCase = categoria.toUpperCase();
-        const itemCategoriaUpperCase = item.categoria?.toUpperCase();
-        return itemCategoriaUpperCase === categoriaUpperCase;
+      const produtosDaCategoria = items.filter(item => {
+        // Comparar em minúsculas para fazer match
+        const categoriaLowerCase = categoria.toLowerCase();
+        const itemCategoriaLowerCase = item.categoria?.toLowerCase();
+        return itemCategoriaLowerCase === categoriaLowerCase;
       });
       if (produtosDaCategoria.length > 0) {
-        grouped[categoriasNormalizadas[categoria as keyof typeof categoriasNormalizadas]] = produtosDaCategoria;
+        const categoriaNormalizada = categoriasNormalizadas[categoria as keyof typeof categoriasNormalizadas];
+        grouped[categoriaNormalizada] = produtosDaCategoria;
+        console.log(`🏷️ Categoria ${categoriaNormalizada}: ${produtosDaCategoria.length} produtos`);
       }
     });
+    
+    console.log('🏷️ Total de categorias criadas:', Object.keys(grouped).length);
+    console.log('🏷️ Total de produtos após agrupamento:', Object.values(grouped).reduce((total, itens) => total + itens.length, 0));
 
     return grouped;
   };
