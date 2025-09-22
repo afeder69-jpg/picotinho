@@ -123,6 +123,7 @@ const EstoqueAtual = () => {
   // Carregar histórico de preços quando o estoque for carregado
   useEffect(() => {
     if (estoque.length > 0) {
+      console.log('🔄 useEffect: Chamando loadHistoricoPrecos com estoque.length:', estoque.length);
       loadHistoricoPrecos();
     }
   }, [estoque]);
@@ -238,6 +239,7 @@ const EstoqueAtual = () => {
             }
           });
 
+          console.log('✅ Setando histórico de preços:', historicoMap);
           setHistoricoPrecos(historicoMap);
           return;
         } else {
@@ -276,7 +278,7 @@ const EstoqueAtual = () => {
           };
         });
 
-        console.log('✅ Histórico carregado via fallback:', historicoMap);
+        console.log('⚠️ FALLBACK: Histórico carregado via fallback:', historicoMap);
         setHistoricoPrecos(historicoMap);
       }
     } catch (error) {
@@ -408,7 +410,8 @@ const EstoqueAtual = () => {
         }
       });
 
-      console.log('📅 Datas das notas fiscais carregadas:', datasMap);
+      console.log('📅 LOAD DATAS: Datas das notas fiscais carregadas:', datasMap);
+      console.log('📅 LOAD DATAS: Total de produtos com data:', Object.keys(datasMap).length);
       setDatasNotasFiscais(datasMap);
     } catch (error) {
       console.error('Erro ao carregar datas das notas fiscais:', error);
@@ -435,12 +438,13 @@ const EstoqueAtual = () => {
 
   // Função para encontrar a data da nota fiscal de um produto
   const encontrarDataNotaFiscal = (nomeProduto: string) => {
-    console.log(`🔍 Buscando data para produto: "${nomeProduto}"`);
-    console.log(`📅 Datas disponíveis:`, Object.keys(datasNotasFiscais));
+    console.log(`🔍 BUSCA DATA: produto="${nomeProduto}"`);
+    console.log(`📅 BUSCA DATA: datasNotasFiscais disponíveis:`, Object.keys(datasNotasFiscais));
+    console.log(`📅 BUSCA DATA: objeto completo:`, datasNotasFiscais);
     
     // Buscar correspondência exata primeiro
     if (datasNotasFiscais[nomeProduto]) {
-      console.log(`✅ Encontrou data exata para "${nomeProduto}": ${datasNotasFiscais[nomeProduto]}`);
+      console.log(`✅ BUSCA DATA: Encontrou data exata para "${nomeProduto}": ${datasNotasFiscais[nomeProduto]}`);
       return datasNotasFiscais[nomeProduto];
     }
     
@@ -1685,24 +1689,41 @@ const EstoqueAtual = () => {
                                     return (
                                       <>
                                         {/* Linha 1: Última compra do próprio usuário */}
-                                        {historicoProduto?.ultimaCompraUsuario ? (
-                                          <div className="text-primary font-medium">
-                                            {historicoProduto.ultimaCompraUsuario.data ? 
-                                              formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
-                                              'Sem data'
-                                            } - R$ {(historicoProduto.ultimaCompraUsuario.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.ultimaCompraUsuario.preco || 0) * quantidade).toFixed(2)}
-                                          </div>
-                                        ) : item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0 && (
-                                          <div className="text-primary font-medium">
-                                            {(() => {
-                                              // Usar a data real da nota fiscal, não a data de atualização do registro
-                                              const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
-                                              return dataRealCompra ? 
-                                                formatDateSafe(dataRealCompra) : 
-                                                'Sem data';
-                                            })()} - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
-                                          </div>
-                                        )}
+                                        {(() => {
+                                          // Debug logging
+                                          console.log(`🔍 RENDERIZAÇÃO PRODUTO: "${nomeExibicao}"`);
+                                          console.log(`📊 historicoProduto:`, historicoProduto);
+                                          console.log(`💰 preco_unitario_ultimo:`, item.preco_unitario_ultimo);
+                                          
+                                          const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
+                                          console.log(`📅 dataRealCompra encontrada:`, dataRealCompra);
+                                          
+                                          // Prioridade: historico > dados do item
+                                          if (historicoProduto?.ultimaCompraUsuario) {
+                                            return (
+                                              <div className="text-primary font-medium">
+                                                {historicoProduto.ultimaCompraUsuario.data ? 
+                                                  formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
+                                                  'Sem data'
+                                                } - R$ {(historicoProduto.ultimaCompraUsuario.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.ultimaCompraUsuario.preco || 0) * quantidade).toFixed(2)}
+                                              </div>
+                                            );
+                                          } 
+                                          
+                                          // Se há preço mas não histórico, usar data da nota fiscal
+                                          if (item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
+                                            return (
+                                              <div className="text-primary font-medium">
+                                                {dataRealCompra ? 
+                                                  formatDateSafe(dataRealCompra) : 
+                                                  'Sem data'
+                                                } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
+                                              </div>
+                                            );
+                                          }
+                                          
+                                          return null;
+                                        })()}
 
                                         {/* Linha 2: Menor preço na área */}
                                         {historicoProduto?.menorPrecoArea ? (
