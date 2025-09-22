@@ -59,15 +59,28 @@ serve(async (req) => {
         if (!dados?.itens) continue;
 
         const dataCompra = dados.compra?.data_emissao || 
-                          dados.compra?.data_compra ||
-                          dados.dataCompra ||
-                          dados.data_emissao;
+                           dados.compra?.data_compra ||
+                           dados.dataCompra ||
+                           dados.data_emissao;
+
+        if (!dataCompra) continue;
+
+        // Validar data antes de usar
+        let dataValida;
+        try {
+          dataValida = new Date(dataCompra);
+          if (isNaN(dataValida.getTime())) {
+            continue;
+          }
+        } catch (error) {
+          continue;
+        }
 
         for (const item of dados.itens) {
           const nomeItem = (item.descricao || item.nome || '').toLowerCase().trim();
           
           if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
-            if (!ultimaCompraDoUsuario || new Date(dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
+            if (!ultimaCompraDoUsuario || dataValida > new Date(ultimaCompraDoUsuario.data)) {
               ultimaCompraDoUsuario = {
                 data: dataCompra,
                 preco: parseFloat(item.valor_unitario || 0),
@@ -124,7 +137,20 @@ serve(async (req) => {
 
             if (!dataCompra) continue;
 
-            const dataFormatada = new Date(dataCompra).toISOString().split('T')[0];
+            // Validar e normalizar a data antes de usar
+            let dataValida;
+            try {
+              dataValida = new Date(dataCompra);
+              if (isNaN(dataValida.getTime())) {
+                console.warn(`Data inválida encontrada: ${dataCompra}`);
+                continue;
+              }
+            } catch (error) {
+              console.warn(`Erro ao processar data: ${dataCompra}`, error);
+              continue;
+            }
+
+            const dataFormatada = dataValida.toISOString().split('T')[0];
 
             for (const item of dados.itens) {
               const nomeItem = (item.descricao || item.nome || '').toLowerCase().trim();
