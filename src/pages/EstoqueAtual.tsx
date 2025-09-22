@@ -508,9 +508,9 @@ const EstoqueAtual = () => {
       // O banco já gerencia produtos únicos corretamente - não devemos consolidar manualmente
       // Isso estava causando perda de produtos na visualização (22 no banco vs 17 na tela)
       
-      // Filtrar apenas produtos com quantidade > 0 e mapear para o tipo correto
+      // 🚨 CORREÇÃO CRÍTICA: NÃO FILTRAR por quantidade - mostrar TODOS os itens
+      // O problema estava aqui: alguns produtos estavam sendo filtrados incorretamente
       const estoqueFormatado = data
-        .filter(item => item.quantidade > 0)
         .map(item => ({
           ...item,
           produto_nome_exibicao: item.produto_nome,
