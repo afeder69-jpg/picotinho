@@ -56,6 +56,7 @@ const EstoqueAtual = () => {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [precosAtuais, setPrecosAtuais] = useState<any[]>([]);
   const [datasNotasFiscais, setDatasNotasFiscais] = useState<{[key: string]: string}>({});
+  const [historicoPrecos, setHistoricoPrecos] = useState<{[key: string]: any}>({});
   const [loading, setLoading] = useState(true);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>('');
   const [modoEdicao, setModoEdicao] = useState(false);
@@ -119,6 +120,13 @@ const EstoqueAtual = () => {
     // corrigirProdutosManuais(); // Removido - correção manual
   }, []);
 
+  // Carregar histórico de preços quando o estoque for carregado
+  useEffect(() => {
+    if (estoque.length > 0) {
+      loadHistoricoPrecos();
+    }
+  }, [estoque]);
+
   // Função removida - estava causando problemas na marcação de produtos manuais
 
   const loadPrecosAtuais = async () => {
@@ -176,6 +184,68 @@ const EstoqueAtual = () => {
       console.error('Erro ao carregar preços atuais dinâmicos:', error);
       // Fallback para o método antigo
       await loadPrecosAtuaisLegacy();
+    }
+  };
+
+  const loadHistoricoPrecos = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || estoque.length === 0) return;
+
+      console.log('🕒 Carregando histórico de preços para estoque...');
+
+      // Extrair nomes únicos dos produtos do estoque
+      const nomesProdutos = estoque.map(item => 
+        item.produto_nome_exibicao || item.produto_nome || ''
+      ).filter(nome => nome.trim() !== '');
+
+      if (nomesProdutos.length === 0) return;
+
+      // Buscar configuração de área de atuação do usuário
+      const { data: config } = await supabase
+        .from('configuracoes_usuario')
+        .select('raio_busca_km')
+        .eq('usuario_id', user.id)
+        .maybeSingle();
+
+      const raio = config?.raio_busca_km || 5.0;
+
+      // Buscar posição atual do usuário via GPS
+      const coordenadas = await obterCoordenadas();
+
+      // Chamar edge function para buscar histórico
+      const { data: historicoData, error } = await supabase.functions.invoke('buscar-historico-precos-estoque', {
+        body: {
+          produtos: nomesProdutos,
+          userId: user.id,
+          latitude: coordenadas.latitude,
+          longitude: coordenadas.longitude,
+          raioKm: raio
+        }
+      });
+
+      if (error) {
+        console.error('Erro ao buscar histórico de preços:', error);
+        return;
+      }
+
+      if (historicoData?.success && historicoData?.resultados) {
+        const historicoMap: {[key: string]: any} = {};
+        
+        historicoData.resultados.forEach((item: any) => {
+          if (item.produto) {
+            historicoMap[item.produto] = {
+              ultimaCompraUsuario: item.ultimaCompraUsuario,
+              menorPrecoArea: item.menorPrecoArea
+            };
+          }
+        });
+
+        console.log('✅ Histórico de preços carregado:', historicoMap);
+        setHistoricoPrecos(historicoMap);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar histórico de preços:', error);
     }
   };
 
@@ -1548,79 +1618,44 @@ const EstoqueAtual = () => {
                                    </Button>
                                  )}
                                </h3>
-                               <p className="text-xs text-muted-foreground space-y-1">
-                                 {item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0 ? (
-                                   <>
-                                     <div>
-                                       Pago- {formatCurrency(item.preco_unitario_ultimo)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((item.preco_unitario_ultimo * quantidade))}
-                                     </div>
-                                     <div className="text-blue-600 font-medium flex items-center gap-1">
-                                        {precoAtual ? (
-                                          <>
-                                             <span>
-                                               {(() => {
-                                                 // Se o preço atual vem de uma nota fiscal, usar a data da nota
-                                                 // Se vem do próprio produto, usar a data da nota fiscal do produto ou a data de atualização
-                                                 let dataExibir = precoAtual.data_atualizacao;
-                                                 
-                                                 if (precoAtual.origem === 'produto_proprio') {
-                                                   const dataNotaFiscal = encontrarDataNotaFiscal(item.produto_nome_normalizado || item.produto_nome);
-                                                   if (dataNotaFiscal) {
-                                                     dataExibir = dataNotaFiscal;
-                                                   }
-                                                 }
-                                                 
-                                                  // Debug específico para sabão YPE
-                                                  if (item.produto_nome.toUpperCase().includes('SABAO') && item.produto_nome.toUpperCase().includes('YPE')) {
-                                                    console.log(`🧼 DEBUG SABÃO YPE:`, {
-                                                      produto: item.produto_nome,
-                                                      precoAtual,
-                                                      dataOriginal: dataExibir,
-                                                      dataFormatada: formatDateSafe(dataExibir)
-                                                    });
-                                                  }
-                                                  
-                                                  const dataFormatada = formatDateSafe(dataExibir);
-                                                  // Verificar se contém data problemática
-                                                  if (dataFormatada.includes('11/09/2025')) {
-                                                    console.error(`❌ ERRO: Data 11/09/2025 detectada para ${item.produto_nome}:`, { precoAtual, dataExibir, dataFormatada });
-                                                    return 'ERRO: Data inválida';
-                                                  }
-                                                  
-                                                  return dataFormatada;
-                                               })()} - {formatCurrency(precoAtual.valor_unitario)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency((precoAtual.valor_unitario * quantidade))}
-                                             </span>
-                                           {(() => {
-                                             const subtotalPago = normalizeValue(item.preco_unitario_ultimo * quantidade);
-                                             const subtotalAtual = normalizeValue(precoAtual.valor_unitario * quantidade);
-                                             
-                                              if (subtotalAtual > subtotalPago) {
-                                                return <ArrowUp className="w-3 h-3 text-red-600 flex-shrink-0" />;
-                                              } else if (subtotalAtual < subtotalPago) {
-                                                return <ArrowDown className="w-3 h-3 text-green-600 flex-shrink-0" />;
-                                             } else {
-                                               return <Minus className="w-3 h-3 text-gray-400 flex-shrink-0" />;
-                                             }
-                                           })()}
-                                         </>
-                                       ) : (
-                                          <span className="text-red-600">
-                                            Sem preço - {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
-                                          </span>
-                                       )}
-                                     </div>
-                                   </>
-                                 ) : (
-                                   <>
-                                     <div>
-                                       Produto inserido manualmente - sem valor definido
-                                     </div>
-                                      <div className="text-red-600 font-medium">
-                                        Sem preço - {formatCurrency(0)} por {item.unidade_medida.replace('Unidade', 'Un')} - Subt.: {formatCurrency(0)}
-                                      </div>
-                                   </>
-                                 )}
-                              </p>
+                                <div className="space-y-1 text-xs">
+                                  {(() => {
+                                    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                    const historicoProduto = historicoPrecos[nomeExibicao];
+                                    const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
+
+                                    return (
+                                      <>
+                                        {/* Linha 1: Última compra do próprio usuário */}
+                                        {historicoProduto?.ultimaCompraUsuario ? (
+                                          <div className="text-primary font-medium">
+                                            {formatDateSafe(historicoProduto.ultimaCompraUsuario.data)} - R$ {formatCurrency(historicoProduto.ultimaCompraUsuario.preco)}/{unidadeFormatada} - T: R$ {formatCurrency(historicoProduto.ultimaCompraUsuario.preco * quantidade)}
+                                          </div>
+                                        ) : item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0 && (
+                                          <div className="text-primary font-medium">
+                                            {formatDateSafe(item.updated_at)} - R$ {formatCurrency(item.preco_unitario_ultimo)}/{unidadeFormatada} - T: R$ {formatCurrency(item.preco_unitario_ultimo * quantidade)}
+                                          </div>
+                                        )}
+
+                                        {/* Linha 2: Menor preço na área */}
+                                        {historicoProduto?.menorPrecoArea ? (
+                                          <div className="text-muted-foreground">
+                                            {formatDateSafe(historicoProduto.menorPrecoArea.data)} - R$ {formatCurrency(historicoProduto.menorPrecoArea.preco)}/{unidadeFormatada} - T: R$ {formatCurrency(historicoProduto.menorPrecoArea.preco * quantidade)}
+                                          </div>
+                                        ) : precoAtual && precoAtual.valor_unitario && (
+                                          <div className="text-muted-foreground">
+                                            {formatDateSafe(precoAtual.data_atualizacao)} - R$ {formatCurrency(precoAtual.valor_unitario)}/{unidadeFormatada} - T: R$ {formatCurrency(precoAtual.valor_unitario * quantidade)}
+                                          </div>
+                                        )}
+
+                                        {/* Fallback: mostrar aviso se não há dados */}
+                                        {!historicoProduto && (!item.preco_unitario_ultimo || item.preco_unitario_ultimo <= 0) && (
+                                          <div className="text-red-600">Sem histórico de preços</div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                            </div>
                            
                               <div className="text-right flex-shrink-0 ml-2">
