@@ -508,46 +508,73 @@ const EstoqueAtual = () => {
       // O banco já gerencia produtos únicos corretamente - não devemos consolidar manualmente
       // Isso estava causando perda de produtos na visualização (22 no banco vs 17 na tela)
       
-      // 🚨 CORREÇÃO CRÍTICA: NÃO FILTRAR por quantidade - mostrar TODOS os itens
-      // O problema estava aqui: alguns produtos estavam sendo filtrados incorretamente
-      const estoqueFormatado = data
-        .map(item => ({
-          ...item,
-          produto_nome_exibicao: item.produto_nome,
-          hash_agrupamento: item.produto_hash_normalizado || item.produto_nome,
-          quantidade_total: item.quantidade,
-          preco_unitario_mais_recente: item.preco_unitario_ultimo,
-          ultima_atualizacao: item.updated_at,
-          ids_originais: [item.id],
-          nomes_originais: [item.produto_nome],
-          itens_originais: 1
-        }));
-      console.log('✅ Produtos filtrados (quantidade > 0):', estoqueFormatado.length);
+      // 🚨 CORREÇÃO CRÍTICA: CONSOLIDAR DUPLICATAS CORRETAMENTE
+      // O banco tem 44 itens (22 únicos duplicados) - vamos consolidar na tela
+      const produtosMap = new Map<string, any>();
       
-      // 🚨 VALIDAÇÃO CRÍTICA: Verificar inconsistências de dados
-      const totalNoBanco = data?.length || 0;
-      const totalNaTela = estoqueFormatado.length;
-      const produtosComQuantidadeZero = data?.filter(item => item.quantidade === 0).length || 0;
+      data.forEach(item => {
+        const chave = item.produto_nome; // Usar nome exato como chave
+        
+        if (produtosMap.has(chave)) {
+          // Produto já existe, manter apenas o mais recente por created_at
+          const itemExistente = produtosMap.get(chave);
+          if (item.created_at > itemExistente.created_at) {
+            produtosMap.set(chave, {
+              ...item,
+              produto_nome_exibicao: item.produto_nome,
+              hash_agrupamento: item.produto_nome,
+              quantidade_total: item.quantidade,
+              preco_unitario_mais_recente: item.preco_unitario_ultimo,
+              ultima_atualizacao: item.updated_at,
+              ids_originais: [item.id],
+              nomes_originais: [item.produto_nome],
+              itens_originais: 1
+            });
+          }
+        } else {
+          // Produto novo, adicionar
+          produtosMap.set(chave, {
+            ...item,
+            produto_nome_exibicao: item.produto_nome,
+            hash_agrupamento: item.produto_nome,
+            quantidade_total: item.quantidade,
+            preco_unitario_mais_recente: item.preco_unitario_ultimo,
+            ultima_atualizacao: item.updated_at,
+            ids_originais: [item.id],
+            nomes_originais: [item.produto_nome],
+            itens_originais: 1
+          });
+        }
+      });
       
-      console.log('🔍 AUDITORIA DE DADOS:');
-      console.log(`📊 Total no banco: ${totalNoBanco}`);
-      console.log(`📊 Total na tela: ${totalNaTela}`);
-      console.log(`📊 Produtos com quantidade 0: ${produtosComQuantidadeZero}`);
-      console.log(`✅ Diferença esperada: ${totalNoBanco - totalNaTela} (deve ser igual a produtos com qtd 0)`);
+      // Converter Map para Array
+      const estoqueFormatado = Array.from(produtosMap.values());
       
-      // ALERTA se houver inconsistência inesperada
-      if ((totalNoBanco - totalNaTela) !== produtosComQuantidadeZero) {
-        console.error('🚨 INCONSISTÊNCIA CRÍTICA DETECTADA!');
-        console.error('🚨 A diferença entre banco e tela não corresponde aos produtos com quantidade zero!');
-        console.error('🚨 Isso indica um problema na lógica de filtros!');
-      }
-      console.log('📦 Dados finais que vão para estado:', estoqueFormatado.slice(0, 3).map(item => ({
+      console.log('✅ Produtos ÚNICOS após consolidação:', estoqueFormatado.length);
+      console.log('📦 Primeiros 3 produtos únicos:', estoqueFormatado.slice(0, 3).map(item => ({
         nome: item.produto_nome,
         quantidade: item.quantidade,
         preco: item.preco_unitario_ultimo
       })));
-      console.log('✅ SETANDO ESTOQUE COM:', estoqueFormatado.length, 'itens (SEM CONSOLIDAÇÃO INCORRETA)');
       
+      // 🚨 VALIDAÇÃO CRÍTICA: Verificar se temos os 4 produtos problemáticos
+      const produtosProblematicos = [
+        'Queijo Parmesão President 100g Ralado',
+        'Filé de Peito de Frango Seara 1kg Bandeja', 
+        'Creme de Leite Italac 200g',
+        'Requeijão Cremoso Tirolez 200g Tradicional'
+      ];
+      
+      console.log('🔍 VERIFICANDO PRODUTOS PROBLEMÁTICOS:');
+      produtosProblematicos.forEach(produtoTeste => {
+        const encontrado = estoqueFormatado.find(p => p.produto_nome === produtoTeste);
+        if (encontrado) {
+          console.log(`✅ ${produtoTeste}: ENCONTRADO | Qtd: ${encontrado.quantidade}`);
+        } else {
+          console.log(`❌ ${produtoTeste}: NÃO ENCONTRADO!`);
+        }
+      });
+
       setEstoque(estoqueFormatado);
       
       // Encontrar a última atualização
