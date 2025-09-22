@@ -1597,7 +1597,24 @@ async function processarNotaEmBackground(
       );
       
     } else {
-      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
+      // Para imagens: IA-1 (extração) → IA-2 (estoque)
+      console.log('🖼️ Processando imagem - iniciando extração de dados...');
+      
+      // ETAPA 1: Extrair dados da imagem
+      const extractResult = await supabase.functions.invoke('extract-receipt-image', {
+        body: { 
+          imagemId: notaImagem.id,
+          userId: mensagem.usuario_id
+        }
+      });
+      
+      console.log('✅ Extração de imagem concluída:', extractResult);
+      
+      if (extractResult.error) {
+        throw new Error(`Erro na extração da imagem: ${extractResult.error.message}`);
+      }
+      
+      // ETAPA 2: Processar estoque automaticamente
       console.log('🚀 Imagem processada, disparando IA-2 automaticamente...');
       
       EdgeRuntime.waitUntil(

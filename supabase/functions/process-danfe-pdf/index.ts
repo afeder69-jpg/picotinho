@@ -186,14 +186,17 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
      • NÃO invente ou troque nomes/marcas, apenas limpe e organize o que está no texto original
    - NÃO altere números, quantidades, CNPJs ou chaves de acesso.
    - Se houver itens iguais repetidos, unifique em um só, somando a quantidade e ajustando o valor_total.
-   - Categorize cada item usando APENAS estas categorias fixas:
-     [Laticínios, Bebidas, Padaria, Mercearia, Hortifruti, Carnes, Higiene, Limpeza, Congelados, Outros]
-   - Use "Outros" somente em último caso, quando o produto realmente não pertence a nenhuma dessas categorias.
-   - Produtos comuns de mercado devem sempre ser classificados corretamente:
-     • Achocolatado → Bebidas ou Mercearia
-     • Extrato de tomate → Mercearia  
-     • Frutas, verduras, legumes → Hortifruti
-   - TODOS os itens DEVEM ter uma categoria obrigatoriamente.
+    - Categorize cada item usando APENAS estas categorias fixas:
+      [hortifruti, bebidas, padaria, mercearia, açougue, laticínios/frios, limpeza, higiene/farmácia, congelados, pet, outros]
+    - Use "outros" somente em último caso, quando o produto realmente não pertence a nenhuma dessas categorias.
+    - Produtos comuns de mercado devem sempre ser classificados corretamente:
+      • Tempero Verde, Cheiro Verde, Salsa, Cebolinha → hortifruti
+      • Milho Verde (lata/conserva), Aveia, Sal, Azeite, Ovos, Massa/Macarrão → mercearia
+      • Esponja de Aço, Bombril → limpeza
+      • Achocolatado → bebidas ou mercearia
+      • Extrato de tomate → mercearia  
+      • Frutas, verduras, legumes → hortifruti
+    - TODOS os itens DEVEM ter uma categoria obrigatoriamente.
    - O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
    - NUNCA truncar ou cortar no meio - incluir TODOS os itens da nota.
 

@@ -241,16 +241,23 @@ serve(async (req) => {
     
     if (dbError) throw dbError;
     
-    // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
-    console.log("🚀 IA-1 finalizou captura, disparando IA-2 automaticamente...");
+    // ✅ FLUXO AUTOMÁTICO: IA-1 (extração de imagem) → IA-2 (estoque)
+    console.log("🚀 Captura externa finalizada, disparando extração de dados...");
     
     EdgeRuntime.waitUntil(
-      supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: notaImagem.id }
+      supabase.functions.invoke('extract-receipt-image', {
+        body: { imagemId: notaImagem.id, userId: userId }
+      }).then((extractResult) => {
+        console.log("✅ Extração de dados concluída:", extractResult);
+        
+        // Após extração, disparar inserção no estoque
+        return supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagem.id }
+        });
       }).then((result) => {
         console.log("✅ IA-2 executada automaticamente com sucesso:", result);
       }).catch((error) => {
-        console.error('❌ Falha na execução automática da IA-2:', error);
+        console.error('❌ Falha na execução automática:', error);
       })
     );
     
