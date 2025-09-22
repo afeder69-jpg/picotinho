@@ -1694,10 +1694,13 @@ const EstoqueAtual = () => {
                                           </div>
                                         ) : item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0 && (
                                           <div className="text-primary font-medium">
-                                            {item.updated_at ? 
-                                              formatDateSafe(item.updated_at) : 
-                                              'Sem data'
-                                            } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
+                                            {(() => {
+                                              // Usar a data real da nota fiscal, não a data de atualização do registro
+                                              const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
+                                              return dataRealCompra ? 
+                                                formatDateSafe(dataRealCompra) : 
+                                                'Sem data';
+                                            })()} - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
                                           </div>
                                         )}
 
