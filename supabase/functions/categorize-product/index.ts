@@ -39,17 +39,17 @@ serve(async (req) => {
             
             1. Categorizar o produto em uma das categorias EXATAS seguindo este mapa de normalização:
             
-            HORTIFRUTI: frutas, verduras, legumes, hortaliças, hortifruti, ervas, temperos naturais
-            - Entradas possíveis: Frutas, Verduras, Legumes, Hortaliças, Hortifruti
-            - Exemplos: banana, maçã, alface, tomate, cebola, batata, limão, fruta de conde, pinha, mamão, abacaxi, cenoura, beterraba, abobrinha
+            HORTIFRUTI: frutas, verduras, legumes, hortaliças, hortifruti, ervas, temperos naturais, temperos verdes
+            - Entradas possíveis: Frutas, Verduras, Legumes, Hortaliças, Hortifruti, Temperos verdes
+            - Exemplos: banana, maçã, alface, tomate, cebola, batata, limão, fruta de conde, pinha, mamão, abacaxi, cenoura, beterraba, abobrinha, tempero verde, cheiro verde, salsa, cebolinha, manjericão, coentro
             
             BEBIDAS: refrigerantes, sucos, água, cerveja, vinhos, destilados, bebidas (exceto leite)
             - Entradas possíveis: Refrigerantes, Sucos, Água, Cerveja, Vinhos, Destilados, Bebidas
             - Exemplos: refrigerante, suco, cerveja, água, energético, vinho, cachaça, whisky, vodka
             
-            MERCEARIA: arroz, feijão, macarrão, açúcar, sal, óleo, café, grãos, cereais, massas, conservas, condimentos
-            - Entradas possíveis: Arroz, Feijão, Macarrão, Açúcar, Sal, Óleo, Café, Mercearia
-            - Exemplos: arroz, feijão, macarrão, óleo, açúcar, café, farinha, molho de tomate, extrato de tomate, vinagre
+            MERCEARIA: arroz, feijão, macarrão, açúcar, sal, óleo, café, grãos, cereais, massas, conservas, condimentos, milho, aveia, azeite, ovos
+            - Entradas possíveis: Arroz, Feijão, Macarrão, Açúcar, Sal, Óleo, Café, Mercearia, Milho, Aveia, Azeite, Ovos
+            - Exemplos: arroz, feijão, macarrão, óleo, açúcar, café, farinha, molho de tomate, extrato de tomate, vinagre, milho verde, aveia, azeite extra virgem, ovos, massa com ovos, sal refinado
             
             AÇOUGUE: açougue, carnes, frango, peixe, suínos, aves, carnes frescas
             - Entradas possíveis: Açougue, Carnes, Frango, Peixe, Suínos
@@ -63,9 +63,9 @@ serve(async (req) => {
             - Entradas possíveis: Laticínios, Frios, Queijos, Leite, Iogurte
             - Exemplos: leite, queijo, manteiga, margarina, iogurte, requeijão, creme de leite, presunto, mortadela, salame
             
-            LIMPEZA: detergente, sabão, desinfetante, amaciante, produtos de limpeza doméstica
-            - Entradas possíveis: Detergente, Sabão, Desinfetante, Amaciante, Produtos de Limpeza
-            - Exemplos: detergente, sabão em pó, desinfetante, água sanitária, amaciante, alvejante
+            LIMPEZA: detergente, sabão, desinfetante, amaciante, produtos de limpeza doméstica, esponja de aço
+            - Entradas possíveis: Detergente, Sabão, Desinfetante, Amaciante, Produtos de Limpeza, Esponja, Esponja de Aço
+            - Exemplos: detergente, sabão em pó, desinfetante, água sanitária, amaciante, alvejante, esponja de aço bombril, esponja dupla face, palha de aço
             
             HIGIENE/FARMÁCIA: higiene, farmácia, sabonete, shampoo, creme dental, medicamentos, produtos de higiene pessoal
             - Entradas possíveis: Higiene, Farmácia, Sabonete, Shampoo, Creme dental, Medicamentos
@@ -81,6 +81,16 @@ serve(async (req) => {
             
             OUTROS: qualquer outro item não mapeado nas categorias acima
             - Entradas possíveis: qualquer item que não se encaixe em nenhuma categoria específica
+            
+            INSTRUÇÕES ESPECÍFICAS PARA CATEGORIZAÇÃO:
+            - "Tempero Verde" ou "Cheiro Verde" → SEMPRE "hortifruti"
+            - "Milho Verde" em lata/conserva → SEMPRE "mercearia"
+            - "Esponja de Aço" ou "Bombril" → SEMPRE "limpeza"
+            - "Massa" qualquer tipo → SEMPRE "mercearia"
+            - "Sal" → SEMPRE "mercearia"
+            - "Aveia" → SEMPRE "mercearia"
+            - "Azeite" → SEMPRE "mercearia"
+            - "Ovos" → SEMPRE "mercearia"
             
             2. Sugerir um nome padronizado no estilo de supermercado com estas regras:
             - Primeira letra de cada palavra importante em maiúscula
