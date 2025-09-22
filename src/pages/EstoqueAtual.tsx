@@ -213,35 +213,70 @@ const EstoqueAtual = () => {
       // Buscar posição atual do usuário via GPS
       const coordenadas = await obterCoordenadas();
 
-      // Chamar edge function para buscar histórico
-      const { data: historicoData, error } = await supabase.functions.invoke('buscar-historico-precos-estoque', {
+      // Tentar buscar histórico primeiro
+      try {
+        const { data: historicoData, error: historicoError } = await supabase.functions.invoke('buscar-historico-precos-estoque', {
+          body: {
+            produtos: nomesProdutos,
+            userId: user.id,
+            latitude: coordenadas.latitude,
+            longitude: coordenadas.longitude,
+            raioKm: raio
+          }
+        });
+
+        if (!historicoError && historicoData?.success) {
+          console.log('✅ Histórico obtido com sucesso:', historicoData);
+          const historicoMap: {[key: string]: any} = {};
+          
+          historicoData.resultados.forEach((item: any) => {
+            if (item.produto) {
+              historicoMap[item.produto] = {
+                ultimaCompraUsuario: item.ultimaCompraUsuario,
+                menorPrecoArea: item.menorPrecoArea
+              };
+            }
+          });
+
+          setHistoricoPrecos(historicoMap);
+          return;
+        } else {
+          console.warn('⚠️ Falha no histórico, usando fallback:', historicoError);
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro na função de histórico, usando fallback:', error);
+      }
+
+      // Fallback: usar função de preços atuais
+      const { data: precoAtualData } = await supabase.functions.invoke('preco-atual-usuario', {
         body: {
-          produtos: nomesProdutos,
           userId: user.id,
           latitude: coordenadas.latitude,
           longitude: coordenadas.longitude,
           raioKm: raio
         }
       });
-
-      if (error) {
-        console.error('Erro ao buscar histórico de preços:', error);
-        return;
-      }
-
-      if (historicoData?.success && historicoData?.resultados) {
+      
+      if (precoAtualData?.success) {
+        // Converter dados do fallback para o formato esperado
         const historicoMap: {[key: string]: any} = {};
         
-        historicoData.resultados.forEach((item: any) => {
-          if (item.produto) {
-            historicoMap[item.produto] = {
-              ultimaCompraUsuario: item.ultimaCompraUsuario,
-              menorPrecoArea: item.menorPrecoArea
-            };
-          }
+        precoAtualData.resultados?.forEach((item: any) => {
+          historicoMap[item.produto_nome] = {
+            ultimaCompraUsuario: {
+              data: item.data_atualizacao,
+              preco: item.valor_unitario,
+              quantidade: 1
+            },
+            menorPrecoArea: {
+              data: item.data_atualizacao,
+              preco: item.valor_unitario,
+              quantidade: 1
+            }
+          };
         });
 
-        console.log('✅ Histórico de preços carregado:', historicoMap);
+        console.log('✅ Histórico carregado via fallback:', historicoMap);
         setHistoricoPrecos(historicoMap);
       }
     } catch (error) {
@@ -1629,22 +1664,22 @@ const EstoqueAtual = () => {
                                         {/* Linha 1: Última compra do próprio usuário */}
                                         {historicoProduto?.ultimaCompraUsuario ? (
                                           <div className="text-primary font-medium">
-                                            {formatDateSafe(historicoProduto.ultimaCompraUsuario.data)} - R$ {formatCurrency(historicoProduto.ultimaCompraUsuario.preco)}/{unidadeFormatada} - T: R$ {formatCurrency(historicoProduto.ultimaCompraUsuario.preco * quantidade)}
+                                            {formatDateSafe(historicoProduto.ultimaCompraUsuario.data)} - R$ {historicoProduto.ultimaCompraUsuario.preco.toFixed(2)}/{unidadeFormatada} - T: R$ {(historicoProduto.ultimaCompraUsuario.preco * quantidade).toFixed(2)}
                                           </div>
                                         ) : item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0 && (
                                           <div className="text-primary font-medium">
-                                            {formatDateSafe(item.updated_at)} - R$ {formatCurrency(item.preco_unitario_ultimo)}/{unidadeFormatada} - T: R$ {formatCurrency(item.preco_unitario_ultimo * quantidade)}
+                                            {formatDateSafe(item.updated_at)} - R$ {item.preco_unitario_ultimo.toFixed(2)}/{unidadeFormatada} - T: R$ {(item.preco_unitario_ultimo * quantidade).toFixed(2)}
                                           </div>
                                         )}
 
                                         {/* Linha 2: Menor preço na área */}
                                         {historicoProduto?.menorPrecoArea ? (
                                           <div className="text-muted-foreground">
-                                            {formatDateSafe(historicoProduto.menorPrecoArea.data)} - R$ {formatCurrency(historicoProduto.menorPrecoArea.preco)}/{unidadeFormatada} - T: R$ {formatCurrency(historicoProduto.menorPrecoArea.preco * quantidade)}
+                                            {formatDateSafe(historicoProduto.menorPrecoArea.data)} - R$ {historicoProduto.menorPrecoArea.preco.toFixed(2)}/{unidadeFormatada} - T: R$ {(historicoProduto.menorPrecoArea.preco * quantidade).toFixed(2)}
                                           </div>
                                         ) : precoAtual && precoAtual.valor_unitario && (
                                           <div className="text-muted-foreground">
-                                            {formatDateSafe(precoAtual.data_atualizacao)} - R$ {formatCurrency(precoAtual.valor_unitario)}/{unidadeFormatada} - T: R$ {formatCurrency(precoAtual.valor_unitario * quantidade)}
+                                            {formatDateSafe(precoAtual.data_atualizacao)} - R$ {precoAtual.valor_unitario.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoAtual.valor_unitario * quantidade).toFixed(2)}
                                           </div>
                                         )}
 

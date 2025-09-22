@@ -58,29 +58,46 @@ serve(async (req) => {
         const dados = nota.dados_extraidos as any;
         if (!dados?.itens) continue;
 
-        const dataCompra = dados.compra?.data_emissao || 
-                           dados.compra?.data_compra ||
-                           dados.dataCompra ||
-                           dados.data_emissao;
+        // Buscar data da compra com validação robusta
+        let dataCompra = null;
+        const possiveisCampos = [
+          dados.compra?.data_emissao,
+          dados.compra?.data_compra,
+          dados.dataCompra,
+          dados.data_emissao,
+          dados.data_compra
+        ];
+
+        for (const campo of possiveisCampos) {
+          if (campo) {
+            try {
+              // Tentar diferentes formatos de data
+              let dataTemp;
+              if (typeof campo === 'string') {
+                // Remover timezone se existir para evitar problemas
+                const dataLimpa = campo.replace(/[-+]\d{2}:\d{2}$/, '');
+                dataTemp = new Date(dataLimpa);
+              } else {
+                dataTemp = new Date(campo);
+              }
+              
+              if (!isNaN(dataTemp.getTime()) && dataTemp.getFullYear() > 2020) {
+                dataCompra = dataTemp.toISOString();
+                break;
+              }
+            } catch (error) {
+              continue;
+            }
+          }
+        }
 
         if (!dataCompra) continue;
-
-        // Validar data antes de usar
-        let dataValida;
-        try {
-          dataValida = new Date(dataCompra);
-          if (isNaN(dataValida.getTime())) {
-            continue;
-          }
-        } catch (error) {
-          continue;
-        }
 
         for (const item of dados.itens) {
           const nomeItem = (item.descricao || item.nome || '').toLowerCase().trim();
           
           if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
-            if (!ultimaCompraDoUsuario || dataValida > new Date(ultimaCompraDoUsuario.data)) {
+            if (!ultimaCompraDoUsuario || new Date(dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
               ultimaCompraDoUsuario = {
                 data: dataCompra,
                 preco: parseFloat(item.valor_unitario || 0),
@@ -130,27 +147,42 @@ serve(async (req) => {
 
             if (!dentroDoRaio) continue;
 
-            const dataCompra = dados.compra?.data_emissao || 
-                              dados.compra?.data_compra ||
-                              dados.dataCompra ||
-                              dados.data_emissao;
+            // Buscar data da compra com validação robusta
+            let dataCompra = null;
+            const possiveisCampos = [
+              dados.compra?.data_emissao,
+              dados.compra?.data_compra,
+              dados.dataCompra,
+              dados.data_emissao,
+              dados.data_compra
+            ];
+
+            for (const campo of possiveisCampos) {
+              if (campo) {
+                try {
+                  // Tentar diferentes formatos de data
+                  let dataTemp;
+                  if (typeof campo === 'string') {
+                    // Remover timezone se existir para evitar problemas
+                    const dataLimpa = campo.replace(/[-+]\d{2}:\d{2}$/, '');
+                    dataTemp = new Date(dataLimpa);
+                  } else {
+                    dataTemp = new Date(campo);
+                  }
+                  
+                  if (!isNaN(dataTemp.getTime()) && dataTemp.getFullYear() > 2020) {
+                    dataCompra = dataTemp.toISOString();
+                    break;
+                  }
+                } catch (error) {
+                  continue;
+                }
+              }
+            }
 
             if (!dataCompra) continue;
 
-            // Validar e normalizar a data antes de usar
-            let dataValida;
-            try {
-              dataValida = new Date(dataCompra);
-              if (isNaN(dataValida.getTime())) {
-                console.warn(`Data inválida encontrada: ${dataCompra}`);
-                continue;
-              }
-            } catch (error) {
-              console.warn(`Erro ao processar data: ${dataCompra}`, error);
-              continue;
-            }
-
-            const dataFormatada = dataValida.toISOString().split('T')[0];
+            const dataFormatada = dataCompra.split('T')[0];
 
             for (const item of dados.itens) {
               const nomeItem = (item.descricao || item.nome || '').toLowerCase().trim();
