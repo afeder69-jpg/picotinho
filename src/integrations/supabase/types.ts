@@ -1607,6 +1607,16 @@ export type Database = {
         }
         Relationships: []
       }
+      estoque_stats: {
+        Row: {
+          total_categorias: number | null
+          total_produtos: number | null
+          ultima_atualizacao: string | null
+          user_id: string | null
+          valor_total_estoque: number | null
+        }
+        Relationships: []
+      }
       supermercados_publicos: {
         Row: {
           ativo: boolean | null
@@ -1771,6 +1781,10 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      limpar_dados_antigos: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       limpar_dados_usuario_completo: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1853,6 +1867,10 @@ export type Database = {
       }
       recalcular_estoque_usuario: {
         Args: { usuario_uuid: string }
+        Returns: undefined
+      }
+      refresh_estoque_stats: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       secure_profile_access: {
