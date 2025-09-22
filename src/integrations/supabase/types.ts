@@ -1617,26 +1617,26 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles_secure_view: {
+      profiles_public_safe: {
         Row: {
-          avatar_url_safe: string | null
+          avatar_url: string | null
           created_at: string | null
           id: string | null
-          nome_display: string | null
+          nome: string | null
           user_id: string | null
         }
         Insert: {
-          avatar_url_safe?: never
+          avatar_url?: string | null
           created_at?: string | null
           id?: string | null
-          nome_display?: never
+          nome?: string | null
           user_id?: string | null
         }
         Update: {
-          avatar_url_safe?: never
+          avatar_url?: string | null
           created_at?: string | null
           id?: string | null
-          nome_display?: never
+          nome?: string | null
           user_id?: string | null
         }
         Relationships: []
