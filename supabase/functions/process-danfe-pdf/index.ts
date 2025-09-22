@@ -565,29 +565,51 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
             }
           }
 
-           // Criar registro na tabela notas_fiscais
+           // Verificar se já existe uma nota fiscal com os mesmos dados
            const cnpjNotaFiscal = dadosEstruturados.estabelecimento.cnpj ? 
              dadosEstruturados.estabelecimento.cnpj.replace(/[^\d]/g, '') : '';
-           const { data: notaFiscal, error: errorNotaFiscal } = await supabase
+           
+           const { data: notaExistente } = await supabase
              .from('notas_fiscais')
-             .insert({
-               user_id: userId,
-               mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
-               cnpj: cnpjNotaFiscal,
-              bairro: extrairBairro(dadosEstruturados.estabelecimento?.endereco) || null,
-              data_compra: dataCompra,
-              valor_total: dadosEstruturados.compra.valor_total || 0,
-              qtd_itens: dadosEstruturados.itens?.length || 0,
-              chave_acesso: null // Adicionar se disponível na nota
-            })
-            .select('id')
-            .single();
+             .select('id')
+             .eq('user_id', userId)
+             .eq('cnpj', cnpjNotaFiscal)
+             .eq('data_compra', dataCompra)
+             .eq('valor_total', dadosEstruturados.compra.valor_total || 0)
+             .single();
+
+           let notaFiscal = null;
+           let errorNotaFiscal = null;
+
+           if (notaExistente) {
+             console.log("⚠️ Nota fiscal já existe com os mesmos dados");
+             notaFiscal = notaExistente;
+           } else {
+             // Criar registro na tabela notas_fiscais apenas se não existir
+             const result = await supabase
+               .from('notas_fiscais')
+               .insert({
+                 user_id: userId,
+                 mercado: dadosEstruturados.estabelecimento.nome || 'Não identificado',
+                 cnpj: cnpjNotaFiscal,
+                bairro: extrairBairro(dadosEstruturados.estabelecimento?.endereco) || null,
+                data_compra: dataCompra,
+                valor_total: dadosEstruturados.compra.valor_total || 0,
+                qtd_itens: dadosEstruturados.itens?.length || 0,
+                chave_acesso: null // Adicionar se disponível na nota
+              })
+              .select('id')
+              .single();
+             
+             notaFiscal = result.data;
+             errorNotaFiscal = result.error;
+           }
 
           if (errorNotaFiscal) {
             console.error("❌ Erro ao criar nota fiscal:", errorNotaFiscal);
           } else {
             notaFiscalId = notaFiscal.id;
-            console.log("✅ Nota fiscal criada:", notaFiscalId);
+            console.log("✅ Nota fiscal processada:", notaFiscalId);
           }
         } catch (notaError) {
           console.error("❌ Erro ao processar nota fiscal:", notaError);
@@ -612,20 +634,35 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           try {
             const { descricao, codigo, quantidade, unidade, valor_unitario, valor_total, categoria } = item;
 
-            // Salvar item da nota
-            await supabase
+            // Verificar se item já existe nesta nota
+            const { data: itemExistente } = await supabase
               .from('itens_nota')
-              .insert({
-                nota_id: notaFiscalId,
-                descricao: descricao || 'Item não identificado',
-                codigo: codigo || null,
-                quantidade: quantidade || 0,
-                unidade: unidade || 'unidade',
-                valor_unitario: valor_unitario || 0,
-                valor_total: valor_total || 0,
-                categoria: categoria || 'outros',
-                data_compra: dataCompraItens
-              });
+              .select('id')
+              .eq('nota_id', notaFiscalId)
+              .eq('descricao', descricao || 'Item não identificado')
+              .eq('codigo', codigo || '')
+              .single();
+
+            if (!itemExistente) {
+              // Salvar item da nota apenas se não existir
+              await supabase
+                .from('itens_nota')
+                .insert({
+                  nota_id: notaFiscalId,
+                  descricao: descricao || 'Item não identificado',
+                  codigo: codigo || null,
+                  quantidade: quantidade || 0,
+                  unidade: unidade || 'unidade',
+                  valor_unitario: valor_unitario || 0,
+                  valor_total: valor_total || 0,
+                  categoria: categoria || 'outros',
+                  data_compra: dataCompraItens
+                });
+              
+              console.log(`✅ Item da nota salvo: ${descricao}`);
+            } else {
+              console.log(`⚠️ Item já existe na nota: ${descricao}`);
+            }
 
             // Atualizar preços atuais de forma inteligente considerando data/hora
             if (descricao && valor_unitario && dadosEstruturados.estabelecimento?.cnpj) {
