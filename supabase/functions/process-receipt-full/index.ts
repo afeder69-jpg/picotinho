@@ -130,6 +130,18 @@ serve(async (req) => {
     if (insertErr) throw new Error(insertErr.message);
 
     console.log(`✅ ${inserted.length} itens inseridos no estoque`);
+    
+    // 🚨 VALIDAÇÃO CRÍTICA: Verificar se todos os itens foram inseridos corretamente
+    const itensEsperados = produtosEstoque.length;
+    const itensInseridos = inserted.length;
+    
+    if (itensInseridos !== itensEsperados) {
+      console.error(`🚨 INCONSISTÊNCIA CRÍTICA: Esperado ${itensEsperados} itens, inserido ${itensInseridos}`);
+      console.error('🚨 Produtos que deveriam ser inseridos:', produtosEstoque.map(p => p.produto_nome));
+      console.error('🚨 Produtos efetivamente inseridos:', inserted.map(p => p.produto_nome));
+    } else {
+      console.log('✅ Validação OK: Todos os itens foram inseridos corretamente');
+    }
 
     // Marcar nota como processada
     await supabase.from("notas_imagens").update({ processada: true, updated_at: nowIso() }).eq("id", finalNotaId);

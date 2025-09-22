@@ -504,29 +504,49 @@ const EstoqueAtual = () => {
         return;
       }
 
-      // Consolidar produtos similares manualmente
-      const produtosConsolidados = new Map();
+      // ✅ CORREÇÃO CRÍTICA: REMOVER CONSOLIDAÇÃO MANUAL INCORRETA
+      // O banco já gerencia produtos únicos corretamente - não devemos consolidar manualmente
+      // Isso estava causando perda de produtos na visualização (22 no banco vs 17 na tela)
       
-      data.forEach(item => {
-        const key = item.produto_nome.toUpperCase();
-        if (produtosConsolidados.has(key)) {
-          const existing = produtosConsolidados.get(key);
-          existing.quantidade += item.quantidade;
-          existing.preco_unitario_ultimo = Math.max(existing.preco_unitario_ultimo || 0, item.preco_unitario_ultimo || 0);
-          existing.updated_at = new Date(existing.updated_at) > new Date(item.updated_at) ? existing.updated_at : item.updated_at;
-        } else {
-          produtosConsolidados.set(key, { ...item });
-        }
-      });
+      // Filtrar apenas produtos com quantidade > 0 e mapear para o tipo correto
+      const estoqueFormatado = data
+        .filter(item => item.quantidade > 0)
+        .map(item => ({
+          ...item,
+          produto_nome_exibicao: item.produto_nome,
+          hash_agrupamento: item.produto_hash_normalizado || item.produto_nome,
+          quantidade_total: item.quantidade,
+          preco_unitario_mais_recente: item.preco_unitario_ultimo,
+          ultima_atualizacao: item.updated_at,
+          ids_originais: [item.id],
+          nomes_originais: [item.produto_nome],
+          itens_originais: 1
+        }));
+      console.log('✅ Produtos filtrados (quantidade > 0):', estoqueFormatado.length);
       
-      const estoqueFormatado = Array.from(produtosConsolidados.values());
-      console.log('📦 Produtos consolidados:', estoqueFormatado.length);
+      // 🚨 VALIDAÇÃO CRÍTICA: Verificar inconsistências de dados
+      const totalNoBanco = data?.length || 0;
+      const totalNaTela = estoqueFormatado.length;
+      const produtosComQuantidadeZero = data?.filter(item => item.quantidade === 0).length || 0;
+      
+      console.log('🔍 AUDITORIA DE DADOS:');
+      console.log(`📊 Total no banco: ${totalNoBanco}`);
+      console.log(`📊 Total na tela: ${totalNaTela}`);
+      console.log(`📊 Produtos com quantidade 0: ${produtosComQuantidadeZero}`);
+      console.log(`✅ Diferença esperada: ${totalNoBanco - totalNaTela} (deve ser igual a produtos com qtd 0)`);
+      
+      // ALERTA se houver inconsistência inesperada
+      if ((totalNoBanco - totalNaTela) !== produtosComQuantidadeZero) {
+        console.error('🚨 INCONSISTÊNCIA CRÍTICA DETECTADA!');
+        console.error('🚨 A diferença entre banco e tela não corresponde aos produtos com quantidade zero!');
+        console.error('🚨 Isso indica um problema na lógica de filtros!');
+      }
       console.log('📦 Dados finais que vão para estado:', estoqueFormatado.slice(0, 3).map(item => ({
         nome: item.produto_nome,
         quantidade: item.quantidade,
         preco: item.preco_unitario_ultimo
       })));
-      console.log('📦 SETANDO ESTOQUE COM:', estoqueFormatado.length, 'itens');
+      console.log('✅ SETANDO ESTOQUE COM:', estoqueFormatado.length, 'itens (SEM CONSOLIDAÇÃO INCORRETA)');
       
       setEstoque(estoqueFormatado);
       
