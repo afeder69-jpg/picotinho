@@ -279,6 +279,7 @@ export const categoriasNormalizadas = {
   'carnes': 'AÇOUGUE'
 };
 
+// Ordem das categorias para exibição
 export const ordemCategorias = [
   'hortifruti', 'bebidas', 'mercearia', 'açougue', 'carnes', 'padaria', 
   'laticínios/frios', 'laticínios', 'limpeza', 'higiene/farmácia', 'congelados', 'pet', 'outros'
