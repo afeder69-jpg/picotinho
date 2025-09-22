@@ -23,6 +23,7 @@ export type Database = {
           icone: string | null
           id: string
           nome: string | null
+          sinonimos: string[] | null
         }
         Insert: {
           ativa?: boolean | null
@@ -32,6 +33,7 @@ export type Database = {
           icone?: string | null
           id?: string
           nome?: string | null
+          sinonimos?: string[] | null
         }
         Update: {
           ativa?: boolean | null
@@ -41,6 +43,7 @@ export type Database = {
           icone?: string | null
           id?: string
           nome?: string | null
+          sinonimos?: string[] | null
         }
         Relationships: []
       }
@@ -1694,6 +1697,18 @@ export type Database = {
       anonymize_user_profile: {
         Args: { profile_user_id: string }
         Returns: boolean
+      }
+      buscar_categoria_por_termo: {
+        Args: { termo_busca: string }
+        Returns: {
+          ativa: boolean
+          cor: string
+          descricao: string
+          icone: string
+          id: string
+          nome: string
+          sinonimos: string[]
+        }[]
       }
       cleanup_old_ingestion_jobs: {
         Args: { days_old?: number }

@@ -8,45 +8,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Utilitário para normalização de categorias case-insensitive
-const categoriasNormalizadas = {
-  'açougue': 'açougue',
-  'bebidas': 'bebidas', 
-  'congelados': 'congelados',
-  'higiene/farmácia': 'higiene/farmácia',
-  'higiene': 'higiene/farmácia',
-  'farmacia': 'higiene/farmácia',
-  'hortifruti': 'hortifruti',
-  'laticínios/frios': 'laticínios/frios',
-  'laticínios': 'laticínios/frios',
-  'laticinios': 'laticínios/frios',
-  'frios': 'laticínios/frios',
-  'limpeza': 'limpeza',
-  'mercearia': 'mercearia',
-  'outros': 'outros',
-  'padaria': 'padaria',
-  'pet': 'pet',
-  'carnes': 'açougue'
-};
-
-function normalizarCategoria(categoria: string): string {
-  if (!categoria) return 'outros';
-  
-  const categoriaLower = categoria.toLowerCase().trim();
-  
-  // Buscar correspondência exata primeiro
-  if (categoriasNormalizadas[categoriaLower as keyof typeof categoriasNormalizadas]) {
-    return categoriasNormalizadas[categoriaLower as keyof typeof categoriasNormalizadas];
-  }
-  
-  // Buscar correspondência parcial
-  for (const [key, value] of Object.entries(categoriasNormalizadas)) {
-    if (categoriaLower.includes(key) || key.includes(categoriaLower)) {
-      return value;
+/**
+ * Busca categoria usando a função do banco de dados
+ */
+async function buscarCategoriaPorTermo(supabase: any, termo: string) {
+  try {
+    const { data, error } = await supabase.rpc('buscar_categoria_por_termo', {
+      termo_busca: termo
+    });
+    
+    if (error) {
+      console.error('Erro ao buscar categoria:', error);
+      return null;
     }
+    
+    return data?.[0] || null;
+  } catch (error) {
+    console.error('Erro ao conectar com o banco:', error);
+    return null;
   }
-  
-  return 'outros';
 }
 
 serve(async (req) => {
@@ -66,18 +46,30 @@ serve(async (req) => {
     // Normalizar comando case-insensitive
     const comando = message.toLowerCase().trim();
     
-    // Comando para consultar categoria usando normalização
+    // Comando para consultar categoria usando normalização do banco
     if (comando.startsWith('categoria ') || comando.startsWith('cat ')) {
       const categoriaInput = comando.replace(/^(categoria|cat)\s+/i, '').trim();
-      const categoriaNormalizada = normalizarCategoria(categoriaInput);
       
-      console.log(`🔍 [CATEGORIA] Input: "${categoriaInput}" -> Normalizada: "${categoriaNormalizada}"`);
+      // Buscar categoria no banco usando a função específica
+      const categoriaEncontrada = await buscarCategoriaPorTermo(supabase, categoriaInput);
       
-      // Buscar produtos usando ILIKE para case-insensitive
+      if (!categoriaEncontrada) {
+        return new Response(
+          JSON.stringify({ 
+            reply: `❌ Categoria "${categoriaInput}" não encontrada. Use "categorias" para ver as disponíveis.`
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const nomeCategoria = categoriaEncontrada.nome;
+      console.log(`🔍 [CATEGORIA] Input: "${categoriaInput}" -> Encontrada: "${nomeCategoria}"`);
+      
+      // Buscar produtos da categoria usando ILIKE para case-insensitive
       const { data, error } = await supabase
         .from('estoque_app')
         .select('*')
-        .ilike('categoria', categoriaNormalizada)
+        .ilike('categoria', nomeCategoria)
         .gt('quantidade', 0)
         .order('produto_nome');
       
@@ -95,14 +87,14 @@ serve(async (req) => {
       if (!data || data.length === 0) {
         return new Response(
           JSON.stringify({ 
-            reply: `❌ Nenhum produto encontrado na categoria "${categoriaInput}".`
+            reply: `❌ Nenhum produto encontrado na categoria "${nomeCategoria}".`
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
       // Formatar resposta
-      let resposta = `📂 **${categoriaNormalizada.toUpperCase()}** (${data.length} item${data.length > 1 ? 'ns' : ''})\n\n`;
+      let resposta = `📂 **${nomeCategoria.toUpperCase()}** (${data.length} item${data.length > 1 ? 'ns' : ''})\n\n`;
       
       let valorTotal = 0;
       
@@ -135,24 +127,40 @@ serve(async (req) => {
     
     // Comando para listar todas as categorias
     if (comando === 'categorias' || comando === 'cats') {
-      const categorias = Object.values(categoriasNormalizadas);
-      const categoriasUnicas = [...new Set(categorias)].sort();
+      // Buscar categorias diretamente do banco
+      const { data: categoriasDB, error: categoriaError } = await supabase
+        .from('categorias')
+        .select('nome, sinonimos')
+        .eq('ativa', true)
+        .order('nome');
+      
+      if (categoriaError) {
+        console.error('❌ Erro ao buscar categorias:', categoriaError);
+        return new Response(
+          JSON.stringify({ 
+            reply: '❌ Erro ao carregar categorias do sistema.'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       
       let resposta = '📂 **CATEGORIAS DISPONÍVEIS:**\n\n';
       
-      for (const categoria of categoriasUnicas) {
+      for (const categoria of categoriasDB || []) {
         // Contar produtos em cada categoria
         const { data } = await supabase
           .from('estoque_app')
           .select('id')
-          .ilike('categoria', categoria)
+          .ilike('categoria', categoria.nome)
           .gt('quantidade', 0);
         
         const total = data?.length || 0;
-        resposta += `• ${categoria.toUpperCase()} (${total} produtos)\n`;
+        const sinonimos = categoria.sinonimos ? ` (${categoria.sinonimos.slice(0, 3).join(', ')}${categoria.sinonimos.length > 3 ? '...' : ''})` : '';
+        resposta += `• ${categoria.nome.toUpperCase()} (${total} produtos)${sinonimos}\n`;
       }
       
       resposta += '\n💡 Use: *categoria [nome]* para ver produtos de uma categoria específica';
+      resposta += '\n💡 Aceita variações como: carnes, frios, higiene, etc.';
       
       return new Response(
         JSON.stringify({ reply: resposta }),
