@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Executar teste imediatamente
-(async () => {
+// FUNÇÃO DESABILITADA PARA EVITAR EXECUÇÃO AUTOMÁTICA
+const testeExecuteNow = async () => {
   try {
     console.log('🚀 EXECUTANDO TESTE DIRETO DA FUNÇÃO...');
     
@@ -53,4 +53,7 @@ import { supabase } from "@/integrations/supabase/client";
   } catch (error) {
     console.error('❌ ERRO GERAL:', error);
   }
-})();
+}; 
+
+// FUNÇÃO DESABILITADA PARA EVITAR EXECUÇÃO AUTOMÁTICA
+// Para executar, chame: testeExecuteNow()

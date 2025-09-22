@@ -66,5 +66,5 @@ const executeTeste = async () => {
   }
 };
 
-// Executar automaticamente
-executeTeste();
+// COMENTADO PARA EVITAR EXECUÇÃO AUTOMÁTICA
+// executeTeste();
