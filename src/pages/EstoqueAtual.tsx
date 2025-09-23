@@ -119,27 +119,31 @@ const EstoqueAtual = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('🔥 useEffect INICIAL executado');
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
-    // Forçar carregamento do histórico após 2 segundos
+    // Forçar carregamento do histórico após 3 segundos (garantido)
     setTimeout(() => {
-      console.log('🔥 FORÇANDO loadHistoricoPrecos após 2 segundos');
-      loadHistoricoPrecos();
-    }, 2000);
+      console.log('🔥 TIMEOUT INICIAL: Forçando loadHistoricoPrecos após 3 segundos');
+      if (estoque.length > 0) {
+        loadHistoricoPrecos();
+      } else {
+        console.log('⚠️ Estoque ainda vazio no timeout inicial');
+      }
+    }, 3000);
   }, []);
 
-  // Carregar histórico de preços quando o estoque for carregado
+  // Carregar histórico de preços quando o estoque for carregado  
   useEffect(() => {
     console.log('🔄 useEffect estoque mudou:', { estoqueLength: estoque.length });
     if (estoque.length > 0) {
       console.log('🔄 useEffect: Chamando loadHistoricoPrecos com estoque.length:', estoque.length);
       // Chamada imediata + timeout para garantir
-      loadHistoricoPrecos();
       setTimeout(() => {
-        console.log('🔥 TIMEOUT: Segunda chamada loadHistoricoPrecos');
+        console.log('🔥 EXECUÇÃO GARANTIDA: loadHistoricoPrecos');
         loadHistoricoPrecos();
-      }, 1500);
+      }, 500);
     }
   }, [estoque]);
 
