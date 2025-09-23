@@ -6,7 +6,7 @@ export const executarLimpezaCompleta = async () => {
     
     const { data, error } = await supabase.functions.invoke('limpar-residuos-completo', {
       body: {
-        email: 'camilapereira.cp14@gmail.com'
+        email: 'milafrancajpal@gmail.com'
       }
     });
 
