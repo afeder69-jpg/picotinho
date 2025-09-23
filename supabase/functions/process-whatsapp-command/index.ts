@@ -233,7 +233,7 @@ const handler = async (req: Request): Promise<Response> => {
             .eq('usuario_id', mensagem.usuario_id)
             .eq('remetente', mensagem.remetente);
           
-          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
+          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Estoque (estoque completo)\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
           comandoExecutado = true;
         }
         
@@ -256,7 +256,10 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar match:', textoNormalizado.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar)\b/));
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
-        // Comandos para CONSULTAR ESTOQUE
+        // Comandos para CONSULTAR ESTOQUE COMPLETO (nova funcionalidade)
+        const isConsultarEstoqueCompleto = textoNormalizado.match(/\b(consulta\s+estoque|estoque\s+completo|^estoque$)\b/);
+        
+        // Comandos para CONSULTAR ESTOQUE (produto específico)
         const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
         
         // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
@@ -283,6 +286,10 @@ const handler = async (req: Request): Promise<Response> => {
           console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
           resposta += await processarAdicionarProduto(supabase, mensagem);
           comandoExecutado = true;
+        } else if (isConsultarEstoqueCompleto) {
+          console.log('📦 Comando CONSULTAR ESTOQUE COMPLETO identificado:', textoNormalizado);
+          resposta += await processarConsultarEstoqueCompleto(supabase, mensagem);
+          comandoExecutado = true;
         } else if (isConsultarCategoria) {
           console.log('📂 Comando CONSULTAR CATEGORIA identificado:', textoNormalizado);
           resposta += await processarConsultarCategoria(supabase, mensagem);
@@ -308,7 +315,7 @@ const handler = async (req: Request): Promise<Response> => {
           
           console.log(`🗑️ [RESET] Sessões ativas removidas para ${mensagem.remetente}`);
           
-          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
+          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Estoque (estoque completo)\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
         }
       }
     }
@@ -631,12 +638,125 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     console.log(`🗑️ [RESET] Sessões ativas removidas para consulta fallback`);
     
     // Fallback se não for comando válido
-    return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+    return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Estoque (estoque completo)\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
 
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar comando:", err);
     console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao processar sua consulta. Tente novamente mais tarde.";
+  }
+}
+
+/**
+ * Processar comando de consultar estoque completo
+ */
+async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): Promise<string> {
+  try {
+    console.log('📦 [INICIO] Processando consulta de estoque completo...');
+    
+    // Verificar se usuario_id existe
+    if (!mensagem.usuario_id) {
+      console.error('❌ [ERRO] Usuario ID não encontrado na mensagem');
+      return "❌ Erro interno: usuário não identificado.";
+    }
+    
+    console.log(`📋 [DEBUG] Usuario ID: ${mensagem.usuario_id}`);
+    
+    // Buscar TODOS os produtos do estoque com quantidade > 0
+    console.log(`🔍 [STEP 1] Buscando todo o estoque do usuário...`);
+    
+    const { data, error } = await supabase
+      .from("estoque_app")
+      .select("produto_nome, categoria, quantidade, unidade_medida, preco_unitario_ultimo")
+      .eq("user_id", mensagem.usuario_id)
+      .gt("quantidade", 0) // Apenas produtos com estoque
+      .order("categoria")
+      .order("produto_nome");
+    
+    console.log(`📋 [RESULT] Data:`, data);
+    console.log(`📋 [RESULT] Error:`, error);
+    
+    if (error) {
+      console.error('❌ [ERRO] Erro ao buscar estoque completo:', error);
+      return "❌ Erro ao consultar seu estoque completo. Tente novamente.";
+    }
+    
+    if (!data || data.length === 0) {
+      console.log(`❌ [STEP 2] Estoque vazio`);
+      return "📦 Seu estoque está vazio no momento.\n\nPara adicionar produtos use:\n• Incluir [produto]\n• Inserir Nota (envie arquivo da nota fiscal)";
+    }
+    
+    console.log(`✅ [STEP 2] ${data.length} produtos encontrados no estoque`);
+    
+    // Agrupar produtos por categoria
+    const produtosPorCategoria = new Map();
+    let valorTotalGeral = 0;
+    
+    data.forEach(produto => {
+      const categoria = produto.categoria || 'OUTROS';
+      
+      if (!produtosPorCategoria.has(categoria)) {
+        produtosPorCategoria.set(categoria, []);
+      }
+      
+      produtosPorCategoria.get(categoria).push(produto);
+      
+      // Calcular valor total (quantidade * preço)
+      if (produto.preco_unitario_ultimo && produto.preco_unitario_ultimo > 0) {
+        valorTotalGeral += produto.quantidade * produto.preco_unitario_ultimo;
+      }
+    });
+    
+    console.log(`🔄 [STEP 3] Produtos agrupados em ${produtosPorCategoria.size} categorias`);
+    
+    // Montar resposta formatada
+    let resposta = "📦 **SEU ESTOQUE COMPLETO**\n\n";
+    
+    // Ordenar categorias alfabeticamente
+    const categoriasOrdenadas = Array.from(produtosPorCategoria.keys()).sort();
+    
+    categoriasOrdenadas.forEach(categoria => {
+      const produtos = produtosPorCategoria.get(categoria);
+      let valorTotalCategoria = 0;
+      
+      resposta += `📂 **${categoria.toUpperCase()}** (${produtos.length} ${produtos.length === 1 ? 'item' : 'itens'})\n\n`;
+      
+      produtos.forEach((produto, index) => {
+        const quantidadeFormatada = formatarQuantidade(produto.quantidade, produto.unidade_medida);
+        const produtoNomeLimpo = limparNomeProduto(produto.produto_nome);
+        const preco = produto.preco_unitario_ultimo || 0;
+        const valorTotal = produto.quantidade * preco;
+        
+        valorTotalCategoria += valorTotal;
+        
+        resposta += `${index + 1}. ${produtoNomeLimpo}\n`;
+        resposta += `   📊 ${quantidadeFormatada}`;
+        
+        if (preco > 0) {
+          resposta += ` | 💰 R$ ${preco.toFixed(2)}/${produto.unidade_medida === 'UN' ? 'un' : produto.unidade_medida} | 💵 R$ ${valorTotal.toFixed(2)}`;
+        }
+        
+        resposta += `\n\n`;
+      });
+      
+      if (valorTotalCategoria > 0) {
+        resposta += `💰 **VALOR TOTAL**: R$ ${valorTotalCategoria.toFixed(2)}\n\n`;
+      }
+    });
+    
+    // Adicionar valor total geral se houver preços
+    if (valorTotalGeral > 0) {
+      resposta += `💰 **VALOR TOTAL GERAL**: R$ ${valorTotalGeral.toFixed(2)}`;
+    }
+    
+    console.log(`📤 [STEP 4] Resposta formatada com ${categoriasOrdenadas.length} categorias`);
+    
+    return resposta;
+
+  } catch (err) {
+    console.error("❌ [ERRO GERAL] Erro ao processar estoque completo:", err);
+    console.error("❌ [ERRO STACK]:", err.stack);
+    return "❌ Houve um erro ao consultar seu estoque completo. Tente novamente mais tarde.";
   }
 }
 
