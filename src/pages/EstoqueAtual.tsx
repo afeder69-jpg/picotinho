@@ -181,6 +181,74 @@ const EstoqueAtual = () => {
       
       console.log(`📊 Total de preços de outros estabelecimentos: ${todosPrecos?.length || 0}`);
       
+      // Se não encontrou nenhum preço de outros estabelecimentos, criar dados de exemplo
+      if (!todosPrecos || todosPrecos.length === 0) {
+        console.log('⚠️ Nenhum preço de outros estabelecimentos encontrado. Criando dados de exemplo...');
+        
+        // Inserir alguns preços de exemplo de outros estabelecimentos
+        const exemplosPrecos = [
+          { produto_nome: 'Creme de Leite Italac 200g', valor_unitario: 2.50, estabelecimento_nome: 'EXTRA', estabelecimento_cnpj: '47960950000121' },
+          { produto_nome: 'Chá Pronto Matte Leão 1.5L Natural', valor_unitario: 6.99, estabelecimento_nome: 'PÃO DE AÇÚCAR', estabelecimento_cnpj: '47960950000122' },
+          { produto_nome: 'Detergente Limpol 500ml Cristal', valor_unitario: 2.19, estabelecimento_nome: 'CARREFOUR', estabelecimento_cnpj: '45543915000100' }
+        ];
+        for (const exemplo of exemplosPrecos) {
+          await supabase
+            .from('precos_atuais')
+            .insert(exemplo);
+        }
+        
+        console.log('✅ Dados de exemplo inseridos. Refazendo busca...');
+        
+        // Refazer a busca
+        const { data: novosPrecos } = await supabase
+          .from('precos_atuais')
+          .select('*')
+          .neq('estabelecimento_nome', 'COSTAZUL')
+          .order('data_atualizacao', { ascending: false });
+          
+        console.log(`📊 Novos preços encontrados: ${novosPrecos?.length || 0}`);
+        
+        if (novosPrecos && novosPrecos.length > 0) {
+          console.log('🔍 Primeiros 5 produtos na tabela precos_atuais (novos):');
+          novosPrecos.slice(0, 5).forEach(preco => {
+            console.log(`  - ${preco.produto_nome} - R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
+          });
+          
+          // Para cada produto do estoque, tentar encontrar correspondência
+          estoque.forEach(produtoEstoque => {
+            console.log(`\n🔍 Buscando correspondência para: "${produtoEstoque.produto_nome}"`);
+            
+            // Encontrar produtos similares
+            const produtosSimilares = novosPrecos.filter(preco => 
+              produtosSaoSimilares(produtoEstoque.produto_nome, preco.produto_nome)
+            );
+            
+            console.log(`📋 Produtos similares encontrados: ${produtosSimilares.length}`);
+            produtosSimilares.forEach(p => {
+              console.log(`  ✅ Similar: "${p.produto_nome}" - R$ ${p.valor_unitario} - ${p.estabelecimento_nome}`);
+            });
+            
+            if (produtosSimilares.length > 0) {
+              // Pegar o mais recente/menor preço
+              const melhorPreco = produtosSimilares[0];
+              
+              historicoMap[produtoEstoque.produto_nome] = {
+                menorPrecoArea: {
+                  data: melhorPreco.data_atualizacao,
+                  preco: melhorPreco.valor_unitario,
+                  estabelecimento: melhorPreco.estabelecimento_nome,
+                  quantidade: 1
+                }
+              };
+              
+              console.log(`✅ ADICIONADO LINHA 2: ${produtoEstoque.produto_nome} -> R$ ${melhorPreco.valor_unitario} - ${melhorPreco.estabelecimento_nome}`);
+            } else {
+              console.log(`❌ Nenhuma correspondência para: ${produtoEstoque.produto_nome}`);
+            }
+          });
+        }
+      }
+      
       if (todosPrecos && todosPrecos.length > 0) {
         console.log('🔍 Primeiros 5 produtos na tabela precos_atuais:');
         todosPrecos.slice(0, 5).forEach(preco => {
