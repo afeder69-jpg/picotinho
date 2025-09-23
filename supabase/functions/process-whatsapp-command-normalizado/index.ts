@@ -65,7 +65,8 @@ serve(async (req) => {
       const nomeCategoria = categoriaEncontrada.categoria_nome;
       console.log(`🔍 [CATEGORIA] Input: "${categoriaInput}" -> Encontrada: "${nomeCategoria}"`);
       
-      // Buscar produtos da categoria usando ILIKE para case-insensitive
+      // Buscar produtos da categoria usando ILIKE para case-insensitive  
+      // NOTA: Esta função não filtra por user_id pois é uma versão simplificada
       const { data, error } = await supabase
         .from('estoque_app')
         .select('*')
