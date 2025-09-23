@@ -36,9 +36,11 @@ serve(async (req) => {
     // 1. BUSCAR PRODUTOS SIMILARES JÁ NORMALIZADOS
     const { data: produtosExistentes, error: errorBusca } = await supabase
       .from('estoque_app')
-      .select('produto_nome, produto_nome_normalizado, produto_hash_normalizado, categoria, marca, nome_base')
+      .select('id, produto_nome, produto_nome_normalizado, produto_hash_normalizado, categoria, marca, nome_base')
+      .eq('user_id', userId)
+      .not('produto_nome_normalizado', 'is', null)
       .not('produto_hash_normalizado', 'is', null)
-      .limit(100);
+      .limit(1000);
 
     if (errorBusca) {
       console.error('❌ Erro ao buscar produtos:', errorBusca);
@@ -52,7 +54,15 @@ serve(async (req) => {
 
     if (!produtosExistentes || produtosExistentes.length === 0) {
       console.log('🆕 Nenhum produto normalizado encontrado - chamando IA-2 para criar novo');
-      return await chamarIA2ParaCriarNovo(produtoNome, supabase, openaiApiKey);
+      const novoProduto = await chamarIA2ParaCriarNovo(produtoNome, supabase, openaiApiKey);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        matched: false,
+        produto: novoProduto
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // 2. USAR IA PARA FAZER MATCHING INTELIGENTE
@@ -64,25 +74,26 @@ serve(async (req) => {
 
     if (produtoSimilar) {
       console.log(`✅ [MATCH ENCONTRADO] "${produtoNome}" → "${produtoSimilar.produto_nome}"`);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          tipo: 'match_encontrado',
-          produto_original: produtoNome,
-          produto_matched: produtoSimilar.produto_nome,
-          produto_nome_normalizado: produtoSimilar.produto_nome_normalizado,
-          produto_hash_normalizado: produtoSimilar.produto_hash_normalizado,
-          categoria: produtoSimilar.categoria,
-          marca: produtoSimilar.marca,
-          nome_base: produtoSimilar.nome_base
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({
+        success: true,
+        matched: true,
+        produto: produtoSimilar
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // 3. NÃO ENCONTROU SIMILAR - CRIAR NOVO COM IA-2
     console.log('🆕 Nenhum produto similar encontrado - criando novo com IA-2');
-    return await chamarIA2ParaCriarNovo(produtoNome, supabase, openaiApiKey);
+    const novoProduto = await chamarIA2ParaCriarNovo(produtoNome, supabase, openaiApiKey);
+    
+    return new Response(JSON.stringify({
+      success: true,
+      matched: false,
+      produto: novoProduto
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
     console.error('❌ Erro geral:', error);
@@ -172,62 +183,54 @@ Se NÃO encontrar produto idêntico, responda apenas: "NENHUM"`;
   }
 }
 
-async function chamarIA2ParaCriarNovo(produtoNome: string, supabase: any, openaiApiKey: string) {
-  console.log(`🆕 Criando novo produto normalizado para: "${produtoNome}"`);
-
+async function chamarIA2ParaCriarNovo(
+  produtoNome: string, 
+  supabase: any, 
+  openAIApiKey?: string
+): Promise<any> {
   try {
-    // Chamar a função IA-2 existente
-    const { data: resultadoIA2, error: errorIA2 } = await supabase.functions.invoke('normalizar-produto-ia2', {
-      body: { nomeOriginal: produtoNome }
+    console.log(`🆕 Criando novo produto normalizado para: "${produtoNome}"`);
+    
+    const { data, error } = await supabase.functions.invoke('normalizar-produto-ia2', {
+      body: { descricao: produtoNome }
     });
 
-    if (errorIA2) {
-      console.error('❌ Erro ao chamar IA-2:', errorIA2);
-      // Fallback: retornar estrutura básica
-      return new Response(
-        JSON.stringify({
-          success: true,
-          tipo: 'criado_fallback',
-          produto_original: produtoNome,
-          produto_nome_normalizado: produtoNome.toUpperCase().trim(),
-          produto_hash_normalizado: await gerarHashSimples(produtoNome),
-          categoria: 'outros',
-          marca: null,
-          nome_base: produtoNome.toUpperCase().trim()
-        }),
-        { headers: { corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (error) {
+      console.error('❌ Erro ao chamar IA-2:', error);
+      
+      // Fallback robusto
+      return {
+        produto_nome_normalizado: produtoNome.toUpperCase().trim(),
+        nome_base: produtoNome.toUpperCase().trim(),
+        marca: null,
+        categoria: 'outros',
+        tipo_embalagem: null,
+        qtd_valor: null,
+        qtd_unidade: null,
+        qtd_base: null,
+        granel: false,
+        produto_hash_normalizado: await gerarHashSimples(produtoNome)
+      };
     }
 
-    console.log('✅ IA-2 executada com sucesso:', resultadoIA2);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        tipo: 'criado_novo',
-        produto_original: produtoNome,
-        ...resultadoIA2
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return data;
 
   } catch (error) {
     console.error('❌ Erro ao criar novo produto:', error);
     
-    // Fallback em caso de erro
-    return new Response(
-      JSON.stringify({
-        success: true,
-        tipo: 'criado_fallback',
-        produto_original: produtoNome,
-        produto_nome_normalizado: produtoNome.toUpperCase().trim(),
-        produto_hash_normalizado: await gerarHashSimples(produtoNome),
-        categoria: 'outros',
-        marca: null,
-        nome_base: produtoNome.toUpperCase().trim()
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Fallback final
+    return {
+      produto_nome_normalizado: produtoNome.toUpperCase().trim(),
+      nome_base: produtoNome.toUpperCase().trim(),
+      marca: null,
+      categoria: 'outros',
+      tipo_embalagem: null,
+      qtd_valor: null,
+      qtd_unidade: null,
+      qtd_base: null,
+      granel: false,
+      produto_hash_normalizado: await gerarHashSimples(produtoNome)
+    };
   }
 }
 
