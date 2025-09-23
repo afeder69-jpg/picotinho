@@ -257,7 +257,18 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
         // Comandos para CONSULTAR ESTOQUE COMPLETO (nova funcionalidade)
+        console.log('🔍 [DEBUG ESTOQUE] Input original:', conteudo);
+        console.log('🔍 [DEBUG ESTOQUE] textoNormalizado:', textoNormalizado);
+        console.log('🔍 [DEBUG ESTOQUE] textoNormalizado.trim():', textoNormalizado.trim());
+        console.log('🔍 [DEBUG ESTOQUE] Length:', textoNormalizado.trim().length);
+        
         const isConsultarEstoqueCompleto = textoNormalizado.trim().match(/^(consulta\s+estoque|estoque\s+completo|estoque)$/);
+        console.log('🔍 [DEBUG ESTOQUE] Regex match result:', isConsultarEstoqueCompleto);
+        console.log('🔍 [DEBUG ESTOQUE] Testando individual:');
+        console.log('  - "consulta estoque":', textoNormalizado.trim() === 'consulta estoque');
+        console.log('  - "estoque completo":', textoNormalizado.trim() === 'estoque completo');
+        console.log('  - "estoque":', textoNormalizado.trim() === 'estoque');
+        
         console.log('🔍 [DEBUG] isConsultarEstoqueCompleto check:', { textoNormalizado, trimmed: textoNormalizado.trim(), match: isConsultarEstoqueCompleto });
         
         // Comandos para CONSULTAR ESTOQUE (produto específico)
