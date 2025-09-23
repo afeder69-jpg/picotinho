@@ -119,186 +119,22 @@ const EstoqueAtual = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log('🔥 INICIANDO APP - useEffect inicial');
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
+    // corrigirProdutosManuais(); // Removido - correção manual
   }, []);
 
-  // Carregar histórico de preços quando o estoque for carregado  
+  // Carregar histórico de preços quando o estoque for carregado
   useEffect(() => {
-    console.log('🔄 ESTOQUE MUDOU:', { estoqueLength: estoque.length });
     if (estoque.length > 0) {
-      console.log('🚀 INICIANDO BUSCA DE HISTÓRICO');
-      buscarHistoricoDeOutrosUsuarios();
+      console.log('🔄 useEffect: Chamando loadHistoricoPrecos com estoque.length:', estoque.length);
+      // Timeout para evitar conflito com outros carregamentos
+      setTimeout(() => {
+        loadHistoricoPrecos();
+      }, 1000);
     }
   }, [estoque]);
-
-  // Função para normalizar nomes de produtos para comparação
-  const normalizarNomeProduto = (nome: string): string => {
-    return nome
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[^\w\s]/g, ' ') // Remove pontuação
-      .replace(/\s+/g, ' ') // Normaliza espaços
-      .trim();
-  };
-
-  // Função para verificar similaridade entre nomes
-  const produtosSaoSimilares = (nome1: string, nome2: string): boolean => {
-    const normalizado1 = normalizarNomeProduto(nome1);
-    const normalizado2 = normalizarNomeProduto(nome2);
-    
-    // Exact match
-    if (normalizado1 === normalizado2) return true;
-    
-    // Contém um ao outro
-    if (normalizado1.includes(normalizado2) || normalizado2.includes(normalizado1)) return true;
-    
-    // Palavras-chave em comum (pelo menos 2 palavras significativas)
-    const palavras1 = normalizado1.split(' ').filter(p => p.length > 2);
-    const palavras2 = normalizado2.split(' ').filter(p => p.length > 2);
-    const palavrasComuns = palavras1.filter(p => palavras2.includes(p));
-    
-    return palavrasComuns.length >= 2;
-  };
-
-  // Função para buscar dados de outros usuários
-  const buscarHistoricoDeOutrosUsuarios = async () => {
-    try {
-      console.log('🎯 FUNÇÃO EXECUTANDO: buscarHistoricoDeOutrosUsuarios');
-      console.log('📋 Produtos no estoque:', estoque.map(p => p.produto_nome));
-      
-      const historicoMap: {[key: string]: any} = {};
-      
-      // Buscar TODOS os preços de outros estabelecimentos (não COSTAZUL)
-      const { data: todosPrecos } = await supabase
-        .from('precos_atuais')
-        .select('*')
-        .neq('estabelecimento_nome', 'COSTAZUL')
-        .order('data_atualizacao', { ascending: false });
-      
-      console.log(`📊 Total de preços de outros estabelecimentos: ${todosPrecos?.length || 0}`);
-      
-      // Se não encontrou nenhum preço de outros estabelecimentos, criar dados de exemplo
-      if (!todosPrecos || todosPrecos.length === 0) {
-        console.log('⚠️ Nenhum preço de outros estabelecimentos encontrado. Criando dados de exemplo...');
-        
-        // Inserir alguns preços de exemplo de outros estabelecimentos
-        const exemplosPrecos = [
-          { produto_nome: 'Creme de Leite Italac 200g', valor_unitario: 2.50, estabelecimento_nome: 'EXTRA', estabelecimento_cnpj: '47960950000121' },
-          { produto_nome: 'Chá Pronto Matte Leão 1.5L Natural', valor_unitario: 6.99, estabelecimento_nome: 'PÃO DE AÇÚCAR', estabelecimento_cnpj: '47960950000122' },
-          { produto_nome: 'Detergente Limpol 500ml Cristal', valor_unitario: 2.19, estabelecimento_nome: 'CARREFOUR', estabelecimento_cnpj: '45543915000100' }
-        ];
-        for (const exemplo of exemplosPrecos) {
-          await supabase
-            .from('precos_atuais')
-            .insert(exemplo);
-        }
-        
-        console.log('✅ Dados de exemplo inseridos. Refazendo busca...');
-        
-        // Refazer a busca
-        const { data: novosPrecos } = await supabase
-          .from('precos_atuais')
-          .select('*')
-          .neq('estabelecimento_nome', 'COSTAZUL')
-          .order('data_atualizacao', { ascending: false });
-          
-        console.log(`📊 Novos preços encontrados: ${novosPrecos?.length || 0}`);
-        
-        if (novosPrecos && novosPrecos.length > 0) {
-          console.log('🔍 Primeiros 5 produtos na tabela precos_atuais (novos):');
-          novosPrecos.slice(0, 5).forEach(preco => {
-            console.log(`  - ${preco.produto_nome} - R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
-          });
-          
-          // Para cada produto do estoque, tentar encontrar correspondência
-          estoque.forEach(produtoEstoque => {
-            console.log(`\n🔍 Buscando correspondência para: "${produtoEstoque.produto_nome}"`);
-            
-            // Encontrar produtos similares
-            const produtosSimilares = novosPrecos.filter(preco => 
-              produtosSaoSimilares(produtoEstoque.produto_nome, preco.produto_nome)
-            );
-            
-            console.log(`📋 Produtos similares encontrados: ${produtosSimilares.length}`);
-            produtosSimilares.forEach(p => {
-              console.log(`  ✅ Similar: "${p.produto_nome}" - R$ ${p.valor_unitario} - ${p.estabelecimento_nome}`);
-            });
-            
-            if (produtosSimilares.length > 0) {
-              // Pegar o mais recente/menor preço
-              const melhorPreco = produtosSimilares[0];
-              
-              historicoMap[produtoEstoque.produto_nome] = {
-                menorPrecoArea: {
-                  data: melhorPreco.data_atualizacao,
-                  preco: melhorPreco.valor_unitario,
-                  estabelecimento: melhorPreco.estabelecimento_nome,
-                  quantidade: 1
-                }
-              };
-              
-              console.log(`✅ ADICIONADO LINHA 2: ${produtoEstoque.produto_nome} -> R$ ${melhorPreco.valor_unitario} - ${melhorPreco.estabelecimento_nome}`);
-            } else {
-              console.log(`❌ Nenhuma correspondência para: ${produtoEstoque.produto_nome}`);
-            }
-          });
-        }
-      }
-      
-      if (todosPrecos && todosPrecos.length > 0) {
-        console.log('🔍 Primeiros 5 produtos na tabela precos_atuais:');
-        todosPrecos.slice(0, 5).forEach(preco => {
-          console.log(`  - ${preco.produto_nome} - R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
-        });
-        
-        // Para cada produto do estoque, tentar encontrar correspondência
-        estoque.forEach(produtoEstoque => {
-          console.log(`\n🔍 Buscando correspondência para: "${produtoEstoque.produto_nome}"`);
-          
-          // Encontrar produtos similares
-          const produtosSimilares = todosPrecos.filter(preco => 
-            produtosSaoSimilares(produtoEstoque.produto_nome, preco.produto_nome)
-          );
-          
-          console.log(`📋 Produtos similares encontrados: ${produtosSimilares.length}`);
-          produtosSimilares.forEach(p => {
-            console.log(`  ✅ Similar: "${p.produto_nome}" - R$ ${p.valor_unitario} - ${p.estabelecimento_nome}`);
-          });
-          
-          if (produtosSimilares.length > 0) {
-            // Pegar o mais recente/menor preço
-            const melhorPreco = produtosSimilares[0];
-            
-            historicoMap[produtoEstoque.produto_nome] = {
-              menorPrecoArea: {
-                data: melhorPreco.data_atualizacao,
-                preco: melhorPreco.valor_unitario,
-                estabelecimento: melhorPreco.estabelecimento_nome,
-                quantidade: 1
-              }
-            };
-            
-            console.log(`✅ ADICIONADO LINHA 2: ${produtoEstoque.produto_nome} -> R$ ${melhorPreco.valor_unitario} - ${melhorPreco.estabelecimento_nome}`);
-          } else {
-            console.log(`❌ Nenhuma correspondência para: ${produtoEstoque.produto_nome}`);
-          }
-        });
-      }
-      
-      console.log('\n🏁 RESULTADO FINAL - historicoMap:', historicoMap);
-      console.log(`📊 Total de produtos com dados de área: ${Object.keys(historicoMap).length}`);
-      
-      setHistoricoPrecos(historicoMap);
-      console.log('✅ setHistoricoPrecos executado com sucesso');
-      
-    } catch (error) {
-      console.error('❌ ERRO na busca:', error);
-    }
-  };
 
   // Função removida - estava causando problemas na marcação de produtos manuais
 
@@ -307,183 +143,154 @@ const EstoqueAtual = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      console.log('🔄 Carregando preços atuais - TODOS os dados disponíveis');
+      // Buscar configuração de área de atuação do usuário
+      const { data: config } = await supabase
+        .from('configuracoes_usuario')
+        .select('raio_busca_km')
+        .eq('usuario_id', user.id)
+        .maybeSingle();
 
-      // BUSCAR TODOS OS PREÇOS DIRETAMENTE (incluindo de outros usuários)
-      const { data: todosPrecos, error: errorTodos } = await supabase
-        .from('precos_atuais')
-        .select('*')
-        .order('data_atualizacao', { ascending: false });
+      const raio = config?.raio_busca_km || 5.0;
 
-      if (errorTodos) {
-        console.error('Erro ao buscar todos os preços:', errorTodos);
-        setPrecosAtuais([]);
+      // Buscar posição atual do usuário via GPS
+      const coordenadas = await obterCoordenadas();
+      console.log('🌍 Coordenadas do usuário obtidas:', coordenadas);
+      
+      // Chamar função dinâmica que calcula preços por área
+      const { data: precosAreaData, error: errorArea } = await supabase.functions.invoke('preco-atual-usuario', {
+        body: {
+          userId: user.id,
+          latitude: coordenadas.latitude,
+          longitude: coordenadas.longitude,
+          raioKm: raio
+        }
+      });
+
+      if (errorArea) {
+        console.error('Erro ao buscar preços por área:', errorArea);
+        // Fallback para o método antigo se as coordenadas não funcionaram
+        await loadPrecosAtuaisLegacy();
         return;
       }
 
-      console.log('📊 TODOS OS PREÇOS NO BANCO:', todosPrecos?.length || 0);
-      
-      // Buscar especificamente os produtos que estão com problema
-      const produtosProblematicos = todosPrecos?.filter(p => 
-        p.produto_nome.toLowerCase().includes('creme') || 
-        p.produto_nome.toLowerCase().includes('chá') ||
-        p.produto_nome.toLowerCase().includes('cha')
-      );
-      console.log('🔍 PRODUTOS PROBLEMÁTICOS ENCONTRADOS:', produtosProblematicos);
+      if (precosAreaData?.success && precosAreaData?.resultados) {
+        const precosFormatados = precosAreaData.resultados.map((item: any) => ({
+          id: `area-${item.produto_nome}`,
+          produto_nome: item.produto_nome,
+          valor_unitario: item.valor_unitario,
+          data_atualizacao: item.data_atualizacao,
+          origem: 'area_dinamica',
+          estabelecimento_nome: item.estabelecimento_nome
+        }));
 
-      // Formatar TODOS os preços para área dinâmica
-      const precosFormatados = (todosPrecos || []).map((item: any) => ({
-        id: `geral-${item.id}`,
-        produto_nome: item.produto_nome,
-        valor_unitario: item.valor_unitario,
-        data_atualizacao: item.data_atualizacao,
-        origem: 'area_dinamica', // Marcar como área dinâmica para funcionar
-        estabelecimento_nome: item.estabelecimento_nome,
-        estabelecimento_cnpj: item.estabelecimento_cnpj
-      }));
-
-      console.log('✅ Preços carregados diretamente do banco:', precosFormatados.length);
-      console.log('📊 Primeiros 5 preços:', precosFormatados?.slice(0, 5));
-      setPrecosAtuais(precosFormatados);
-
+        console.log(`✅ Preços dinâmicos carregados por área (${raio}km):`, precosFormatados);
+        setPrecosAtuais(precosFormatados);
+      } else {
+        // Fallback se não há resultados na área
+        setPrecosAtuais([]);
+      }
     } catch (error) {
-      console.error('Erro ao carregar preços atuais:', error);
-      setPrecosAtuais([]);
+      console.error('Erro ao carregar preços atuais dinâmicos:', error);
+      // Fallback para o método antigo
+      await loadPrecosAtuaisLegacy();
     }
   };
 
   const loadHistoricoPrecos = async () => {
     try {
-      console.log('🚀 FUNÇÃO INICIADA: loadHistoricoPrecos');
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || estoque.length === 0) {
-        console.log('❌ SAINDO: user ou estoque vazio', { user: !!user, estoqueLength: estoque.length });
-        return;
-      }
+      if (!user || estoque.length === 0) return;
 
-      console.log('🎯 BUSCA CORRETA: Apenas preços de OUTROS usuários/estabelecimentos (excluindo COSTAZUL)');
+      console.log('🕒 Carregando histórico de preços para estoque...');
 
       // Extrair nomes únicos dos produtos do estoque
       const nomesProdutos = estoque.map(item => 
         item.produto_nome_exibicao || item.produto_nome || ''
       ).filter(nome => nome.trim() !== '');
 
-      console.log('📝 Produtos para buscar:', nomesProdutos);
       if (nomesProdutos.length === 0) return;
-      
-      const historicoMap: {[key: string]: any} = {};
-      
-      for (const produtoNome of nomesProdutos) {
-        console.log(`\n🔍 === PROCESSANDO: ${produtoNome} ===`);
-        
-        // Buscar o produto no estoque para referência
-        const produtoEstoque = estoque.find(e => 
-          (e.produto_nome_exibicao || e.produto_nome) === produtoNome
-        );
-        
-        if (produtoEstoque) {
-          console.log(`✅ Produto encontrado no estoque: ${produtoNome}`);
+
+      // Buscar configuração de área de atuação do usuário
+      const { data: config } = await supabase
+        .from('configuracoes_usuario')
+        .select('raio_busca_km')
+        .eq('usuario_id', user.id)
+        .maybeSingle();
+
+      const raio = config?.raio_busca_km || 5.0;
+
+      // Buscar posição atual do usuário via GPS
+      const coordenadas = await obterCoordenadas();
+
+      // Tentar buscar histórico primeiro
+      try {
+        const { data: historicoData, error: historicoError } = await supabase.functions.invoke('buscar-historico-precos-estoque', {
+          body: {
+            produtos: nomesProdutos,
+            userId: user.id,
+            latitude: coordenadas.latitude,
+            longitude: coordenadas.longitude,
+            raioKm: raio
+          }
+        });
+
+        if (!historicoError && historicoData?.success) {
+          console.log('✅ Histórico obtido com sucesso:', historicoData);
+          const historicoMap: {[key: string]: any} = {};
           
-          // Implementar lógica de busca por similaridade de nomes (para contornar variações)
-          const nomesParaBuscar = [
-            produtoNome,
-            produtoNome.replace('Creme de Leite', 'Creme Leite'),
-            produtoNome.replace('Chá Pronto', 'Chá Mate'),
-            produtoNome.replace(' 1.5L ', ' 1,5L '),
-            produtoNome.replace(' 1,5L ', ' 1.5L ')
-          ];
-          
-          console.log(`🔍 Nomes para buscar:`, nomesParaBuscar);
-          
-          let melhorPrecoOutroUsuario = null;
-          
-          // Buscar em todas as variações de nome, MAS EXCLUINDO o usuário atual (COSTAZUL)
-          for (const nomeVariacao of nomesParaBuscar) {
-            if (nomeVariacao.length < 3) continue; // Evitar buscas muito genéricas
-            
-            console.log(`🔍 Testando variação: "${nomeVariacao}"`);
-            
-            const { data: precosOutrosUsuarios } = await supabase
-              .from('precos_atuais')
-              .select('*')
-              .or(`produto_nome.ilike.%${nomeVariacao}%,produto_nome_normalizado.ilike.%${nomeVariacao}%`)
-              .neq('estabelecimento_nome', 'COSTAZUL') // 🎯 EXCLUSÃO CRÍTICA: não buscar dados do usuário atual
-              .neq('estabelecimento_cnpj', '17493338000397') // Dupla garantia por CNPJ
-              .order('data_atualizacao', { ascending: false });
-            
-            console.log(`📊 Resultados para "${nomeVariacao}":`, precosOutrosUsuarios?.length || 0, 'registros');
-            
-            if (precosOutrosUsuarios && precosOutrosUsuarios.length > 0) {
-              console.log(`📋 Dados encontrados:`, precosOutrosUsuarios.map(p => ({
-                produto: p.produto_nome,
-                preco: p.valor_unitario,
-                estabelecimento: p.estabelecimento_nome,
-                data: p.data_atualizacao
-              })));
-              
-              // Pegar o mais recente (primeiro da lista)
-              const maisRecente = precosOutrosUsuarios[0];
-              
-              melhorPrecoOutroUsuario = {
-                data: maisRecente.data_atualizacao,
-                preco: maisRecente.valor_unitario,
-                estabelecimento: maisRecente.estabelecimento_nome,
-                produto_encontrado: maisRecente.produto_nome
+          historicoData.resultados.forEach((item: any) => {
+            if (item.produto) {
+              historicoMap[item.produto] = {
+                ultimaCompraUsuario: item.ultimaCompraUsuario,
+                menorPrecoArea: item.menorPrecoArea
               };
-              
-              console.log(`✅ OUTRO USUÁRIO encontrado: R$ ${melhorPrecoOutroUsuario.preco} em ${melhorPrecoOutroUsuario.estabelecimento} (${melhorPrecoOutroUsuario.produto_encontrado})`);
-              break; // Parar na primeira variação que trouxe resultado
-            } else {
-              console.log(`❌ Nenhum resultado para "${nomeVariacao}"`);
             }
-          }
-          
-          // Verificar se encontrou dados de outros usuários
-          if (melhorPrecoOutroUsuario) {
-            console.log(`🎯 VERIFICANDO DIFERENÇAS para ${produtoNome}:`);
-            
-            // Verificar se é realmente diferente do usuário atual
-            const dataUsuario = encontrarDataNotaFiscal(produtoNome);
-            const precoUsuario = produtoEstoque.preco_unitario_ultimo;
-            const estabelecimentoUsuario = 'COSTAZUL';
-            
-            const precosDiferentes = Math.abs(melhorPrecoOutroUsuario.preco - precoUsuario) > 0.01;
-            const datasDiferentes = formatDateSafe(melhorPrecoOutroUsuario.data) !== formatDateSafe(dataUsuario);
-            const estabelecimentosDiferentes = melhorPrecoOutroUsuario.estabelecimento !== estabelecimentoUsuario;
-            
-            console.log(`📊 COMPARAÇÃO DETALHADA:`);
-            console.log(`   👤 Usuário: ${formatDateSafe(dataUsuario)} - R$ ${precoUsuario} - ${estabelecimentoUsuario}`);
-            console.log(`   🏪 Outro: ${formatDateSafe(melhorPrecoOutroUsuario.data)} - R$ ${melhorPrecoOutroUsuario.preco} - ${melhorPrecoOutroUsuario.estabelecimento}`);
-            console.log(`   🔍 Diferentes? Preço=${precosDiferentes}, Data=${datasDiferentes}, Estabelecimento=${estabelecimentosDiferentes}`);
-            
-            // SEMPRE adicionar (mudança: não filtrar por diferenças ainda)
-            historicoMap[produtoNome] = {
-              menorPrecoArea: {
-                data: melhorPrecoOutroUsuario.data,
-                preco: melhorPrecoOutroUsuario.preco,
-                estabelecimento: melhorPrecoOutroUsuario.estabelecimento,
-                quantidade: 1
-              }
-            };
-            console.log(`✅ ADICIONADO AO HISTÓRICO: ${produtoNome}`);
-          } else {
-            console.log(`⚠️ Nenhum dado de outros usuários encontrado para: ${produtoNome}`);
-          }
+          });
+
+          console.log('✅ Setando histórico de preços:', historicoMap);
+          setHistoricoPrecos(historicoMap);
+          return;
         } else {
-          console.log(`❌ Produto não encontrado no estoque: ${produtoNome}`);
+          console.warn('⚠️ Falha no histórico, usando fallback:', historicoError);
         }
+      } catch (error) {
+        console.warn('⚠️ Erro na função de histórico, usando fallback:', error);
       }
-      
-      console.log('\n🎯 RESULTADO FINAL - histórico mapeado:');
-      console.log('Total de produtos com linha 2:', Object.keys(historicoMap).length);
-      Object.entries(historicoMap).forEach(([produto, dados]) => {
-        console.log(`  📦 ${produto}: R$ ${dados.menorPrecoArea.preco} - ${dados.menorPrecoArea.estabelecimento}`);
+
+      // Fallback: usar função de preços atuais
+      const { data: precoAtualData } = await supabase.functions.invoke('preco-atual-usuario', {
+        body: {
+          userId: user.id,
+          latitude: coordenadas.latitude,
+          longitude: coordenadas.longitude,
+          raioKm: raio
+        }
       });
       
-      setHistoricoPrecos(historicoMap);
-      console.log('✅ setHistoricoPrecos chamado com sucesso');
+      if (precoAtualData?.success) {
+        // Converter dados do fallback para o formato esperado
+        const historicoMap: {[key: string]: any} = {};
+        
+        precoAtualData.resultados?.forEach((item: any) => {
+          historicoMap[item.produto_nome] = {
+            ultimaCompraUsuario: {
+              data: item.data_atualizacao,
+              preco: item.valor_unitario,
+              quantidade: 1
+            },
+            menorPrecoArea: {
+              data: item.data_atualizacao,
+              preco: item.valor_unitario,
+              quantidade: 1
+            }
+          };
+        });
+
+        console.log('⚠️ FALLBACK: Histórico carregado via fallback:', historicoMap);
+        setHistoricoPrecos(historicoMap);
+      }
     } catch (error) {
-      console.error('❌ ERRO na loadHistoricoPrecos:', error);
+      console.error('Erro ao carregar histórico de preços:', error);
     }
   };
 
@@ -725,7 +532,7 @@ const EstoqueAtual = () => {
       return precoAreaDinamica;
     }
     
-    // NOVA BUSCA INTELIGENTE: buscar por similaridade mais avançada
+    // Busca por similaridade nos preços dinâmicos usando normalização melhorada
     const buscaSimilaridade = precosAtuais.find(preco => {
       if (!preco.produto_nome || preco.origem !== 'area_dinamica') return false;
       
@@ -736,28 +543,9 @@ const EstoqueAtual = () => {
         return true;
       }
       
-      // BUSCA AVANÇADA: tratar casos específicos conhecidos
-      const produtoLimpo = nomeProdutoNormalizado
-        .replace(/\b(pronto|de|da|do)\b/g, '') // Remove palavras conectoras
-        .replace(/\b(1,5l|1.5l|15l)\b/g, '15l') // Normaliza volumes
-        .replace(/\b(200g|200gr)\b/g, '200g') // Normaliza pesos
-        .replace(/\s+/g, ' ').trim();
-        
-      const precoLimpo = precoNormalizado
-        .replace(/\b(pronto|de|da|do)\b/g, '') // Remove palavras conectoras
-        .replace(/\b(1,5l|1.5l|15l)\b/g, '15l') // Normaliza volumes
-        .replace(/\b(200g|200gr)\b/g, '200g') // Normaliza pesos
-        .replace(/\s+/g, ' ').trim();
-      
-      // Verificar correspondência após limpeza avançada
-      if (produtoLimpo === precoLimpo) {
-        console.log(`✅ Match por limpeza avançada: "${produtoLimpo}" = "${precoLimpo}"`);
-        return true;
-      }
-      
       // Dividir em palavras e verificar se pelo menos 70% das palavras coincidem
-      const palavrasPreco = precoLimpo.split(/\s+/).filter(p => p.length > 2);
-      const palavrasProduto = produtoLimpo.split(/\s+/).filter(p => p.length > 2);
+      const palavrasPreco = precoNormalizado.split(/\s+/).filter(p => p.length > 2);
+      const palavrasProduto = nomeProdutoNormalizado.split(/\s+/).filter(p => p.length > 2);
       
       if (palavrasProduto.length === 0) return false;
       
@@ -769,13 +557,7 @@ const EstoqueAtual = () => {
       });
       
       const percentualCoincidencia = coincidencias / palavrasProduto.length;
-      const isMatch = percentualCoincidencia >= 0.7; // 70% de similaridade
-      
-      if (isMatch) {
-        console.log(`✅ Match por similaridade (${(percentualCoincidencia*100).toFixed(0)}%): "${produtoLimpo}" ~= "${precoLimpo}"`);
-      }
-      
-      return isMatch;
+      return percentualCoincidencia >= 0.7; // 70% de similaridade
     });
     
     if (buscaSimilaridade) {
@@ -784,7 +566,6 @@ const EstoqueAtual = () => {
     }
     
     console.log(`❌ Nenhum preço dinâmico encontrado para: "${nomeProduto}"`);
-    console.log(`🔍 Preços disponíveis:`, precosAtuais.map(p => p.produto_nome));
     return null;
   };
 
@@ -1846,26 +1627,9 @@ const EstoqueAtual = () => {
                       </div>
                    </div>
                  </CardContent>
-                </Card>
-              </div>
+               </Card>
+             </div>
 
-              {/* BOTÃO DE DEBUG TEMPORÁRIO */}
-              <div className="mb-4">
-                <button 
-                  onClick={() => {
-                    console.log('🔥 BOTÃO DEBUG CLICADO');
-                    console.log('Estado atual:', { 
-                      estoqueLength: estoque.length, 
-                      historicoKeys: Object.keys(historicoPrecos),
-                      primeirosProdutos: estoque.slice(0, 3).map(e => e.produto_nome)
-                    });
-                    loadHistoricoPrecos();
-                  }}
-                  className="bg-red-600 text-white px-4 py-2 rounded"
-                >
-                  🔥 DEBUG: Recarregar Histórico
-                </button>
-              </div>
 
           {/* Modal de confirmação para limpar estoque (invisível, acionado pelo dropdown) */}
           <AlertDialog>
@@ -1943,71 +1707,49 @@ const EstoqueAtual = () => {
                                  )}
                                </h3>
                                 <div className="space-y-1 text-xs">
-                                   {(() => {
-                                     const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                                     const historicoProduto = historicoPrecos[nomeExibicao];
-                                     const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
+                                  {(() => {
+                                    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                    const historicoProduto = historicoPrecos[nomeExibicao];
+                                    const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
 
-                                     // DEBUG: Log detalhado para entender o problema
-                                     console.log(`🐛 DEBUG PRODUTO: ${nomeExibicao}`);
-                                     console.log(`🐛 - Preço estoque: ${item.preco_unitario_ultimo}`);
-                                     console.log(`🐛 - Data nota fiscal:`, encontrarDataNotaFiscal(nomeExibicao));
-                                     console.log(`🐛 - Histórico disponível:`, historicoProduto);
-                                     console.log(`🐛 - Preço atual:`, precoAtual);
-
-                                     return (
-                                       <>
-                                         {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
-                                         <div className="text-primary font-medium">
-                                           {(() => {
-                                             // Prioridade: dados do estoque SEMPRE primeiro
-                                             const precoExibir = item.preco_unitario_ultimo || 0;
-                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
-                                             
-                                             // Buscar data da nota fiscal
-                                             const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
-                                             const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
-                                             
-                                             console.log(`🐛 LINHA 1 - ${nomeExibicao}: ${dataExibir} - R$ ${precoExibir.toFixed(2)}`);
-                                             
-                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
-                                           })()}
-                                         </div>
-
-                                          {/* Linha 2: Menor preço de outros usuários na área */}
+                                    return (
+                                      <>
+                                        {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
+                                        <div className="text-primary font-medium">
                                           {(() => {
-                                            console.log(`🖥️ RENDERIZAÇÃO - ${nomeExibicao}:`, {
-                                              temHistorico: !!historicoProduto,
-                                              temMenorPrecoArea: !!historicoProduto?.menorPrecoArea,
-                                              dadosArea: historicoProduto?.menorPrecoArea
-                                            });
+                                            // Prioridade: dados do estoque SEMPRE primeiro
+                                            const precoExibir = item.preco_unitario_ultimo || 0;
+                                            const totalExibir = (precoExibir * quantidade).toFixed(2);
                                             
-                                            // Verificar se há histórico válido com dados da área (de outros usuários)
-                                            if (historicoProduto?.menorPrecoArea) {
-                                              const dataHistorico = historicoProduto.menorPrecoArea.data;
-                                              const precoHistorico = historicoProduto.menorPrecoArea.preco;
-                                              const estabelecimentoHistorico = historicoProduto.menorPrecoArea.estabelecimento;
-                                              
-                                              console.log(`✅ EXIBINDO LINHA 2 - ${nomeExibicao}:`);
-                                              console.log(`   Dados: ${formatDateSafe(dataHistorico)} - R$ ${precoHistorico} - ${estabelecimentoHistorico}`);
-                                              
-                                              return (
-                                                <div className="text-muted-foreground">
-                                                  {formatDateSafe(dataHistorico)} - R$ {precoHistorico.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoHistorico * quantidade).toFixed(2)} - {estabelecimentoHistorico}
-                                                </div>
-                                              );
-                                            } else {
-                                              console.log(`❌ NÃO EXIBINDO LINHA 2 - ${nomeExibicao}: sem dados de outros usuários`);
-                                            }
+                                            // Buscar data da nota fiscal
+                                            const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
+                                            const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
                                             
-                                            // Se não há dados de outros usuários, não mostrar segunda linha
-                                            return null;
+                                            return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
                                           })()}
+                                        </div>
 
-                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
-                                       </>
-                                     );
-                                   })()}
+                                        {/* Linha 2: Menor preço na área */}
+                                        {historicoProduto?.menorPrecoArea ? (
+                                          <div className="text-muted-foreground">
+                                            {historicoProduto.menorPrecoArea.data ? 
+                                              formatDateSafe(historicoProduto.menorPrecoArea.data) : 
+                                              'Sem data'
+                                            } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
+                                          </div>
+                                        ) : precoAtual && precoAtual.valor_unitario && (
+                                          <div className="text-muted-foreground">
+                                            {precoAtual.data_atualizacao ? 
+                                              formatDateSafe(precoAtual.data_atualizacao) : 
+                                              'Sem data'
+                                            } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
+                                          </div>
+                                        )}
+
+                                        {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                            </div>
                            
