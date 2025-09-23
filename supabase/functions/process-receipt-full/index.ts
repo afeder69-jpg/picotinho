@@ -183,6 +183,16 @@ serve(async (req) => {
       if (batchInserted) {
         allInserted.push(...batchInserted);
         totalInserted += batchInserted.length;
+
+        // 🚀 REVOLUÇÃO: Smart Product Matcher em Background
+        console.log(`🧠 [SMART MATCHER] Iniciando normalização inteligente para ${batchInserted.length} produtos...`);
+        
+        // Executar normalização em background para cada produto inserido
+        batchInserted.forEach(produto => {
+          EdgeRuntime.waitUntil(
+            processarProdutoInteligente(produto.id, produto.produto_nome, userId, supabase)
+          );
+        });
       }
     }
     
@@ -232,3 +242,62 @@ serve(async (req) => {
     });
   }
 });
+
+// ================== SMART PRODUCT MATCHER ==================
+async function processarProdutoInteligente(
+  produtoId: string, 
+  produtoNome: string, 
+  userId: string, 
+  supabase: any
+) {
+  try {
+    console.log(`🧠 [SMART MATCHER] Processando "${produtoNome}" (ID: ${produtoId})`);
+
+    // Chamar o Smart Product Matcher
+    const { data: resultado, error } = await supabase.functions.invoke('smart-product-matcher', {
+      body: { 
+        produtoNome: produtoNome,
+        userId: userId 
+      }
+    });
+
+    if (error) {
+      console.error(`❌ [SMART MATCHER] Erro para "${produtoNome}":`, error);
+      return;
+    }
+
+    if (!resultado?.success) {
+      console.log(`⚠️ [SMART MATCHER] Resultado não bem-sucedido para "${produtoNome}"`);
+      return;
+    }
+
+    // Atualizar o produto com os dados normalizados
+    const updateData: any = {
+      produto_nome_normalizado: resultado.produto_nome_normalizado,
+      produto_hash_normalizado: resultado.produto_hash_normalizado
+    };
+
+    if (resultado.categoria) updateData.categoria = resultado.categoria;
+    if (resultado.marca) updateData.marca = resultado.marca;
+    if (resultado.nome_base) updateData.nome_base = resultado.nome_base;
+
+    const { error: updateError } = await supabase
+      .from('estoque_app')
+      .update(updateData)
+      .eq('id', produtoId);
+
+    if (updateError) {
+      console.error(`❌ [SMART MATCHER] Erro ao atualizar "${produtoNome}":`, updateError);
+      return;
+    }
+
+    if (resultado.tipo === 'match_encontrado') {
+      console.log(`✅ [SMART MATCHER] MATCH! "${produtoNome}" → "${resultado.produto_matched}"`);
+    } else {
+      console.log(`✅ [SMART MATCHER] NOVO! "${produtoNome}" normalizado com sucesso`);
+    }
+
+  } catch (error) {
+    console.error(`💥 [SMART MATCHER] Erro geral para "${produtoNome}":`, error);
+  }
+}

@@ -17,6 +17,7 @@ import CleanupUserData from "./pages/CleanupUserData";
 
 import TestNormalizacao from "./pages/TestNormalizacao";
 import TestNormalizacaoCasos from "./pages/TestNormalizacaoCasos";
+import TestSmartMatcher from "./pages/TestSmartMatcher";
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
 
@@ -58,6 +59,7 @@ const App = () => {
                 
                 <Route path="/test-normalizacao" element={<TestNormalizacao />} />
                 <Route path="/test-casos" element={<TestNormalizacaoCasos />} />
+                <Route path="/test-smart-matcher" element={<TestSmartMatcher />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <BottomNavigation />
