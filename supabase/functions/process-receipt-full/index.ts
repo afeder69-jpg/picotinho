@@ -190,7 +190,7 @@ serve(async (req) => {
         // Executar normalização em background para cada produto inserido
         batchInserted.forEach(produto => {
           EdgeRuntime.waitUntil(
-            processarProdutoInteligente(produto.id, produto.produto_nome, userId, supabase)
+            processarProdutoInteligente(produto.id, produto.produto_nome, nota.usuario_id, supabase)
           );
         });
       }
