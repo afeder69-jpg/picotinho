@@ -134,58 +134,98 @@ const EstoqueAtual = () => {
     }
   }, [estoque]);
 
-  // Função simplificada para buscar dados de outros usuários
+  // Função para normalizar nomes de produtos para comparação
+  const normalizarNomeProduto = (nome: string): string => {
+    return nome
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^\w\s]/g, ' ') // Remove pontuação
+      .replace(/\s+/g, ' ') // Normaliza espaços
+      .trim();
+  };
+
+  // Função para verificar similaridade entre nomes
+  const produtosSaoSimilares = (nome1: string, nome2: string): boolean => {
+    const normalizado1 = normalizarNomeProduto(nome1);
+    const normalizado2 = normalizarNomeProduto(nome2);
+    
+    // Exact match
+    if (normalizado1 === normalizado2) return true;
+    
+    // Contém um ao outro
+    if (normalizado1.includes(normalizado2) || normalizado2.includes(normalizado1)) return true;
+    
+    // Palavras-chave em comum (pelo menos 2 palavras significativas)
+    const palavras1 = normalizado1.split(' ').filter(p => p.length > 2);
+    const palavras2 = normalizado2.split(' ').filter(p => p.length > 2);
+    const palavrasComuns = palavras1.filter(p => palavras2.includes(p));
+    
+    return palavrasComuns.length >= 2;
+  };
+
+  // Função para buscar dados de outros usuários
   const buscarHistoricoDeOutrosUsuarios = async () => {
     try {
       console.log('🎯 FUNÇÃO EXECUTANDO: buscarHistoricoDeOutrosUsuarios');
+      console.log('📋 Produtos no estoque:', estoque.map(p => p.produto_nome));
       
       const historicoMap: {[key: string]: any} = {};
       
-      // Buscar dados diretos para os produtos que sabemos que existem
-      const produtosComHistorico = ['Creme de Leite Italac 200g', 'Chá Pronto Matte Leão 1.5L Natural'];
+      // Buscar TODOS os preços de outros estabelecimentos (não COSTAZUL)
+      const { data: todosPrecos } = await supabase
+        .from('precos_atuais')
+        .select('*')
+        .neq('estabelecimento_nome', 'COSTAZUL')
+        .order('data_atualizacao', { ascending: false });
       
-      for (const produto of produtosComHistorico) {
-        console.log(`🔍 Buscando dados para: ${produto}`);
+      console.log(`📊 Total de preços de outros estabelecimentos: ${todosPrecos?.length || 0}`);
+      
+      if (todosPrecos && todosPrecos.length > 0) {
+        console.log('🔍 Primeiros 5 produtos na tabela precos_atuais:');
+        todosPrecos.slice(0, 5).forEach(preco => {
+          console.log(`  - ${preco.produto_nome} - R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
+        });
         
-        // Buscar diretamente na tabela precos_atuais excluindo COSTAZUL
-        const { data: precosOutros } = await supabase
-          .from('precos_atuais')
-          .select('*')
-          .neq('estabelecimento_nome', 'COSTAZUL')
-          .or(`produto_nome.ilike.%Creme%Leite%,produto_nome.ilike.%Chá%Mate%`)
-          .order('data_atualizacao', { ascending: false });
-        
-        console.log(`📊 Encontrados ${precosOutros?.length || 0} registros de outros usuários`);
-        
-        if (precosOutros && precosOutros.length > 0) {
-          precosOutros.forEach(preco => {
-            console.log(`✅ DADO ENCONTRADO: ${preco.produto_nome} - R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
+        // Para cada produto do estoque, tentar encontrar correspondência
+        estoque.forEach(produtoEstoque => {
+          console.log(`\n🔍 Buscando correspondência para: "${produtoEstoque.produto_nome}"`);
+          
+          // Encontrar produtos similares
+          const produtosSimilares = todosPrecos.filter(preco => 
+            produtosSaoSimilares(produtoEstoque.produto_nome, preco.produto_nome)
+          );
+          
+          console.log(`📋 Produtos similares encontrados: ${produtosSimilares.length}`);
+          produtosSimilares.forEach(p => {
+            console.log(`  ✅ Similar: "${p.produto_nome}" - R$ ${p.valor_unitario} - ${p.estabelecimento_nome}`);
+          });
+          
+          if (produtosSimilares.length > 0) {
+            // Pegar o mais recente/menor preço
+            const melhorPreco = produtosSimilares[0];
             
-            // Mapear os nomes corretamente
-            let nomeProdutoEstoque = produto;
-            if (preco.produto_nome.includes('Creme')) {
-              nomeProdutoEstoque = 'Creme de Leite Italac 200g';
-            } else if (preco.produto_nome.includes('Chá') || preco.produto_nome.includes('Mate')) {
-              nomeProdutoEstoque = 'Chá Pronto Matte Leão 1.5L Natural';
-            }
-            
-            historicoMap[nomeProdutoEstoque] = {
+            historicoMap[produtoEstoque.produto_nome] = {
               menorPrecoArea: {
-                data: preco.data_atualizacao,
-                preco: preco.valor_unitario,
-                estabelecimento: preco.estabelecimento_nome,
+                data: melhorPreco.data_atualizacao,
+                preco: melhorPreco.valor_unitario,
+                estabelecimento: melhorPreco.estabelecimento_nome,
                 quantidade: 1
               }
             };
             
-            console.log(`✅ ADICIONADO: ${nomeProdutoEstoque} -> R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
-          });
-        }
+            console.log(`✅ ADICIONADO LINHA 2: ${produtoEstoque.produto_nome} -> R$ ${melhorPreco.valor_unitario} - ${melhorPreco.estabelecimento_nome}`);
+          } else {
+            console.log(`❌ Nenhuma correspondência para: ${produtoEstoque.produto_nome}`);
+          }
+        });
       }
       
-      console.log('🏁 RESULTADO FINAL:', historicoMap);
+      console.log('\n🏁 RESULTADO FINAL - historicoMap:', historicoMap);
+      console.log(`📊 Total de produtos com dados de área: ${Object.keys(historicoMap).length}`);
+      
       setHistoricoPrecos(historicoMap);
-      console.log('✅ setHistoricoPrecos executado com:', Object.keys(historicoMap).length, 'produtos');
+      console.log('✅ setHistoricoPrecos executado com sucesso');
       
     } catch (error) {
       console.error('❌ ERRO na busca:', error);
