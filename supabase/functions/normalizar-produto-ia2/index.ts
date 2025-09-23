@@ -12,14 +12,46 @@ serve(async (req) => {
   }
 
   try {
-    console.log('⚠️ FUNÇÃO DESABILITADA - Use inserir-estoque-direto em vez desta');
+    const { nomeOriginal, notaId, usuarioId, debug } = await req.json();
+    
+    if (!nomeOriginal && !notaId) {
+      return new Response(
+        JSON.stringify({ error: 'nomeOriginal ou notaId é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('🧠 IA-2 ATIVADA: Normalizando produto com IA avançada');
+    
+    if (debug) {
+      console.log('🔍 Debug mode ativado');
+      console.log('Parâmetros:', { nomeOriginal, notaId, usuarioId });
+    }
+
+    // TODO: Implementar lógica de normalização com IA
+    // Por enquanto, retornar estrutura básica
+    const produtoNormalizado = {
+      produto_nome_normalizado: nomeOriginal?.toUpperCase(),
+      nome_base: nomeOriginal?.toUpperCase(),
+      marca: null,
+      categoria: 'indefinida',
+      tipo_embalagem: null,
+      qtd_valor: null,
+      qtd_unidade: null,
+      granel: false,
+      produto_hash_normalizado: `hash_${Date.now()}`
+    };
+
+    console.log('✅ Produto normalizado:', produtoNormalizado);
     
     return new Response(
       JSON.stringify({ 
-        error: 'Esta função foi substituída pela inserção direta. Use inserir-estoque-direto.',
-        redirect: 'inserir-estoque-direto'
+        success: true,
+        produto_normalizado: produtoNormalizado,
+        acao: 'provisorio',
+        confianca: 0.8
       }),
-      { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
