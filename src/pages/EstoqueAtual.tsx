@@ -122,17 +122,24 @@ const EstoqueAtual = () => {
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
-    // corrigirProdutosManuais(); // Removido - correção manual
+    // Forçar carregamento do histórico após 2 segundos
+    setTimeout(() => {
+      console.log('🔥 FORÇANDO loadHistoricoPrecos após 2 segundos');
+      loadHistoricoPrecos();
+    }, 2000);
   }, []);
 
   // Carregar histórico de preços quando o estoque for carregado
   useEffect(() => {
+    console.log('🔄 useEffect estoque mudou:', { estoqueLength: estoque.length });
     if (estoque.length > 0) {
       console.log('🔄 useEffect: Chamando loadHistoricoPrecos com estoque.length:', estoque.length);
-      // Timeout para evitar conflito com outros carregamentos
+      // Chamada imediata + timeout para garantir
+      loadHistoricoPrecos();
       setTimeout(() => {
+        console.log('🔥 TIMEOUT: Segunda chamada loadHistoricoPrecos');
         loadHistoricoPrecos();
-      }, 1000);
+      }, 1500);
     }
   }, [estoque]);
 
@@ -1682,9 +1689,26 @@ const EstoqueAtual = () => {
                       </div>
                    </div>
                  </CardContent>
-               </Card>
-             </div>
+                </Card>
+              </div>
 
+              {/* BOTÃO DE DEBUG TEMPORÁRIO */}
+              <div className="mb-4">
+                <button 
+                  onClick={() => {
+                    console.log('🔥 BOTÃO DEBUG CLICADO');
+                    console.log('Estado atual:', { 
+                      estoqueLength: estoque.length, 
+                      historicoKeys: Object.keys(historicoPrecos),
+                      primeirosProdutos: estoque.slice(0, 3).map(e => e.produto_nome)
+                    });
+                    loadHistoricoPrecos();
+                  }}
+                  className="bg-red-600 text-white px-4 py-2 rounded"
+                >
+                  🔥 DEBUG: Recarregar Histórico
+                </button>
+              </div>
 
           {/* Modal de confirmação para limpar estoque (invisível, acionado pelo dropdown) */}
           <AlertDialog>
