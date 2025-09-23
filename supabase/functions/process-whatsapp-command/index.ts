@@ -257,19 +257,21 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
         // Comandos para CONSULTAR ESTOQUE COMPLETO (nova funcionalidade)
+        const textoLimpo = textoNormalizado.trim().toLowerCase();
         console.log('🔍 [DEBUG ESTOQUE] Input original:', conteudo);
-        console.log('🔍 [DEBUG ESTOQUE] textoNormalizado:', textoNormalizado);
-        console.log('🔍 [DEBUG ESTOQUE] textoNormalizado.trim():', textoNormalizado.trim());
-        console.log('🔍 [DEBUG ESTOQUE] Length:', textoNormalizado.trim().length);
+        console.log('🔍 [DEBUG ESTOQUE] textoLimpo:', textoLimpo);
         
-        const isConsultarEstoqueCompleto = textoNormalizado.trim().match(/^(consulta\s+estoque|estoque\s+completo|estoque)$/);
-        console.log('🔍 [DEBUG ESTOQUE] Regex match result:', isConsultarEstoqueCompleto);
-        console.log('🔍 [DEBUG ESTOQUE] Testando individual:');
-        console.log('  - "consulta estoque":', textoNormalizado.trim() === 'consulta estoque');
-        console.log('  - "estoque completo":', textoNormalizado.trim() === 'estoque completo');
-        console.log('  - "estoque":', textoNormalizado.trim() === 'estoque');
+        const isConsultarEstoqueCompleto = (
+            textoLimpo === 'consulta estoque' ||
+            textoLimpo === 'estoque completo' ||
+            textoLimpo === 'estoque'
+        );
         
-        console.log('🔍 [DEBUG] isConsultarEstoqueCompleto check:', { textoNormalizado, trimmed: textoNormalizado.trim(), match: isConsultarEstoqueCompleto });
+        console.log('🔍 [DEBUG ESTOQUE] isConsultarEstoqueCompleto:', isConsultarEstoqueCompleto);
+        console.log('🔍 [DEBUG ESTOQUE] Comparações:');
+        console.log('  - consulta estoque:', textoLimpo === 'consulta estoque');
+        console.log('  - estoque completo:', textoLimpo === 'estoque completo'); 
+        console.log('  - estoque:', textoLimpo === 'estoque');
         
         // Comandos para CONSULTAR ESTOQUE (produto específico)
         const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
