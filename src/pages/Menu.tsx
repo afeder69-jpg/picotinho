@@ -18,12 +18,14 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 
 
 const Menu = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { isMaster } = useUserRole();
 
   const handleSignOut = async () => {
     try {
@@ -91,14 +93,14 @@ const Menu = () => {
       onClick: () => navigate('/test-normalizacao'),
       isActive: true
     },
-    {
+    ...(isMaster ? [{
       id: 'revisao-normalizacao',
       title: 'Revisão de Normalização',
-      description: 'Aprovar/rejeitar sugestões do sistema',
+      description: 'Aprovar/rejeitar sugestões do sistema (Master)',
       icon: CheckSquare,
       onClick: () => navigate('/revisao-normalizacao'),
       isActive: true
-    }
+    }] : [])
   ];
 
   return (
