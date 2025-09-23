@@ -166,13 +166,56 @@ serve(async (req) => {
     let totalInserted = 0;
     const allInserted: any[] = [];
     
+    // 🔥 CORREÇÃO CRÍTICA: Normalizar ANTES de inserir
     for (let i = 0; i < produtosEstoque.length; i += BATCH_SIZE) {
       const batch = produtosEstoque.slice(i, i + BATCH_SIZE);
       console.log(`📦 Processando lote ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(produtosEstoque.length/BATCH_SIZE)} (${batch.length} itens)`);
       
+      // Normalizar cada produto ANTES de inserir
+      const batchNormalizado = await Promise.all(
+        batch.map(async (produto) => {
+          try {
+            console.log(`🤖 Normalizando: "${produto.produto_nome}"`);
+            
+            const { data: normalizado, error: normError } = await supabase.functions.invoke('normalizar-produto-ia2', {
+              body: { descricao: produto.produto_nome }
+            });
+            
+            if (normError) {
+              console.error(`❌ Erro normalização para "${produto.produto_nome}":`, normError);
+              // Usar produto original se falhar
+              return produto;
+            }
+            
+            if (normalizado) {
+              console.log(`✅ Normalizado: "${produto.produto_nome}" → "${normalizado.produto_nome_normalizado}"`);
+              
+              return {
+                ...produto,
+                produto_nome_normalizado: normalizado.produto_nome_normalizado,
+                nome_base: normalizado.nome_base,
+                marca: normalizado.marca,
+                categoria: normalizado.categoria || produto.categoria,
+                tipo_embalagem: normalizado.tipo_embalagem,
+                qtd_valor: normalizado.qtd_valor,
+                qtd_unidade: normalizado.qtd_unidade,
+                qtd_base: normalizado.qtd_base,
+                granel: normalizado.granel,
+                produto_hash_normalizado: normalizado.produto_hash_normalizado
+              };
+            }
+            
+            return produto;
+          } catch (error) {
+            console.error(`💥 Erro geral normalização "${produto.produto_nome}":`, error);
+            return produto;
+          }
+        })
+      );
+      
       const { data: batchInserted, error: batchError } = await supabase
         .from("estoque_app")
-        .insert(batch)
+        .insert(batchNormalizado)
         .select();
       
       if (batchError) {
@@ -183,16 +226,7 @@ serve(async (req) => {
       if (batchInserted) {
         allInserted.push(...batchInserted);
         totalInserted += batchInserted.length;
-
-        // 🚀 REVOLUÇÃO: Smart Product Matcher em Background
-        console.log(`🧠 [SMART MATCHER] Iniciando normalização inteligente para ${batchInserted.length} produtos...`);
-        
-        // Executar normalização em background para cada produto inserido
-        batchInserted.forEach(produto => {
-          EdgeRuntime.waitUntil(
-            processarProdutoInteligente(produto.id, produto.produto_nome, nota.usuario_id, supabase)
-          );
-        });
+        console.log(`✅ Lote inserido com normalização: ${batchInserted.length} produtos`);
       }
     }
     
