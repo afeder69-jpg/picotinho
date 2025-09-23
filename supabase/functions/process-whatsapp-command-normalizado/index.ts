@@ -62,7 +62,7 @@ serve(async (req) => {
         );
       }
       
-      const nomeCategoria = categoriaEncontrada.nome;
+      const nomeCategoria = categoriaEncontrada.categoria_nome;
       console.log(`🔍 [CATEGORIA] Input: "${categoriaInput}" -> Encontrada: "${nomeCategoria}"`);
       
       // Buscar produtos da categoria usando ILIKE para case-insensitive
