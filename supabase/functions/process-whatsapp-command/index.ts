@@ -221,6 +221,9 @@ const handler = async (req: Request): Promise<Response> => {
           .replace(/[^\w\s]/gi, ""); // Remove pontuação
         
         console.log('🔍 [DEBUG] Texto normalizado:', textoNormalizado);
+        console.log('🔍 [DEBUG] Texto original:', mensagem.conteudo);
+        console.log('🔍 [DEBUG] Texto trimmed:', textoNormalizado.trim());
+        console.log('🔍 [DEBUG] Length:', textoNormalizado.trim().length);
         
         // VERIFICAÇÃO DE CANCELAMENTO - ALTA PRIORIDADE (funciona mesmo sem sessão ativa)
         if (textoNormalizado === 'cancela' || textoNormalizado === 'cancelar') {
@@ -257,8 +260,8 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
         // Comandos para CONSULTAR ESTOQUE COMPLETO (nova funcionalidade)
-        const isConsultarEstoqueCompleto = textoNormalizado.trim().match(/^(consulta\s+estoque|estoque)$/);
-        console.log('🔍 [DEBUG] isConsultarEstoqueCompleto check:', { textoNormalizado, trimmed: textoNormalizado.trim(), match: isConsultarEstoqueCompleto });
+        const isConsultarEstoqueCompleto = textoNormalizado.trim().match(/^(consulta\s+estoque|estoque)$/i);
+        console.log('🔍 [DEBUG] isConsultarEstoqueCompleto check:', { textoNormalizado, trimmed: textoNormalizado.trim(), match: isConsultarEstoqueCompleto, regexTest: /^(consulta\s+estoque|estoque)$/i.test(textoNormalizado.trim()) });
         
         // Comandos para CONSULTAR ESTOQUE (produto específico)
         const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/) && !textoNormalizado.trim().match(/^(consulta\s+estoque|estoque)$/);
