@@ -1701,13 +1701,7 @@ export type Database = {
       buscar_categoria_por_termo: {
         Args: { termo_busca: string }
         Returns: {
-          ativa: boolean
-          cor: string
-          descricao: string
-          icone: string
-          id: string
-          nome: string
-          sinonimos: string[]
+          categoria_nome: string
         }[]
       }
       cleanup_old_ingestion_jobs: {
