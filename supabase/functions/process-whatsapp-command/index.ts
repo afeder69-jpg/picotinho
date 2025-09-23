@@ -261,7 +261,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isConsultarEstoqueCompleto check:', { textoNormalizado, trimmed: textoNormalizado.trim(), match: isConsultarEstoqueCompleto });
         
         // Comandos para CONSULTAR ESTOQUE (produto específico)
-        const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
+        const isConsultar = textoNormalizado.match(/\b(estoque|estoques)\b/);
         
         // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
         const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
