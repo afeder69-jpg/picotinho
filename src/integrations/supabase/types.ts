@@ -1809,6 +1809,17 @@ export type Database = {
         }
         Relationships: []
       }
+      stats_normalizacao: {
+        Row: {
+          acao: string | null
+          data: string | null
+          score_max: number | null
+          score_medio: number | null
+          score_min: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
       supermercados_publicos: {
         Row: {
           ativo: boolean | null
@@ -1871,6 +1882,22 @@ export type Database = {
         Args: { termo_busca: string }
         Returns: {
           categoria_nome: string
+        }[]
+      }
+      buscar_produto_por_sku: {
+        Args: { sku_busca: string }
+        Returns: {
+          ativo: boolean
+          categoria: string
+          created_at: string
+          descricao: string
+          id: string
+          marca: string
+          nome_normalizado: string
+          provisorio: boolean
+          sku: string
+          updated_at: string
+          variante: string
         }[]
       }
       cleanup_old_ingestion_jobs: {
@@ -2159,6 +2186,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      refresh_stats_normalizacao: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       safe_mask_personal_data: {
         Args: {
           cep_input?: string
@@ -2194,6 +2225,10 @@ export type Database = {
       }
       sparsevec_typmod_in: {
         Args: { "": unknown[] }
+        Returns: number
+      }
+      text_similarity: {
+        Args: { text1: string; text2: string }
         Returns: number
       }
       update_my_profile: {
@@ -2242,6 +2277,23 @@ export type Database = {
       vector_send: {
         Args: { "": string }
         Returns: string
+      }
+      vector_similarity_search: {
+        Args: {
+          match_count?: number
+          query_embedding: string
+          similarity_threshold?: number
+        }
+        Returns: {
+          categoria: string
+          embedding: string
+          id: string
+          marca: string
+          nome_normalizado: string
+          similarity: number
+          sku: string
+          variante: string
+        }[]
       }
       vector_typmod_in: {
         Args: { "": unknown[] }
