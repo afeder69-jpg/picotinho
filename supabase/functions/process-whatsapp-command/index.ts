@@ -1262,7 +1262,7 @@ Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor,
       const quantidadeDecimal = Math.round(quantidade * 1000) / 1000;
       
       // Criar produto no estoque
-      const { data: produtoInserido, error: errorInsert } = await supabase
+      await supabase
         .from('estoque_app')
         .insert({
           user_id: mensagem.usuario_id,
@@ -1272,21 +1272,7 @@ Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor,
           unidade_medida: unidade.toUpperCase(),
           preco_unitario_ultimo: preco,
           origem: 'manual' // IMPORTANTE: Marcar como produto inserido manualmente via WhatsApp
-        })
-        .select()
-        .single();
-
-      if (errorInsert) {
-        throw errorInsert;
-      }
-
-      // 🚀 REVOLUÇÃO: Smart Product Matcher em Background
-      if (produtoInserido) {
-        console.log(`🧠 [SMART MATCHER] Iniciando normalização inteligente para "${sessao.produto_nome}"...`);
-        EdgeRuntime.waitUntil(
-          processarProdutoInteligenteWhatsApp(produtoInserido.id, sessao.produto_nome, mensagem.usuario_id, supabase)
-        );
-      }
+        });
       
       // Encerrar sessão
       await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
@@ -1844,65 +1830,6 @@ async function processarNotaEmBackground(
     
     // Enviar mensagem de erro específica
     await enviarRespostaWhatsApp(mensagem.remetente, mensagemErro);
-  }
-}
-
-// ================== SMART PRODUCT MATCHER ==================
-async function processarProdutoInteligenteWhatsApp(
-  produtoId: string, 
-  produtoNome: string, 
-  userId: string, 
-  supabase: any
-) {
-  try {
-    console.log(`🧠 [SMART MATCHER WhatsApp] Processando "${produtoNome}" (ID: ${produtoId})`);
-
-    // Chamar o Smart Product Matcher
-    const { data: resultado, error } = await supabase.functions.invoke('smart-product-matcher', {
-      body: { 
-        produtoNome: produtoNome,
-        userId: userId 
-      }
-    });
-
-    if (error) {
-      console.error(`❌ [SMART MATCHER WhatsApp] Erro para "${produtoNome}":`, error);
-      return;
-    }
-
-    if (!resultado?.success) {
-      console.log(`⚠️ [SMART MATCHER WhatsApp] Resultado não bem-sucedido para "${produtoNome}"`);
-      return;
-    }
-
-    // Atualizar o produto com os dados normalizados
-    const updateData: any = {
-      produto_nome_normalizado: resultado.produto_nome_normalizado,
-      produto_hash_normalizado: resultado.produto_hash_normalizado
-    };
-
-    if (resultado.categoria) updateData.categoria = resultado.categoria;
-    if (resultado.marca) updateData.marca = resultado.marca;
-    if (resultado.nome_base) updateData.nome_base = resultado.nome_base;
-
-    const { error: updateError } = await supabase
-      .from('estoque_app')
-      .update(updateData)
-      .eq('id', produtoId);
-
-    if (updateError) {
-      console.error(`❌ [SMART MATCHER WhatsApp] Erro ao atualizar "${produtoNome}":`, updateError);
-      return;
-    }
-
-    if (resultado.tipo === 'match_encontrado') {
-      console.log(`✅ [SMART MATCHER WhatsApp] MATCH! "${produtoNome}" → "${resultado.produto_matched}"`);
-    } else {
-      console.log(`✅ [SMART MATCHER WhatsApp] NOVO! "${produtoNome}" normalizado com sucesso`);
-    }
-
-  } catch (error) {
-    console.error(`💥 [SMART MATCHER WhatsApp] Erro geral para "${produtoNome}":`, error);
   }
 }
 

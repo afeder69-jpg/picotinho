@@ -166,56 +166,13 @@ serve(async (req) => {
     let totalInserted = 0;
     const allInserted: any[] = [];
     
-    // 🔥 CORREÇÃO CRÍTICA: Normalizar ANTES de inserir
     for (let i = 0; i < produtosEstoque.length; i += BATCH_SIZE) {
       const batch = produtosEstoque.slice(i, i + BATCH_SIZE);
       console.log(`📦 Processando lote ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(produtosEstoque.length/BATCH_SIZE)} (${batch.length} itens)`);
       
-      // Normalizar cada produto ANTES de inserir
-      const batchNormalizado = await Promise.all(
-        batch.map(async (produto) => {
-          try {
-            console.log(`🤖 Normalizando: "${produto.produto_nome}"`);
-            
-            const { data: normalizado, error: normError } = await supabase.functions.invoke('normalizar-produto-ia2', {
-              body: { descricao: produto.produto_nome }
-            });
-            
-            if (normError) {
-              console.error(`❌ Erro normalização para "${produto.produto_nome}":`, normError);
-              // Usar produto original se falhar
-              return produto;
-            }
-            
-            if (normalizado) {
-              console.log(`✅ Normalizado: "${produto.produto_nome}" → "${normalizado.produto_nome_normalizado}"`);
-              
-              return {
-                ...produto,
-                produto_nome_normalizado: normalizado.produto_nome_normalizado,
-                nome_base: normalizado.nome_base,
-                marca: normalizado.marca,
-                categoria: normalizado.categoria || produto.categoria,
-                tipo_embalagem: normalizado.tipo_embalagem,
-                qtd_valor: normalizado.qtd_valor,
-                qtd_unidade: normalizado.qtd_unidade,
-                qtd_base: normalizado.qtd_base,
-                granel: normalizado.granel,
-                produto_hash_normalizado: normalizado.produto_hash_normalizado
-              };
-            }
-            
-            return produto;
-          } catch (error) {
-            console.error(`💥 Erro geral normalização "${produto.produto_nome}":`, error);
-            return produto;
-          }
-        })
-      );
-      
       const { data: batchInserted, error: batchError } = await supabase
         .from("estoque_app")
-        .insert(batchNormalizado)
+        .insert(batch)
         .select();
       
       if (batchError) {
@@ -226,7 +183,6 @@ serve(async (req) => {
       if (batchInserted) {
         allInserted.push(...batchInserted);
         totalInserted += batchInserted.length;
-        console.log(`✅ Lote inserido com normalização: ${batchInserted.length} produtos`);
       }
     }
     
@@ -276,62 +232,3 @@ serve(async (req) => {
     });
   }
 });
-
-// ================== SMART PRODUCT MATCHER ==================
-async function processarProdutoInteligente(
-  produtoId: string, 
-  produtoNome: string, 
-  userId: string, 
-  supabase: any
-) {
-  try {
-    console.log(`🧠 [SMART MATCHER] Processando "${produtoNome}" (ID: ${produtoId})`);
-
-    // Chamar o Smart Product Matcher
-    const { data: resultado, error } = await supabase.functions.invoke('smart-product-matcher', {
-      body: { 
-        produtoNome: produtoNome,
-        userId: userId 
-      }
-    });
-
-    if (error) {
-      console.error(`❌ [SMART MATCHER] Erro para "${produtoNome}":`, error);
-      return;
-    }
-
-    if (!resultado?.success) {
-      console.log(`⚠️ [SMART MATCHER] Resultado não bem-sucedido para "${produtoNome}"`);
-      return;
-    }
-
-    // Atualizar o produto com os dados normalizados
-    const updateData: any = {
-      produto_nome_normalizado: resultado.produto_nome_normalizado,
-      produto_hash_normalizado: resultado.produto_hash_normalizado
-    };
-
-    if (resultado.categoria) updateData.categoria = resultado.categoria;
-    if (resultado.marca) updateData.marca = resultado.marca;
-    if (resultado.nome_base) updateData.nome_base = resultado.nome_base;
-
-    const { error: updateError } = await supabase
-      .from('estoque_app')
-      .update(updateData)
-      .eq('id', produtoId);
-
-    if (updateError) {
-      console.error(`❌ [SMART MATCHER] Erro ao atualizar "${produtoNome}":`, updateError);
-      return;
-    }
-
-    if (resultado.tipo === 'match_encontrado') {
-      console.log(`✅ [SMART MATCHER] MATCH! "${produtoNome}" → "${resultado.produto_matched}"`);
-    } else {
-      console.log(`✅ [SMART MATCHER] NOVO! "${produtoNome}" normalizado com sucesso`);
-    }
-
-  } catch (error) {
-    console.error(`💥 [SMART MATCHER] Erro geral para "${produtoNome}":`, error);
-  }
-}

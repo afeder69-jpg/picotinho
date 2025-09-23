@@ -1866,14 +1866,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      limpar_residuos_usuario_completo: {
-        Args: { target_user_id: string }
-        Returns: {
-          registros_removidos: number
-          status: string
-          tabela_limpa: string
-        }[]
-      }
       limpar_sessoes_expiradas: {
         Args: Record<PropertyKey, never>
         Returns: undefined
