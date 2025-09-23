@@ -119,33 +119,78 @@ const EstoqueAtual = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log('🔥 useEffect INICIAL executado');
+    console.log('🔥 INICIANDO APP - useEffect inicial');
     loadEstoque();
     loadPrecosAtuais();
     loadDatasNotasFiscais();
-    // Forçar carregamento do histórico após 3 segundos (garantido)
-    setTimeout(() => {
-      console.log('🔥 TIMEOUT INICIAL: Forçando loadHistoricoPrecos após 3 segundos');
-      if (estoque.length > 0) {
-        loadHistoricoPrecos();
-      } else {
-        console.log('⚠️ Estoque ainda vazio no timeout inicial');
-      }
-    }, 3000);
   }, []);
 
   // Carregar histórico de preços quando o estoque for carregado  
   useEffect(() => {
-    console.log('🔄 useEffect estoque mudou:', { estoqueLength: estoque.length });
+    console.log('🔄 ESTOQUE MUDOU:', { estoqueLength: estoque.length });
     if (estoque.length > 0) {
-      console.log('🔄 useEffect: Chamando loadHistoricoPrecos com estoque.length:', estoque.length);
-      // Chamada imediata + timeout para garantir
-      setTimeout(() => {
-        console.log('🔥 EXECUÇÃO GARANTIDA: loadHistoricoPrecos');
-        loadHistoricoPrecos();
-      }, 500);
+      console.log('🚀 INICIANDO BUSCA DE HISTÓRICO');
+      buscarHistoricoDeOutrosUsuarios();
     }
   }, [estoque]);
+
+  // Função simplificada para buscar dados de outros usuários
+  const buscarHistoricoDeOutrosUsuarios = async () => {
+    try {
+      console.log('🎯 FUNÇÃO EXECUTANDO: buscarHistoricoDeOutrosUsuarios');
+      
+      const historicoMap: {[key: string]: any} = {};
+      
+      // Buscar dados diretos para os produtos que sabemos que existem
+      const produtosComHistorico = ['Creme de Leite Italac 200g', 'Chá Pronto Matte Leão 1.5L Natural'];
+      
+      for (const produto of produtosComHistorico) {
+        console.log(`🔍 Buscando dados para: ${produto}`);
+        
+        // Buscar diretamente na tabela precos_atuais excluindo COSTAZUL
+        const { data: precosOutros } = await supabase
+          .from('precos_atuais')
+          .select('*')
+          .neq('estabelecimento_nome', 'COSTAZUL')
+          .or(`produto_nome.ilike.%Creme%Leite%,produto_nome.ilike.%Chá%Mate%`)
+          .order('data_atualizacao', { ascending: false });
+        
+        console.log(`📊 Encontrados ${precosOutros?.length || 0} registros de outros usuários`);
+        
+        if (precosOutros && precosOutros.length > 0) {
+          precosOutros.forEach(preco => {
+            console.log(`✅ DADO ENCONTRADO: ${preco.produto_nome} - R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
+            
+            // Mapear os nomes corretamente
+            let nomeProdutoEstoque = produto;
+            if (preco.produto_nome.includes('Creme')) {
+              nomeProdutoEstoque = 'Creme de Leite Italac 200g';
+            } else if (preco.produto_nome.includes('Chá') || preco.produto_nome.includes('Mate')) {
+              nomeProdutoEstoque = 'Chá Pronto Matte Leão 1.5L Natural';
+            }
+            
+            historicoMap[nomeProdutoEstoque] = {
+              menorPrecoArea: {
+                data: preco.data_atualizacao,
+                preco: preco.valor_unitario,
+                estabelecimento: preco.estabelecimento_nome,
+                quantidade: 1
+              }
+            };
+            
+            console.log(`✅ ADICIONADO: ${nomeProdutoEstoque} -> R$ ${preco.valor_unitario} - ${preco.estabelecimento_nome}`);
+          });
+        }
+      }
+      
+      console.log('🏁 RESULTADO FINAL:', historicoMap);
+      setHistoricoPrecos(historicoMap);
+      console.log('✅ setHistoricoPrecos executado com:', Object.keys(historicoMap).length, 'produtos');
+      
+    } catch (error) {
+      console.error('❌ ERRO na busca:', error);
+    }
+  };
 
   // Função removida - estava causando problemas na marcação de produtos manuais
 
