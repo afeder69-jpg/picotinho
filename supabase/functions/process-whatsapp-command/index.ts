@@ -257,7 +257,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
         // Comandos para CONSULTAR ESTOQUE COMPLETO (nova funcionalidade)
-        const isConsultarEstoqueCompleto = textoNormalizado.trim().match(/^(consulta\s+estoque|estoque\s+completo|consulta|estoque)$/);
+        const isConsultarEstoqueCompleto = textoNormalizado.trim().match(/^(consulta\s+estoque|estoque\s+completo|estoque)$/);
         console.log('🔍 [DEBUG] isConsultarEstoqueCompleto check:', { textoNormalizado, trimmed: textoNormalizado.trim(), match: isConsultarEstoqueCompleto });
         
         // Comandos para CONSULTAR ESTOQUE (produto específico)
