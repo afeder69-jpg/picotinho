@@ -554,6 +554,56 @@ export type Database = {
         }
         Relationships: []
       }
+      normalizacoes_log: {
+        Row: {
+          acao: string
+          candidatos: Json | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          produto_id: string | null
+          score_agregado: number | null
+          score_embedding: number | null
+          score_fuzzy: number | null
+          texto_origem: string
+          user_id: string | null
+        }
+        Insert: {
+          acao: string
+          candidatos?: Json | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          produto_id?: string | null
+          score_agregado?: number | null
+          score_embedding?: number | null
+          score_fuzzy?: number | null
+          texto_origem: string
+          user_id?: string | null
+        }
+        Update: {
+          acao?: string
+          candidatos?: Json | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          produto_id?: string | null
+          score_agregado?: number | null
+          score_embedding?: number | null
+          score_fuzzy?: number | null
+          texto_origem?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "normalizacoes_log_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_normalizados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       normalizacoes_marcas: {
         Row: {
           ativo: boolean
@@ -993,28 +1043,49 @@ export type Database = {
           ativo: boolean
           categoria: string
           created_at: string
+          descricao: string | null
+          embedding: string | null
           id: string
+          marca: string | null
+          nome_normalizado: string | null
           nome_padrao: string
+          provisorio: boolean | null
+          sku: string | null
           unidade_medida: string
           updated_at: string
+          variante: string | null
         }
         Insert: {
           ativo?: boolean
           categoria: string
           created_at?: string
+          descricao?: string | null
+          embedding?: string | null
           id?: string
+          marca?: string | null
+          nome_normalizado?: string | null
           nome_padrao: string
+          provisorio?: boolean | null
+          sku?: string | null
           unidade_medida?: string
           updated_at?: string
+          variante?: string | null
         }
         Update: {
           ativo?: boolean
           categoria?: string
           created_at?: string
+          descricao?: string | null
+          embedding?: string | null
           id?: string
+          marca?: string | null
+          nome_normalizado?: string | null
           nome_padrao?: string
+          provisorio?: boolean | null
+          sku?: string | null
           unidade_medida?: string
           updated_at?: string
+          variante?: string | null
         }
         Relationships: []
       }
@@ -1140,6 +1211,59 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      propostas_revisao: {
+        Row: {
+          aprovado_por: string | null
+          candidatos: Json
+          created_at: string | null
+          fonte: string | null
+          id: string
+          novo_produto: Json | null
+          observacoes: string | null
+          produto_escolhido_id: string | null
+          score_melhor: number | null
+          status: string | null
+          texto_origem: string
+          updated_at: string | null
+        }
+        Insert: {
+          aprovado_por?: string | null
+          candidatos: Json
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          novo_produto?: Json | null
+          observacoes?: string | null
+          produto_escolhido_id?: string | null
+          score_melhor?: number | null
+          status?: string | null
+          texto_origem: string
+          updated_at?: string | null
+        }
+        Update: {
+          aprovado_por?: string | null
+          candidatos?: Json
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          novo_produto?: Json | null
+          observacoes?: string | null
+          produto_escolhido_id?: string | null
+          score_melhor?: number | null
+          status?: string | null
+          texto_origem?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "propostas_revisao_produto_escolhido_id_fkey"
+            columns: ["produto_escolhido_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_normalizados"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       receipt_items: {
         Row: {
@@ -1336,6 +1460,47 @@ export type Database = {
           uf?: string
         }
         Relationships: []
+      }
+      sinonimos_produtos: {
+        Row: {
+          aprovado_por: string | null
+          confianca: number | null
+          created_at: string | null
+          fonte: string | null
+          id: string
+          metodo_criacao: string | null
+          produto_id: string | null
+          texto_origem: string
+        }
+        Insert: {
+          aprovado_por?: string | null
+          confianca?: number | null
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          metodo_criacao?: string | null
+          produto_id?: string | null
+          texto_origem: string
+        }
+        Update: {
+          aprovado_por?: string | null
+          confianca?: number | null
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          metodo_criacao?: string | null
+          produto_id?: string | null
+          texto_origem?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinonimos_produtos_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_normalizados"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       supermercados: {
         Row: {
@@ -1698,6 +1863,10 @@ export type Database = {
         Args: { profile_user_id: string }
         Returns: boolean
       }
+      binary_quantize: {
+        Args: { "": string } | { "": unknown }
+        Returns: unknown
+      }
       buscar_categoria_por_termo: {
         Args: { termo_busca: string }
         Returns: {
@@ -1818,6 +1987,58 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      halfvec_avg: {
+        Args: { "": number[] }
+        Returns: unknown
+      }
+      halfvec_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      halfvec_send: {
+        Args: { "": unknown }
+        Returns: string
+      }
+      halfvec_typmod_in: {
+        Args: { "": unknown[] }
+        Returns: number
+      }
+      hnsw_bit_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      hnsw_halfvec_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      hnsw_sparsevec_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      hnswhandler: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      ivfflat_bit_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      ivfflat_halfvec_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      ivfflathandler: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      l2_norm: {
+        Args: { "": unknown } | { "": unknown }
+        Returns: number
+      }
+      l2_normalize: {
+        Args: { "": string } | { "": unknown } | { "": unknown }
+        Returns: unknown
+      }
       limpar_dados_antigos: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1865,6 +2086,14 @@ export type Database = {
       limpar_produtos_inconsistentes: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      limpar_residuos_usuario_completo: {
+        Args: { target_user_id: string }
+        Returns: {
+          registros_removidos: number
+          status: string
+          tabela_limpa: string
+        }[]
       }
       limpar_sessoes_expiradas: {
         Args: Record<PropertyKey, never>
@@ -1955,6 +2184,18 @@ export type Database = {
         Args: { "": string }
         Returns: string[]
       }
+      sparsevec_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      sparsevec_send: {
+        Args: { "": unknown }
+        Returns: string
+      }
+      sparsevec_typmod_in: {
+        Args: { "": unknown[] }
+        Returns: number
+      }
       update_my_profile: {
         Args: { p_avatar_url?: string; p_nome?: string; p_telefone?: string }
         Returns: {
@@ -1981,6 +2222,30 @@ export type Database = {
       validate_user_access: {
         Args: { user_uuid: string }
         Returns: boolean
+      }
+      vector_avg: {
+        Args: { "": number[] }
+        Returns: string
+      }
+      vector_dims: {
+        Args: { "": string } | { "": unknown }
+        Returns: number
+      }
+      vector_norm: {
+        Args: { "": string }
+        Returns: number
+      }
+      vector_out: {
+        Args: { "": string }
+        Returns: unknown
+      }
+      vector_send: {
+        Args: { "": string }
+        Returns: string
+      }
+      vector_typmod_in: {
+        Args: { "": unknown[] }
+        Returns: number
       }
     }
     Enums: {
