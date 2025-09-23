@@ -13,7 +13,8 @@ import {
   LogOut,
   MapPin,
   Settings,
-  Database
+  Database,
+  CheckSquare
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -84,10 +85,18 @@ const Menu = () => {
     },
     {
       id: 'test-normalizacao',
-      title: 'Normalização (teste)',
-      description: 'Executar normalização de estabelecimentos - TEMPORÁRIO',
+      title: 'Teste de Normalização',
+      description: 'Testar sistema de normalização de produtos',
       icon: Database,
       onClick: () => navigate('/test-normalizacao'),
+      isActive: true
+    },
+    {
+      id: 'revisao-normalizacao',
+      title: 'Revisão de Normalização',
+      description: 'Aprovar/rejeitar sugestões do sistema',
+      icon: CheckSquare,
+      onClick: () => navigate('/revisao-normalizacao'),
       isActive: true
     }
   ];
