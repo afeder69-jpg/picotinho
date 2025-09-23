@@ -257,22 +257,20 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
         // Comandos para CONSULTAR ESTOQUE COMPLETO (nova funcionalidade)
-        const textoOriginalLimpo = conteudo.trim().toLowerCase();
         console.log('🔍 [DEBUG ESTOQUE] Input original:', conteudo);
-        console.log('🔍 [DEBUG ESTOQUE] textoOriginalLimpo:', textoOriginalLimpo);
         console.log('🔍 [DEBUG ESTOQUE] textoNormalizado:', textoNormalizado);
         
         const isConsultarEstoqueCompleto = (
-            textoOriginalLimpo === 'consulta estoque' ||
-            textoOriginalLimpo === 'estoque completo' ||
-            textoOriginalLimpo === 'estoque'
+            textoNormalizado.trim() === 'CONSULTA ESTOQUE' ||
+            textoNormalizado.trim() === 'ESTOQUE COMPLETO' ||
+            textoNormalizado.trim() === 'ESTOQUE'
         );
         
         console.log('🔍 [DEBUG ESTOQUE] isConsultarEstoqueCompleto:', isConsultarEstoqueCompleto);
-        console.log('🔍 [DEBUG ESTOQUE] Comparações com texto original:');
-        console.log('  - consulta estoque:', textoOriginalLimpo === 'consulta estoque');
-        console.log('  - estoque completo:', textoOriginalLimpo === 'estoque completo'); 
-        console.log('  - estoque:', textoOriginalLimpo === 'estoque');
+        console.log('🔍 [DEBUG ESTOQUE] Comparações:');
+        console.log('  - CONSULTA ESTOQUE:', textoNormalizado.trim() === 'CONSULTA ESTOQUE');
+        console.log('  - ESTOQUE COMPLETO:', textoNormalizado.trim() === 'ESTOQUE COMPLETO'); 
+        console.log('  - ESTOQUE:', textoNormalizado.trim() === 'ESTOQUE');
         
         // Comandos para CONSULTAR ESTOQUE (produto específico)
         const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
