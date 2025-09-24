@@ -5,21 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Função para detectar texto corrompido/binário
-function isCorruptedText(text: string): boolean {
-  if (!text || text.length === 0) return true;
-  
-  // Detectar se tem muitos caracteres de controle/binários
-  const controlChars = (text.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length;
-  const controlRatio = controlChars / text.length;
-  
-  // Detectar se tem muitos caracteres especiais seguidos
-  const binaryPattern = /[\x00-\x1F\x7F-\xFF]{10,}/g;
-  const hasBinaryChunks = binaryPattern.test(text);
-  
-  // Se mais de 30% são caracteres de controle OU tem chunks binários grandes
-  return controlRatio > 0.3 || hasBinaryChunks;
-}
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
@@ -157,31 +142,10 @@ serve(async (req) => {
     console.log(textoLimpo); // TEXTO NORMALIZADO COMPLETO, sem cortar
     console.log("=".repeat(80));
 
-    // ❌ VALIDAÇÃO CRÍTICA: Detectar texto corrompido/binário
-    if (!textoLimpo || textoLimpo.length < 50 || textoLimpo === "ERRO_EXTRAÇÃO_PDF" || isCorruptedText(textoLimpo)) {
-      console.log("❌ PDF CORROMPIDO OU INVÁLIDO - MARCANDO COMO FALHA DEFINITIVA");
+    // Validação básica do texto extraído
+    if (!textoLimpo || textoLimpo.length < 20 || textoLimpo === "ERRO_EXTRAÇÃO_PDF") {
+      console.log("⚠️ Texto extraído muito curto ou com erro, mas continuando processamento");
       console.log("📏 Tamanho do texto:", textoLimpo?.length || 0);
-      console.log("📝 Prévia do texto:", textoLimpo?.substring(0, 200) || "VAZIO");
-      
-      // Marcar nota como processada com falha para evitar loop infinito
-      await supabase
-        .from('notas_imagens')
-        .update({ 
-          processada: true,
-          dados_extraidos: { error: "PDF_CORROMPIDO", message: "PDF contém dados binários ou está corrompido" },
-          debug_texto: "PDF_CORROMPIDO",
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', notaImagemId);
-      
-      return new Response(JSON.stringify({
-        success: false,
-        error: "PDF_CORRUPTED",
-        message: "PDF está corrompido ou contém dados binários - processamento finalizado com falha",
-      }), { 
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
     }
 
     // 🤖 Processar com IA para estruturar dados
