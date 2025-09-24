@@ -49,55 +49,66 @@ serve(async (req) => {
     const marcas = marcasConhecidas?.map(m => m.nome).join(', ') || '';
 
     // Prompt da IA3 para normalização de produtos
-    const promptIA3 = `Você é a IA3 do Picotinho, especializada em normalização de produtos alimentícios.
+    const promptIA3 = `Você é um especialista em normalização de produtos de supermercado para um sistema de comparação de preços.
 
-MISSÃO: Receber um produto cru e transformá-lo em um produto normalizado e padronizado.
+Sua tarefa é receber um item cru extraído de uma nota fiscal e devolver um JSON estruturado com nome padronizado, SKU e atributos normalizados.
 
-CONTEXTO - PRODUTOS EXISTENTES:
+CONTEXTO - PRODUTOS EXISTENTES COM SKU:
 ${contextoProdutos}
 
 MARCAS CONHECIDAS: ${marcas}
 
-CATEGORIAS DISPONÍVEIS:
-- açougue (carnes, frangos, peixes, embutidos)
-- padaria (pães, bolos, salgados)
-- hortifruti (frutas, verduras, legumes)
-- mercearia (arroz, feijão, molhos, temperos, conservas)
-- frios-e-laticinios (queijos, iogurtes, leites, manteigas)
-- bebidas (refrigerantes, sucos, águas, bebidas alcólicas)
-- higiene-e-limpeza (sabonetes, detergentes, papel higiênico)
-- outros
+## Instruções obrigatórias:
 
-REGRAS DE NORMALIZAÇÃO:
-1. PRESERVAR SEMPRE: marcas (Nestlé, Italac, Coca-Cola), quantidades (200g, 1L, 500ml), medidas
-2. PADRONIZAR: "cr." → "Creme", "refrig." → "Refrigerante", "choc." → "Chocolate"
-3. CORRIGIR: "leite" → "Leite", capitalize primeira letra de cada palavra importante
-4. UNIDADES: UN (unidade), KG (quilo), L (litro), ML (mililitro), G (grama)
-5. CATEGORIA: obrigatória baseada no tipo de produto
+1. **Nome original**: sempre preserve como recebido no campo "nome_original".
+2. **Nome normalizado**:
+   - Corrija abreviações e erros comuns.
+   - Padronize capitalização: primeiras letras maiúsculas, marcas preservadas (Italac, Nestlé, Coca-Cola).
+   - Preserve sempre peso/volume da embalagem (200g, 1L, 500ml).
+   - Remova códigos de barras e ruídos.
+   - Exemplo: "cr. leite italac 200 gr" → "Creme de Leite Italac 200g".
+3. **SKU**:
+   - Se já existir SKU conhecido para este produto (fornecido via contexto acima), retorne no campo "sku".
+   - Caso não exista, retorne null.
+4. **Ação**:
+   - "aceito_automatico" → confiança alta (≥0.9).
+   - "enviado_revisao" → confiança média (≥0.75 e <0.9).
+   - "novo_sku_sugerido" → confiança baixa (<0.75).
+5. **Categoria obrigatória**:
+   - hortifruti: frutas, verduras, legumes, temperos verdes, ervas frescas
+   - mercearia: arroz, feijão, massas, sal, açúcar, óleo, azeite, ovos, aveia, conservas, molhos
+   - bebidas: refrigerantes, sucos, água, cervejas, vinhos, energéticos (exceto leite)
+   - laticínios/frios: leite, queijos, iogurtes, manteiga, requeijão, embutidos
+   - limpeza: detergentes, sabões, desinfetantes, esponja de aço, amaciantes
+   - higiene/farmácia: sabonetes, shampoos, pasta de dente, papel higiênico, medicamentos
+   - açougue: carnes frescas, frango, peixes, linguiças
+   - padaria: pães, bolos, biscoitos, torradas
+   - congelados: sorvetes, pizzas congeladas, produtos congelados
+   - pet: rações, produtos para animais
+   - outros: apenas se não se encaixar em nenhuma das acima
+6. **Marca**: identifique marca se existir (Nestlé, Italac, Coca-Cola, etc.), caso contrário null.
+7. **Quantidade e unidade**: identificar valor e unidade (ex.: 200g, 1L, 6UN).
+8. **Validação**:
+   - Sempre retornar categoria preenchida.
+   - Nunca deixar null em "categoria".
+   - Retornar sempre um JSON válido.
+
+## Estrutura obrigatória do JSON de saída:
+{
+  "nome_original": "texto cru recebido",
+  "nome_normalizado": "texto padronizado",
+  "sku": "string ou null",
+  "acao": "aceito_automatico | enviado_revisao | novo_sku_sugerido",
+  "score": 0.0,
+  "categoria": "categoria_obrigatoria",
+  "marca": "string ou null",
+  "quantidade": "ex: 200g, 1L, 500ml, 6UN",
+  "unidade": "G | ML | L | KG | UN"
+}
 
 PRODUTO A NORMALIZAR: "${produto_nome}"
 
-INSTRUÇÕES:
-1. Analise o produto cru e normalize o nome
-2. Identifique marca, quantidade, unidade e categoria
-3. Busque produtos similares nos existentes para calcular score de similaridade
-4. Aplique as regras de confiança:
-   - Score ≥ 0.9: aceito_automatico (associar ao SKU existente)
-   - Score 0.75-0.89: enviado_revisao (produto similar existe, mas precisa confirmação)
-   - Score < 0.75: novo_sku_sugerido (produto novo, criar SKU)
-
-RESPONDA APENAS COM JSON VÁLIDO:
-{
-  "nome_original": "${produto_nome}",
-  "nome_normalizado": "Nome Padronizado Do Produto",
-  "sku": "SKU123 ou null",
-  "acao": "aceito_automatico | enviado_revisao | novo_sku_sugerido",
-  "score": 0.85,
-  "categoria": "categoria_obrigatoria",
-  "marca": "Marca Detectada ou null",
-  "quantidade": "200g ou 1L ou 500ml ou null",
-  "unidade": "UN | KG | L | ML | G"
-}`;
+Responda APENAS o JSON. Não explique.`;
 
     // Chamar OpenAI
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
