@@ -18,29 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    // Verificar se há body na requisição
-    const contentType = req.headers.get('content-type');
-    let requestBody = {};
-    
-    if (contentType && contentType.includes('application/json')) {
-      const text = await req.text();
-      if (text && text.trim()) {
-        try {
-          requestBody = JSON.parse(text);
-        } catch (parseError) {
-          console.error('❌ Erro ao fazer parse do JSON:', parseError);
-          console.log('📝 Texto recebido:', text);
-          return new Response(JSON.stringify({ 
-            error: 'JSON inválido na requisição',
-            details: parseError.message 
-          }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
-      }
-    }
-    
+    const requestBody = await req.json();
     const { nomeOriginal, notaId, usuarioId, debug } = requestBody;
     
     console.log('📝 Parâmetros recebidos:', requestBody);
@@ -119,7 +97,7 @@ serve(async (req) => {
         console.log('✅ Nota já existe no estoque, prosseguindo com normalização...');
       }
 
-      // Processar normalização diretamente aqui para evitar recursão
+      // Agora normalizar cada produto individualmente 
       const itens = nota.dados_extraidos.itens;
       let itensNormalizados = 0;
       let propostas = 0;
@@ -130,13 +108,28 @@ serve(async (req) => {
         console.log(`📝 Normalizando: ${item.descricao}`);
         
         try {
-          // Processar normalização diretamente aqui
-          const resultado = await processarNormalizacaoItem(item.descricao, usuarioId || nota.usuario_id);
+          // Chamar recursivamente para normalizar produto individual
+          const normResponse = await fetch(req.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': req.headers.get('Authorization') || ''
+            },
+            body: JSON.stringify({ 
+              nomeOriginal: item.descricao,
+              usuarioId: usuarioId || nota.usuario_id,
+              debug: false
+            })
+          });
+
+          const normResult = await normResponse.json();
           
-          if (resultado.acao === 'aceito_automatico') {
-            itensNormalizados++;
-          } else if (resultado.acao === 'enviado_revisao') {
-            propostas++;
+          if (normResult.success) {
+            if (normResult.acao === 'aceito_automatico') {
+              itensNormalizados++;
+            } else if (normResult.acao === 'enviado_revisao') {
+              propostas++;
+            }
           }
         } catch (err) {
           console.error(`❌ Erro ao normalizar ${item.descricao}:`, err);
@@ -158,12 +151,209 @@ serve(async (req) => {
     }
 
     // ========= FLUXO PARA PRODUTO INDIVIDUAL =========
-    const resultado = await processarNormalizacaoItem(nomeOriginal, usuarioId);
+    console.log('📝 Produto original:', nomeOriginal);
+
+    // 1. NORMALIZAÇÃO BÁSICA DO TEXTO
+    let nomeNormalizado = nomeOriginal.toUpperCase().trim();
     
-    return new Response(
-      JSON.stringify(resultado),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Aplicar normalizações da tabela normalizacoes_nomes
+    const { data: normalizacoes } = await supabase
+      .from('normalizacoes_nomes')
+      .select('termo_errado, termo_correto')
+      .eq('ativo', true);
+    
+    if (normalizacoes) {
+      for (const norm of normalizacoes) {
+        const regex = new RegExp(`\\b${norm.termo_errado}\\b`, 'gi');
+        nomeNormalizado = nomeNormalizado.replace(regex, norm.termo_correto);
+      }
+    }
+
+    // Normalizações específicas de padrões
+    nomeNormalizado = nomeNormalizado
+      .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO|INTEGRAL|10\s*GRAOS|ORIGINAL)?\b/gi, 'PAO DE FORMA')
+      .replace(/\b(ACHOCOLATADO EM PO NESCAU)\s*(\d+G|3\.0|30KG)?\b/gi, 'ACHOCOLATADO EM PO')
+      .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|INTEGRAL|10\s*GRAOS|ORIGINAL|\d+G|\d+ML|\d+L|\d+KG)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    console.log('🔄 Nome normalizado:', nomeNormalizado);
+
+    // 2. BUSCAR PRODUTOS EXISTENTES SIMILARES
+    const { data: produtosExistentes } = await supabase
+      .from('produtos_normalizados')
+      .select('*')
+      .eq('ativo', true)
+      .limit(50);
+
+    // 3. CALCULAR SCORES DE SIMILARIDADE
+    let melhorCandidato = null;
+    let scoreSimilaridade = 0;
+    let candidatos = [];
+
+    if (produtosExistentes) {
+      for (const produto of produtosExistentes) {
+        // Score baseado em similaridade de texto
+        const similarity = calcularSimilaridade(nomeNormalizado, produto.nome_normalizado || produto.nome_padrao);
+        
+        if (similarity > 0.7) {
+          candidatos.push({
+            id: produto.id,
+            nome: produto.nome_padrao,
+            categoria: produto.categoria,
+            marca: produto.marca,
+            score: similarity,
+            provisorio: produto.provisorio
+          });
+        }
+
+        if (similarity > scoreSimilaridade) {
+          scoreSimilaridade = similarity;
+          melhorCandidato = produto;
+        }
+      }
+    }
+
+    // Ordenar candidatos por score
+    candidatos.sort((a, b) => b.score - a.score);
+
+    // 4. EXTRAÇÃO DE INFORMAÇÕES DO PRODUTO
+    const infoExtraida = extrairInformacoesProduto(nomeNormalizado);
+    
+    // 5. DETERMINAR NÍVEL DE CONFIANÇA
+    let confianca = calcularConfianca(scoreSimilaridade, candidatos, infoExtraida, nomeNormalizado);
+    
+    console.log('📊 Score melhor candidato:', scoreSimilaridade);
+    console.log('📊 Confiança calculada:', confianca);
+    console.log('🎯 Candidatos encontrados:', candidatos.length);
+
+    // 6. DECISÃO BASEADA NA CONFIANÇA
+    const LIMITE_CONFIANCA_ALTA = 0.9;
+    
+    if (confianca >= LIMITE_CONFIANCA_ALTA && melhorCandidato) {
+      // ALTA CONFIANÇA - INSERIR AUTOMATICAMENTE
+      console.log('✅ ALTA CONFIANÇA - Inserindo automaticamente');
+      
+      const produtoNormalizado = {
+        produto_nome_normalizado: melhorCandidato.nome_normalizado || melhorCandidato.nome_padrao,
+        nome_base: melhorCandidato.nome_padrao,
+        marca: melhorCandidato.marca,
+        categoria: melhorCandidato.categoria,
+        tipo_embalagem: infoExtraida.tipo_embalagem,
+        qtd_valor: infoExtraida.qtd_valor,
+        qtd_unidade: infoExtraida.qtd_unidade,
+        granel: infoExtraida.granel,
+        produto_hash_normalizado: gerarHash(melhorCandidato.nome_padrao)
+      };
+
+      // Log da normalização
+      await supabase
+        .from('normalizacoes_log')
+        .insert({
+          texto_origem: nomeOriginal,
+          acao: 'aceito_automatico',
+          produto_id: melhorCandidato.id,
+          score_fuzzy: scoreSimilaridade,
+          score_agregado: confianca,
+          candidatos: candidatos.slice(0, 5),
+          user_id: usuarioId,
+          metadata: { fonte: 'ia2_auto', info_extraida: infoExtraida }
+        });
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          produto_normalizado: produtoNormalizado,
+          acao: 'aceito_automatico',
+          confianca: confianca,
+          candidato_escolhido: melhorCandidato.nome_padrao
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+      
+    } else {
+      // BAIXA CONFIANÇA - CRIAR PROPOSTA PARA REVISÃO
+      console.log('⚠️ BAIXA CONFIANÇA - Criando proposta para revisão');
+      
+      // Preparar novo produto sugerido
+      const novoProdutoSugerido = {
+        nome_padrao: nomeNormalizado,
+        nome_normalizado: nomeNormalizado,
+        categoria: infoExtraida.categoria || 'indefinida',
+        marca: infoExtraida.marca,
+        tipo_embalagem: infoExtraida.tipo_embalagem,
+        qtd_valor: infoExtraida.qtd_valor,
+        qtd_unidade: infoExtraida.qtd_unidade,
+        granel: infoExtraida.granel,
+        unidade_medida: 'unidade',
+        provisorio: true
+      };
+
+      // Criar proposta de revisão
+      const { data: proposta, error: propostaError } = await supabase
+        .from('propostas_revisao')
+        .insert({
+          texto_origem: nomeOriginal,
+          candidatos: candidatos.slice(0, 10),
+          score_melhor: scoreSimilaridade,
+          produto_escolhido_id: melhorCandidato?.id,
+          novo_produto: novoProdutoSugerido,
+          fonte: 'ia2_revisao',
+          status: 'pendente'
+        })
+        .select()
+        .single();
+
+      if (propostaError) {
+        console.error('❌ Erro ao criar proposta:', propostaError);
+      } else {
+        console.log('📝 Proposta criada:', proposta.id);
+      }
+
+      // Log da normalização
+      await supabase
+        .from('normalizacoes_log')
+        .insert({
+          texto_origem: nomeOriginal,
+          acao: 'enviado_revisao',
+          produto_id: melhorCandidato?.id,
+          score_fuzzy: scoreSimilaridade,
+          score_agregado: confianca,
+          candidatos: candidatos.slice(0, 5),
+          user_id: usuarioId,
+          metadata: { 
+            fonte: 'ia2_revisao', 
+            info_extraida: infoExtraida,
+            proposta_id: proposta?.id
+          }
+        });
+
+      // Por enquanto, inserir produto provisório para não travar o fluxo
+      const produtoProvisorio = {
+        produto_nome_normalizado: nomeNormalizado,
+        nome_base: nomeNormalizado,
+        marca: infoExtraida.marca,
+        categoria: infoExtraida.categoria || 'indefinida',
+        tipo_embalagem: infoExtraida.tipo_embalagem,
+        qtd_valor: infoExtraida.qtd_valor,
+        qtd_unidade: infoExtraida.qtd_unidade,
+        granel: infoExtraida.granel,
+        produto_hash_normalizado: gerarHash(nomeNormalizado + '_PROVISORIO')
+      };
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          produto_normalizado: produtoProvisorio,
+          acao: 'enviado_revisao',
+          confianca: confianca,
+          proposta_criada: true,
+          candidatos_encontrados: candidatos.length,
+          melhor_score: scoreSimilaridade
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
   } catch (error) {
     console.error('❌ Erro na IA-2:', error);
@@ -173,207 +363,6 @@ serve(async (req) => {
     );
   }
 });
-
-// FUNÇÃO AUXILIAR PARA PROCESSAR NORMALIZAÇÃO
-async function processarNormalizacaoItem(nomeOriginal: string, usuarioId?: string) {
-  console.log('📝 Produto original:', nomeOriginal);
-
-  // 1. NORMALIZAÇÃO BÁSICA DO TEXTO
-  let nomeNormalizado = nomeOriginal.toUpperCase().trim();
-  
-  // Aplicar normalizações da tabela normalizacoes_nomes
-  const { data: normalizacoes } = await supabase
-    .from('normalizacoes_nomes')
-    .select('termo_errado, termo_correto')
-    .eq('ativo', true);
-  
-  if (normalizacoes) {
-    for (const norm of normalizacoes) {
-      const regex = new RegExp(`\\b${norm.termo_errado}\\b`, 'gi');
-      nomeNormalizado = nomeNormalizado.replace(regex, norm.termo_correto);
-    }
-  }
-
-  // Normalizações específicas de padrões
-  nomeNormalizado = nomeNormalizado
-    .replace(/\b(PAO DE FORMA|PAO FORMA)\s*(PULLMAN|PUSPANAT|WICKBOLD|PLUS|VITA)?\s*\d*G?\s*(100\s*NUTRICAO|INTEGRAL|10\s*GRAOS|ORIGINAL)?\b/gi, 'PAO DE FORMA')
-    .replace(/\b(ACHOCOLATADO EM PO NESCAU)\s*(\d+G|3\.0|30KG)?\b/gi, 'ACHOCOLATADO EM PO')
-    .replace(/\b(FATIADO|MINI\s*LANCHE|170G\s*AMEIXA|380G|450G|480G|500G|180G\s*REQUEIJAO|3\.0|INTEGRAL|10\s*GRAOS|ORIGINAL|\d+G|\d+ML|\d+L|\d+KG)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  console.log('🔄 Nome normalizado:', nomeNormalizado);
-
-  // 2. BUSCAR PRODUTOS EXISTENTES SIMILARES
-  const { data: produtosExistentes } = await supabase
-    .from('produtos_normalizados')
-    .select('*')
-    .eq('ativo', true)
-    .limit(50);
-
-  // 3. CALCULAR SCORES DE SIMILARIDADE
-  let melhorCandidato = null;
-  let scoreSimilaridade = 0;
-  let candidatos = [];
-
-  if (produtosExistentes) {
-    for (const produto of produtosExistentes) {
-      // Score baseado em similaridade de texto
-      const similarity = calcularSimilaridade(nomeNormalizado, produto.nome_normalizado || produto.nome_padrao);
-      
-      if (similarity > 0.7) {
-        candidatos.push({
-          id: produto.id,
-          nome: produto.nome_padrao,
-          categoria: produto.categoria,
-          marca: produto.marca,
-          score: similarity,
-          provisorio: produto.provisorio
-        });
-      }
-
-      if (similarity > scoreSimilaridade) {
-        scoreSimilaridade = similarity;
-        melhorCandidato = produto;
-      }
-    }
-  }
-
-  // Ordenar candidatos por score
-  candidatos.sort((a, b) => b.score - a.score);
-
-  // 4. EXTRAÇÃO DE INFORMAÇÕES DO PRODUTO
-  const infoExtraida = extrairInformacoesProduto(nomeNormalizado);
-  
-  // 5. DETERMINAR NÍVEL DE CONFIANÇA
-  let confianca = calcularConfianca(scoreSimilaridade, candidatos, infoExtraida, nomeNormalizado);
-  
-  console.log('📊 Score melhor candidato:', scoreSimilaridade);
-  console.log('📊 Confiança calculada:', confianca);
-  console.log('🎯 Candidatos encontrados:', candidatos.length);
-
-  // 6. DECISÃO BASEADA NA CONFIANÇA
-  const LIMITE_CONFIANCA_ALTA = 0.9;
-  
-  if (confianca >= LIMITE_CONFIANCA_ALTA && melhorCandidato) {
-    // ALTA CONFIANÇA - INSERIR AUTOMATICAMENTE
-    console.log('✅ ALTA CONFIANÇA - Inserindo automaticamente');
-    
-    const produtoNormalizado = {
-      produto_nome_normalizado: melhorCandidato.nome_normalizado || melhorCandidato.nome_padrao,
-      nome_base: melhorCandidato.nome_padrao,
-      marca: melhorCandidato.marca,
-      categoria: melhorCandidato.categoria,
-      tipo_embalagem: infoExtraida.tipo_embalagem,
-      qtd_valor: infoExtraida.qtd_valor,
-      qtd_unidade: infoExtraida.qtd_unidade,
-      granel: infoExtraida.granel,
-      produto_hash_normalizado: gerarHash(melhorCandidato.nome_padrao)
-    };
-
-    // Log da normalização
-    await supabase
-      .from('normalizacoes_log')
-      .insert({
-        texto_origem: nomeOriginal,
-        acao: 'aceito_automatico',
-        produto_id: melhorCandidato.id,
-        score_fuzzy: scoreSimilaridade,
-        score_agregado: confianca,
-        candidatos: candidatos.slice(0, 5),
-        user_id: usuarioId,
-        metadata: { fonte: 'ia2_auto', info_extraida: infoExtraida }
-      });
-
-    return { 
-      success: true,
-      produto_normalizado: produtoNormalizado,
-      acao: 'aceito_automatico',
-      confianca: confianca,
-      candidato_escolhido: melhorCandidato.nome_padrao
-    };
-    
-  } else {
-    // BAIXA CONFIANÇA - CRIAR PROPOSTA PARA REVISÃO
-    console.log('⚠️ BAIXA CONFIANÇA - Criando proposta para revisão');
-    
-    // Preparar novo produto sugerido
-    const novoProdutoSugerido = {
-      nome_padrao: nomeNormalizado,
-      nome_normalizado: nomeNormalizado,
-      categoria: infoExtraida.categoria || 'indefinida',
-      marca: infoExtraida.marca,
-      tipo_embalagem: infoExtraida.tipo_embalagem,
-      qtd_valor: infoExtraida.qtd_valor,
-      qtd_unidade: infoExtraida.qtd_unidade,
-      granel: infoExtraida.granel,
-      unidade_medida: 'unidade',
-      provisorio: true
-    };
-
-    // Criar proposta de revisão
-    const { data: proposta, error: propostaError } = await supabase
-      .from('propostas_revisao')
-      .insert({
-        texto_origem: nomeOriginal,
-        candidatos: candidatos.slice(0, 10),
-        score_melhor: scoreSimilaridade,
-        produto_escolhido_id: melhorCandidato?.id,
-        novo_produto: novoProdutoSugerido,
-        fonte: 'ia2_revisao',
-        status: 'pendente'
-      })
-      .select()
-      .single();
-
-    if (propostaError) {
-      console.error('❌ Erro ao criar proposta:', propostaError);
-    } else {
-      console.log('📝 Proposta criada:', proposta.id);
-    }
-
-    // Log da normalização
-    await supabase
-      .from('normalizacoes_log')
-      .insert({
-        texto_origem: nomeOriginal,
-        acao: 'enviado_revisao',
-        produto_id: melhorCandidato?.id,
-        score_fuzzy: scoreSimilaridade,
-        score_agregado: confianca,
-        candidatos: candidatos.slice(0, 5),
-        user_id: usuarioId,
-        metadata: { 
-          fonte: 'ia2_revisao', 
-          info_extraida: infoExtraida,
-          proposta_id: proposta?.id
-        }
-      });
-
-    // Por enquanto, inserir produto provisório para não travar o fluxo
-    const produtoProvisorio = {
-      produto_nome_normalizado: nomeNormalizado,
-      nome_base: nomeNormalizado,
-      marca: infoExtraida.marca,
-      categoria: infoExtraida.categoria || 'indefinida',
-      tipo_embalagem: infoExtraida.tipo_embalagem,
-      qtd_valor: infoExtraida.qtd_valor,
-      qtd_unidade: infoExtraida.qtd_unidade,
-      granel: infoExtraida.granel,
-      produto_hash_normalizado: gerarHash(nomeNormalizado + '_PROVISORIO')
-    };
-
-    return { 
-      success: true,
-      produto_normalizado: produtoProvisorio,
-      acao: 'enviado_revisao',
-      confianca: confianca,
-      proposta_criada: true,
-      candidatos_encontrados: candidatos.length,
-      melhor_score: scoreSimilaridade
-    };
-  }
-}
 
 // FUNÇÕES AUXILIARES
 function calcularSimilaridade(str1: string, str2: string): number {

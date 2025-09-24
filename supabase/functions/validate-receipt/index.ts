@@ -19,20 +19,19 @@ interface ValidationResult {
   message: string;
 }
 
-// Função para extrair texto de PDF (implementação simplificada)
+// Função para extrair texto de PDF (mesma implementação da IA-2)
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    console.log('📄 Extraindo texto do PDF...');
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
     
-    // Método simples para extrair texto de PDFs (fallback)
-    const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
-    
-    // Extrair texto entre parênteses (conteúdo comum em PDFs)
-    const regex = /\(([^)]+)\)/g;
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
-    let match;
-    while ((match = regex.exec(pdfString)) !== null) {
-      extractedText += match[1] + " ";
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      extractedText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
     }
     
     return extractedText.trim();

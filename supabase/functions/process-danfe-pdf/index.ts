@@ -5,36 +5,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    console.log('📄 Extraindo texto do PDF...');
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
     
-    // Método simples para extrair texto de PDFs (fallback)
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
+    let extractedText = "";
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      extractedText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
+    }
+    
+    return extractedText.trim();
+  } catch (error) {
+    console.error("❌ Erro ao extrair texto do PDF:", error);
+    // Fallback: tentar extrair texto simples usando regex
     const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
-    
-    // Extrair texto entre parênteses (conteúdo comum em PDFs)
     const regex = /\(([^)]+)\)/g;
     let extractedText = "";
     let match;
     while ((match = regex.exec(pdfString)) !== null) {
       extractedText += match[1] + " ";
     }
-    
-    // Se não conseguiu extrair nada, tentar texto direto
-    if (!extractedText.trim()) {
-      // Buscar por padrões de texto comum em notas fiscais
-      const textRegex = /[A-ZÀ-Ÿ][A-Za-zÀ-ÿ\s]{3,50}/g;
-      const matches = pdfString.match(textRegex) || [];
-      extractedText = matches.join(" ");
-    }
-    
-    console.log('✅ Texto extraído:', extractedText.substring(0, 200) + '...');
     return extractedText.trim();
-    
-  } catch (error) {
-    console.error("❌ Erro ao extrair texto do PDF:", error);
-    return "ERRO_EXTRAÇÃO_PDF";
   }
 }
 
@@ -142,10 +138,15 @@ serve(async (req) => {
     console.log(textoLimpo); // TEXTO NORMALIZADO COMPLETO, sem cortar
     console.log("=".repeat(80));
 
-    // Validação básica do texto extraído
-    if (!textoLimpo || textoLimpo.length < 20 || textoLimpo === "ERRO_EXTRAÇÃO_PDF") {
-      console.log("⚠️ Texto extraído muito curto ou com erro, mas continuando processamento");
-      console.log("📏 Tamanho do texto:", textoLimpo?.length || 0);
+    if (!textoLimpo || textoLimpo.length < 50) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "INSUFFICIENT_TEXT",
+        message: "PDF não contém texto suficiente — provavelmente é escaneado",
+      }), { 
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // 🤖 Processar com IA para estruturar dados
@@ -157,11 +158,7 @@ serve(async (req) => {
 
     const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
 
-IMPORTANTE: 
-- Se o texto não contém dados reais de uma nota fiscal, retorne erro
-- NUNCA invente ou crie dados de exemplo
-- NUNCA retorne supermercados fictícios como "Supermercado Exemplo"
-- Se não conseguir extrair dados REAIS, retorne JSON de erro: {"error": "DADOS_INSUFICIENTES", "message": "Não foi possível extrair dados reais da nota fiscal"}
+IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
 1. Estruture em JSON os dados da compra:
    • Estabelecimento (nome, cnpj, endereco)
@@ -283,33 +280,6 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
-      
-      // 🚫 VALIDAÇÃO CRÍTICA: NUNCA PERMITIR DADOS DE EXEMPLO
-      if (dadosEstruturados.error) {
-        console.log("❌ IA retornou erro:", dadosEstruturados.message);
-        return new Response(JSON.stringify({
-          success: false,
-          error: "AI_EXTRACTION_FAILED",
-          message: dadosEstruturados.message || "Não foi possível extrair dados reais da nota fiscal"
-        }), { 
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-      
-      // Verificar se há dados suspeitos de exemplo
-      const nomeEstabelecimento = dadosEstruturados?.estabelecimento?.nome?.toLowerCase() || '';
-      if (nomeEstabelecimento.includes('exemplo') || nomeEstabelecimento.includes('supermercado exemplo')) {
-        console.log("❌ DADOS DE EXEMPLO DETECTADOS - ABORTANDO:", nomeEstabelecimento);
-        return new Response(JSON.stringify({
-          success: false,
-          error: "EXAMPLE_DATA_DETECTED",
-          message: "Detectados dados de exemplo. NUNCA criar notas fiscais fictícias!"
-        }), { 
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
 
       // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO
       if (dadosEstruturados.estabelecimento?.nome) {
@@ -777,18 +747,22 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
       console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
       
-      try {
-        const ia2Result = await supabase.functions.invoke('normalizar-produto-ia2', {
+      // 🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...
+      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+      
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('normalizar-produto-ia2', {
           body: { 
             notaId: notaImagemId,
             usuarioId: userId,
-            debug: true
+            debug: false
           }
-        });
-        console.log("✅ IA-2 executada automaticamente com sucesso:", ia2Result);
-      } catch (ia2Error) {
-        console.error("❌ Falha na execução automática da IA-2:", ia2Error);
-      }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        }).catch((estoqueErr) => {
+          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+        })
+      );
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
