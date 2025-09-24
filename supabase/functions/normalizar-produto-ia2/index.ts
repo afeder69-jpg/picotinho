@@ -18,7 +18,29 @@ serve(async (req) => {
   }
 
   try {
-    const requestBody = await req.json();
+    // Verificar se há body na requisição
+    const contentType = req.headers.get('content-type');
+    let requestBody = {};
+    
+    if (contentType && contentType.includes('application/json')) {
+      const text = await req.text();
+      if (text && text.trim()) {
+        try {
+          requestBody = JSON.parse(text);
+        } catch (parseError) {
+          console.error('❌ Erro ao fazer parse do JSON:', parseError);
+          console.log('📝 Texto recebido:', text);
+          return new Response(JSON.stringify({ 
+            error: 'JSON inválido na requisição',
+            details: parseError.message 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+    }
+    
     const { nomeOriginal, notaId, usuarioId, debug } = requestBody;
     
     console.log('📝 Parâmetros recebidos:', requestBody);
@@ -108,21 +130,19 @@ serve(async (req) => {
         console.log(`📝 Normalizando: ${item.descricao}`);
         
         try {
-          // Chamar recursivamente para normalizar produto individual
-          const normResponse = await fetch(req.url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': req.headers.get('Authorization') || ''
-            },
-            body: JSON.stringify({ 
+          // Chamar a função supabase diretamente para normalizar produto individual
+          const { data: normResult, error: normError } = await supabase.functions.invoke('normalizar-produto-ia2', {
+            body: { 
               nomeOriginal: item.descricao,
               usuarioId: usuarioId || nota.usuario_id,
               debug: false
-            })
+            }
           });
 
-          const normResult = await normResponse.json();
+          if (normError) {
+            console.error(`❌ Erro ao normalizar ${item.descricao}:`, normError);
+            continue;
+          }
           
           if (normResult.success) {
             if (normResult.acao === 'aceito_automatico') {
