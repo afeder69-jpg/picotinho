@@ -747,22 +747,18 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
       console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
       
-      // 🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...
-      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
-      
-      EdgeRuntime.waitUntil(
-        supabase.functions.invoke('normalizar-produto-ia2', {
+      try {
+        const ia2Result = await supabase.functions.invoke('normalizar-produto-ia2', {
           body: { 
             notaId: notaImagemId,
             usuarioId: userId,
-            debug: false
+            debug: true
           }
-        }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
-        }).catch((estoqueErr) => {
-          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
-        })
-      );
+        });
+        console.log("✅ IA-2 executada automaticamente com sucesso:", ia2Result);
+      } catch (ia2Error) {
+        console.error("❌ Falha na execução automática da IA-2:", ia2Error);
+      }
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
