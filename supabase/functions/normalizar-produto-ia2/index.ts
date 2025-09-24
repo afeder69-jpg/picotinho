@@ -59,24 +59,40 @@ serve(async (req) => {
         );
       }
 
-      // Chamar process-receipt-full para inserir no estoque
-      console.log('🔄 Chamando process-receipt-full para inserir no estoque...');
-      const { data: processResult, error: processError } = await supabase.functions.invoke('process-receipt-full', {
-        body: { notaId: notaId }
-      });
+      // ⚠️ PULAR process-receipt-full - assumir que já foi processado
+      console.log('🔄 Assumindo que a nota já foi processada no estoque...');
+      
+      // Verificar se já existe no estoque
+      const { data: estoqueItems, error: estoqueError } = await supabase
+        .from('estoque_app')
+        .select('id')
+        .eq('nota_id', notaId)
+        .limit(1);
+      
+      if (estoqueError) {
+        console.error('❌ Erro ao verificar estoque:', estoqueError);
+      } else if (!estoqueItems || estoqueItems.length === 0) {
+        console.log('⚠️ Estoque vazio para esta nota - processando primeiro...');
+        
+        const { data: processResult, error: processError } = await supabase.functions.invoke('process-receipt-full', {
+          body: { notaId: notaId }
+        });
 
-      if (processError || !processResult?.success) {
-        console.error('❌ Erro no process-receipt-full:', processError);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Erro ao processar nota no estoque',
-            details: processError?.message || processResult?.error 
-          }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        if (processError || !processResult?.success) {
+          console.error('❌ Erro no process-receipt-full:', processError);
+          return new Response(
+            JSON.stringify({ 
+              error: 'Erro ao processar nota no estoque',
+              details: processError?.message || processResult?.error 
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        console.log('✅ Nota processada no estoque:', processResult.itens_inseridos, 'itens');
+      } else {
+        console.log('✅ Nota já existe no estoque, prosseguindo com normalização...');
       }
-
-      console.log('✅ Nota processada no estoque:', processResult.itens_inseridos, 'itens');
 
       // Agora normalizar cada produto individualmente 
       const itens = nota.dados_extraidos.itens;
