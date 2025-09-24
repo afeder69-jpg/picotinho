@@ -198,7 +198,7 @@ serve(async (req) => {
     console.error('Erro ao corrigir preços zerados:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: error instanceof Error ? error.message : 'Erro desconhecido'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

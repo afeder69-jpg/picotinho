@@ -175,7 +175,7 @@ Responda APENAS com um JSON simples:
     console.error('❌ Erro na correção:', error);
     return new Response(JSON.stringify({
       error: 'Erro interno do servidor',
-      details: error.message
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

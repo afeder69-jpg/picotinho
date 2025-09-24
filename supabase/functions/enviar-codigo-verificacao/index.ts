@@ -179,9 +179,9 @@ const handler = async (req: Request): Promise<Response> => {
       console.error('💥 Erro na requisição para WhatsApp:', error);
       return new Response(JSON.stringify({ 
         success: true, 
-        message: `Erro na conexão com WhatsApp: ${error.message}. Use este código: ${codigo}`,
+        message: `Erro na conexão com WhatsApp: ${error instanceof Error ? error.message : 'Erro desconhecido'}. Use este código: ${codigo}`,
         codigo_debug: codigo,
-        connection_error: error.message
+        connection_error: error instanceof Error ? error.message : 'Erro desconhecido'
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -193,7 +193,7 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Erro interno do servidor' 
+        error: (error instanceof Error ? error.message : 'Erro desconhecido') || 'Erro interno do servidor' 
       }),
       {
         status: 400,

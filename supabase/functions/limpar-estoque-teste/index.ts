@@ -60,7 +60,7 @@ serve(async (req) => {
     console.error('[ERRO]:', error);
     return new Response(JSON.stringify({
       erro: 'Erro interno',
-      motivo: error.message
+      motivo: error instanceof Error ? error.message : 'Erro desconhecido'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

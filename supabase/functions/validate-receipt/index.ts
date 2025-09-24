@@ -30,6 +30,11 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
       globalThis.navigator = {} as any;
     }
     
+    // Configure GlobalWorkerOptions for PDF.js
+    globalThis.GlobalWorkerOptions = {
+      workerSrc: "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs"
+    };
+    
     const pdf = await pdfjs.getDocument({ 
       data: pdfBuffer,
       verbosity: 0 // Reduce logging

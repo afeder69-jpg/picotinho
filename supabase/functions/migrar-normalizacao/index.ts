@@ -71,10 +71,10 @@ serve(async (req) => {
       let produtosParaNormalizar: string[] = [];
       
       if (source_table === 'estoque_app') {
-        produtosParaNormalizar = [item.produto_nome];
+        produtosParaNormalizar = [(item as any).produto_nome];
       } else if (source_table === 'notas_imagens') {
         // Extrair produtos dos dados da nota
-        if (item.dados_extraidos?.itens && Array.isArray(item.dados_extraidos.itens)) {
+        if ((item as any).dados_extraidos?.itens && Array.isArray((item as any).dados_extraidos.itens)) {
           produtosParaNormalizar = item.dados_extraidos.itens
             .filter((produto: any) => produto.descricao)
             .map((produto: any) => produto.descricao);
