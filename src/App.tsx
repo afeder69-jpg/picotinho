@@ -16,6 +16,7 @@ import WhatsAppConfig from "./pages/WhatsAppConfig";
 import CleanupUserData from "./pages/CleanupUserData";
 
 import TestNormalizacao from "./pages/TestNormalizacao";
+import TesteIA3 from "./pages/TesteIA3";
 import TestNormalizacaoCasos from "./pages/TestNormalizacaoCasos";
 import RevisaoNormalizacao from "./pages/RevisaoNormalizacao";
 import SetupMaster from "./pages/SetupMaster";
@@ -59,6 +60,7 @@ const App = () => {
                 <Route path="/cleanup" element={<CleanupUserData />} />
                 
                 <Route path="/test-normalizacao" element={<TestNormalizacao />} />
+                <Route path="/teste-ia3" element={<TesteIA3 />} />
                 <Route path="/test-casos" element={<TestNormalizacaoCasos />} />
                 <Route path="/revisao-normalizacao" element={<RevisaoNormalizacao />} />
                 <Route path="/setup-master" element={<SetupMaster />} />
