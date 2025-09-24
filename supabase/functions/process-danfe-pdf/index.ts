@@ -747,10 +747,16 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
       console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
       
-      // Executar IA-2 em background após salvar os dados
+      // 🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...
+      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+      
       EdgeRuntime.waitUntil(
-        supabase.functions.invoke('process-receipt-full', {
-          body: { notaId: notaImagemId }
+        supabase.functions.invoke('normalizar-produto-ia2', {
+          body: { 
+            notaId: notaImagemId,
+            usuarioId: userId,
+            debug: false
+          }
         }).then((result) => {
           console.log("✅ IA-2 executada automaticamente com sucesso:", result);
         }).catch((estoqueErr) => {
