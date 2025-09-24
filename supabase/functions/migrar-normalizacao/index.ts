@@ -75,7 +75,7 @@ serve(async (req) => {
       } else if (source_table === 'notas_imagens') {
         // Extrair produtos dos dados da nota
         if ((item as any).dados_extraidos?.itens && Array.isArray((item as any).dados_extraidos.itens)) {
-          produtosParaNormalizar = item.dados_extraidos.itens
+          produtosParaNormalizar = (item as any).dados_extraidos.itens
             .filter((produto: any) => produto.descricao)
             .map((produto: any) => produto.descricao);
         }
@@ -102,7 +102,7 @@ serve(async (req) => {
               fonte: `backfill_${source_table}`,
               meta: {
                 batch_id: `${offset}-${batch_size}`,
-                source_id: source_table === 'estoque_app' ? item.user_id : item.id
+                source_id: source_table === 'estoque_app' ? (item as any).user_id : (item as any).id
               }
             }
           });

@@ -144,7 +144,7 @@ serve(async (req) => {
           itens_inseridos_estoque: itens.length,
           itens_normalizados: itensNormalizados,
           propostas_criadas: propostas,
-          total_financeiro: itens.reduce((sum, item) => sum + (parseFloat(item.valor_total) || 0), 0)
+          total_financeiro: itens.reduce((sum: any, item: any) => sum + (parseFloat(item.valor_total) || 0), 0)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -358,7 +358,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro na IA-2:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

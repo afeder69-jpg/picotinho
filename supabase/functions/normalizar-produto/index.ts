@@ -263,11 +263,11 @@ serve(async (req) => {
       embedding = await gerarEmbedding(textoLimpo);
       console.log(`🧠 Embedding gerado: ${embedding.length} dimensões`);
     } catch (error) {
-      console.warn('⚠️ Erro ao gerar embedding, continuando sem:', error.message);
+      console.warn('⚠️ Erro ao gerar embedding, continuando sem:', error instanceof Error ? error.message : 'Erro desconhecido');
     }
     
     // 4. Buscar candidatos
-    const candidatos = await buscarCandidatos(supabase, textoLimpo, embedding);
+    const candidatos = await buscarCandidatos(supabase, textoLimpo, embedding || []);
     console.log(`🎯 ${candidatos.length} candidatos encontrados`);
     
     // 5. Decisão baseada no melhor score

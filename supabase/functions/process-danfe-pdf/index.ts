@@ -121,6 +121,58 @@ serve(async (req) => {
       });
     }
 
+    // 🚨 CORREÇÃO CRÍTICA: SEMPRE CHAMAR IA1 (validate-receipt) PRIMEIRO
+    console.log("🔍 Iniciando validação IA1 (validate-receipt) antes de processar...");
+    try {
+      const validationResult = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/validate-receipt`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          notaImagemId,
+          pdfUrl,
+          userId
+        }),
+      });
+
+      if (!validationResult.ok) {
+        throw new Error(`Validation failed: ${validationResult.status}`);
+      }
+
+      const validation = await validationResult.json();
+      console.log("✅ Validação IA1 concluída:", validation);
+
+      // Se a validação rejeitou o documento, parar aqui
+      if (!validation.approved) {
+        console.log("❌ Documento rejeitado pela IA1:", validation.reason);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "DOCUMENT_REJECTED",
+          message: validation.message || "Documento rejeitado pela validação",
+          reason: validation.reason
+        }), { 
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Se chegou aqui, o documento foi aprovado pela IA1
+      console.log("✅ Documento aprovado pela IA1, continuando processamento...");
+
+    } catch (validationError) {
+      console.error("❌ Erro na validação IA1:", validationError);
+      return new Response(JSON.stringify({
+        success: false,
+        error: "VALIDATION_ERROR",
+        message: "Erro na validação do documento"
+      }), { 
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     console.log("📥 Baixando PDF:", pdfUrl);
     const resp = await fetch(pdfUrl);
     if (!resp.ok) throw new Error(`Falha ao baixar PDF: ${resp.status}`);
@@ -267,7 +319,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
     let dadosEstruturados = null;
     let compraId = null;
@@ -514,7 +566,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
             // 📝 Criar itens da nota fiscal
             if (dadosEstruturados.itens && dadosEstruturados.itens.length > 0) {
-              const itensNotaFiscal = dadosEstruturados.itens.map(item => {
+              const itensNotaFiscal = dadosEstruturados.itens.map((item: any) => {
                 // Normalizar nome (mesma lógica do estoque)
                 let nomeNormalizado = item.descricao.toUpperCase().trim();
                 
@@ -796,11 +848,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     });
 
   } catch (err) {
-    console.error("❌ Erro geral:", err.message);
+    console.error("❌ Erro geral:", err instanceof Error ? err.message : 'Erro desconhecido');
     return new Response(JSON.stringify({
       success: false,
       error: "GENERAL_ERROR",
-      message: err.message
+      message: err instanceof Error ? err.message : 'Erro desconhecido'
     }), { 
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
