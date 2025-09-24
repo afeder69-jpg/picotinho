@@ -7,30 +7,33 @@ const corsHeaders = {
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    // Import pdfjs-dist usando uma abordagem compatível com Deno
-    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
+    console.log('📄 Extraindo texto do PDF...');
     
-    const pdf = await getDocument({ data: pdfBuffer }).promise;
-    let extractedText = "";
-    
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      extractedText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
-    }
-    
-    return extractedText.trim();
-  } catch (error) {
-    console.error("❌ Erro ao extrair texto do PDF:", error);
-    // Fallback: tentar extrair texto simples usando regex
+    // Método simples para extrair texto de PDFs (fallback)
     const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
+    
+    // Extrair texto entre parênteses (conteúdo comum em PDFs)
     const regex = /\(([^)]+)\)/g;
     let extractedText = "";
     let match;
     while ((match = regex.exec(pdfString)) !== null) {
       extractedText += match[1] + " ";
     }
+    
+    // Se não conseguiu extrair nada, tentar texto direto
+    if (!extractedText.trim()) {
+      // Buscar por padrões de texto comum em notas fiscais
+      const textRegex = /[A-ZÀ-Ÿ][A-Za-zÀ-ÿ\s]{3,50}/g;
+      const matches = pdfString.match(textRegex) || [];
+      extractedText = matches.join(" ");
+    }
+    
+    console.log('✅ Texto extraído:', extractedText.substring(0, 200) + '...');
     return extractedText.trim();
+    
+  } catch (error) {
+    console.error("❌ Erro ao extrair texto do PDF:", error);
+    return "ERRO_EXTRAÇÃO_PDF";
   }
 }
 
