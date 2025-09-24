@@ -1757,15 +1757,8 @@ async function processarNotaEmBackground(
       // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2  
       console.log('🚀 PDF processado, disparando IA-2 automaticamente...');
       
-      EdgeRuntime.waitUntil(
-        supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente:", result);
-        }).catch((error) => {
-          console.error('❌ Falha na IA-2 automática:', error);
-        })
-      );
+      // REMOVIDO: process-receipt-full será chamado pelo process-danfe-pdf automaticamente
+      console.log("✅ PDF processado, IA-2 será executada automaticamente pelo fluxo");
       
     } else {
       // Para imagens: IA-1 (extração) → IA-2 (estoque)
@@ -1788,15 +1781,8 @@ async function processarNotaEmBackground(
       // ETAPA 2: Processar estoque automaticamente
       console.log('🚀 Imagem processada, disparando IA-2 automaticamente...');
       
-      EdgeRuntime.waitUntil(
-        supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente:", result);
-        }).catch((error) => {
-          console.error('❌ Falha na IA-2 automática:', error);
-        })
-      );
+      // REMOVIDO: process-receipt-full será chamado pelo extract-receipt-image automaticamente
+      console.log("✅ Imagem processada, IA-2 será executada automaticamente pelo fluxo");
     }
     
     // Aguardar um pouco para garantir que tudo foi persistido

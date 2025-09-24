@@ -249,13 +249,7 @@ serve(async (req) => {
         body: { imagemId: notaImagem.id, userId: userId }
       }).then((extractResult) => {
         console.log("✅ Extração de dados concluída:", extractResult);
-        
-        // Após extração, disparar inserção no estoque
-        return supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        });
-      }).then((result) => {
-        console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        // REMOVIDO: process-receipt-full será chamado pelo extract-receipt-image automaticamente
       }).catch((error) => {
         console.error('❌ Falha na execução automática:', error);
       })
