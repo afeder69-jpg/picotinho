@@ -28,12 +28,111 @@ serve(async (req) => {
     }
 
     console.log('🧠 IA-2 INICIADA: Normalizando produto com IA avançada');
-    console.log('📝 Produto original:', nomeOriginal);
     
     if (debug) {
       console.log('🔍 Debug mode ativado');
       console.log('Parâmetros:', { nomeOriginal, notaId, usuarioId });
     }
+
+    // ========= FLUXO PARA PROCESSAR NOTA COMPLETA =========
+    if (notaId) {
+      console.log('📋 PROCESSANDO NOTA COMPLETA:', notaId);
+      
+      // Buscar nota e seus dados
+      const { data: nota, error: notaError } = await supabase
+        .from('notas_imagens')
+        .select('*')
+        .eq('id', notaId)
+        .single();
+
+      if (notaError || !nota) {
+        return new Response(
+          JSON.stringify({ error: 'Nota não encontrada' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!nota.dados_extraidos?.itens) {
+        return new Response(
+          JSON.stringify({ error: 'Nota não possui itens extraídos' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Chamar process-receipt-full para inserir no estoque
+      console.log('🔄 Chamando process-receipt-full para inserir no estoque...');
+      const { data: processResult, error: processError } = await supabase.functions.invoke('process-receipt-full', {
+        body: { notaId: notaId }
+      });
+
+      if (processError || !processResult?.success) {
+        console.error('❌ Erro no process-receipt-full:', processError);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Erro ao processar nota no estoque',
+            details: processError?.message || processResult?.error 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('✅ Nota processada no estoque:', processResult.itens_inseridos, 'itens');
+
+      // Agora normalizar cada produto individualmente 
+      const itens = nota.dados_extraidos.itens;
+      let itensNormalizados = 0;
+      let propostas = 0;
+
+      for (const item of itens) {
+        if (!item.descricao || item.descricao.trim() === '') continue;
+
+        console.log(`📝 Normalizando: ${item.descricao}`);
+        
+        try {
+          // Chamar recursivamente para normalizar produto individual
+          const normResponse = await fetch(req.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': req.headers.get('Authorization') || ''
+            },
+            body: JSON.stringify({ 
+              nomeOriginal: item.descricao,
+              usuarioId: usuarioId || nota.usuario_id,
+              debug: false
+            })
+          });
+
+          const normResult = await normResponse.json();
+          
+          if (normResult.success) {
+            if (normResult.acao === 'aceito_automatico') {
+              itensNormalizados++;
+            } else if (normResult.acao === 'enviado_revisao') {
+              propostas++;
+            }
+          }
+        } catch (err) {
+          console.error(`❌ Erro ao normalizar ${item.descricao}:`, err);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          nota_processada: true,
+          itens_processados: itens.length,
+          itens_inseridos_estoque: processResult.itens_inseridos,
+          itens_normalizados: itensNormalizados,
+          propostas_criadas: propostas,
+          total_financeiro: processResult.total_financeiro
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ========= FLUXO PARA PRODUTO INDIVIDUAL =========
+    console.log('📝 Produto original:', nomeOriginal);
 
     // 1. NORMALIZAÇÃO BÁSICA DO TEXTO
     let nomeNormalizado = nomeOriginal.toUpperCase().trim();
