@@ -18,7 +18,10 @@ serve(async (req) => {
   }
 
   try {
-    const { nomeOriginal, notaId, usuarioId, debug } = await req.json();
+    const requestBody = await req.json();
+    const { nomeOriginal, notaId, usuarioId, debug } = requestBody;
+    
+    console.log('📝 Parâmetros recebidos:', requestBody);
     
     if (!nomeOriginal && !notaId) {
       return new Response(
