@@ -332,7 +332,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             let processResponse;
             
             if (isPdf) {
-              // Para PDFs, usar process-danfe-pdf
+              // Para PDFs, usar process-danfe-pdf para extrair dados
               processResponse = await supabase.functions.invoke('process-danfe-pdf', {
                 body: {
                   notaImagemId: notaData.id,
@@ -341,12 +341,11 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 }
               });
             } else {
-              // Para imagens, usar apenas extração (sem processamento de estoque aqui)
-              processResponse = await supabase.functions.invoke('validate-receipt', {
+              // Para imagens, usar extract-receipt-image para extrair dados  
+              processResponse = await supabase.functions.invoke('extract-receipt-image', {
                 body: {
-                  notaImagemId: notaData.id,
-                  imageUrl: urlData.publicUrl,
-                  qrUrl: null
+                  imagemId: notaData.id,
+                  userId: currentUser.id
                 }
               });
             }
