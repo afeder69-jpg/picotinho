@@ -119,7 +119,7 @@ serve(async (req) => {
         console.log('✅ Nota já existe no estoque, prosseguindo com normalização...');
       }
 
-      // Agora normalizar cada produto individualmente 
+      // Processar normalização diretamente aqui para evitar recursão
       const itens = nota.dados_extraidos.itens;
       let itensNormalizados = 0;
       let propostas = 0;
@@ -130,26 +130,13 @@ serve(async (req) => {
         console.log(`📝 Normalizando: ${item.descricao}`);
         
         try {
-          // Chamar a função supabase diretamente para normalizar produto individual
-          const { data: normResult, error: normError } = await supabase.functions.invoke('normalizar-produto-ia2', {
-            body: { 
-              nomeOriginal: item.descricao,
-              usuarioId: usuarioId || nota.usuario_id,
-              debug: false
-            }
-          });
-
-          if (normError) {
-            console.error(`❌ Erro ao normalizar ${item.descricao}:`, normError);
-            continue;
-          }
+          // Processar normalização diretamente aqui
+          const resultado = await processarNormalizacaoItem(item.descricao, usuarioId || nota.usuario_id);
           
-          if (normResult.success) {
-            if (normResult.acao === 'aceito_automatico') {
-              itensNormalizados++;
-            } else if (normResult.acao === 'enviado_revisao') {
-              propostas++;
-            }
+          if (resultado.acao === 'aceito_automatico') {
+            itensNormalizados++;
+          } else if (resultado.acao === 'enviado_revisao') {
+            propostas++;
           }
         } catch (err) {
           console.error(`❌ Erro ao normalizar ${item.descricao}:`, err);
@@ -171,7 +158,25 @@ serve(async (req) => {
     }
 
     // ========= FLUXO PARA PRODUTO INDIVIDUAL =========
-    console.log('📝 Produto original:', nomeOriginal);
+    const resultado = await processarNormalizacaoItem(nomeOriginal, usuarioId);
+    
+    return new Response(
+      JSON.stringify(resultado),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('❌ Erro na IA-2:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+// FUNÇÃO AUXILIAR PARA PROCESSAR NORMALIZAÇÃO
+async function processarNormalizacaoItem(nomeOriginal: string, usuarioId?: string) {
+  console.log('📝 Produto original:', nomeOriginal);
 
     // 1. NORMALIZAÇÃO BÁSICA DO TEXTO
     let nomeNormalizado = nomeOriginal.toUpperCase().trim();
@@ -280,16 +285,13 @@ serve(async (req) => {
           metadata: { fonte: 'ia2_auto', info_extraida: infoExtraida }
         });
 
-      return new Response(
-        JSON.stringify({ 
-          success: true,
-          produto_normalizado: produtoNormalizado,
-          acao: 'aceito_automatico',
-          confianca: confianca,
-          candidato_escolhido: melhorCandidato.nome_padrao
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return { 
+        success: true,
+        produto_normalizado: produtoNormalizado,
+        acao: 'aceito_automatico',
+        confianca: confianca,
+        candidato_escolhido: melhorCandidato.nome_padrao
+      };
       
     } else {
       // BAIXA CONFIANÇA - CRIAR PROPOSTA PARA REVISÃO
@@ -361,28 +363,17 @@ serve(async (req) => {
         produto_hash_normalizado: gerarHash(nomeNormalizado + '_PROVISORIO')
       };
 
-      return new Response(
-        JSON.stringify({ 
-          success: true,
-          produto_normalizado: produtoProvisorio,
-          acao: 'enviado_revisao',
-          confianca: confianca,
-          proposta_criada: true,
-          candidatos_encontrados: candidatos.length,
-          melhor_score: scoreSimilaridade
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return { 
+        success: true,
+        produto_normalizado: produtoProvisorio,
+        acao: 'enviado_revisao',
+        confianca: confianca,
+        proposta_criada: true,
+        candidatos_encontrados: candidatos.length,
+        melhor_score: scoreSimilaridade
+      };
     }
-
-  } catch (error) {
-    console.error('❌ Erro na IA-2:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-});
+}
 
 // FUNÇÕES AUXILIARES
 function calcularSimilaridade(str1: string, str2: string): number {
