@@ -50,13 +50,20 @@ serve(async (req) => {
 
     // 2. Limpar tabelas na ordem correta (considerando foreign keys)
     
-    // Itens de compra primeiro
-    const { data: deletedItens, error: itensError } = await supabase
-      .from('itens_compra_app')
-      .delete()
-      .in('compra_id', 
-        supabase.from('compras_app').select('id').eq('user_id', userId)
-      );
+    // Itens de compra primeiro - buscar IDs de compras primeiro
+    const { data: comprasIds, error: comprasIdsError } = await supabase
+      .from('compras_app')
+      .select('id')
+      .eq('user_id', userId);
+    
+    let itensError = null;
+    if (!comprasIdsError && comprasIds && comprasIds.length > 0) {
+      const { data: deletedItens, error: deleteError } = await supabase
+        .from('itens_compra_app')
+        .delete()
+        .in('compra_id', comprasIds.map((c: any) => c.id));
+      itensError = deleteError;
+    }
     
     if (itensError) console.error('Erro ao deletar itens_compra_app:', itensError);
     cleanupResults.push({ table: 'itens_compra_app', status: itensError ? 'erro' : 'ok' });
@@ -70,24 +77,38 @@ serve(async (req) => {
     if (comprasError) console.error('Erro ao deletar compras_app:', comprasError);
     cleanupResults.push({ table: 'compras_app', status: comprasError ? 'erro' : 'ok' });
 
-    // Itens de nota
-    const { error: itensNotaError } = await supabase
-      .from('itens_nota')
-      .delete()
-      .in('nota_id', 
-        supabase.from('notas_fiscais').select('id').eq('user_id', userId)
-      );
+    // Itens de nota - buscar IDs de notas primeiro
+    const { data: notasIds, error: notasIdsError } = await supabase
+      .from('notas_fiscais')
+      .select('id')
+      .eq('user_id', userId);
+    
+    let itensNotaError = null;
+    if (!notasIdsError && notasIds && notasIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('itens_nota')
+        .delete()
+        .in('nota_id', notasIds.map((n: any) => n.id));
+      itensNotaError = deleteError;
+    }
     
     if (itensNotaError) console.error('Erro ao deletar itens_nota:', itensNotaError);
     cleanupResults.push({ table: 'itens_nota', status: itensNotaError ? 'erro' : 'ok' });
 
-    // Receipt items
-    const { error: receiptItemsError } = await supabase
-      .from('receipt_items')
-      .delete()
-      .in('receipt_id', 
-        supabase.from('receipts').select('id').eq('user_id', userId)
-      );
+    // Receipt items - buscar IDs de receipts primeiro
+    const { data: receiptsIds, error: receiptsIdsError } = await supabase
+      .from('receipts')
+      .select('id')
+      .eq('user_id', userId);
+    
+    let receiptItemsError = null;
+    if (!receiptsIdsError && receiptsIds && receiptsIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('receipt_items')
+        .delete()
+        .in('receipt_id', receiptsIds.map((r: any) => r.id));
+      receiptItemsError = deleteError;
+    }
     
     if (receiptItemsError) console.error('Erro ao deletar receipt_items:', receiptItemsError);
     cleanupResults.push({ table: 'receipt_items', status: receiptItemsError ? 'erro' : 'ok' });
@@ -200,10 +221,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro na limpeza:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

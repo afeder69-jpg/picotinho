@@ -57,7 +57,7 @@ serve(async (req) => {
 
     // Construir endereço completo para geocodificação
     let enderecoCompleto;
-    let dadosCEP = null;
+    let dadosCEP: any = null;
     
     // Se apenas 'endereco' foi fornecido (novo uso para estabelecimentos das notas)
     if (endereco && !supermercadoId && !cidade && !estado && !cep) {

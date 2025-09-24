@@ -85,8 +85,8 @@ async function convertHtmlToImage(html: string, url: string): Promise<string> {
         } else {
           console.log('API retornou status:', response.status);
         }
-      } catch (apiError) {
-        console.log('Erro na API:', apiError.message);
+      } catch (apiError: any) {
+        console.log('Erro na API:', apiError instanceof Error ? apiError.message : String(apiError));
         continue;
       }
     }
@@ -244,16 +244,15 @@ serve(async (req) => {
     // ✅ FLUXO AUTOMÁTICO: IA-1 (extração de imagem) → IA-2 (estoque)
     console.log("🚀 Captura externa finalizada, disparando extração de dados...");
     
-    EdgeRuntime.waitUntil(
-      supabase.functions.invoke('extract-receipt-image', {
-        body: { imagemId: notaImagem.id, userId: userId }
-      }).then((extractResult) => {
-        console.log("✅ Extração de dados concluída:", extractResult);
-        // REMOVIDO: process-receipt-full será chamado pelo extract-receipt-image automaticamente
-      }).catch((error) => {
-        console.error('❌ Falha na execução automática:', error);
-      })
-    );
+    // Executar em background sem bloquear a resposta
+    supabase.functions.invoke('extract-receipt-image', {
+      body: { imagemId: notaImagem.id, userId: userId }
+    }).then((extractResult) => {
+      console.log("✅ Extração de dados concluída:", extractResult);
+      // REMOVIDO: process-receipt-full será chamado pelo extract-receipt-image automaticamente
+    }).catch((error: any) => {
+      console.error('❌ Falha na execução automática:', error instanceof Error ? error.message : String(error));
+    });
     
     console.log('Captura externa concluída com sucesso:', notaImagem.id);
     
@@ -269,13 +268,13 @@ serve(async (req) => {
       }
     );
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro na captura externa:', error);
     
     return new Response(
       JSON.stringify({ 
         error: 'Erro interno do servidor',
-        details: error.message 
+        details: error instanceof Error ? error.message : String(error)
       }),
       { 
         status: 500, 

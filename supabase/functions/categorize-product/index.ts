@@ -159,10 +159,11 @@ serve(async (req) => {
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao categorizar produto:', error);
+    const { productName } = await req.json().catch(() => ({ productName: 'Produto' }));
     return new Response(JSON.stringify({ 
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       category: 'outros', // fallback
       suggestedName: productName // fallback
     }), {

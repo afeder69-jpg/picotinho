@@ -78,11 +78,11 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro no debug:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
