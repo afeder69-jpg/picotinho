@@ -51,6 +51,12 @@ serve(async (req) => {
     // Prompt da IA3 para normalização de produtos
     const promptIA3 = `Você é um especialista em normalização de produtos de supermercado para um sistema de comparação de preços.
 
+⚠️ Regra obrigatória: 
+Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
+Se não encontrar a informação, retorne null (ou campo vazio permitido). 
+Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
+Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+
 Sua tarefa é receber um item cru extraído de uma nota fiscal e devolver um JSON estruturado com nome padronizado, SKU e atributos normalizados.
 
 CONTEXTO - PRODUTOS EXISTENTES COM SKU:

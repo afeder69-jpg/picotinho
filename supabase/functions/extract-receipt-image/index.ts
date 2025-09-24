@@ -123,6 +123,12 @@ serve(async (req) => {
     // Prompt da IA2 - APENAS EXTRAÇÃO (sem normalização)
     const extractionPrompt = `Você é um especialista em análise de notas fiscais brasileiras. Analise esta imagem de nota fiscal e extraia TODOS os dados estruturados em JSON.
 
+⚠️ Regra obrigatória: 
+Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
+Se não encontrar a informação, retorne null (ou campo vazio permitido). 
+Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
+Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+
 IMPORTANTE: Sua função é APENAS extrair os dados como estão na nota. NÃO normalize ou padronize nomes de produtos.
 
 ESTRUTURA OBRIGATÓRIA DO JSON:

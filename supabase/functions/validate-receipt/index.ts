@@ -86,6 +86,12 @@ Deno.serve(async (req) => {
 
     const validationPrompt = `Analise este documento e responda APENAS com um JSON no formato especificado.
 
+⚠️ Regra obrigatória: 
+Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
+Se não encontrar a informação, retorne null (ou campo vazio permitido). 
+Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
+Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+
 CRITÉRIOS DE VALIDAÇÃO:
 1. CHAVE DE ACESSO: Procure por sequência de 44 dígitos (pode ter espaços, pontos, quebras). Normalize: O→0, I/l→1, B→8.
 2. ESTABELECIMENTO: Identifique o nome/tipo do emissor.
