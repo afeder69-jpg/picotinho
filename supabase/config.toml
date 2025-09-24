@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.backfill-preco-atual]
 verify_jwt = false
+
+[functions.fix-nota-pdf-corrompido]
+verify_jwt = false
