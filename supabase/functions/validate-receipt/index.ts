@@ -22,10 +22,19 @@ interface ValidationResult {
 // Função para extrair texto de PDF (mesma implementação da IA-2)
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    // Import pdfjs-dist usando uma abordagem compatível com Deno
-    const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
+    // Import pdfjs-dist using proper Deno configuration
+    const pdfjs = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
     
-    const pdf = await getDocument({ data: pdfBuffer }).promise;
+    // Configure the worker for Deno environment
+    if (typeof globalThis !== 'undefined' && !globalThis.navigator) {
+      globalThis.navigator = {} as any;
+    }
+    
+    const pdf = await pdfjs.getDocument({ 
+      data: pdfBuffer,
+      verbosity: 0 // Reduce logging
+    }).promise;
+    
     let extractedText = "";
     
     for (let i = 1; i <= pdf.numPages; i++) {
