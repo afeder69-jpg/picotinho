@@ -141,11 +141,15 @@ serve(async (req) => {
     console.log(textoLimpo); // TEXTO NORMALIZADO COMPLETO, sem cortar
     console.log("=".repeat(80));
 
-    if (!textoLimpo || textoLimpo.length < 50) {
+    if (!textoLimpo || textoLimpo.length < 50 || textoLimpo === "ERRO_EXTRAÇÃO_PDF") {
+      console.log("❌ TEXTO INSUFICIENTE OU ERRO - ABORTANDO PROCESSAMENTO");
+      console.log("📏 Tamanho do texto:", textoLimpo?.length || 0);
+      console.log("📝 Prévia do texto:", textoLimpo?.substring(0, 200) || "VAZIO");
+      
       return new Response(JSON.stringify({
         success: false,
         error: "INSUFFICIENT_TEXT",
-        message: "PDF não contém texto suficiente — provavelmente é escaneado",
+        message: "PDF não contém texto suficiente ou falhou na extração — provavelmente é escaneado",
       }), { 
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -161,7 +165,11 @@ serve(async (req) => {
 
     const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
 
-IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
+IMPORTANTE: 
+- Se o texto não contém dados reais de uma nota fiscal, retorne erro
+- NUNCA invente ou crie dados de exemplo
+- NUNCA retorne supermercados fictícios como "Supermercado Exemplo"
+- Se não conseguir extrair dados REAIS, retorne JSON de erro: {"error": "DADOS_INSUFICIENTES", "message": "Não foi possível extrair dados reais da nota fiscal"}
 
 1. Estruture em JSON os dados da compra:
    • Estabelecimento (nome, cnpj, endereco)
@@ -283,6 +291,33 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
+      
+      // 🚫 VALIDAÇÃO CRÍTICA: NUNCA PERMITIR DADOS DE EXEMPLO
+      if (dadosEstruturados.error) {
+        console.log("❌ IA retornou erro:", dadosEstruturados.message);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "AI_EXTRACTION_FAILED",
+          message: dadosEstruturados.message || "Não foi possível extrair dados reais da nota fiscal"
+        }), { 
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      
+      // Verificar se há dados suspeitos de exemplo
+      const nomeEstabelecimento = dadosEstruturados?.estabelecimento?.nome?.toLowerCase() || '';
+      if (nomeEstabelecimento.includes('exemplo') || nomeEstabelecimento.includes('supermercado exemplo')) {
+        console.log("❌ DADOS DE EXEMPLO DETECTADOS - ABORTANDO:", nomeEstabelecimento);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "EXAMPLE_DATA_DETECTED",
+          message: "Detectados dados de exemplo. NUNCA criar notas fiscais fictícias!"
+        }), { 
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
 
       // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO
       if (dadosEstruturados.estabelecimento?.nome) {
