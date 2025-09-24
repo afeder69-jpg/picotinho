@@ -176,12 +176,12 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro geral:', error);
     return new Response(
       JSON.stringify({ 
         reply: '❌ Erro interno do sistema.',
-        error: error.message 
+        error: error instanceof Error ? error.message : String(error)
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
