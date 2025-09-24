@@ -138,10 +138,10 @@ serve(async (req) => {
           success: true,
           nota_processada: true,
           itens_processados: itens.length,
-          itens_inseridos_estoque: processResult.itens_inseridos,
+          itens_inseridos_estoque: itens.length,
           itens_normalizados: itensNormalizados,
           propostas_criadas: propostas,
-          total_financeiro: processResult.total_financeiro
+          total_financeiro: itens.reduce((sum, item) => sum + (parseFloat(item.valor_total) || 0), 0)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

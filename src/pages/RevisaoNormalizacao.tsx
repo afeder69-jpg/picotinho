@@ -33,7 +33,7 @@ export default function RevisaoNormalizacao() {
   const [propostas, setPropostas] = useState<Proposta[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState("pendente");
-  const [filtroScore, setFiltroScore] = useState("");
+  const [filtroScore, setFiltroScore] = useState("0.9");
   const [produtoNovo, setProdutoNovo] = useState<ProdutoNovo>({
     nome_normalizado: "",
     marca: "",
