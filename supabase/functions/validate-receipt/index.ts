@@ -91,15 +91,22 @@ Deno.serve(async (req) => {
 
     const validationPrompt = `Analise este documento e responda APENAS com um JSON no formato especificado.
 
-CRITÉRIOS DE VALIDAÇÃO PARA NOTAS FISCAIS DE PRODUTOS:
+CRITÉRIOS DE VALIDAÇÃO PARA NOTAS FISCAIS DE PRODUTOS (MERCADO/SUPERMERCADO):
 1. CHAVE DE ACESSO: Procure por sequência de 44 dígitos (pode ter espaços, pontos, quebras). Normalize: O→0, I/l→1, B→8.
-2. ESTABELECIMENTO: Identifique o nome/tipo do emissor.
-3. SINAIS DE COMPRA: Verifique se há itens com descrição+quantidade+valor, valor total, ou forma de pagamento.
-4. TIPO DE DOCUMENTO: Diferencie entre NFC-e (produtos) e NFS-e (serviços).
+2. ESTABELECIMENTO: Identifique se é SUPERMERCADO, MERCADO, LOJA DE CONVENIÊNCIA, PADARIA, AÇOUGUE, ou similar.
+3. SINAIS DE COMPRA: Procure por lista de PRODUTOS alimentícios/domésticos com quantidade e preços.
+4. TIPO DE DOCUMENTO: Diferencie entre NFC-e (produtos físicos) e NFS-e (serviços prestados).
 
-REGRAS RÍGIDAS:
-- APROVAR apenas se: É uma nota fiscal de PRODUTOS (NFC-e, cupom fiscal, nota de venda)
-- REPROVAR se: É nota de serviço (NFS-e), documento irrelevante, ou não é nota fiscal
+IMPORTANTE - APROVAR SE:
+- Há uma lista de produtos/itens com preços (mesmo que seja NFS-e mas contenha produtos)
+- É de supermercado, mercado, padaria, açougue, loja de conveniência
+- Contém produtos alimentícios ou domésticos (arroz, feijão, leite, pão, etc.)
+- É nota fiscal eletrônica com chave de acesso válida
+
+REPROVAR APENAS SE:
+- É claramente serviço puro (consulta médica, advogado, limpeza, etc.) SEM produtos
+- Não é nota fiscal (recibo simples, comprovante bancário, etc.)
+- Documento completamente ilegível ou corrompido
 
 Responda APENAS o JSON:
 {
