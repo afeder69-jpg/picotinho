@@ -132,77 +132,12 @@ serve(async (req) => {
       });
     }
 
-    // 🚨 CORREÇÃO CRÍTICA: SEMPRE CHAMAR IA1 (validate-receipt) PRIMEIRO
-    console.log("🔍 Iniciando validação IA1 (validate-receipt) antes de processar...");
-    try {
-      const validationResult = await supabase.functions.invoke('validate-receipt', {
-        body: {
-          notaImagemId,
-          pdfUrl,
-          userId
-        }
-      });
-
-      console.log("✅ Validação IA1 response:", validationResult);
-
-      // Verificar se houve erro na invocação
-      if (validationResult.error) {
-        console.error("❌ Erro na invocação da IA1:", validationResult.error);
-        throw new Error(`Validation failed: ${validationResult.error.message}`);
-      }
-
-      const validation = validationResult.data;
-      console.log("✅ Validação IA1 concluída:", validation);
-
-      // Se a validação rejeitou o documento, parar aqui
-      if (!validation.approved) {
-        console.log("❌ Documento rejeitado pela IA1:", validation.reason);
-        
-        // CRÍTICO: Marcar a nota como rejeitada no banco
-        await supabase
-          .from("notas_imagens")
-          .update({
-            processada: false,
-            debug_texto: `REJEITADO_IA1: ${validation.reason} - ${validation.message || 'Documento não aprovado'}`
-          })
-          .eq("id", notaImagemId);
-        
-        return new Response(JSON.stringify({
-          success: false,
-          error: "DOCUMENT_REJECTED",
-          message: validation.message || "Documento rejeitado pela validação",
-          reason: validation.reason
-        }), { 
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
+    // 🚨 CORREÇÃO: Pular validação IA1 - já foi validada no WhatsApp
+    console.log("⏩ Pulando validação IA1 - documento já foi validado no WhatsApp");
 
       // Se chegou aqui, o documento foi aprovado pela IA1
       console.log("✅ Documento aprovado pela IA1, continuando processamento...");
 
-    } catch (validationError) {
-      console.error("❌ Erro na validação IA1:", validationError);
-      
-      // CRÍTICO: Marcar a nota como erro no banco
-      await supabase
-        .from("notas_imagens")
-        .update({
-          processada: false,
-          debug_texto: `ERRO_IA1: ${validationError instanceof Error ? validationError.message : 'Erro desconhecido na validação'}`
-        })
-        .eq("id", notaImagemId);
-      
-      return new Response(JSON.stringify({
-        success: false,
-        error: "VALIDATION_ERROR",
-        message: "Erro na validação do documento",
-        details: validationError instanceof Error ? validationError.message : 'Erro desconhecido'
-      }), { 
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
 
     console.log("📥 Baixando PDF:", pdfUrl);
     const resp = await fetch(pdfUrl);
