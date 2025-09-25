@@ -206,17 +206,21 @@ Retorne APENAS o JSON válido, sem explicações.`;
     // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
     console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
     
-    // Executar IA-2 em background após salvar os dados
-    // Process in background (EdgeRuntime not available in this context)
-    setTimeout(() => {
-      supabase.functions.invoke('process-receipt-full', {
-        body: { imagemId: finalNotaId }
-      }).then((result) => {
+    // Executar IA-2 em background imediatamente
+    const backgroundTask = async () => {
+      try {
+        console.log("🔄 Iniciando IA-2 para nota:", finalNotaId);
+        const result = await supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: finalNotaId }
+        });
         console.log("✅ IA-2 executada automaticamente com sucesso:", result);
-      }).catch((estoqueErr) => {
+      } catch (estoqueErr) {
         console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
-      })
-    }, 0);
+      }
+    };
+    
+    // Executar imediatamente, sem esperar
+    backgroundTask();
 
     return new Response(JSON.stringify({
       success: true,
