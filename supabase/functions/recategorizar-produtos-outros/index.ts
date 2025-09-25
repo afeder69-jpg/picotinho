@@ -109,7 +109,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro na recategorização:', error);
     return new Response(JSON.stringify({ 
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
       success: false
     }), {
       status: 500,

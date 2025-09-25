@@ -57,7 +57,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro:', error);
     return new Response(JSON.stringify({
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
       details: error
     }), {
       status: 500,

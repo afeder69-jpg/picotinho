@@ -79,8 +79,8 @@ serve(async (req) => {
     console.error('[TESTE-IA2] Erro:', error);
     return new Response(JSON.stringify({
       erro: 'Erro interno do teste',
-      motivo: error.message,
-      stack: error.stack
+      motivo: error instanceof Error ? error.message : 'Erro desconhecido',
+      stack: error instanceof Error ? error.stack : 'Stack não disponível'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
