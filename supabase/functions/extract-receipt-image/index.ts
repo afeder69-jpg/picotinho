@@ -207,7 +207,8 @@ Retorne APENAS o JSON válido, sem explicações.`;
     console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
     
     // Executar IA-2 em background após salvar os dados
-    EdgeRuntime.waitUntil(
+    // Process in background (EdgeRuntime not available in this context)
+    setTimeout(() => {
       supabase.functions.invoke('process-receipt-full', {
         body: { imagemId: finalNotaId }
       }).then((result) => {
@@ -215,7 +216,7 @@ Retorne APENAS o JSON válido, sem explicações.`;
       }).catch((estoqueErr) => {
         console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
       })
-    );
+    }, 0);
 
     return new Response(JSON.stringify({
       success: true,

@@ -105,8 +105,9 @@ serve(async (req) => {
         console.log(`📝 Normalizando: ${item.descricao}`);
         
         try {
-          // Chamar recursivamente para normalizar produto individual
-          const normResponse = await fetch(req.url, {
+          // Chamar recursivamente para normalizar produto individual  
+          const requestUrl = new URL(req.url);
+          const normResponse = await fetch(requestUrl.toString(), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -149,6 +150,92 @@ serve(async (req) => {
 
     // ========= FLUXO PARA PRODUTO INDIVIDUAL =========
     console.log('📝 Produto original:', nomeOriginal);
+
+    // *** VERIFICAÇÃO ESPECIAL: BASE VAZIA ***
+    const { data: produtosExistentesVerificacao, error: countError } = await supabase
+      .from('produtos_normalizados')
+      .select('id')
+      .eq('ativo', true)
+      .limit(1);
+
+    if (!countError && (!produtosExistentesVerificacao || produtosExistentesVerificacao.length === 0)) {
+      console.log('🌱 PRIMEIRA NORMALIZAÇÃO: Base vazia detectada - criando produto semente');
+      
+      // Normalizar o nome básico
+      let nomeSemente = nomeOriginal.toUpperCase().trim();
+      
+      // Aplicar normalizações básicas
+      const { data: normalizacoes } = await supabase
+        .from('normalizacoes_nomes')
+        .select('termo_errado, termo_correto')
+        .eq('ativo', true);
+      
+      if (normalizacoes) {
+        for (const norm of normalizacoes) {
+          const regex = new RegExp(`\\b${norm.termo_errado}\\b`, 'gi');
+          nomeSemente = nomeSemente.replace(regex, norm.termo_correto);
+        }
+      }
+      
+      // Gerar hash normalizado
+      const hashSemente = gerarHash(nomeSemente);
+      
+      // Extrair informações do produto
+      const infoProduto = extrairInformacoesProduto(nomeSemente);
+      
+      // Criar primeiro produto normalizado
+      const { data: produtoSemente, error: insertError } = await supabase
+        .from('produtos_normalizados')
+        .insert({
+          nome_padrao: nomeSemente,
+          nome_normalizado: nomeSemente,
+          categoria: infoProduto.categoria,
+          marca: infoProduto.marca,
+          unidade_medida: infoProduto.granel ? 'KG' : 'unidade',
+          ativo: true,
+          provisorio: false,
+          sku: hashSemente
+        })
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('❌ Erro ao criar produto semente:', insertError);
+        throw new Error(`Falha ao criar produto inicial: ${insertError.message}`);
+      }
+      
+      // Registrar em log
+      await supabase.from('normalizacoes_log').insert({
+        user_id: usuarioId,
+        texto_origem: nomeOriginal,
+        acao: 'primeira_normalizacao_base_vazia',
+        produto_id: produtoSemente.id,
+        score_agregado: 1.0,
+        candidatos: [],
+        metadata: {
+          fonte: 'ia3_base_vazia',
+          produto_semente: true,
+          nome_original: nomeOriginal,
+          nome_normalizado: nomeSemente
+        }
+      });
+      
+      console.log('✅ Produto semente criado com sucesso:', produtoSemente.nome_padrao);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          acao: 'primeira_normalizacao',
+          produto_nome_normalizado: nomeSemente,
+          produto_hash_normalizado: hashSemente,
+          categoria: infoProduto.categoria,
+          origem: 'produto_semente',
+          produto_id: produtoSemente.id,
+          detalhes: 'Base vazia - primeiro produto criado como semente'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // 1. NORMALIZAÇÃO BÁSICA DO TEXTO
     let nomeNormalizado = nomeOriginal.toUpperCase().trim();
