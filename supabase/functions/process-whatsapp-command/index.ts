@@ -1817,7 +1817,11 @@ async function processarNotaEmBackground(
     let mensagemErro = "❌ Erro ao processar a nota fiscal.";
     
     const errorStr = String(error).toLowerCase();
-    if (errorStr.includes('estoque') || errorStr.includes('inserção') || errorStr.includes('insert')) {
+    if (errorStr.includes('ilegível') || errorStr.includes('corrompido') || errorStr.includes('digitalizado')) {
+      mensagemErro = "❌ PDF ilegível ou corrompido detectado.\n\n📸 Tente enviar uma FOTO da nota fiscal em vez do PDF.\n\nOu escaneie novamente com melhor qualidade.";
+    } else if (errorStr.includes('não reconhecido') || errorStr.includes('dados essenciais')) {
+      mensagemErro = "❌ Documento não parece ser uma nota fiscal válida.\n\nVerifique se enviou o arquivo correto (nota fiscal, cupom fiscal ou DANFE).";
+    } else if (errorStr.includes('estoque') || errorStr.includes('inserção') || errorStr.includes('insert')) {
       mensagemErro = "❌ Erro ao salvar produtos no estoque. A nota foi lida corretamente, mas houve falha na gravação dos itens.\n\nTente novamente em alguns instantes.";
     } else if (errorStr.includes('ia-2') || errorStr.includes('normalizar') || errorStr.includes('indisponível')) {
       mensagemErro = "❌ Aguardando disponibilidade da IA para processar a nota fiscal.\n\nTente novamente em alguns instantes.";
