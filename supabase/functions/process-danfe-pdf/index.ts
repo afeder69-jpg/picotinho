@@ -7,8 +7,15 @@ const corsHeaders = {
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    // Import pdfjs-dist usando uma abordagem compatível com Deno
-    const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
+    // Import pdfjs-dist com configuração do worker
+    const pdfjs = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
+    
+    // Configurar worker para evitar o erro "No GlobalWorkerOptions.workerSrc specified"
+    if (typeof pdfjs.GlobalWorkerOptions !== 'undefined') {
+      pdfjs.GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs";
+    }
+    
+    const { getDocument } = pdfjs;
     
     const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
