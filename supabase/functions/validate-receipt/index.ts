@@ -91,17 +91,15 @@ Deno.serve(async (req) => {
 
     const validationPrompt = `Analise este documento e responda APENAS com um JSON no formato especificado.
 
-⚠️ SEJA PERMISSIVO: Se o documento parece ser uma nota fiscal (mesmo sem todos os elementos), APROVE.
-Só reprove documentos que claramente NÃO são notas fiscais.
-
-CRITÉRIOS PERMISSIVOS:
+CRITÉRIOS DE VALIDAÇÃO PARA NOTAS FISCAIS DE PRODUTOS:
 1. CHAVE DE ACESSO: Procure por sequência de 44 dígitos (pode ter espaços, pontos, quebras). Normalize: O→0, I/l→1, B→8.
-2. ESTABELECIMENTO: Qualquer nome de empresa, loja, ou prestador de serviço
-3. SINAIS DE COMPRA: Qualquer valor monetário, itens, ou estrutura de nota fiscal
+2. ESTABELECIMENTO: Identifique o nome/tipo do emissor.
+3. SINAIS DE COMPRA: Verifique se há itens com descrição+quantidade+valor, valor total, ou forma de pagamento.
+4. TIPO DE DOCUMENTO: Diferencie entre NFC-e (produtos) e NFS-e (serviços).
 
-REGRA PRINCIPAL:
-- APROVAR se: Parece ser uma nota fiscal (produtos, serviços, vendas) mesmo que incompleta
-- REPROVAR apenas se: Documento totalmente irrelevante (não é nota fiscal alguma)
+REGRAS RÍGIDAS:
+- APROVAR apenas se: É uma nota fiscal de PRODUTOS (NFC-e, cupom fiscal, nota de venda)
+- REPROVAR se: É nota de serviço (NFS-e), documento irrelevante, ou não é nota fiscal
 
 Responda APENAS o JSON:
 {
@@ -380,13 +378,12 @@ Responda APENAS o JSON:
         shouldDelete: true,
         message: '📋 Esta nota fiscal já foi lançada no PICOTINHO por outro usuário! Cada nota só pode ser processada uma vez no sistema.'
       };
-    } else if (analysis.eh_nfse && !analysis.tem_sinais_compra) {
-      // Só rejeitar NFSE se realmente não tiver sinais de compra
+    } else if (analysis.eh_nfse) {
       result = {
         approved: false,
-        reason: 'nfse_sem_produtos',
+        reason: 'nfse',
         shouldDelete: true,
-        message: '❌ Esta nota de serviço não contém produtos para o Picotinho.'
+        message: '❌ Este arquivo é uma nota de serviço. O Picotinho aceita apenas notas fiscais de produtos.'
       };
     } else if (analysis.reason === 'erro_analise_pdf' || analysis.reason === 'erro_analise_imagem') {
       result = {
