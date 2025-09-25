@@ -153,6 +153,12 @@ serve(async (req) => {
     // ========= FLUXO PARA PRODUTO INDIVIDUAL =========
     console.log('📝 Produto original:', nomeOriginal);
 
+    // ⚠️ REGRA OBRIGATÓRIA: 
+    // Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
+    // Se não encontrar a informação, retorne null (ou campo vazio permitido). 
+    // Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
+    // Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+
     // 1. NORMALIZAÇÃO BÁSICA DO TEXTO
     let nomeNormalizado = nomeOriginal.toUpperCase().trim();
     

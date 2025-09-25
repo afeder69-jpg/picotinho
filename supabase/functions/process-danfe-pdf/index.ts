@@ -176,6 +176,12 @@ serve(async (req) => {
 
     const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
 
+⚠️ Regra obrigatória: 
+Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
+Se não encontrar a informação, retorne null (ou campo vazio permitido). 
+Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
+Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+
 IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
 1. Estruture em JSON os dados da compra:
