@@ -173,7 +173,7 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
    - Se não encontrar, deixe null
 
 2. Regras OBRIGATÓRIAS:
-   - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
+   - Para VALOR TOTAL: identifique apenas o valor oficial total da compra, ignorando números soltos no início do texto.
    - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
      • JAMAIS altere marcas ou nomes originais (ex: se estiver "Nescau" não pode virar "Nesquik", se estiver "Plusvita" não pode virar "Pullman")
      • NUNCA inclua quantidade comprada na descrição (a quantidade vai no campo separado "quantidade")
