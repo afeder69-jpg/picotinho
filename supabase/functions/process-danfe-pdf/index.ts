@@ -174,13 +174,66 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
+    // 🚨 VERIFICAÇÃO CRÍTICA: Se texto está corrompido/ilegível, BLOQUEAR processamento
+    const caracteresLegíveis = textoLimpo.replace(/[^\w\s\-.,:/()R$]/g, '').length;
+    const percentualLegível = caracteresLegíveis / textoLimpo.length;
+    
+    console.log('🔍 Análise de legibilidade do texto:');
+    console.log('📊 Caracteres totais:', textoLimpo.length);
+    console.log('📊 Caracteres legíveis:', caracteresLegíveis);
+    console.log('📊 Percentual legível:', (percentualLegível * 100).toFixed(2) + '%');
+    
+    // Se menos de 30% do texto é legível, BLOQUEAR
+    if (percentualLegível < 0.3) {
+      console.log('❌ TEXTO ILEGÍVEL - Bloqueando processamento para evitar dados fictícios');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'TEXTO_ILEGIVEL',
+          message: 'PDF contém texto corrompido/ilegível. Não é possível extrair dados reais.' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-⚠️ Regra obrigatória: 
-Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
-Se não encontrar a informação, retorne null (ou campo vazio permitido). 
-Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
-Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+    // VERIFICAR se contém palavras-chave obrigatórias de NFC-e
+    const palavrasChave = ['nfc', 'danfe', 'cnpj', 'total', 'item', 'produto'];
+    const contemPalavrasChave = palavrasChave.some(palavra => 
+      textoLimpo.toLowerCase().includes(palavra)
+    );
+    
+    if (!contemPalavrasChave) {
+      console.log('❌ DOCUMENTO INVÁLIDO - Não contém estrutura de NFC-e');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'DOCUMENTO_INVALIDO',
+          message: 'Documento não contém estrutura válida de nota fiscal.' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const aiPrompt = `INSTRUÇÃO CRÍTICA: Você está analisando texto extraído de PDF de uma nota fiscal.
+
+🚨 REGRA ABSOLUTA - NUNCA INVENTE DADOS:
+- Se o texto estiver corrompido/ilegível, retorne {"error": "TEXTO_ILEGIVEL"}
+- Se não encontrar informação específica, use null
+- NUNCA crie estabelecimentos fictícios como "SUPERMERCADO EXEMPLO"
+- NUNCA crie CNPJs sequenciais ou falsos
+- NUNCA crie produtos genéricos
+
+VERIFICAÇÕES OBRIGATÓRIAS:
+1. O texto deve conter dados reais de estabelecimento
+2. Deve haver CNPJ válido (não inventado)
+3. Produtos devem ter nomes específicos (não genéricos)
+4. Valores devem ser extraídos, não estimados
+
+⚠️ Se o texto abaixo estiver corrompido ou for impossível extrair dados REAIS, retorne exatamente:
+{"error": "DADOS_INSUFICIENTES", "motivo": "Texto ilegível ou sem dados válidos"}
+
+Texto a analisar:
+${textoLimpo}
 
 IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
@@ -268,11 +321,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
+          { role: 'system', content: 'Você é um extrator conservador de dados de nota fiscal. NUNCA invente informações. Se o texto estiver corrompido ou ilegível, retorne erro. Extraia apenas dados que existem claramente no documento.' },
           { role: 'user', content: aiPrompt }
         ],
-        max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
-        temperature: 0.1
+        max_tokens: 4000,
+        temperature: 0.0 // Zero criatividade - apenas extração
       }),
     });
 
@@ -299,7 +352,41 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       const jsonString = jsonMatch ? jsonMatch[0] : respostaIA;
       
       dadosEstruturados = JSON.parse(jsonString);
-      console.log("✅ JSON parseado com sucesso");
+      
+      // 🚨 VERIFICAÇÃO CRÍTICA: Se IA retornou erro de dados insuficientes
+      if (dadosEstruturados.error) {
+        console.log('❌ IA detectou dados insuficientes:', dadosEstruturados.motivo || dadosEstruturados.error);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'DADOS_INSUFICIENTES',
+            message: 'IA não conseguiu extrair dados válidos do documento' 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 🛡️ VALIDAÇÃO FINAL: Verificar se dados não são fictícios
+      const nomeEstabelecimento = dadosEstruturados.estabelecimento?.nome?.toUpperCase() || '';
+      const cnpjEstabelecimento = dadosEstruturados.estabelecimento?.cnpj || '';
+      
+      // Lista de nomes/CNPJs fictícios para bloquear
+      const nomesFicticios = ['SUPERMERCADO EXEMPLO', 'ESTABELECIMENTO TESTE', 'LOJA EXEMPLO', 'EMPRESA EXEMPLO'];
+      const cnpjsFicticios = ['12345678000190', '11111111111111', '00000000000000', '12.345.678/0001-90'];
+      
+      if (nomesFicticios.includes(nomeEstabelecimento) || cnpjsFicticios.includes(cnpjEstabelecimento)) {
+        console.log('❌ DADOS FICTÍCIOS DETECTADOS - Bloqueando:', nomeEstabelecimento, cnpjEstabelecimento);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'DADOS_FICTICIOS',
+            message: 'Sistema detectou tentativa de criação de dados fictícios' 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log("✅ JSON parseado e validado com sucesso");
 
       // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO
       if (dadosEstruturados.estabelecimento?.nome) {
