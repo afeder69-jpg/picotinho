@@ -744,25 +744,19 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-3
-      console.log("🚀 IA-1 finalizou extração, disparando IA-3 automaticamente...");
-      
-      // 🚀 IA-1 finalizou extração, disparando IA-3 automaticamente...
-      console.log("🚀 IA-1 finalizou extração, disparando IA-3 automaticamente...");
-      
-      EdgeRuntime.waitUntil(
-        supabase.functions.invoke('normalizar-produto-ia3', {
-          body: { 
-            notaId: notaImagemId,
-            usuarioId: userId,
-            debug: false
-          }
-        }).then((result) => {
-          console.log("✅ IA-3 executada automaticamente com sucesso:", result);
-        }).catch((estoqueErr) => {
-          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
-        })
-      );
+    // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2 → IA-3
+    console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+    
+    // Primeiro processar no estoque (IA-2), depois normalizar (IA-3)
+    setTimeout(() => {
+      supabase.functions.invoke('process-receipt-full', {
+        body: { notaId: notaImagemId }
+      }).then((result) => {
+        console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+      }).catch((estoqueErr) => {
+        console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+      })
+    }, 0);
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
