@@ -1781,10 +1781,27 @@ async function processarNotaEmBackground(
           throw new Error(`Erro na extração IA-2: ${extractResult.error.message}`);
         }
         
+        // VERIFICAR SE REALMENTE DEU SUCESSO
+        if (!extractResult.data?.success) {
+          const errorMsg = extractResult.data?.error || 'Erro desconhecido';
+          const message = extractResult.data?.message || 'Falha no processamento';
+          throw new Error(`IA-2 falhou: ${errorMsg} - ${message}`);
+        }
+        
         console.log('✅ IA-2: Dados extraídos com sucesso');
         
       } catch (error) {
         console.error('❌ Erro no processamento:', error);
+        
+        // Enviar mensagem de erro específica
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMsg = errorMessage.includes('DOCUMENTO_INVALIDO') 
+          ? "❌ Este documento não é uma nota fiscal válida."
+          : errorMessage.includes('rejeitada') 
+          ? `❌ Nota rejeitada: ${errorMessage.split(':')[1] || 'documento inválido'}`
+          : `❌ Erro no processamento: ${errorMessage}`;
+          
+        await enviarRespostaWhatsApp(mensagem.remetente, errorMsg);
         throw error;
       }
       
@@ -1813,10 +1830,7 @@ async function processarNotaEmBackground(
       console.log("✅ Imagem processada, IA-2 será executada automaticamente pelo fluxo");
     }
     
-    // Aguardar um pouco para garantir que tudo foi persistido
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Enviar mensagem de sucesso final
+    // APENAS enviar mensagem de sucesso se chegou até aqui sem erros
     console.log('📱 Enviando mensagem de confirmação final...');
     await enviarRespostaWhatsApp(
       mensagem.remetente, 
