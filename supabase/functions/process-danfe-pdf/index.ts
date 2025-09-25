@@ -270,6 +270,9 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Environment variables not set');
+    }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let dadosEstruturados = null;
@@ -523,7 +526,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
             // 📝 Criar itens da nota fiscal
             if (dadosEstruturados.itens && dadosEstruturados.itens.length > 0) {
-              const itensNotaFiscal = dadosEstruturados.itens.map(item => {
+              const itensNotaFiscal = dadosEstruturados.itens.map((item: any) => {
                 // Normalizar nome (mesma lógica do estoque)
                 let nomeNormalizado = item.descricao.toUpperCase().trim();
                 
@@ -803,11 +806,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     });
 
   } catch (err) {
-    console.error("❌ Erro geral:", err.message);
-    return new Response(JSON.stringify({
-      success: false,
-      error: "GENERAL_ERROR",
-      message: err.message
+    console.error("❌ Erro geral:", err instanceof Error ? err.message : String(err));
+    return new Response(
+      JSON.stringify({ 
+        error: "Erro interno no processamento",
+        message: err instanceof Error ? err.message : String(err)
     }), { 
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

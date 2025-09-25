@@ -432,7 +432,7 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     }
     
     if (!estoque) {
-      return `Produto "${produtoNome}" não encontrado no seu estoque.`;
+      return `Produto não encontrado no seu estoque.`;
     }
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
@@ -636,8 +636,8 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     await supabase
       .from('whatsapp_sessions')
       .delete()
-      .eq('usuario_id', usuarioId)
-      .eq('remetente', remetente);
+      .eq('usuario_id', mensagem.usuario_id)
+      .eq('remetente', mensagem.remetente);
     
     console.log(`🗑️ [RESET] Sessões ativas removidas para consulta fallback`);
     
@@ -646,7 +646,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
 
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar comando:", err);
-    console.error("❌ [ERRO STACK]:", err.stack);
+    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
     return "❌ Houve um erro ao processar sua consulta. Tente novamente mais tarde.";
   }
 }
@@ -696,7 +696,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
     const produtosPorCategoria = new Map();
     let valorTotalGeral = 0;
     
-    data.forEach(produto => {
+    data.forEach((produto: any) => {
       const categoria = produto.categoria || 'OUTROS';
       
       if (!produtosPorCategoria.has(categoria)) {
@@ -725,7 +725,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
       
       resposta += `📂 **${categoria.toUpperCase()}** (${produtos.length} ${produtos.length === 1 ? 'item' : 'itens'})\n\n`;
       
-      produtos.forEach((produto, index) => {
+      produtos.forEach((produto: any, index: number) => {
         const quantidadeFormatada = formatarQuantidade(produto.quantidade, produto.unidade_medida);
         const produtoNomeLimpo = limparNomeProduto(produto.produto_nome);
         const preco = produto.preco_unitario_ultimo || 0;
@@ -1158,7 +1158,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         '11': 'outros'
       };
       
-      categoriaSelecionada = mapeamentoCategoria[resposta];
+      categoriaSelecionada = mapeamentoCategoria[resposta as keyof typeof mapeamentoCategoria];
       
       if (!categoriaSelecionada) {
         const novasTentativas = tentativasErro + 1;
@@ -1358,7 +1358,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       let ajuda = `❌ Categoria "${termoCategoria}" não encontrada.\n\n📂 **CATEGORIAS DISPONÍVEIS:**\n\n`;
       
       if (todasCategorias) {
-        todasCategorias.forEach(cat => {
+        todasCategorias.forEach((cat: any) => {
           const exemplos = cat.sinonimos ? cat.sinonimos.slice(0, 2).join(', ') : '';
           ajuda += `• ${cat.nome.toUpperCase()}${exemplos ? ` (ex: ${exemplos})` : ''}\n`;
         });
@@ -1400,7 +1400,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     // Consolidar produtos duplicados (mesmo nome)
     const produtosConsolidados = new Map();
     
-    data.forEach(produto => {
+    data.forEach((produto: any) => {
       const chave = produto.produto_nome.trim().toUpperCase();
       
       if (produtosConsolidados.has(chave)) {
@@ -1703,16 +1703,9 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
       return `❌ ${validacao.message}`;
     }
     
-    // Processar em background usando EdgeRuntime.waitUntil para garantir execução
-    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-      EdgeRuntime.waitUntil(
-        processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
-      );
-    } else {
-      // Fallback para ambientes sem EdgeRuntime
-      processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
-        .catch(error => console.error('❌ Erro no processamento em background:', error));
-    }
+    // Processar em background
+    processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
+      .catch(error => console.error('❌ Erro no processamento em background:', error));
     
     return "📂 Nota recebida, iniciando avaliação...";
     
