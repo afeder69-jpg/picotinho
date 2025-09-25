@@ -35,8 +35,8 @@ serve(async (req) => {
       console.log(`\n🔍 Testando: ${caso}`);
       
       try {
-        // Chamar a função normalizar-produto-ia2
-        const { data, error } = await supabase.functions.invoke('normalizar-produto-ia2', {
+        // Chamar a função normalizar-produto-ia3
+        const { data, error } = await supabase.functions.invoke('normalizar-produto-ia3', {
           body: { nomeOriginal: caso }
         });
 

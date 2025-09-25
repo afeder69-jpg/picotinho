@@ -17,14 +17,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🧪 TESTE MANUAL: Processando nota existente com IA-2');
+    console.log('🧪 TESTE MANUAL: Processando nota existente com IA-3');
     
     // Testar com a nota que já foi extraída
     const notaId = '0cbb6a6a-3db0-45c0-9374-da1d53454746';
     const usuarioId = 'ae5b5501-7f8a-46da-9cba-b9955a84e697';
     
-    // Chamar a IA-2 diretamente
-    const { data: ia2Response, error: ia2Error } = await supabase.functions.invoke('normalizar-produto-ia2', {
+    // Chamar a IA-3 diretamente
+    const { data: ia3Response, error: ia3Error } = await supabase.functions.invoke('normalizar-produto-ia3', {
       body: {
         notaId: notaId,
         usuarioId: usuarioId,
@@ -32,7 +32,7 @@ serve(async (req) => {
       }
     });
 
-    if (ia2Error) {
+    if (ia3Error) {
       console.error('❌ Erro na IA-2:', ia2Error);
       throw new Error(`Erro na IA-2: ${ia2Error.message}`);
     }

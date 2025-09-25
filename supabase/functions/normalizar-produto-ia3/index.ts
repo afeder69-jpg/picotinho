@@ -27,7 +27,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('🧠 IA-2 INICIADA: Normalizando produto com IA avançada');
+    console.log('🧠 IA-3 INICIADA: Normalizando produto com IA avançada');
     
     if (debug) {
       console.log('🔍 Debug mode ativado');
@@ -254,7 +254,7 @@ serve(async (req) => {
           score_agregado: confianca,
           candidatos: candidatos.slice(0, 5),
           user_id: usuarioId,
-          metadata: { fonte: 'ia2_auto', info_extraida: infoExtraida }
+          metadata: { fonte: 'ia3_auto', info_extraida: infoExtraida }
         });
 
       return new Response(
@@ -295,7 +295,7 @@ serve(async (req) => {
           score_melhor: scoreSimilaridade,
           produto_escolhido_id: melhorCandidato?.id,
           novo_produto: novoProdutoSugerido,
-          fonte: 'ia2_revisao',
+          fonte: 'ia3_revisao',
           status: 'pendente'
         })
         .select()
@@ -319,7 +319,7 @@ serve(async (req) => {
           candidatos: candidatos.slice(0, 5),
           user_id: usuarioId,
           metadata: { 
-            fonte: 'ia2_revisao', 
+            fonte: 'ia3_revisao', 
             info_extraida: infoExtraida,
             proposta_id: proposta?.id
           }
@@ -353,7 +353,7 @@ serve(async (req) => {
     }
 
   } catch (error) {
-    console.error('❌ Erro na IA-2:', error);
+    console.error('❌ Erro na IA-3:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

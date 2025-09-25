@@ -36,7 +36,7 @@ export default function TestNormalizacaoCasos() {
     try {
       console.log(`🔍 Testando caso individual: ${caso}`);
       
-      const { data, error } = await supabase.functions.invoke('normalizar-produto-ia2', {
+      const { data, error } = await supabase.functions.invoke('normalizar-produto-ia3', {
         body: { nomeOriginal: caso }
       });
       

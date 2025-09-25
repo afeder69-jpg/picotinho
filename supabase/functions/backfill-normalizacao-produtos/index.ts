@@ -257,8 +257,8 @@ async function processarPrecosUsuario(supabase: any, limite: number) {
 }
 
 async function normalizarProduto(supabase: any, nomeOriginal: string) {
-  // Chamar a função de normalização IA-2
-  const response = await supabase.functions.invoke('normalizar-produto-ia2', {
+  // Chamar a função de normalização IA-3
+  const response = await supabase.functions.invoke('normalizar-produto-ia3', {
     body: { nomeOriginal }
   });
 

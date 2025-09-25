@@ -29,17 +29,17 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[TESTE-IA2] Testando normalização: "${descricao}"`);
+    console.log(`[TESTE-IA3] Testando normalização: "${descricao}"`);
 
-    // Chamar IA-2 para normalização
-    const { data: resultado, error } = await supabase.functions.invoke('normalizar-produto-ia2', {
+    // Chamar IA-3 para normalização
+    const { data: resultado, error } = await supabase.functions.invoke('normalizar-produto-ia3', {
       body: { nomeOriginal: descricao, debug: true }
     });
 
     if (error) {
-      console.error('[TESTE-IA2] Erro na IA-2:', error);
+      console.error('[TESTE-IA3] Erro na IA-3:', error);
       return new Response(JSON.stringify({
-        erro: 'Falha na IA-2',
+        erro: 'Falha na IA-3',
         detalhes: error,
         status: 'ERRO'
       }), {

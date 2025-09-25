@@ -8,7 +8,7 @@ const corsHeaders = {
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
     // Import pdfjs-dist usando uma abordagem compatível com Deno
-    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
+    const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
     
     const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
@@ -744,21 +744,21 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
-      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-3
+      console.log("🚀 IA-1 finalizou extração, disparando IA-3 automaticamente...");
       
-      // 🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...
-      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+      // 🚀 IA-1 finalizou extração, disparando IA-3 automaticamente...
+      console.log("🚀 IA-1 finalizou extração, disparando IA-3 automaticamente...");
       
       EdgeRuntime.waitUntil(
-        supabase.functions.invoke('normalizar-produto-ia2', {
+        supabase.functions.invoke('normalizar-produto-ia3', {
           body: { 
             notaId: notaImagemId,
             usuarioId: userId,
             debug: false
           }
         }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+          console.log("✅ IA-3 executada automaticamente com sucesso:", result);
         }).catch((estoqueErr) => {
           console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
         })
