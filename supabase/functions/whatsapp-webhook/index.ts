@@ -275,7 +275,7 @@ const handler = async (req: Request): Promise<Response> => {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Client-Token': accountSecret || ''
+                'Client-Token': accountSecret
               },
               body: JSON.stringify(requestBody)
             });

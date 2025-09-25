@@ -57,7 +57,7 @@ serve(async (req) => {
 
     // Construir endereço completo para geocodificação
     let enderecoCompleto;
-    let dadosCEP: any = null;
+    let dadosCEP = null;
     
     // Se apenas 'endereco' foi fornecido (novo uso para estabelecimentos das notas)
     if (endereco && !supermercadoId && !cidade && !estado && !cep) {
@@ -370,7 +370,7 @@ serve(async (req) => {
     console.error('Erro na geocodificação:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido'
+      error: error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

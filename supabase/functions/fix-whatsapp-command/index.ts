@@ -82,11 +82,6 @@ const handler = async (req: Request): Promise<Response> => {
     const token = Deno.env.get('WHATSAPP_API_TOKEN');
     const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
 
-    if (!instanceUrl || !token || !accountSecret) {
-      console.error('❌ Variáveis WhatsApp não configuradas');
-      return new Response('Erro na configuração WhatsApp', { status: 500, headers: corsHeaders });
-    }
-
     const whatsappUrl = `${instanceUrl}/send-text`;
     const whatsappPayload = {
       phone: mensagem.remetente,
@@ -131,9 +126,9 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response('Erro ao enviar WhatsApp', { status: 500, headers: corsHeaders });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Erro geral:', error);
-    return new Response(`Erro: ${error instanceof Error ? error.message : String(error)}`, { status: 500, headers: corsHeaders });
+    return new Response(`Erro: ${error.message}`, { status: 500, headers: corsHeaders });
   }
 };
 

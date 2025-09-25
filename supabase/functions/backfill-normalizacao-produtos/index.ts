@@ -66,7 +66,7 @@ serve(async (req) => {
     console.error('[BACKFILL-NORMALIZACAO] Erro:', error);
     return new Response(JSON.stringify({
       sucesso: false,
-      erro: error instanceof Error ? error.message : 'Erro desconhecido'
+      erro: error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -310,18 +310,18 @@ async function consolidarEstoque(supabase: any) {
     
     try {
       console.log(`[CONSOLIDACAO] Consolidando ${produtos.length} produtos: ${produtos[0].produto_nome_normalizado || produtos[0].produto_nome}`);
-      console.log(`[CONSOLIDACAO] Produtos originais: ${produtos.map((p: any) => p.produto_nome).join(' + ')}`);
+      console.log(`[CONSOLIDACAO] Produtos originais: ${produtos.map(p => p.produto_nome).join(' + ')}`);
       
       // Ordenar por data de criação (mais antigo primeiro, mas usar o melhor nome normalizado)
-      produtos.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      produtos.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       // Manter o produto com o melhor nome normalizado como principal
-      const produtoPrincipal = produtos.find((p: any) => p.produto_nome_normalizado && p.produto_nome_normalizado.trim() !== '') || produtos[0];
-      const outrosProdutos = produtos.filter((p: any) => p.id !== produtoPrincipal.id);
+      const produtoPrincipal = produtos.find(p => p.produto_nome_normalizado && p.produto_nome_normalizado.trim() !== '') || produtos[0];
+      const outrosProdutos = produtos.filter(p => p.id !== produtoPrincipal.id);
       
       // Somar quantidades
-      const quantidadeTotal = produtos.reduce((total: number, p: any) => total + (p.quantidade || 0), 0);
-      const precoMaisRecente = produtos.reduce((ultimoPreco: any, p: any) => 
+      const quantidadeTotal = produtos.reduce((total, p) => total + (p.quantidade || 0), 0);
+      const precoMaisRecente = produtos.reduce((ultimoPreco, p) => 
         p.updated_at > ultimoPreco.updated_at ? p : ultimoPreco
       ).preco_unitario_ultimo;
       
@@ -342,7 +342,7 @@ async function consolidarEstoque(supabase: any) {
       
       // Deletar produtos duplicados
       if (outrosProdutos.length > 0) {
-        const idsParaDeletar = outrosProdutos.map((p: any) => p.id);
+        const idsParaDeletar = outrosProdutos.map(p => p.id);
         const { error: deleteError } = await supabase
           .from('estoque_app')
           .delete()

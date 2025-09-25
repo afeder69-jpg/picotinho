@@ -432,7 +432,7 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     }
     
     if (!estoque) {
-      return `Produto não encontrado no seu estoque.`;
+      return `Produto "${produtoNome}" não encontrado no seu estoque.`;
     }
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
@@ -636,17 +636,17 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     await supabase
       .from('whatsapp_sessions')
       .delete()
-      .eq('usuario_id', mensagem.usuario_id)
-      .eq('remetente', mensagem.remetente);
+      .eq('usuario_id', usuarioId)
+      .eq('remetente', remetente);
     
     console.log(`🗑️ [RESET] Sessões ativas removidas para consulta fallback`);
     
     // Fallback se não for comando válido
     return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Estoque (estoque completo)\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar comando:", err);
-    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
+    console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao processar sua consulta. Tente novamente mais tarde.";
   }
 }
@@ -696,7 +696,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
     const produtosPorCategoria = new Map();
     let valorTotalGeral = 0;
     
-    data.forEach((produto: any) => {
+    data.forEach(produto => {
       const categoria = produto.categoria || 'OUTROS';
       
       if (!produtosPorCategoria.has(categoria)) {
@@ -725,7 +725,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
       
       resposta += `📂 **${categoria.toUpperCase()}** (${produtos.length} ${produtos.length === 1 ? 'item' : 'itens'})\n\n`;
       
-      produtos.forEach((produto: any, index: number) => {
+      produtos.forEach((produto, index) => {
         const quantidadeFormatada = formatarQuantidade(produto.quantidade, produto.unidade_medida);
         const produtoNomeLimpo = limparNomeProduto(produto.produto_nome);
         const preco = produto.preco_unitario_ultimo || 0;
@@ -757,9 +757,9 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
     
     return resposta;
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar estoque completo:", err);
-    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
+    console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao consultar seu estoque completo. Tente novamente mais tarde.";
   }
 }
@@ -1158,7 +1158,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         '11': 'outros'
       };
       
-      categoriaSelecionada = mapeamentoCategoria[resposta as keyof typeof mapeamentoCategoria];
+      categoriaSelecionada = mapeamentoCategoria[resposta];
       
       if (!categoriaSelecionada) {
         const novasTentativas = tentativasErro + 1;
@@ -1358,7 +1358,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       let ajuda = `❌ Categoria "${termoCategoria}" não encontrada.\n\n📂 **CATEGORIAS DISPONÍVEIS:**\n\n`;
       
       if (todasCategorias) {
-        todasCategorias.forEach((cat: any) => {
+        todasCategorias.forEach(cat => {
           const exemplos = cat.sinonimos ? cat.sinonimos.slice(0, 2).join(', ') : '';
           ajuda += `• ${cat.nome.toUpperCase()}${exemplos ? ` (ex: ${exemplos})` : ''}\n`;
         });
@@ -1400,7 +1400,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     // Consolidar produtos duplicados (mesmo nome)
     const produtosConsolidados = new Map();
     
-    data.forEach((produto: any) => {
+    data.forEach(produto => {
       const chave = produto.produto_nome.trim().toUpperCase();
       
       if (produtosConsolidados.has(chave)) {
@@ -1464,9 +1464,9 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     console.log(`📤 [STEP 8] Resposta final preparada`);
     return resposta;
     
-  } catch (err: any) {
+  } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar consulta de categoria:", err);
-    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
+    console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao processar sua consulta de categoria. Tente novamente mais tarde.";
   }
 }
@@ -1703,15 +1703,15 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
       return `❌ ${validacao.message}`;
     }
     
-    // Processar em background usando waitUntil para garantir execução
-    if (typeof (globalThis as any).EdgeRuntime !== 'undefined' && (globalThis as any).EdgeRuntime.waitUntil) {
-      (globalThis as any).EdgeRuntime.waitUntil(
+    // Processar em background usando EdgeRuntime.waitUntil para garantir execução
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      EdgeRuntime.waitUntil(
         processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
       );
     } else {
       // Fallback para ambientes sem EdgeRuntime
       processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
-        .catch((error: any) => console.error('❌ Erro no processamento em background:', error));
+        .catch(error => console.error('❌ Erro no processamento em background:', error));
     }
     
     return "📂 Nota recebida, iniciando avaliação...";
@@ -1739,71 +1739,26 @@ async function processarNotaEmBackground(
     if (anexo.tipo === 'document' && mimetype === 'application/pdf') {
       console.log('📄 Processando PDF...');
       
-      // NOVA ABORDAGEM: Processamento sequencial com logs detalhados
-      console.log('🔄 Iniciando processamento sequencial...');
+      // Etapa 1: Extração de dados do PDF
+      const extractResult = await supabase.functions.invoke('process-danfe-pdf', {
+        body: { 
+          pdfUrl: publicUrl,
+          notaImagemId: notaImagem.id,
+          userId: mensagem.usuario_id
+        }
+      });
       
-      try {
-        // Etapa 1: Validação com IA-1
-        console.log('🔍 ETAPA 1: Validação com IA-1...');
-        const validateResult = await supabase.functions.invoke('validate-receipt', {
-          body: { 
-            notaImagemId: notaImagem.id,
-            userId: mensagem.usuario_id
-          }
-        });
-        
-        console.log('📋 Resultado da validação:', validateResult);
-        
-        if (validateResult.error) {
-          throw new Error(`Erro na validação IA-1: ${validateResult.error.message}`);
-        }
-        
-        if (!validateResult.data?.approved) {
-          throw new Error(`Nota rejeitada pela IA-1: ${validateResult.data?.reason || 'Motivo não especificado'}`);
-        }
-        
-        console.log('✅ IA-1: Nota aprovada para processamento');
-        
-        // Etapa 2: Extração de dados com IA-2  
-        console.log('🤖 ETAPA 2: Extração de dados com IA-2...');
-        const extractResult = await supabase.functions.invoke('process-danfe-pdf', {
-          body: { 
-            notaImagemId: notaImagem.id,
-            userId: mensagem.usuario_id,
-            pdfUrl: publicUrl,
-            skipValidation: true // Já foi validado
-          }
-        });
-        
-        console.log('📋 Resultado da extração:', extractResult);
-        
-        if (extractResult.error) {
-          throw new Error(`Erro na extração IA-2: ${extractResult.error.message}`);
-        }
-        
-        // VERIFICAR SE REALMENTE DEU SUCESSO
-        if (!extractResult.data?.success) {
-          const errorMsg = extractResult.data?.error || 'Erro desconhecido';
-          const message = extractResult.data?.message || 'Falha no processamento';
-          throw new Error(`IA-2 falhou: ${errorMsg} - ${message}`);
-        }
-        
-        console.log('✅ IA-2: Dados extraídos com sucesso');
-        
-      } catch (error) {
-        console.error('❌ Erro no processamento:', error);
-        
-        // Enviar mensagem de erro específica
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorMsg = errorMessage.includes('DOCUMENTO_INVALIDO') 
-          ? "❌ Este documento não é uma nota fiscal válida."
-          : errorMessage.includes('rejeitada') 
-          ? `❌ Nota rejeitada: ${errorMessage.split(':')[1] || 'documento inválido'}`
-          : `❌ Erro no processamento: ${errorMessage}`;
-          
-        await enviarRespostaWhatsApp(mensagem.remetente, errorMsg);
-        throw error;
+      console.log('✅ Extração de dados concluída:', extractResult);
+      
+      if (extractResult.error) {
+        throw new Error(`Erro na extração: ${extractResult.error.message}`);
       }
+      
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2  
+      console.log('🚀 PDF processado, disparando IA-2 automaticamente...');
+      
+      // REMOVIDO: process-receipt-full será chamado pelo process-danfe-pdf automaticamente
+      console.log("✅ PDF processado, IA-2 será executada automaticamente pelo fluxo");
       
     } else {
       // Para imagens: IA-1 (extração) → IA-2 (estoque)
@@ -1830,7 +1785,10 @@ async function processarNotaEmBackground(
       console.log("✅ Imagem processada, IA-2 será executada automaticamente pelo fluxo");
     }
     
-    // APENAS enviar mensagem de sucesso se chegou até aqui sem erros
+    // Aguardar um pouco para garantir que tudo foi persistido
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Enviar mensagem de sucesso final
     console.log('📱 Enviando mensagem de confirmação final...');
     await enviarRespostaWhatsApp(
       mensagem.remetente, 

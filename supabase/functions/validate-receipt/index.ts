@@ -22,24 +22,10 @@ interface ValidationResult {
 // Função para extrair texto de PDF (mesma implementação da IA-2)
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    // Import pdfjs-dist using proper Deno configuration
-    const pdfjs = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
     
-    // Configure the worker for Deno environment
-    if (typeof globalThis !== 'undefined' && !globalThis.navigator) {
-      globalThis.navigator = {} as any;
-    }
-    
-    // Configure GlobalWorkerOptions for PDF.js
-    (globalThis as any).GlobalWorkerOptions = {
-      workerSrc: "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs"
-    };
-    
-    const pdf = await pdfjs.getDocument({ 
-      data: pdfBuffer,
-      verbosity: 0 // Reduce logging
-    }).promise;
-    
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
     
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -51,10 +37,15 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
     return extractedText.trim();
   } catch (error) {
     console.error("❌ Erro ao extrair texto do PDF:", error);
-    // 🚨 CORREÇÃO CRÍTICA: Se falhar extração, APROVAR por precaução
-    // É melhor aprovar uma nota inválida do que rejeitar uma nota válida
-    console.log("⚠️ Falha na extração de texto - APROVANDO por precaução (nota de produtos presumida)");
-    return "TEXTO_NAO_EXTRAIDO_APROVAR_NOTA_PRODUTOS"; // Texto especial que força aprovação
+    // Fallback: tentar extrair texto simples usando regex
+    const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
+    const regex = /\(([^)]+)\)/g;
+    let extractedText = "";
+    let match;
+    while ((match = regex.exec(pdfString)) !== null) {
+      extractedText += match[1] + " ";
+    }
+    return extractedText.trim();
   }
 }
 
@@ -120,22 +111,9 @@ Responda APENAS o JSON:
         const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
         console.log('Texto extraído do PDF:', extractedText.substring(0, 500) + '...');
         
-        // 🚨 CORREÇÃO CRÍTICA: Detectar texto corrompido e aprovar automaticamente
-        if (!extractedText || extractedText.length < 100 || 
-            extractedText.includes("D:202") || extractedText.includes("Mozilla") ||
-            extractedText.includes("KHTML") || extractedText.includes("Android") ||
-            extractedText.includes("Skia/PDF") || extractedText.includes("m139") ||
-            /^[^a-zA-Z]{0,50}[D:]/.test(extractedText)) {
-          console.log('🎯 Texto corrompido/metadata detectado - APROVANDO automaticamente (presumida nota de produtos)');
-          analysisText = JSON.stringify({
-            approved: true,
-            reason: 'aprovado_texto_corrompido',
-            chave_encontrada: null,
-            setor_inferido: 'produtos',
-            tem_sinais_compra: true,
-            eh_nfse: false
-          });
-        } else {
+        if (!extractedText || extractedText.length < 50) {
+          throw new Error('PDF não contém texto suficiente');
+        }
         
         // Usar modelo de texto para analisar o conteúdo extraído
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -170,18 +148,16 @@ Responda APENAS o JSON:
         analysisText = openaiResult.choices[0]?.message?.content || '{}';
         
         console.log('OpenAI resposta para PDF:', analysisText);
-        }
         
       } catch (pdfError) {
         console.error('Erro ao analisar PDF:', pdfError);
-        // 🚨 CORREÇÃO CRÍTICA: Para PDFs com erro, APROVAR (presumir nota de produtos)
-        console.log('🎯 Erro na análise PDF - APROVANDO automaticamente (presumida nota de produtos)');
+        // Para PDFs com erro, assumir como inválido
         analysisText = JSON.stringify({
-          approved: true,
-          reason: 'aprovado_erro_pdf',
+          approved: false,
+          reason: 'erro_analise_pdf',
           chave_encontrada: null,
-          setor_inferido: 'produtos',
-          tem_sinais_compra: true,
+          setor_inferido: 'desconhecido',
+          tem_sinais_compra: false,
           eh_nfse: false
         });
       }
@@ -382,7 +358,7 @@ Responda APENAS o JSON:
         approved: false,
         reason: 'nfse',
         shouldDelete: true,
-        message: '❌ Este arquivo é uma nota de serviço. O Picotinho aceita apenas notas fiscais de produtos.'
+        message: '❌ Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento.'
       };
     } else if (analysis.reason === 'erro_analise_pdf' || analysis.reason === 'erro_analise_imagem') {
       result = {
@@ -518,7 +494,7 @@ Responda APENAS o JSON:
         reason: 'erro_sistema',
         shouldDelete: false,
         message: '❌ Erro no sistema de validação',
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
+        error: error.message
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

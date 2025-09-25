@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
-import { Resend } from "https://esm.sh/resend@4.0.0";
+import { Resend } from "npm:resend@4.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY") as string);
 const hookSecret = Deno.env.get("SEND_EMAIL_HOOK_SECRET") as string;
@@ -101,7 +101,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: {
-          message: error instanceof Error ? error.message : 'Erro desconhecido',
+          message: error.message,
         },
       }),
       {

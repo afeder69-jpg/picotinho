@@ -124,7 +124,7 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: (error instanceof Error ? error.message : 'Erro desconhecido') || 'Erro interno do servidor' 
+        error: error.message || 'Erro interno do servidor' 
       }),
       {
         status: 400,

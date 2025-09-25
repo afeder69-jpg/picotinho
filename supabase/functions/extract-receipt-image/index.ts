@@ -7,77 +7,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Função para processar itens com IA3
-async function processarItensComIA3(itens: any[], usuarioId: string, notaId: string, supabase: any) {
-  console.log(`🔄 Processando ${itens.length} itens com IA3...`);
-  
-  for (const item of itens) {
-    try {
-      console.log(`🎯 IA3 processando: ${item.descricao}`);
-      
-      // Chamar IA3 para normalizar o item
-      const { data: resultadoIA3, error: erroIA3 } = await supabase.functions.invoke('normalizar-produto-ia3', {
-        body: {
-          produto_nome: item.descricao,
-          usuario_id: usuarioId
-        }
-      });
-      
-      if (erroIA3) {
-        console.error(`❌ Erro IA3 para "${item.descricao}":`, erroIA3);
-        continue;
-      }
-      
-      console.log(`✅ IA3 processou "${item.descricao}" → "${resultadoIA3.resultado.nome_normalizado}" (${resultadoIA3.resultado.acao})`);
-      
-      // Se foi aceito automaticamente, atualizar estoque
-      if (resultadoIA3.resultado.acao === 'aceito_automatico') {
-        await adicionarAoEstoque(item, resultadoIA3.resultado, usuarioId, notaId, supabase);
-      }
-      
-    } catch (error) {
-      console.error(`❌ Erro ao processar item "${item.descricao}" com IA3:`, error);
-    }
-  }
-  
-  console.log(`✅ Processamento IA3 concluído para nota ${notaId}`);
-}
-
-// Função para adicionar ao estoque
-async function adicionarAoEstoque(itemNota: any, resultadoIA3: any, usuarioId: string, notaId: string, supabase: any) {
-  try {
-    const { error } = await supabase
-      .from('estoque_app')
-      .insert({
-        user_id: usuarioId,
-        nota_id: notaId,
-        produto_nome: resultadoIA3.nome_normalizado,
-        produto_nome_normalizado: resultadoIA3.nome_normalizado,
-        nome_base: resultadoIA3.nome_normalizado,
-        marca: resultadoIA3.marca,
-        categoria: resultadoIA3.categoria,
-        quantidade: itemNota.quantidade || 1,
-        unidade_medida: resultadoIA3.unidade || 'UN',
-        preco_unitario_ultimo: itemNota.valor_unitario || 0,
-        origem: 'nota_fiscal_ia3',
-        tipo_embalagem: null,
-        qtd_valor: null,
-        qtd_unidade: resultadoIA3.quantidade,
-        qtd_base: null,
-        granel: false,
-        produto_hash_normalizado: resultadoIA3.sku || null
-      });
-    
-    if (error) {
-      console.error(`❌ Erro ao adicionar "${resultadoIA3.nome_normalizado}" ao estoque:`, error);
-    } else {
-      console.log(`✅ Adicionado ao estoque: ${resultadoIA3.nome_normalizado} (${itemNota.quantidade} ${resultadoIA3.unidade})`);
-    }
-  } catch (error) {
-    console.error(`❌ Erro ao inserir no estoque:`, error);
-  }
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -120,22 +49,39 @@ serve(async (req) => {
 
     console.log(`🔍 Processando imagem: ${nota.imagem_url}`);
 
-    // Prompt da IA2 - APENAS EXTRAÇÃO (sem normalização)
+    // Prompt para extração completa de dados de notas fiscais com categorização aprimorada
     const extractionPrompt = `Você é um especialista em análise de notas fiscais brasileiras. Analise esta imagem de nota fiscal e extraia TODOS os dados estruturados em JSON.
 
-⚠️ Regra obrigatória: 
-Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
-Se não encontrar a informação, retorne null (ou campo vazio permitido). 
-Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
-Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+REGRAS CRÍTICAS DE CATEGORIZAÇÃO:
 
-IMPORTANTE: Sua função é APENAS extrair os dados como estão na nota. NÃO normalize ou padronize nomes de produtos.
+1. Use EXATAMENTE estas categorias (em minúsculas):
+   - hortifruti: frutas, verduras, legumes, temperos verdes, ervas frescas
+   - mercearia: arroz, feijão, massas, sal, açúcar, óleo, azeite, ovos, milho (enlatado), aveia, conservas, molhos
+   - bebidas: refrigerantes, sucos, água, cervejas, vinhos, energéticos (exceto leite)
+   - laticínios/frios: leite, queijos, iogurtes, manteiga, requeijão, embutidos, presunto, mortadela
+   - limpeza: detergentes, sabões, desinfetantes, esponja de aço, bombril, amaciantes
+   - higiene/farmácia: sabonetes, shampoos, pasta de dente, papel higiênico, medicamentos
+   - açougue: carnes frescas, frango, peixes, linguiças
+   - padaria: pães, bolos, biscoitos, torradas
+   - congelados: sorvetes, produtos congelados, pizzas congeladas
+   - pet: rações, produtos para animais
+   - outros: apenas quando não se encaixa em nenhuma categoria acima
 
-ESTRUTURA OBRIGATÓRIA DO JSON:
+2. CATEGORIZAÇÃO ESPECÍFICA (OBRIGATÓRIA):
+   - "Tempero Verde" ou similar → "hortifruti"
+   - "Milho Verde" (lata/conserva) → "mercearia"
+   - "Esponja de Aço" ou "Bombril" → "limpeza"
+   - Qualquer tipo de "Massa" ou "Macarrão" → "mercearia"
+   - "Sal" de qualquer tipo → "mercearia"
+   - "Aveia" → "mercearia"
+   - "Azeite" → "mercearia"
+   - "Ovos" → "mercearia"
+
+3. ESTRUTURA OBRIGATÓRIA DO JSON:
 {
   "estabelecimento": {
-    "nome": "Nome do estabelecimento EXATAMENTE como aparece",
-    "cnpj": "CNPJ normalizado (apenas números)",
+    "nome": "Nome do estabelecimento",
+    "cnpj": "CNPJ normalizado",
     "endereco": "Endereço completo"
   },
   "compra": {
@@ -147,28 +93,29 @@ ESTRUTURA OBRIGATÓRIA DO JSON:
   },
   "itens": [
     {
-      "descricao": "Nome do produto EXATAMENTE como aparece na nota",
+      "descricao": "Nome limpo do produto",
       "codigo": "código se disponível",
       "quantidade": 1.0,
-      "unidade": "UN/KG/L etc como aparece",
+      "unidade": "UN/KG/L etc",
       "valor_unitario": 0.00,
-      "valor_total": 0.00
+      "valor_total": 0.00,
+      "categoria": "categoria_obrigatoria"
     }
   ]
 }
 
-REGRAS DE EXTRAÇÃO:
-- Extraia os nomes dos produtos EXATAMENTE como aparecem na nota
-- NÃO corrija abreviações (mantenha "cr.", "refrig.", etc.)
-- NÃO padronize capitalização
-- NÃO remova códigos ou símbolos
-- NÃO adicione categorias (isso será feito depois)
-- APENAS extraia e estruture os dados brutos
+4. REGRAS DE LIMPEZA DE NOMES:
+   - Preserve marcas originais (Nescau, Bombril, etc.)
+   - Remova códigos de barras
+   - Mantenha peso/volume da embalagem (500g, 1L, etc.)
+   - Capitalize adequadamente
+   - Não inclua quantidade comprada na descrição
 
-VALIDAÇÕES:
-- Extraia TODOS os produtos visíveis
-- Mantenha valores numéricos precisos
-- Preserve formatação original dos nomes
+5. VALIDAÇÕES:
+   - TODOS os itens DEVEM ter categoria
+   - Nunca deixe categoria vazia ou null
+   - Use "outros" APENAS em último caso
+   - Extraia TODOS os produtos visíveis
 
 Retorne APENAS o JSON válido, sem explicações.`;
 
@@ -235,14 +182,20 @@ Retorne APENAS o JSON válido, sem explicações.`;
       throw new Error('Estrutura de dados inválida - itens não encontrados');
     }
 
-    console.log(`✅ Extraídos ${dadosExtraidos.itens.length} itens (sem normalização)`);
+    // Garantir que todos os itens tenham categoria
+    dadosExtraidos.itens = dadosExtraidos.itens.map((item: any) => ({
+      ...item,
+      categoria: item.categoria || 'outros'
+    }));
+
+    console.log(`✅ Extraídos ${dadosExtraidos.itens.length} itens com categorização`);
 
     // Salvar dados extraídos na nota
     const { error: updateError } = await supabase
       .from("notas_imagens")
       .update({ 
         dados_extraidos: dadosExtraidos,
-        debug_texto: 'IA2_EXTRACAO_CONCLUIDA'
+        debug_texto: 'EXTRAÇÃO_IMAGEM_CONCLUÍDA'
       })
       .eq("id", finalNotaId);
 
@@ -250,28 +203,19 @@ Retorne APENAS o JSON válido, sem explicações.`;
       throw new Error(`Erro ao salvar dados extraídos: ${updateError.message}`);
     }
 
-    // ✅ FLUXO NOVO: IA2 → IA3 (com feature flag)
-    console.log("🚀 IA2 finalizou extração, verificando se deve chamar IA3...");
+    // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
+    console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
     
-    // Verificar feature flag para IA3
-    const { data: featureFlag } = await supabase
-      .from('configuracoes_usuario')
-      .select('*')
-      .eq('usuario_id', nota.usuario_id)
-      .single();
-    
-    const usarIA3 = true; // Por enquanto sempre true, depois será uma feature flag
-    
-    if (usarIA3) {
-      console.log("🎯 Feature flag IA3 ativa - processando itens com IA3...");
-      
-      // Executar IA3 para cada item em background
-      processarItensComIA3(dadosExtraidos.itens, nota.usuario_id, finalNotaId, supabase)
-        .catch(error => console.error("❌ Erro no processamento IA3:", error));
-    } else {
-      console.log("⏸️ Feature flag IA3 desativa - usando fluxo antigo...");
-      // Manter fluxo antigo se necessário
-    }
+    // Executar IA-2 em background após salvar os dados
+    EdgeRuntime.waitUntil(
+      supabase.functions.invoke('process-receipt-full', {
+        body: { imagemId: finalNotaId }
+      }).then((result) => {
+        console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+      }).catch((estoqueErr) => {
+        console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+      })
+    );
 
     return new Response(JSON.stringify({
       success: true,

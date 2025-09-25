@@ -64,7 +64,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro na limpeza dos dados:', error);
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Erro desconhecido' 
+      error: error.message 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

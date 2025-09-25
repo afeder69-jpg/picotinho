@@ -18,10 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const requestBody = await req.json();
-    const { nomeOriginal, notaId, usuarioId, debug } = requestBody;
-    
-    console.log('📝 Parâmetros recebidos:', requestBody);
+    const { nomeOriginal, notaId, usuarioId, debug } = await req.json();
     
     if (!nomeOriginal && !notaId) {
       return new Response(
@@ -144,7 +141,7 @@ serve(async (req) => {
           itens_inseridos_estoque: itens.length,
           itens_normalizados: itensNormalizados,
           propostas_criadas: propostas,
-          total_financeiro: itens.reduce((sum: any, item: any) => sum + (parseFloat(item.valor_total) || 0), 0)
+          total_financeiro: itens.reduce((sum, item) => sum + (parseFloat(item.valor_total) || 0), 0)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -152,12 +149,6 @@ serve(async (req) => {
 
     // ========= FLUXO PARA PRODUTO INDIVIDUAL =========
     console.log('📝 Produto original:', nomeOriginal);
-
-    // ⚠️ REGRA OBRIGATÓRIA: 
-    // Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
-    // Se não encontrar a informação, retorne null (ou campo vazio permitido). 
-    // Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
-    // Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
 
     // 1. NORMALIZAÇÃO BÁSICA DO TEXTO
     let nomeNormalizado = nomeOriginal.toUpperCase().trim();
@@ -364,7 +355,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro na IA-2:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro desconhecido' }),
+      JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

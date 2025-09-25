@@ -77,7 +77,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   } catch (error) {
     console.error('❌ [TESTE] Erro geral:', error);
-    return new Response(`Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, { status: 500, headers: corsHeaders });
+    return new Response(`Erro: ${error.message}`, { status: 500, headers: corsHeaders });
   }
 };
 

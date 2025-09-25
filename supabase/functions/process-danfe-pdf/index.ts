@@ -7,15 +7,8 @@ const corsHeaders = {
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    // Import pdfjs-dist com configuração do worker
-    const pdfjs = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
-    
-    // Configurar worker para evitar o erro "No GlobalWorkerOptions.workerSrc specified"
-    if (typeof pdfjs.GlobalWorkerOptions !== 'undefined') {
-      pdfjs.GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs";
-    }
-    
-    const { getDocument } = pdfjs;
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
     
     const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
@@ -102,17 +95,6 @@ serve(async (req) => {
   try {
     const { pdfUrl, notaImagemId, userId } = await req.json();
 
-    // CRÍTICO: Inicializar cliente Supabase PRIMEIRO
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Missing Supabase environment variables");
-    }
-
-    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     if (!pdfUrl || !notaImagemId || !userId) {
       return new Response(JSON.stringify({
         success: false,
@@ -138,13 +120,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
-
-    // 🚨 CORREÇÃO: Pular validação IA1 - já foi validada no WhatsApp
-    console.log("⏩ Pulando validação IA1 - documento já foi validado no WhatsApp");
-
-      // Se chegou aqui, o documento foi aprovado pela IA1
-      console.log("✅ Documento aprovado pela IA1, continuando processamento...");
-
 
     console.log("📥 Baixando PDF:", pdfUrl);
     const resp = await fetch(pdfUrl);
@@ -181,66 +156,7 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    // 🚨 VERIFICAÇÃO CRÍTICA: Se texto está corrompido/ilegível, BLOQUEAR processamento
-    const caracteresLegíveis = textoLimpo.replace(/[^\w\s\-.,:/()R$]/g, '').length;
-    const percentualLegível = caracteresLegíveis / textoLimpo.length;
-    
-    console.log('🔍 Análise de legibilidade do texto:');
-    console.log('📊 Caracteres totais:', textoLimpo.length);
-    console.log('📊 Caracteres legíveis:', caracteresLegíveis);
-    console.log('📊 Percentual legível:', (percentualLegível * 100).toFixed(2) + '%');
-    
-    // Se menos de 30% do texto é legível, BLOQUEAR
-    if (percentualLegível < 0.3) {
-      console.log('❌ TEXTO ILEGÍVEL - Bloqueando processamento para evitar dados fictícios');
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'TEXTO_ILEGIVEL',
-          message: 'PDF contém texto corrompido/ilegível. Não é possível extrair dados reais.' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // VERIFICAR se contém palavras-chave obrigatórias de NFC-e
-    const palavrasChave = ['nfc', 'danfe', 'cnpj', 'total', 'item', 'produto'];
-    const contemPalavrasChave = palavrasChave.some(palavra => 
-      textoLimpo.toLowerCase().includes(palavra)
-    );
-    
-    if (!contemPalavrasChave) {
-      console.log('❌ DOCUMENTO INVÁLIDO - Não contém estrutura de NFC-e');
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'DOCUMENTO_INVALIDO',
-          message: 'Documento não contém estrutura válida de nota fiscal.' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const aiPrompt = `INSTRUÇÃO CRÍTICA: Você está analisando texto extraído de PDF de uma nota fiscal.
-
-🚨 REGRA ABSOLUTA - NUNCA INVENTE DADOS:
-- Se o texto estiver corrompido/ilegível, retorne {"error": "TEXTO_ILEGIVEL"}
-- Se não encontrar informação específica, use null
-- NUNCA crie estabelecimentos fictícios como "SUPERMERCADO EXEMPLO"
-- NUNCA crie CNPJs sequenciais ou falsos
-- NUNCA crie produtos genéricos
-
-VERIFICAÇÕES OBRIGATÓRIAS:
-1. O texto deve conter dados reais de estabelecimento
-2. Deve haver CNPJ válido (não inventado)
-3. Produtos devem ter nomes específicos (não genéricos)
-4. Valores devem ser extraídos, não estimados
-
-⚠️ Se o texto abaixo estiver corrompido ou for impossível extrair dados REAIS, retorne exatamente:
-{"error": "DADOS_INSUFICIENTES", "motivo": "Texto ilegível ou sem dados válidos"}
-
-Texto a analisar:
-${textoLimpo}
+    const aiPrompt = `Você recebeu o texto extraído de uma DANFE NFC-e.
 
 IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omitir nenhum produto.
 
@@ -328,11 +244,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'Você é um extrator conservador de dados de nota fiscal. NUNCA invente informações. Se o texto estiver corrompido ou ilegível, retorne erro. Extraia apenas dados que existem claramente no documento.' },
+          { role: 'system', content: 'Você é um especialista em processamento de notas fiscais brasileiras. Retorne sempre um JSON válido e bem estruturado.' },
           { role: 'user', content: aiPrompt }
         ],
-        max_tokens: 4000,
-        temperature: 0.0 // Zero criatividade - apenas extração
+        max_tokens: 4000, // Aumentado para garantir que o JSON completo seja retornado
+        temperature: 0.1
       }),
     });
 
@@ -347,7 +263,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     console.log(respostaIA); // RESPOSTA COMPLETA da IA, sem cortar
     console.log("=".repeat(80));
 
-    // 💾 Configurar OpenAI API - Supabase já foi declarado anteriormente
+    // 💾 Configurar Supabase
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let dadosEstruturados = null;
     let compraId = null;
@@ -359,41 +279,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       const jsonString = jsonMatch ? jsonMatch[0] : respostaIA;
       
       dadosEstruturados = JSON.parse(jsonString);
-      
-      // 🚨 VERIFICAÇÃO CRÍTICA: Se IA retornou erro de dados insuficientes
-      if (dadosEstruturados.error) {
-        console.log('❌ IA detectou dados insuficientes:', dadosEstruturados.motivo || dadosEstruturados.error);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'DADOS_INSUFICIENTES',
-            message: 'IA não conseguiu extrair dados válidos do documento' 
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // 🛡️ VALIDAÇÃO FINAL: Verificar se dados não são fictícios
-      const nomeEstabelecimento = dadosEstruturados.estabelecimento?.nome?.toUpperCase() || '';
-      const cnpjEstabelecimento = dadosEstruturados.estabelecimento?.cnpj || '';
-      
-      // Lista de nomes/CNPJs fictícios para bloquear
-      const nomesFicticios = ['SUPERMERCADO EXEMPLO', 'ESTABELECIMENTO TESTE', 'LOJA EXEMPLO', 'EMPRESA EXEMPLO'];
-      const cnpjsFicticios = ['12345678000190', '11111111111111', '00000000000000', '12.345.678/0001-90'];
-      
-      if (nomesFicticios.includes(nomeEstabelecimento) || cnpjsFicticios.includes(cnpjEstabelecimento)) {
-        console.log('❌ DADOS FICTÍCIOS DETECTADOS - Bloqueando:', nomeEstabelecimento, cnpjEstabelecimento);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'DADOS_FICTICIOS',
-            message: 'Sistema detectou tentativa de criação de dados fictícios' 
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      console.log("✅ JSON parseado e validado com sucesso");
+      console.log("✅ JSON parseado com sucesso");
 
       // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO
       if (dadosEstruturados.estabelecimento?.nome) {
@@ -628,7 +514,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
             // 📝 Criar itens da nota fiscal
             if (dadosEstruturados.itens && dadosEstruturados.itens.length > 0) {
-              const itensNotaFiscal = dadosEstruturados.itens.map((item: any) => {
+              const itensNotaFiscal = dadosEstruturados.itens.map(item => {
                 // Normalizar nome (mesma lógica do estoque)
                 let nomeNormalizado = item.descricao.toUpperCase().trim();
                 
@@ -861,18 +747,22 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
       console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
       
-      try {
-        const ia2Result = await supabase.functions.invoke('normalizar-produto-ia2', {
+      // 🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...
+      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+      
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('normalizar-produto-ia2', {
           body: { 
             notaId: notaImagemId,
             usuarioId: userId,
-            debug: true
+            debug: false
           }
-        });
-        console.log("✅ IA-2 executada automaticamente com sucesso:", ia2Result);
-      } catch (ia2Error) {
-        console.error("❌ Falha na execução automática da IA-2:", ia2Error);
-      }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        }).catch((estoqueErr) => {
+          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+        })
+      );
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
@@ -910,11 +800,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     });
 
   } catch (err) {
-    console.error("❌ Erro geral:", err instanceof Error ? err.message : 'Erro desconhecido');
+    console.error("❌ Erro geral:", err.message);
     return new Response(JSON.stringify({
       success: false,
       error: "GENERAL_ERROR",
-      message: err instanceof Error ? err.message : 'Erro desconhecido'
+      message: err.message
     }), { 
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
