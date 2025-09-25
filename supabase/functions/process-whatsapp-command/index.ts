@@ -1739,26 +1739,54 @@ async function processarNotaEmBackground(
     if (anexo.tipo === 'document' && mimetype === 'application/pdf') {
       console.log('📄 Processando PDF...');
       
-      // Etapa 1: Extração de dados do PDF
-      const extractResult = await supabase.functions.invoke('process-danfe-pdf', {
-        body: { 
-          pdfUrl: publicUrl,
-          notaImagemId: notaImagem.id,
-          userId: mensagem.usuario_id
+      // NOVA ABORDAGEM: Processamento sequencial com logs detalhados
+      console.log('🔄 Iniciando processamento sequencial...');
+      
+      try {
+        // Etapa 1: Validação com IA-1
+        console.log('🔍 ETAPA 1: Validação com IA-1...');
+        const validateResult = await supabase.functions.invoke('validate-receipt', {
+          body: { 
+            notaImagemId: notaImagem.id,
+            userId: mensagem.usuario_id
+          }
+        });
+        
+        console.log('📋 Resultado da validação:', validateResult);
+        
+        if (validateResult.error) {
+          throw new Error(`Erro na validação IA-1: ${validateResult.error.message}`);
         }
-      });
-      
-      console.log('✅ Extração de dados concluída:', extractResult);
-      
-      if (extractResult.error) {
-        throw new Error(`Erro na extração: ${extractResult.error.message}`);
+        
+        if (!validateResult.data?.approved) {
+          throw new Error(`Nota rejeitada pela IA-1: ${validateResult.data?.reason || 'Motivo não especificado'}`);
+        }
+        
+        console.log('✅ IA-1: Nota aprovada para processamento');
+        
+        // Etapa 2: Extração de dados com IA-2  
+        console.log('🤖 ETAPA 2: Extração de dados com IA-2...');
+        const extractResult = await supabase.functions.invoke('process-danfe-pdf', {
+          body: { 
+            notaImagemId: notaImagem.id,
+            userId: mensagem.usuario_id,
+            pdfUrl: publicUrl,
+            skipValidation: true // Já foi validado
+          }
+        });
+        
+        console.log('📋 Resultado da extração:', extractResult);
+        
+        if (extractResult.error) {
+          throw new Error(`Erro na extração IA-2: ${extractResult.error.message}`);
+        }
+        
+        console.log('✅ IA-2: Dados extraídos com sucesso');
+        
+      } catch (error) {
+        console.error('❌ Erro no processamento:', error);
+        throw error;
       }
-      
-      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2  
-      console.log('🚀 PDF processado, disparando IA-2 automaticamente...');
-      
-      // REMOVIDO: process-receipt-full será chamado pelo process-danfe-pdf automaticamente
-      console.log("✅ PDF processado, IA-2 será executada automaticamente pelo fluxo");
       
     } else {
       // Para imagens: IA-1 (extração) → IA-2 (estoque)
