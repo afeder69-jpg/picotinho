@@ -82,9 +82,10 @@ const handler = async (req: Request): Promise<Response> => {
     const token = Deno.env.get('WHATSAPP_API_TOKEN');
     const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
 
-    if (!instanceUrl) {
-      throw new Error('WhatsApp Instance URL não encontrada');
+    if (!instanceUrl || !token || !accountSecret) {
+      throw new Error('Configuração WhatsApp incompleta');
     }
+    
     const whatsappUrl = `${instanceUrl}/send-text`;
     const whatsappPayload = {
       phone: mensagem.remetente,
