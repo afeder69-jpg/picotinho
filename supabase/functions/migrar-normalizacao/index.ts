@@ -70,9 +70,9 @@ serve(async (req) => {
     for (const item of produtos) {
       let produtosParaNormalizar: string[] = [];
       
-      if (source_table === 'estoque_app') {
+      if (source_table === 'estoque_app' && 'produto_nome' in item) {
         produtosParaNormalizar = [item.produto_nome];
-      } else if (source_table === 'notas_imagens') {
+      } else if (source_table === 'notas_imagens' && 'dados_extraidos' in item) {
         // Extrair produtos dos dados da nota
         if (item.dados_extraidos?.itens && Array.isArray(item.dados_extraidos.itens)) {
           produtosParaNormalizar = item.dados_extraidos.itens
@@ -102,7 +102,9 @@ serve(async (req) => {
               fonte: `backfill_${source_table}`,
               meta: {
                 batch_id: `${offset}-${batch_size}`,
-                source_id: source_table === 'estoque_app' ? item.user_id : item.id
+                source_id: source_table === 'estoque_app' 
+                  ? ('user_id' in item ? item.user_id : null)
+                  : ('id' in item ? item.id : null)
               }
             }
           });

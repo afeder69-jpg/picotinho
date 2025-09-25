@@ -90,7 +90,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('📤 Enviando resposta WhatsApp:', resposta);
 
-    const whatsappResponse = await fetch(whatsappUrl, {
+    const whatsappResponse = await fetch(whatsappUrl!, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -128,7 +128,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   } catch (error) {
     console.error('❌ Erro geral:', error);
-    return new Response(`Erro: ${error.message}`, { status: 500, headers: corsHeaders });
+    return new Response(`Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, { status: 500, headers: corsHeaders });
   }
 };
 

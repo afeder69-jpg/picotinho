@@ -200,7 +200,10 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
    - O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
    - NUNCA truncar ou cortar no meio - incluir TODOS os itens da nota.
 
-3. Estrutura OBRIGATÓRIA do retorno:
+CRÍTICO: Se o texto não contém dados suficientes ou é ilegível, retorne exatamente:
+{"error": "EXTRACTION_FAILED", "message": "PDF ilegível ou dados insuficientes"}
+
+3. Estrutura OBRIGATÓRIA do retorno (apenas se dados válidos):
 \`\`\`json
 {
   "estabelecimento": {
@@ -279,6 +282,12 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       const jsonString = jsonMatch ? jsonMatch[0] : respostaIA;
       
       dadosEstruturados = JSON.parse(jsonString);
+      
+      // Verificar se a IA retornou erro de extração
+      if (dadosEstruturados.error === "EXTRACTION_FAILED") {
+        throw new Error(dadosEstruturados.message || "Falha na extração: PDF ilegível ou dados insuficientes");
+      }
+      
       console.log("✅ JSON parseado com sucesso");
 
       // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO

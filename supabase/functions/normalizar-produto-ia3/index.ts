@@ -142,7 +142,7 @@ serve(async (req) => {
           itens_inseridos_estoque: itens.length,
           itens_normalizados: itensNormalizados,
           propostas_criadas: propostas,
-          total_financeiro: itens.reduce((sum, item) => sum + (parseFloat(item.valor_total) || 0), 0)
+          total_financeiro: itens.reduce((sum: number, item: any) => sum + (parseFloat(item.valor_total) || 0), 0)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
