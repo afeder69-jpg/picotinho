@@ -759,7 +759,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
 
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar estoque completo:", err);
-    console.error("❌ [ERRO STACK]:", err.stack);
+    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
     return "❌ Houve um erro ao consultar seu estoque completo. Tente novamente mais tarde.";
   }
 }
@@ -1466,7 +1466,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar consulta de categoria:", err);
-    console.error("❌ [ERRO STACK]:", err.stack);
+    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
     return "❌ Houve um erro ao processar sua consulta de categoria. Tente novamente mais tarde.";
   }
 }
@@ -1704,8 +1704,14 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
     }
     
     // Processar em background
+    console.log(`🔄 [DEBUG BACKGROUND] Iniciando processamento em background para ${anexo?.type || 'sem anexo'}...`);
     processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
-      .catch(error => console.error('❌ Erro no processamento em background:', error));
+      .then(() => {
+        console.log(`✅ [DEBUG BACKGROUND] Processamento concluído com sucesso`);
+      })
+      .catch(error => {
+        console.error('❌ [DEBUG BACKGROUND] Erro no processamento:', error);
+      });
     
     return "📂 Nota recebida, iniciando avaliação...";
     
@@ -1772,6 +1778,20 @@ async function processarNotaEmBackground(
       }
       
       // ETAPA 2: Processar estoque automaticamente
+      console.log('🚀 Imagem processada, disparando process-receipt-full...');
+      
+      const stockResult = await supabase.functions.invoke('process-receipt-full', {
+        body: { 
+          notaImagemId: notaImagem.id 
+        }
+      });
+      
+      console.log('✅ [DEBUG BACKGROUND] process-receipt-full concluído:', stockResult);
+      
+      if (stockResult.error) {
+        console.error('❌ [DEBUG BACKGROUND] Erro no process-receipt-full:', stockResult.error);
+        throw new Error(`Erro no processamento do estoque: ${stockResult.error.message}`);
+      }
       console.log('🚀 Imagem processada, disparando IA-2 automaticamente...');
       
       // REMOVIDO: process-receipt-full será chamado pelo extract-receipt-image automaticamente

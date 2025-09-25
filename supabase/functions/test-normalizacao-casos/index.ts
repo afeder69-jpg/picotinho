@@ -59,7 +59,7 @@ serve(async (req) => {
         console.error(`💥 Exceção para ${caso}:`, err);
         resultados.push({
           entrada: caso,
-          erro: err.message,
+          erro: err instanceof Error ? err.message : String(err),
           sucesso: false
         });
       }
@@ -97,8 +97,8 @@ serve(async (req) => {
   } catch (error) {
     console.error('💥 Erro geral:', error);
     return new Response(JSON.stringify({ 
-      erro: error.message,
-      stack: error.stack 
+      erro: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : String(error)
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

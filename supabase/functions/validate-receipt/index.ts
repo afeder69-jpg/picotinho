@@ -494,7 +494,7 @@ Responda APENAS o JSON:
         reason: 'erro_sistema',
         shouldDelete: false,
         message: '❌ Erro no sistema de validação',
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

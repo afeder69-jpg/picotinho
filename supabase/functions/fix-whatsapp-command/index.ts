@@ -93,7 +93,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('📤 Enviando resposta WhatsApp:', resposta);
 
-    const whatsappResponse = await fetch(whatsappUrl!, {
+    const whatsappResponse = await fetch(whatsappUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

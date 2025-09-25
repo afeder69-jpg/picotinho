@@ -33,11 +33,11 @@ serve(async (req) => {
     });
 
     if (ia3Error) {
-      console.error('❌ Erro na IA-2:', ia2Error);
-      throw new Error(`Erro na IA-2: ${ia2Error.message}`);
+      console.error('❌ Erro na IA-3:', ia3Error);
+      throw new Error(`Erro na IA-3: ${ia3Error.message}`);
     }
 
-    console.log('✅ IA-2 executada com sucesso:', ia2Response);
+    console.log('✅ IA-3 executada com sucesso:', ia3Response);
 
     // Verificar se produtos foram inseridos
     const { data: estoqueData, error: estoqueError } = await supabase
@@ -56,7 +56,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true,
         message: 'Teste manual da IA-2 concluído',
-        ia2_result: ia2Response,
+        ia3_result: ia3Response,
         produtos_no_estoque: estoqueData?.length || 0,
         primeiros_produtos: estoqueData?.slice(0, 3) || []
       }),
@@ -67,7 +67,7 @@ serve(async (req) => {
     console.error('❌ Erro no teste:', error);
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
