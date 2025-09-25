@@ -91,20 +91,17 @@ Deno.serve(async (req) => {
 
     const validationPrompt = `Analise este documento e responda APENAS com um JSON no formato especificado.
 
-⚠️ Regra obrigatória: 
-Você NÃO pode inventar, criar ou alterar dados que não estejam presentes de forma explícita no documento ou entrada fornecida. 
-Se não encontrar a informação, retorne null (ou campo vazio permitido). 
-Nunca crie notas, itens, valores, produtos ou estabelecimentos fictícios. 
-Seu papel é apenas interpretar e estruturar os dados existentes, nunca gerar informações novas.
+⚠️ SEJA PERMISSIVO: Se o documento parece ser uma nota fiscal (mesmo sem todos os elementos), APROVE.
+Só reprove documentos que claramente NÃO são notas fiscais.
 
-CRITÉRIOS DE VALIDAÇÃO:
+CRITÉRIOS PERMISSIVOS:
 1. CHAVE DE ACESSO: Procure por sequência de 44 dígitos (pode ter espaços, pontos, quebras). Normalize: O→0, I/l→1, B→8.
-2. ESTABELECIMENTO: Identifique o nome/tipo do emissor.
-3. SINAIS DE COMPRA: Verifique se há itens com descrição+quantidade+valor, valor total, ou forma de pagamento.
+2. ESTABELECIMENTO: Qualquer nome de empresa, loja, ou prestador de serviço
+3. SINAIS DE COMPRA: Qualquer valor monetário, itens, ou estrutura de nota fiscal
 
-REGRA SIMPLES:
-- APROVAR se: É uma nota fiscal de compra com produtos OU nota de serviço, mesmo sem chave visível
-- REPROVAR apenas se: Documento claramente inválido (não é nota fiscal)
+REGRA PRINCIPAL:
+- APROVAR se: Parece ser uma nota fiscal (produtos, serviços, vendas) mesmo que incompleta
+- REPROVAR apenas se: Documento totalmente irrelevante (não é nota fiscal alguma)
 
 Responda APENAS o JSON:
 {
@@ -131,12 +128,12 @@ Responda APENAS o JSON:
         const extractedText = await extractTextFromPDF(new Uint8Array(buffer));
         console.log('Texto extraído do PDF:', extractedText.substring(0, 500) + '...');
         
-        // Se não conseguir extrair texto, tenta fallback mais permissivo
-        if (!extractedText || extractedText.length < 10) {
-          console.log('⚠️ Pouco texto extraído, usando análise permissiva');
+        // Se não conseguir extrair texto suficiente, aprovar por precaução
+        if (!extractedText || extractedText.length < 50) {
+          console.log('⚠️ Pouco texto extraído do PDF, aprovando por precaução');
           analysisText = JSON.stringify({
             approved: true,
-            reason: 'documento_aceito_fallback',
+            reason: 'pdf_aprovado_fallback',
             chave_encontrada: null,
             setor_inferido: 'produtos',
             tem_sinais_compra: true,
@@ -383,12 +380,13 @@ Responda APENAS o JSON:
         shouldDelete: true,
         message: '📋 Esta nota fiscal já foi lançada no PICOTINHO por outro usuário! Cada nota só pode ser processada uma vez no sistema.'
       };
-    } else if (analysis.eh_nfse) {
+    } else if (analysis.eh_nfse && !analysis.tem_sinais_compra) {
+      // Só rejeitar NFSE se realmente não tiver sinais de compra
       result = {
         approved: false,
-        reason: 'nfse',
+        reason: 'nfse_sem_produtos',
         shouldDelete: true,
-        message: '❌ Este arquivo não é uma nota fiscal de produtos. O Picotinho não aceita esse tipo de documento.'
+        message: '❌ Esta nota de serviço não contém produtos para o Picotinho.'
       };
     } else if (analysis.reason === 'erro_analise_pdf' || analysis.reason === 'erro_analise_imagem') {
       result = {
