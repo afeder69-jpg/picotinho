@@ -280,18 +280,100 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
     // 📊 Tentar processar JSON da IA
     try {
+      console.log("🔍 INICIANDO ANÁLISE DA RESPOSTA DA IA");
+      console.log("📏 Tamanho da resposta:", respostaIA.length, "caracteres");
+      console.log("🎯 Primeiros 200 chars:", respostaIA.substring(0, 200));
+      console.log("🏁 Últimos 200 chars:", respostaIA.substring(Math.max(0, respostaIA.length - 200)));
+      
       // Limpar resposta da IA para extrair apenas o JSON
       const jsonMatch = respostaIA.match(/\{[\s\S]*\}/);
       const jsonString = jsonMatch ? jsonMatch[0] : respostaIA;
       
+      console.log("🔧 JSON extraído para parsing:");
+      console.log("📏 Tamanho do JSON:", jsonString.length, "caracteres");
+      console.log("🎯 Primeiros 300 chars do JSON:", jsonString.substring(0, 300));
+      
       dadosEstruturados = JSON.parse(jsonString);
+      console.log("✅ JSON parseado com sucesso");
+      
+      // 🔍 VALIDAÇÕES ESTRUTURAIS DO JSON
+      console.log("🧪 INICIANDO VALIDAÇÕES ESTRUTURAIS:");
       
       // Verificar se a IA retornou erro de extração
       if (dadosEstruturados.error === "EXTRACTION_FAILED") {
+        console.log("❌ IA retornou EXTRACTION_FAILED:", dadosEstruturados.message);
         throw new Error(dadosEstruturados.message || "Falha na extração: PDF ilegível ou dados insuficientes");
       }
       
-      console.log("✅ JSON parseado com sucesso");
+      // Validação 1: Estrutura básica
+      const estruturaValida = dadosEstruturados && 
+                             typeof dadosEstruturados === 'object' &&
+                             dadosEstruturados.estabelecimento &&
+                             dadosEstruturados.compra &&
+                             dadosEstruturados.itens;
+      
+      console.log("🏗️ Estrutura básica válida:", estruturaValida);
+      console.log("🏪 Estabelecimento presente:", !!dadosEstruturados.estabelecimento);
+      console.log("🛒 Compra presente:", !!dadosEstruturados.compra);
+      console.log("📦 Itens presente:", !!dadosEstruturados.itens);
+      
+      if (!estruturaValida) {
+        console.log("❌ ESTRUTURA INVÁLIDA - Objetos obrigatórios ausentes");
+        throw new Error("Estrutura JSON inválida: faltam objetos obrigatórios (estabelecimento, compra, itens)");
+      }
+      
+      // Validação 2: Itens array
+      if (!Array.isArray(dadosEstruturados.itens)) {
+        console.log("❌ ITENS NÃO É ARRAY:", typeof dadosEstruturados.itens);
+        throw new Error("Campo 'itens' deve ser um array");
+      }
+      
+      console.log("📊 Quantidade de itens extraídos:", dadosEstruturados.itens.length);
+      
+      // Validação 3: Itens básicos
+      const itensValidos = dadosEstruturados.itens.every((item, index) => {
+        const valido = item && 
+                      typeof item === 'object' &&
+                      item.descricao &&
+                      typeof item.quantidade === 'number' &&
+                      typeof item.valor_unitario === 'number';
+        
+        if (!valido) {
+          console.log(`❌ Item ${index} inválido:`, {
+            temDescricao: !!item?.descricao,
+            tipoQuantidade: typeof item?.quantidade,
+            tipoValorUnitario: typeof item?.valor_unitario,
+            item: item
+          });
+        }
+        
+        return valido;
+      });
+      
+      console.log("✅ Todos os itens válidos:", itensValidos);
+      
+      if (!itensValidos) {
+        throw new Error("Um ou mais itens têm estrutura inválida (falta descrição, quantidade ou valor_unitario)");
+      }
+      
+      // Validação 4: Estabelecimento
+      if (!dadosEstruturados.estabelecimento.nome) {
+        console.log("⚠️ Nome do estabelecimento ausente");
+      } else {
+        console.log("🏪 Nome do estabelecimento:", dadosEstruturados.estabelecimento.nome);
+      }
+      
+      // Validação 5: Chave de acesso
+      const chaveAcesso = dadosEstruturados.compra?.chave_acesso;
+      if (chaveAcesso) {
+        const chaveValida = typeof chaveAcesso === 'string' && chaveAcesso.length >= 43 && chaveAcesso.length <= 44;
+        console.log("🔑 Chave de acesso presente:", chaveAcesso.substring(0, 10) + "...");
+        console.log("🔑 Chave válida:", chaveValida, "(tamanho:", chaveAcesso.length, ")");
+      } else {
+        console.log("⚠️ Chave de acesso ausente");
+      }
+      
+      console.log("✅ TODAS AS VALIDAÇÕES PASSARAM - Prosseguindo com o processamento");
 
       // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO
       if (dadosEstruturados.estabelecimento?.nome) {
