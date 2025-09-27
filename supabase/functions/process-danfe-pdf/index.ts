@@ -7,21 +7,10 @@ const corsHeaders = {
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    console.log("🔧 PRE-IMPORT: Iniciando configuração do PDF.js worker...");
-    console.log("🔍 PRE-IMPORT: globalThis.GlobalWorkerOptions existe?", !!(globalThis as any).GlobalWorkerOptions);
+    console.log("📄 Extraindo texto do PDF...");
+    const pdfjsLib = await import("https://esm.sh/pdfjs-dist@4.0.379/es2022/pdfjs-dist.mjs");
     
-    // ========== IMPORTAR PDF.js SEM CONFIGURAÇÃO GLOBAL ==========
-    console.log("📦 Importando PDF.js...");
-    const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
-    
-    // ========== USAR getDocument COM workerSrc DIRETO ==========
-    console.log("📄 Iniciando carregamento do PDF com workerSrc direto...");
-    
-    const loadingTask = getDocument({
-      data: pdfBuffer,
-      workerSrc: "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs"
-    } as any);
-    
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
     const pdf = await loadingTask.promise;
     console.log(`📊 PDF carregado com sucesso! Total de páginas: ${pdf.numPages}`);
     let extractedText = "";
