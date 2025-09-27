@@ -36,6 +36,7 @@ serve(async (req) => {
       });
     }
 
+    console.log(`T2: IA-2 START - nota_id=${finalNotaId}`);
     console.log(`🏁 process-receipt-full START - nota_id=${finalNotaId}`);
 
     // Buscar nota

@@ -331,7 +331,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
       console.log("📊 Quantidade de itens extraídos:", dadosEstruturados.itens.length);
       
       // Validação 3: Itens básicos
-      const itensValidos = dadosEstruturados.itens.every((item, index) => {
+      const itensValidos = dadosEstruturados.itens.every((item: any, index: number) => {
         const valido = item && 
                       typeof item === 'object' &&
                       item.descricao &&
@@ -843,6 +843,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     
     // Primeiro processar no estoque (IA-2), depois normalizar (IA-3)
     setTimeout(() => {
+      console.log("T1: agendei IA-2 - nota ID:", notaImagemId);
       supabase.functions.invoke('process-receipt-full', {
         body: { notaId: notaImagemId }
       }).then((result) => {
