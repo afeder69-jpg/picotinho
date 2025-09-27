@@ -216,6 +216,8 @@ serve(async (req) => {
 
     const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
+    console.log(`✅ Resultado: process-receipt-full SUCESSO - nota_id=${finalNotaId}, itens=${inserted.length}`);
+    
     return new Response(
       JSON.stringify({
         success: true,
@@ -226,7 +228,7 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error("❌ Erro geral:", error?.message || error);
+    console.error("❌ Resultado: process-receipt-full ERRO:", error?.message || error);
     return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

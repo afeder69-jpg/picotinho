@@ -850,9 +850,9 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         const ia2Result = await supabase.functions.invoke('process-receipt-full', {
           body: { notaId: notaImagemId }
         });
-        console.log("✅ IA-2 executada com AWAIT com sucesso:", ia2Result.data);
+        console.log("✅ Resultado: IA-2 executada com AWAIT com sucesso:", ia2Result.data);
       } catch (ia2Error) {
-        console.error("❌ Falha na IA-2 com AWAIT:", ia2Error);
+        console.error("❌ Resultado: Falha na IA-2 com AWAIT:", ia2Error);
       }
     } else {
       // Manter comportamento original para fallback
