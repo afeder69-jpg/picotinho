@@ -7,17 +7,30 @@ const corsHeaders = {
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    // Import pdfjs-dist usando uma abordagem compatível com Deno
-    const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
+    console.log("🔧 PRE-IMPORT: Iniciando configuração do PDF.js worker...");
+    console.log("🔍 PRE-IMPORT: globalThis.GlobalWorkerOptions existe?", !!(globalThis as any).GlobalWorkerOptions);
     
-    // Configurar worker do PDF.js para ambiente Deno
-    console.log("🔧 Configurando PDF.js worker...");
+    // ========== CONFIGURAR WORKER ANTES DO IMPORT ==========
     (globalThis as any).GlobalWorkerOptions = {
       workerSrc: 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs'
     };
-    console.log("✅ PDF.js worker configurado:", (globalThis as any).GlobalWorkerOptions.workerSrc);
     
-    console.log("📄 Iniciando carregamento do PDF...");
+    console.log("✅ PÓS-CONFIG: Worker configurado:", (globalThis as any).GlobalWorkerOptions?.workerSrc);
+    console.log("🔍 PÓS-CONFIG: Objeto completo:", JSON.stringify((globalThis as any).GlobalWorkerOptions));
+    
+    // ========== SÓ DEPOIS IMPORTAR O PDF.js ==========
+    console.log("📦 Importando PDF.js com worker pré-configurado...");
+    const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
+    
+    console.log("🔍 PÓS-IMPORT: Worker ainda existe?", (globalThis as any).GlobalWorkerOptions?.workerSrc);
+    console.log("🔍 PÓS-IMPORT: Worker ainda é o mesmo?", 
+      (globalThis as any).GlobalWorkerOptions?.workerSrc === 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs'
+    );
+    
+    // ========== VERIFICAR ANTES DE USAR ==========
+    console.log("🚀 PRE-GETDOCUMENT: Worker disponível?", !!(globalThis as any).GlobalWorkerOptions?.workerSrc);
+    console.log("📄 Iniciando carregamento do PDF com worker configurado...");
+    
     const pdf = await getDocument({ data: pdfBuffer }).promise;
     console.log(`📊 PDF carregado com sucesso! Total de páginas: ${pdf.numPages}`);
     let extractedText = "";
