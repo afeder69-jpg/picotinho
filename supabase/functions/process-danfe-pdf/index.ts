@@ -10,31 +10,19 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
     console.log("🔧 PRE-IMPORT: Iniciando configuração do PDF.js worker...");
     console.log("🔍 PRE-IMPORT: globalThis.GlobalWorkerOptions existe?", !!(globalThis as any).GlobalWorkerOptions);
     
-    // ========== CONFIGURAR WORKER ANTES DO IMPORT ==========
-    (globalThis as any).GlobalWorkerOptions = {
-      workerSrc: 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs'
-    };
-    
-    console.log("✅ PÓS-CONFIG: Worker configurado:", (globalThis as any).GlobalWorkerOptions?.workerSrc);
-    console.log("🔍 PÓS-CONFIG: Objeto completo:", JSON.stringify((globalThis as any).GlobalWorkerOptions));
-    
-    // ========== SÓ DEPOIS IMPORTAR O PDF.js ==========
-    console.log("📦 Importando PDF.js com worker pré-configurado...");
+    // ========== IMPORTAR PDF.js SEM CONFIGURAÇÃO GLOBAL ==========
+    console.log("📦 Importando PDF.js...");
     const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
     
-    console.log("🔍 PÓS-IMPORT: Worker ainda existe?", (globalThis as any).GlobalWorkerOptions?.workerSrc);
-    console.log("🔍 PÓS-IMPORT: Worker ainda é o mesmo?", 
-      (globalThis as any).GlobalWorkerOptions?.workerSrc === 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs'
-    );
+    // ========== USAR getDocument COM workerSrc DIRETO ==========
+    console.log("📄 Iniciando carregamento do PDF com workerSrc direto...");
     
-    // ========== VERIFICAR ANTES DE USAR ==========
-    console.log("🚀 PRE-GETDOCUMENT: Worker disponível?", !!(globalThis as any).GlobalWorkerOptions?.workerSrc);
-    console.log("📄 Iniciando carregamento do PDF com worker configurado...");
-    
-    const pdf = await getDocument({
+    const loadingTask = getDocument({
       data: pdfBuffer,
-      workerSrc: 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs'
-    } as any).promise;
+      workerSrc: "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs"
+    } as any);
+    
+    const pdf = await loadingTask.promise;
     console.log(`📊 PDF carregado com sucesso! Total de páginas: ${pdf.numPages}`);
     let extractedText = "";
     
