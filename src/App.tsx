@@ -14,13 +14,9 @@ import ConfiguracoesUsuario from "./pages/ConfiguracoesUsuario";
 import CadastroUsuario from "./pages/CadastroUsuario";
 import WhatsAppConfig from "./pages/WhatsAppConfig";
 import CleanupUserData from "./pages/CleanupUserData";
-import ExecuteTestNow from "./execute-test-now";
-import ExecuteTestAwait from "./execute-test-await";
 
 import TestNormalizacao from "./pages/TestNormalizacao";
 import TestNormalizacaoCasos from "./pages/TestNormalizacaoCasos";
-import RevisaoNormalizacao from "./pages/RevisaoNormalizacao";
-import SetupMaster from "./pages/SetupMaster";
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
 
@@ -59,13 +55,9 @@ const App = () => {
                 <Route path="/cadastro-usuario" element={<CadastroUsuario />} />
                 <Route path="/whatsapp" element={<WhatsAppConfig />} />
                 <Route path="/cleanup" element={<CleanupUserData />} />
-                <Route path="/execute-test-now" element={<ExecuteTestNow />} />
-                <Route path="/execute-test-await" element={<ExecuteTestAwait />} />
                 
                 <Route path="/test-normalizacao" element={<TestNormalizacao />} />
                 <Route path="/test-casos" element={<TestNormalizacaoCasos />} />
-                <Route path="/revisao-normalizacao" element={<RevisaoNormalizacao />} />
-                <Route path="/setup-master" element={<SetupMaster />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <BottomNavigation />

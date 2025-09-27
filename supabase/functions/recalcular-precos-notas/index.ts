@@ -97,13 +97,13 @@ serve(async (req) => {
               }
             } catch (error) {
               console.error(`❌ Erro ao processar item ${produtoNome}:`, error);
-              erros.push(`${produtoNome}: ${error instanceof Error ? error.message : String(error)}`);
+              erros.push(`${produtoNome}: ${error.message}`);
             }
           }
         }
       } catch (error) {
         console.error(`❌ Erro ao processar nota ${nota.id}:`, error);
-        erros.push(`Nota ${nota.id}: ${error instanceof Error ? error.message : String(error)}`);
+        erros.push(`Nota ${nota.id}: ${error.message}`);
       }
     }
 
@@ -121,7 +121,7 @@ serve(async (req) => {
     console.error('Erro no recálculo de preços:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -35,8 +35,8 @@ serve(async (req) => {
       console.log(`\n🔍 Testando: ${caso}`);
       
       try {
-        // Chamar a função normalizar-produto-ia3
-        const { data, error } = await supabase.functions.invoke('normalizar-produto-ia3', {
+        // Chamar a função normalizar-produto-ia2
+        const { data, error } = await supabase.functions.invoke('normalizar-produto-ia2', {
           body: { nomeOriginal: caso }
         });
 
@@ -59,7 +59,7 @@ serve(async (req) => {
         console.error(`💥 Exceção para ${caso}:`, err);
         resultados.push({
           entrada: caso,
-          erro: err instanceof Error ? err.message : String(err),
+          erro: err.message,
           sucesso: false
         });
       }
@@ -97,8 +97,8 @@ serve(async (req) => {
   } catch (error) {
     console.error('💥 Erro geral:', error);
     return new Response(JSON.stringify({ 
-      erro: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : String(error)
+      erro: error.message,
+      stack: error.stack 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

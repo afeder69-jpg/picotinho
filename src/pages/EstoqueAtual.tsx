@@ -34,7 +34,6 @@ interface EstoqueItem {
   quantidade: number;
   preco_unitario_ultimo: number | null;
   updated_at: string;
-  created_at?: string;
   origem?: string;
   produto_nome_normalizado?: string | null;
   produto_hash_normalizado?: string | null;
@@ -636,23 +635,19 @@ const EstoqueAtual = () => {
         const chave = item.produto_nome; // Usar nome exato como chave
         
         if (produtosMap.has(chave)) {
-            // Produto já existe, somar quantidades e manter o preço mais recente
-            const itemExistente = produtosMap.get(chave);
-            produtosMap.set(chave, {
-              ...itemExistente,
-              quantidade_total: itemExistente.quantidade_total + item.quantidade,
-              quantidade: itemExistente.quantidade_total + item.quantidade, // Para compatibilidade
-              preco_unitario_mais_recente: item.preco_unitario_ultimo || itemExistente.preco_unitario_mais_recente,
-              preco_unitario_ultimo: item.preco_unitario_ultimo || itemExistente.preco_unitario_ultimo, // Para compatibilidade
-              ultima_atualizacao: item.updated_at > itemExistente.ultima_atualizacao ? item.updated_at : itemExistente.ultima_atualizacao,
-              updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at, // Para compatibilidade
-              // Para produtos manuais, manter a data de criação mais antiga (primeira inserção)
-              created_at: item.created_at && itemExistente.created_at ? 
-                (item.created_at < itemExistente.created_at ? item.created_at : itemExistente.created_at) :
-                (item.created_at || itemExistente.created_at),
-              ids_originais: [...itemExistente.ids_originais, item.id],
-              nomes_originais: [...itemExistente.nomes_originais, item.produto_nome],
-              itens_originais: itemExistente.itens_originais + 1
+          // Produto já existe, somar quantidades e manter o preço mais recente
+          const itemExistente = produtosMap.get(chave);
+          produtosMap.set(chave, {
+            ...itemExistente,
+            quantidade_total: itemExistente.quantidade_total + item.quantidade,
+            quantidade: itemExistente.quantidade_total + item.quantidade, // Para compatibilidade
+            preco_unitario_mais_recente: item.preco_unitario_ultimo || itemExistente.preco_unitario_mais_recente,
+            preco_unitario_ultimo: item.preco_unitario_ultimo || itemExistente.preco_unitario_ultimo, // Para compatibilidade
+            ultima_atualizacao: item.updated_at > itemExistente.ultima_atualizacao ? item.updated_at : itemExistente.ultima_atualizacao,
+            updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at, // Para compatibilidade
+            ids_originais: [...itemExistente.ids_originais, item.id],
+            nomes_originais: [...itemExistente.nomes_originais, item.produto_nome],
+            itens_originais: itemExistente.itens_originais + 1
           });
         } else {
           // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)
@@ -1425,13 +1420,8 @@ const EstoqueAtual = () => {
     // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
     const subtotalAtual = itens.reduce((sum, item) => {
       const precoAtual = encontrarPrecoAtual(item.produto_nome_normalizado || item.produto_nome);
-      
-      // Para produtos manuais, usar o preço de inserção se não houver preço atual de mercado
-      let preco = precoAtual?.valor_unitario || 0;
-      if (preco === 0 && item.origem === 'manual' && item.preco_unitario_ultimo) {
-        preco = item.preco_unitario_ultimo;
-      }
-      
+      // REGRA: Apenas usar preços atuais (de notas fiscais), não preços pagos manuais
+      const preco = precoAtual?.valor_unitario || 0; // Se não há preço atual, não somar
       const quantidade = parseFloat(item.quantidade.toString());
       const subtotalItem = Math.round((preco * quantidade) * 100) / 100;
       return sum + subtotalItem;
@@ -1731,19 +1721,9 @@ const EstoqueAtual = () => {
                                             const precoExibir = item.preco_unitario_ultimo || 0;
                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
                                             
-                                            // Buscar data da nota fiscal ou data de criação manual
+                                            // Buscar data da nota fiscal
                                             const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
-                                            let dataExibir = 'Sem data';
-                                            
-                                            if (dataRealCompra) {
-                                              dataExibir = formatDateSafe(dataRealCompra);
-                                            } else if (isProdutoManual(nomeExibicao)) {
-                                              // Para produtos manuais, usar a data de criação
-                                              const dataInsercao = item.created_at || item.updated_at;
-                                              if (dataInsercao) {
-                                                dataExibir = formatDateSafe(dataInsercao);
-                                              }
-                                            }
+                                            const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
                                             
                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
                                           })()}
@@ -1757,37 +1737,14 @@ const EstoqueAtual = () => {
                                               'Sem data'
                                             } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
                                           </div>
-                                        ) : precoAtual && precoAtual.valor_unitario ? (
+                                        ) : precoAtual && precoAtual.valor_unitario && (
                                           <div className="text-muted-foreground">
                                             {precoAtual.data_atualizacao ? 
                                               formatDateSafe(precoAtual.data_atualizacao) : 
                                               'Sem data'
                                             } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
                                           </div>
-                                        ) : isProdutoManual(nomeExibicao) ? (
-                                          // Para produtos manuais, repetir as mesmas informações da linha superior
-                                          <div className="text-muted-foreground">
-                                            {(() => {
-                                              const precoExibir = item.preco_unitario_ultimo || 0;
-                                              const totalExibir = (precoExibir * quantidade).toFixed(2);
-                                              
-                                              // Usar a mesma data da inserção manual
-                                              const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
-                                              let dataExibir = 'Sem data';
-                                              
-                                              if (dataRealCompra) {
-                                                dataExibir = formatDateSafe(dataRealCompra);
-                                              } else {
-                                                const dataInsercao = item.created_at || item.updated_at;
-                                                if (dataInsercao) {
-                                                  dataExibir = formatDateSafe(dataInsercao);
-                                                }
-                                              }
-                                              
-                                              return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
-                                            })()}
-                                          </div>
-                                        ) : null}
+                                        )}
 
                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
                                       </>

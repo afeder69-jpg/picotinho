@@ -17,14 +17,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🧪 TESTE MANUAL: Processando nota existente com IA-3');
+    console.log('🧪 TESTE MANUAL: Processando nota existente com IA-2');
     
     // Testar com a nota que já foi extraída
     const notaId = '0cbb6a6a-3db0-45c0-9374-da1d53454746';
     const usuarioId = 'ae5b5501-7f8a-46da-9cba-b9955a84e697';
     
-    // Chamar a IA-3 diretamente
-    const { data: ia3Response, error: ia3Error } = await supabase.functions.invoke('normalizar-produto-ia3', {
+    // Chamar a IA-2 diretamente
+    const { data: ia2Response, error: ia2Error } = await supabase.functions.invoke('normalizar-produto-ia2', {
       body: {
         notaId: notaId,
         usuarioId: usuarioId,
@@ -32,12 +32,12 @@ serve(async (req) => {
       }
     });
 
-    if (ia3Error) {
-      console.error('❌ Erro na IA-3:', ia3Error);
-      throw new Error(`Erro na IA-3: ${ia3Error.message}`);
+    if (ia2Error) {
+      console.error('❌ Erro na IA-2:', ia2Error);
+      throw new Error(`Erro na IA-2: ${ia2Error.message}`);
     }
 
-    console.log('✅ IA-3 executada com sucesso:', ia3Response);
+    console.log('✅ IA-2 executada com sucesso:', ia2Response);
 
     // Verificar se produtos foram inseridos
     const { data: estoqueData, error: estoqueError } = await supabase
@@ -56,7 +56,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true,
         message: 'Teste manual da IA-2 concluído',
-        ia3_result: ia3Response,
+        ia2_result: ia2Response,
         produtos_no_estoque: estoqueData?.length || 0,
         primeiros_produtos: estoqueData?.slice(0, 3) || []
       }),
@@ -67,7 +67,7 @@ serve(async (req) => {
     console.error('❌ Erro no teste:', error);
     
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+      JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

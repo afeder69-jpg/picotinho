@@ -86,7 +86,7 @@ async function convertHtmlToImage(html: string, url: string): Promise<string> {
           console.log('API retornou status:', response.status);
         }
       } catch (apiError) {
-        console.log('Erro na API:', (apiError as any)?.message || 'Erro desconhecido');
+        console.log('Erro na API:', apiError.message);
         continue;
       }
     }
@@ -244,15 +244,22 @@ serve(async (req) => {
     // ✅ FLUXO AUTOMÁTICO: IA-1 (extração de imagem) → IA-2 (estoque)
     console.log("🚀 Captura externa finalizada, disparando extração de dados...");
     
-    // Processar extração em background
-    supabase.functions.invoke('extract-receipt-image', {
-      body: { imagemId: notaImagem.id, userId: userId }
-    }).then((extractResult) => {
-      console.log("✅ Extração de dados concluída:", extractResult);
-      // REMOVIDO: process-receipt-full será chamado pelo extract-receipt-image automaticamente
-    }).catch((error) => {
-      console.error('❌ Falha na execução automática:', error);
-    });
+    EdgeRuntime.waitUntil(
+      supabase.functions.invoke('extract-receipt-image', {
+        body: { imagemId: notaImagem.id, userId: userId }
+      }).then((extractResult) => {
+        console.log("✅ Extração de dados concluída:", extractResult);
+        
+        // Após extração, disparar inserção no estoque
+        return supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagem.id }
+        });
+      }).then((result) => {
+        console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+      }).catch((error) => {
+        console.error('❌ Falha na execução automática:', error);
+      })
+    );
     
     console.log('Captura externa concluída com sucesso:', notaImagem.id);
     
@@ -274,7 +281,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Erro interno do servidor',
-        details: (error as any)?.message || 'Erro desconhecido' 
+        details: error.message 
       }),
       { 
         status: 500, 

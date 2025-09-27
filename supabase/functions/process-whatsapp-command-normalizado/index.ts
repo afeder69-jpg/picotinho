@@ -181,7 +181,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         reply: '❌ Erro interno do sistema.',
-        error: error instanceof Error ? error.message : String(error)
+        error: error.message 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

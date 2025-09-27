@@ -13,19 +13,16 @@ import {
   LogOut,
   MapPin,
   Settings,
-  Database,
-  CheckSquare
+  Database
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 
 
 const Menu = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { isMaster } = useUserRole();
 
   const handleSignOut = async () => {
     try {
@@ -87,20 +84,12 @@ const Menu = () => {
     },
     {
       id: 'test-normalizacao',
-      title: 'Teste de Normalização',
-      description: 'Testar sistema de normalização de produtos',
+      title: 'Normalização (teste)',
+      description: 'Executar normalização de estabelecimentos - TEMPORÁRIO',
       icon: Database,
       onClick: () => navigate('/test-normalizacao'),
       isActive: true
-    },
-    ...(isMaster ? [{
-      id: 'revisao-normalizacao',
-      title: 'Revisão de Normalização',
-      description: 'Aprovar/rejeitar sugestões do sistema (Master)',
-      icon: CheckSquare,
-      onClick: () => navigate('/revisao-normalizacao'),
-      isActive: true
-    }] : [])
+    }
   ];
 
   return (

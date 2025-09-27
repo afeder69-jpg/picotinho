@@ -432,7 +432,7 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
     }
     
     if (!estoque) {
-      return `Produto não encontrado no seu estoque.`;
+      return `Produto "${produtoNome}" não encontrado no seu estoque.`;
     }
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
@@ -636,8 +636,8 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     await supabase
       .from('whatsapp_sessions')
       .delete()
-      .eq('usuario_id', mensagem.usuario_id)
-      .eq('remetente', mensagem.remetente);
+      .eq('usuario_id', usuarioId)
+      .eq('remetente', remetente);
     
     console.log(`🗑️ [RESET] Sessões ativas removidas para consulta fallback`);
     
@@ -646,7 +646,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
 
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar comando:", err);
-    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
+    console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao processar sua consulta. Tente novamente mais tarde.";
   }
 }
@@ -696,7 +696,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
     const produtosPorCategoria = new Map();
     let valorTotalGeral = 0;
     
-    data.forEach((produto: any) => {
+    data.forEach(produto => {
       const categoria = produto.categoria || 'OUTROS';
       
       if (!produtosPorCategoria.has(categoria)) {
@@ -725,7 +725,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
       
       resposta += `📂 **${categoria.toUpperCase()}** (${produtos.length} ${produtos.length === 1 ? 'item' : 'itens'})\n\n`;
       
-      produtos.forEach((produto: any, index: number) => {
+      produtos.forEach((produto, index) => {
         const quantidadeFormatada = formatarQuantidade(produto.quantidade, produto.unidade_medida);
         const produtoNomeLimpo = limparNomeProduto(produto.produto_nome);
         const preco = produto.preco_unitario_ultimo || 0;
@@ -759,7 +759,7 @@ async function processarConsultarEstoqueCompleto(supabase: any, mensagem: any): 
 
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar estoque completo:", err);
-    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
+    console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao consultar seu estoque completo. Tente novamente mais tarde.";
   }
 }
@@ -1158,7 +1158,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         '11': 'outros'
       };
       
-      categoriaSelecionada = mapeamentoCategoria[resposta as keyof typeof mapeamentoCategoria];
+      categoriaSelecionada = mapeamentoCategoria[resposta];
       
       if (!categoriaSelecionada) {
         const novasTentativas = tentativasErro + 1;
@@ -1358,7 +1358,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       let ajuda = `❌ Categoria "${termoCategoria}" não encontrada.\n\n📂 **CATEGORIAS DISPONÍVEIS:**\n\n`;
       
       if (todasCategorias) {
-        todasCategorias.forEach((cat: any) => {
+        todasCategorias.forEach(cat => {
           const exemplos = cat.sinonimos ? cat.sinonimos.slice(0, 2).join(', ') : '';
           ajuda += `• ${cat.nome.toUpperCase()}${exemplos ? ` (ex: ${exemplos})` : ''}\n`;
         });
@@ -1400,7 +1400,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     // Consolidar produtos duplicados (mesmo nome)
     const produtosConsolidados = new Map();
     
-    data.forEach((produto: any) => {
+    data.forEach(produto => {
       const chave = produto.produto_nome.trim().toUpperCase();
       
       if (produtosConsolidados.has(chave)) {
@@ -1466,7 +1466,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar consulta de categoria:", err);
-    console.error("❌ [ERRO STACK]:", err instanceof Error ? err.stack : String(err));
+    console.error("❌ [ERRO STACK]:", err.stack);
     return "❌ Houve um erro ao processar sua consulta de categoria. Tente novamente mais tarde.";
   }
 }
@@ -1703,15 +1703,16 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
       return `❌ ${validacao.message}`;
     }
     
-    // Processar em background
-    console.log(`🔄 [DEBUG BACKGROUND] Iniciando processamento em background para ${anexo?.type || 'sem anexo'}...`);
-    processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
-      .then(() => {
-        console.log(`✅ [DEBUG BACKGROUND] Processamento concluído com sucesso`);
-      })
-      .catch(error => {
-        console.error('❌ [DEBUG BACKGROUND] Erro no processamento:', error);
-      });
+    // Processar em background usando EdgeRuntime.waitUntil para garantir execução
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      EdgeRuntime.waitUntil(
+        processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
+      );
+    } else {
+      // Fallback para ambientes sem EdgeRuntime
+      processarNotaEmBackground(supabase, anexo, mimetype, publicUrl, notaImagem, mensagem)
+        .catch(error => console.error('❌ Erro no processamento em background:', error));
+    }
     
     return "📂 Nota recebida, iniciando avaliação...";
     
@@ -1756,8 +1757,15 @@ async function processarNotaEmBackground(
       // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2  
       console.log('🚀 PDF processado, disparando IA-2 automaticamente...');
       
-      // REMOVIDO: process-receipt-full será chamado pelo process-danfe-pdf automaticamente
-      console.log("✅ PDF processado, IA-2 será executada automaticamente pelo fluxo");
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagem.id }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente:", result);
+        }).catch((error) => {
+          console.error('❌ Falha na IA-2 automática:', error);
+        })
+      );
       
     } else {
       // Para imagens: IA-1 (extração) → IA-2 (estoque)
@@ -1778,24 +1786,17 @@ async function processarNotaEmBackground(
       }
       
       // ETAPA 2: Processar estoque automaticamente
-      console.log('🚀 Imagem processada, disparando process-receipt-full...');
-      
-      const stockResult = await supabase.functions.invoke('process-receipt-full', {
-        body: { 
-          notaImagemId: notaImagem.id 
-        }
-      });
-      
-      console.log('✅ [DEBUG BACKGROUND] process-receipt-full concluído:', stockResult);
-      
-      if (stockResult.error) {
-        console.error('❌ [DEBUG BACKGROUND] Erro no process-receipt-full:', stockResult.error);
-        throw new Error(`Erro no processamento do estoque: ${stockResult.error.message}`);
-      }
       console.log('🚀 Imagem processada, disparando IA-2 automaticamente...');
       
-      // REMOVIDO: process-receipt-full será chamado pelo extract-receipt-image automaticamente
-      console.log("✅ Imagem processada, IA-2 será executada automaticamente pelo fluxo");
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
+          body: { imagemId: notaImagem.id }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente:", result);
+        }).catch((error) => {
+          console.error('❌ Falha na IA-2 automática:', error);
+        })
+      );
     }
     
     // Aguardar um pouco para garantir que tudo foi persistido
@@ -1817,11 +1818,7 @@ async function processarNotaEmBackground(
     let mensagemErro = "❌ Erro ao processar a nota fiscal.";
     
     const errorStr = String(error).toLowerCase();
-    if (errorStr.includes('ilegível') || errorStr.includes('corrompido') || errorStr.includes('digitalizado')) {
-      mensagemErro = "❌ PDF ilegível ou corrompido detectado.\n\n📸 Tente enviar uma FOTO da nota fiscal em vez do PDF.\n\nOu escaneie novamente com melhor qualidade.";
-    } else if (errorStr.includes('não reconhecido') || errorStr.includes('dados essenciais')) {
-      mensagemErro = "❌ Documento não parece ser uma nota fiscal válida.\n\nVerifique se enviou o arquivo correto (nota fiscal, cupom fiscal ou DANFE).";
-    } else if (errorStr.includes('estoque') || errorStr.includes('inserção') || errorStr.includes('insert')) {
+    if (errorStr.includes('estoque') || errorStr.includes('inserção') || errorStr.includes('insert')) {
       mensagemErro = "❌ Erro ao salvar produtos no estoque. A nota foi lida corretamente, mas houve falha na gravação dos itens.\n\nTente novamente em alguns instantes.";
     } else if (errorStr.includes('ia-2') || errorStr.includes('normalizar') || errorStr.includes('indisponível')) {
       mensagemErro = "❌ Aguardando disponibilidade da IA para processar a nota fiscal.\n\nTente novamente em alguns instantes.";

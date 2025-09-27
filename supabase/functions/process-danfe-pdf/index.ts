@@ -7,12 +7,10 @@ const corsHeaders = {
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    console.log("📄 Extraindo texto do PDF...");
-    const pdfjsLib = await import("https://esm.sh/pdfjs-dist@4.0.379/es2022/pdfjs-dist.mjs");
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
     
-    const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
-    const pdf = await loadingTask.promise;
-    console.log(`📊 PDF carregado com sucesso! Total de páginas: ${pdf.numPages}`);
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
     
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -175,7 +173,7 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
    - Se não encontrar, deixe null
 
 2. Regras OBRIGATÓRIAS:
-   - Para VALOR TOTAL: identifique apenas o valor oficial total da compra, ignorando números soltos no início do texto.
+   - Para VALOR TOTAL: identifique apenas o valor oficial total da compra (ex: 226,29), ignorando números soltos no início do texto.
    - Para DESCRIÇÕES: limpe e padronize os nomes dos produtos:
      • JAMAIS altere marcas ou nomes originais (ex: se estiver "Nescau" não pode virar "Nesquik", se estiver "Plusvita" não pode virar "Pullman")
      • NUNCA inclua quantidade comprada na descrição (a quantidade vai no campo separado "quantidade")
@@ -202,10 +200,7 @@ IMPORTANTE: O JSON deve incluir ABSOLUTAMENTE TODOS OS ITENS extraídos, sem omi
    - O JSON deve estar sempre COMPLETO e bem fechado, válido do início ao fim.
    - NUNCA truncar ou cortar no meio - incluir TODOS os itens da nota.
 
-CRÍTICO: Se o texto não contém dados suficientes ou é ilegível, retorne exatamente:
-{"error": "EXTRACTION_FAILED", "message": "PDF ilegível ou dados insuficientes"}
-
-3. Estrutura OBRIGATÓRIA do retorno (apenas se dados válidos):
+3. Estrutura OBRIGATÓRIA do retorno:
 \`\`\`json
 {
   "estabelecimento": {
@@ -272,9 +267,6 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.7.1");
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Environment variables not set');
-    }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let dadosEstruturados = null;
@@ -282,100 +274,12 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
     // 📊 Tentar processar JSON da IA
     try {
-      console.log("🔍 INICIANDO ANÁLISE DA RESPOSTA DA IA");
-      console.log("📏 Tamanho da resposta:", respostaIA.length, "caracteres");
-      console.log("🎯 Primeiros 200 chars:", respostaIA.substring(0, 200));
-      console.log("🏁 Últimos 200 chars:", respostaIA.substring(Math.max(0, respostaIA.length - 200)));
-      
       // Limpar resposta da IA para extrair apenas o JSON
       const jsonMatch = respostaIA.match(/\{[\s\S]*\}/);
       const jsonString = jsonMatch ? jsonMatch[0] : respostaIA;
       
-      console.log("🔧 JSON extraído para parsing:");
-      console.log("📏 Tamanho do JSON:", jsonString.length, "caracteres");
-      console.log("🎯 Primeiros 300 chars do JSON:", jsonString.substring(0, 300));
-      
       dadosEstruturados = JSON.parse(jsonString);
       console.log("✅ JSON parseado com sucesso");
-      
-      // 🔍 VALIDAÇÕES ESTRUTURAIS DO JSON
-      console.log("🧪 INICIANDO VALIDAÇÕES ESTRUTURAIS:");
-      
-      // Verificar se a IA retornou erro de extração
-      if (dadosEstruturados.error === "EXTRACTION_FAILED") {
-        console.log("❌ IA retornou EXTRACTION_FAILED:", dadosEstruturados.message);
-        throw new Error(dadosEstruturados.message || "Falha na extração: PDF ilegível ou dados insuficientes");
-      }
-      
-      // Validação 1: Estrutura básica
-      const estruturaValida = dadosEstruturados && 
-                             typeof dadosEstruturados === 'object' &&
-                             dadosEstruturados.estabelecimento &&
-                             dadosEstruturados.compra &&
-                             dadosEstruturados.itens;
-      
-      console.log("🏗️ Estrutura básica válida:", estruturaValida);
-      console.log("🏪 Estabelecimento presente:", !!dadosEstruturados.estabelecimento);
-      console.log("🛒 Compra presente:", !!dadosEstruturados.compra);
-      console.log("📦 Itens presente:", !!dadosEstruturados.itens);
-      
-      if (!estruturaValida) {
-        console.log("❌ ESTRUTURA INVÁLIDA - Objetos obrigatórios ausentes");
-        throw new Error("Estrutura JSON inválida: faltam objetos obrigatórios (estabelecimento, compra, itens)");
-      }
-      
-      // Validação 2: Itens array
-      if (!Array.isArray(dadosEstruturados.itens)) {
-        console.log("❌ ITENS NÃO É ARRAY:", typeof dadosEstruturados.itens);
-        throw new Error("Campo 'itens' deve ser um array");
-      }
-      
-      console.log("📊 Quantidade de itens extraídos:", dadosEstruturados.itens.length);
-      
-      // Validação 3: Itens básicos
-      const itensValidos = dadosEstruturados.itens.every((item: any, index: number) => {
-        const valido = item && 
-                      typeof item === 'object' &&
-                      item.descricao &&
-                      typeof item.quantidade === 'number' &&
-                      typeof item.valor_unitario === 'number';
-        
-        if (!valido) {
-          console.log(`❌ Item ${index} inválido:`, {
-            temDescricao: !!item?.descricao,
-            tipoQuantidade: typeof item?.quantidade,
-            tipoValorUnitario: typeof item?.valor_unitario,
-            item: item
-          });
-        }
-        
-        return valido;
-      });
-      
-      console.log("✅ Todos os itens válidos:", itensValidos);
-      
-      if (!itensValidos) {
-        throw new Error("Um ou mais itens têm estrutura inválida (falta descrição, quantidade ou valor_unitario)");
-      }
-      
-      // Validação 4: Estabelecimento
-      if (!dadosEstruturados.estabelecimento.nome) {
-        console.log("⚠️ Nome do estabelecimento ausente");
-      } else {
-        console.log("🏪 Nome do estabelecimento:", dadosEstruturados.estabelecimento.nome);
-      }
-      
-      // Validação 5: Chave de acesso
-      const chaveAcesso = dadosEstruturados.compra?.chave_acesso;
-      if (chaveAcesso) {
-        const chaveValida = typeof chaveAcesso === 'string' && chaveAcesso.length >= 43 && chaveAcesso.length <= 44;
-        console.log("🔑 Chave de acesso presente:", chaveAcesso.substring(0, 10) + "...");
-        console.log("🔑 Chave válida:", chaveValida, "(tamanho:", chaveAcesso.length, ")");
-      } else {
-        console.log("⚠️ Chave de acesso ausente");
-      }
-      
-      console.log("✅ TODAS AS VALIDAÇÕES PASSARAM - Prosseguindo com o processamento");
 
       // 🏪 APLICAR NORMALIZAÇÃO DO ESTABELECIMENTO PRIMEIRO
       if (dadosEstruturados.estabelecimento?.nome) {
@@ -610,7 +514,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
             // 📝 Criar itens da nota fiscal
             if (dadosEstruturados.itens && dadosEstruturados.itens.length > 0) {
-              const itensNotaFiscal = dadosEstruturados.itens.map((item: any) => {
+              const itensNotaFiscal = dadosEstruturados.itens.map(item => {
                 // Normalizar nome (mesma lógica do estoque)
                 let nomeNormalizado = item.descricao.toUpperCase().trim();
                 
@@ -650,47 +554,8 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
       // SEÇÃO DUPLICADA REMOVIDA - a primeira seção já cria notas_fiscais e itens_nota
 
-      // 📦 PROCESSAMENTO DE ESTOQUE REATIVADO (SEM NORMALIZAÇÃO IA-3)
-      console.log("📦 Processando estoque DIRETAMENTE sem normalização IA-3");
-      
-      // Processar itens para o estoque do usuário
-      if (dadosEstruturados.itens && dadosEstruturados.itens.length > 0) {
-        console.log(`📦 Processando ${dadosEstruturados.itens.length} itens para o estoque...`);
-        
-        for (const item of dadosEstruturados.itens) {
-          try {
-            const { descricao, quantidade, valor_unitario, categoria } = item;
-            
-            if (!descricao || quantidade <= 0) {
-              console.log("⏭️ Pulando item inválido:", item);
-              continue;
-            }
-            
-            // Inserir diretamente no estoque sem normalização
-            const { error: estoqueError } = await supabase
-              .from('estoque_app')
-              .insert({
-                user_id: userId,
-                produto_nome: descricao,
-                quantidade: quantidade || 1,
-                preco_unitario_ultimo: valor_unitario || 0,
-                categoria: categoria || 'outros',
-                unidade_medida: 'UN',
-                origem: 'nota_fiscal'
-              });
-            
-            if (estoqueError) {
-              console.error("❌ Erro ao adicionar ao estoque:", descricao, estoqueError);
-            } else {
-              console.log("✅ Adicionado ao estoque:", descricao, "- Qtd:", quantidade);
-            }
-          } catch (itemError) {
-            console.error("❌ Erro ao processar item para estoque:", item, itemError);
-          }
-        }
-        
-        console.log("✅ Processamento de estoque concluído SEM normalização");
-      }
+      // 📦 PROCESSAMENTO DE ESTOQUE REMOVIDO - APENAS IA-2 AUTORIZADA
+      console.log("📦 Estoque será processado apenas via IA-2");
 
       // 🛍️ Processar itens da compra
       if (dadosEstruturados.itens && compraId) {
@@ -879,18 +744,19 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-    // ⚠️ NORMALIZAÇÃO TEMPORARIAMENTE SUSPENSA
-    // IA-3 (normalização) desativada para teste direto ao estoque
-    console.log("⚠️ NORMALIZAÇÃO IA-3 SUSPENSA - produtos vão direto ao estoque");
-    console.log("📦 Produtos já foram salvos no estoque nas seções anteriores");
-    
-    // Comentado temporariamente:
-    // const useAwaitForIA2 = Deno.env.get('USE_AWAIT_FOR_IA_2') === 'true';
-    // supabase.functions.invoke('process-receipt-full', {
-    //   body: { notaId: notaImagemId }
-    // });
-    
-    console.log("✅ Processamento concluído SEM normalização IA-3");
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
+      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+      
+      // Executar IA-2 em background após salvar os dados
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
+          body: { notaId: notaImagemId }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        }).catch((estoqueErr) => {
+          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+        })
+      );
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
@@ -928,11 +794,11 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     });
 
   } catch (err) {
-    console.error("❌ Erro geral:", err instanceof Error ? err.message : String(err));
-    return new Response(
-      JSON.stringify({ 
-        error: "Erro interno no processamento",
-        message: err instanceof Error ? err.message : String(err)
+    console.error("❌ Erro geral:", err.message);
+    return new Response(JSON.stringify({
+      success: false,
+      error: "GENERAL_ERROR",
+      message: err.message
     }), { 
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

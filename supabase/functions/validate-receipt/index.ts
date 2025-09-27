@@ -23,7 +23,7 @@ interface ValidationResult {
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
     // Import pdfjs-dist usando uma abordagem compatível com Deno
-    const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
     
     const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
@@ -494,7 +494,7 @@ Responda APENAS o JSON:
         reason: 'erro_sistema',
         shouldDelete: false,
         message: '❌ Erro no sistema de validação',
-        error: error instanceof Error ? error.message : String(error)
+        error: error.message
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

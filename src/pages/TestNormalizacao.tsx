@@ -1,12 +1,9 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import { Crown } from 'lucide-react';
 
 export default function TestNormalizacao() {
   const [loading, setLoading] = useState(false);
-  const [loadingMaster, setLoadingMaster] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
 
   const executarBackfill = async (tabela: string, forcarReprocessamento = false, consolidar = false) => {
@@ -35,52 +32,9 @@ export default function TestNormalizacao() {
     }
   };
 
-  const virarMaster = async () => {
-    setLoadingMaster(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('setup-master-user');
-      
-      if (error) {
-        throw error;
-      }
-
-      toast.success("🎉 Você agora é Master! Recarregando...");
-      
-      // Recarregar a página para atualizar as permissões
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-
-    } catch (error: any) {
-      console.error('Erro ao virar Master:', error);
-      toast.error("Erro ao configurar Master");
-    } finally {
-      setLoadingMaster(false);
-    }
-  };
-
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">🔧 Normalização de Produtos</h1>
-      
-      {/* Botão para virar Master */}
-      <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <Crown className="h-5 w-5 text-yellow-600" />
-          <h2 className="font-semibold text-yellow-800">Configuração Master</h2>
-        </div>
-        <p className="text-sm text-yellow-700 mb-3">
-          Para ver o botão "Revisar Normalizações", você precisa ser Master:
-        </p>
-        <Button 
-          onClick={virarMaster}
-          disabled={loadingMaster}
-          variant="outline"
-          className="bg-yellow-100 border-yellow-300 text-yellow-800 hover:bg-yellow-200"
-        >
-          {loadingMaster ? "Configurando..." : "🎯 Virar Master Agora"}
-        </Button>
-      </div>
       
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

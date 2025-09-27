@@ -332,7 +332,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
             let processResponse;
             
             if (isPdf) {
-              // Para PDFs, usar process-danfe-pdf para extrair dados
+              // Para PDFs, usar process-danfe-pdf
               processResponse = await supabase.functions.invoke('process-danfe-pdf', {
                 body: {
                   notaImagemId: notaData.id,
@@ -341,11 +341,12 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 }
               });
             } else {
-              // Para imagens, usar extract-receipt-image para extrair dados  
-              processResponse = await supabase.functions.invoke('extract-receipt-image', {
+              // Para imagens, usar apenas extração (sem processamento de estoque aqui)
+              processResponse = await supabase.functions.invoke('validate-receipt', {
                 body: {
-                  imagemId: notaData.id,
-                  userId: currentUser.id
+                  notaImagemId: notaData.id,
+                  imageUrl: urlData.publicUrl,
+                  qrUrl: null
                 }
               });
             }
@@ -358,13 +359,13 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                 variant: "destructive",
               });
             } else {
-              console.log('✅ Extração concluída - chamando IA-3 diretamente para normalização e inserção');
+              console.log('✅ Extração concluída - chamando IA-2 diretamente para normalização e inserção');
               
-              // 🎯 CORREÇÃO CRÍTICA: Chamar IA-3 diretamente após extração
+              // 🎯 CORREÇÃO CRÍTICA: Chamar IA-2 diretamente após extração
               try {
-                console.log('🎯 Chamando IA-3 para processar nota:', notaData.id);
+                console.log('🎯 Chamando IA-2 para processar nota:', notaData.id);
                 
-                const ia3Response = await supabase.functions.invoke('normalizar-produto-ia3', {
+                const ia2Response = await supabase.functions.invoke('normalizar-produto-ia2', {
                   body: { 
                     notaId: notaData.id,
                     usuarioId: currentUser.id,
@@ -372,34 +373,34 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
                   }
                 });
                 
-                console.log('=== RESPOSTA DA IA-3 ===', ia3Response);
+                console.log('=== RESPOSTA DA IA-2 ===', ia2Response);
                 
-                if (ia3Response.error) {
-                  console.error('❌ Erro na IA-3:', ia3Response.error);
+                if (ia2Response.error) {
+                  console.error('❌ Erro na IA-2:', ia2Response.error);
                   toast({
                     title: "⚠️ Nota extraída",
-                    description: `${file.name} extraído, mas erro na normalização: ${ia3Response.error.message}`,
+                    description: `${file.name} extraído, mas erro na normalização: ${ia2Response.error.message}`,
                     variant: "destructive",
                   });
-                } else if (ia3Response.data?.success) {
-                  console.log(`✅ IA-3 processou ${ia3Response.data.itens_processados} produtos no estoque`);
+                } else if (ia2Response.data?.success) {
+                  console.log(`✅ IA-2 processou ${ia2Response.data.itens_processados} produtos no estoque`);
                   toast({
                     title: "✅ Processamento concluído",
-                    description: `${file.name}: ${ia3Response.data.itens_processados} produtos adicionados ao estoque!`,
+                    description: `${file.name}: ${ia2Response.data.itens_processados} produtos adicionados ao estoque!`,
                   });
                 } else {
-                  console.error('❌ IA-3 falhou:', ia3Response.data);
+                  console.error('❌ IA-2 falhou:', ia2Response.data);
                   toast({
-                    title: "⚠️ Erro na IA-3",
-                    description: `Falha na normalização: ${ia3Response.data?.error || 'Erro desconhecido'}`,
+                    title: "⚠️ Erro na IA-2",
+                    description: `Falha na normalização: ${ia2Response.data?.error || 'Erro desconhecido'}`,
                     variant: "destructive",
                   });
                 }
-              } catch (ia3Error) {
-                console.error('❌ Erro ao chamar IA-3:', ia3Error);
+              } catch (ia2Error) {
+                console.error('❌ Erro ao chamar IA-2:', ia2Error);
                 toast({
                   title: "⚠️ Nota extraída",
-                  description: `${file.name} extraído, mas erro na IA-3: ${ia3Error.message}`,
+                  description: `${file.name} extraído, mas erro na IA-2: ${ia2Error.message}`,
                   variant: "destructive",
                 });
               }
