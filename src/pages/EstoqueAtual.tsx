@@ -1752,14 +1752,37 @@ const EstoqueAtual = () => {
                                               'Sem data'
                                             } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
                                           </div>
-                                        ) : precoAtual && precoAtual.valor_unitario && (
+                                        ) : precoAtual && precoAtual.valor_unitario ? (
                                           <div className="text-muted-foreground">
                                             {precoAtual.data_atualizacao ? 
                                               formatDateSafe(precoAtual.data_atualizacao) : 
                                               'Sem data'
                                             } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
                                           </div>
-                                        )}
+                                        ) : isProdutoManual(nomeExibicao) ? (
+                                          // Para produtos manuais, repetir as mesmas informações da linha superior
+                                          <div className="text-muted-foreground">
+                                            {(() => {
+                                              const precoExibir = item.preco_unitario_ultimo || 0;
+                                              const totalExibir = (precoExibir * quantidade).toFixed(2);
+                                              
+                                              // Usar a mesma data da inserção manual
+                                              const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
+                                              let dataExibir = 'Sem data';
+                                              
+                                              if (dataRealCompra) {
+                                                dataExibir = formatDateSafe(dataRealCompra);
+                                              } else {
+                                                const dataInsercao = item.created_at || item.updated_at;
+                                                if (dataInsercao) {
+                                                  dataExibir = formatDateSafe(dataInsercao);
+                                                }
+                                              }
+                                              
+                                              return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
+                                            })()}
+                                          </div>
+                                        ) : null}
 
                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
                                       </>
