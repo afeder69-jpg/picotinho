@@ -847,12 +847,26 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     if (useAwaitForIA2) {
       try {
         console.log("T1: chamando IA-2 com AWAIT - nota ID:", notaImagemId);
-        const ia2Result = await supabase.functions.invoke('process-receipt-full', {
+        
+        // Implementar timeout explícito com Promise.race
+        const ia2Promise = supabase.functions.invoke('process-receipt-full', {
           body: { notaId: notaImagemId }
         });
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('TIMEOUT_60_SECONDS'));
+          }, 60000); // 60 segundos
+        });
+        
+        const ia2Result = await Promise.race([ia2Promise, timeoutPromise]);
         console.log("✅ Resultado: IA-2 executada com AWAIT com sucesso:", ia2Result.data);
       } catch (ia2Error) {
-        console.error("❌ Resultado: Falha na IA-2 com AWAIT:", ia2Error);
+        if (ia2Error.message === 'TIMEOUT_60_SECONDS') {
+          console.error("❌ Resultado: TIMEOUT - IA-2 não respondeu em 60 segundos:", ia2Error);
+        } else {
+          console.error("❌ Resultado: Falha na IA-2 com AWAIT:", ia2Error);
+        }
       }
     } else {
       // Manter comportamento original para fallback
