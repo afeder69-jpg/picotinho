@@ -841,17 +841,32 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
     // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2 → IA-3
     console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
     
-    // Primeiro processar no estoque (IA-2), depois normalizar (IA-3)
-    setTimeout(() => {
-      console.log("T1: agendei IA-2 - nota ID:", notaImagemId);
-      supabase.functions.invoke('process-receipt-full', {
-        body: { notaId: notaImagemId }
-      }).then((result) => {
-        console.log("✅ IA-2 executada automaticamente com sucesso:", result);
-      }).catch((estoqueErr) => {
-        console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
-      })
-    }, 0);
+    // Verificar flag para usar await ou setTimeout
+    const useAwaitForIA2 = Deno.env.get('USE_AWAIT_FOR_IA_2') === 'true';
+    
+    if (useAwaitForIA2) {
+      try {
+        console.log("T1: chamando IA-2 com AWAIT - nota ID:", notaImagemId);
+        const ia2Result = await supabase.functions.invoke('process-receipt-full', {
+          body: { notaId: notaImagemId }
+        });
+        console.log("✅ IA-2 executada com AWAIT com sucesso:", ia2Result.data);
+      } catch (ia2Error) {
+        console.error("❌ Falha na IA-2 com AWAIT:", ia2Error);
+      }
+    } else {
+      // Manter comportamento original para fallback
+      setTimeout(() => {
+        console.log("T1: agendei IA-2 - nota ID:", notaImagemId);
+        supabase.functions.invoke('process-receipt-full', {
+          body: { notaId: notaImagemId }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        }).catch((estoqueErr) => {
+          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+        })
+      }, 0);
+    }
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
