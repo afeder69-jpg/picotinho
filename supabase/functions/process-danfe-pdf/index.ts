@@ -661,8 +661,47 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
 
       // SEÇÃO DUPLICADA REMOVIDA - a primeira seção já cria notas_fiscais e itens_nota
 
-      // 📦 PROCESSAMENTO DE ESTOQUE REMOVIDO - APENAS IA-2 AUTORIZADA
-      console.log("📦 Estoque será processado apenas via IA-2");
+      // 📦 PROCESSAMENTO DE ESTOQUE REATIVADO (SEM NORMALIZAÇÃO IA-3)
+      console.log("📦 Processando estoque DIRETAMENTE sem normalização IA-3");
+      
+      // Processar itens para o estoque do usuário
+      if (dadosEstruturados.itens && dadosEstruturados.itens.length > 0) {
+        console.log(`📦 Processando ${dadosEstruturados.itens.length} itens para o estoque...`);
+        
+        for (const item of dadosEstruturados.itens) {
+          try {
+            const { descricao, quantidade, valor_unitario, categoria } = item;
+            
+            if (!descricao || quantidade <= 0) {
+              console.log("⏭️ Pulando item inválido:", item);
+              continue;
+            }
+            
+            // Inserir diretamente no estoque sem normalização
+            const { error: estoqueError } = await supabase
+              .from('estoque_app')
+              .insert({
+                user_id: userId,
+                produto_nome: descricao,
+                quantidade: quantidade || 1,
+                preco_unitario_ultimo: valor_unitario || 0,
+                categoria: categoria || 'outros',
+                unidade_medida: 'UN',
+                origem: 'nota_fiscal'
+              });
+            
+            if (estoqueError) {
+              console.error("❌ Erro ao adicionar ao estoque:", descricao, estoqueError);
+            } else {
+              console.log("✅ Adicionado ao estoque:", descricao, "- Qtd:", quantidade);
+            }
+          } catch (itemError) {
+            console.error("❌ Erro ao processar item para estoque:", item, itemError);
+          }
+        }
+        
+        console.log("✅ Processamento de estoque concluído SEM normalização");
+      }
 
       // 🛍️ Processar itens da compra
       if (dadosEstruturados.itens && compraId) {
@@ -851,49 +890,18 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-    // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2 → IA-3
-    console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
+    // ⚠️ NORMALIZAÇÃO TEMPORARIAMENTE SUSPENSA
+    // IA-3 (normalização) desativada para teste direto ao estoque
+    console.log("⚠️ NORMALIZAÇÃO IA-3 SUSPENSA - produtos vão direto ao estoque");
+    console.log("📦 Produtos já foram salvos no estoque nas seções anteriores");
     
-    // Verificar flag para usar await ou setTimeout
-    const useAwaitForIA2 = Deno.env.get('USE_AWAIT_FOR_IA_2') === 'true';
+    // Comentado temporariamente:
+    // const useAwaitForIA2 = Deno.env.get('USE_AWAIT_FOR_IA_2') === 'true';
+    // supabase.functions.invoke('process-receipt-full', {
+    //   body: { notaId: notaImagemId }
+    // });
     
-    if (useAwaitForIA2) {
-      try {
-        console.log("T1: chamando IA-2 com AWAIT - nota ID:", notaImagemId);
-        
-        // Implementar timeout explícito com Promise.race
-        const ia2Promise = supabase.functions.invoke('process-receipt-full', {
-          body: { notaId: notaImagemId }
-        });
-        
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('TIMEOUT_60_SECONDS'));
-          }, 60000); // 60 segundos
-        });
-        
-        const ia2Result = await Promise.race([ia2Promise, timeoutPromise]) as any;
-        console.log("✅ Resultado: IA-2 executada com AWAIT com sucesso:", ia2Result.data);
-      } catch (ia2Error: any) {
-        if (ia2Error?.message === 'TIMEOUT_60_SECONDS') {
-          console.error("❌ Resultado: TIMEOUT - IA-2 não respondeu em 60 segundos:", ia2Error);
-        } else {
-          console.error("❌ Resultado: Falha na IA-2 com AWAIT:", ia2Error);
-        }
-      }
-    } else {
-      // Manter comportamento original para fallback
-      setTimeout(() => {
-        console.log("T1: agendei IA-2 - nota ID:", notaImagemId);
-        supabase.functions.invoke('process-receipt-full', {
-          body: { notaId: notaImagemId }
-        }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
-        }).catch((estoqueErr) => {
-          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
-        })
-      }, 0);
-    }
+    console.log("✅ Processamento concluído SEM normalização IA-3");
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
