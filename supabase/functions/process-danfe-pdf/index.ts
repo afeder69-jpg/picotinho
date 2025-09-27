@@ -31,7 +31,10 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
     console.log("🚀 PRE-GETDOCUMENT: Worker disponível?", !!(globalThis as any).GlobalWorkerOptions?.workerSrc);
     console.log("📄 Iniciando carregamento do PDF com worker configurado...");
     
-    const pdf = await getDocument({ data: pdfBuffer }).promise;
+    const pdf = await getDocument({
+      data: pdfBuffer,
+      workerSrc: 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs'
+    } as any).promise;
     console.log(`📊 PDF carregado com sucesso! Total de páginas: ${pdf.numPages}`);
     let extractedText = "";
     
