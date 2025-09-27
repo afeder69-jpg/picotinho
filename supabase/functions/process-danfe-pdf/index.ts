@@ -10,7 +10,16 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
     // Import pdfjs-dist usando uma abordagem compatível com Deno
     const { getDocument } = await import("https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs");
     
+    // Configurar worker do PDF.js para ambiente Deno
+    console.log("🔧 Configurando PDF.js worker...");
+    (globalThis as any).GlobalWorkerOptions = {
+      workerSrc: 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs'
+    };
+    console.log("✅ PDF.js worker configurado:", (globalThis as any).GlobalWorkerOptions.workerSrc);
+    
+    console.log("📄 Iniciando carregamento do PDF...");
     const pdf = await getDocument({ data: pdfBuffer }).promise;
+    console.log(`📊 PDF carregado com sucesso! Total de páginas: ${pdf.numPages}`);
     let extractedText = "";
     
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -859,10 +868,10 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
           }, 60000); // 60 segundos
         });
         
-        const ia2Result = await Promise.race([ia2Promise, timeoutPromise]);
+        const ia2Result = await Promise.race([ia2Promise, timeoutPromise]) as any;
         console.log("✅ Resultado: IA-2 executada com AWAIT com sucesso:", ia2Result.data);
-      } catch (ia2Error) {
-        if (ia2Error.message === 'TIMEOUT_60_SECONDS') {
+      } catch (ia2Error: any) {
+        if (ia2Error?.message === 'TIMEOUT_60_SECONDS') {
           console.error("❌ Resultado: TIMEOUT - IA-2 não respondeu em 60 segundos:", ia2Error);
         } else {
           console.error("❌ Resultado: Falha na IA-2 com AWAIT:", ia2Error);
