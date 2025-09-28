@@ -500,7 +500,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
               status_processamento: 'processada',
               mercado: dadosEstruturados.estabelecimento?.nome || null,
               cnpj: dadosEstruturados.estabelecimento?.cnpj || null,
-              chave_acesso: null, // Pode ser extraído do texto se disponível
+              chave_acesso: dadosEstruturados.compra?.chave_acesso || null,
               qtd_itens: dadosEstruturados.itens?.length || 0,
                bairro: extrairBairro(dadosEstruturados.estabelecimento?.endereco) || null
             })
