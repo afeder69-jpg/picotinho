@@ -7,28 +7,30 @@ const corsHeaders = {
 
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    const { getDocument } = await import("https://cdn.skypack.dev/pdfjs-dist@3.11.174?dts");
+    // Import pdfjs-dist usando uma abordagem compatível com Deno
+    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
     
-    const loadingTask = getDocument(pdfBuffer);
-    const pdf = await loadingTask.promise;
+    const pdf = await getDocument({ data: pdfBuffer }).promise;
+    let extractedText = "";
     
-    let fullText = '';
-    
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const content = await page.getTextContent();
-      
-      const pageText = content.items
-        .map((item: any) => item.str)
-        .join(' ');
-      
-      fullText += pageText + ' ';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      extractedText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
     }
     
-    return fullText.trim();
+    return extractedText.trim();
   } catch (error) {
     console.error("❌ Erro ao extrair texto do PDF:", error);
-    throw error;
+    // Fallback: tentar extrair texto simples usando regex
+    const pdfString = new TextDecoder("latin1").decode(pdfBuffer);
+    const regex = /\(([^)]+)\)/g;
+    let extractedText = "";
+    let match;
+    while ((match = regex.exec(pdfString)) !== null) {
+      extractedText += match[1] + " ";
+    }
+    return extractedText.trim();
   }
 }
 

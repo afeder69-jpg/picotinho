@@ -422,56 +422,44 @@ const ReceiptList = () => {
 
   const deleteReceipt = async (id: string) => {
     try {
-      // Delete from receipts table
-      const { error: receiptError } = await supabase
-        .from('receipts')
-        .delete()
-        .eq('id', id);
-
-      if (receiptError) {
-        console.warn('Warning deleting from receipts:', receiptError);
-      }
-
-      // Delete from notas_fiscais table (cleanup orphaned records)
-      const { error: notasFiscaisError } = await supabase
-        .from('notas_fiscais')
-        .delete()
-        .eq('id', id);
-
-      if (notasFiscaisError) {
-        console.warn('Warning deleting from notas_fiscais:', notasFiscaisError);
-      }
-
-      // Delete from compras_app table (cleanup orphaned records)  
-      const { error: comprasError } = await supabase
-        .from('compras_app')
-        .delete()
-        .eq('id', id);
-
-      if (comprasError) {
-        console.warn('Warning deleting from compras_app:', comprasError);
-      }
-
-      // Delete from notas_imagens table (this will trigger stock reversal via database trigger)
-      const { error: notasError } = await supabase
+      // Para notas processadas, marcar como não processadas e limpar dados extraídos
+      // ao invés de deletar completamente para evitar falsos positivos de duplicata
+      const { data: nota } = await supabase
         .from('notas_imagens')
-        .delete()
-        .eq('id', id);
+        .select('processada, dados_extraidos')
+        .eq('id', id)
+        .single();
 
-      if (notasError) throw notasError;
+      if (nota?.processada) {
+        // Se estava processada, marcar como não processada e limpar dados extraídos
+        await supabase
+          .from('notas_imagens')
+          .update({ 
+            processada: false, 
+            dados_extraidos: null
+          })
+          .eq('id', id);
+        
+        console.log('📝 Nota marcada como não processada para evitar falsos positivos de duplicata');
+      }
+
+      // Deletar registros das tabelas
+      const [receiptsResult, notasImagensResult] = await Promise.all([
+        supabase.from('receipts').delete().eq('id', id),
+        supabase.from('notas_imagens').delete().eq('id', id)
+      ]);
+
+      const receiptsSuccess = !receiptsResult.error;
+      const notasSuccess = !notasImagensResult.error;
+      if (!receiptsSuccess && !notasSuccess) {
+        throw new Error('Erro ao excluir nota fiscal');
+      }
 
       await loadReceipts();
-      toast({ 
-        title: "Sucesso", 
-        description: "Nota fiscal excluída com sucesso e o estoque foi ajustado."
-      });
+      toast({ title: "Sucesso", description: "Nota fiscal excluída com sucesso" });
     } catch (error) {
       console.error('Error deleting receipt:', error);
-      toast({ 
-        title: "Erro", 
-        description: "Erro ao excluir nota fiscal", 
-        variant: "destructive" 
-      });
+      toast({ title: "Erro", description: "Erro ao excluir nota fiscal", variant: "destructive" });
     }
   };
 
