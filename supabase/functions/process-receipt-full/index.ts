@@ -24,7 +24,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json().catch(() => ({}));
-    const { notaId, imagemId } = body || {};
+    const { notaId, imagemId, force } = body || {};
     
     // Aceitar tanto notaId quanto imagemId para compatibilidade
     const finalNotaId = notaId || imagemId;
@@ -36,12 +36,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🏁 process-receipt-full START - nota_id=${finalNotaId}`);
+    console.log(`🏁 process-receipt-full START - nota_id=${finalNotaId}, force=${force || false}`);
 
-    // Buscar nota
+    // 🛡️ PROTEÇÃO CONTRA RE-PROCESSAMENTO
+    // Buscar nota com verificação de status processada
     const { data: nota, error: notaError } = await supabase
       .from("notas_imagens")
-      .select("id, usuario_id, compra_id, dados_extraidos")
+      .select("id, usuario_id, compra_id, dados_extraidos, processada")
       .eq("id", finalNotaId)
       .single();
 
@@ -50,6 +51,37 @@ serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // 🛡️ VERIFICAÇÃO ANTI-DUPLICAÇÃO
+    if (nota.processada && !force) {
+      console.log(`⚠️ NOTA JÁ PROCESSADA - Tentativa de re-processamento bloqueada para nota ${finalNotaId}`);
+      
+      // Retornar dados do estoque existente como confirmação
+      const { data: estoqueExistente } = await supabase
+        .from("estoque_app")
+        .select("*")
+        .eq("nota_id", finalNotaId)
+        .eq("user_id", nota.usuario_id);
+      
+      const totalFinanceiro = (estoqueExistente || []).reduce((acc: number, it: any) => 
+        acc + (it.quantidade * it.preco_unitario_ultimo), 0);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Nota já foi processada anteriormente",
+          nota_id: finalNotaId,
+          itens_inseridos: estoqueExistente?.length || 0,
+          total_financeiro: totalFinanceiro.toFixed(2),
+          already_processed: true
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (force) {
+      console.log(`🔄 REPROCESSAMENTO FORÇADO - Reprocessando nota ${finalNotaId} por solicitação manual`);
     }
 
     // Buscar itens - primeiro tenta itens_nota, depois dados_extraidos
