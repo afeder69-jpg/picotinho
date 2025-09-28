@@ -1754,18 +1754,8 @@ async function processarNotaEmBackground(
         throw new Error(`Erro na extração: ${extractResult.error.message}`);
       }
       
-      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2  
-      console.log('🚀 PDF processado, disparando IA-2 automaticamente...');
-      
-      EdgeRuntime.waitUntil(
-        supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente:", result);
-        }).catch((error) => {
-          console.error('❌ Falha na IA-2 automática:', error);
-        })
-      );
+      // ✅ IA-2 será executada automaticamente pelo process-danfe-pdf
+      console.log('🚀 PDF processado, IA-2 será disparada pelo process-danfe-pdf...');
       
     } else {
       // Para imagens: IA-1 (extração) → IA-2 (estoque)
