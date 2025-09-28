@@ -133,7 +133,7 @@ const handler = async (req: Request): Promise<Response> => {
             comando_identificado = 'baixar_estoque';
           } else if (textoLimpo.startsWith('+') || textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
             comando_identificado = 'aumentar_estoque';
-          } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar|estoque)\b/)) {
+          } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar)\b/)) {
             comando_identificado = 'consultar_estoque';
           } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
             comando_identificado = 'adicionar_produto';
