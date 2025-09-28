@@ -8,7 +8,8 @@ const corsHeaders = {
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
     // Import pdfjs-dist usando uma abordagem compatível com Deno
-    const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
+    // const { getDocument } = await import("npm:pdfjs-dist@4.0.379/build/pdf.mjs");
+    throw new Error("PDF processing temporarily disabled due to dependency issues");
     
     const pdf = await getDocument({ data: pdfBuffer }).promise;
     let extractedText = "";
