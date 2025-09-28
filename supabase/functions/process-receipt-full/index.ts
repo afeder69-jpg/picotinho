@@ -53,31 +53,37 @@ serve(async (req) => {
       });
     }
 
-    // 🛡️ VERIFICAÇÃO ANTI-DUPLICAÇÃO
+    // 🛡️ VERIFICAÇÃO ANTI-DUPLICAÇÃO INTELIGENTE
     if (nota.processada && !force) {
-      console.log(`⚠️ NOTA JÁ PROCESSADA - Tentativa de re-processamento bloqueada para nota ${finalNotaId}`);
-      
-      // Retornar dados do estoque existente como confirmação
+      // Verificar se já existem itens no estoque para esta nota
       const { data: estoqueExistente } = await supabase
         .from("estoque_app")
         .select("*")
         .eq("nota_id", finalNotaId)
         .eq("user_id", nota.usuario_id);
       
-      const totalFinanceiro = (estoqueExistente || []).reduce((acc: number, it: any) => 
-        acc + (it.quantidade * it.preco_unitario_ultimo), 0);
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Nota já foi processada anteriormente",
-          nota_id: finalNotaId,
-          itens_inseridos: estoqueExistente?.length || 0,
-          total_financeiro: totalFinanceiro.toFixed(2),
-          already_processed: true
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // SÓ bloquear se realmente há itens no estoque (duplicação real)
+      if (estoqueExistente && estoqueExistente.length > 0) {
+        console.log(`⚠️ NOTA JÁ PROCESSADA COM ESTOQUE - Bloqueando re-processamento para nota ${finalNotaId} (${estoqueExistente.length} itens no estoque)`);
+        
+        const totalFinanceiro = estoqueExistente.reduce((acc: number, it: any) => 
+          acc + (it.quantidade * it.preco_unitario_ultimo), 0);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Nota já foi processada anteriormente",
+            nota_id: finalNotaId,
+            itens_inseridos: estoqueExistente.length,
+            total_financeiro: totalFinanceiro.toFixed(2),
+            already_processed: true
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else {
+        // Nota marcada como processada MAS sem itens no estoque = processamento incompleto
+        console.log(`🔧 CORREÇÃO DE PROCESSAMENTO INCOMPLETO - Nota ${finalNotaId} estava marcada como processada mas sem itens no estoque. Processando...`);
+      }
     }
 
     if (force) {
