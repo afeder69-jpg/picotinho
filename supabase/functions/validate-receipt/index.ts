@@ -22,7 +22,7 @@ interface ValidationResult {
 // Função para extrair texto de PDF (mesma implementação da IA-2)
 async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   try {
-    const { getDocument } = await import("https://cdn.skypack.dev/pdfjs-dist@4.8.69?dts");
+    const { getDocument } = await import("https://cdn.skypack.dev/pdfjs-dist@3.11.174?dts");
     
     const loadingTask = getDocument(pdfBuffer);
     const pdf = await loadingTask.promise;
@@ -492,7 +492,7 @@ Responda APENAS o JSON:
         reason: 'erro_sistema',
         shouldDelete: false,
         message: '❌ Erro no sistema de validação',
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

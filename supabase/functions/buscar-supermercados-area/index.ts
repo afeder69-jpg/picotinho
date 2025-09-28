@@ -232,7 +232,7 @@ serve(async (req) => {
           console.log(`❌ Falha na geocodificação para ${estabelecimento.nome}: ${geoError?.message || 'Coordenadas não encontradas'}`);
         }
       } catch (error) {
-        console.log(`❌ Erro ao geocodificar ${estabelecimento.nome}: ${error.message}`);
+        console.log(`❌ Erro ao geocodificar ${estabelecimento.nome}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -305,7 +305,7 @@ serve(async (req) => {
         
         notasDoSupermercado.forEach(nota => {
           const itens = nota.dados_extraidos?.itens || [];
-          itens.forEach(item => {
+          itens.forEach((item: any) => {
             if (item.descricao && item.descricao.trim()) {
               // Normalizar nome do produto usando a mesma lógica do sistema
               let nomeNormalizado = item.descricao.trim().toUpperCase();
@@ -337,7 +337,7 @@ serve(async (req) => {
             nomeNormalizado = nomeNormalizadoResult;
           }
         } catch (error) {
-          console.log(`Erro ao normalizar nome do supermercado ${supermercado.nome}: ${error.message}`);
+          console.log(`Erro ao normalizar nome do supermercado ${supermercado.nome}: ${error instanceof Error ? error.message : String(error)}`);
           // Manter nome original em caso de erro
         }
 
@@ -363,7 +363,7 @@ serve(async (req) => {
     console.error('Erro ao buscar supermercados por localização:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
