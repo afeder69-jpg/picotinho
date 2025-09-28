@@ -744,32 +744,19 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
         })
         .eq("id", notaImagemId);
 
-      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2 (VERIFICAR SE JÁ PROCESSOU ESTOQUE)
-      console.log("🚀 IA-1 finalizou extração, verificando se precisa processar estoque...");
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2
+      console.log("🚀 IA-1 finalizou extração, disparando IA-2 automaticamente...");
       
-      // VERIFICAR SE JÁ EXISTE ESTOQUE PARA ESTA NOTA (EVITAR DUPLICAÇÃO)
-      const { data: estoqueExistente } = await supabase
-        .from('estoque_app')
-        .select('id')
-        .eq('nota_id', notaImagemId)
-        .limit(1);
-      
-      if (estoqueExistente && estoqueExistente.length > 0) {
-        console.log(`⚠️ ESTOQUE JÁ EXISTE para nota ${notaImagemId} - PULANDO IA-2 para evitar duplicação`);
-      } else {
-        console.log(`✅ Estoque não existe para nota ${notaImagemId} - EXECUTANDO IA-2`);
-        
-        // Executar IA-2 em background após salvar os dados
-        EdgeRuntime.waitUntil(
-          supabase.functions.invoke('process-receipt-full', {
-            body: { notaId: notaImagemId }
-          }).then((result) => {
-            console.log("✅ IA-2 executada automaticamente com sucesso:", result);
-          }).catch((estoqueErr) => {
-            console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
-          })
-        );
-      }
+      // Executar IA-2 em background após salvar os dados
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke('process-receipt-full', {
+          body: { notaId: notaImagemId }
+        }).then((result) => {
+          console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        }).catch((estoqueErr) => {
+          console.error("❌ Falha na execução automática da IA-2:", estoqueErr);
+        })
+      );
 
     } catch (parseError) {
       console.error("❌ Erro ao processar JSON da IA:", parseError);
