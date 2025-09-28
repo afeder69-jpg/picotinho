@@ -326,7 +326,17 @@ Responda APENAS o JSON:
 
         if (nfErr) console.error('Erro buscando duplicidade em notas_fiscais:', nfErr);
 
-        isDuplicate = !!((existingInImages && existingInImages.length > 0) || (existingInNotas && existingInNotas.length > 0));
+        // 3) Procurar em compras_app de QUALQUER USUÁRIO (quando já processadas)
+        const { data: existingInCompras, error: comprasErr } = await supabase
+          .from('compras_app')
+          .select('id, user_id')
+          .in('chave_acesso', chaveVariations);
+
+        if (comprasErr) console.error('Erro buscando duplicidade em compras_app:', comprasErr);
+
+        isDuplicate = !!((existingInImages && existingInImages.length > 0) || 
+                         (existingInNotas && existingInNotas.length > 0) ||
+                         (existingInCompras && existingInCompras.length > 0));
 
         if (isDuplicate) {
           console.log('⚠️ DUPLICATA DETECTADA! Chave já existe no Picotinho:', normalizedKey.slice(-6));
@@ -336,6 +346,9 @@ Responda APENAS o JSON:
           }
           if (existingInNotas && existingInNotas.length > 0) {
             console.log('📋 Encontrada em notas_fiscais de usuário(s):', existingInNotas.map(n => n.user_id));
+          }
+          if (existingInCompras && existingInCompras.length > 0) {
+            console.log('📋 Encontrada em compras_app de usuário(s):', existingInCompras.map(n => n.user_id));
           }
         } else {
           console.log('✅ Chave única no Picotinho - não há duplicatas:', normalizedKey.slice(-6));
