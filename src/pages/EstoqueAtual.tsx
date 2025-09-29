@@ -1148,6 +1148,9 @@ const EstoqueAtual = () => {
     if (!itemEditando) return;
 
     try {
+      const quantidadeAnterior = itemEditando.quantidade;
+      
+      // Atualizar estoque
       const { error } = await supabase
         .from('estoque_app')
         .update({
@@ -1157,6 +1160,26 @@ const EstoqueAtual = () => {
         .eq('id', itemEditando.id);
 
       if (error) throw error;
+
+      // Se houve redução na quantidade, registrar consumo
+      if (novaQuantidade < quantidadeAnterior) {
+        const quantidadeConsumida = quantidadeAnterior - novaQuantidade;
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        const { error: consumoError } = await supabase
+          .from('consumos_app')
+          .insert({
+            user_id: user?.id,
+            produto_id: itemEditando.id,
+            quantidade: quantidadeConsumida
+          });
+
+        if (consumoError) {
+          console.error('Erro ao registrar consumo:', consumoError);
+          // Não bloquear a operação principal mesmo se o registro de consumo falhar
+        }
+      }
 
       await loadEstoque();
       fecharModalEdicao();
