@@ -1740,14 +1740,21 @@ const EstoqueAtual = () => {
                                               'Sem data'
                                             } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
                                           </div>
-                                        ) : precoAtual && precoAtual.valor_unitario && (
+                                        ) : precoAtual && precoAtual.valor_unitario ? (
                                           <div className="text-muted-foreground">
                                             {precoAtual.data_atualizacao ? 
                                               formatDateSafe(precoAtual.data_atualizacao) : 
                                               'Sem data'
                                             } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
                                           </div>
-                                        )}
+                                        ) : item.origem === 'manual' ? (
+                                          <div className="text-muted-foreground">
+                                            {item.created_at ? 
+                                              formatDateSafe(item.created_at) : 
+                                              'Sem data'
+                                            } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
+                                          </div>
+                                        ) : null}
 
                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
                                       </>
