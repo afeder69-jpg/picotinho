@@ -56,7 +56,7 @@ export default function Relatorios() {
   const [dadosGrafico, setDadosGrafico] = useState<DadosGrafico[]>([]);
   const [produtos, setProdutos] = useState<string[]>([]);
   const [estabelecimentos, setEstabelecimentos] = useState<EstabelecimentoInfo[]>([]);
-  const [categorias, setCategorias] = useState<{nome: string}[]>([]);
+  const [categorias, setCategorias] = useState<{id: string; nome: string; sinonimos: string[]}[]>([]);
   const [carregando, setCarregando] = useState(false);
   
   // Estados dos totais
