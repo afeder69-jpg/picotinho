@@ -10,7 +10,7 @@ let categoriasCache: Array<{
 /**
  * Carrega as categorias do banco de dados com cache
  */
-async function carregarCategorias() {
+export async function carregarCategorias() {
   if (categoriasCache) return categoriasCache;
   
   try {

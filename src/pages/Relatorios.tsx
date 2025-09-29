@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { carregarCategorias } from "@/lib/categorias";
 
 type TipoRelatorio = "compras" | "consumos" | "todos";
 
@@ -38,11 +39,6 @@ interface EstabelecimentoInfo {
   cnpj: string;
 }
 
-const CATEGORIAS_SISTEMA = [
-  'Açougue', 'Bebidas', 'Cereais', 'Condimentos', 'Congelados',
-  'Doces', 'Frios', 'Higiene', 'Hortifruti', 'Limpeza', 'Padaria'
-];
-
 export default function Relatorios() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -60,6 +56,7 @@ export default function Relatorios() {
   const [dadosGrafico, setDadosGrafico] = useState<DadosGrafico[]>([]);
   const [produtos, setProdutos] = useState<string[]>([]);
   const [estabelecimentos, setEstabelecimentos] = useState<EstabelecimentoInfo[]>([]);
+  const [categorias, setCategorias] = useState<{nome: string}[]>([]);
   const [carregando, setCarregando] = useState(false);
   
   // Estados dos totais
@@ -85,6 +82,20 @@ export default function Relatorios() {
     
     carregarProdutos();
   }, [user]);
+
+  // Carregar categorias do sistema
+  useEffect(() => {
+    const carregarCategoriasAsync = async () => {
+      try {
+        const categoriasData = await carregarCategorias();
+        setCategorias(categoriasData);
+      } catch (error) {
+        console.error('Erro ao carregar categorias:', error);
+      }
+    };
+    
+    carregarCategoriasAsync();
+  }, []);
 
   // Carregar estabelecimentos onde o usuário comprou
   useEffect(() => {
@@ -368,8 +379,8 @@ export default function Relatorios() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas as categorias</SelectItem>
-                    {CATEGORIAS_SISTEMA.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    {categorias.map(cat => (
+                      <SelectItem key={cat.nome} value={cat.nome}>{cat.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
