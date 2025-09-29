@@ -8,10 +8,23 @@ let categoriasCache: Array<{
 }> | null = null;
 
 /**
+ * Limpa o cache das categorias para forçar reload
+ */
+export function limparCacheCategories() {
+  categoriasCache = null;
+  console.log('🧹 Cache de categorias limpo');
+}
+
+/**
  * Carrega as categorias do banco de dados com cache
  */
 export async function carregarCategorias() {
-  if (categoriasCache) return categoriasCache;
+  if (categoriasCache) {
+    console.log('📋 Usando cache de categorias:', categoriasCache.length, 'categorias');
+    return categoriasCache;
+  }
+  
+  console.log('🔄 Carregando categorias do banco...');
   
   try {
     const { data, error } = await supabase
@@ -20,14 +33,15 @@ export async function carregarCategorias() {
       .eq('ativa', true);
     
     if (error) {
-      console.error('Erro ao carregar categorias:', error);
+      console.error('❌ Erro ao carregar categorias:', error);
       return [];
     }
     
+    console.log('✅ Categorias carregadas do banco:', data?.length || 0, 'categorias encontradas');
     categoriasCache = data || [];
     return categoriasCache;
   } catch (error) {
-    console.error('Erro ao conectar com o banco:', error);
+    console.error('❌ Erro ao conectar com o banco:', error);
     return [];
   }
 }

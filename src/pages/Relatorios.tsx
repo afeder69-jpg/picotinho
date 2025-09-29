@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { carregarCategorias } from "@/lib/categorias";
+import { carregarCategorias, limparCacheCategories } from "@/lib/categorias";
 
 type TipoRelatorio = "compras" | "consumos" | "todos";
 
@@ -87,10 +87,29 @@ export default function Relatorios() {
   useEffect(() => {
     const carregarCategoriasAsync = async () => {
       try {
+        console.log('🔥 Iniciando carregamento de categorias...');
+        
+        // Limpar cache primeiro para forçar reload
+        limparCacheCategories();
+        
         const categoriasData = await carregarCategorias();
+        console.log('📊 Categorias recebidas:', categoriasData.length, categoriasData);
+        
         setCategorias(categoriasData);
+        
+        // Se ainda estiver vazio, tentar novamente após 1 segundo
+        if (categoriasData.length === 0) {
+          console.log('⚠️ Nenhuma categoria encontrada, tentando novamente...');
+          setTimeout(async () => {
+            limparCacheCategories();
+            const retryData = await carregarCategorias();
+            console.log('🔄 Tentativa 2 - Categorias:', retryData.length);
+            setCategorias(retryData);
+          }, 1000);
+        }
+        
       } catch (error) {
-        console.error('Erro ao carregar categorias:', error);
+        console.error('❌ Erro ao carregar categorias:', error);
       }
     };
     
