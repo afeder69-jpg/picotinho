@@ -152,6 +152,7 @@ export type Database = {
       }
       consumos_app: {
         Row: {
+          categoria: string | null
           created_at: string
           data_consumo: string
           id: string
@@ -161,6 +162,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          categoria?: string | null
           created_at?: string
           data_consumo?: string
           id?: string
@@ -170,6 +172,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          categoria?: string | null
           created_at?: string
           data_consumo?: string
           id?: string

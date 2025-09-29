@@ -1172,7 +1172,8 @@ const EstoqueAtual = () => {
           .insert({
             user_id: user?.id,
             produto_id: itemEditando.id,
-            quantidade: quantidadeConsumida
+            quantidade: quantidadeConsumida,
+            categoria: itemEditando.categoria
           });
 
         if (consumoError) {

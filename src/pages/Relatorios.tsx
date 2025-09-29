@@ -179,16 +179,15 @@ export default function Relatorios() {
       
       // 2. Buscar dados de CONSUMOS (saídas)
       if (tipoRelatorio === "consumos" || tipoRelatorio === "todos") {
-        const query = supabase
+        const { data: consumosData } = await supabase
           .from('consumos_app')
           .select(`
             data_consumo,
             quantidade,
-            estoque_app!inner(produto_nome, categoria, preco_unitario_ultimo)
+            categoria,
+            estoque_app!inner(produto_nome, preco_unitario_ultimo)
           `)
           .eq('user_id', user.id);
-        
-        const { data: consumosData } = await query;
         
         if (consumosData) {
           consumosData.forEach(consumo => {
@@ -199,7 +198,7 @@ export default function Relatorios() {
             todosOsDados.push({
               data: consumo.data_consumo.split('T')[0],
               produto: estoque.produto_nome,
-              categoria: estoque.categoria || 'Não categorizado',
+              categoria: consumo.categoria || 'Não categorizado',
               quantidade: consumo.quantidade,
               valor: valorTotal,
               mercado: "Casa (consumo)",
