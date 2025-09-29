@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -408,17 +409,17 @@ export default function Relatorios() {
               {/* Produto */}
               <div className="space-y-2">
                 <Label>Produto</Label>
-                <Input
-                  placeholder="Digite o nome do produto"
+                <Combobox
                   value={produto}
-                  onChange={(e) => setProduto(e.target.value)}
-                  list="produtos-list"
+                  onValueChange={setProduto}
+                  options={[
+                    { value: "", label: "Todos os produtos" },
+                    ...produtos.map(prod => ({ value: prod, label: prod }))
+                  ]}
+                  placeholder="Selecione um produto..."
+                  searchPlaceholder="Buscar produto..."
+                  emptyText="Nenhum produto encontrado."
                 />
-                <datalist id="produtos-list">
-                  {produtos.map(prod => (
-                    <option key={prod} value={prod} />
-                  ))}
-                </datalist>
               </div>
 
               {/* Mercado */}
