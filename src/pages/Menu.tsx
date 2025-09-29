@@ -63,8 +63,8 @@ const Menu = () => {
       title: 'Relatórios',
       description: 'Visualizar Relatórios de Compras, Consumo e Estoque',
       icon: BarChart3,
-      onClick: () => {},
-      isActive: false
+      onClick: () => navigate('/relatorios'),
+      isActive: true
     },
     {
       id: 'recipes',

@@ -14,6 +14,7 @@ import ConfiguracoesUsuario from "./pages/ConfiguracoesUsuario";
 import CadastroUsuario from "./pages/CadastroUsuario";
 import WhatsAppConfig from "./pages/WhatsAppConfig";
 import CleanupUserData from "./pages/CleanupUserData";
+import Relatorios from "./pages/Relatorios";
 
 import TestNormalizacao from "./pages/TestNormalizacao";
 import TestNormalizacaoCasos from "./pages/TestNormalizacaoCasos";
@@ -55,6 +56,7 @@ const App = () => {
                 <Route path="/cadastro-usuario" element={<CadastroUsuario />} />
                 <Route path="/whatsapp" element={<WhatsAppConfig />} />
                 <Route path="/cleanup" element={<CleanupUserData />} />
+                <Route path="/relatorios" element={<Relatorios />} />
                 
                 <Route path="/test-normalizacao" element={<TestNormalizacao />} />
                 <Route path="/test-casos" element={<TestNormalizacaoCasos />} />
