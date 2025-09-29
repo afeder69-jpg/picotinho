@@ -1750,21 +1750,62 @@ const EstoqueAtual = () => {
                                             {historicoProduto.menorPrecoArea.data ? 
                                               formatDateSafe(historicoProduto.menorPrecoArea.data) : 
                                               'Sem data'
-                                            } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
+                                             } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
+                                             {(() => {
+                                               const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                               const precoOriginal = item.preco_unitario_ultimo || 0;
+                                               const precoAreaAtual = historicoProduto.menorPrecoArea.preco || 0;
+                                               
+                                               if (precoAreaAtual === 0 || precoOriginal === 0) {
+                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
+                                               }
+                                               
+                                               const atual = normalizeValue(precoAreaAtual);
+                                               const original = normalizeValue(precoOriginal);
+                                               
+                                               if (atual > original) {
+                                                 return <ArrowUp className="w-3 h-3 text-red-600 ml-1 inline" />;
+                                               } else if (atual < original) {
+                                                 return <ArrowDown className="w-3 h-3 text-green-600 ml-1 inline" />;
+                                               } else {
+                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
+                                               }
+                                             })()}
                                           </div>
                                         ) : precoAtual && precoAtual.valor_unitario ? (
                                           <div className="text-muted-foreground">
                                             {precoAtual.data_atualizacao ? 
                                               formatDateSafe(precoAtual.data_atualizacao) : 
                                               'Sem data'
-                                            } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
+                                             } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
+                                             {(() => {
+                                               const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                               const precoOriginal = item.preco_unitario_ultimo || 0;
+                                               const precoAreaAtual = precoAtual.valor_unitario || 0;
+                                               
+                                               if (precoAreaAtual === 0 || precoOriginal === 0) {
+                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
+                                               }
+                                               
+                                               const atual = normalizeValue(precoAreaAtual);
+                                               const original = normalizeValue(precoOriginal);
+                                               
+                                               if (atual > original) {
+                                                 return <ArrowUp className="w-3 h-3 text-red-600 ml-1 inline" />;
+                                               } else if (atual < original) {
+                                                 return <ArrowDown className="w-3 h-3 text-green-600 ml-1 inline" />;
+                                               } else {
+                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
+                                               }
+                                             })()}
                                           </div>
                                         ) : item.origem === 'manual' ? (
                                           <div className="text-muted-foreground">
                                             {item.created_at ? 
                                               formatDateSafe(item.created_at) : 
                                               'Sem data'
-                                            } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
+                                             } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
+                                             <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />
                                           </div>
                                         ) : null}
 
@@ -1779,44 +1820,8 @@ const EstoqueAtual = () => {
                                  <div className={`text-xs font-medium ${
                                    quantidade === 0 ? 'text-red-600' : 'text-foreground'
                                  }`}>
-                                   {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
-                                 </div>
-                                  {/* Setinha de comparação de preços */}
-                                  {(() => {
-                                    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                                    const historicoProduto = historicoPrecos[nomeExibicao];
-                                    const precoAtual = encontrarPrecoAtual(nomeExibicao);
-                                    
-                                    // Para produtos manuais, sem comparação (preço igual)
-                                    if (item.origem === 'manual') {
-                                      return <Minus className="w-3 h-3 text-muted-foreground/60 mt-0.5" />;
-                                    }
-                                    
-                                    // Comparar preço atual da área vs preço originalmente pago
-                                    const precoOriginal = item.preco_unitario_ultimo || 0;
-                                    let precoAreaAtual = 0;
-                                    
-                                    if (historicoProduto?.menorPrecoArea?.preco) {
-                                      precoAreaAtual = historicoProduto.menorPrecoArea.preco;
-                                    } else if (precoAtual?.valor_unitario) {
-                                      precoAreaAtual = precoAtual.valor_unitario;
-                                    }
-                                    
-                                    if (precoAreaAtual === 0 || precoOriginal === 0) {
-                                      return <Minus className="w-3 h-3 text-muted-foreground/60 mt-0.5" />;
-                                    }
-                                    
-                                    const atual = normalizeValue(precoAreaAtual);
-                                    const original = normalizeValue(precoOriginal);
-                                    
-                                    if (atual > original) {
-                                      return <ArrowUp className="w-3 h-3 text-red-600 mt-0.5" />;
-                                    } else if (atual < original) {
-                                      return <ArrowDown className="w-3 h-3 text-green-600 mt-0.5" />;
-                                    } else {
-                                      return <Minus className="w-3 h-3 text-muted-foreground/60 mt-0.5" />;
-                                    }
-                                  })()}
+                                  {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
+                                  </div>
                           </div>
                        </div>
                     );
