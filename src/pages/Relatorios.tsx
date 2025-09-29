@@ -137,6 +137,21 @@ export default function Relatorios() {
       
       // 1. Buscar dados de COMPRAS (entradas)
       if (tipoRelatorio === "compras" || tipoRelatorio === "todos") {
+        // Carregar produtos do estoque para mapeamento de categorias
+        const { data: estoqueData } = await supabase
+          .from('estoque_app')
+          .select('produto_nome, categoria')
+          .eq('user_id', user.id);
+        
+        // Criar mapa produto → categoria para lookup eficiente
+        const mapaCategorias = new Map<string, string>();
+        if (estoqueData) {
+          estoqueData.forEach(item => {
+            const nome = item.produto_nome.toUpperCase().trim();
+            mapaCategorias.set(nome, item.categoria);
+          });
+        }
+        
         const { data: notasData } = await supabase
           .from('notas_imagens')
           .select('dados_extraidos, created_at')
@@ -160,10 +175,27 @@ export default function Relatorios() {
                   const valorTotal = quantidade * valorUnitario;
                   
                   if (produtoNome && quantidade > 0) {
+                    // Buscar categoria do produto
+                    const nomeItem = produtoNome.toUpperCase().trim();
+                    let categoria = 'Não categorizado';
+                    
+                    // 1. Busca exata
+                    if (mapaCategorias.has(nomeItem)) {
+                      categoria = mapaCategorias.get(nomeItem)!;
+                    } else {
+                      // 2. Busca por similaridade
+                      for (const [nomeProduto, categoriaProduto] of mapaCategorias) {
+                        if (nomeItem.includes(nomeProduto) || nomeProduto.includes(nomeItem)) {
+                          categoria = categoriaProduto;
+                          break;
+                        }
+                      }
+                    }
+                    
                     todosOsDados.push({
                       data: nota.created_at?.split('T')[0] || '',
                       produto: produtoNome,
-                      categoria: 'Não categorizado', // Seria necessário categorizar
+                      categoria: categoria,
                       quantidade,
                       valor: valorTotal,
                       mercado: nomeEstabelecimento,
