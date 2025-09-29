@@ -1421,8 +1421,10 @@ const EstoqueAtual = () => {
     // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
     const subtotalAtual = itens.reduce((sum, item) => {
       const precoAtual = encontrarPrecoAtual(item.produto_nome_normalizado || item.produto_nome);
-      // REGRA: Apenas usar preços atuais (de notas fiscais), não preços pagos manuais
-      const preco = precoAtual?.valor_unitario || 0; // Se não há preço atual, não somar
+      // REGRA: Para manuais usar preço inserido, para notas usar preço atual da área
+      const preco = item.origem === 'manual' 
+        ? (item.preco_unitario_ultimo || 0)  // Para manuais: usar preço inserido
+        : (precoAtual?.valor_unitario || 0); // Para notas: usar preço atual da área
       const quantidade = parseFloat(item.quantidade.toString());
       const subtotalItem = Math.round((preco * quantidade) * 100) / 100;
       return sum + subtotalItem;
