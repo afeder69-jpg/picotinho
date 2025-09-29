@@ -82,14 +82,6 @@ const Menu = () => {
       onClick: () => navigate('/configuracoes'),
       isActive: true
     },
-    {
-      id: 'test-normalizacao',
-      title: 'Normalização (teste)',
-      description: 'Executar normalização de estabelecimentos - TEMPORÁRIO',
-      icon: Database,
-      onClick: () => navigate('/test-normalizacao'),
-      isActive: true
-    }
   ];
 
   return (
