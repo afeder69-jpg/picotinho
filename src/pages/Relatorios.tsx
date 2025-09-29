@@ -276,7 +276,9 @@ export default function Relatorios() {
       
       // Filtro por categoria
       if (categoria !== "todas") {
-        dadosFiltrados = dadosFiltrados.filter(item => item.categoria === categoria);
+        dadosFiltrados = dadosFiltrados.filter(item => 
+          item.categoria?.toUpperCase() === categoria.toUpperCase()
+        );
       }
       
       // Filtro por produto
