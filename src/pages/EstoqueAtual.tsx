@@ -34,6 +34,7 @@ interface EstoqueItem {
   quantidade: number;
   preco_unitario_ultimo: number | null;
   updated_at: string;
+  created_at?: string;
   origem?: string;
   produto_nome_normalizado?: string | null;
   produto_hash_normalizado?: string | null;
@@ -1721,9 +1722,11 @@ const EstoqueAtual = () => {
                                             const precoExibir = item.preco_unitario_ultimo || 0;
                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
                                             
-                                            // Buscar data da nota fiscal
-                                            const dataRealCompra = encontrarDataNotaFiscal(nomeExibicao);
-                                            const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
+                                             // Buscar data: usar created_at para produtos manuais, data da nota fiscal para outros
+                                             const dataRealCompra = item.origem === 'manual' 
+                                               ? item.created_at 
+                                               : encontrarDataNotaFiscal(nomeExibicao);
+                                             const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
                                             
                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
                                           })()}
