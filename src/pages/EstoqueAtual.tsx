@@ -1708,12 +1708,24 @@ const EstoqueAtual = () => {
                                  )}
                                </h3>
                                 <div className="space-y-1 text-xs">
-                                  {(() => {
-                                    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                                    const historicoProduto = historicoPrecos[nomeExibicao];
-                                    const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
+                                   {(() => {
+                                     const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                     const historicoProduto = historicoPrecos[nomeExibicao];
+                                     const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
 
-                                    return (
+                                     // Debug para produtos manuais
+                                     if (item.origem === 'manual') {
+                                       console.log('PRODUTO MANUAL DEBUG:', {
+                                         nome: nomeExibicao,
+                                         origem: item.origem,
+                                         created_at: item.created_at,
+                                         preco_unitario_ultimo: item.preco_unitario_ultimo,
+                                         historicoPrecos: historicoProduto,
+                                         precoAtual: encontrarPrecoAtual(nomeExibicao)
+                                       });
+                                     }
+
+                                     return (
                                       <>
                                         {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
                                         <div className="text-primary font-medium">
