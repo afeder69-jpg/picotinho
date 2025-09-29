@@ -150,6 +150,44 @@ export type Database = {
         }
         Relationships: []
       }
+      consumos_app: {
+        Row: {
+          created_at: string
+          data_consumo: string
+          id: string
+          produto_id: string
+          quantidade: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_consumo?: string
+          id?: string
+          produto_id: string
+          quantidade: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data_consumo?: string
+          id?: string
+          produto_id?: string
+          quantidade?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consumos_app_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_app"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estoque_app: {
         Row: {
           categoria: string
