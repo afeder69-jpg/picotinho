@@ -1781,7 +1781,42 @@ const EstoqueAtual = () => {
                                  }`}>
                                    {formatarQuantidade(quantidade)} {item.unidade_medida.replace('Unidade', 'Un')}
                                  </div>
-                                {/* Texto removido conforme solicitação do usuário */}
+                                  {/* Setinha de comparação de preços */}
+                                  {(() => {
+                                    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                    const historicoProduto = historicoPrecos[nomeExibicao];
+                                    const precoAtual = encontrarPrecoAtual(nomeExibicao);
+                                    
+                                    // Para produtos manuais, sem comparação (preço igual)
+                                    if (item.origem === 'manual') {
+                                      return <Minus className="w-3 h-3 text-muted-foreground/60 mt-0.5" />;
+                                    }
+                                    
+                                    // Comparar preço atual da área vs preço originalmente pago
+                                    const precoOriginal = item.preco_unitario_ultimo || 0;
+                                    let precoAreaAtual = 0;
+                                    
+                                    if (historicoProduto?.menorPrecoArea?.preco) {
+                                      precoAreaAtual = historicoProduto.menorPrecoArea.preco;
+                                    } else if (precoAtual?.valor_unitario) {
+                                      precoAreaAtual = precoAtual.valor_unitario;
+                                    }
+                                    
+                                    if (precoAreaAtual === 0 || precoOriginal === 0) {
+                                      return <Minus className="w-3 h-3 text-muted-foreground/60 mt-0.5" />;
+                                    }
+                                    
+                                    const atual = normalizeValue(precoAreaAtual);
+                                    const original = normalizeValue(precoOriginal);
+                                    
+                                    if (atual > original) {
+                                      return <ArrowUp className="w-3 h-3 text-red-600 mt-0.5" />;
+                                    } else if (atual < original) {
+                                      return <ArrowDown className="w-3 h-3 text-green-600 mt-0.5" />;
+                                    } else {
+                                      return <Minus className="w-3 h-3 text-muted-foreground/60 mt-0.5" />;
+                                    }
+                                  })()}
                           </div>
                        </div>
                     );
