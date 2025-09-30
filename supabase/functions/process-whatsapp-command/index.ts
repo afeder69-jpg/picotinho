@@ -596,24 +596,54 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         return "❌ Erro ao consultar estoque.";
       }
       
-      // Buscar produto comparando nomes (similaridade simples)
-      const data = estoques?.find((item: any) => {
-        const nomeEstoqueSimples = item.produto_nome.toLowerCase().trim();
-        const produtoSimples = produto.toLowerCase().trim();
-        return nomeEstoqueSimples.includes(produtoSimples) || 
-               produtoSimples.includes(nomeEstoqueSimples);
-      });
+      // Função para normalizar nome de produto (remove variações de "granel", "kg", etc)
+      const normalizarNome = (nome: string): string => {
+        return nome
+          .toUpperCase()
+          .trim()
+          .replace(/\s+/g, ' ')
+          .replace(/\b(GRANEL|KG|G|UN|PC|L|ML)\b/gi, '')
+          .trim();
+      };
+      
+      // Buscar TODOS os produtos similares (não apenas o primeiro)
+      const produtosEncontrados = estoques?.filter((item: any) => {
+        const nomeEstoqueNormalizado = normalizarNome(item.produto_nome);
+        const produtoNormalizado = normalizarNome(produto);
+        return nomeEstoqueNormalizado.includes(produtoNormalizado) || 
+               produtoNormalizado.includes(nomeEstoqueNormalizado);
+      }) || [];
 
-      console.log(`📋 [STEP 6] Resultado do banco:`);
-      console.log(`📋 [RESULT] Data:`, data);
-      console.log(`📋 [RESULT] Error:`, error);
+      console.log(`📋 [STEP 6] Produtos encontrados:`, produtosEncontrados.length);
+      console.log(`📋 [RESULT] Produtos:`, produtosEncontrados.map((p: any) => `${p.produto_nome}: ${p.quantidade} ${p.unidade_medida}`));
 
-      if (error || !data) {
+      if (produtosEncontrados.length === 0) {
         console.log(`❌ [STEP 7] Produto não encontrado - retornando erro`);
         return "❌ Produto não encontrado no seu estoque.";
       }
 
-      console.log(`✅ [STEP 8] Produto encontrado - preparando resposta`);
+      // Consolidar produtos com o mesmo nome normalizado
+      const produtosConsolidados = produtosEncontrados.reduce((acc: any, item: any) => {
+        const nomeNormalizado = normalizarNome(item.produto_nome);
+        
+        if (!acc[nomeNormalizado]) {
+          acc[nomeNormalizado] = {
+            produto_nome: item.produto_nome,
+            quantidade: 0,
+            unidade_medida: item.unidade_medida
+          };
+        }
+        
+        acc[nomeNormalizado].quantidade += item.quantidade;
+        return acc;
+      }, {});
+      
+      // Pegar o primeiro produto consolidado
+      const data = Object.values(produtosConsolidados)[0] as any;
+      
+      console.log(`✅ [STEP 8] Produto consolidado - preparando resposta`);
+      console.log(`📊 Quantidade total:`, data.quantidade, data.unidade_medida);
+      
       const quantidadeFormatada = formatarQuantidade(data.quantidade, data.unidade_medida);
       const produtoNomeLimpo = limparNomeProduto(data.produto_nome);
       const resposta = `✅ Você tem ${quantidadeFormatada} de ${produtoNomeLimpo} em estoque.`;
