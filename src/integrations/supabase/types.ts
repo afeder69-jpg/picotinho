@@ -47,85 +47,6 @@ export type Database = {
         }
         Relationships: []
       }
-      compras_app: {
-        Row: {
-          chave_acesso: string | null
-          created_at: string | null
-          data_compra: string
-          desconto: number | null
-          forma_pagamento: string | null
-          hora_compra: string | null
-          id: string
-          numero_nota_fiscal: string | null
-          observacoes: string | null
-          preco_total: number
-          qr_code_url: string | null
-          status: string | null
-          supermercado_id: string
-          taxa_servico: number | null
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          chave_acesso?: string | null
-          created_at?: string | null
-          data_compra: string
-          desconto?: number | null
-          forma_pagamento?: string | null
-          hora_compra?: string | null
-          id?: string
-          numero_nota_fiscal?: string | null
-          observacoes?: string | null
-          preco_total?: number
-          qr_code_url?: string | null
-          status?: string | null
-          supermercado_id: string
-          taxa_servico?: number | null
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          chave_acesso?: string | null
-          created_at?: string | null
-          data_compra?: string
-          desconto?: number | null
-          forma_pagamento?: string | null
-          hora_compra?: string | null
-          id?: string
-          numero_nota_fiscal?: string | null
-          observacoes?: string | null
-          preco_total?: number
-          qr_code_url?: string | null
-          status?: string | null
-          supermercado_id?: string
-          taxa_servico?: number | null
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "compras_app_supermercado_id_fkey"
-            columns: ["supermercado_id"]
-            isOneToOne: false
-            referencedRelation: "supermercados"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "compras_app_supermercado_id_fkey"
-            columns: ["supermercado_id"]
-            isOneToOne: false
-            referencedRelation: "supermercados_publicos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "compras_app_supermercado_id_fkey"
-            columns: ["supermercado_id"]
-            isOneToOne: false
-            referencedRelation: "view_comparacao_supermercados_app"
-            referencedColumns: ["supermercado_id"]
-          },
-        ]
-      }
       configuracoes_usuario: {
         Row: {
           created_at: string
@@ -261,15 +182,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_estoque_app_compra_id"
-            columns: ["compra_id"]
-            isOneToOne: false
-            referencedRelation: "compras_app"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       historico_precos_app: {
         Row: {
@@ -305,13 +218,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "historico_precos_app_produto_id_fkey"
-            columns: ["produto_id"]
-            isOneToOne: false
-            referencedRelation: "view_comparacao_supermercados_app"
-            referencedColumns: ["produto_id"]
-          },
-          {
             foreignKeyName: "historico_precos_app_supermercado_id_fkey"
             columns: ["supermercado_id"]
             isOneToOne: false
@@ -324,13 +230,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "supermercados_publicos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "historico_precos_app_supermercado_id_fkey"
-            columns: ["supermercado_id"]
-            isOneToOne: false
-            referencedRelation: "view_comparacao_supermercados_app"
-            referencedColumns: ["supermercado_id"]
           },
         ]
       }
@@ -366,120 +265,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      itens_compra_app: {
-        Row: {
-          compra_id: string
-          created_at: string | null
-          desconto_item: number | null
-          id: string
-          observacoes: string | null
-          preco_total: number
-          preco_unitario: number
-          produto_id: string
-          quantidade: number
-        }
-        Insert: {
-          compra_id: string
-          created_at?: string | null
-          desconto_item?: number | null
-          id?: string
-          observacoes?: string | null
-          preco_total: number
-          preco_unitario: number
-          produto_id: string
-          quantidade: number
-        }
-        Update: {
-          compra_id?: string
-          created_at?: string | null
-          desconto_item?: number | null
-          id?: string
-          observacoes?: string | null
-          preco_total?: number
-          preco_unitario?: number
-          produto_id?: string
-          quantidade?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "itens_compra_app_compra_id_fkey"
-            columns: ["compra_id"]
-            isOneToOne: false
-            referencedRelation: "compras_app"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "itens_compra_app_produto_id_fkey"
-            columns: ["produto_id"]
-            isOneToOne: false
-            referencedRelation: "produtos_app"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "itens_compra_app_produto_id_fkey"
-            columns: ["produto_id"]
-            isOneToOne: false
-            referencedRelation: "view_comparacao_supermercados_app"
-            referencedColumns: ["produto_id"]
-          },
-        ]
-      }
-      itens_nota: {
-        Row: {
-          categoria: string | null
-          codigo: string | null
-          created_at: string
-          data_compra: string | null
-          descricao: string
-          descricao_normalizada: string | null
-          id: string
-          nota_id: string
-          produto_normalizado_id: string | null
-          quantidade: number | null
-          unidade: string | null
-          valor_total: number | null
-          valor_unitario: number | null
-        }
-        Insert: {
-          categoria?: string | null
-          codigo?: string | null
-          created_at?: string
-          data_compra?: string | null
-          descricao: string
-          descricao_normalizada?: string | null
-          id?: string
-          nota_id: string
-          produto_normalizado_id?: string | null
-          quantidade?: number | null
-          unidade?: string | null
-          valor_total?: number | null
-          valor_unitario?: number | null
-        }
-        Update: {
-          categoria?: string | null
-          codigo?: string | null
-          created_at?: string
-          data_compra?: string | null
-          descricao?: string
-          descricao_normalizada?: string | null
-          id?: string
-          nota_id?: string
-          produto_normalizado_id?: string | null
-          quantidade?: number | null
-          unidade?: string | null
-          valor_total?: number | null
-          valor_unitario?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "itens_nota_nota_id_fkey"
-            columns: ["nota_id"]
-            isOneToOne: false
-            referencedRelation: "notas_fiscais"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       marcas_conhecidas: {
         Row: {
@@ -768,66 +553,6 @@ export type Database = {
           updated_at?: string
           url?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      notas_fiscais: {
-        Row: {
-          bairro: string | null
-          chave_acesso: string | null
-          cnpj: string | null
-          created_at: string | null
-          criado_em: string
-          data_compra: string | null
-          hora_compra: string | null
-          id: string
-          imagem_url: string | null
-          mercado: string | null
-          mercado_id: string | null
-          qr_url: string | null
-          qtd_itens: number | null
-          status_processamento: string | null
-          updated_at: string | null
-          user_id: string | null
-          valor_total: number | null
-        }
-        Insert: {
-          bairro?: string | null
-          chave_acesso?: string | null
-          cnpj?: string | null
-          created_at?: string | null
-          criado_em?: string
-          data_compra?: string | null
-          hora_compra?: string | null
-          id?: string
-          imagem_url?: string | null
-          mercado?: string | null
-          mercado_id?: string | null
-          qr_url?: string | null
-          qtd_itens?: number | null
-          status_processamento?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          valor_total?: number | null
-        }
-        Update: {
-          bairro?: string | null
-          chave_acesso?: string | null
-          cnpj?: string | null
-          created_at?: string | null
-          criado_em?: string
-          data_compra?: string | null
-          hora_compra?: string | null
-          id?: string
-          imagem_url?: string | null
-          mercado?: string | null
-          mercado_id?: string | null
-          qr_url?: string | null
-          qtd_itens?: number | null
-          status_processamento?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          valor_total?: number | null
         }
         Relationships: []
       }
@@ -1915,18 +1640,6 @@ export type Database = {
           longitude_aproximada?: never
           nome?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      view_comparacao_supermercados_app: {
-        Row: {
-          preco_medio: number | null
-          produto_id: string | null
-          produto_nome: string | null
-          supermercado_id: string | null
-          supermercado_nome: string | null
-          ultima_compra: string | null
-          vezes_comprado: number | null
         }
         Relationships: []
       }
