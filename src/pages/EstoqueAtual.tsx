@@ -630,10 +630,29 @@ const EstoqueAtual = () => {
       
       // 🚨 CORREÇÃO CRÍTICA: CONSOLIDAR DUPLICATAS CORRETAMENTE
       // O banco tem 44 itens (22 únicos duplicados) - vamos consolidar na tela
+      
+      // 🔧 FUNÇÃO DE NORMALIZAÇÃO: Remove variações do mesmo produto
+      const normalizarNomeProduto = (nome: string): string => {
+        return nome
+          .toUpperCase()
+          .trim()
+          .replace(/\s+/g, ' ') // Normalizar espaços múltiplos
+          .replace(/\bKG\b/gi, '') // Remover "Kg"
+          .replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL') // Remover "Granel" duplicado
+          .replace(/\s+/g, ' ') // Limpar espaços novamente após remoções
+          .trim();
+      };
+      
       const produtosMap = new Map<string, any>();
       
       data.forEach(item => {
-        const chave = item.produto_nome; // Usar nome exato como chave
+        const chave = normalizarNomeProduto(item.produto_nome); // Usar nome normalizado como chave
+        
+        console.log('🔍 Debug consolidação:', {
+          original: item.produto_nome,
+          normalizado: chave,
+          quantidade: item.quantidade
+        });
         
         if (produtosMap.has(chave)) {
           // Produto já existe, somar quantidades e manter o preço mais recente
@@ -654,8 +673,9 @@ const EstoqueAtual = () => {
           // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)
           produtosMap.set(chave, {
             ...item,
-            produto_nome_exibicao: item.produto_nome,
-            hash_agrupamento: item.produto_nome,
+            produto_nome: chave, // Usar nome normalizado consistente
+            produto_nome_exibicao: item.produto_nome, // Manter nome original para exibição
+            hash_agrupamento: chave,
             quantidade_total: item.quantidade,
             preco_unitario_mais_recente: item.preco_unitario_ultimo,
             ultima_atualizacao: item.updated_at,
@@ -672,9 +692,26 @@ const EstoqueAtual = () => {
       console.log('✅ Produtos ÚNICOS após consolidação:', estoqueFormatado.length);
       console.log('📦 Primeiros 3 produtos únicos:', estoqueFormatado.slice(0, 3).map(item => ({
         nome: item.produto_nome,
+        nomeExibicao: item.produto_nome_exibicao,
         quantidade: item.quantidade,
+        itensOriginais: item.itens_originais,
+        nomesOriginais: item.nomes_originais,
         preco: item.preco_unitario_ultimo
       })));
+      
+      // 🔍 Debug específico para Abacate
+      const abacates = estoqueFormatado.filter(item => 
+        item.produto_nome_exibicao?.toUpperCase().includes('ABACATE')
+      );
+      if (abacates.length > 0) {
+        console.log('🥑 Debug Abacate:', abacates.map(item => ({
+          nomeNormalizado: item.produto_nome,
+          nomeExibicao: item.produto_nome_exibicao,
+          quantidade: item.quantidade,
+          itensConsolidados: item.itens_originais,
+          nomesOriginais: item.nomes_originais
+        })));
+      }
       
       // 🚨 VALIDAÇÃO CRÍTICA: Verificar se temos os 4 produtos problemáticos
       const produtosProblematicos = [
