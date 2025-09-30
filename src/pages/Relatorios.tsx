@@ -18,6 +18,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { carregarCategorias, limparCacheCategories } from "@/lib/categorias";
 
+/**
+ * Converte data brasileira (DD/MM/YYYY) para formato ISO (YYYY-MM-DD)
+ * @param dataBrasileira - Data no formato DD/MM/YYYY ou DD/MM/YYYY HH:mm:ss
+ * @returns Data no formato YYYY-MM-DD ou string vazia se inválido
+ */
+function converterDataBrasileiraParaISO(dataBrasileira: string | undefined): string {
+  if (!dataBrasileira) return '';
+  
+  // Remove informações de hora e timezone se existirem
+  const apenasData = dataBrasileira.split(' ')[0];
+  
+  // Converte DD/MM/YYYY para YYYY-MM-DD
+  const partes = apenasData.split('/');
+  if (partes.length === 3) {
+    const [dia, mes, ano] = partes;
+    return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+  }
+  
+  return '';
+}
+
 type TipoRelatorio = "compras" | "consumos" | "todos";
 
 interface ItemRelatorio {
@@ -224,7 +245,7 @@ export default function Relatorios() {
                     }
                     
                     todosOsDados.push({
-                      data: dadosExtraidos?.compra?.data_emissao?.split(' ')[0]?.split('T')[0] || nota.created_at?.split('T')[0] || '',
+                      data: converterDataBrasileiraParaISO(dadosExtraidos?.compra?.data_emissao) || nota.created_at?.split('T')[0] || '',
                       produto: produtoNome,
                       categoria: categoria,
                       quantidade,
