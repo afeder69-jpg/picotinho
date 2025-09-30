@@ -256,8 +256,10 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar match:', textoNormalizado.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar)\b/));
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
-        // Comandos para CONSULTAR ESTOQUE
-        const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/);
+        // Comandos para CONSULTAR ESTOQUE (aceita "consulta", "consultar" ou "estoque")
+        const isConsultar = textoNormalizado.match(/\b(consulta|consultar|estoque)\b/);
+        console.log('🔍 [DEBUG] isConsultar match:', textoNormalizado.match(/\b(consulta|consultar|estoque)\b/));
+        console.log('🔍 [DEBUG] isConsultar result:', isConsultar);
         
         // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
         const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
