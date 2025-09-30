@@ -50,37 +50,6 @@ serve(async (req) => {
 
     // 2. Limpar tabelas na ordem correta (considerando foreign keys)
     
-    // Itens de compra primeiro
-    const { data: deletedItens, error: itensError } = await supabase
-      .from('itens_compra_app')
-      .delete()
-      .in('compra_id', 
-        supabase.from('compras_app').select('id').eq('user_id', userId)
-      );
-    
-    if (itensError) console.error('Erro ao deletar itens_compra_app:', itensError);
-    cleanupResults.push({ table: 'itens_compra_app', status: itensError ? 'erro' : 'ok' });
-
-    // Compras
-    const { error: comprasError } = await supabase
-      .from('compras_app')
-      .delete()
-      .eq('user_id', userId);
-    
-    if (comprasError) console.error('Erro ao deletar compras_app:', comprasError);
-    cleanupResults.push({ table: 'compras_app', status: comprasError ? 'erro' : 'ok' });
-
-    // Itens de nota
-    const { error: itensNotaError } = await supabase
-      .from('itens_nota')
-      .delete()
-      .in('nota_id', 
-        supabase.from('notas_fiscais').select('id').eq('user_id', userId)
-      );
-    
-    if (itensNotaError) console.error('Erro ao deletar itens_nota:', itensNotaError);
-    cleanupResults.push({ table: 'itens_nota', status: itensNotaError ? 'erro' : 'ok' });
-
     // Receipt items
     const { error: receiptItemsError } = await supabase
       .from('receipt_items')
@@ -100,15 +69,6 @@ serve(async (req) => {
     
     if (receiptsError) console.error('Erro ao deletar receipts:', receiptsError);
     cleanupResults.push({ table: 'receipts', status: receiptsError ? 'erro' : 'ok' });
-
-    // Notas fiscais
-    const { error: notasFiscaisError } = await supabase
-      .from('notas_fiscais')
-      .delete()
-      .eq('user_id', userId);
-    
-    if (notasFiscaisError) console.error('Erro ao deletar notas_fiscais:', notasFiscaisError);
-    cleanupResults.push({ table: 'notas_fiscais', status: notasFiscaisError ? 'erro' : 'ok' });
 
     // Notas imagens
     const { error: notasImagensError } = await supabase

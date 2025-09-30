@@ -302,8 +302,8 @@ Responda APENAS o JSON:
 
         console.log('Variações de chave para busca:', chaveVariations);
 
-        // 🔥 CORREÇÃO CRÍTICA: Verificar em TODOS OS USUÁRIOS do Picotinho
-        // 1) Procurar em notas_imagens de QUALQUER USUÁRIO (não apenas do atual)
+        // 🔥 Verificar em TODOS OS USUÁRIOS do Picotinho
+        // Procurar em notas_imagens de QUALQUER USUÁRIO (não apenas do atual)
         const orConditions = chaveVariations.flatMap((chave) => [
           `dados_extraidos->chave_acesso.eq."${chave}"`,
           `dados_extraidos->>chave_acesso.eq."${chave}"`,
@@ -318,38 +318,11 @@ Responda APENAS o JSON:
 
         if (imgErr) console.error('Erro buscando duplicidade em notas_imagens:', imgErr);
 
-        // 2) Procurar em notas_fiscais de QUALQUER USUÁRIO (quando já processadas)
-        const { data: existingInNotas, error: nfErr } = await supabase
-          .from('notas_fiscais')
-          .select('id, user_id')
-          .in('chave_acesso', chaveVariations);
-
-        if (nfErr) console.error('Erro buscando duplicidade em notas_fiscais:', nfErr);
-
-        // 3) Procurar em compras_app de QUALQUER USUÁRIO (quando já processadas)
-        const { data: existingInCompras, error: comprasErr } = await supabase
-          .from('compras_app')
-          .select('id, user_id')
-          .in('chave_acesso', chaveVariations);
-
-        if (comprasErr) console.error('Erro buscando duplicidade em compras_app:', comprasErr);
-
-        isDuplicate = !!((existingInImages && existingInImages.length > 0) || 
-                         (existingInNotas && existingInNotas.length > 0) ||
-                         (existingInCompras && existingInCompras.length > 0));
+        isDuplicate = !!(existingInImages && existingInImages.length > 0);
 
         if (isDuplicate) {
           console.log('⚠️ DUPLICATA DETECTADA! Chave já existe no Picotinho:', normalizedKey.slice(-6));
-          // Logar se encontrada em qual usuário
-          if (existingInImages && existingInImages.length > 0) {
-            console.log('📋 Encontrada em notas_imagens de usuário(s):', existingInImages.map(n => n.usuario_id));
-          }
-          if (existingInNotas && existingInNotas.length > 0) {
-            console.log('📋 Encontrada em notas_fiscais de usuário(s):', existingInNotas.map(n => n.user_id));
-          }
-          if (existingInCompras && existingInCompras.length > 0) {
-            console.log('📋 Encontrada em compras_app de usuário(s):', existingInCompras.map(n => n.user_id));
-          }
+          console.log('📋 Encontrada em notas_imagens de usuário(s):', existingInImages.map(n => n.usuario_id));
         } else {
           console.log('✅ Chave única no Picotinho - não há duplicatas:', normalizedKey.slice(-6));
         }

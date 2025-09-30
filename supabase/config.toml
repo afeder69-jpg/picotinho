@@ -32,3 +32,9 @@ verify_jwt = false
 
 [functions.backfill-preco-atual]
 verify_jwt = false
+
+[functions.process-danfe-pdf-disabled]
+verify_jwt = false
+
+[functions.corrigir-bairros-notas-disabled]
+verify_jwt = false
