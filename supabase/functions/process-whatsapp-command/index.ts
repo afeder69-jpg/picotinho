@@ -569,8 +569,69 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     
     console.log(`📝 [STEP 1] Texto normalizado: "${texto}"`);
     
-    if (texto.includes("consulta")) {
-      console.log(`✅ [STEP 2] Texto contém "consulta" - prosseguindo...`);
+    // Verificar se é consulta de estoque completo
+    const isConsultaEstoqueCompleto = texto === "estoque" || 
+                                       texto === "consulta estoque" ||
+                                       texto === "consultar estoque" ||
+                                       texto === "consulta" ||
+                                       texto === "consultar";
+
+    if (isConsultaEstoqueCompleto) {
+      console.log(`📦 [CONSULTA COMPLETA] Retornando todo o estoque`);
+      
+      // Buscar TODO o estoque do usuário
+      const { data: estoques, error } = await supabase
+        .from("estoque_app")
+        .select("produto_nome, quantidade, unidade_medida, preco_unitario_ultimo")
+        .eq("user_id", mensagem.usuario_id);
+      
+      if (error) {
+        console.error(`❌ Erro ao buscar estoque:`, error);
+        return "❌ Erro ao consultar estoque.";
+      }
+      
+      if (!estoques || estoques.length === 0) {
+        return "📭 Seu estoque está vazio. Use 'Incluir [produto]' para adicionar itens.";
+      }
+      
+      // Consolidar produtos por nome
+      const produtosConsolidados: any = {};
+      
+      estoques.forEach((item: any) => {
+        const chave = item.produto_nome.toUpperCase().trim();
+        if (!produtosConsolidados[chave]) {
+          produtosConsolidados[chave] = {
+            produto_nome: item.produto_nome,
+            quantidade: 0,
+            unidade_medida: item.unidade_medida,
+            preco_unitario_ultimo: item.preco_unitario_ultimo || 0
+          };
+        }
+        produtosConsolidados[chave].quantidade += item.quantidade;
+      });
+      
+      // Montar resposta formatada
+      let resposta = "📦 **SEU ESTOQUE COMPLETO**\n\n";
+      let contador = 1;
+      
+      Object.values(produtosConsolidados).forEach((produto: any) => {
+        const quantidadeFormatada = produto.quantidade.toFixed(3).replace('.', ',');
+        const precoFormatado = produto.preco_unitario_ultimo > 0 
+          ? `R$ ${produto.preco_unitario_ultimo.toFixed(2).replace('.', ',')}` 
+          : 'Sem preço';
+        const unidadeFormatada = produto.unidade_medida.toLowerCase();
+        
+        resposta += `${contador}. ${produto.produto_nome}\n`;
+        resposta += `   📊 ${quantidadeFormatada} ${unidadeFormatada}`;
+        resposta += ` | 💰 ${precoFormatado}/${unidadeFormatada}\n\n`;
+        contador++;
+      });
+      
+      return resposta;
+      
+    } else if (texto.includes("consulta")) {
+      // Consulta de produto específico
+      console.log(`✅ [STEP 2] Texto contém "consulta" - buscando produto específico...`);
       
       const partes = texto.split("consulta");
       console.log(`📋 [DEBUG] Partes após split: ${JSON.stringify(partes)}`);
@@ -578,14 +639,15 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       const produto = partes[1]?.trim();
       console.log(`📝 [STEP 3] Produto extraído: "${produto}"`);
 
-      if (!produto) {
-        console.log(`❌ [STEP 4] Produto vazio - retornando erro`);
-        return "❌ Você precisa informar um produto. Exemplo: 'Picotinho, consulta banana'";
+      if (!produto || produto === "estoque") {
+        console.log(`❌ [STEP 4] Produto vazio ou "estoque" - retornando consulta completa`);
+        // Redirecionar para consulta completa
+        return await processarConsultarEstoque(supabase, { ...mensagem, conteudo: "estoque" });
       }
 
       console.log(`🔍 [STEP 5] Iniciando busca no banco...`);
       
-    // Buscar no estoque usando nomes normalizados
+      // Buscar no estoque usando nomes normalizados
       const { data: estoques, error } = await supabase
         .from("estoque_app")
         .select("produto_nome, quantidade, unidade_medida")
