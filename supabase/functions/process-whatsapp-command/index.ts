@@ -271,8 +271,12 @@ const handler = async (req: Request): Promise<Response> => {
         // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
         const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
         
-        // Verificar se é comando de inserir nota com anexo
-        if (mensagem.comando_identificado === 'inserir_nota') {
+        // PRIORIDADE: Verificar se webhook já identificou o comando
+        if (mensagem.comando_identificado === 'consultar_categoria') {
+          console.log('📂 Comando CONSULTAR CATEGORIA identificado pelo webhook:', mensagem.conteudo);
+          resposta += await processarConsultarCategoria(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (mensagem.comando_identificado === 'inserir_nota') {
           console.log('📎 Comando INSERIR NOTA identificado com anexo');
           resposta += await processarInserirNota(supabase, mensagem);
           comandoExecutado = true;
@@ -291,10 +295,6 @@ const handler = async (req: Request): Promise<Response> => {
         } else if (isAdicionar) {
           console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
           resposta += await processarAdicionarProduto(supabase, mensagem);
-          comandoExecutado = true;
-        } else if (isConsultarCategoria) {
-          console.log('📂 Comando CONSULTAR CATEGORIA identificado:', textoNormalizado);
-          resposta += await processarConsultarCategoria(supabase, mensagem);
           comandoExecutado = true;
         } else if (isEstoque) {
           console.log('📦 Comando ESTOQUE COMPLETO identificado:', textoNormalizado);
