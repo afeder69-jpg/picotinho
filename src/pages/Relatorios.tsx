@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, Calendar, Filter, Download } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,7 @@ interface ItemRelatorio {
 interface DadosGrafico {
   periodo: string;
   valor: number;
+  cor: string;
 }
 
 interface EstabelecimentoInfo {
@@ -336,8 +337,14 @@ export default function Relatorios() {
         dadosAgrupados.set(mesPeriodo, (dadosAgrupados.get(mesPeriodo) || 0) + item.valor);
       });
       
+      const coresMeses = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+      
       const dadosGraficoArray = Array.from(dadosAgrupados.entries())
-        .map(([periodo, valor]) => ({ periodo, valor }))
+        .map(([periodo, valor], index) => ({ 
+          periodo, 
+          valor,
+          cor: coresMeses[index % coresMeses.length]
+        }))
         .sort((a, b) => new Date(a.periodo).getTime() - new Date(b.periodo).getTime());
       
       setDados(dadosFiltrados);
@@ -580,7 +587,7 @@ export default function Relatorios() {
                 </CardHeader>
                 <CardContent>
                   {dadosGrafico.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={400}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={dadosGrafico}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="periodo" />
@@ -589,7 +596,11 @@ export default function Relatorios() {
                           formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Valor']}
                           labelFormatter={(label) => `Período: ${label}`}
                         />
-                        <Bar dataKey="valor" fill="hsl(var(--primary))" />
+                        <Bar dataKey="valor">
+                          {dadosGrafico.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.cor} />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
