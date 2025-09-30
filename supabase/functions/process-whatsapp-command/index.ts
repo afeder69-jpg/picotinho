@@ -79,7 +79,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Se houve sessão expirada, enviar mensagem inicial e retornar
     if (sessaoExpirada) {
       console.log(`⏰ [TIMEOUT] Sessão expirou - enviando mensagem inicial`);
-      const mensagemInicial = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+      const mensagemInicial = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
       
       // Enviar resposta e marcar como processada
       const enviado = await enviarRespostaWhatsApp(mensagem.remetente, mensagemInicial);
@@ -233,7 +233,7 @@ const handler = async (req: Request): Promise<Response> => {
             .eq('usuario_id', mensagem.usuario_id)
             .eq('remetente', mensagem.remetente);
           
-          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
+          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
           comandoExecutado = true;
         }
         
@@ -321,7 +321,7 @@ const handler = async (req: Request): Promise<Response> => {
           
           console.log(`🗑️ [RESET] Sessões ativas removidas para ${mensagem.remetente}`);
           
-          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
+          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
         }
       }
     }
@@ -793,7 +793,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     console.log(`🗑️ [RESET] Sessões ativas removidas para consulta fallback`);
     
     // Fallback se não for comando válido
-    return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+    return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
 
   } catch (err) {
     console.error("❌ [ERRO GERAL] Erro ao processar comando:", err);
@@ -1056,7 +1056,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
         .eq('id', sessao.id);
       
       // Retornar mensagem inicial padrão
-      return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+      return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
     }
     
     const tentativasErro = sessao.contexto?.tentativas_erro || 0;
@@ -1086,7 +1086,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
@@ -1130,7 +1130,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
@@ -1208,7 +1208,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
@@ -1271,7 +1271,7 @@ async function processarRespostaSessao(supabase: any, mensagem: any, sessao: any
             .delete()
             .eq('id', sessao.id);
           
-          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]";
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
         }
         
         // Para 1ª, 2ª ou 3ª tentativa, enviar mensagem de erro normal
