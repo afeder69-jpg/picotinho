@@ -224,7 +224,7 @@ export default function Relatorios() {
                     }
                     
                     todosOsDados.push({
-                      data: nota.created_at?.split('T')[0] || '',
+                      data: dadosExtraidos?.compra?.data_emissao?.split(' ')[0]?.split('T')[0] || nota.created_at?.split('T')[0] || '',
                       produto: produtoNome,
                       categoria: categoria,
                       quantidade,
