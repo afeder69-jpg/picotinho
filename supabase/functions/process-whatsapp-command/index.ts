@@ -1407,7 +1407,7 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
     }
     
     // Extrair o nome da categoria encontrada
-    const categoriaNome = categoriaEncontrada[0]?.nome || termoCategoria;
+    const categoriaNome = categoriaEncontrada[0]?.categoria_nome || termoCategoria;
     console.log(`✅ [STEP 3] Categoria encontrada: "${categoriaNome}"`);
     console.log(`🔍 [DEBUG] categoriaEncontrada:`, categoriaEncontrada);
     console.log(`🔍 [STEP 4] Iniciando busca de produtos...`);
