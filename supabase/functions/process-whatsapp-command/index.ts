@@ -588,13 +588,14 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
                                        texto === "consultar";
 
     if (isConsultaEstoqueCompleto) {
-      console.log(`📦 [CONSULTA COMPLETA] Retornando todo o estoque`);
+      console.log(`📦 [CONSULTA COMPLETA] Retornando todo o estoque categorizado`);
       
-      // Buscar TODO o estoque do usuário
+      // Buscar TODO o estoque do usuário COM CATEGORIA
       const { data: estoques, error } = await supabase
         .from("estoque_app")
-        .select("produto_nome, quantidade, unidade_medida, preco_unitario_ultimo")
-        .eq("user_id", mensagem.usuario_id);
+        .select("produto_nome, quantidade, unidade_medida, preco_unitario_ultimo, categoria")
+        .eq("user_id", mensagem.usuario_id)
+        .order("categoria, produto_nome");
       
       if (error) {
         console.error(`❌ Erro ao buscar estoque:`, error);
@@ -605,38 +606,84 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
         return "📭 Seu estoque está vazio. Use 'Incluir [produto]' para adicionar itens.";
       }
       
-      // Consolidar produtos por nome
-      const produtosConsolidados: any = {};
+      // Agrupar por categoria
+      const categorias: any = {};
       
       estoques.forEach((item: any) => {
+        const categoria = item.categoria || 'Sem Categoria';
         const chave = item.produto_nome.toUpperCase().trim();
-        if (!produtosConsolidados[chave]) {
-          produtosConsolidados[chave] = {
+        
+        if (!categorias[categoria]) {
+          categorias[categoria] = {};
+        }
+        
+        if (!categorias[categoria][chave]) {
+          categorias[categoria][chave] = {
             produto_nome: item.produto_nome,
             quantidade: 0,
             unidade_medida: item.unidade_medida,
             preco_unitario_ultimo: item.preco_unitario_ultimo || 0
           };
         }
-        produtosConsolidados[chave].quantidade += item.quantidade;
+        categorias[categoria][chave].quantidade += item.quantidade;
       });
       
-      // Montar resposta formatada
+      // Ordenar categorias alfabeticamente
+      const categoriasOrdenadas = Object.keys(categorias).sort();
+      
+      // Montar resposta categorizada
       let resposta = "📦 **SEU ESTOQUE COMPLETO**\n\n";
-      let contador = 1;
+      let contadorGeral = 1;
+      let totalItens = 0;
+      let valorTotalGeral = 0;
       
-      Object.values(produtosConsolidados).forEach((produto: any) => {
-        const quantidadeFormatada = produto.quantidade.toFixed(3).replace('.', ',');
-        const precoFormatado = produto.preco_unitario_ultimo > 0 
-          ? `R$ ${produto.preco_unitario_ultimo.toFixed(2).replace('.', ',')}` 
-          : 'Sem preço';
-        const unidadeFormatada = produto.unidade_medida.toLowerCase();
+      categoriasOrdenadas.forEach(categoria => {
+        const produtos = categorias[categoria];
+        const qtdItensCategoria = Object.keys(produtos).length;
+        let valorTotalCategoria = 0;
         
-        resposta += `${contador}. ${produto.produto_nome}\n`;
-        resposta += `   📊 ${quantidadeFormatada} ${unidadeFormatada}`;
-        resposta += ` | 💰 ${precoFormatado}/${unidadeFormatada}\n\n`;
-        contador++;
+        // Cabeçalho da categoria
+        resposta += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        resposta += `📂 **${categoria.toUpperCase()}**\n`;
+        resposta += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        
+        // Produtos da categoria
+        Object.values(produtos).forEach((produto: any) => {
+          const quantidadeFormatada = produto.quantidade.toFixed(3).replace('.', ',');
+          const precoFormatado = produto.preco_unitario_ultimo > 0 
+            ? `R$ ${produto.preco_unitario_ultimo.toFixed(2).replace('.', ',')}` 
+            : 'R$ 0,00';
+          const unidadeFormatada = produto.unidade_medida.toLowerCase();
+          
+          resposta += `${contadorGeral}. ${produto.produto_nome}\n`;
+          resposta += `   📊 ${quantidadeFormatada} ${unidadeFormatada}`;
+          resposta += ` | 💰 ${precoFormatado}/${unidadeFormatada}\n\n`;
+          
+          if (produto.preco_unitario_ultimo > 0) {
+            valorTotalCategoria += produto.quantidade * produto.preco_unitario_ultimo;
+          }
+          
+          contadorGeral++;
+        });
+        
+        // Subtotal da categoria
+        resposta += `📊 Subtotal ${categoria}: ${qtdItensCategoria} produto(s)`;
+        if (valorTotalCategoria > 0) {
+          resposta += ` | 💰 R$ ${valorTotalCategoria.toFixed(2).replace('.', ',')}`;
+        }
+        resposta += `\n\n`;
+        
+        totalItens += qtdItensCategoria;
+        valorTotalGeral += valorTotalCategoria;
       });
+      
+      // Total geral
+      resposta += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      resposta += `📊 **TOTAL GERAL**: ${totalItens} produto(s)`;
+      if (valorTotalGeral > 0) {
+        resposta += `\n💰 **VALOR TOTAL**: R$ ${valorTotalGeral.toFixed(2).replace('.', ',')}`;
+      }
+      resposta += `\n━━━━━━━━━━━━━━━━━━━━━`;
       
       return resposta;
       
