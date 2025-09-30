@@ -14,6 +14,38 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+// Normalizar unidades para o padrão Picotinho: Un, Kg, Lt
+function normalizarUnidadeMedida(unidade: string): string {
+  if (!unidade) return 'Un';
+  
+  const unidadeLimpa = unidade.trim().toUpperCase();
+  
+  // Mapeamento para padrão Picotinho
+  const mapeamento: { [key: string]: string } = {
+    'PC': 'Un',
+    'UNIDADE': 'Un',
+    'UN': 'Un',
+    'UND': 'Un',
+    'PEÇA': 'Un',
+    'PECA': 'Un',
+    'G': 'Kg',
+    'GRAMAS': 'Kg',
+    'GRAMA': 'Kg',
+    'KG': 'Kg',
+    'QUILO': 'Kg',
+    'KILO': 'Kg',
+    'ML': 'Lt',
+    'MILILITRO': 'Lt',
+    'MILILITROS': 'Lt',
+    'L': 'Lt',
+    'LT': 'Lt',
+    'LITRO': 'Lt',
+    'LITROS': 'Lt'
+  };
+  
+  return mapeamento[unidadeLimpa] || unidadeLimpa;
+}
+
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -113,7 +145,7 @@ serve(async (req) => {
           categoria: item.categoria || 'outros',
           quantidade: parseFloat(item.quantidade) || 0,
           valor_unitario: parseFloat(item.valor_unitario) || 0,
-          unidade: item.unidade || 'unidade',
+          unidade: normalizarUnidadeMedida(item.unidade || 'unidade'),
           data_compra: dataCompra
         }));
         console.log(`📦 Itens carregados de dados_extraidos: ${itens.length}`);
@@ -159,7 +191,7 @@ serve(async (req) => {
           produto_nome: item.descricao,
           categoria: item.categoria || 'outros',
           quantidade: item.quantidade,
-          unidade_medida: item.unidade || 'unidade',
+          unidade_medida: normalizarUnidadeMedida(item.unidade || 'unidade'),
           preco_unitario_ultimo: item.valor_unitario,
           compra_id: nota.compra_id,
           origem: "nota_fiscal",

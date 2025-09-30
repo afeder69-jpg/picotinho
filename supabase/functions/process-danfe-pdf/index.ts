@@ -34,6 +34,38 @@ async function extractTextFromPDF(pdfBuffer: Uint8Array): Promise<string> {
   }
 }
 
+// Normalizar unidades para o padrão Picotinho: Un, Kg, Lt
+function normalizarUnidadeMedida(unidade: string): string {
+  if (!unidade) return 'Un';
+  
+  const unidadeLimpa = unidade.trim().toUpperCase();
+  
+  // Mapeamento para padrão Picotinho
+  const mapeamento: { [key: string]: string } = {
+    'PC': 'Un',
+    'UNIDADE': 'Un',
+    'UN': 'Un',
+    'UND': 'Un',
+    'PEÇA': 'Un',
+    'PECA': 'Un',
+    'G': 'Kg',
+    'GRAMAS': 'Kg',
+    'GRAMA': 'Kg',
+    'KG': 'Kg',
+    'QUILO': 'Kg',
+    'KILO': 'Kg',
+    'ML': 'Lt',
+    'MILILITRO': 'Lt',
+    'MILILITROS': 'Lt',
+    'L': 'Lt',
+    'LT': 'Lt',
+    'LITRO': 'Lt',
+    'LITROS': 'Lt'
+  };
+  
+  return mapeamento[unidadeLimpa] || unidadeLimpa;
+}
+
 // Função para extrair bairro do endereço
 function extrairBairro(endereco: string): string | null {
   if (!endereco) return null;
@@ -530,7 +562,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                   descricao_normalizada: nomeNormalizado,
                   codigo: item.codigo || null,
                   quantidade: item.quantidade || 1,
-                  unidade: item.unidade || 'unidade',
+                  unidade: normalizarUnidadeMedida(item.unidade || 'unidade'),
                   valor_unitario: item.valor_unitario || 0,
                   valor_total: item.valor_total || 0,
                   categoria: item.categoria || 'outros',
@@ -610,7 +642,7 @@ Retorne APENAS o JSON estruturado completo, sem explicações adicionais. GARANT
                 .insert({
                   nome: descricao || 'Produto',
                   codigo_barras: codigo || null,
-                  unidade_medida: unidade || 'unidade',
+                  unidade_medida: normalizarUnidadeMedida(unidade || 'unidade'),
                   categoria_id: categoriaId // Remover o fallback null que pode estar causando problema
                 })
                 .select('id')
