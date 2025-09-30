@@ -1287,7 +1287,10 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
       return ajuda;
     }
     
+    // Extrair o nome da categoria encontrada
+    const categoriaNome = categoriaEncontrada[0]?.nome || termoCategoria;
     console.log(`✅ [STEP 3] Categoria encontrada: "${categoriaNome}"`);
+    console.log(`🔍 [DEBUG] categoriaEncontrada:`, categoriaEncontrada);
     console.log(`🔍 [STEP 4] Iniciando busca de produtos...`);
     
     // Buscar produtos da categoria usando ILIKE e agrupando para evitar duplicatas
