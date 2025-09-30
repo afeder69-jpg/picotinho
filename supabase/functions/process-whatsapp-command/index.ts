@@ -1368,7 +1368,8 @@ async function processarConsultarCategoria(supabase: any, mensagem: any): Promis
         const valorItem = produto.quantidade * produto.preco_unitario_ultimo;
         valorTotal += valorItem;
         
-        resposta += ` | 💰 ${precoFormatado}/un`;
+        const unidadeFormatada = produto.unidade_medida.toLowerCase();
+        resposta += ` | 💰 ${precoFormatado}/${unidadeFormatada}`;
         resposta += ` | 💵 R$ ${valorItem.toFixed(2).replace('.', ',')}`;
       }
       
