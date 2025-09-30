@@ -133,8 +133,14 @@ const handler = async (req: Request): Promise<Response> => {
             comando_identificado = 'baixar_estoque';
           } else if (textoLimpo.startsWith('+') || textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
             comando_identificado = 'aumentar_estoque';
-    } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar|estoque)\b/)) {
-      comando_identificado = 'consultar_estoque';
+          } else if (textoLimpo.match(/\b(consulta|consultar|consulte|ver|verificar)\s+(categoria|cat)\b/)) {
+            // Comando específico de consulta de categoria - capturar antes da consulta geral
+            comando_identificado = 'consultar_categoria';
+          } else if (textoLimpo.match(/\b(categoria|cat)\b/) && !textoLimpo.match(/\b(baixa|baixar|aumenta|aumentar|inclui|incluir)\b/)) {
+            // Também reconhecer "categoria [termo]" sem "consulta" na frente
+            comando_identificado = 'consultar_categoria';
+          } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar|estoque)\b/)) {
+            comando_identificado = 'consultar_estoque';
           } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
             comando_identificado = 'adicionar_produto';
           } else if (textoLimpo.match(/\b(inserir nota|inserir notas|enviar nota|enviar notas|nota fiscal|notas fiscais)\b/)) {
