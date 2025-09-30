@@ -257,9 +257,16 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 [DEBUG] isAdicionar result:', isAdicionar);
         
         // Comandos para CONSULTAR ESTOQUE (aceita "consulta", "consultar" ou "estoque")
-        const isConsultar = textoNormalizado.match(/\b(consulta|consultar|estoque)\b/);
-        console.log('🔍 [DEBUG] isConsultar match:', textoNormalizado.match(/\b(consulta|consultar|estoque)\b/));
-        console.log('🔍 [DEBUG] isConsultar result:', isConsultar);
+        // Verificar se é comando de ESTOQUE (sozinho ou com consulta)
+        const isEstoque = textoNormalizado === 'estoque' || 
+                          textoNormalizado === 'consulta estoque' ||
+                          textoNormalizado === 'consultar estoque';
+        
+        // Verificar se é CONSULTA de produto específico
+        const isConsultar = textoNormalizado.match(/\b(consulta|consultar)\b/) && !isEstoque;
+        
+        console.log('🔍 [DEBUG] isEstoque:', isEstoque);
+        console.log('🔍 [DEBUG] isConsultar:', isConsultar);
         
         // Comandos para CONSULTAR CATEGORIA (requer palavra "categoria" explícita)
         const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
@@ -289,8 +296,12 @@ const handler = async (req: Request): Promise<Response> => {
           console.log('📂 Comando CONSULTAR CATEGORIA identificado:', textoNormalizado);
           resposta += await processarConsultarCategoria(supabase, mensagem);
           comandoExecutado = true;
+        } else if (isEstoque) {
+          console.log('📦 Comando ESTOQUE COMPLETO identificado:', textoNormalizado);
+          resposta += await processarConsultarEstoque(supabase, mensagem);
+          comandoExecutado = true;
         } else if (isConsultar) {
-          console.log('🔍 Comando CONSULTAR identificado:', textoNormalizado);
+          console.log('🔍 Comando CONSULTAR PRODUTO identificado:', textoNormalizado);
           resposta += await processarConsultarEstoque(supabase, mensagem);
           comandoExecutado = true;
         } else {
@@ -640,9 +651,8 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
       console.log(`📝 [STEP 3] Produto extraído: "${produto}"`);
 
       if (!produto || produto === "estoque") {
-        console.log(`❌ [STEP 4] Produto vazio ou "estoque" - retornando consulta completa`);
-        // Redirecionar para consulta completa
-        return await processarConsultarEstoque(supabase, { ...mensagem, conteudo: "estoque" });
+        console.log(`❌ [STEP 4] Produto vazio ou "estoque" - comando inválido`);
+        return "❌ Você precisa informar um produto. Exemplo: 'consulta banana'\n\nPara ver todo o estoque, use apenas: 'ESTOQUE'";
       }
 
       console.log(`🔍 [STEP 5] Iniciando busca no banco...`);
