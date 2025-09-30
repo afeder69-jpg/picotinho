@@ -606,6 +606,17 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
           .trim();
       };
       
+      // Normalizar unidades para padrão Picotinho (Un, Kg, Lt)
+      const normalizarUnidade = (unidade: string): string => {
+        const unidadeLimpa = unidade?.toUpperCase().trim() || 'UN';
+        const mapa: { [key: string]: string } = {
+          'PC': 'Un', 'UNIDADE': 'Un', 'UN': 'Un', 'UND': 'Un',
+          'G': 'Kg', 'GRAMAS': 'Kg', 'KG': 'Kg',
+          'ML': 'Lt', 'L': 'Lt', 'LT': 'Lt'
+        };
+        return mapa[unidadeLimpa] || unidadeLimpa;
+      };
+      
       // Buscar TODOS os produtos similares (não apenas o primeiro)
       const produtosEncontrados = estoques?.filter((item: any) => {
         const nomeEstoqueNormalizado = normalizarNome(item.produto_nome);
@@ -630,7 +641,7 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
           acc[nomeNormalizado] = {
             produto_nome: item.produto_nome,
             quantidade: 0,
-            unidade_medida: item.unidade_medida
+            unidade_medida: normalizarUnidade(item.unidade_medida)
           };
         }
         
