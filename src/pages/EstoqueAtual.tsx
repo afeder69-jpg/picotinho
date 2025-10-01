@@ -1667,7 +1667,7 @@ const EstoqueAtual = () => {
                       const corPercentual = percentualCategoria >= 0 ? 'text-red-600' : 'text-green-600';
 
                       return (
-                        <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs sm:text-sm items-center py-1">
+                        <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs items-center py-1">
                            <button 
                              onClick={scrollToCategory}
                              className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium whitespace-nowrap max-w-[140px] truncate"
@@ -1679,7 +1679,7 @@ const EstoqueAtual = () => {
                            <span className="font-medium text-blue-600 text-right">
                              {formatCurrency(subtotalAtual)}
                            </span>
-                          <span className={`font-medium ${corPercentual} text-right text-xs`}>
+                          <span className={`font-medium ${corPercentual} text-right text-[10px]`}>
                             {sinalPercentual}{Math.abs(percentualCategoria).toFixed(1)}%
                           </span>
                           <div className="flex justify-end">
@@ -1697,7 +1697,7 @@ const EstoqueAtual = () => {
                          <span className="text-blue-600 text-right">
                            {formatCurrency(valorTotalEstoque)}
                           </span>
-                          <span className={`font-bold text-right text-xs ${(() => {
+                          <span className={`font-bold text-right text-[10px] ${(() => {
                             const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
                             return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
                           })()}`}>
