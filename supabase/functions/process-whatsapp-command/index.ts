@@ -437,21 +437,21 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
       return `Produto "${produtoNome}" não encontrado no seu estoque.`;
     }
     
-    // Consolidar produtos com o mesmo nome normalizado (soma quantidades)
+    // Consolidar produtos somando quantidades
     const produtosConsolidados = produtosEncontrados.reduce((acc: any, item: any) => {
-      const nomeNormalizado = normalizarNome(item.produto_nome);
+      const chave = item.produto_nome.toLowerCase().trim();
       
-      if (!acc[nomeNormalizado]) {
-        acc[nomeNormalizado] = {
+      if (!acc[chave]) {
+        acc[chave] = {
           produto_nome: item.produto_nome,
           quantidade: 0,
-          unidade_medida: normalizarUnidade(item.unidade_medida),
+          unidade_medida: item.unidade_medida,
           entradas: [] // Guardar todas as entradas para poder operar nelas
         };
       }
       
-      acc[nomeNormalizado].quantidade += item.quantidade;
-      acc[nomeNormalizado].entradas.push(item);
+      acc[chave].quantidade += item.quantidade;
+      acc[chave].entradas.push(item);
       return acc;
     }, {});
     
@@ -894,21 +894,21 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       return `❌ Produto não encontrado no seu estoque. Use o comando 'criar' ou 'incluir' para adicionar um novo produto.`;
     }
     
-    // Consolidar produtos com o mesmo nome normalizado (soma quantidades)
+    // Consolidar produtos somando quantidades
     const produtosConsolidados = produtosEncontrados.reduce((acc: any, item: any) => {
-      const nomeNormalizado = normalizarNome(item.produto_nome);
+      const chave = item.produto_nome.toLowerCase().trim();
       
-      if (!acc[nomeNormalizado]) {
-        acc[nomeNormalizado] = {
+      if (!acc[chave]) {
+        acc[chave] = {
           produto_nome: item.produto_nome,
           quantidade: 0,
-          unidade_medida: normalizarUnidade(item.unidade_medida),
+          unidade_medida: item.unidade_medida,
           entradas: [] // Guardar todas as entradas para poder operar nelas
         };
       }
       
-      acc[nomeNormalizado].quantidade += item.quantidade;
-      acc[nomeNormalizado].entradas.push(item);
+      acc[chave].quantidade += item.quantidade;
+      acc[chave].entradas.push(item);
       return acc;
     }, {});
     
