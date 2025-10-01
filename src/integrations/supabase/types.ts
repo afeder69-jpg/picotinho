@@ -326,6 +326,63 @@ export type Database = {
         }
         Relationships: []
       }
+      normalizacao_decisoes_log: {
+        Row: {
+          candidato_id: string | null
+          created_at: string | null
+          decidido_por: string | null
+          decisao: string
+          decisao_master: Json | null
+          feedback_texto: string | null
+          id: string
+          produto_master_final: string | null
+          sugestao_ia: Json | null
+          texto_original: string
+          usado_para_treino: boolean | null
+        }
+        Insert: {
+          candidato_id?: string | null
+          created_at?: string | null
+          decidido_por?: string | null
+          decisao: string
+          decisao_master?: Json | null
+          feedback_texto?: string | null
+          id?: string
+          produto_master_final?: string | null
+          sugestao_ia?: Json | null
+          texto_original: string
+          usado_para_treino?: boolean | null
+        }
+        Update: {
+          candidato_id?: string | null
+          created_at?: string | null
+          decidido_por?: string | null
+          decisao?: string
+          decisao_master?: Json | null
+          feedback_texto?: string | null
+          id?: string
+          produto_master_final?: string | null
+          sugestao_ia?: Json | null
+          texto_original?: string
+          usado_para_treino?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "normalizacao_decisoes_log_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_candidatos_normalizacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "normalizacao_decisoes_log_produto_master_final_fkey"
+            columns: ["produto_master_final"]
+            isOneToOne: false
+            referencedRelation: "produtos_master_global"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       normalizacoes_embalagens: {
         Row: {
           ativo: boolean
@@ -804,6 +861,165 @@ export type Database = {
           },
         ]
       }
+      produtos_candidatos_normalizacao: {
+        Row: {
+          candidatos_similares: Json | null
+          categoria_sugerida: string | null
+          confianca_ia: number | null
+          created_at: string | null
+          granel_sugerido: boolean | null
+          id: string
+          marca_sugerida: string | null
+          nome_base_sugerido: string | null
+          nome_padrao_sugerido: string | null
+          nota_imagem_id: string | null
+          observacoes_revisor: string | null
+          qtd_unidade_sugerido: string | null
+          qtd_valor_sugerido: number | null
+          razao_ia: string | null
+          revisado_em: string | null
+          revisado_por: string | null
+          status: string | null
+          sugestao_produto_master: string | null
+          sugestao_sku_global: string | null
+          texto_original: string
+          tipo_embalagem_sugerido: string | null
+          updated_at: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          candidatos_similares?: Json | null
+          categoria_sugerida?: string | null
+          confianca_ia?: number | null
+          created_at?: string | null
+          granel_sugerido?: boolean | null
+          id?: string
+          marca_sugerida?: string | null
+          nome_base_sugerido?: string | null
+          nome_padrao_sugerido?: string | null
+          nota_imagem_id?: string | null
+          observacoes_revisor?: string | null
+          qtd_unidade_sugerido?: string | null
+          qtd_valor_sugerido?: number | null
+          razao_ia?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
+          status?: string | null
+          sugestao_produto_master?: string | null
+          sugestao_sku_global?: string | null
+          texto_original: string
+          tipo_embalagem_sugerido?: string | null
+          updated_at?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          candidatos_similares?: Json | null
+          categoria_sugerida?: string | null
+          confianca_ia?: number | null
+          created_at?: string | null
+          granel_sugerido?: boolean | null
+          id?: string
+          marca_sugerida?: string | null
+          nome_base_sugerido?: string | null
+          nome_padrao_sugerido?: string | null
+          nota_imagem_id?: string | null
+          observacoes_revisor?: string | null
+          qtd_unidade_sugerido?: string | null
+          qtd_valor_sugerido?: number | null
+          razao_ia?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
+          status?: string | null
+          sugestao_produto_master?: string | null
+          sugestao_sku_global?: string | null
+          texto_original?: string
+          tipo_embalagem_sugerido?: string | null
+          updated_at?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produtos_candidatos_normalizacao_nota_imagem_id_fkey"
+            columns: ["nota_imagem_id"]
+            isOneToOne: false
+            referencedRelation: "notas_imagens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "produtos_candidatos_normalizacao_sugestao_produto_master_fkey"
+            columns: ["sugestao_produto_master"]
+            isOneToOne: false
+            referencedRelation: "produtos_master_global"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      produtos_master_global: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          categoria: string
+          confianca_normalizacao: number | null
+          created_at: string | null
+          granel: boolean | null
+          id: string
+          marca: string | null
+          nome_base: string
+          nome_padrao: string
+          qtd_base: number | null
+          qtd_unidade: string | null
+          qtd_valor: number | null
+          sku_global: string
+          status: string | null
+          tipo_embalagem: string | null
+          total_notas: number | null
+          total_usuarios: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          categoria: string
+          confianca_normalizacao?: number | null
+          created_at?: string | null
+          granel?: boolean | null
+          id?: string
+          marca?: string | null
+          nome_base: string
+          nome_padrao: string
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
+          sku_global: string
+          status?: string | null
+          tipo_embalagem?: string | null
+          total_notas?: number | null
+          total_usuarios?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          categoria?: string
+          confianca_normalizacao?: number | null
+          created_at?: string | null
+          granel?: boolean | null
+          id?: string
+          marca?: string | null
+          nome_base?: string
+          nome_padrao?: string
+          qtd_base?: number | null
+          qtd_unidade?: string | null
+          qtd_valor?: number | null
+          sku_global?: string
+          status?: string | null
+          tipo_embalagem?: string | null
+          total_notas?: number | null
+          total_usuarios?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       produtos_normalizados: {
         Row: {
           ativo: boolean
@@ -854,6 +1070,50 @@ export type Database = {
           variante?: string | null
         }
         Relationships: []
+      }
+      produtos_sinonimos_globais: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          confianca: number | null
+          created_at: string | null
+          fonte: string | null
+          id: string
+          produto_master_id: string
+          texto_variacao: string
+          total_ocorrencias: number | null
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          confianca?: number | null
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          produto_master_id: string
+          texto_variacao: string
+          total_ocorrencias?: number | null
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          confianca?: number | null
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          produto_master_id?: string
+          texto_variacao?: string
+          total_ocorrencias?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produtos_sinonimos_globais_produto_master_id_fkey"
+            columns: ["produto_master_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_master_global"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profile_access_log: {
         Row: {
