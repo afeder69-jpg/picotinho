@@ -86,32 +86,59 @@ const EstoqueAtual = () => {
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
   const [itemParaExcluir, setItemParaExcluir] = useState<EstoqueItem | null>(null);
 
-  // Função para obter coordenadas do usuário via GPS
-  const obterCoordenadas = (): Promise<{ latitude: number; longitude: number }> => {
-    return new Promise((resolve, reject) => {
+  // Função para obter coordenadas do usuário (prioriza CEP do perfil)
+  const obterCoordenadas = async (): Promise<{ latitude: number; longitude: number }> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('⚠️ Usuário não autenticado');
+        return { latitude: -22.9068, longitude: -43.1729 };
+      }
+
+      // Priorizar coordenadas do perfil (baseado no CEP cadastrado)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('latitude, longitude, cep')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profile?.latitude && profile?.longitude && profile?.cep) {
+        console.log(`✅ Usando coordenadas do CEP cadastrado: ${profile.latitude}, ${profile.longitude}`);
+        return {
+          latitude: profile.latitude,
+          longitude: profile.longitude
+        };
+      }
+
+      console.log('⚠️ CEP não cadastrado - usando fallback GPS');
+    } catch (error) {
+      console.error('Erro ao buscar perfil:', error);
+    }
+
+    // Fallback para GPS apenas se não tiver CEP
+    return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        console.error('Geolocalização não suportada');
-        // Fallback para Rio de Janeiro (região do usuário)
+        console.warn('⚠️ Geolocalização não suportada - usando coordenadas padrão');
         resolve({ latitude: -22.9068, longitude: -43.1729 });
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log(`📍 GPS obtido: ${position.coords.latitude}, ${position.coords.longitude}`);
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           });
         },
         (error) => {
-          console.error('Erro ao obter localização:', error);
-          // Fallback para Rio de Janeiro (região do usuário)
+          console.error('❌ Erro ao obter GPS:', error);
           resolve({ latitude: -22.9068, longitude: -43.1729 });
         },
         {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 300000 // 5 minutos
+          maximumAge: 300000
         }
       );
     });
