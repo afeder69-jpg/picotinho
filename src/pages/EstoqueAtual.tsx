@@ -1608,11 +1608,12 @@ const EstoqueAtual = () => {
               <CardContent>
                 <div className="space-y-1">
                    {/* Cabeçalho das colunas */}
-                    <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
+                    <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
                       <span>Categoria</span>
                       <span className="text-center">Itens</span>
                       <span className="text-center">Valor Pago</span>
                       <span className="text-right">Valor Atual</span>
+                      <span className="text-right">%</span>
                       <span className="text-right"></span>
                     </div>
                   
@@ -1644,8 +1645,15 @@ const EstoqueAtual = () => {
                       // Calcular quantidade total de itens na categoria
                      const quantidadeItens = itensCategoria.length;
 
+                      // Calcular percentual da categoria
+                      const percentualCategoria = subtotal > 0 
+                        ? ((subtotalAtual - subtotal) / subtotal) * 100 
+                        : 0;
+                      const sinalPercentual = percentualCategoria >= 0 ? '+' : '';
+                      const corPercentual = percentualCategoria >= 0 ? 'text-red-600' : 'text-green-600';
+
                       return (
-                        <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 text-xs sm:text-sm items-center py-1">
+                        <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs sm:text-sm items-center py-1">
                            <button 
                              onClick={scrollToCategory}
                              className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium whitespace-nowrap max-w-[140px] truncate"
@@ -1657,6 +1665,9 @@ const EstoqueAtual = () => {
                            <span className="font-medium text-blue-600 text-right">
                              {formatCurrency(subtotalAtual)}
                            </span>
+                          <span className={`font-medium ${corPercentual} text-right text-xs`}>
+                            {sinalPercentual}{Math.abs(percentualCategoria).toFixed(1)}%
+                          </span>
                           <div className="flex justify-end">
                             {getTrendIcon()}
                           </div>
@@ -1665,12 +1676,22 @@ const EstoqueAtual = () => {
                   })}
                   
                       <div className="border-t pt-2 mt-2">
-                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.8fr_0.6fr] gap-1 font-bold text-xs">
+                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 font-bold text-xs">
                           <span className="text-foreground">Total</span>
                           <span className="text-muted-foreground text-center">{totalProdutosUnicos}</span>
                          <span className="text-foreground text-center">{formatCurrency(valorTotalPago)}</span>
                          <span className="text-blue-600 text-right">
                            {formatCurrency(valorTotalEstoque)}
+                          </span>
+                          <span className={`font-bold text-right text-xs ${(() => {
+                            const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
+                            return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
+                          })()}`}>
+                            {(() => {
+                              const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
+                              const sinal = percentualTotal >= 0 ? '+' : '';
+                              return `${sinal}${Math.abs(percentualTotal).toFixed(1)}%`;
+                            })()}
                           </span>
                           <div className="flex justify-end">
                              {/* Ícone de tendência total com normalização */}
@@ -1690,30 +1711,24 @@ const EstoqueAtual = () => {
                         </div>
                       </div>
                       
-                      {/* Linha de diferença - bloco independente separado da tabela */}
+                      {/* Linha de diferença - alinhada com o grid */}
                       <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground font-medium">Diferença</span>
-                          <div className={`font-medium ${(() => {
+                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs font-medium">
+                          <span className="text-muted-foreground">Diferença</span>
+                          <span></span>
+                          <span></span>
+                          <span className={`text-right ${(() => {
                             const diferenca = valorTotalEstoque - valorTotalPago;
                             return diferenca >= 0 ? 'text-red-600' : 'text-green-600';
-                          })()} flex items-center gap-1`}>
-                            <span>
-                              {(() => {
-                                const diferenca = valorTotalEstoque - valorTotalPago;
-                                const sinal = diferenca >= 0 ? '+' : '';
-                                return `${sinal}${formatCurrency(Math.abs(diferenca))}`;
-                              })()}
-                            </span>
-                            <span className="text-xs">
-                              ({(() => {
-                                const diferenca = valorTotalEstoque - valorTotalPago;
-                                const percentual = valorTotalPago > 0 ? ((diferenca / valorTotalPago) * 100) : 0;
-                                const sinal = diferenca >= 0 ? '+' : '';
-                                return `${sinal}${Math.abs(percentual).toFixed(1)}%`;
-                              })()})
-                            </span>
-                          </div>
+                          })()}`}>
+                            {(() => {
+                              const diferenca = valorTotalEstoque - valorTotalPago;
+                              const sinal = diferenca >= 0 ? '+' : '';
+                              return `${sinal}${formatCurrency(Math.abs(diferenca))}`;
+                            })()}
+                          </span>
+                          <span></span>
+                          <span></span>
                         </div>
                       </div>
                    </div>
