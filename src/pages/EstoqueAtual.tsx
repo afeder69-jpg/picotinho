@@ -1627,7 +1627,7 @@ const EstoqueAtual = () => {
                       <span>Itens</span>
                       <span>Valor Pago</span>
                       <span>Valor Atual</span>
-                      <span>%</span>
+                      <span className="text-right">%</span>
                       <span className="text-right"></span>
                     </div>
                   
@@ -1679,7 +1679,7 @@ const EstoqueAtual = () => {
                            <span className="font-medium text-blue-600 text-left">
                              {formatCurrency(subtotalAtual)}
                            </span>
-                          <span className={`font-medium ${corPercentual} text-left text-[10px]`}>
+                          <span className={`font-medium ${corPercentual} text-right text-[10px]`}>
                             {sinalPercentual}{Math.abs(percentualCategoria).toFixed(1)}%
                           </span>
                           <div className="flex justify-end">
@@ -1697,7 +1697,7 @@ const EstoqueAtual = () => {
                          <span className="text-blue-600 text-left">
                            {formatCurrency(valorTotalEstoque)}
                           </span>
-                          <span className={`text-left text-[10px] ${(() => {
+                          <span className={`text-right text-[10px] ${(() => {
                             const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
                             return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
                           })()}`}>
