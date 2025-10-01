@@ -1625,7 +1625,7 @@ const EstoqueAtual = () => {
                     <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
                       <span>Categoria</span>
                       <span className="text-center">Itens</span>
-                      <span className="text-center">Valor Pago</span>
+                      <span className="text-right">Valor Pago</span>
                       <span className="text-right">Valor Atual</span>
                       <span className="text-right">%</span>
                       <span className="text-right"></span>
@@ -1675,7 +1675,7 @@ const EstoqueAtual = () => {
                              {formatCategoryName(categoria)}
                            </button>
                           <span className="font-medium text-muted-foreground text-center">{quantidadeItens}</span>
-                          <span className="font-medium text-foreground text-center">{formatCurrency(subtotal)}</span>
+                          <span className="font-medium text-foreground text-right">{formatCurrency(subtotal)}</span>
                            <span className="font-medium text-blue-600 text-right">
                              {formatCurrency(subtotalAtual)}
                            </span>
