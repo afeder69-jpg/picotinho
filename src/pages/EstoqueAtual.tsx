@@ -1674,12 +1674,12 @@ const EstoqueAtual = () => {
                            >
                              {formatCategoryName(categoria)}
                            </button>
-                          <span className="font-medium text-muted-foreground text-center">{quantidadeItens}</span>
-                          <span className="font-medium text-foreground text-right">{formatCurrency(subtotal)}</span>
-                           <span className="font-medium text-blue-600 text-right">
+                          <span className="font-medium text-muted-foreground text-left">{quantidadeItens}</span>
+                          <span className="font-medium text-foreground text-left">{formatCurrency(subtotal)}</span>
+                           <span className="font-medium text-blue-600 text-left">
                              {formatCurrency(subtotalAtual)}
                            </span>
-                          <span className={`font-medium ${corPercentual} text-right text-[10px]`}>
+                          <span className={`font-medium ${corPercentual} text-left text-[10px]`}>
                             {sinalPercentual}{Math.abs(percentualCategoria).toFixed(1)}%
                           </span>
                           <div className="flex justify-end">
@@ -1692,12 +1692,12 @@ const EstoqueAtual = () => {
                       <div className="border-t pt-2 mt-2">
                         <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 font-bold text-xs">
                           <span className="text-foreground">Total</span>
-                          <span className="text-muted-foreground text-center">{totalProdutosUnicos}</span>
-                         <span className="text-foreground text-center">{formatCurrency(valorTotalPago)}</span>
-                         <span className="text-blue-600 text-right">
+                          <span className="text-muted-foreground text-left">{totalProdutosUnicos}</span>
+                         <span className="text-foreground text-left">{formatCurrency(valorTotalPago)}</span>
+                         <span className="text-blue-600 text-left">
                            {formatCurrency(valorTotalEstoque)}
                           </span>
-                          <span className={`font-bold text-right text-[10px] ${(() => {
+                          <span className={`font-bold text-left text-[10px] ${(() => {
                             const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
                             return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
                           })()}`}>
