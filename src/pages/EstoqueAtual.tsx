@@ -1624,10 +1624,10 @@ const EstoqueAtual = () => {
                    {/* Cabeçalho das colunas */}
                     <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
                       <span>Categoria</span>
-                      <span className="text-center">Itens</span>
-                      <span className="text-right">Valor Pago</span>
-                      <span className="text-right">Valor Atual</span>
-                      <span className="text-right">%</span>
+                      <span>Itens</span>
+                      <span>Valor Pago</span>
+                      <span>Valor Atual</span>
+                      <span>%</span>
                       <span className="text-right"></span>
                     </div>
                   
