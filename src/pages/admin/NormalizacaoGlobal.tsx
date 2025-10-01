@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { 
   CheckCircle2, 
   XCircle, 
@@ -15,7 +20,8 @@ import {
   TrendingUp,
   Shield,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Edit3
 } from "lucide-react";
 
 export default function NormalizacaoGlobal() {
@@ -32,6 +38,27 @@ export default function NormalizacaoGlobal() {
   const [candidatos, setCandidatos] = useState<any[]>([]);
   const [produtosMaster, setProdutosMaster] = useState<any[]>([]);
   const [processando, setProcessando] = useState(false);
+  
+  // Estados para modais
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [candidatoAtual, setCandidatoAtual] = useState<any>(null);
+  
+  // Estados para formulário de edição
+  const [editForm, setEditForm] = useState({
+    nome_padrao: '',
+    categoria: '',
+    nome_base: '',
+    marca: '',
+    tipo_embalagem: '',
+    qtd_valor: '',
+    qtd_unidade: '',
+    granel: false,
+    sku_global: ''
+  });
+  
+  // Estado para observações de rejeição
+  const [observacoesRejeicao, setObservacoesRejeicao] = useState('');
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -161,13 +188,124 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function aprovarCandidato(candidatoId: string) {
+  function abrirModalEdicao(candidato: any) {
+    setCandidatoAtual(candidato);
+    setEditForm({
+      nome_padrao: candidato.nome_padrao_sugerido || '',
+      categoria: candidato.categoria_sugerida || '',
+      nome_base: candidato.nome_base_sugerido || '',
+      marca: candidato.marca_sugerida || '',
+      tipo_embalagem: candidato.tipo_embalagem_sugerido || '',
+      qtd_valor: candidato.qtd_valor_sugerido?.toString() || '',
+      qtd_unidade: candidato.qtd_unidade_sugerido || '',
+      granel: candidato.granel_sugerido || false,
+      sku_global: candidato.sugestao_sku_global || ''
+    });
+    setEditModalOpen(true);
+  }
+
+  function abrirModalRejeicao(candidato: any) {
+    setCandidatoAtual(candidato);
+    setObservacoesRejeicao('');
+    setRejectModalOpen(true);
+  }
+
+  async function aprovarComModificacoes() {
+    if (!candidatoAtual) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Criar produto master com dados editados
+      const { data: produtoMaster, error: errorMaster } = await supabase
+        .from('produtos_master_global')
+        .insert({
+          sku_global: editForm.sku_global,
+          nome_padrao: editForm.nome_padrao,
+          categoria: editForm.categoria,
+          nome_base: editForm.nome_base,
+          marca: editForm.marca || null,
+          tipo_embalagem: editForm.tipo_embalagem || null,
+          qtd_valor: editForm.qtd_valor ? parseFloat(editForm.qtd_valor) : null,
+          qtd_unidade: editForm.qtd_unidade || null,
+          granel: editForm.granel,
+          confianca_normalizacao: candidatoAtual.confianca_ia,
+          aprovado_por: user.id,
+          aprovado_em: new Date().toISOString(),
+          status: 'ativo'
+        })
+        .select()
+        .single();
+
+      if (errorMaster) throw errorMaster;
+
+      // Atualizar candidato
+      const { error: errorCandidato } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .update({ 
+          status: 'aprovado',
+          revisado_por: user.id,
+          revisado_em: new Date().toISOString(),
+          sugestao_produto_master: produtoMaster.id
+        })
+        .eq('id', candidatoAtual.id);
+
+      if (errorCandidato) throw errorCandidato;
+
+      // Salvar no log de decisões para aprendizado da IA
+      const { error: errorLog } = await supabase
+        .from('normalizacao_decisoes_log')
+        .insert({
+          texto_original: candidatoAtual.texto_original,
+          candidato_id: candidatoAtual.id,
+          decisao: 'aprovado_com_modificacoes',
+          sugestao_ia: {
+            nome_padrao: candidatoAtual.nome_padrao_sugerido,
+            categoria: candidatoAtual.categoria_sugerida,
+            nome_base: candidatoAtual.nome_base_sugerido,
+            marca: candidatoAtual.marca_sugerida,
+            tipo_embalagem: candidatoAtual.tipo_embalagem_sugerido,
+            qtd_valor: candidatoAtual.qtd_valor_sugerido,
+            qtd_unidade: candidatoAtual.qtd_unidade_sugerido,
+            granel: candidatoAtual.granel_sugerido,
+            confianca: candidatoAtual.confianca_ia
+          },
+          decisao_master: editForm,
+          decidido_por: user.id,
+          produto_master_final: produtoMaster.id,
+          usado_para_treino: false
+        });
+
+      if (errorLog) console.error('Erro ao salvar log:', errorLog);
+
+      toast({
+        title: "Aprovado com modificações",
+        description: "Produto adicionado ao catálogo master com suas edições",
+      });
+
+      setEditModalOpen(false);
+      await carregarDados();
+
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  }
+
+  async function aprovarSemModificacoes(candidatoId: string) {
     try {
       const candidato = candidatos.find(c => c.id === candidatoId);
       if (!candidato) return;
 
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
       // Criar produto master
-      const { error: errorMaster } = await supabase
+      const { data: produtoMaster, error: errorMaster } = await supabase
         .from('produtos_master_global')
         .insert({
           sku_global: candidato.sugestao_sku_global,
@@ -180,8 +318,12 @@ export default function NormalizacaoGlobal() {
           qtd_unidade: candidato.qtd_unidade_sugerido,
           granel: candidato.granel_sugerido,
           confianca_normalizacao: candidato.confianca_ia,
+          aprovado_por: user.id,
+          aprovado_em: new Date().toISOString(),
           status: 'ativo'
-        });
+        })
+        .select()
+        .single();
 
       if (errorMaster) throw errorMaster;
 
@@ -190,11 +332,32 @@ export default function NormalizacaoGlobal() {
         .from('produtos_candidatos_normalizacao')
         .update({ 
           status: 'aprovado',
-          revisado_em: new Date().toISOString()
+          revisado_por: user.id,
+          revisado_em: new Date().toISOString(),
+          sugestao_produto_master: produtoMaster.id
         })
         .eq('id', candidatoId);
 
       if (errorCandidato) throw errorCandidato;
+
+      // Salvar no log - aprovação sem modificações
+      const { error: errorLog } = await supabase
+        .from('normalizacao_decisoes_log')
+        .insert({
+          texto_original: candidato.texto_original,
+          candidato_id: candidato.id,
+          decisao: 'aprovado_sem_modificacoes',
+          sugestao_ia: {
+            nome_padrao: candidato.nome_padrao_sugerido,
+            categoria: candidato.categoria_sugerida,
+            confianca: candidato.confianca_ia
+          },
+          decidido_por: user.id,
+          produto_master_final: produtoMaster.id,
+          usado_para_treino: false
+        });
+
+      if (errorLog) console.error('Erro ao salvar log:', errorLog);
 
       toast({
         title: "Aprovado",
@@ -212,23 +375,61 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function rejeitarCandidato(candidatoId: string) {
+  async function rejeitarComObservacoes() {
+    if (!candidatoAtual) return;
+    
+    if (!observacoesRejeicao.trim()) {
+      toast({
+        title: "Observações obrigatórias",
+        description: "Por favor, explique o motivo da rejeição para ajudar a IA a aprender",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      const { error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Atualizar candidato com observações
+      const { error: errorCandidato } = await supabase
         .from('produtos_candidatos_normalizacao')
         .update({ 
           status: 'rejeitado',
-          revisado_em: new Date().toISOString()
+          revisado_por: user.id,
+          revisado_em: new Date().toISOString(),
+          observacoes_revisor: observacoesRejeicao
         })
-        .eq('id', candidatoId);
+        .eq('id', candidatoAtual.id);
 
-      if (error) throw error;
+      if (errorCandidato) throw errorCandidato;
+
+      // Salvar no log para aprendizado
+      const { error: errorLog } = await supabase
+        .from('normalizacao_decisoes_log')
+        .insert({
+          texto_original: candidatoAtual.texto_original,
+          candidato_id: candidatoAtual.id,
+          decisao: 'rejeitado',
+          sugestao_ia: {
+            nome_padrao: candidatoAtual.nome_padrao_sugerido,
+            categoria: candidatoAtual.categoria_sugerida,
+            confianca: candidatoAtual.confianca_ia,
+            razao_ia: candidatoAtual.razao_ia
+          },
+          feedback_texto: observacoesRejeicao,
+          decidido_por: user.id,
+          usado_para_treino: false
+        });
+
+      if (errorLog) console.error('Erro ao salvar log:', errorLog);
 
       toast({
         title: "Rejeitado",
-        description: "Candidato marcado como rejeitado",
+        description: "Feedback registrado para melhorar a IA",
       });
 
+      setRejectModalOpen(false);
       await carregarDados();
 
     } catch (error: any) {
@@ -370,8 +571,17 @@ export default function NormalizacaoGlobal() {
                     <div className="flex gap-2">
                       <Button 
                         size="sm" 
+                        variant="outline"
+                        onClick={() => abrirModalEdicao(candidato)}
+                        className="gap-1"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Editar e Aprovar
+                      </Button>
+                      <Button 
+                        size="sm" 
                         variant="default"
-                        onClick={() => aprovarCandidato(candidato.id)}
+                        onClick={() => aprovarSemModificacoes(candidato.id)}
                         className="gap-1"
                       >
                         <CheckCircle2 className="w-4 h-4" />
@@ -380,7 +590,7 @@ export default function NormalizacaoGlobal() {
                       <Button 
                         size="sm" 
                         variant="destructive"
-                        onClick={() => rejeitarCandidato(candidato.id)}
+                        onClick={() => abrirModalRejeicao(candidato)}
                         className="gap-1"
                       >
                         <XCircle className="w-4 h-4" />
@@ -495,6 +705,192 @@ export default function NormalizacaoGlobal() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Modal de Edição */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Normalização</DialogTitle>
+            <DialogDescription>
+              Modifique os campos conforme necessário. Suas correções ajudarão a IA a aprender.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="nome_padrao">Nome Padrão *</Label>
+              <Input
+                id="nome_padrao"
+                value={editForm.nome_padrao}
+                onChange={(e) => setEditForm({...editForm, nome_padrao: e.target.value})}
+                placeholder="Ex: Arroz Branco Tipo 1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="categoria">Categoria *</Label>
+                <Input
+                  id="categoria"
+                  value={editForm.categoria}
+                  onChange={(e) => setEditForm({...editForm, categoria: e.target.value})}
+                  placeholder="Ex: Alimentos"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="nome_base">Nome Base *</Label>
+                <Input
+                  id="nome_base"
+                  value={editForm.nome_base}
+                  onChange={(e) => setEditForm({...editForm, nome_base: e.target.value})}
+                  placeholder="Ex: Arroz"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="marca">Marca</Label>
+                <Input
+                  id="marca"
+                  value={editForm.marca}
+                  onChange={(e) => setEditForm({...editForm, marca: e.target.value})}
+                  placeholder="Ex: Tio João"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tipo_embalagem">Tipo Embalagem</Label>
+                <Input
+                  id="tipo_embalagem"
+                  value={editForm.tipo_embalagem}
+                  onChange={(e) => setEditForm({...editForm, tipo_embalagem: e.target.value})}
+                  placeholder="Ex: Pacote, Caixa"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="qtd_valor">Quantidade (Valor)</Label>
+                <Input
+                  id="qtd_valor"
+                  type="number"
+                  step="0.01"
+                  value={editForm.qtd_valor}
+                  onChange={(e) => setEditForm({...editForm, qtd_valor: e.target.value})}
+                  placeholder="Ex: 1"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="qtd_unidade">Quantidade (Unidade)</Label>
+                <Input
+                  id="qtd_unidade"
+                  value={editForm.qtd_unidade}
+                  onChange={(e) => setEditForm({...editForm, qtd_unidade: e.target.value})}
+                  placeholder="Ex: kg, g, L"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sku_global">SKU Global</Label>
+              <Input
+                id="sku_global"
+                value={editForm.sku_global}
+                onChange={(e) => setEditForm({...editForm, sku_global: e.target.value})}
+                placeholder="Gerado automaticamente"
+                className="font-mono"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="granel"
+                checked={editForm.granel}
+                onCheckedChange={(checked) => setEditForm({...editForm, granel: checked})}
+              />
+              <Label htmlFor="granel">Produto vendido a granel</Label>
+            </div>
+
+            {candidatoAtual && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Texto original:</strong> {candidatoAtual.texto_original}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={aprovarComModificacoes} disabled={!editForm.nome_padrao || !editForm.categoria || !editForm.nome_base}>
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Aprovar com Modificações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Rejeição */}
+      <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Rejeitar Normalização</DialogTitle>
+            <DialogDescription>
+              Por favor, explique o motivo da rejeição. Isso ajudará a IA a melhorar suas sugestões.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {candidatoAtual && (
+              <div className="space-y-2">
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-sm">
+                    <strong>Texto original:</strong> {candidatoAtual.texto_original}
+                  </p>
+                  <p className="text-sm mt-2">
+                    <strong>Sugestão da IA:</strong> {candidatoAtual.nome_padrao_sugerido}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="observacoes">Motivo da rejeição *</Label>
+              <Textarea
+                id="observacoes"
+                value={observacoesRejeicao}
+                onChange={(e) => setObservacoesRejeicao(e.target.value)}
+                placeholder="Ex: Nome muito genérico, falta informação da marca, categoria incorreta..."
+                rows={4}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Suas observações serão usadas para treinar a IA e melhorar futuras normalizações.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={rejeitarComObservacoes}
+              disabled={!observacoesRejeicao.trim()}
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Rejeitar com Feedback
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
