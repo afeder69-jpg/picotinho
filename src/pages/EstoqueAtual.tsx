@@ -1663,7 +1663,7 @@ const EstoqueAtual = () => {
                       const percentualCategoria = subtotal > 0 
                         ? ((subtotalAtual - subtotal) / subtotal) * 100 
                         : 0;
-                      const sinalPercentual = percentualCategoria >= 0 ? '+' : '';
+                      const sinalPercentual = percentualCategoria >= 0 ? '+' : '-';
                       const corPercentual = percentualCategoria >= 0 ? 'text-red-600' : 'text-green-600';
 
                       return (
@@ -1703,7 +1703,7 @@ const EstoqueAtual = () => {
                           })()}`}>
                             {(() => {
                               const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
-                              const sinal = percentualTotal >= 0 ? '+' : '';
+                              const sinal = percentualTotal >= 0 ? '+' : '-';
                               return `${sinal}${Math.abs(percentualTotal).toFixed(1)}%`;
                             })()}
                           </span>
