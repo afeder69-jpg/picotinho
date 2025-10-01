@@ -1697,7 +1697,7 @@ const EstoqueAtual = () => {
                          <span className="text-blue-600 text-left">
                            {formatCurrency(valorTotalEstoque)}
                           </span>
-                          <span className={`font-bold text-left text-[10px] ${(() => {
+                          <span className={`text-left text-[10px] ${(() => {
                             const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
                             return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
                           })()}`}>
