@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.corrigir-bairros-notas-disabled]
 verify_jwt = false
+
+[functions.processar-normalizacao-global]
+verify_jwt = false

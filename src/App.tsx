@@ -15,6 +15,7 @@ import CadastroUsuario from "./pages/CadastroUsuario";
 import WhatsAppConfig from "./pages/WhatsAppConfig";
 import CleanupUserData from "./pages/CleanupUserData";
 import Relatorios from "./pages/Relatorios";
+import NormalizacaoGlobal from "./pages/admin/NormalizacaoGlobal";
 
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
@@ -55,6 +56,7 @@ const App = () => {
                 <Route path="/whatsapp" element={<WhatsAppConfig />} />
                 <Route path="/cleanup" element={<CleanupUserData />} />
                 <Route path="/relatorios" element={<Relatorios />} />
+                <Route path="/admin/normalizacao" element={<NormalizacaoGlobal />} />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>
