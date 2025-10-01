@@ -60,6 +60,7 @@ const EstoqueAtual = () => {
   const [datasNotasFiscais, setDatasNotasFiscais] = useState<{[key: string]: string}>({});
   const [historicoPrecos, setHistoricoPrecos] = useState<{[key: string]: any}>({});
   const [loading, setLoading] = useState(true);
+  const [loadingPrecosAtuais, setLoadingPrecosAtuais] = useState(false);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>('');
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
@@ -167,6 +168,7 @@ const EstoqueAtual = () => {
   // Função removida - estava causando problemas na marcação de produtos manuais
 
   const loadPrecosAtuais = async () => {
+    setLoadingPrecosAtuais(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -221,6 +223,8 @@ const EstoqueAtual = () => {
       console.error('Erro ao carregar preços atuais dinâmicos:', error);
       // Fallback para o método antigo
       await loadPrecosAtuaisLegacy();
+    } finally {
+      setLoadingPrecosAtuais(false);
     }
   };
 
@@ -1597,6 +1601,16 @@ const EstoqueAtual = () => {
               <h1 className="text-xl sm:text-3xl font-bold text-foreground">Estoque Atual</h1>
             </div>
           </div>
+
+          {/* Mensagem de carregamento de preços atuais */}
+          {loadingPrecosAtuais && (
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2 animate-fade-in">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                🔄 Atualizando preços atuais da sua região... Aguarde um momento.
+              </p>
+            </div>
+          )}
           {/* Cards de resumo */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <Card className="md:col-span-2 lg:col-span-1">
