@@ -1824,18 +1824,8 @@ async function processarNotaEmBackground(
         throw new Error(`Erro na extração da imagem: ${extractResult.error.message}`);
       }
       
-      // ETAPA 2: Processar estoque automaticamente
-      console.log('🚀 Imagem processada, disparando IA-2 automaticamente...');
-      
-      EdgeRuntime.waitUntil(
-        supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente:", result);
-        }).catch((error) => {
-          console.error('❌ Falha na IA-2 automática:', error);
-        })
-      );
+      // ✅ FLUXO AUTOMÁTICO: extract-receipt-image já dispara process-receipt-full automaticamente
+      console.log('✅ Imagem extraída - IA-2 será executada automaticamente pelo extract-receipt-image');
     }
     
     // Aguardar um pouco para garantir que tudo foi persistido
