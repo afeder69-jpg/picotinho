@@ -1690,14 +1690,14 @@ const EstoqueAtual = () => {
                   })}
                   
                       <div className="border-t pt-2 mt-2">
-                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 font-bold text-xs">
+                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 font-bold text-[11px]">
                           <span className="text-foreground">Total</span>
                           <span className="text-muted-foreground text-left">{totalProdutosUnicos}</span>
                          <span className="text-foreground text-left">{formatCurrency(valorTotalPago)}</span>
                          <span className="text-blue-600 text-left">
                            {formatCurrency(valorTotalEstoque)}
                           </span>
-                          <span className={`text-right text-[10px] ${(() => {
+                          <span className={`text-right text-[11px] ${(() => {
                             const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
                             return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
                           })()}`}>
