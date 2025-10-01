@@ -79,14 +79,15 @@ export default function NormalizacaoGlobal() {
       }
 
       // Verificar se é master
-      const { data: roles } = await supabase
+      const { data: roles, error: roleError } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
         .eq('role', 'master')
-        .single();
+        .maybeSingle();
 
-      if (!roles) {
+      if (!roles || roleError) {
+        console.error('Erro ao verificar role:', roleError);
         toast({
           title: "Acesso restrito",
           description: "Apenas usuários master podem acessar esta área",
