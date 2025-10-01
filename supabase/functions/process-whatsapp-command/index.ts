@@ -421,21 +421,46 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
       return "Erro ao consultar estoque. Tente novamente.";
     }
     
-    // Buscar produto comparando nomes (similaridade simples)
-    const estoque = estoques?.find((item: any) => {
+    // Buscar TODOS os produtos com nomes similares (consolidação)
+    const produtosEncontrados = estoques?.filter((item: any) => {
       const nomeEstoqueSimples = item.produto_nome.toLowerCase().trim();
       return nomeEstoqueSimples.includes(produtoNomeSimples) || 
              produtoNomeSimples.includes(nomeEstoqueSimples);
-    });
+    }) || [];
     
     if (erroEstoque) {
       console.error('❌ Erro ao buscar estoque:', erroEstoque);
       return "Erro ao consultar estoque. Tente novamente.";
     }
     
-    if (!estoque) {
+    if (produtosEncontrados.length === 0) {
       return `Produto "${produtoNome}" não encontrado no seu estoque.`;
     }
+    
+    // Consolidar produtos com o mesmo nome normalizado (soma quantidades)
+    const produtosConsolidados = produtosEncontrados.reduce((acc: any, item: any) => {
+      const nomeNormalizado = normalizarNome(item.produto_nome);
+      
+      if (!acc[nomeNormalizado]) {
+        acc[nomeNormalizado] = {
+          produto_nome: item.produto_nome,
+          quantidade: 0,
+          unidade_medida: normalizarUnidade(item.unidade_medida),
+          entradas: [] // Guardar todas as entradas para poder operar nelas
+        };
+      }
+      
+      acc[nomeNormalizado].quantidade += item.quantidade;
+      acc[nomeNormalizado].entradas.push(item);
+      return acc;
+    }, {});
+    
+    // Pegar o primeiro produto consolidado
+    const produtoConsolidado = Object.values(produtosConsolidados)[0] as any;
+    const quantidadeTotalDisponivel = produtoConsolidado.quantidade;
+    
+    console.log(`📊 Produto consolidado: ${produtoConsolidado.produto_nome} - Total: ${quantidadeTotalDisponivel} ${produtoConsolidado.unidade_medida}`);
+    console.log(`📊 Entradas encontradas: ${produtoConsolidado.entradas.length}`);
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
     let quantidadeConvertida = quantidade;
@@ -458,23 +483,29 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
         quantidadeConvertida = quantidade;
       }
     } else {
-      // Se não foi especificada unidade, usar a unidade do estoque
+      // Se não foi especificada unidade, usar a unidade do estoque consolidado
       quantidadeConvertida = quantidade;
-      unidadeFinal = estoque.unidade_medida;
+      unidadeFinal = produtoConsolidado.unidade_medida;
     }
     
     console.log(`📊 Quantidade convertida: ${quantidadeConvertida} (original: ${quantidade} ${unidadeExtraida || 'sem unidade'})`);
     
-    // Verificar se há quantidade suficiente
-    if (estoque.quantidade < quantidadeConvertida) {
-      const estoqueFormatado = formatarQuantidade(estoque.quantidade, estoque.unidade_medida);
-      const tentouBaixarFormatado = formatarQuantidade(quantidade, unidadeFinal || estoque.unidade_medida);
+    // Verificar se há quantidade suficiente (usando quantidade consolidada)
+    if (quantidadeTotalDisponivel < quantidadeConvertida) {
+      const estoqueFormatado = formatarQuantidade(quantidadeTotalDisponivel, produtoConsolidado.unidade_medida);
+      const tentouBaixarFormatado = formatarQuantidade(quantidade, unidadeFinal || produtoConsolidado.unidade_medida);
       
       return `❌ Estoque insuficiente!\n\nVocê tem: ${estoqueFormatado}\nTentou baixar: ${tentouBaixarFormatado}\n\nQuantidade disponível: ${estoqueFormatado}`;
     }
     
-    // Baixar do estoque
-    let novaQuantidade = estoque.quantidade - quantidadeConvertida;
+    // Ordenar entradas por data de atualização (mais recente primeiro)
+    const entradasOrdenadas = produtoConsolidado.entradas.sort((a: any, b: any) => {
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    });
+    
+    // Baixar da entrada mais recente
+    const entradaMaisRecente = entradasOrdenadas[0];
+    let novaQuantidade = entradaMaisRecente.quantidade - quantidadeConvertida;
     
     // Arredondar SEMPRE com 3 casas decimais para precisão de miligrama
     novaQuantidade = Math.round(novaQuantidade * 1000) / 1000;
@@ -487,24 +518,30 @@ async function processarBaixarEstoque(supabase: any, mensagem: any): Promise<str
           quantidade: 0,
           updated_at: new Date().toISOString()
         })
-        .eq('id', estoque.id);
-        
-      const baixadoFormatado = formatarQuantidade(quantidade, unidadeFinal || estoque.unidade_medida);
-      return `✅ Produto retirado do estoque!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: 0 (produto zerado)`;
+        .eq('id', entradaMaisRecente.id);
+      
+      // Recalcular total consolidado após a operação
+      const novoTotalConsolidado = quantidadeTotalDisponivel - quantidadeConvertida;
+      const baixadoFormatado = formatarQuantidade(quantidade, unidadeFinal || produtoConsolidado.unidade_medida);
+      const estoqueAtualFormatado = formatarQuantidade(novoTotalConsolidado, produtoConsolidado.unidade_medida);
+      
+      return `✅ Produto retirado do estoque!\n\n📦 ${produtoConsolidado.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: ${estoqueAtualFormatado}`;
     } else {
-      // Atualizar quantidade
+      // Atualizar quantidade da entrada mais recente
       await supabase
         .from('estoque_app')
         .update({
           quantidade: novaQuantidade,
           updated_at: new Date().toISOString()
         })
-        .eq('id', estoque.id);
-        
-      const baixadoFormatado = formatarQuantidade(quantidade, unidadeFinal || estoque.unidade_medida);
-      const estoqueAtualFormatado = formatarQuantidade(novaQuantidade, estoque.unidade_medida);
+        .eq('id', entradaMaisRecente.id);
       
-      return `✅ Estoque atualizado!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: ${estoqueAtualFormatado}`;
+      // Recalcular total consolidado após a operação
+      const novoTotalConsolidado = quantidadeTotalDisponivel - quantidadeConvertida;
+      const baixadoFormatado = formatarQuantidade(quantidade, unidadeFinal || produtoConsolidado.unidade_medida);
+      const estoqueAtualFormatado = formatarQuantidade(novoTotalConsolidado, produtoConsolidado.unidade_medida);
+      
+      return `✅ Estoque atualizado!\n\n📦 ${produtoConsolidado.produto_nome}\n🔢 Baixado: ${baixadoFormatado}\n📊 Estoque atual: ${estoqueAtualFormatado}`;
     }
     
   } catch (error) {
@@ -840,22 +877,47 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       .select('*')
       .eq('user_id', mensagem.usuario_id);
     
-    // Buscar produto comparando nomes (similaridade simples)
-    const estoque = estoques?.find((item: any) => {
+    // Buscar TODOS os produtos com nomes similares (consolidação)
+    const produtosEncontrados = estoques?.filter((item: any) => {
       const nomeEstoqueSimples = item.produto_nome.toLowerCase().trim();
       const produtoSimples = produtoNomeNormalizado.toLowerCase().trim();
       return nomeEstoqueSimples.includes(produtoSimples) || 
              produtoSimples.includes(nomeEstoqueSimples);
-    });
+    }) || [];
     
     if (erroEstoque) {
       console.error('❌ Erro ao buscar estoque:', erroEstoque);
       return "Erro ao consultar estoque. Tente novamente.";
     }
     
-    if (!estoque) {
+    if (produtosEncontrados.length === 0) {
       return `❌ Produto não encontrado no seu estoque. Use o comando 'criar' ou 'incluir' para adicionar um novo produto.`;
     }
+    
+    // Consolidar produtos com o mesmo nome normalizado (soma quantidades)
+    const produtosConsolidados = produtosEncontrados.reduce((acc: any, item: any) => {
+      const nomeNormalizado = normalizarNome(item.produto_nome);
+      
+      if (!acc[nomeNormalizado]) {
+        acc[nomeNormalizado] = {
+          produto_nome: item.produto_nome,
+          quantidade: 0,
+          unidade_medida: normalizarUnidade(item.unidade_medida),
+          entradas: [] // Guardar todas as entradas para poder operar nelas
+        };
+      }
+      
+      acc[nomeNormalizado].quantidade += item.quantidade;
+      acc[nomeNormalizado].entradas.push(item);
+      return acc;
+    }, {});
+    
+    // Pegar o primeiro produto consolidado
+    const produtoConsolidado = Object.values(produtosConsolidados)[0] as any;
+    const quantidadeTotalAntes = produtoConsolidado.quantidade;
+    
+    console.log(`📊 Produto consolidado: ${produtoConsolidado.produto_nome} - Total: ${quantidadeTotalAntes} ${produtoConsolidado.unidade_medida}`);
+    console.log(`📊 Entradas encontradas: ${produtoConsolidado.entradas.length}`);
     
     // Converter unidades se necessário (CORRIGIDO: kg vs g)
     let quantidadeConvertida = quantidade;
@@ -879,12 +941,20 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
       quantidadeConvertida = quantidade;
     }
     
-    // Somar ao estoque existente e arredondar com 3 casas decimais para precisão de miligrama
-    const novaQuantidade = Math.round((estoque.quantidade + quantidadeConvertida) * 1000) / 1000;
+    // Ordenar entradas por data de atualização (mais recente primeiro)
+    const entradasOrdenadas = produtoConsolidado.entradas.sort((a: any, b: any) => {
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    });
+    
+    // Aumentar na entrada mais recente
+    const entradaMaisRecente = entradasOrdenadas[0];
+    
+    // Somar ao estoque existente da entrada mais recente e arredondar com 3 casas decimais
+    const novaQuantidade = Math.round((entradaMaisRecente.quantidade + quantidadeConvertida) * 1000) / 1000;
     
     // Atualizar estoque com logs completos
-    console.log(`🔄 Atualizando estoque ID: ${estoque.id}`);
-    console.log(`📊 Quantidade atual: ${estoque.quantidade}`);
+    console.log(`🔄 Atualizando estoque ID: ${entradaMaisRecente.id}`);
+    console.log(`📊 Quantidade atual: ${entradaMaisRecente.quantidade}`);
     console.log(`➕ Quantidade a adicionar: ${quantidadeConvertida}`);
     console.log(`🎯 Nova quantidade: ${novaQuantidade}`);
     
@@ -894,7 +964,7 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
         quantidade: novaQuantidade,
         updated_at: new Date().toISOString()
       })
-      .eq('id', estoque.id)
+      .eq('id', entradaMaisRecente.id)
       .select();
     
     if (updateError) {
@@ -904,10 +974,12 @@ async function processarAumentarEstoque(supabase: any, mensagem: any): Promise<s
     
     console.log('✅ ESTOQUE ATUALIZADO COM SUCESSO:', updateResult);
     
-    const adicionadoFormatado = formatarQuantidade(quantidade, unidadeExtraida || estoque.unidade_medida);
-    const estoqueAtualFormatado = formatarQuantidade(novaQuantidade, estoque.unidade_medida);
+    // Recalcular total consolidado após a operação
+    const novoTotalConsolidado = quantidadeTotalAntes + quantidadeConvertida;
+    const adicionadoFormatado = formatarQuantidade(quantidade, unidadeExtraida || produtoConsolidado.unidade_medida);
+    const estoqueAtualFormatado = formatarQuantidade(novoTotalConsolidado, produtoConsolidado.unidade_medida);
     
-    const produtoNomeLimpo = limparNomeProduto(estoque.produto_nome);
+    const produtoNomeLimpo = limparNomeProduto(produtoConsolidado.produto_nome);
     return `✅ Foram adicionados ${adicionadoFormatado} ao estoque de ${produtoNomeLimpo}. Agora você tem ${estoqueAtualFormatado} em estoque.`;
     
   } catch (error) {
