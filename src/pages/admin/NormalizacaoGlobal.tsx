@@ -53,6 +53,9 @@ export default function NormalizacaoGlobal() {
     tipo_embalagem: '',
     qtd_valor: '',
     qtd_unidade: '',
+    qtd_base: '',
+    unidade_base: '',
+    categoria_unidade: '',
     granel: false,
     sku_global: ''
   });
@@ -189,8 +192,48 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+  // Função para calcular unidade base
+  function calcularUnidadeBase(qtd_valor: number, qtd_unidade: string) {
+    let qtd_base = qtd_valor;
+    let unidade_base = qtd_unidade;
+    let categoria_unidade = 'UNIDADE';
+    
+    const unidadeUpper = qtd_unidade.toUpperCase();
+    
+    // L → ml
+    if (['L', 'LITRO', 'LITROS'].includes(unidadeUpper)) {
+      qtd_base = qtd_valor * 1000;
+      unidade_base = 'ml';
+      categoria_unidade = 'VOLUME';
+    }
+    // kg → g
+    else if (['KG', 'KILO', 'KILOS'].includes(unidadeUpper)) {
+      qtd_base = qtd_valor * 1000;
+      unidade_base = 'g';
+      categoria_unidade = 'PESO';
+    }
+    // ml
+    else if (['ML', 'MILILITRO', 'MILILITROS'].includes(unidadeUpper)) {
+      categoria_unidade = 'VOLUME';
+      unidade_base = 'ml';
+    }
+    // g
+    else if (['G', 'GRAMA', 'GRAMAS'].includes(unidadeUpper)) {
+      categoria_unidade = 'PESO';
+      unidade_base = 'g';
+    }
+    
+    return { qtd_base, unidade_base, categoria_unidade };
+  }
+
   function abrirModalEdicao(candidato: any) {
     setCandidatoAtual(candidato);
+    
+    // Calcular unidade base automaticamente
+    const qtdValor = parseFloat(candidato.qtd_valor_sugerido || '0');
+    const qtdUnidade = candidato.qtd_unidade_sugerido || '';
+    const { qtd_base, unidade_base, categoria_unidade } = calcularUnidadeBase(qtdValor, qtdUnidade);
+    
     setEditForm({
       nome_padrao: candidato.nome_padrao_sugerido || '',
       categoria: candidato.categoria_sugerida || '',
@@ -199,6 +242,9 @@ export default function NormalizacaoGlobal() {
       tipo_embalagem: candidato.tipo_embalagem_sugerido || '',
       qtd_valor: candidato.qtd_valor_sugerido?.toString() || '',
       qtd_unidade: candidato.qtd_unidade_sugerido || '',
+      qtd_base: qtd_base.toString(),
+      unidade_base: unidade_base,
+      categoria_unidade: categoria_unidade,
       granel: candidato.granel_sugerido || false,
       sku_global: candidato.sugestao_sku_global || ''
     });
@@ -230,6 +276,9 @@ export default function NormalizacaoGlobal() {
           tipo_embalagem: editForm.tipo_embalagem || null,
           qtd_valor: editForm.qtd_valor ? parseFloat(editForm.qtd_valor) : null,
           qtd_unidade: editForm.qtd_unidade || null,
+          qtd_base: editForm.qtd_base ? parseFloat(editForm.qtd_base) : null,
+          unidade_base: editForm.unidade_base || null,
+          categoria_unidade: editForm.categoria_unidade || null,
           granel: editForm.granel,
           confianca_normalizacao: candidatoAtual.confianca_ia,
           aprovado_por: user.id,
@@ -614,14 +663,19 @@ export default function NormalizacaoGlobal() {
                       <span className="text-muted-foreground">Marca:</span>
                       <p>{candidato.marca_sugerida || '-'}</p>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Quantidade:</span>
-                      <p>
-                        {candidato.qtd_valor_sugerido} {candidato.qtd_unidade_sugerido}
-                        {candidato.granel_sugerido && ' (granel)'}
-                      </p>
-                    </div>
-                  </div>
+                     <div>
+                       <span className="text-muted-foreground">Quantidade:</span>
+                       <p>
+                         {candidato.qtd_valor_sugerido} {candidato.qtd_unidade_sugerido}
+                         {candidato.granel_sugerido && ' (granel)'}
+                       </p>
+                       {candidato.qtd_base_sugerida && (
+                         <p className="text-xs text-muted-foreground mt-1">
+                           Base: {candidato.qtd_base_sugerida} {candidato.unidade_base_sugerida}
+                         </p>
+                       )}
+                     </div>
+                   </div>
                   {candidato.razao_ia && (
                     <div className="mt-4 p-3 bg-muted rounded-lg">
                       <div className="flex items-start gap-2">
@@ -692,14 +746,19 @@ export default function NormalizacaoGlobal() {
                       <span className="text-muted-foreground">Embalagem:</span>
                       <p>{produto.tipo_embalagem || '-'}</p>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Quantidade:</span>
-                      <p>
-                        {produto.qtd_valor} {produto.qtd_unidade}
-                        {produto.granel && ' (granel)'}
-                      </p>
-                    </div>
-                  </div>
+                     <div>
+                       <span className="text-muted-foreground">Quantidade:</span>
+                       <p>
+                         {produto.qtd_valor} {produto.qtd_unidade}
+                         {produto.granel && ' (granel)'}
+                       </p>
+                       {produto.qtd_base && (
+                         <p className="text-xs text-muted-foreground mt-1">
+                           Base: {produto.qtd_base} {produto.unidade_base}
+                         </p>
+                       )}
+                     </div>
+                   </div>
                 </CardContent>
               </Card>
             ))
@@ -793,6 +852,48 @@ export default function NormalizacaoGlobal() {
                   onChange={(e) => setEditForm({...editForm, qtd_unidade: e.target.value})}
                   placeholder="Ex: kg, g, L"
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
+              <Label className="text-sm font-semibold">Unidade Base (auto-calculado, editável)</Label>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="qtd_base" className="text-xs">Quantidade Base</Label>
+                  <Input
+                    id="qtd_base"
+                    type="number"
+                    step="0.001"
+                    value={editForm.qtd_base}
+                    onChange={(e) => setEditForm({...editForm, qtd_base: e.target.value})}
+                    placeholder="Ex: 1250"
+                  />
+                  <p className="text-xs text-muted-foreground">Sempre em ml/g</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="unidade_base" className="text-xs">Unidade Base</Label>
+                  <Input
+                    id="unidade_base"
+                    value={editForm.unidade_base}
+                    onChange={(e) => setEditForm({...editForm, unidade_base: e.target.value})}
+                    placeholder="ml, g, ou un"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="categoria_unidade" className="text-xs">Categoria</Label>
+                  <select 
+                    id="categoria_unidade"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={editForm.categoria_unidade}
+                    onChange={(e) => setEditForm({...editForm, categoria_unidade: e.target.value})}
+                  >
+                    <option value="VOLUME">VOLUME</option>
+                    <option value="PESO">PESO</option>
+                    <option value="UNIDADE">UNIDADE</option>
+                  </select>
+                </div>
               </div>
             </div>
 

@@ -123,6 +123,7 @@ export type Database = {
           nome_base: string | null
           nota_id: string | null
           origem: string | null
+          preco_por_unidade_base: number | null
           preco_unitario_ultimo: number | null
           produto_hash_normalizado: string | null
           produto_nome: string
@@ -132,6 +133,7 @@ export type Database = {
           qtd_valor: number | null
           quantidade: number
           tipo_embalagem: string | null
+          unidade_base: string | null
           unidade_medida: string
           updated_at: string
           user_id: string
@@ -146,6 +148,7 @@ export type Database = {
           nome_base?: string | null
           nota_id?: string | null
           origem?: string | null
+          preco_por_unidade_base?: number | null
           preco_unitario_ultimo?: number | null
           produto_hash_normalizado?: string | null
           produto_nome: string
@@ -155,6 +158,7 @@ export type Database = {
           qtd_valor?: number | null
           quantidade?: number
           tipo_embalagem?: string | null
+          unidade_base?: string | null
           unidade_medida?: string
           updated_at?: string
           user_id: string
@@ -169,6 +173,7 @@ export type Database = {
           nome_base?: string | null
           nota_id?: string | null
           origem?: string | null
+          preco_por_unidade_base?: number | null
           preco_unitario_ultimo?: number | null
           produto_hash_normalizado?: string | null
           produto_nome?: string
@@ -178,6 +183,7 @@ export type Database = {
           qtd_valor?: number | null
           quantidade?: number
           tipo_embalagem?: string | null
+          unidade_base?: string | null
           unidade_medida?: string
           updated_at?: string
           user_id?: string
@@ -674,6 +680,7 @@ export type Database = {
           id: string
           marca: string | null
           nome_base: string | null
+          preco_por_unidade_base: number | null
           produto_codigo: string | null
           produto_hash_normalizado: string | null
           produto_nome: string
@@ -693,6 +700,7 @@ export type Database = {
           id?: string
           marca?: string | null
           nome_base?: string | null
+          preco_por_unidade_base?: number | null
           produto_codigo?: string | null
           produto_hash_normalizado?: string | null
           produto_nome: string
@@ -712,6 +720,7 @@ export type Database = {
           id?: string
           marca?: string | null
           nome_base?: string | null
+          preco_por_unidade_base?: number | null
           produto_codigo?: string | null
           produto_hash_normalizado?: string | null
           produto_nome?: string
@@ -733,6 +742,7 @@ export type Database = {
           marca: string | null
           nome_base: string | null
           origem: string
+          preco_por_unidade_base: number | null
           produto_hash_normalizado: string | null
           produto_nome: string
           produto_nome_normalizado: string | null
@@ -752,6 +762,7 @@ export type Database = {
           marca?: string | null
           nome_base?: string | null
           origem?: string
+          preco_por_unidade_base?: number | null
           produto_hash_normalizado?: string | null
           produto_nome: string
           produto_nome_normalizado?: string | null
@@ -771,6 +782,7 @@ export type Database = {
           marca?: string | null
           nome_base?: string | null
           origem?: string
+          preco_por_unidade_base?: number | null
           produto_hash_normalizado?: string | null
           produto_nome?: string
           produto_nome_normalizado?: string | null
@@ -865,6 +877,7 @@ export type Database = {
         Row: {
           candidatos_similares: Json | null
           categoria_sugerida: string | null
+          categoria_unidade_sugerida: string | null
           confianca_ia: number | null
           created_at: string | null
           granel_sugerido: boolean | null
@@ -874,6 +887,7 @@ export type Database = {
           nome_padrao_sugerido: string | null
           nota_imagem_id: string | null
           observacoes_revisor: string | null
+          qtd_base_sugerida: number | null
           qtd_unidade_sugerido: string | null
           qtd_valor_sugerido: number | null
           razao_ia: string | null
@@ -884,12 +898,14 @@ export type Database = {
           sugestao_sku_global: string | null
           texto_original: string
           tipo_embalagem_sugerido: string | null
+          unidade_base_sugerida: string | null
           updated_at: string | null
           usuario_id: string | null
         }
         Insert: {
           candidatos_similares?: Json | null
           categoria_sugerida?: string | null
+          categoria_unidade_sugerida?: string | null
           confianca_ia?: number | null
           created_at?: string | null
           granel_sugerido?: boolean | null
@@ -899,6 +915,7 @@ export type Database = {
           nome_padrao_sugerido?: string | null
           nota_imagem_id?: string | null
           observacoes_revisor?: string | null
+          qtd_base_sugerida?: number | null
           qtd_unidade_sugerido?: string | null
           qtd_valor_sugerido?: number | null
           razao_ia?: string | null
@@ -909,12 +926,14 @@ export type Database = {
           sugestao_sku_global?: string | null
           texto_original: string
           tipo_embalagem_sugerido?: string | null
+          unidade_base_sugerida?: string | null
           updated_at?: string | null
           usuario_id?: string | null
         }
         Update: {
           candidatos_similares?: Json | null
           categoria_sugerida?: string | null
+          categoria_unidade_sugerida?: string | null
           confianca_ia?: number | null
           created_at?: string | null
           granel_sugerido?: boolean | null
@@ -924,6 +943,7 @@ export type Database = {
           nome_padrao_sugerido?: string | null
           nota_imagem_id?: string | null
           observacoes_revisor?: string | null
+          qtd_base_sugerida?: number | null
           qtd_unidade_sugerido?: string | null
           qtd_valor_sugerido?: number | null
           razao_ia?: string | null
@@ -934,6 +954,7 @@ export type Database = {
           sugestao_sku_global?: string | null
           texto_original?: string
           tipo_embalagem_sugerido?: string | null
+          unidade_base_sugerida?: string | null
           updated_at?: string | null
           usuario_id?: string | null
         }
@@ -959,6 +980,7 @@ export type Database = {
           aprovado_em: string | null
           aprovado_por: string | null
           categoria: string
+          categoria_unidade: string | null
           confianca_normalizacao: number | null
           created_at: string | null
           granel: boolean | null
@@ -974,12 +996,14 @@ export type Database = {
           tipo_embalagem: string | null
           total_notas: number | null
           total_usuarios: number | null
+          unidade_base: string | null
           updated_at: string | null
         }
         Insert: {
           aprovado_em?: string | null
           aprovado_por?: string | null
           categoria: string
+          categoria_unidade?: string | null
           confianca_normalizacao?: number | null
           created_at?: string | null
           granel?: boolean | null
@@ -995,12 +1019,14 @@ export type Database = {
           tipo_embalagem?: string | null
           total_notas?: number | null
           total_usuarios?: number | null
+          unidade_base?: string | null
           updated_at?: string | null
         }
         Update: {
           aprovado_em?: string | null
           aprovado_por?: string | null
           categoria?: string
+          categoria_unidade?: string | null
           confianca_normalizacao?: number | null
           created_at?: string | null
           granel?: boolean | null
@@ -1016,6 +1042,7 @@ export type Database = {
           tipo_embalagem?: string | null
           total_notas?: number | null
           total_usuarios?: number | null
+          unidade_base?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1579,6 +1606,39 @@ export type Database = {
         }
         Relationships: []
       }
+      unidades_conversao: {
+        Row: {
+          ativo: boolean | null
+          categoria_aplicavel: string | null
+          created_at: string | null
+          fator_conversao: number
+          id: string
+          unidade_destino: string
+          unidade_origem: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria_aplicavel?: string | null
+          created_at?: string | null
+          fator_conversao: number
+          id?: string
+          unidade_destino: string
+          unidade_origem: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria_aplicavel?: string | null
+          created_at?: string | null
+          fator_conversao?: number
+          id?: string
+          unidade_destino?: string
+          unidade_origem?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1934,6 +1994,18 @@ export type Database = {
           updated_at: string
           variante: string
         }[]
+      }
+      calcular_preco_por_unidade_base: {
+        Args: {
+          preco_unitario: number
+          qtd_base_input: number
+          unidade_base_input: string
+        }
+        Returns: number
+      }
+      calcular_unidade_base: {
+        Args: { qtd_unidade_input: string; qtd_valor_input: number }
+        Returns: Json
       }
       cleanup_old_ingestion_jobs: {
         Args: { days_old?: number }

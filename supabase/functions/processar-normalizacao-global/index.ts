@@ -20,6 +20,9 @@ interface NormalizacaoSugerida {
   tipo_embalagem: string | null;
   qtd_valor: number | null;
   qtd_unidade: string | null;
+  qtd_base: number | null;
+  unidade_base: string | null;
+  categoria_unidade: string | null;
   granel: boolean;
   confianca: number;
   razao: string;
@@ -196,19 +199,29 @@ INSTRUÇÕES:
    - Quantidade (valor + unidade, ex: 5 + "kg")
    - Se é granel (vendido por peso/medida)
 
-2. Gere um SKU global único no formato: CATEGORIA-NOME_BASE-MARCA-QTDUNIDADE
-   Exemplo: ALIM-ARROZ-TIOJAO-5KG
+2. **ATENÇÃO ESPECIAL: UNIDADE BASE**
+   - Se a unidade for L (litros): converta para ml (multiplique por 1000)
+     Exemplo: 1.25L → qtd_base: 1250, unidade_base: "ml"
+   - Se a unidade for kg (quilos): converta para g (multiplique por 1000)
+     Exemplo: 0.6kg → qtd_base: 600, unidade_base: "g"
+   - Se a unidade já for ml, g, ou unidade: mantenha como está
+   - **PÃO FRANCÊS E SIMILARES:** Se não houver quantidade explícita mas o produto é tipicamente vendido por peso (pão francês, frutas, verduras), assuma 1kg = 1000g
 
-3. Categorize em uma dessas categorias brasileiras:
+3. Categorize a unidade:
+   - "VOLUME" para líquidos (ml)
+   - "PESO" para sólidos (g)
+   - "UNIDADE" para itens vendidos por peça
+
+4. Gere um SKU global único no formato: CATEGORIA-NOME_BASE-MARCA-QTDUNIDADE
+
+5. Categorize em uma dessas categorias brasileiras:
    ALIMENTOS, BEBIDAS, HIGIENE, LIMPEZA, HORTIFRUTI, ACOUGUE, PADARIA, OUTROS
 
-4. Atribua uma confiança de 0-100 baseado em:
+6. Atribua uma confiança de 0-100 baseado em:
    - 90-100: Nome muito claro e estruturado
    - 70-89: Nome razoável mas com alguma ambiguidade
    - 50-69: Nome confuso ou incompleto
    - 0-49: Nome muito vago ou problemático
-
-5. Se encontrar produto similar no catálogo (>80% similaridade), use o mesmo produto_master_id
 
 RESPONDA APENAS COM JSON (sem markdown):
 {
@@ -219,7 +232,10 @@ RESPONDA APENAS COM JSON (sem markdown):
   "marca": "string ou null",
   "tipo_embalagem": "string ou null",
   "qtd_valor": number ou null,
-  "qtd_unidade": "string ou null",
+  "qtd_unidade": "string ou null (L, kg, ml, g, un)",
+  "qtd_base": number ou null (sempre em ml/g/unidade),
+  "unidade_base": "string ou null (ml, g, un)",
+  "categoria_unidade": "string ou null (VOLUME, PESO, UNIDADE)",
   "granel": boolean,
   "confianca": number (0-100),
   "razao": "string (explicação breve da análise)",
@@ -301,6 +317,9 @@ async function criarProdutoMaster(
       tipo_embalagem: normalizacao.tipo_embalagem,
       qtd_valor: normalizacao.qtd_valor,
       qtd_unidade: normalizacao.qtd_unidade,
+      qtd_base: normalizacao.qtd_base,
+      unidade_base: normalizacao.unidade_base,
+      categoria_unidade: normalizacao.categoria_unidade,
       granel: normalizacao.granel,
       confianca_normalizacao: normalizacao.confianca,
       status: 'ativo',
@@ -335,6 +354,9 @@ async function criarCandidato(
       tipo_embalagem_sugerido: normalizacao.tipo_embalagem,
       qtd_valor_sugerido: normalizacao.qtd_valor,
       qtd_unidade_sugerido: normalizacao.qtd_unidade,
+      qtd_base_sugerida: normalizacao.qtd_base,
+      unidade_base_sugerida: normalizacao.unidade_base,
+      categoria_unidade_sugerida: normalizacao.categoria_unidade,
       granel_sugerido: normalizacao.granel,
       razao_ia: normalizacao.razao,
       status: status
