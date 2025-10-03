@@ -69,12 +69,29 @@ export default function NormalizacaoGlobal() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [produtoMasterEditando, setProdutoMasterEditando] = useState<string | null>(null);
   
-  // Estado para filtro do catálogo master
+  // Estados para filtro e busca do catálogo master
   const [filtroMaster, setFiltroMaster] = useState('');
+  const [buscandoMaster, setBuscandoMaster] = useState(false);
+  const [resultadosBusca, setResultadosBusca] = useState<any[]>([]);
 
   useEffect(() => {
     verificarAcessoMaster();
   }, []);
+
+  // useEffect para busca dinâmica com debounce
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (filtroMaster.trim()) {
+        await buscarProdutosMaster(filtroMaster.trim());
+      } else {
+        // Se filtro vazio, carregar produtos recentes
+        setResultadosBusca([]);
+        await carregarProdutosRecentes();
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [filtroMaster]);
 
   async function verificarAcessoMaster() {
     try {
@@ -151,14 +168,8 @@ export default function NormalizacaoGlobal() {
 
       setCandidatos(candidatosPendentes || []);
 
-      // Produtos master recentes
-      const { data: masterRecentes } = await supabase
-        .from('produtos_master_global')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      setProdutosMaster(masterRecentes || []);
+      // Carregar produtos recentes iniciais
+      await carregarProdutosRecentes();
 
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
@@ -167,6 +178,46 @@ export default function NormalizacaoGlobal() {
         description: "Erro ao carregar dados",
         variant: "destructive"
       });
+    }
+  }
+
+  async function carregarProdutosRecentes() {
+    try {
+      const { data: masterRecentes } = await supabase
+        .from('produtos_master_global')
+        .select('*')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      setProdutosMaster(masterRecentes || []);
+    } catch (error: any) {
+      console.error('Erro ao carregar produtos recentes:', error);
+    }
+  }
+
+  async function buscarProdutosMaster(termo: string) {
+    setBuscandoMaster(true);
+    try {
+      const { data, error } = await supabase
+        .from('produtos_master_global')
+        .select('*')
+        .or(`nome_padrao.ilike.%${termo}%,sku_global.ilike.%${termo}%,marca.ilike.%${termo}%,nome_base.ilike.%${termo}%`)
+        .eq('status', 'ativo')
+        .limit(50)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setResultadosBusca(data || []);
+    } catch (error: any) {
+      console.error('Erro ao buscar produtos:', error);
+      toast({
+        title: "Erro na busca",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setBuscandoMaster(false);
     }
   }
 
@@ -874,30 +925,44 @@ export default function NormalizacaoGlobal() {
         {/* Catálogo Master */}
         <TabsContent value="catalogo" className="space-y-4">
           {/* Campo de busca */}
-          <div className="mb-4">
+          <div className="mb-4 space-y-2">
             <Input
               placeholder="Buscar por nome, SKU ou marca..."
               value={filtroMaster}
               onChange={(e) => setFiltroMaster(e.target.value)}
               className="max-w-md"
             />
+            {filtroMaster && (
+              <p className="text-sm text-muted-foreground">
+                {buscandoMaster ? 'Buscando...' : `Mostrando ${resultadosBusca.length} resultado(s)`}
+              </p>
+            )}
           </div>
 
-          {produtosMaster.length === 0 ? (
+          {buscandoMaster ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Package className="w-16 h-16 text-muted-foreground mb-4 animate-pulse" />
+                <p className="text-muted-foreground">Buscando produtos...</p>
+              </CardContent>
+            </Card>
+          ) : (filtroMaster ? resultadosBusca : produtosMaster).length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Package className="w-16 h-16 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Catálogo vazio</h3>
+                <h3 className="text-lg font-semibold mb-2">
+                  {filtroMaster ? 'Nenhum resultado encontrado' : 'Catálogo vazio'}
+                </h3>
                 <p className="text-muted-foreground text-center">
-                  Nenhum produto normalizado ainda. Execute o processamento para começar.
+                  {filtroMaster 
+                    ? 'Tente outros termos de busca' 
+                    : 'Nenhum produto normalizado ainda. Execute o processamento para começar.'}
                 </p>
               </CardContent>
             </Card>
           ) : (
-            produtosMaster
+            (filtroMaster ? resultadosBusca : produtosMaster)
               .filter(p => 
-                !filtroMaster || 
-                p.nome_padrao?.toLowerCase().includes(filtroMaster.toLowerCase()) ||
                 p.sku_global?.toLowerCase().includes(filtroMaster.toLowerCase()) ||
                 p.marca?.toLowerCase().includes(filtroMaster.toLowerCase())
               )
