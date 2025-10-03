@@ -62,6 +62,15 @@ export default function NormalizacaoGlobal() {
   
   // Estado para observações de rejeição
   const [observacoesRejeicao, setObservacoesRejeicao] = useState('');
+  
+  // Estados para gerenciamento de imagens
+  const [imagemFile, setImagemFile] = useState<File | null>(null);
+  const [imagemPreview, setImagemPreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [produtoMasterEditando, setProdutoMasterEditando] = useState<string | null>(null);
+  
+  // Estado para filtro do catálogo master
+  const [filtroMaster, setFiltroMaster] = useState('');
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -228,6 +237,11 @@ export default function NormalizacaoGlobal() {
 
   function abrirModalEdicao(candidato: any) {
     setCandidatoAtual(candidato);
+    setProdutoMasterEditando(null);
+    
+    // Limpar estados de imagem
+    setImagemFile(null);
+    setImagemPreview(null);
     
     // Calcular unidade base automaticamente
     const qtdValor = parseFloat(candidato.qtd_valor_sugerido || '0');
@@ -264,27 +278,62 @@ export default function NormalizacaoGlobal() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
 
+      let imagemUrl = null;
+      let imagemPath = null;
+
+      // Upload de imagem se selecionada
+      if (imagemFile) {
+        setUploadingImage(true);
+        const tempId = crypto.randomUUID();
+        const fileExt = imagemFile.name.split('.').pop();
+        const fileName = `${tempId}-${Date.now()}.${fileExt}`;
+        const filePath = fileName;
+
+        const { error: uploadError } = await supabase.storage
+          .from('produtos-master-fotos')
+          .upload(filePath, imagemFile, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('produtos-master-fotos')
+          .getPublicUrl(filePath);
+
+        imagemUrl = publicUrl;
+        imagemPath = filePath;
+        setUploadingImage(false);
+      }
+
       // Criar produto master com dados editados
+      const insertData: any = {
+        sku_global: editForm.sku_global,
+        nome_padrao: editForm.nome_padrao,
+        categoria: editForm.categoria,
+        nome_base: editForm.nome_base,
+        marca: editForm.marca || null,
+        tipo_embalagem: editForm.tipo_embalagem || null,
+        qtd_valor: editForm.qtd_valor ? parseFloat(editForm.qtd_valor) : null,
+        qtd_unidade: editForm.qtd_unidade || null,
+        qtd_base: editForm.qtd_base ? parseFloat(editForm.qtd_base) : null,
+        unidade_base: editForm.unidade_base || null,
+        categoria_unidade: editForm.categoria_unidade || null,
+        granel: editForm.granel,
+        confianca_normalizacao: candidatoAtual.confianca_ia,
+        aprovado_por: user.id,
+        aprovado_em: new Date().toISOString(),
+        status: 'ativo'
+      };
+
+      if (imagemUrl) {
+        insertData.imagem_url = imagemUrl;
+        insertData.imagem_path = imagemPath;
+        insertData.imagem_adicionada_por = user.id;
+        insertData.imagem_adicionada_em = new Date().toISOString();
+      }
+
       const { data: produtoMaster, error: errorMaster } = await supabase
         .from('produtos_master_global')
-        .insert({
-          sku_global: editForm.sku_global,
-          nome_padrao: editForm.nome_padrao,
-          categoria: editForm.categoria,
-          nome_base: editForm.nome_base,
-          marca: editForm.marca || null,
-          tipo_embalagem: editForm.tipo_embalagem || null,
-          qtd_valor: editForm.qtd_valor ? parseFloat(editForm.qtd_valor) : null,
-          qtd_unidade: editForm.qtd_unidade || null,
-          qtd_base: editForm.qtd_base ? parseFloat(editForm.qtd_base) : null,
-          unidade_base: editForm.unidade_base || null,
-          categoria_unidade: editForm.categoria_unidade || null,
-          granel: editForm.granel,
-          confianca_normalizacao: candidatoAtual.confianca_ia,
-          aprovado_por: user.id,
-          aprovado_em: new Date().toISOString(),
-          status: 'ativo'
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -414,6 +463,135 @@ export default function NormalizacaoGlobal() {
         description: "Produto adicionado ao catálogo master",
       });
 
+      await carregarDados();
+
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  }
+
+  async function editarProdutoMaster(produtoId: string) {
+    try {
+      const { data: produto, error } = await supabase
+        .from('produtos_master_global')
+        .select('*')
+        .eq('id', produtoId)
+        .single();
+
+      if (error) throw error;
+      if (!produto) return;
+
+      setProdutoMasterEditando(produtoId);
+      setCandidatoAtual(null);
+
+      // Preencher form com dados do produto master
+      setEditForm({
+        nome_padrao: produto.nome_padrao || '',
+        categoria: produto.categoria || '',
+        nome_base: produto.nome_base || '',
+        marca: produto.marca || '',
+        tipo_embalagem: produto.tipo_embalagem || '',
+        qtd_valor: produto.qtd_valor?.toString() || '',
+        qtd_unidade: produto.qtd_unidade || '',
+        qtd_base: produto.qtd_base?.toString() || '',
+        unidade_base: produto.unidade_base || '',
+        categoria_unidade: produto.categoria_unidade || '',
+        granel: produto.granel || false,
+        sku_global: produto.sku_global || ''
+      });
+
+      // Carregar imagem existente se houver
+      if (produto.imagem_url) {
+        setImagemPreview(produto.imagem_url);
+      } else {
+        setImagemPreview(null);
+      }
+      setImagemFile(null);
+
+      setEditModalOpen(true);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  }
+
+  async function salvarEdicaoProdutoMaster() {
+    if (!produtoMasterEditando) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      let imagemUrl = imagemPreview; // Manter existente
+      let imagemPath = null;
+
+      // Upload de nova imagem se selecionada
+      if (imagemFile) {
+        setUploadingImage(true);
+        const fileExt = imagemFile.name.split('.').pop();
+        const fileName = `${produtoMasterEditando}-${Date.now()}.${fileExt}`;
+        const filePath = fileName;
+
+        const { error: uploadError } = await supabase.storage
+          .from('produtos-master-fotos')
+          .upload(filePath, imagemFile, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('produtos-master-fotos')
+          .getPublicUrl(filePath);
+
+        imagemUrl = publicUrl;
+        imagemPath = filePath;
+        setUploadingImage(false);
+      }
+
+      // Atualizar produto master
+      const updateData: any = {
+        sku_global: editForm.sku_global,
+        nome_padrao: editForm.nome_padrao,
+        categoria: editForm.categoria,
+        nome_base: editForm.nome_base,
+        marca: editForm.marca || null,
+        tipo_embalagem: editForm.tipo_embalagem || null,
+        qtd_valor: editForm.qtd_valor ? parseFloat(editForm.qtd_valor) : null,
+        qtd_unidade: editForm.qtd_unidade || null,
+        qtd_base: editForm.qtd_base ? parseFloat(editForm.qtd_base) : null,
+        unidade_base: editForm.unidade_base || null,
+        categoria_unidade: editForm.categoria_unidade || null,
+        granel: editForm.granel,
+        updated_at: new Date().toISOString()
+      };
+
+      if (imagemFile && imagemUrl && imagemPath) {
+        updateData.imagem_url = imagemUrl;
+        updateData.imagem_path = imagemPath;
+        updateData.imagem_adicionada_por = user.id;
+        updateData.imagem_adicionada_em = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('produtos_master_global')
+        .update(updateData)
+        .eq('id', produtoMasterEditando);
+
+      if (error) throw error;
+
+      toast({
+        title: "Produto atualizado",
+        description: "As alterações foram salvas com sucesso",
+      });
+
+      setEditModalOpen(false);
+      setProdutoMasterEditando(null);
       await carregarDados();
 
     } catch (error: any) {
@@ -695,6 +873,16 @@ export default function NormalizacaoGlobal() {
 
         {/* Catálogo Master */}
         <TabsContent value="catalogo" className="space-y-4">
+          {/* Campo de busca */}
+          <div className="mb-4">
+            <Input
+              placeholder="Buscar por nome, SKU ou marca..."
+              value={filtroMaster}
+              onChange={(e) => setFiltroMaster(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
           {produtosMaster.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -706,28 +894,63 @@ export default function NormalizacaoGlobal() {
               </CardContent>
             </Card>
           ) : (
-            produtosMaster.map((produto) => (
+            produtosMaster
+              .filter(p => 
+                !filtroMaster || 
+                p.nome_padrao?.toLowerCase().includes(filtroMaster.toLowerCase()) ||
+                p.sku_global?.toLowerCase().includes(filtroMaster.toLowerCase()) ||
+                p.marca?.toLowerCase().includes(filtroMaster.toLowerCase())
+              )
+              .map((produto) => (
               <Card key={produto.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{produto.nome_padrao}</CardTitle>
-                        <Badge variant="outline">{produto.categoria}</Badge>
-                        {produto.status === 'ativo' && (
-                          <Badge variant="default">Ativo</Badge>
-                        )}
+                    <div className="flex items-start gap-4 flex-1">
+                      {/* Foto do produto */}
+                      {produto.imagem_url && (
+                        <div className="w-16 h-16 rounded-md overflow-hidden bg-muted border flex-shrink-0">
+                          <img 
+                            src={produto.imagem_url} 
+                            alt={produto.nome_padrao}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <CardTitle className="text-lg">{produto.nome_padrao}</CardTitle>
+                          <Badge variant="outline">{produto.categoria}</Badge>
+                          {produto.status === 'ativo' && (
+                            <Badge variant="default">Ativo</Badge>
+                          )}
+                          <Badge variant={produto.imagem_url ? "default" : "secondary"}>
+                            {produto.imagem_url ? "COM FOTO" : "SEM FOTO"}
+                          </Badge>
+                        </div>
+                        <CardDescription>SKU: {produto.sku_global}</CardDescription>
                       </div>
-                      <CardDescription>SKU: {produto.sku_global}</CardDescription>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="text-center">
-                        <Users className="w-4 h-4 mx-auto mb-1" />
-                        <span>{produto.total_usuarios} usuários</span>
-                      </div>
-                      <div className="text-center">
-                        <TrendingUp className="w-4 h-4 mx-auto mb-1" />
-                        <span>{produto.total_notas} notas</span>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => editarProdutoMaster(produto.id)}
+                        className="gap-1"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Editar
+                      </Button>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="text-center">
+                          <Users className="w-4 h-4 mx-auto mb-1" />
+                          <span>{produto.total_usuarios}</span>
+                        </div>
+                        <div className="text-center">
+                          <TrendingUp className="w-4 h-4 mx-auto mb-1" />
+                          <span>{produto.total_notas}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -917,6 +1140,64 @@ export default function NormalizacaoGlobal() {
               <Label htmlFor="granel">Produto vendido a granel</Label>
             </div>
 
+            {/* Seção de Imagem do Produto */}
+            <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
+              <Label>Foto do Produto (opcional)</Label>
+              
+              {/* Preview da imagem */}
+              {imagemPreview && (
+                <div className="relative w-32 h-32 rounded-lg overflow-hidden border">
+                  <img src={imagemPreview} alt="Preview" className="w-full h-full object-cover" />
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="absolute top-1 right-1"
+                    onClick={() => {
+                      setImagemPreview(null);
+                      setImagemFile(null);
+                    }}
+                  >
+                    Remover
+                  </Button>
+                </div>
+              )}
+              
+              {/* Input de arquivo */}
+              {!imagemPreview && (
+                <Input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      // Validar tamanho (5MB)
+                      if (file.size > 5242880) {
+                        toast({
+                          title: "Arquivo muito grande",
+                          description: "A imagem deve ter no máximo 5MB",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
+                      
+                      setImagemFile(file);
+                      
+                      // Gerar preview
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setImagemPreview(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              )}
+              
+              <p className="text-sm text-muted-foreground">
+                Formatos: JPG, PNG, WEBP (máx. 5MB)
+              </p>
+            </div>
+
             {candidatoAtual && (
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
@@ -930,9 +1211,12 @@ export default function NormalizacaoGlobal() {
             <Button variant="outline" onClick={() => setEditModalOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={aprovarComModificacoes} disabled={!editForm.nome_padrao || !editForm.categoria || !editForm.nome_base}>
+            <Button 
+              onClick={produtoMasterEditando ? salvarEdicaoProdutoMaster : aprovarComModificacoes} 
+              disabled={!editForm.nome_padrao || !editForm.categoria || !editForm.nome_base || uploadingImage}
+            >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Aprovar com Modificações
+              {uploadingImage ? 'Enviando imagem...' : produtoMasterEditando ? 'Salvar Alterações' : 'Aprovar com Modificações'}
             </Button>
           </DialogFooter>
         </DialogContent>

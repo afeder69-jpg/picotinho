@@ -27,6 +27,8 @@ interface NormalizacaoSugerida {
   confianca: number;
   razao: string;
   produto_master_id: string | null;
+  imagem_url?: string;
+  imagem_path?: string;
 }
 
 Deno.serve(async (req) => {
@@ -306,26 +308,36 @@ async function criarProdutoMaster(
   supabase: any,
   normalizacao: NormalizacaoSugerida
 ) {
+  const insertData: any = {
+    sku_global: normalizacao.sku_global,
+    nome_padrao: normalizacao.nome_padrao,
+    categoria: normalizacao.categoria,
+    nome_base: normalizacao.nome_base,
+    marca: normalizacao.marca,
+    tipo_embalagem: normalizacao.tipo_embalagem,
+    qtd_valor: normalizacao.qtd_valor,
+    qtd_unidade: normalizacao.qtd_unidade,
+    qtd_base: normalizacao.qtd_base,
+    unidade_base: normalizacao.unidade_base,
+    categoria_unidade: normalizacao.categoria_unidade,
+    granel: normalizacao.granel,
+    confianca_normalizacao: normalizacao.confianca,
+    status: 'ativo',
+    total_usuarios: 1,
+    total_notas: 1
+  };
+
+  // Adicionar campos de imagem se existirem
+  if (normalizacao.imagem_url) {
+    insertData.imagem_url = normalizacao.imagem_url;
+  }
+  if (normalizacao.imagem_path) {
+    insertData.imagem_path = normalizacao.imagem_path;
+  }
+
   const { error } = await supabase
     .from('produtos_master_global')
-    .insert({
-      sku_global: normalizacao.sku_global,
-      nome_padrao: normalizacao.nome_padrao,
-      categoria: normalizacao.categoria,
-      nome_base: normalizacao.nome_base,
-      marca: normalizacao.marca,
-      tipo_embalagem: normalizacao.tipo_embalagem,
-      qtd_valor: normalizacao.qtd_valor,
-      qtd_unidade: normalizacao.qtd_unidade,
-      qtd_base: normalizacao.qtd_base,
-      unidade_base: normalizacao.unidade_base,
-      categoria_unidade: normalizacao.categoria_unidade,
-      granel: normalizacao.granel,
-      confianca_normalizacao: normalizacao.confianca,
-      status: 'ativo',
-      total_usuarios: 1,
-      total_notas: 1
-    });
+    .insert(insertData);
 
   if (error) {
     throw new Error(`Erro ao criar produto master: ${error.message}`);
