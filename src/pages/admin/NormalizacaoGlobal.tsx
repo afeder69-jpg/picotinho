@@ -199,11 +199,26 @@ export default function NormalizacaoGlobal() {
   async function buscarProdutosMaster(termo: string) {
     setBuscandoMaster(true);
     try {
-      const { data, error } = await supabase
+      // Detectar se tem múltiplos termos separados por ";"
+      const termos = termo.includes(';') 
+        ? termo.split(';').map(t => t.trim()).filter(t => t.length > 0)
+        : [termo.trim()];
+
+      // Construir query dinâmica
+      let query = supabase
         .from('produtos_master_global')
         .select('*')
-        .or(`nome_padrao.ilike.%${termo}%,sku_global.ilike.%${termo}%,marca.ilike.%${termo}%,nome_base.ilike.%${termo}%`)
-        .eq('status', 'ativo')
+        .eq('status', 'ativo');
+
+      // Para cada termo, adicionar condição AND com busca em múltiplos campos
+      termos.forEach(t => {
+        query = query.or(
+          `nome_padrao.ilike.%${t}%,sku_global.ilike.%${t}%,marca.ilike.%${t}%,nome_base.ilike.%${t}%`
+        );
+      });
+
+      // Limitar e ordenar
+      const { data, error } = await query
         .limit(50)
         .order('created_at', { ascending: false });
 
@@ -927,11 +942,16 @@ export default function NormalizacaoGlobal() {
           {/* Campo de busca */}
           <div className="mb-4 space-y-2">
             <Input
-              placeholder="Buscar por nome, SKU ou marca..."
+              placeholder="Buscar... (use ; para múltiplos termos: ex: leite ; piracanjuba)"
               value={filtroMaster}
               onChange={(e) => setFiltroMaster(e.target.value)}
               className="max-w-md"
             />
+            {filtroMaster && filtroMaster.includes(';') && (
+              <div className="text-xs text-muted-foreground">
+                🔍 Buscando por {filtroMaster.split(';').filter(t => t.trim()).length} termos
+              </div>
+            )}
             {filtroMaster && (
               <p className="text-sm text-muted-foreground">
                 {buscandoMaster ? 'Buscando...' : `Mostrando ${resultadosBusca.length} resultado(s)`}
