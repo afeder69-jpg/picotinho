@@ -1687,6 +1687,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles_audit_log: {
+        Row: {
+          acao: string
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          executado_em: string
+          executado_por: string
+          id: string
+          motivo: string | null
+          user_role_id: string
+        }
+        Insert: {
+          acao: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          executado_em?: string
+          executado_por: string
+          id?: string
+          motivo?: string | null
+          user_role_id: string
+        }
+        Update: {
+          acao?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          executado_em?: string
+          executado_por?: string
+          id?: string
+          motivo?: string | null
+          user_role_id?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           created_at: string
