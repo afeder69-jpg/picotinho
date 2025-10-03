@@ -41,8 +41,13 @@ export function Combobox({
   isLoading = false
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+  const [searchValue, setSearchValue] = React.useState("")
 
   const selectedOption = options.find(option => option.value === value)
+  
+  React.useEffect(() => {
+    console.log("🔄 Combobox options updated:", options.length, options);
+  }, [options])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -58,40 +63,48 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 z-50" align="start">
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput 
             placeholder={searchPlaceholder} 
-            onValueChange={(search) => onSearchChange?.(search)}
+            value={searchValue}
+            onValueChange={(search) => {
+              console.log("🔍 Search changed:", search);
+              setSearchValue(search);
+              onSearchChange?.(search);
+            }}
           />
           <CommandList>
             {isLoading ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 Buscando...
               </div>
+            ) : options.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {searchValue.length >= 2 ? emptyText : "Digite ao menos 2 caracteres para buscar"}
+              </div>
             ) : (
-              <>
-                <CommandEmpty>{emptyText}</CommandEmpty>
-                <CommandGroup>
-                  {options.map((option) => (
-                    <CommandItem
-                      key={option.value}
-                      value={option.value}
-                      onSelect={(currentValue) => {
-                        onValueChange(currentValue === value ? "" : currentValue)
-                        setOpen(false)
-                      }}
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          value === option.value ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      {option.label}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={option.label}
+                    onSelect={() => {
+                      console.log("✅ Selected:", option);
+                      onValueChange(option.value)
+                      setOpen(false)
+                      setSearchValue("")
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === option.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
             )}
           </CommandList>
         </Command>

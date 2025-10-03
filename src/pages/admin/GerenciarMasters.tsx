@@ -194,13 +194,23 @@ export default function GerenciarMasters() {
     queryFn: async () => {
       if (searchQuery.length < 2) return [];
       
+      console.log("🔍 Buscando usuários com termo:", searchQuery);
+      
+      const searchLower = searchQuery.toLowerCase();
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, user_id, nome, email, avatar_url")
-        .or(`nome.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
+        .select("id, user_id, nome, nome_completo, email, avatar_url")
+        .or(`nome.ilike.%${searchQuery}%,nome_completo.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
         .limit(10);
       
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Erro ao buscar usuários:", error);
+        throw error;
+      }
+      
+      console.log("✅ Usuários encontrados:", data?.length || 0, data);
+      
+      if (!data || data.length === 0) return [];
       
       // Filtrar usuários que já são Masters
       const userIds = data.map(u => u.user_id);
@@ -212,7 +222,15 @@ export default function GerenciarMasters() {
         .in("user_id", userIds);
       
       const masterIds = new Set(masters?.map(m => m.user_id) || []);
-      return data.filter(u => !masterIds.has(u.user_id));
+      const filtered = data.filter(u => !masterIds.has(u.user_id));
+      
+      console.log("✅ Usuários não-masters filtrados:", filtered.length, filtered);
+      
+      return filtered.map(u => ({
+        value: u.user_id,
+        label: `${u.nome || u.nome_completo || 'Sem nome'} (${u.email})`,
+        ...u
+      }));
     },
     enabled: searchQuery.length >= 2,
     staleTime: 30000, // 30s cache
