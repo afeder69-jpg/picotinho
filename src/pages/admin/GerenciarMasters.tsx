@@ -12,9 +12,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Table,
   TableBody,
@@ -74,8 +74,8 @@ export default function GerenciarMasters() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [emailBusca, setEmailBusca] = useState("");
-  const [usuarioEncontrado, setUsuarioEncontrado] = useState<UsuarioBusca | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState("");
   const [showRevogarDialog, setShowRevogarDialog] = useState(false);
   const [showReativarDialog, setShowReativarDialog] = useState(false);
   const [masterSelecionado, setMasterSelecionado] = useState<Master | null>(null);
@@ -188,6 +188,54 @@ export default function GerenciarMasters() {
     enabled: !!user?.id,
   });
 
+  // Buscar usuários disponíveis com debounce
+  const { data: usuariosDisponiveis = [], isLoading: loadingUsuarios } = useQuery({
+    queryKey: ["usuarios-disponiveis", searchQuery],
+    queryFn: async () => {
+      if (searchQuery.length < 2) return [];
+      
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, user_id, nome, email, avatar_url")
+        .or(`nome.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
+        .limit(10);
+      
+      if (error) throw error;
+      
+      // Filtrar usuários que já são Masters
+      const userIds = data.map(u => u.user_id);
+      const { data: masters } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "master")
+        .is("revogado_em", null)
+        .in("user_id", userIds);
+      
+      const masterIds = new Set(masters?.map(m => m.user_id) || []);
+      return data.filter(u => !masterIds.has(u.user_id));
+    },
+    enabled: searchQuery.length >= 2,
+    staleTime: 30000, // 30s cache
+  });
+
+  // Buscar usuário selecionado
+  const { data: usuarioSelecionado } = useQuery({
+    queryKey: ["usuario-selecionado", selectedUserId],
+    queryFn: async () => {
+      if (!selectedUserId) return null;
+      
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, user_id, nome, email, avatar_url")
+        .eq("user_id", selectedUserId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedUserId,
+  });
+
   // Buscar estatísticas
   const { data: stats } = useQuery({
     queryKey: ["masters-stats"],
@@ -287,51 +335,13 @@ export default function GerenciarMasters() {
     onSuccess: () => {
       toast.success("Usuário promovido a Master com sucesso");
       queryClient.invalidateQueries({ queryKey: ["masters-ativos"] });
-      setUsuarioEncontrado(null);
-      setEmailBusca("");
+      setSelectedUserId("");
+      setSearchQuery("");
     },
     onError: (error: any) => {
       toast.error("Erro ao promover usuário: " + error.message);
     },
   });
-
-  // Buscar usuário por email
-  const buscarUsuario = async () => {
-    if (!emailBusca.trim()) {
-      toast.error("Digite um email para buscar");
-      return;
-    }
-
-    try {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("id, user_id, nome, email, avatar_url")
-        .eq("email", emailBusca.trim())
-        .single();
-
-      if (error || !profile) {
-        toast.error("Usuário não encontrado");
-        setUsuarioEncontrado(null);
-        return;
-      }
-
-      // Verificar se já é Master
-      const { data: masterRole } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", profile.user_id)
-        .eq("role", "master")
-        .is("revogado_em", null)
-        .maybeSingle();
-
-      setUsuarioEncontrado({
-        ...profile,
-        is_master: !!masterRole,
-      });
-    } catch (error: any) {
-      toast.error("Erro ao buscar usuário: " + error.message);
-    }
-  };
 
   const getInitials = (nome: string) => {
     if (!nome) return "?";
@@ -506,49 +516,56 @@ export default function GerenciarMasters() {
               <CardHeader>
                 <CardTitle>➕ Promover Novo Master</CardTitle>
                 <CardDescription>
-                  Busque um usuário por email para promovê-lo a Master
+                  Busque um usuário por nome ou email para promovê-lo a Master
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Digite o email do usuário..."
-                    value={emailBusca}
-                    onChange={(e) => setEmailBusca(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && buscarUsuario()}
+                <div className="space-y-2">
+                  <Label>Buscar Usuário</Label>
+                  <Combobox
+                    value={selectedUserId}
+                    onValueChange={(value) => {
+                      setSelectedUserId(value);
+                    }}
+                    onSearchChange={(search) => {
+                      setSearchQuery(search);
+                    }}
+                    options={usuariosDisponiveis.map((user) => ({
+                      value: user.user_id,
+                      label: `${user.nome} - ${user.email}`,
+                    }))}
+                    placeholder="Selecione um usuário..."
+                    searchPlaceholder="Digite nome ou email do usuário..."
+                    emptyText="Nenhum usuário encontrado"
+                    className="w-full"
+                    isLoading={loadingUsuarios}
                   />
-                  <Button onClick={buscarUsuario}>
-                    <Search className="w-4 h-4 mr-2" />
-                    Buscar
-                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Digite pelo menos 2 caracteres para iniciar a busca
+                  </p>
                 </div>
 
-                {usuarioEncontrado && (
+                {usuarioSelecionado && (
                   <Card>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Avatar className="w-12 h-12">
-                            <AvatarImage src={usuarioEncontrado.avatar_url} />
+                            <AvatarImage src={usuarioSelecionado.avatar_url} />
                             <AvatarFallback>
-                              {getInitials(usuarioEncontrado.nome)}
+                              {getInitials(usuarioSelecionado.nome)}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{usuarioEncontrado.nome}</p>
+                            <p className="font-medium">{usuarioSelecionado.nome}</p>
                             <p className="text-sm text-muted-foreground">
-                              {usuarioEncontrado.email}
+                              {usuarioSelecionado.email}
                             </p>
-                            {usuarioEncontrado.is_master && (
-                              <Badge variant="secondary" className="mt-1">
-                                Já é Master
-                              </Badge>
-                            )}
                           </div>
                         </div>
                         <Button
-                          onClick={() => promoverMutation.mutate(usuarioEncontrado.user_id)}
-                          disabled={usuarioEncontrado.is_master || promoverMutation.isPending}
+                          onClick={() => promoverMutation.mutate(usuarioSelecionado.user_id)}
+                          disabled={promoverMutation.isPending}
                         >
                           <UserPlus className="w-4 h-4 mr-2" />
                           Promover a Master

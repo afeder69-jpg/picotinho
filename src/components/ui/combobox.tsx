@@ -25,6 +25,8 @@ interface ComboboxProps {
   searchPlaceholder?: string
   emptyText?: string
   className?: string
+  onSearchChange?: (search: string) => void
+  isLoading?: boolean
 }
 
 export function Combobox({
@@ -34,7 +36,9 @@ export function Combobox({
   placeholder = "Selecione uma opção...",
   searchPlaceholder = "Buscar...",
   emptyText = "Nenhum item encontrado.",
-  className
+  className,
+  onSearchChange,
+  isLoading = false
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -55,29 +59,40 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 z-50" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput 
+            placeholder={searchPlaceholder} 
+            onValueChange={(search) => onSearchChange?.(search)}
+          />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.value}
-                  onSelect={(currentValue) => {
-                    onValueChange(currentValue === value ? "" : currentValue)
-                    setOpen(false)
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === option.value ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {option.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {isLoading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                Buscando...
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>{emptyText}</CommandEmpty>
+                <CommandGroup>
+                  {options.map((option) => (
+                    <CommandItem
+                      key={option.value}
+                      value={option.value}
+                      onSelect={(currentValue) => {
+                        onValueChange(currentValue === value ? "" : currentValue)
+                        setOpen(false)
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          value === option.value ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {option.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
