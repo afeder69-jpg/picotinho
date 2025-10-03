@@ -982,10 +982,6 @@ export default function NormalizacaoGlobal() {
             </Card>
           ) : (
             (filtroMaster ? resultadosBusca : produtosMaster)
-              .filter(p => 
-                p.sku_global?.toLowerCase().includes(filtroMaster.toLowerCase()) ||
-                p.marca?.toLowerCase().includes(filtroMaster.toLowerCase())
-              )
               .map((produto) => (
               <Card key={produto.id}>
                 <CardHeader>
