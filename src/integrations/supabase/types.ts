@@ -985,6 +985,10 @@ export type Database = {
           created_at: string | null
           granel: boolean | null
           id: string
+          imagem_adicionada_em: string | null
+          imagem_adicionada_por: string | null
+          imagem_path: string | null
+          imagem_url: string | null
           marca: string | null
           nome_base: string
           nome_padrao: string
@@ -1008,6 +1012,10 @@ export type Database = {
           created_at?: string | null
           granel?: boolean | null
           id?: string
+          imagem_adicionada_em?: string | null
+          imagem_adicionada_por?: string | null
+          imagem_path?: string | null
+          imagem_url?: string | null
           marca?: string | null
           nome_base: string
           nome_padrao: string
@@ -1031,6 +1039,10 @@ export type Database = {
           created_at?: string | null
           granel?: boolean | null
           id?: string
+          imagem_adicionada_em?: string | null
+          imagem_adicionada_por?: string | null
+          imagem_path?: string | null
+          imagem_url?: string | null
           marca?: string | null
           nome_base?: string
           nome_padrao?: string
