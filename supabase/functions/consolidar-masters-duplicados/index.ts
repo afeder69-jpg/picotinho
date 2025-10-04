@@ -127,24 +127,35 @@ Deno.serve(async (req) => {
 
       // Para cada duplicado
       for (const duplicado of duplicados) {
-        // 4.1 Criar sinônimo do SKU duplicado apontando para o principal
-        const { error: sinonimoError } = await supabase
+        // 4.1 Criar sinônimo do SKU duplicado apontando para o principal (SE NÃO EXISTIR)
+        const { data: sinonimoExistente } = await supabase
           .from('produtos_sinonimos_globais')
-          .insert({
-            produto_master_id: masterPrincipal.id,
-            texto_variacao: duplicado.sku_global,
-            fonte: 'consolidacao_automatica',
-            confianca: 100,
-            total_ocorrencias: duplicado.total_notas,
-            aprovado_por: null, // Sistema
-            aprovado_em: new Date().toISOString()
-          });
+          .select('id')
+          .eq('produto_master_id', masterPrincipal.id)
+          .eq('texto_variacao', duplicado.sku_global)
+          .maybeSingle();
 
-        if (!sinonimoError) {
-          sinonimosCriados++;
-          console.log(`      ➕ Sinônimo criado: ${duplicado.sku_global} -> ${masterPrincipal.sku_global}`);
+        if (!sinonimoExistente) {
+          const { error: sinonimoError } = await supabase
+            .from('produtos_sinonimos_globais')
+            .insert({
+              produto_master_id: masterPrincipal.id,
+              texto_variacao: duplicado.sku_global,
+              fonte: 'consolidacao_automatica',
+              confianca: 100,
+              total_ocorrencias: duplicado.total_notas,
+              aprovado_por: null, // Sistema
+              aprovado_em: new Date().toISOString()
+            });
+
+          if (!sinonimoError) {
+            sinonimosCriados++;
+            console.log(`      ➕ Sinônimo criado: ${duplicado.sku_global} -> ${masterPrincipal.sku_global}`);
+          } else {
+            console.error(`      ⚠️ Erro ao criar sinônimo: ${sinonimoError.message}`);
+          }
         } else {
-          console.error(`      ⚠️ Erro ao criar sinônimo: ${sinonimoError.message}`);
+          console.log(`      ⏭️ Sinônimo já existe: ${duplicado.sku_global} -> ${masterPrincipal.sku_global}`);
         }
 
         // 4.2 Atualizar referências em estoque_app

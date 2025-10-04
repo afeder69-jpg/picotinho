@@ -181,19 +181,33 @@ Deno.serve(async (req) => {
             normalizacao.imagem_path = produto.imagem_path;
           }
 
-          // Decidir se auto-aprovar ou enviar para revisão
-          if (normalizacao.confianca >= 90 || normalizacao.produto_master_id) {
-            // ✅ AUTO-APROVAR
-            if (normalizacao.produto_master_id) {
-              // 🎯 IA encontrou produto existente - criar candidato aprovado
+          // ✅ NOVA LÓGICA: Verificar se produto já existe antes de criar
+          if (normalizacao.produto_master_id) {
+            // 🎯 IA encontrou produto existente - criar candidato aprovado
+            await criarCandidato(supabase, produto, normalizacao, 'aprovado');
+            totalAutoAprovados++;
+            console.log(`✅ Auto-aprovado (variação reconhecida): ${normalizacao.nome_padrao}`);
+          } else if (normalizacao.confianca >= 90) {
+            // 🔍 BUSCAR SE JÁ EXISTE produto idêntico (nome_base + marca)
+            const { data: masterExistente } = await supabase
+              .from('produtos_master_global')
+              .select('id, sku_global')
+              .eq('nome_base', normalizacao.nome_base)
+              .eq('marca', normalizacao.marca || null)
+              .eq('status', 'ativo')
+              .maybeSingle();
+
+            if (masterExistente) {
+              // ✅ Produto já existe - não criar duplicado, apenas candidato
+              normalizacao.produto_master_id = masterExistente.id;
               await criarCandidato(supabase, produto, normalizacao, 'aprovado');
               totalAutoAprovados++;
-              console.log(`✅ Auto-aprovado (variação reconhecida): ${normalizacao.nome_padrao}`);
+              console.log(`✅ Auto-aprovado (master existente encontrado): ${normalizacao.nome_padrao} -> ${masterExistente.sku_global}`);
             } else {
-              // Produto novo com alta confiança
+              // Produto realmente novo - pode criar
               await criarProdutoMaster(supabase, normalizacao);
               totalAutoAprovados++;
-              console.log(`✅ Auto-aprovado (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+              console.log(`✅ Auto-aprovado (produto novo ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
             }
           } else {
             // ⏳ ENVIAR PARA REVISÃO
