@@ -386,104 +386,30 @@ async function criarProdutoMaster(
   supabase: any,
   normalizacao: NormalizacaoSugerida
 ) {
-  // 1. Verificar se produto já existe pelo SKU global
-  const { data: produtoExistente } = await supabase
-    .from('produtos_master_global')
-    .select('*')
-    .eq('sku_global', normalizacao.sku_global)
-    .maybeSingle();
+  // Chamar função SQL atômica para UPSERT
+  const { data, error } = await supabase.rpc('upsert_produto_master', {
+    p_sku_global: normalizacao.sku_global,
+    p_nome_padrao: normalizacao.nome_padrao,
+    p_nome_base: normalizacao.nome_base,
+    p_categoria: normalizacao.categoria,
+    p_qtd_valor: normalizacao.qtd_valor,
+    p_qtd_unidade: normalizacao.qtd_unidade,
+    p_qtd_base: normalizacao.qtd_base,
+    p_unidade_base: normalizacao.unidade_base,
+    p_categoria_unidade: normalizacao.categoria_unidade,
+    p_granel: normalizacao.granel,
+    p_marca: normalizacao.marca,
+    p_tipo_embalagem: normalizacao.tipo_embalagem,
+    p_imagem_url: normalizacao.imagem_url,
+    p_imagem_path: normalizacao.imagem_path,
+    p_confianca: normalizacao.confianca
+  });
 
-  if (produtoExistente) {
-    // 2. PRODUTO EXISTE - Fazer merge inteligente
-    const updateData: any = {
-      sku_global: normalizacao.sku_global,
-      
-      // Sempre atualizar com dados novos
-      nome_padrao: normalizacao.nome_padrao,
-      nome_base: normalizacao.nome_base,
-      categoria: normalizacao.categoria,
-      qtd_valor: normalizacao.qtd_valor,
-      qtd_unidade: normalizacao.qtd_unidade,
-      qtd_base: normalizacao.qtd_base,
-      unidade_base: normalizacao.unidade_base,
-      categoria_unidade: normalizacao.categoria_unidade,
-      granel: normalizacao.granel,
-      
-      // Atualizar condicionalmente (prevalecer novo se existir, senão manter antigo)
-      marca: normalizacao.marca || produtoExistente.marca,
-      tipo_embalagem: normalizacao.tipo_embalagem || produtoExistente.tipo_embalagem,
-      imagem_url: normalizacao.imagem_url || produtoExistente.imagem_url,
-      imagem_path: normalizacao.imagem_path || produtoExistente.imagem_path,
-      
-      // Usar máxima confiança entre antiga e nova
-      confianca_normalizacao: Math.max(
-        normalizacao.confianca, 
-        produtoExistente.confianca_normalizacao || 0
-      ),
-      
-      // Incrementar contadores
-      total_usuarios: (produtoExistente.total_usuarios || 0) + 1,
-      total_notas: (produtoExistente.total_notas || 0) + 1,
-      
-      // Manter campos de auditoria
-      aprovado_por: produtoExistente.aprovado_por,
-      aprovado_em: produtoExistente.aprovado_em,
-      created_at: produtoExistente.created_at,
-      
-      // Atualizar timestamp
-      updated_at: new Date().toISOString(),
-      status: 'ativo'
-    };
-
-    // Fazer UPSERT (insert or update)
-    const { error } = await supabase
-      .from('produtos_master_global')
-      .upsert(updateData, { onConflict: 'sku_global' });
-
-    if (error) {
-      throw new Error(`Erro ao atualizar produto master: ${error.message}`);
-    }
-    
-    console.log(`🔄 Produto atualizado: ${normalizacao.nome_padrao} (SKU: ${normalizacao.sku_global})`);
-    
-  } else {
-    // 3. PRODUTO NÃO EXISTE - Criar novo (INSERT)
-    const insertData: any = {
-      sku_global: normalizacao.sku_global,
-      nome_padrao: normalizacao.nome_padrao,
-      categoria: normalizacao.categoria,
-      nome_base: normalizacao.nome_base,
-      marca: normalizacao.marca,
-      tipo_embalagem: normalizacao.tipo_embalagem,
-      qtd_valor: normalizacao.qtd_valor,
-      qtd_unidade: normalizacao.qtd_unidade,
-      qtd_base: normalizacao.qtd_base,
-      unidade_base: normalizacao.unidade_base,
-      categoria_unidade: normalizacao.categoria_unidade,
-      granel: normalizacao.granel,
-      confianca_normalizacao: normalizacao.confianca,
-      status: 'ativo',
-      total_usuarios: 1,
-      total_notas: 1
-    };
-
-    if (normalizacao.imagem_url) {
-      insertData.imagem_url = normalizacao.imagem_url;
-    }
-    if (normalizacao.imagem_path) {
-      insertData.imagem_path = normalizacao.imagem_path;
-    }
-
-    const { error } = await supabase
-      .from('produtos_master_global')
-      .insert(insertData);
-
-    if (error) {
-      throw new Error(`Erro ao criar produto master: ${error.message}`);
-    }
-    
-    console.log(`🆕 Novo produto criado: ${normalizacao.nome_padrao} (SKU: ${normalizacao.sku_global})`);
+  if (error) {
+    throw new Error(`Erro ao criar/atualizar produto master: ${error.message}`);
   }
+  
+  console.log(`${data.operacao === 'INSERT' ? '🆕' : '🔄'} ${data.mensagem}`);
 }
 
 async function criarCandidato(

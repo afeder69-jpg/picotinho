@@ -2468,6 +2468,26 @@ export type Database = {
           user_id: string
         }[]
       }
+      upsert_produto_master: {
+        Args: {
+          p_categoria: string
+          p_categoria_unidade: string
+          p_confianca: number
+          p_granel: boolean
+          p_imagem_path: string
+          p_imagem_url: string
+          p_marca: string
+          p_nome_base: string
+          p_nome_padrao: string
+          p_qtd_base: number
+          p_qtd_unidade: string
+          p_qtd_valor: number
+          p_sku_global: string
+          p_tipo_embalagem: string
+          p_unidade_base: string
+        }
+        Returns: Json
+      }
       validar_telefone_whatsapp: {
         Args: { telefone_numero: string }
         Returns: boolean
