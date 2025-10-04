@@ -403,30 +403,40 @@ async function criarProdutoMaster(
   supabase: any,
   normalizacao: NormalizacaoSugerida
 ) {
-  // Chamar função SQL atômica para UPSERT
-  const { data, error } = await supabase.rpc('upsert_produto_master', {
-    p_sku_global: normalizacao.sku_global,
-    p_nome_padrao: normalizacao.nome_padrao,
-    p_nome_base: normalizacao.nome_base,
-    p_categoria: normalizacao.categoria,
-    p_qtd_valor: normalizacao.qtd_valor,
-    p_qtd_unidade: normalizacao.qtd_unidade,
-    p_qtd_base: normalizacao.qtd_base,
-    p_unidade_base: normalizacao.unidade_base,
-    p_categoria_unidade: normalizacao.categoria_unidade,
-    p_granel: normalizacao.granel,
-    p_marca: normalizacao.marca,
-    p_tipo_embalagem: normalizacao.tipo_embalagem,
-    p_imagem_url: normalizacao.imagem_url,
-    p_imagem_path: normalizacao.imagem_path,
-    p_confianca: normalizacao.confianca
-  });
+  // 🔥 Chamada SQL usando INSERT direto para evitar conflito de ordem de parâmetros
+  const { data, error } = await supabase
+    .from('produtos_master_global')
+    .upsert({
+      sku_global: normalizacao.sku_global,
+      nome_padrao: normalizacao.nome_padrao,
+      nome_base: normalizacao.nome_base,
+      categoria: normalizacao.categoria,
+      qtd_valor: normalizacao.qtd_valor,
+      qtd_unidade: normalizacao.qtd_unidade,
+      qtd_base: normalizacao.qtd_base,
+      unidade_base: normalizacao.unidade_base,
+      categoria_unidade: normalizacao.categoria_unidade,
+      granel: normalizacao.granel,
+      marca: normalizacao.marca,
+      tipo_embalagem: normalizacao.tipo_embalagem,
+      imagem_url: normalizacao.imagem_url || null,
+      imagem_path: normalizacao.imagem_path || null,
+      confianca_normalizacao: normalizacao.confianca,
+      total_usuarios: 1,
+      total_notas: 1,
+      status: 'ativo'
+    }, {
+      onConflict: 'sku_global',
+      ignoreDuplicates: false
+    })
+    .select()
+    .single();
 
   if (error) {
     throw new Error(`Erro ao criar/atualizar produto master: ${error.message}`);
   }
   
-  console.log(`${data.operacao === 'INSERT' ? '🆕' : '🔄'} ${data.mensagem}`);
+  console.log(`✅ Produto salvo: ${data.nome_padrao}`);
 }
 
 async function criarCandidato(
