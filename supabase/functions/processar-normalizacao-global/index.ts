@@ -213,17 +213,37 @@ Deno.serve(async (req) => {
     }
 
     // Marcar todas as notas processadas como normalizadas
+    let notasMarcadasComSucesso = 0;
+    let notasFalharam = 0;
+    
+    console.log(`📝 Tentando marcar ${notasIds.length} notas como normalizadas...`);
+    console.log(`📋 IDs das notas: ${notasIds.join(', ')}`);
+    
     if (notasIds.length > 0) {
-      const { error: updateError } = await supabase
-        .from('notas_imagens')
-        .update({ normalizada: true })
-        .in('id', notasIds);
-      
-      if (updateError) {
-        console.error('❌ Erro ao marcar notas como normalizadas:', updateError);
-      } else {
-        console.log(`✅ ${notasIds.length} notas marcadas como normalizadas`);
+      try {
+        const { data: notasAtualizadas, error: updateError } = await supabase
+          .from('notas_imagens')
+          .update({ normalizada: true })
+          .in('id', notasIds)
+          .select('id');
+        
+        if (updateError) {
+          console.error('❌ Erro ao marcar notas como normalizadas:', updateError);
+          notasFalharam = notasIds.length;
+        } else {
+          notasMarcadasComSucesso = notasAtualizadas?.length || 0;
+          notasFalharam = notasIds.length - notasMarcadasComSucesso;
+          console.log(`✅ ${notasMarcadasComSucesso} notas marcadas como normalizadas com sucesso`);
+          if (notasFalharam > 0) {
+            console.warn(`⚠️ ${notasFalharam} notas não foram atualizadas`);
+          }
+        }
+      } catch (error: any) {
+        console.error('❌ Exceção ao marcar notas:', error.message);
+        notasFalharam = notasIds.length;
       }
+    } else {
+      console.log('ℹ️ Nenhuma nota para marcar (array vazio)');
     }
 
     const resultado = {
@@ -232,7 +252,9 @@ Deno.serve(async (req) => {
       processados: totalProcessados,
       auto_aprovados: totalAutoAprovados,
       para_revisao: totalParaRevisao,
-      notas_normalizadas: notasIds.length,
+      notas_processadas: notasIds.length,
+      notas_marcadas: notasMarcadasComSucesso,
+      notas_falharam: notasFalharam,
       timestamp: new Date().toISOString()
     };
 
