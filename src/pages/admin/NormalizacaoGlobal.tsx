@@ -262,7 +262,11 @@ export default function NormalizacaoGlobal() {
         description: "A normalização está sendo processada em background...",
       });
 
-      const { data, error } = await supabase.functions.invoke('processar-normalizacao-global');
+      const { data, error } = await supabase.functions.invoke('processar-normalizacao-global', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
 
       if (error) throw error;
 

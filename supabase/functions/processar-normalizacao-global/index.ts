@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
       .eq('processada', true)
       .eq('normalizada', false)
       .not('dados_extraidos', 'is', null)
-      .limit(10);
+      .limit(3); // Reduzido para evitar timeout
 
     if (notasError) {
       throw new Error(`Erro ao buscar notas: ${notasError.message}`);
