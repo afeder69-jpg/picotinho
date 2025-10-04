@@ -631,6 +631,7 @@ export type Database = {
           imagem_path: string
           imagem_url: string
           nome_original: string | null
+          normalizada: boolean | null
           origem: string | null
           processada: boolean | null
           updated_at: string | null
@@ -647,6 +648,7 @@ export type Database = {
           imagem_path: string
           imagem_url: string
           nome_original?: string | null
+          normalizada?: boolean | null
           origem?: string | null
           processada?: boolean | null
           updated_at?: string | null
@@ -663,6 +665,7 @@ export type Database = {
           imagem_path?: string
           imagem_url?: string
           nome_original?: string | null
+          normalizada?: boolean | null
           origem?: string | null
           processada?: boolean | null
           updated_at?: string | null

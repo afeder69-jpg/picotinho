@@ -58,7 +58,9 @@ Deno.serve(async (req) => {
       .from('notas_imagens')
       .select('id, usuario_id, dados_extraidos')
       .eq('processada', true)
-      .not('dados_extraidos', 'is', null);
+      .eq('normalizada', false)
+      .not('dados_extraidos', 'is', null)
+      .limit(10);
 
     if (notasError) {
       throw new Error(`Erro ao buscar notas: ${notasError.message}`);
@@ -82,6 +84,7 @@ Deno.serve(async (req) => {
     const produtosParaNormalizar: ProdutoParaNormalizar[] = [];
 
     // Extrair produtos de cada nota fiscal
+    const notasIds: string[] = [];
     for (const nota of notasProcessadas || []) {
       const itens = nota.dados_extraidos?.itens || [];
       
@@ -96,6 +99,7 @@ Deno.serve(async (req) => {
           });
         }
       }
+      notasIds.push(nota.id);
     }
 
     // Adicionar produtos do Open Food Facts
@@ -208,12 +212,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Marcar todas as notas processadas como normalizadas
+    if (notasIds.length > 0) {
+      const { error: updateError } = await supabase
+        .from('notas_imagens')
+        .update({ normalizada: true })
+        .in('id', notasIds);
+      
+      if (updateError) {
+        console.error('❌ Erro ao marcar notas como normalizadas:', updateError);
+      } else {
+        console.log(`✅ ${notasIds.length} notas marcadas como normalizadas`);
+      }
+    }
+
     const resultado = {
       sucesso: true,
       total_produtos: produtosParaNormalizar.length,
       processados: totalProcessados,
       auto_aprovados: totalAutoAprovados,
       para_revisao: totalParaRevisao,
+      notas_normalizadas: notasIds.length,
       timestamp: new Date().toISOString()
     };
 

@@ -222,10 +222,10 @@ async function inserirProdutoStaging(
       }
     }
     
-    // Inserir no staging
+    // Inserir no staging (upsert para evitar duplicatas)
     const { error } = await supabase
       .from('open_food_facts_staging')
-      .insert({
+      .upsert({
         codigo_barras: produto.code,
         texto_original: textoOriginal,
         dados_brutos: {
@@ -241,9 +241,20 @@ async function inserirProdutoStaging(
         processada: false,
         imagem_url: imagemUrl,
         imagem_path: imagemPath
+      }, {
+        onConflict: 'codigo_barras',
+        ignoreDuplicates: true
       });
       
     if (error) {
+      // Se for erro de duplicata, é esperado
+      if (error.code === '23505' || error.message?.includes('duplicate')) {
+        return {
+          sucesso: true,
+          mensagem: `Produto já existente (ignorado): ${textoOriginal}`
+        };
+      }
+      
       return {
         sucesso: false,
         mensagem: `Erro ao inserir: ${error.message}`
@@ -252,7 +263,7 @@ async function inserirProdutoStaging(
     
     return {
       sucesso: true,
-      mensagem: `Produto enviado para normalização: ${textoOriginal}`
+      mensagem: `Produto importado: ${textoOriginal}`
     };
   } catch (error) {
     return {
@@ -307,11 +318,13 @@ serve(async (req) => {
       const resultado = await inserirProdutoStaging(supabaseClient, produto);
       
       if (resultado.sucesso) {
-        resultados.importados++;
-        resultados.logs.push(`✅ ${resultado.mensagem}`);
-      } else if (resultado.mensagem.includes('já existe')) {
-        resultados.duplicados++;
-        resultados.logs.push(`⚠️ ${resultado.mensagem}`);
+        if (resultado.mensagem.includes('já existente')) {
+          resultados.duplicados++;
+          resultados.logs.push(`⏭️  ${resultado.mensagem}`);
+        } else {
+          resultados.importados++;
+          resultados.logs.push(`✅ ${resultado.mensagem}`);
+        }
       } else {
         resultados.erros++;
         resultados.logs.push(`❌ ${resultado.mensagem}`);
