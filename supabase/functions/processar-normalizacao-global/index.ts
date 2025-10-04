@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
       .eq('processada', true)
       .eq('normalizada', false)
       .not('dados_extraidos', 'is', null)
-      .limit(3); // Reduzido para evitar timeout
+      .limit(1); // ✅ Reduzido para 1 nota por execução para evitar timeout
 
     if (notasError) {
       throw new Error(`Erro ao buscar notas: ${notasError.message}`);
@@ -212,6 +212,9 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 🎯 LOG DE CONFIRMAÇÃO: Verificar se código chega aqui antes do timeout
+    console.log('🎯 CHEGOU AQUI - vai marcar notas antes do if');
+    
     // Marcar todas as notas processadas como normalizadas
     let notasMarcadasComSucesso = 0;
     let notasFalharam = 0;
