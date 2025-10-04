@@ -454,11 +454,16 @@ export default function NormalizacaoGlobal() {
 
       if (error) throw error;
 
-      setRelatorioConsolidacao(data);
+      setRelatorioConsolidacao({
+        grupos_consolidados: data.total_grupos_consolidados,
+        masters_removidos: data.total_masters_removidos,
+        sinonimos_criados: data.total_sinonimos_criados,
+        grupos: data.grupos
+      });
       
       toast({
         title: "Consolidação concluída! 🎉",
-        description: `${data.resumo.grupos_consolidados} grupos processados`,
+        description: `${data.total_grupos_consolidados} grupos processados`,
       });
 
       await carregarDados();
