@@ -24,7 +24,8 @@ import {
   Edit3,
   Download,
   Database,
-  Image
+  Image,
+  Trash2
 } from "lucide-react";
 import {
   Pagination,
@@ -113,6 +114,10 @@ export default function NormalizacaoGlobal() {
   const [logsImportacao, setLogsImportacao] = useState<string[]>([]);
   const [limiteImportar, setLimiteImportar] = useState(50);
   const [apenasComImagem, setApenasComImagem] = useState(true);
+
+  // Estados para consolidação de duplicados
+  const [consolidando, setConsolidando] = useState(false);
+  const [relatorioConsolidacao, setRelatorioConsolidacao] = useState<any>(null);
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -433,6 +438,41 @@ export default function NormalizacaoGlobal() {
     setLogsImportacao([]);
     setProgressoImportacao(0);
     setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
+  }
+
+  async function consolidarMastersDuplicados() {
+    setConsolidando(true);
+    setRelatorioConsolidacao(null);
+    
+    try {
+      toast({
+        title: "Consolidação iniciada",
+        description: "Processando duplicados...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('consolidar-masters-duplicados');
+
+      if (error) throw error;
+
+      setRelatorioConsolidacao(data);
+      
+      toast({
+        title: "Consolidação concluída! 🎉",
+        description: `${data.resumo.grupos_consolidados} grupos processados`,
+      });
+
+      await carregarDados();
+
+    } catch (error: any) {
+      console.error('Erro ao consolidar:', error);
+      toast({
+        title: "Erro na consolidação",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setConsolidando(false);
+    }
   }
 
 
@@ -939,7 +979,7 @@ export default function NormalizacaoGlobal() {
         <div className="flex gap-2">
           <Button 
             onClick={processarNormalizacao}
-            disabled={processando || processandoBackfill}
+            disabled={processando || processandoBackfill || consolidando}
             className="gap-2"
           >
             <Sparkles className="w-4 h-4" />
@@ -948,7 +988,7 @@ export default function NormalizacaoGlobal() {
           
           <Button 
             onClick={processarBackfillLegados}
-            disabled={processando || processandoBackfill}
+            disabled={processando || processandoBackfill || consolidando}
             variant="outline"
             className="gap-2"
           >
@@ -956,6 +996,16 @@ export default function NormalizacaoGlobal() {
             {processandoBackfill 
               ? `Backfill... ${progressoBackfill.progresso}` 
               : 'Normalizar Produtos Legados'}
+          </Button>
+
+          <Button 
+            onClick={consolidarMastersDuplicados}
+            disabled={processando || processandoBackfill || consolidando}
+            variant="destructive"
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            {consolidando ? 'Consolidando...' : 'Consolidar Duplicados'}
           </Button>
         </div>
       </div>
@@ -1053,6 +1103,81 @@ export default function NormalizacaoGlobal() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Progresso da Consolidação */}
+      {consolidando && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 animate-pulse" />
+              Consolidando Masters Duplicados
+            </CardTitle>
+            <CardDescription>
+              Removendo duplicatas e criando sinônimos...
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-destructive"></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Relatório de Consolidação */}
+      {relatorioConsolidacao && (
+        <Card className="border-green-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              Consolidação Concluída
+            </CardTitle>
+            <CardDescription>
+              Resumo da operação
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Grupos Consolidados</p>
+                <p className="text-2xl font-bold text-green-600">{relatorioConsolidacao.resumo.grupos_consolidados}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Masters Removidos</p>
+                <p className="text-2xl font-bold text-destructive">{relatorioConsolidacao.resumo.masters_removidos}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Sinônimos Criados</p>
+                <p className="text-2xl font-bold text-blue-600">{relatorioConsolidacao.resumo.sinonimos_criados}</p>
+              </div>
+            </div>
+
+            {relatorioConsolidacao.detalhes && relatorioConsolidacao.detalhes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Detalhes:</p>
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {relatorioConsolidacao.detalhes.map((detalhe: any, idx: number) => (
+                    <div key={idx} className="text-sm p-2 bg-muted rounded border">
+                      <p className="font-medium">{detalhe.grupo}</p>
+                      <p className="text-muted-foreground">
+                        {detalhe.duplicados_removidos} duplicados → {detalhe.master_principal}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Button 
+              onClick={() => setRelatorioConsolidacao(null)} 
+              variant="outline" 
+              className="w-full"
+            >
+              Fechar
+            </Button>
           </CardContent>
         </Card>
       )}
