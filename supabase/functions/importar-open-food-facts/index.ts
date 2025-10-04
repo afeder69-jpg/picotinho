@@ -367,6 +367,8 @@ async function inserirProduto(
 }
 
 serve(async (req) => {
+  console.log('🚀 Edge Function importar-open-food-facts iniciada');
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
