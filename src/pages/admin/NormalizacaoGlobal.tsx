@@ -1148,27 +1148,30 @@ export default function NormalizacaoGlobal() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Grupos Consolidados</p>
-                <p className="text-2xl font-bold text-green-600">{relatorioConsolidacao.resumo.grupos_consolidados}</p>
+                <p className="text-2xl font-bold text-green-600">{relatorioConsolidacao.grupos_consolidados}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Masters Removidos</p>
-                <p className="text-2xl font-bold text-destructive">{relatorioConsolidacao.resumo.masters_removidos}</p>
+                <p className="text-2xl font-bold text-destructive">{relatorioConsolidacao.masters_removidos}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Sinônimos Criados</p>
-                <p className="text-2xl font-bold text-blue-600">{relatorioConsolidacao.resumo.sinonimos_criados}</p>
+                <p className="text-2xl font-bold text-blue-600">{relatorioConsolidacao.sinonimos_criados}</p>
               </div>
             </div>
 
-            {relatorioConsolidacao.detalhes && relatorioConsolidacao.detalhes.length > 0 && (
+            {relatorioConsolidacao.grupos && relatorioConsolidacao.grupos.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium">Detalhes:</p>
+                <p className="text-sm font-medium">Grupos Consolidados:</p>
                 <div className="max-h-60 overflow-y-auto space-y-2">
-                  {relatorioConsolidacao.detalhes.map((detalhe: any, idx: number) => (
+                  {relatorioConsolidacao.grupos.map((grupo: any, idx: number) => (
                     <div key={idx} className="text-sm p-2 bg-muted rounded border">
-                      <p className="font-medium">{detalhe.grupo}</p>
+                      <p className="font-medium">{grupo.nome_base} {grupo.marca && `(${grupo.marca})`}</p>
                       <p className="text-muted-foreground">
-                        {detalhe.duplicados_removidos} duplicados → {detalhe.master_principal}
+                        {grupo.duplicados_removidos} duplicados removidos → Master: {grupo.master_principal_sku}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {grupo.sinonimos_criados} sinônimos | {grupo.referencias_atualizadas_estoque} refs estoque
                       </p>
                     </div>
                   ))}
