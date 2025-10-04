@@ -1,5 +1,7 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
+# Build forçado para sincronizar edge functions - 2025-01-04
+
 [functions.importar-open-food-facts]
 verify_jwt = false
 
