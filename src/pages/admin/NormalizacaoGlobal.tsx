@@ -89,7 +89,6 @@ export default function NormalizacaoGlobal() {
     semImagem: 0
   });
   const [logsImportacao, setLogsImportacao] = useState<string[]>([]);
-  const [categoriasImportar, setCategoriasImportar] = useState<string[]>([]);
   const [limiteImportar, setLimiteImportar] = useState(50);
   const [apenasComImagem, setApenasComImagem] = useState(true);
 
@@ -300,7 +299,6 @@ export default function NormalizacaoGlobal() {
 
       const { data, error } = await supabase.functions.invoke('importar-open-food-facts', {
         body: {
-          categorias: categoriasImportar.length > 0 ? categoriasImportar : undefined,
           limite: limiteImportar,
           pagina: 1,
           comImagem: apenasComImagem
@@ -339,13 +337,6 @@ export default function NormalizacaoGlobal() {
     setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
   }
 
-  function toggleCategoriaImportar(categoria: string) {
-    setCategoriasImportar(prev => 
-      prev.includes(categoria)
-        ? prev.filter(c => c !== categoria)
-        : [...prev, categoria]
-    );
-  }
 
   // Função para calcular unidade base
   function calcularUnidadeBase(qtd_valor: number, qtd_unidade: string) {
@@ -1165,22 +1156,6 @@ export default function NormalizacaoGlobal() {
             <CardContent className="space-y-6">
               {/* Painel de Configuração */}
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Categorias (deixe vazio para todas)</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {['AÇOUGUE', 'BEBIDAS', 'CONGELADOS', 'HIGIENE/FARMÁCIA', 'HORTIFRUTI', 'LATICÍNIOS/FRIOS', 'LIMPEZA', 'MERCEARIA', 'OUTROS', 'PADARIA', 'PET'].map(cat => (
-                      <Badge 
-                        key={cat}
-                        variant={categoriasImportar.includes(cat) ? "default" : "outline"}
-                        className="cursor-pointer"
-                        onClick={() => toggleCategoriaImportar(cat)}
-                      >
-                        {cat}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="limite">Limite de produtos</Label>

@@ -18,7 +18,6 @@ interface OpenFoodProduct {
 }
 
 interface ImportacaoParams {
-  categorias?: string[];
   limite: number;
   pagina: number;
   comImagem: boolean;
@@ -157,10 +156,6 @@ async function buscarProdutosOpenFood(params: ImportacaoParams): Promise<OpenFoo
     page: params.pagina.toString()
   });
   
-  if (params.categorias && params.categorias.length > 0) {
-    queryParams.append('categories_tags_en', params.categorias.join(','));
-  }
-  
   console.log(`🌍 Chamando API v2: ${baseUrl}?${queryParams}`);
   
   const response = await fetch(`${baseUrl}?${queryParams}`);
@@ -280,12 +275,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { categorias, limite = 50, pagina = 1, comImagem = true } = await req.json();
+    const { limite = 50, pagina = 1, comImagem = true } = await req.json();
 
-    console.log(`🔍 Buscando produtos do Open Food Facts (página ${pagina}, limite ${limite})`);
+    console.log(`🔍 Buscando produtos brasileiros do Open Food Facts (página ${pagina}, limite ${limite})`);
 
     const produtos = await buscarProdutosOpenFood({
-      categorias,
       limite,
       pagina,
       comImagem
