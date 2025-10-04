@@ -1,5 +1,8 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
+[functions.importar-open-food-facts]
+verify_jwt = false
+
 [functions.validate-receipt]
 verify_jwt = false
 

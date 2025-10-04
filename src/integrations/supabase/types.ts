@@ -981,6 +981,7 @@ export type Database = {
           aprovado_por: string | null
           categoria: string
           categoria_unidade: string | null
+          codigo_barras: string | null
           confianca_normalizacao: number | null
           created_at: string | null
           granel: boolean | null
@@ -1008,6 +1009,7 @@ export type Database = {
           aprovado_por?: string | null
           categoria: string
           categoria_unidade?: string | null
+          codigo_barras?: string | null
           confianca_normalizacao?: number | null
           created_at?: string | null
           granel?: boolean | null
@@ -1035,6 +1037,7 @@ export type Database = {
           aprovado_por?: string | null
           categoria?: string
           categoria_unidade?: string | null
+          codigo_barras?: string | null
           confianca_normalizacao?: number | null
           created_at?: string | null
           granel?: boolean | null
