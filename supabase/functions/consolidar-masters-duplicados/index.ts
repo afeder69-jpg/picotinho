@@ -182,16 +182,17 @@ Deno.serve(async (req) => {
           console.log(`      🔄 Candidatos atualizados: ${candidatosCount} registros`);
         }
 
-        // 4.4 Marcar duplicado como consolidado (soft delete)
-        await supabase
+        // 4.4 Marcar duplicado como inativo (removido da consolidação)
+        const { error: updateError } = await supabase
           .from('produtos_master_global')
-          .update({ 
-            status: 'consolidado',
-            updated_at: new Date().toISOString()
-          })
+          .delete()
           .eq('id', duplicado.id);
 
-        console.log(`      ✔️ Master ${duplicado.sku_global} marcado como consolidado`);
+        if (!updateError) {
+          console.log(`      ✔️ Master ${duplicado.sku_global} removido (duplicado consolidado)`);
+        } else {
+          console.error(`      ⚠️ Erro ao remover duplicado: ${updateError.message}`);
+        }
       }
 
       // Adicionar ao relatório
