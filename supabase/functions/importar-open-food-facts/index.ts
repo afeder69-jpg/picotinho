@@ -259,30 +259,46 @@ function normalizarProduto(produto: OpenFoodProduct): ProdutoNormalizado | null 
   };
 }
 
-// Buscar produtos na API Open Food Facts
+// Buscar produtos na API Open Food Facts (API v2)
 async function buscarProdutosOpenFood(params: ImportacaoParams): Promise<OpenFoodProduct[]> {
-  const baseUrl = 'https://world.openfoodfacts.org/cgi/search.pl';
+  const baseUrl = 'https://world.openfoodfacts.org/api/v2/search';
   
   const queryParams = new URLSearchParams({
-    countries_tags: 'en:brazil',
-    fields: 'code,product_name,brands,categories,quantity,image_url,image_small_url',
+    countries_tags_en: 'brazil',
+    fields: 'code,product_name,brands,categories_tags,quantity,image_url',
     page_size: params.limite.toString(),
-    page: params.pagina.toString(),
-    json: '1'
+    page: params.pagina.toString()
   });
   
-  if (params.comImagem) {
-    queryParams.append('states_tags', 'en:photos-validated');
-  }
+  // API v2 não suporta filtro por fotos validadas da mesma forma
+  // Vamos filtrar localmente produtos sem imagem se necessário
   
   if (params.categorias && params.categorias.length > 0) {
-    queryParams.append('categories_tags', params.categorias.join(','));
+    queryParams.append('categories_tags_en', params.categorias.join(','));
   }
   
+  console.log(`🌍 Chamando API v2: ${baseUrl}?${queryParams}`);
+  
   const response = await fetch(`${baseUrl}?${queryParams}`);
+  
+  if (!response.ok) {
+    console.error(`❌ Erro na API: ${response.status} ${response.statusText}`);
+    throw new Error(`API retornou ${response.status}: ${response.statusText}`);
+  }
+  
   const data = await response.json();
   
-  return data.products || [];
+  console.log(`📊 API retornou: ${data.count} produtos totais, ${data.products?.length || 0} nesta página`);
+  
+  let produtos = data.products || [];
+  
+  // Filtrar produtos sem imagem se necessário
+  if (params.comImagem) {
+    produtos = produtos.filter((p: OpenFoodProduct) => p.image_url);
+    console.log(`🖼️ Após filtro de imagem: ${produtos.length} produtos`);
+  }
+  
+  return produtos;
 }
 
 // Inserir produto no banco
