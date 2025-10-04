@@ -69,11 +69,11 @@ serve(async (req) => {
       if (produtosVistos.has(produto.produto_nome)) continue;
       produtosVistos.add(produto.produto_nome);
 
-      // Verificar se já foi processado
+      // Verificar se já foi processado (case-insensitive)
       const { count } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('*', { count: 'exact', head: true })
-        .eq('texto_original', produto.produto_nome);
+        .ilike('texto_original', produto.produto_nome);
 
       if (count === 0) {
         produtosParaProcessar.push(produto);
