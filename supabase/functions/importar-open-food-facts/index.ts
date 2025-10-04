@@ -17,21 +17,6 @@ interface OpenFoodProduct {
   image_small_url?: string;
 }
 
-interface ProdutoNormalizado {
-  sku_global: string;
-  nome_padrao: string;
-  nome_base: string;
-  marca: string;
-  categoria: string;
-  tipo_embalagem: string | null;
-  qtd_valor: number | null;
-  qtd_unidade: string | null;
-  granel: boolean;
-  imagem_url?: string;
-  imagem_path?: string;
-  codigo_barras?: string;
-}
-
 interface ImportacaoParams {
   categorias?: string[];
   limite: number;
@@ -117,74 +102,10 @@ function mapearCategoriaOpenFood(categoriesOpenFood: string): string {
   return 'OUTROS';
 }
 
-// Gerar SKU no padrão Picotinho: CATEGORIA-NOME_BASE-MARCA-QUANTIDADE
-function gerarSkuPicotinho(
-  categoria: string,
-  nomeBase: string,
-  marca: string,
-  quantidade: string
-): string {
-  const catNorm = categoria.toUpperCase().replace(/[^A-Z]/g, '_');
-  const nomeNorm = nomeBase.toUpperCase()
-    .replace(/[^A-Z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-  const marcaNorm = marca.toUpperCase()
-    .replace(/[^A-Z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-  const qtdNorm = quantidade.toUpperCase().replace(/\s/g, '');
-  
-  return `${catNorm}-${nomeNorm}-${marcaNorm}-${qtdNorm}`;
-}
-
-// Verificação tripla de duplicados
-async function verificarDuplicado(
-  supabase: any,
-  skuGlobal: string,
-  nomeBase: string,
-  marca: string,
-  quantidade: string,
-  codigoBarras?: string
-): Promise<boolean> {
-  // 1. Verificar por SKU exato
-  const { data: porSku } = await supabase
-    .from('produtos_master_global')
-    .select('id')
-    .eq('sku_global', skuGlobal)
-    .maybeSingle();
-    
-  if (porSku) return true;
-  
-  // 2. Verificar por nome_base + marca + quantidade (normalizado)
-  const { data: porDados } = await supabase
-    .from('produtos_master_global')
-    .select('id')
-    .ilike('nome_base', nomeBase)
-    .ilike('marca', marca)
-    .ilike('qtd_unidade', quantidade)
-    .maybeSingle();
-    
-  if (porDados) return true;
-  
-  // 3. Verificar por código de barras se disponível
-  if (codigoBarras) {
-    const { data: porBarras } = await supabase
-      .from('produtos_master_global')
-      .select('id')
-      .eq('codigo_barras', codigoBarras)
-      .maybeSingle();
-      
-    if (porBarras) return true;
-  }
-  
-  return false;
-}
-
 // Processar imagem: download e upload
 async function processarImagem(
   imageUrl: string,
-  skuGlobal: string,
+  codigo_barras: string,
   supabase: any
 ): Promise<{ url: string; path: string } | null> {
   try {
@@ -196,7 +117,7 @@ async function processarImagem(
     
     const blob = await response.blob();
     const extensao = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
-    const nomeArquivo = `${skuGlobal}.${extensao}`;
+    const nomeArquivo = `${codigo_barras}.${extensao}`;
     const path = `produtos-master/${nomeArquivo}`;
     
     const { error: uploadError } = await supabase.storage
@@ -225,40 +146,6 @@ async function processarImagem(
   }
 }
 
-// Normalizar produto do Open Food Facts
-function normalizarProduto(produto: OpenFoodProduct): ProdutoNormalizado | null {
-  if (!produto.product_name || !produto.brands) {
-    return null;
-  }
-  
-  const categoria = mapearCategoriaOpenFood(produto.categories || '');
-  const nomeBase = produto.product_name.trim();
-  const marca = produto.brands.split(',')[0].trim();
-  const quantidade = produto.quantity || 'UN';
-  
-  // Extrair quantidade e unidade
-  const qtdMatch = quantidade.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
-  const qtdValor = qtdMatch ? parseFloat(qtdMatch[1]) : null;
-  const qtdUnidade = qtdMatch ? qtdMatch[2].toUpperCase() : quantidade;
-  
-  const skuGlobal = gerarSkuPicotinho(categoria, nomeBase, marca, qtdUnidade);
-  const nomePadrao = `${nomeBase} ${marca} ${qtdUnidade}`.toUpperCase();
-  
-  return {
-    sku_global: skuGlobal,
-    nome_padrao: nomePadrao,
-    nome_base: nomeBase.toUpperCase(),
-    marca: marca.toUpperCase(),
-    categoria,
-    tipo_embalagem: null,
-    qtd_valor: qtdValor,
-    qtd_unidade: qtdUnidade,
-    granel: false,
-    imagem_url: produto.image_url || produto.image_small_url,
-    codigo_barras: produto.code
-  };
-}
-
 // Buscar produtos na API Open Food Facts (API v2)
 async function buscarProdutosOpenFood(params: ImportacaoParams): Promise<OpenFoodProduct[]> {
   const baseUrl = 'https://world.openfoodfacts.org/api/v2/search';
@@ -269,9 +156,6 @@ async function buscarProdutosOpenFood(params: ImportacaoParams): Promise<OpenFoo
     page_size: params.limite.toString(),
     page: params.pagina.toString()
   });
-  
-  // API v2 não suporta filtro por fotos validadas da mesma forma
-  // Vamos filtrar localmente produtos sem imagem se necessário
   
   if (params.categorias && params.categorias.length > 0) {
     queryParams.append('categories_tags_en', params.categorias.join(','));
@@ -301,37 +185,39 @@ async function buscarProdutosOpenFood(params: ImportacaoParams): Promise<OpenFoo
   return produtos;
 }
 
-// Inserir produto no banco
-async function inserirProduto(
+// Inserir produto no staging
+async function inserirProdutoStaging(
   supabase: any,
-  produto: ProdutoNormalizado
+  produto: OpenFoodProduct
 ): Promise<{ sucesso: boolean; mensagem: string }> {
   try {
-    // Verificação de duplicado
-    const isDuplicado = await verificarDuplicado(
-      supabase,
-      produto.sku_global,
-      produto.nome_base,
-      produto.marca,
-      produto.qtd_unidade || '',
-      produto.codigo_barras
-    );
-    
-    if (isDuplicado) {
+    if (!produto.product_name || !produto.brands) {
       return {
         sucesso: false,
-        mensagem: `Produto já existe: ${produto.nome_padrao}`
+        mensagem: `Produto sem nome ou marca: ${produto.code}`
       };
     }
+
+    const categoria = mapearCategoriaOpenFood(produto.categories || '');
+    const nomeBase = produto.product_name.trim();
+    const marca = produto.brands.split(',')[0].trim();
+    const quantidade = produto.quantity || 'UN';
+    
+    // Extrair quantidade e unidade
+    const qtdMatch = quantidade.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
+    const qtdValor = qtdMatch ? parseFloat(qtdMatch[1]) : null;
+    const qtdUnidade = qtdMatch ? qtdMatch[2].toUpperCase() : quantidade;
+    
+    const textoOriginal = `${nomeBase} ${marca} ${qtdUnidade}`.trim();
     
     // Processar imagem se disponível
     let imagemUrl: string | null = null;
     let imagemPath: string | null = null;
     
-    if (produto.imagem_url) {
+    if (produto.image_url) {
       const imagem = await processarImagem(
-        produto.imagem_url,
-        produto.sku_global,
+        produto.image_url,
+        produto.code,
         supabase
       );
       
@@ -341,20 +227,21 @@ async function inserirProduto(
       }
     }
     
-    // Inserir no staging para normalização posterior pela IA
+    // Inserir no staging
     const { error } = await supabase
       .from('open_food_facts_staging')
       .insert({
-        codigo_barras: produto.codigo_barras || '',
-        texto_original: `${produto.nome_base} ${produto.marca} ${produto.qtd_unidade || ''}`,
+        codigo_barras: produto.code,
+        texto_original: textoOriginal,
         dados_brutos: {
-          nome_base: produto.nome_base,
-          marca: produto.marca,
-          categoria: produto.categoria,
-          qtd_valor: produto.qtd_valor,
-          qtd_unidade: produto.qtd_unidade,
-          tipo_embalagem: produto.tipo_embalagem,
-          granel: produto.granel
+          nome_base: nomeBase,
+          marca: marca,
+          categoria: categoria,
+          qtd_valor: qtdValor,
+          qtd_unidade: qtdUnidade,
+          product_name: produto.product_name,
+          brands: produto.brands,
+          quantity: produto.quantity
         },
         processada: false,
         imagem_url: imagemUrl,
@@ -370,7 +257,7 @@ async function inserirProduto(
     
     return {
       sucesso: true,
-      mensagem: `Produto importado: ${produto.nome_padrao}`
+      mensagem: `Produto enviado para normalização: ${textoOriginal}`
     };
   } catch (error) {
     return {
@@ -417,21 +304,13 @@ serve(async (req) => {
     };
 
     for (const produto of produtos) {
-      const produtoNormalizado = normalizarProduto(produto);
-      
-      if (!produtoNormalizado) {
-        resultados.erros++;
-        resultados.logs.push(`❌ Produto inválido: ${produto.product_name}`);
-        continue;
-      }
-
-      if (produtoNormalizado.imagem_url) {
+      if (produto.image_url) {
         resultados.comImagem++;
       } else {
         resultados.semImagem++;
       }
 
-      const resultado = await inserirProduto(supabaseClient, produtoNormalizado);
+      const resultado = await inserirProdutoStaging(supabaseClient, produto);
       
       if (resultado.sucesso) {
         resultados.importados++;

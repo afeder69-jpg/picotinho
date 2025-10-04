@@ -7,8 +7,14 @@ const corsHeaders = {
 
 interface ProdutoParaNormalizar {
   texto_original: string;
-  usuario_id: string;
-  nota_imagem_id: string;
+  usuario_id?: string;
+  nota_imagem_id?: string;
+  open_food_facts_id?: string;
+  origem: 'nota_fiscal' | 'open_food_facts';
+  codigo_barras?: string;
+  dados_brutos?: any;
+  imagem_url?: string;
+  imagem_path?: string;
 }
 
 interface NormalizacaoSugerida {
@@ -32,7 +38,6 @@ interface NormalizacaoSugerida {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -40,17 +45,15 @@ Deno.serve(async (req) => {
   try {
     console.log('🚀 Iniciando processamento de normalização global');
 
-    // Inicializar Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. BUSCAR PRODUTOS DE DUAS FONTES
+    // 1. BUSCAR PRODUTOS DE NOTAS NÃO NORMALIZADAS
     console.log('📋 Buscando produtos para normalizar...');
     
-    // FONTE 1: Notas fiscais
     const { data: notasProcessadas, error: notasError } = await supabase
       .from('notas_imagens')
       .select('id, usuario_id, dados_extraidos')
@@ -63,10 +66,10 @@ Deno.serve(async (req) => {
 
     console.log(`📦 Notas fiscais: ${notasProcessadas?.length || 0} notas processadas`);
 
-    // FONTE 2: Open Food Facts
+    // 2. BUSCAR PRODUTOS DO OPEN FOOD FACTS NÃO NORMALIZADOS
     const { data: openFoodProducts, error: offError } = await supabase
       .from('open_food_facts_staging')
-      .select('*')
+      .select('id, codigo_barras, texto_original, dados_brutos, imagem_url, imagem_path')
       .eq('processada', false)
       .limit(50);
 
@@ -74,11 +77,11 @@ Deno.serve(async (req) => {
       console.warn(`⚠️ Erro ao buscar Open Food Facts: ${offError.message}`);
     }
 
-    console.log(`📦 Open Food Facts: ${openFoodProducts?.length || 0} produtos para normalizar`);
+    console.log(`🌍 Open Food Facts: ${openFoodProducts?.length || 0} produtos para normalizar`);
 
-    const produtosParaNormalizar: Array<ProdutoParaNormalizar & { origem?: string; off_id?: string; imagem_url?: string; imagem_path?: string }> = [];
+    const produtosParaNormalizar: ProdutoParaNormalizar[] = [];
 
-    // Extrair produtos de NOTAS FISCAIS
+    // Extrair produtos de cada nota fiscal
     for (const nota of notasProcessadas || []) {
       const itens = nota.dados_extraidos?.itens || [];
       
@@ -95,23 +98,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Extrair produtos de OPEN FOOD FACTS
-    for (const produto of openFoodProducts || []) {
+    // Adicionar produtos do Open Food Facts
+    for (const offProduto of openFoodProducts || []) {
       produtosParaNormalizar.push({
-        texto_original: produto.texto_original,
-        usuario_id: '', // Open Food Facts não tem usuario_id
-        nota_imagem_id: '', // Não vem de nota
+        texto_original: offProduto.texto_original,
+        open_food_facts_id: offProduto.id,
         origem: 'open_food_facts',
-        off_id: produto.id,
-        imagem_url: produto.imagem_url,
-        imagem_path: produto.imagem_path
+        codigo_barras: offProduto.codigo_barras,
+        dados_brutos: offProduto.dados_brutos,
+        imagem_url: offProduto.imagem_url,
+        imagem_path: offProduto.imagem_path
       });
     }
 
-    console.log(`🔍 Total de produtos para normalizar: ${produtosParaNormalizar.length} (${notasProcessadas?.length || 0} notas + ${openFoodProducts?.length || 0} Open Food Facts)`);
+    console.log(`🔍 Total de produtos para normalizar: ${produtosParaNormalizar.length}`);
 
     // 2. PROCESSAR EM LOTES
-    const LOTE_SIZE = 10; // Processar 10 produtos por vez
+    const LOTE_SIZE = 10;
     let totalProcessados = 0;
     let totalAutoAprovados = 0;
     let totalParaRevisao = 0;
@@ -127,7 +130,7 @@ Deno.serve(async (req) => {
             .from('produtos_candidatos_normalizacao')
             .select('id')
             .eq('texto_original', produto.texto_original)
-            .single();
+            .maybeSingle();
 
           if (jaExiste) {
             console.log(`⏭️  Produto já normalizado: ${produto.texto_original}`);
@@ -147,9 +150,11 @@ Deno.serve(async (req) => {
             lovableApiKey
           );
 
-          // Adicionar campos de imagem se for Open Food Facts
-          if (produto.origem === 'open_food_facts' && produto.imagem_url) {
+          // Adicionar campos de imagem se existirem
+          if (produto.imagem_url) {
             normalizacao.imagem_url = produto.imagem_url;
+          }
+          if (produto.imagem_path) {
             normalizacao.imagem_path = produto.imagem_path;
           }
 
@@ -157,23 +162,21 @@ Deno.serve(async (req) => {
           const statusFinal = normalizacao.confianca >= 90 ? 'auto_aprovado' : 'pendente';
           
           if (statusFinal === 'auto_aprovado') {
-            // AUTO-APROVAR: Criar produto master direto
             await criarProdutoMaster(supabase, normalizacao);
             totalAutoAprovados++;
             console.log(`✅ Auto-aprovado (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
           } else {
-            // ENVIAR PARA REVISÃO: Criar candidato
             await criarCandidato(supabase, produto, normalizacao, statusFinal);
             totalParaRevisao++;
             console.log(`⏳ Para revisão (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
           }
 
           // Marcar Open Food Facts como processado
-          if (produto.origem === 'open_food_facts' && produto.off_id) {
+          if (produto.origem === 'open_food_facts' && produto.open_food_facts_id) {
             await supabase
               .from('open_food_facts_staging')
               .update({ processada: true })
-              .eq('id', produto.off_id);
+              .eq('id', produto.open_food_facts_id);
           }
 
           totalProcessados++;
@@ -183,7 +186,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Pequeno delay entre lotes para não sobrecarregar
       if (i + LOTE_SIZE < produtosParaNormalizar.length) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
@@ -302,7 +304,7 @@ RESPONDA APENAS COM JSON (sem markdown):
           },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.3, // Baixa temperatura para respostas mais consistentes
+        temperature: 0.3,
       }),
     });
 
@@ -314,7 +316,6 @@ RESPONDA APENAS COM JSON (sem markdown):
     const data = await response.json();
     const conteudo = data.choices[0].message.content;
     
-    // Limpar markdown se houver
     const jsonLimpo = conteudo
       .replace(/```json\n?/g, '')
       .replace(/```\n?/g, '')
@@ -361,16 +362,18 @@ RESPONDA APENAS COM JSON (sem markdown):
 
   } catch (error: any) {
     console.error('❌ Erro ao chamar Lovable AI:', error);
-    // Retornar normalização básica em caso de erro
     return {
       sku_global: `TEMP-${Date.now()}`,
       nome_padrao: textoOriginal.toUpperCase(),
       categoria: 'OUTROS',
-      nome_base: textoOriginal,
+      nome_base: textoOriginal.toUpperCase(),
       marca: null,
       tipo_embalagem: null,
       qtd_valor: null,
       qtd_unidade: null,
+      qtd_base: null,
+      unidade_base: null,
+      categoria_unidade: null,
       granel: false,
       confianca: 30,
       razao: `Erro na IA: ${error.message}`,
@@ -402,7 +405,6 @@ async function criarProdutoMaster(
     total_notas: 1
   };
 
-  // Adicionar campos de imagem se existirem
   if (normalizacao.imagem_url) {
     insertData.imagem_url = normalizacao.imagem_url;
   }
@@ -429,8 +431,8 @@ async function criarCandidato(
     .from('produtos_candidatos_normalizacao')
     .insert({
       texto_original: produto.texto_original,
-      usuario_id: produto.usuario_id,
-      nota_imagem_id: produto.nota_imagem_id,
+      usuario_id: produto.usuario_id || null,
+      nota_imagem_id: produto.nota_imagem_id || null,
       sugestao_sku_global: normalizacao.sku_global,
       sugestao_produto_master: normalizacao.produto_master_id,
       confianca_ia: normalizacao.confianca,
