@@ -1167,7 +1167,7 @@ export default function NormalizacaoGlobal() {
                 <div className="space-y-2">
                   <Label>Categorias (deixe vazio para todas)</Label>
                   <div className="flex flex-wrap gap-2">
-                    {['ACOUGUE', 'BEBIDAS', 'CEREAIS', 'CONGELADOS', 'FRIOS', 'FRUTAS', 'HIGIENE', 'HORTIFRUTI', 'LATICINIOS', 'LIMPEZA', 'PADARIA'].map(cat => (
+                    {['AÇOUGUE', 'BEBIDAS', 'CONGELADOS', 'HIGIENE/FARMÁCIA', 'HORTIFRUTI', 'LATICÍNIOS/FRIOS', 'LIMPEZA', 'MERCEARIA', 'OUTROS', 'PADARIA', 'PET'].map(cat => (
                       <Badge 
                         key={cat}
                         variant={categoriasImportar.includes(cat) ? "default" : "outline"}
