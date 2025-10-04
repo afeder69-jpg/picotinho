@@ -158,11 +158,13 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Buscar produtos similares no catálogo master
+          // Buscar produtos similares no catálogo master (mais contexto para IA)
           const { data: produtosSimilares } = await supabase
             .from('produtos_master_global')
             .select('*')
-            .limit(5);
+            .eq('status', 'ativo')
+            .order('total_usuarios', { ascending: false })
+            .limit(20);
 
           // Chamar Lovable AI (Gemini) para análise
           const normalizacao = await normalizarComIA(
@@ -180,14 +182,22 @@ Deno.serve(async (req) => {
           }
 
           // Decidir se auto-aprovar ou enviar para revisão
-          const statusFinal = normalizacao.confianca >= 90 ? 'auto_aprovado' : 'pendente';
-          
-          if (statusFinal === 'auto_aprovado') {
-            await criarProdutoMaster(supabase, normalizacao);
-            totalAutoAprovados++;
-            console.log(`✅ Auto-aprovado (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+          if (normalizacao.confianca >= 90 || normalizacao.produto_master_id) {
+            // ✅ AUTO-APROVAR
+            if (normalizacao.produto_master_id) {
+              // 🎯 IA encontrou produto existente - criar candidato aprovado
+              await criarCandidato(supabase, produto, normalizacao, 'aprovado');
+              totalAutoAprovados++;
+              console.log(`✅ Auto-aprovado (variação reconhecida): ${normalizacao.nome_padrao}`);
+            } else {
+              // Produto novo com alta confiança
+              await criarProdutoMaster(supabase, normalizacao);
+              totalAutoAprovados++;
+              console.log(`✅ Auto-aprovado (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+            }
           } else {
-            await criarCandidato(supabase, produto, normalizacao, statusFinal);
+            // ⏳ ENVIAR PARA REVISÃO
+            await criarCandidato(supabase, produto, normalizacao, 'pendente');
             totalParaRevisao++;
             console.log(`⏳ Para revisão (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
           }
@@ -296,9 +306,22 @@ async function normalizarComIA(
 PRODUTO PARA NORMALIZAR: "${textoOriginal}"
 
 PRODUTOS SIMILARES NO CATÁLOGO (para referência):
-${produtosSimilares.map(p => `- ${p.nome_padrao} (SKU: ${p.sku_global})`).join('\n') || 'Nenhum produto similar encontrado'}
+${produtosSimilares.map(p => `- ${p.nome_padrao} | SKU: ${p.sku_global} | ID: ${p.id}`).join('\n') || 'Nenhum produto similar encontrado'}
 
 INSTRUÇÕES:
+
+**🔍 PASSO 1 - VERIFICAR SE É VARIAÇÃO DE PRODUTO EXISTENTE:**
+- Compare o produto com os PRODUTOS SIMILARES acima
+- Se for uma VARIAÇÃO/SINÔNIMO de algum produto existente, retorne o ID dele no campo "produto_master_id"
+- Exemplos de variações que SÃO O MESMO PRODUTO:
+  * "TEMPERO VERDE" e "CHEIRO VERDE" são o mesmo produto
+  * "CHEIRO-VERDE" e "CHEIRO VERDE" são o mesmo produto
+  * "AÇÚCAR CRISTAL" e "AÇUCAR CRISTAL" são o mesmo produto
+  * "LEITE NINHO" e "LEITE EM PÓ NINHO" são o mesmo produto
+  * "AGUA SANITARIA" e "ÁGUA SANITÁRIA" são o mesmo produto
+- Se tiver 80%+ de certeza que é o mesmo produto, USE O produto_master_id (ID) do catálogo
+
+**📝 PASSO 2 - SE NÃO FOR VARIAÇÃO, NORMALIZE COMO PRODUTO NOVO:**
 1. Analise o nome do produto e extraia:
    - Nome base (ex: "Arroz", "Feijão", "Leite")
    - Marca (se identificável)
@@ -325,7 +348,7 @@ INSTRUÇÕES:
    ALIMENTOS, BEBIDAS, HIGIENE, LIMPEZA, HORTIFRUTI, ACOUGUE, PADARIA, OUTROS
 
 6. Atribua uma confiança de 0-100 baseado em:
-   - 90-100: Nome muito claro e estruturado
+   - 90-100: Nome muito claro e estruturado (ou produto encontrado no catálogo)
    - 70-89: Nome razoável mas com alguma ambiguidade
    - 50-69: Nome confuso ou incompleto
    - 0-49: Nome muito vago ou problemático
@@ -345,8 +368,8 @@ RESPONDA APENAS COM JSON (sem markdown):
   "categoria_unidade": "string ou null (VOLUME, PESO, UNIDADE)",
   "granel": boolean,
   "confianca": number (0-100),
-  "razao": "string (explicação breve da análise)",
-  "produto_master_id": "string ou null (se encontrou similar)"
+  "razao": "string (explicação breve - mencione se encontrou no catálogo)",
+  "produto_master_id": "string ou null (ID do produto similar encontrado)"
 }`;
 
   try {
