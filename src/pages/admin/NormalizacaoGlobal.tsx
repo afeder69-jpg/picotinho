@@ -302,7 +302,8 @@ export default function NormalizacaoGlobal() {
         body: {
           categorias: categoriasImportar.length > 0 ? categoriasImportar : undefined,
           limite: limiteImportar,
-          apenasComImagem
+          pagina: 1,
+          comImagem: apenasComImagem
         }
       });
       
