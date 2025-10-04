@@ -111,7 +111,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`🔍 Total de produtos para normalizar: ${produtosParaNormalizar.length}`);
+    console.log(`📊 Encontrados ${produtosParaNormalizar.length} produtos para processar`);
+
+    // ✅ VALIDAÇÃO: Retornar early se não houver produtos novos
+    if (produtosParaNormalizar.length === 0) {
+      console.log('ℹ️ Nenhum produto novo para processar');
+      return new Response(
+        JSON.stringify({
+          sucesso: true,
+          mensagem: 'Nenhum produto novo para processar',
+          total_produtos: 0,
+          processados: 0,
+          auto_aprovados: 0,
+          para_revisao: 0,
+          timestamp: new Date().toISOString()
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // 2. PROCESSAR EM LOTES
     const LOTE_SIZE = 10;
