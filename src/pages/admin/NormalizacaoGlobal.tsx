@@ -26,6 +26,15 @@ import {
   Database,
   Image
 } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 export default function NormalizacaoGlobal() {
   const navigate = useNavigate();
@@ -84,6 +93,11 @@ export default function NormalizacaoGlobal() {
   const [filtroMaster, setFiltroMaster] = useState('');
   const [buscandoMaster, setBuscandoMaster] = useState(false);
   const [resultadosBusca, setResultadosBusca] = useState<any[]>([]);
+  
+  // Estados para paginação de candidatos
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const itensPorPagina = 20;
 
   // Estados para importação Open Food Facts
   const [importando, setImportando] = useState(false);
@@ -118,6 +132,13 @@ export default function NormalizacaoGlobal() {
 
     return () => clearTimeout(timer);
   }, [filtroMaster]);
+  
+  // useEffect para recarregar dados ao mudar de página
+  useEffect(() => {
+    if (isMaster) {
+      carregarDados();
+    }
+  }, [paginaAtual]);
 
   async function verificarAcessoMaster() {
     try {
@@ -184,15 +205,22 @@ export default function NormalizacaoGlobal() {
         totalUsuarios: usuarios?.length || 0
       });
 
-      // Candidatos pendentes
-      const { data: candidatosPendentes } = await supabase
+      // Candidatos pendentes com paginação
+      const inicio = (paginaAtual - 1) * itensPorPagina;
+      const fim = inicio + itensPorPagina - 1;
+      
+      const { data: candidatosPendentes, count: totalCandidatos } = await supabase
         .from('produtos_candidatos_normalizacao')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('status', 'pendente')
         .order('confianca_ia', { ascending: false })
-        .limit(20);
+        .range(inicio, fim);
 
       setCandidatos(candidatosPendentes || []);
+      
+      // Calcular total de páginas
+      const totalPags = Math.ceil((totalCandidatos || 0) / itensPorPagina);
+      setTotalPaginas(totalPags);
 
       // Carregar produtos recentes iniciais
       await carregarProdutosRecentes();
@@ -482,6 +510,7 @@ export default function NormalizacaoGlobal() {
     if (!candidatoAtual) return;
 
     try {
+      setPaginaAtual(1); // Resetar para primeira página
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
 
@@ -604,6 +633,7 @@ export default function NormalizacaoGlobal() {
 
   async function aprovarSemModificacoes(candidatoId: string) {
     try {
+      setPaginaAtual(1); // Resetar para primeira página
       const candidato = candidatos.find(c => c.id === candidatoId);
       if (!candidato) return;
 
@@ -823,6 +853,7 @@ export default function NormalizacaoGlobal() {
     }
 
     try {
+      setPaginaAtual(1); // Resetar para primeira página
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
 
@@ -1144,6 +1175,81 @@ export default function NormalizacaoGlobal() {
                 </CardContent>
               </Card>
             ))
+          )}
+          
+          {/* Paginação */}
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <div className="text-sm text-muted-foreground">
+                Página {paginaAtual} de {totalPaginas} • {stats.pendentesRevisao} candidatos no total
+              </div>
+              
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => paginaAtual > 1 && setPaginaAtual(paginaAtual - 1)}
+                      className={paginaAtual === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  
+                  {/* Mostrar primeiras páginas */}
+                  {[...Array(totalPaginas)].map((_, i) => {
+                    const pageNum = i + 1;
+                    
+                    // Mostrar apenas páginas relevantes
+                    const showPage = (
+                      pageNum === 1 || // primeira página
+                      pageNum === totalPaginas || // última página
+                      (pageNum >= paginaAtual - 1 && pageNum <= paginaAtual + 1) // páginas próximas
+                    );
+                    
+                    // Mostrar ellipsis
+                    const showEllipsisBefore = pageNum === paginaAtual - 1 && paginaAtual > 3;
+                    const showEllipsisAfter = pageNum === paginaAtual + 1 && paginaAtual < totalPaginas - 2;
+                    
+                    if (!showPage && !showEllipsisBefore && !showEllipsisAfter) {
+                      return null;
+                    }
+                    
+                    if (showEllipsisBefore && pageNum > 1) {
+                      return (
+                        <PaginationItem key={`ellipsis-before-${i}`}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
+                    
+                    if (showEllipsisAfter && pageNum < totalPaginas) {
+                      return (
+                        <PaginationItem key={`ellipsis-after-${i}`}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
+                    
+                    return (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          onClick={() => setPaginaAtual(pageNum)}
+                          isActive={paginaAtual === pageNum}
+                          className="cursor-pointer"
+                        >
+                          {pageNum}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => paginaAtual < totalPaginas && setPaginaAtual(paginaAtual + 1)}
+                      className={paginaAtual === totalPaginas ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           )}
         </TabsContent>
 
