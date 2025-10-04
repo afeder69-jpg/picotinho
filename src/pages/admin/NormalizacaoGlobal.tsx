@@ -309,13 +309,13 @@ export default function NormalizacaoGlobal() {
       
       if (error) throw error;
       
-      setStatsImportacao(data.stats || {});
+      setStatsImportacao(data || {});
       setLogsImportacao(data.logs || []);
       setProgressoImportacao(100);
       
       toast({
         title: "Importação concluída!",
-        description: `${data.stats?.importados || 0} produtos importados com sucesso`,
+        description: `${data?.importados || 0} produtos importados com sucesso`,
       });
       
       await carregarDados();
@@ -1246,7 +1246,31 @@ export default function NormalizacaoGlobal() {
 
               {/* Estatísticas */}
               {(statsImportacao.total > 0 || importando) && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Resultado da Importação</h3>
+                    {!importando && statsImportacao.total > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setStatsImportacao({
+                            total: 0,
+                            importados: 0,
+                            duplicados: 0,
+                            erros: 0,
+                            comImagem: 0,
+                            semImagem: 0
+                          });
+                          setLogsImportacao([]);
+                          setProgressoImportacao(0);
+                        }}
+                      >
+                        Limpar Resultados
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <Card>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
@@ -1318,6 +1342,7 @@ export default function NormalizacaoGlobal() {
                       </div>
                     </CardContent>
                   </Card>
+                  </div>
                 </div>
               )}
 
