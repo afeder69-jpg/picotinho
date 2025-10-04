@@ -1,6 +1,9 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
-# Build forçado para deploy de importar-open-food-facts - 2025-10-04 15:42
+# Build forçado para deploy de consolidar-masters-duplicados - 2025-10-04
+
+[functions.consolidar-masters-duplicados]
+verify_jwt = false
 
 [functions.backfill-normalizacao-legados]
 verify_jwt = true
