@@ -21,7 +21,10 @@ import {
   Shield,
   Sparkles,
   AlertCircle,
-  Edit3
+  Edit3,
+  Download,
+  Database,
+  Image
 } from "lucide-react";
 
 export default function NormalizacaoGlobal() {
@@ -73,6 +76,22 @@ export default function NormalizacaoGlobal() {
   const [filtroMaster, setFiltroMaster] = useState('');
   const [buscandoMaster, setBuscandoMaster] = useState(false);
   const [resultadosBusca, setResultadosBusca] = useState<any[]>([]);
+
+  // Estados para importação Open Food Facts
+  const [importando, setImportando] = useState(false);
+  const [progressoImportacao, setProgressoImportacao] = useState(0);
+  const [statsImportacao, setStatsImportacao] = useState({
+    total: 0,
+    importados: 0,
+    duplicados: 0,
+    erros: 0,
+    comImagem: 0,
+    semImagem: 0
+  });
+  const [logsImportacao, setLogsImportacao] = useState<string[]>([]);
+  const [categoriasImportar, setCategoriasImportar] = useState<string[]>([]);
+  const [limiteImportar, setLimiteImportar] = useState(50);
+  const [apenasComImagem, setApenasComImagem] = useState(true);
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -265,6 +284,66 @@ export default function NormalizacaoGlobal() {
     } finally {
       setProcessando(false);
     }
+  }
+
+  async function iniciarImportacao() {
+    setImportando(true);
+    setLogsImportacao([]);
+    setProgressoImportacao(0);
+    setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
+    
+    try {
+      toast({
+        title: "Importação iniciada",
+        description: "Buscando produtos do Open Food Facts...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('importar-open-food-facts', {
+        body: {
+          categorias: categoriasImportar.length > 0 ? categoriasImportar : undefined,
+          limite: limiteImportar,
+          apenasComImagem
+        }
+      });
+      
+      if (error) throw error;
+      
+      setStatsImportacao(data.stats || {});
+      setLogsImportacao(data.logs || []);
+      setProgressoImportacao(100);
+      
+      toast({
+        title: "Importação concluída!",
+        description: `${data.stats?.importados || 0} produtos importados com sucesso`,
+      });
+      
+      await carregarDados();
+      
+    } catch (error: any) {
+      console.error('Erro na importação:', error);
+      toast({
+        title: "Erro na importação",
+        description: error.message,
+        variant: "destructive"
+      });
+      setLogsImportacao(prev => [...prev, `❌ ERRO: ${error.message}`]);
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  function limparLogsImportacao() {
+    setLogsImportacao([]);
+    setProgressoImportacao(0);
+    setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
+  }
+
+  function toggleCategoriaImportar(categoria: string) {
+    setCategoriasImportar(prev => 
+      prev.includes(categoria)
+        ? prev.filter(c => c !== categoria)
+        : [...prev, categoria]
+    );
   }
 
   // Função para calcular unidade base
@@ -831,6 +910,10 @@ export default function NormalizacaoGlobal() {
             <Package className="w-4 h-4" />
             Catálogo Master
           </TabsTrigger>
+          <TabsTrigger value="importar" className="gap-2">
+            <Download className="w-4 h-4" />
+            Importar Open Food Facts
+          </TabsTrigger>
         </TabsList>
 
         {/* Candidatos Pendentes */}
@@ -1067,6 +1150,199 @@ export default function NormalizacaoGlobal() {
               </Card>
             ))
           )}
+        </TabsContent>
+
+        {/* Importar Open Food Facts */}
+        <TabsContent value="importar" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Importar Produtos do Open Food Facts</CardTitle>
+              <CardDescription>
+                Base de dados colaborativa mundial de produtos alimentícios com fotos, ingredientes e informações nutricionais
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Painel de Configuração */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Categorias (deixe vazio para todas)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {['ACOUGUE', 'BEBIDAS', 'CEREAIS', 'CONGELADOS', 'FRIOS', 'FRUTAS', 'HIGIENE', 'HORTIFRUTI', 'LATICINIOS', 'LIMPEZA', 'PADARIA'].map(cat => (
+                      <Badge 
+                        key={cat}
+                        variant={categoriasImportar.includes(cat) ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => toggleCategoriaImportar(cat)}
+                      >
+                        {cat}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="limite">Limite de produtos</Label>
+                    <select
+                      id="limite"
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                      value={limiteImportar}
+                      onChange={(e) => setLimiteImportar(Number(e.target.value))}
+                    >
+                      <option value={50}>50 produtos</option>
+                      <option value={100}>100 produtos</option>
+                      <option value={500}>500 produtos</option>
+                      <option value={1000}>1000 produtos</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="comImagem" className="flex items-center gap-2">
+                      <Switch
+                        id="comImagem"
+                        checked={apenasComImagem}
+                        onCheckedChange={setApenasComImagem}
+                      />
+                      Apenas produtos com imagem
+                    </Label>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={iniciarImportacao} 
+                    disabled={importando}
+                    className="gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    {importando ? 'Importando...' : 'Iniciar Importação'}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={limparLogsImportacao}
+                    disabled={importando}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+
+              {/* Progresso */}
+              {importando && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Progresso da importação</span>
+                    <span>{progressoImportacao}%</span>
+                  </div>
+                  <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-primary h-full transition-all duration-300"
+                      style={{ width: `${progressoImportacao}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Estatísticas */}
+              {(statsImportacao.total > 0 || importando) && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Importados</p>
+                          <p className="text-2xl font-bold text-green-600">{statsImportacao.importados}</p>
+                        </div>
+                        <CheckCircle2 className="w-8 h-8 text-green-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Duplicados</p>
+                          <p className="text-2xl font-bold text-yellow-600">{statsImportacao.duplicados}</p>
+                        </div>
+                        <AlertCircle className="w-8 h-8 text-yellow-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Erros</p>
+                          <p className="text-2xl font-bold text-red-600">{statsImportacao.erros}</p>
+                        </div>
+                        <XCircle className="w-8 h-8 text-red-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Com Imagem</p>
+                          <p className="text-2xl font-bold text-blue-600">{statsImportacao.comImagem}</p>
+                        </div>
+                        <Image className="w-8 h-8 text-blue-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Sem Imagem</p>
+                          <p className="text-2xl font-bold text-gray-600">{statsImportacao.semImagem}</p>
+                        </div>
+                        <Database className="w-8 h-8 text-gray-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Total</p>
+                          <p className="text-2xl font-bold">{statsImportacao.total}</p>
+                        </div>
+                        <Package className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Logs Detalhados */}
+              {logsImportacao.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Logs da Importação</Label>
+                  <div className="max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/50 space-y-1">
+                    {logsImportacao.map((log, index) => (
+                      <p 
+                        key={index} 
+                        className={`text-sm font-mono ${
+                          log.includes('✅') ? 'text-green-600' :
+                          log.includes('⚠️') ? 'text-yellow-600' :
+                          log.includes('❌') ? 'text-red-600' :
+                          'text-muted-foreground'
+                        }`}
+                      >
+                        {log}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
