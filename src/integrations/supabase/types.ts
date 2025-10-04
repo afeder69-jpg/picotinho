@@ -670,6 +670,42 @@ export type Database = {
         }
         Relationships: []
       }
+      open_food_facts_staging: {
+        Row: {
+          codigo_barras: string
+          created_at: string | null
+          dados_brutos: Json
+          id: string
+          imagem_path: string | null
+          imagem_url: string | null
+          processada: boolean | null
+          texto_original: string
+          updated_at: string | null
+        }
+        Insert: {
+          codigo_barras: string
+          created_at?: string | null
+          dados_brutos: Json
+          id?: string
+          imagem_path?: string | null
+          imagem_url?: string | null
+          processada?: boolean | null
+          texto_original: string
+          updated_at?: string | null
+        }
+        Update: {
+          codigo_barras?: string
+          created_at?: string | null
+          dados_brutos?: Json
+          id?: string
+          imagem_path?: string | null
+          imagem_url?: string | null
+          processada?: boolean | null
+          texto_original?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       precos_atuais: {
         Row: {
           created_at: string

@@ -47,9 +47,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. BUSCAR PRODUTOS DE NOTAS NÃO NORMALIZADAS
+    // 1. BUSCAR PRODUTOS DE DUAS FONTES
     console.log('📋 Buscando produtos para normalizar...');
     
+    // FONTE 1: Notas fiscais
     const { data: notasProcessadas, error: notasError } = await supabase
       .from('notas_imagens')
       .select('id, usuario_id, dados_extraidos')
@@ -60,11 +61,24 @@ Deno.serve(async (req) => {
       throw new Error(`Erro ao buscar notas: ${notasError.message}`);
     }
 
-    console.log(`📦 Encontradas ${notasProcessadas?.length || 0} notas processadas`);
+    console.log(`📦 Notas fiscais: ${notasProcessadas?.length || 0} notas processadas`);
 
-    const produtosParaNormalizar: ProdutoParaNormalizar[] = [];
+    // FONTE 2: Open Food Facts
+    const { data: openFoodProducts, error: offError } = await supabase
+      .from('open_food_facts_staging')
+      .select('*')
+      .eq('processada', false)
+      .limit(50);
 
-    // Extrair produtos de cada nota
+    if (offError) {
+      console.warn(`⚠️ Erro ao buscar Open Food Facts: ${offError.message}`);
+    }
+
+    console.log(`📦 Open Food Facts: ${openFoodProducts?.length || 0} produtos para normalizar`);
+
+    const produtosParaNormalizar: Array<ProdutoParaNormalizar & { origem?: string; off_id?: string; imagem_url?: string; imagem_path?: string }> = [];
+
+    // Extrair produtos de NOTAS FISCAIS
     for (const nota of notasProcessadas || []) {
       const itens = nota.dados_extraidos?.itens || [];
       
@@ -74,13 +88,27 @@ Deno.serve(async (req) => {
           produtosParaNormalizar.push({
             texto_original: descricao,
             usuario_id: nota.usuario_id,
-            nota_imagem_id: nota.id
+            nota_imagem_id: nota.id,
+            origem: 'nota_fiscal'
           });
         }
       }
     }
 
-    console.log(`🔍 Total de produtos para normalizar: ${produtosParaNormalizar.length}`);
+    // Extrair produtos de OPEN FOOD FACTS
+    for (const produto of openFoodProducts || []) {
+      produtosParaNormalizar.push({
+        texto_original: produto.texto_original,
+        usuario_id: '', // Open Food Facts não tem usuario_id
+        nota_imagem_id: '', // Não vem de nota
+        origem: 'open_food_facts',
+        off_id: produto.id,
+        imagem_url: produto.imagem_url,
+        imagem_path: produto.imagem_path
+      });
+    }
+
+    console.log(`🔍 Total de produtos para normalizar: ${produtosParaNormalizar.length} (${notasProcessadas?.length || 0} notas + ${openFoodProducts?.length || 0} Open Food Facts)`);
 
     // 2. PROCESSAR EM LOTES
     const LOTE_SIZE = 10; // Processar 10 produtos por vez
@@ -119,6 +147,12 @@ Deno.serve(async (req) => {
             lovableApiKey
           );
 
+          // Adicionar campos de imagem se for Open Food Facts
+          if (produto.origem === 'open_food_facts' && produto.imagem_url) {
+            normalizacao.imagem_url = produto.imagem_url;
+            normalizacao.imagem_path = produto.imagem_path;
+          }
+
           // Decidir se auto-aprovar ou enviar para revisão
           const statusFinal = normalizacao.confianca >= 90 ? 'auto_aprovado' : 'pendente';
           
@@ -132,6 +166,14 @@ Deno.serve(async (req) => {
             await criarCandidato(supabase, produto, normalizacao, statusFinal);
             totalParaRevisao++;
             console.log(`⏳ Para revisão (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+          }
+
+          // Marcar Open Food Facts como processado
+          if (produto.origem === 'open_food_facts' && produto.off_id) {
+            await supabase
+              .from('open_food_facts_staging')
+              .update({ processada: true })
+              .eq('id', produto.off_id);
           }
 
           totalProcessados++;
@@ -279,6 +321,39 @@ RESPONDA APENAS COM JSON (sem markdown):
       .trim();
     
     const resultado = JSON.parse(jsonLimpo);
+    
+    // 🔥 APLICAR UPPERCASE EM TODOS OS CAMPOS DE TEXTO
+    resultado.nome_padrao = resultado.nome_padrao?.toUpperCase() || '';
+    resultado.nome_base = resultado.nome_base?.toUpperCase() || '';
+    resultado.marca = resultado.marca?.toUpperCase() || null;
+    resultado.categoria = resultado.categoria?.toUpperCase() || 'OUTROS';
+
+    // 🔥 VALIDAR CAMPOS DE UNIDADE BASE (fallback se IA não calcular)
+    if (!resultado.qtd_base && resultado.qtd_valor && resultado.qtd_unidade) {
+      const unidadeLower = resultado.qtd_unidade.toLowerCase();
+      
+      if (unidadeLower === 'l' || unidadeLower === 'litro' || unidadeLower === 'litros') {
+        resultado.qtd_base = resultado.qtd_valor * 1000;
+        resultado.unidade_base = 'ml';
+        resultado.categoria_unidade = 'VOLUME';
+      } else if (unidadeLower === 'kg' || unidadeLower === 'kilo' || unidadeLower === 'kilos') {
+        resultado.qtd_base = resultado.qtd_valor * 1000;
+        resultado.unidade_base = 'g';
+        resultado.categoria_unidade = 'PESO';
+      } else if (unidadeLower === 'ml') {
+        resultado.qtd_base = resultado.qtd_valor;
+        resultado.unidade_base = 'ml';
+        resultado.categoria_unidade = 'VOLUME';
+      } else if (unidadeLower === 'g' || unidadeLower === 'gramas') {
+        resultado.qtd_base = resultado.qtd_valor;
+        resultado.unidade_base = 'g';
+        resultado.categoria_unidade = 'PESO';
+      } else {
+        resultado.qtd_base = resultado.qtd_valor;
+        resultado.unidade_base = 'un';
+        resultado.categoria_unidade = 'UNIDADE';
+      }
+    }
     
     console.log(`✅ IA respondeu com ${resultado.confianca}% de confiança`);
     

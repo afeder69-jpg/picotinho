@@ -341,26 +341,24 @@ async function inserirProduto(
       }
     }
     
-    // Inserir no banco
+    // Inserir no staging para normalização posterior pela IA
     const { error } = await supabase
-      .from('produtos_master_global')
+      .from('open_food_facts_staging')
       .insert({
-        sku_global: produto.sku_global,
-        nome_padrao: produto.nome_padrao,
-        nome_base: produto.nome_base,
-        marca: produto.marca,
-        categoria: produto.categoria,
-        tipo_embalagem: produto.tipo_embalagem,
-        qtd_valor: produto.qtd_valor,
-        qtd_unidade: produto.qtd_unidade,
-        granel: produto.granel,
+        codigo_barras: produto.codigo_barras || '',
+        texto_original: `${produto.nome_base} ${produto.marca} ${produto.qtd_unidade || ''}`,
+        dados_brutos: {
+          nome_base: produto.nome_base,
+          marca: produto.marca,
+          categoria: produto.categoria,
+          qtd_valor: produto.qtd_valor,
+          qtd_unidade: produto.qtd_unidade,
+          tipo_embalagem: produto.tipo_embalagem,
+          granel: produto.granel
+        },
+        processada: false,
         imagem_url: imagemUrl,
-        imagem_path: imagemPath,
-        status: 'ativo',
-        confianca_normalizacao: 85,
-        codigo_barras: produto.codigo_barras,
-        aprovado_em: new Date().toISOString(),
-        aprovado_por: null
+        imagem_path: imagemPath
       });
       
     if (error) {
