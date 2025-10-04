@@ -2,6 +2,9 @@ project_id = "mjsbwrtegorjxcepvrik"
 
 # Build forçado para deploy de importar-open-food-facts - 2025-10-04 15:42
 
+[functions.backfill-normalizacao-legados]
+verify_jwt = true
+
 [functions.importar-open-food-facts]
 verify_jwt = false
 
