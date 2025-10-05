@@ -33,7 +33,9 @@ import {
   User,
   RotateCcw,
   Loader2,
-  ImageOff
+  ImageOff,
+  BarChart3,
+  Zap
 } from "lucide-react";
 import {
   Pagination,
@@ -1167,163 +1169,173 @@ export default function NormalizacaoGlobal() {
         </div>
       </div>
 
-      {/* Dashboard de Estatísticas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Card 1: Catálogo Master Global */}
-        <Card className="bg-gradient-to-br from-primary/5 to-purple-50 dark:from-primary/10 dark:to-purple-950/20 border-primary/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package className="h-4 w-4 text-primary" />
-              Catálogo Master Global
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary mb-1">
-                {stats.totalProdutosMaster}
-              </div>
-              <p className="text-xs text-muted-foreground">Total de Produtos Únicos</p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="bg-card rounded-lg p-2 border border-border hover:bg-accent/50 transition-colors cursor-help">
-                      <div className="flex items-center gap-1 mb-1">
-                        <Globe className="h-3 w-3 text-blue-500" />
-                        <span className="text-xs font-medium text-muted-foreground">OpenFoodFacts</span>
-                      </div>
-                      <div className="text-xl font-bold text-foreground">
-                        {stats.produtosOpenFoodFacts}
-                      </div>
+      {/* Dashboard Otimizado */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
+            Dashboard de Normalização
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Grid de Estatísticas */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {/* Catálogo Master */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="bg-gradient-to-br from-primary/10 to-purple-50 dark:from-primary/20 dark:to-purple-950/30 rounded-lg p-4 border-2 border-primary/30 hover:border-primary/50 transition-all cursor-help">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package className="h-5 w-5 text-primary" />
+                      <span className="text-xs font-medium text-muted-foreground">Catálogo Master</span>
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Produtos importados do Open Food Facts</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="bg-card rounded-lg p-2 border border-border hover:bg-accent/50 transition-colors cursor-help">
-                      <div className="flex items-center gap-1 mb-1">
-                        <FileText className="h-3 w-3 text-green-500" />
-                        <span className="text-xs font-medium text-muted-foreground">Notas Fiscais</span>
-                      </div>
-                      <div className="text-xl font-bold text-foreground">
-                        {stats.produtosNotasFiscais}
-                      </div>
+                    <div className="text-3xl font-bold text-primary mb-1">
+                      {stats.totalProdutosMaster}
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Produtos criados a partir de notas fiscais</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                    <div className="text-xs text-muted-foreground">produtos únicos</div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Total de produtos únicos no catálogo master</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 border-2 border-orange-300 dark:border-orange-700 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors cursor-help">
-                      <div className="flex items-center gap-2 mb-1">
-                        <ImageOff className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                        <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">Produtos sem Fotos</span>
-                      </div>
-                      <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">
-                        {stats.produtosSemImagem}
-                        <span className="text-sm font-normal text-muted-foreground ml-2">
-                          de {stats.totalProdutosMaster}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {stats.produtosComImagem} produtos já possuem imagem
-                      </div>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Produtos do catálogo master que ainda não possuem imagem</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 2: Fila de Processamento */}
-        <Card className="bg-gradient-to-br from-green-50 to-yellow-50 dark:from-green-950/20 dark:to-yellow-950/20 border-green-200 dark:border-green-900">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Settings className="h-4 w-4 text-green-600 dark:text-green-400" />
-              Fila de Processamento
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
             {/* Auto-Aprovados */}
-            <div className="bg-card rounded-lg p-3 border border-green-200 dark:border-green-900">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-semibold text-foreground">Auto-Aprovados</span>
-                <Badge variant="default" className="bg-green-600 text-white text-xs">IA ≥ 90%</Badge>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-xl font-bold text-foreground">{stats.autoAprovadosTotal} candidatos</div>
-                
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Globe className="h-3 w-3 text-blue-500" />
-                    <span>OpenFoodFacts: {stats.autoAprovadosOpenFoodFacts}</span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-lg p-4 border-2 border-green-300 dark:border-green-700 hover:border-green-400 dark:hover:border-green-600 transition-all cursor-help">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Auto-Aprovados</span>
+                      <Badge variant="default" className="bg-green-600 text-white text-[10px] px-1.5 py-0">
+                        IA ≥ 90%
+                      </Badge>
+                    </div>
+                    <div className="text-3xl font-bold text-green-700 dark:text-green-300 mb-1">
+                      {stats.autoAprovadosTotal}
+                    </div>
+                    <div className="text-xs text-muted-foreground">candidatos aprovados</div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <FileText className="h-3 w-3 text-green-500" />
-                    <span>Notas Fiscais: {stats.autoAprovadosNotasFiscais}</span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="space-y-1">
+                    <p className="font-semibold">Aprovados automaticamente pela IA</p>
+                    <p className="text-xs">OpenFoodFacts: {stats.autoAprovadosOpenFoodFacts}</p>
+                    <p className="text-xs">Notas Fiscais: {stats.autoAprovadosNotasFiscais}</p>
                   </div>
-                </div>
-              </div>
-            </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             {/* Aprovados Manualmente */}
-            <div className="bg-card rounded-lg p-3 border border-border">
-              <div className="flex items-center gap-2 mb-1">
-                <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm font-semibold text-foreground">Aprovados Manualmente</span>
-              </div>
-              <div className="text-xl font-bold text-foreground">{stats.aprovadosManuaisTotal}</div>
-              <p className="text-xs text-muted-foreground mt-1">candidatos aprovados por você</p>
-            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg p-4 border-2 border-blue-300 dark:border-blue-700 hover:border-blue-400 dark:hover:border-blue-600 transition-all cursor-help">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Aprov. Manual</span>
+                    </div>
+                    <div className="text-3xl font-bold text-blue-700 dark:text-blue-300 mb-1">
+                      {stats.aprovadosManuaisTotal}
+                    </div>
+                    <div className="text-xs text-muted-foreground">candidatos aprovados</div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Produtos aprovados manualmente por você</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-            {/* Pendentes */}
-            <div className="bg-card rounded-lg p-3 border border-yellow-200 dark:border-yellow-900">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                <span className="text-sm font-semibold text-foreground">Aguardando Revisão</span>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-xl font-bold text-foreground">{stats.pendentesTotal} candidatos</div>
-                
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Globe className="h-3 w-3 text-blue-500" />
-                    <span>OpenFoodFacts: {stats.pendentesOpenFoodFacts}</span>
+            {/* Produtos sem Fotos */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 rounded-lg p-4 border-2 border-orange-300 dark:border-orange-700 hover:border-orange-400 dark:hover:border-orange-600 transition-all cursor-help">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ImageOff className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Sem Fotos</span>
+                    </div>
+                    <div className="text-3xl font-bold text-orange-700 dark:text-orange-300 mb-1">
+                      {stats.produtosSemImagem}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      de {stats.totalProdutosMaster} produtos
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <FileText className="h-3 w-3 text-green-500" />
-                    <span>Notas Fiscais: {stats.pendentesNotasFiscais}</span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Produtos do catálogo master sem imagem</p>
+                  <p className="text-xs mt-1">{stats.produtosComImagem} já possuem imagem</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Aguardando Revisão */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 rounded-lg p-4 border-2 border-yellow-300 dark:border-yellow-700 hover:border-yellow-400 dark:hover:border-yellow-600 transition-all cursor-help">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Aguardando</span>
+                    </div>
+                    <div className="text-3xl font-bold text-yellow-700 dark:text-yellow-300 mb-1">
+                      {stats.pendentesTotal}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      ~{stats.estimativaNovos} novos estimados
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 pt-1 border-t border-border">
-                    <TrendingUp className="h-3 w-3 text-orange-500" />
-                    <span className="font-medium">Estimativa: ~{stats.estimativaNovos} novos</span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="space-y-1">
+                    <p className="font-semibold">Candidatos aguardando revisão</p>
+                    <p className="text-xs">OpenFoodFacts: {stats.pendentesOpenFoodFacts}</p>
+                    <p className="text-xs">Notas Fiscais: {stats.pendentesNotasFiscais}</p>
                   </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Separador */}
+          <div className="border-t border-border"></div>
+
+          {/* Botões de Ação */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button 
+              onClick={processarNormalizacao}
+              disabled={processando || consolidando}
+              className="flex-1 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all"
+            >
+              <Zap className="w-4 h-4" />
+              {processando ? 'Processando...' : 'Processar Novas Normalizações'}
+            </Button>
+
+            <Button 
+              onClick={() => setConfirmarConsolidacaoOpen(true)}
+              disabled={processando || consolidando}
+              variant="destructive"
+              className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
+            >
+              <Database className="w-4 h-4" />
+              {consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
+              {duplicatasEncontradas > 0 && (
+                <Badge 
+                  variant="secondary" 
+                  className="ml-2 bg-yellow-500 text-yellow-950 hover:bg-yellow-600"
+                >
+                  {duplicatasEncontradas}
+                </Badge>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
 
       {/* Progresso da Consolidação */}
