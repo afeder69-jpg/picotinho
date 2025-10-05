@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -137,6 +138,8 @@ export default function NormalizacaoGlobal() {
   // Estados para consolidação de duplicados
   const [consolidando, setConsolidando] = useState(false);
   const [relatorioConsolidacao, setRelatorioConsolidacao] = useState<any>(null);
+  const [confirmarConsolidacaoOpen, setConfirmarConsolidacaoOpen] = useState(false);
+  const [duplicatasEncontradas, setDuplicatasEncontradas] = useState(0);
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -315,6 +318,9 @@ export default function NormalizacaoGlobal() {
 
       // Carregar produtos recentes iniciais
       await carregarProdutosRecentes();
+      
+      // Buscar duplicatas
+      await buscarDuplicatas();
 
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
@@ -557,9 +563,37 @@ export default function NormalizacaoGlobal() {
     setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
   }
 
+  async function buscarDuplicatas() {
+    try {
+      // Buscar produtos com nomes similares usando similarity
+      const { data, error } = await supabase
+        .from('produtos_master_global')
+        .select('nome_base, marca, sku_global')
+        .eq('status', 'ativo');
+      
+      if (error) throw error;
+      
+      // Contar grupos com nomes muito similares
+      const grupos = new Map();
+      
+      data?.forEach(produto => {
+        const chave = `${produto.nome_base.toUpperCase().trim()}|${(produto.marca || 'SEM_MARCA').toUpperCase().trim()}`;
+        grupos.set(chave, (grupos.get(chave) || 0) + 1);
+      });
+      
+      const duplicatasCount = Array.from(grupos.values())
+        .filter(count => count > 1).length;
+      
+      setDuplicatasEncontradas(duplicatasCount);
+    } catch (error) {
+      console.error('Erro ao buscar duplicatas:', error);
+    }
+  }
+
   async function consolidarMastersDuplicados() {
     setConsolidando(true);
     setRelatorioConsolidacao(null);
+    setConfirmarConsolidacaoOpen(false);
     
     try {
       toast({
@@ -1109,13 +1143,21 @@ export default function NormalizacaoGlobal() {
           </Button>
 
           <Button 
-            onClick={consolidarMastersDuplicados}
+            onClick={() => setConfirmarConsolidacaoOpen(true)}
             disabled={processando || consolidando}
             variant="destructive"
-            className="gap-2"
+            className="gap-2 relative"
           >
             <Database className="w-4 h-4" />
-            {consolidando ? 'Consolidando...' : 'Consolidar Duplicados'}
+            {consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
+            {duplicatasEncontradas > 0 && (
+              <Badge 
+                variant="secondary" 
+                className="ml-2 bg-yellow-500 text-yellow-950 hover:bg-yellow-600"
+              >
+                {duplicatasEncontradas}
+              </Badge>
+            )}
           </Button>
         </div>
       </div>
@@ -2247,6 +2289,39 @@ export default function NormalizacaoGlobal() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog de Confirmação para Consolidação */}
+      <AlertDialog open={confirmarConsolidacaoOpen} onOpenChange={setConfirmarConsolidacaoOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-destructive" />
+              Consolidar Produtos Duplicados?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>Esta operação irá:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Buscar produtos master com nomes muito similares</li>
+                <li>Consolidar duplicatas em um único produto principal</li>
+                <li>Criar sinônimos automáticos para manter referências</li>
+                <li>Atualizar todas as referências no estoque dos usuários</li>
+              </ul>
+              <p className="font-semibold text-destructive mt-3">
+                ⚠️ Esta ação é irreversível!
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={consolidarMastersDuplicados}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Sim, Consolidar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
