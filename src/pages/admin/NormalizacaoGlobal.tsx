@@ -48,6 +48,8 @@ import {
 } from "@/components/ui/pagination";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
+import { ScrapingControls } from "@/components/admin/ImageScraping/ScrapingControls";
+import { ImagePreviewCard } from "@/components/admin/ImageScraping/ImagePreviewCard";
 
 export default function NormalizacaoGlobal() {
   const navigate = useNavigate();
@@ -82,6 +84,11 @@ export default function NormalizacaoGlobal() {
   const [candidatos, setCandidatos] = useState<any[]>([]);
   const [produtosMaster, setProdutosMaster] = useState<any[]>([]);
   const [processando, setProcessando] = useState(false);
+  
+  // Estados para raspagem de imagens
+  const [processandoImagens, setProcessandoImagens] = useState(false);
+  const [imagensSugeridas, setImagensSugeridas] = useState<any[]>([]);
+  const [totalProcessadoImagens, setTotalProcessadoImagens] = useState(0);
   
   // Estados para modais
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -1110,6 +1117,114 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+  // ============= FUNÇÕES DE RASPAGEM DE IMAGENS =============
+  
+  const buscarImagensProdutos = async (batchSize: number, autoAprovar: boolean) => {
+    setProcessandoImagens(true);
+    setImagensSugeridas([]);
+    
+    try {
+      // Buscar produtos sem imagem
+      const { data: produtosSemImagem, error: errorProdutos } = await supabase
+        .from('produtos_master_global')
+        .select('id, sku_global, nome_padrao')
+        .is('imagem_url', null)
+        .eq('status', 'ativo')
+        .limit(batchSize);
+
+      if (errorProdutos) throw errorProdutos;
+      if (!produtosSemImagem || produtosSemImagem.length === 0) {
+        toast({
+          title: "Sem produtos",
+          description: "Não há produtos sem imagem para processar",
+        });
+        setProcessandoImagens(false);
+        return;
+      }
+
+      const produtoIds = produtosSemImagem.map(p => p.id);
+
+      toast({
+        title: "Processando...",
+        description: `Buscando imagens para ${produtoIds.length} produtos...`,
+      });
+
+      // Chamar edge function
+      const { data, error } = await supabase.functions.invoke('buscar-imagens-produtos', {
+        body: { produtoIds }
+      });
+
+      if (error) throw error;
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Erro ao buscar imagens');
+      }
+
+      const resultados = data.resultados || [];
+      
+      // Se auto-aprovar, atualizar produtos com confiança >= 80%
+      if (autoAprovar) {
+        const paraAprovar = resultados.filter(
+          (r: any) => r.status === 'success' && r.confianca >= 80
+        );
+
+        for (const resultado of paraAprovar) {
+          await supabase
+            .from('produtos_master_global')
+            .update({
+              imagem_url: resultado.imageUrl,
+              imagem_path: resultado.imagemPath,
+              imagem_adicionada_em: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', resultado.produtoId);
+        }
+
+        toast({
+          title: "Processamento completo!",
+          description: `${paraAprovar.length} imagens auto-aprovadas, ${resultados.length - paraAprovar.length} aguardando revisão`,
+        });
+
+        // Mostrar apenas os que precisam revisão
+        setImagensSugeridas(resultados.filter((r: any) => 
+          r.status === 'error' || r.confianca < 80
+        ));
+        setTotalProcessadoImagens(prev => prev + paraAprovar.length);
+      } else {
+        setImagensSugeridas(resultados);
+        toast({
+          title: "Busca completa!",
+          description: `${resultados.length} resultados encontrados`,
+        });
+      }
+
+      // Recarregar stats
+      await carregarDados();
+
+    } catch (error: any) {
+      console.error('Erro ao buscar imagens:', error);
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setProcessandoImagens(false);
+    }
+  };
+
+  const handleImagemAprovada = () => {
+    setTotalProcessadoImagens(prev => prev + 1);
+    carregarDados();
+  };
+
+  const handleImagemRejeitada = () => {
+    // Apenas remove da lista de sugestões
+    toast({
+      title: "Imagem rejeitada",
+      description: "Você pode tentar uma nova busca depois",
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1402,6 +1517,10 @@ export default function NormalizacaoGlobal() {
           <TabsTrigger value="importar" className="gap-2">
             <Download className="w-4 h-4" />
             Importar Open Food Facts
+          </TabsTrigger>
+          <TabsTrigger value="raspagem-imagens" className="gap-2">
+            <ImageOff className="w-4 h-4" />
+            Raspagem de Imagens ({stats.produtosSemImagem})
           </TabsTrigger>
         </TabsList>
 
@@ -1965,6 +2084,55 @@ export default function NormalizacaoGlobal() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Aba de Raspagem de Imagens */}
+        <TabsContent value="raspagem-imagens" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="md:col-span-1">
+              <ScrapingControls
+                totalSemImagem={stats.produtosSemImagem}
+                totalProcessado={totalProcessadoImagens}
+                processando={processandoImagens}
+                onBuscarImagens={buscarImagensProdutos}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              {imagensSugeridas.length === 0 && !processandoImagens ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <ImageOff className="w-16 h-16 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Nenhuma busca realizada</h3>
+                    <p className="text-muted-foreground text-center">
+                      Selecione o tamanho do lote e clique em "Buscar Imagens no Google" para começar
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : processandoImagens ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="w-16 h-16 text-primary mb-4 animate-spin" />
+                    <h3 className="text-lg font-semibold mb-2">Processando...</h3>
+                    <p className="text-muted-foreground text-center">
+                      Buscando e baixando imagens do Google. Isso pode levar alguns minutos.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {imagensSugeridas.map((resultado) => (
+                    <ImagePreviewCard
+                      key={resultado.produtoId}
+                      resultado={resultado}
+                      onAprovado={handleImagemAprovada}
+                      onRejeitado={handleImagemRejeitada}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 
