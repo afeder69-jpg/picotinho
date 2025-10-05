@@ -47,19 +47,44 @@ serve(async (req) => {
     log.push(`✅ Staging: ${stats.stagingResetados} produtos marcados para reprocessamento`);
     console.log(`✅ ${stats.stagingResetados} produtos staging resetados`);
 
-    // 2. DELETAR MASTERS ANTIGOS OFF
-    console.log('🗑️ Passo 2: Deletando masters antigos OFF...');
-    const { data: mastersExcluidos, error: errorMasters } = await supabase
+    // 2. DELETAR MASTERS ANTIGOS OFF (TODOS antes de 05/10 13:00)
+    console.log('🗑️ Passo 2: Buscando masters antigos OFF...');
+    
+    // Buscar IDs de masters que vieram de notas fiscais (têm candidatos associados)
+    const { data: candidatosComMaster } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .select('sugestao_produto_master')
+      .not('sugestao_produto_master', 'is', null);
+    
+    const idsNotasFiscais = new Set(candidatosComMaster?.map(c => c.sugestao_produto_master) || []);
+    
+    console.log(`ℹ️ Masters de notas fiscais preservados: ${idsNotasFiscais.size}`);
+    
+    // Deletar APENAS masters antigos que NÃO são de notas fiscais
+    const { data: todosAntigos } = await supabase
       .from('produtos_master_global')
-      .delete()
+      .select('id, nome_padrao')
       .eq('status', 'ativo')
-      .lt('created_at', '2025-10-05 13:00:00')
-      .is('codigo_barras', null)
-      .select('id, nome_padrao');
+      .lt('created_at', '2025-10-05 13:00:00');
+    
+    const idsParaDeletar = todosAntigos?.filter(m => !idsNotasFiscais.has(m.id)).map(m => m.id) || [];
+    
+    console.log(`🗑️ Masters OFF antigos para deletar: ${idsParaDeletar.length}`);
+    
+    let mastersExcluidos: any[] = [];
+    if (idsParaDeletar.length > 0) {
+      const { data, error: errorMasters } = await supabase
+        .from('produtos_master_global')
+        .delete()
+        .in('id', idsParaDeletar)
+        .select('id, nome_padrao');
 
-    if (errorMasters) {
-      console.error('Erro ao deletar masters:', errorMasters);
-      throw errorMasters;
+      if (errorMasters) {
+        console.error('Erro ao deletar masters:', errorMasters);
+        throw errorMasters;
+      }
+      
+      mastersExcluidos = data || [];
     }
 
     stats.mastersExcluidos = mastersExcluidos?.length || 0;
