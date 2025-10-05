@@ -47,29 +47,61 @@ serve(async (req) => {
     log.push(`✅ Staging: ${stats.stagingResetados} produtos marcados para reprocessamento`);
     console.log(`✅ ${stats.stagingResetados} produtos staging resetados`);
 
-    // 2. DELETAR MASTERS ANTIGOS OFF (TODOS antes de 05/10 13:00)
-    console.log('🗑️ Passo 2: Buscando masters antigos OFF...');
+    // 2. BUSCAR MASTERS PARA DELETAR (TODOS antes de 05/10 13:00)
+    console.log('🔍 Passo 2: Identificando masters para deletar...');
     
-    // Buscar IDs de masters que vieram de notas fiscais (têm candidatos associados)
-    const { data: candidatosComMaster } = await supabase
+    // Buscar IDs de masters que vieram de notas fiscais (têm candidatos auto-aprovados associados)
+    const { data: candidatosAutoAprovados } = await supabase
       .from('produtos_candidatos_normalizacao')
       .select('sugestao_produto_master')
+      .eq('status', 'aprovado')
+      .gte('confianca_ia', 90)
       .not('sugestao_produto_master', 'is', null);
     
-    const idsNotasFiscais = new Set(candidatosComMaster?.map(c => c.sugestao_produto_master) || []);
+    const idsNotasFiscais = new Set(candidatosAutoAprovados?.map(c => c.sugestao_produto_master) || []);
     
-    console.log(`ℹ️ Masters de notas fiscais preservados: ${idsNotasFiscais.size}`);
+    console.log(`ℹ️ Masters de notas fiscais auto-aprovados: ${idsNotasFiscais.size}`);
     
-    // Deletar APENAS masters antigos que NÃO são de notas fiscais
+    // Buscar todos os masters antigos
     const { data: todosAntigos } = await supabase
       .from('produtos_master_global')
       .select('id, nome_padrao')
       .eq('status', 'ativo')
       .lt('created_at', '2025-10-05 13:00:00');
     
+    // Separar: masters a preservar (notas fiscais) vs masters a deletar (OFF antigos)
     const idsParaDeletar = todosAntigos?.filter(m => !idsNotasFiscais.has(m.id)).map(m => m.id) || [];
     
-    console.log(`🗑️ Masters OFF antigos para deletar: ${idsParaDeletar.length}`);
+    console.log(`🗑️ Masters OFF antigos identificados: ${idsParaDeletar.length}`);
+
+    // 3. LIMPAR REFERÊNCIAS DE CANDIDATOS PRIMEIRO (evitar foreign key constraint)
+    console.log('🧹 Passo 3: Limpando referências de candidatos...');
+    
+    if (idsParaDeletar.length > 0) {
+      // Atualizar candidatos que referenciam masters que serão deletados
+      const { data: candidatosAtualizados, error: errorCandidatos } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .update({
+          status: 'rejeitado',
+          observacoes_revisor: 'Master OFF antigo deletado durante reset',
+          sugestao_produto_master: null,
+          updated_at: new Date().toISOString()
+        })
+        .in('sugestao_produto_master', idsParaDeletar)
+        .select('id');
+
+      if (errorCandidatos) {
+        console.error('Erro ao limpar candidatos:', errorCandidatos);
+        throw errorCandidatos;
+      }
+
+      stats.candidatosRejeitados = candidatosAtualizados?.length || 0;
+      log.push(`🧹 Candidatos: ${stats.candidatosRejeitados} referências limpas`);
+      console.log(`✅ ${stats.candidatosRejeitados} candidatos atualizados`);
+    }
+
+    // 4. DELETAR MASTERS ANTIGOS OFF
+    console.log('🗑️ Passo 4: Deletando masters OFF antigos...');
     
     let mastersExcluidos: any[] = [];
     if (idsParaDeletar.length > 0) {
@@ -91,24 +123,8 @@ serve(async (req) => {
     log.push(`🗑️ Masters OFF antigos: ${stats.mastersExcluidos} produtos deletados`);
     console.log(`✅ ${stats.mastersExcluidos} masters excluídos`);
 
-    // 3. LIMPAR SINÔNIMOS ÓRFÃOS
-    console.log('🧹 Passo 3: Limpando sinônimos órfãos...');
-    const { data: sinonimosRemovidos, error: errorSinonimos } = await supabase.rpc(
-      'limpar_sinonimos_orfaos'
-    );
-
-    if (errorSinonimos) {
-      console.error('Erro ao limpar sinônimos:', errorSinonimos);
-      // Não falhar se não existir a função, continuar
-      log.push(`⚠️ Sinônimos: Não foi possível limpar automaticamente`);
-    } else {
-      stats.sinonimosRemovidos = sinonimosRemovidos || 0;
-      log.push(`🧹 Sinônimos órfãos: ${stats.sinonimosRemovidos} removidos`);
-      console.log(`✅ ${stats.sinonimosRemovidos} sinônimos removidos`);
-    }
-
-    // 4. REJEITAR CANDIDATOS ÓRFÃOS
-    console.log('❌ Passo 4: Rejeitando candidatos órfãos...');
+    // 5. LIMPAR SINÔNIMOS ÓRFÃOS
+    console.log('🧹 Passo 5: Limpando sinônimos órfãos...');
     
     // Buscar IDs de masters ativos
     const { data: mastersAtivos } = await supabase
@@ -117,26 +133,22 @@ serve(async (req) => {
       .eq('status', 'ativo');
 
     const idsAtivos = mastersAtivos?.map(m => m.id) || [];
-
-    const { data: candidatosRejeitados, error: errorCandidatos } = await supabase
-      .from('produtos_candidatos_normalizacao')
-      .update({
-        status: 'rejeitado',
-        observacoes_revisor: 'Master deletado durante limpeza OFF',
-        updated_at: new Date().toISOString()
-      })
-      .eq('status', 'pendente')
-      .not('sugestao_produto_master', 'in', `(${idsAtivos.join(',')})`)
+    
+    // Deletar sinônimos que apontam para masters que não existem mais
+    const { data: sinonimosRemovidos, error: errorSinonimos } = await supabase
+      .from('produtos_sinonimos_globais')
+      .delete()
+      .not('produto_master_id', 'in', `(${idsAtivos.join(',')})`)
       .select('id');
 
-    if (errorCandidatos) {
-      console.error('Erro ao rejeitar candidatos:', errorCandidatos);
-      throw errorCandidatos;
+    if (errorSinonimos) {
+      console.error('Erro ao limpar sinônimos:', errorSinonimos);
+      log.push(`⚠️ Sinônimos: Não foi possível limpar automaticamente`);
+    } else {
+      stats.sinonimosRemovidos = sinonimosRemovidos?.length || 0;
+      log.push(`🧹 Sinônimos órfãos: ${stats.sinonimosRemovidos} removidos`);
+      console.log(`✅ ${stats.sinonimosRemovidos} sinônimos removidos`);
     }
-
-    stats.candidatosRejeitados = candidatosRejeitados?.length || 0;
-    log.push(`❌ Candidatos órfãos: ${stats.candidatosRejeitados} marcados como rejeitados`);
-    console.log(`✅ ${stats.candidatosRejeitados} candidatos rejeitados`);
 
     // Log final
     log.push('');
