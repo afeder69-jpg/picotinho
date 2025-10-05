@@ -5,7 +5,7 @@ project_id = "mjsbwrtegorjxcepvrik"
 [functions.consolidar-masters-duplicados]
 verify_jwt = false
 
-[functions.resetar-open-food-facts]
+[functions.desmarcar-pagina-open-food-facts]
 verify_jwt = false
 
 [functions.backfill-normalizacao-legados]
