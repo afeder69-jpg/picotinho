@@ -76,14 +76,6 @@ export default function NormalizacaoGlobal() {
   const [candidatos, setCandidatos] = useState<any[]>([]);
   const [produtosMaster, setProdutosMaster] = useState<any[]>([]);
   const [processando, setProcessando] = useState(false);
-  const [processandoBackfill, setProcessandoBackfill] = useState(false);
-  const [progressoBackfill, setProgressoBackfill] = useState({
-    processados: 0,
-    auto_aprovados: 0,
-    para_revisao: 0,
-    restantes: 163,
-    progresso: '0/163'
-  });
   
   // Estados para modais
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -421,64 +413,6 @@ export default function NormalizacaoGlobal() {
       });
     } finally {
       setProcessando(false);
-    }
-  }
-
-  async function processarBackfillLegados() {
-    setProcessandoBackfill(true);
-    
-    try {
-      toast({
-        title: "Backfill iniciado",
-        description: "Processando produtos legados em lotes de 10...",
-      });
-
-      let totalProcessados = 0;
-      let totalAutoAprovados = 0;
-      let totalParaRevisao = 0;
-      let continuar = true;
-
-      // Loop até processar todos
-      while (continuar) {
-        const { data, error } = await supabase.functions.invoke('backfill-normalizacao-legados');
-
-        if (error) throw error;
-
-        totalProcessados += data.processados;
-        totalAutoAprovados += data.auto_aprovados;
-        totalParaRevisao += data.para_revisao;
-
-        setProgressoBackfill({
-          processados: totalProcessados,
-          auto_aprovados: totalAutoAprovados,
-          para_revisao: totalParaRevisao,
-          restantes: data.restantes,
-          progresso: data.progresso
-        });
-
-        if (data.restantes === 0) {
-          continuar = false;
-          toast({
-            title: "Backfill concluído! 🎉",
-            description: `${totalProcessados} produtos normalizados. ${totalAutoAprovados} auto-aprovados, ${totalParaRevisao} para revisão.`,
-          });
-        } else {
-          // Aguardar 2 segundos antes do próximo lote
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-
-      await carregarDados();
-
-    } catch (error: any) {
-      console.error('Erro ao processar backfill:', error);
-      toast({
-        title: "Erro no backfill",
-        description: error.message,
-        variant: "destructive"
-      });
-    } finally {
-      setProcessandoBackfill(false);
     }
   }
 
@@ -1167,28 +1101,16 @@ export default function NormalizacaoGlobal() {
         <div className="flex gap-2">
           <Button 
             onClick={processarNormalizacao}
-            disabled={processando || processandoBackfill || consolidando}
+            disabled={processando || consolidando}
             className="gap-2"
           >
             <Sparkles className="w-4 h-4" />
             {processando ? 'Processando...' : 'Processar Novas Normalizações'}
           </Button>
-          
-          <Button 
-            onClick={processarBackfillLegados}
-            disabled={processando || processandoBackfill || consolidando}
-            variant="outline"
-            className="gap-2"
-          >
-            <Database className="w-4 h-4" />
-            {processandoBackfill 
-              ? `Backfill... ${progressoBackfill.progresso}` 
-              : 'Normalizar Produtos Legados'}
-          </Button>
 
           <Button 
             onClick={consolidarMastersDuplicados}
-            disabled={processando || processandoBackfill || consolidando}
+            disabled={processando || consolidando}
             variant="destructive"
             className="gap-2"
           >
@@ -1331,55 +1253,6 @@ export default function NormalizacaoGlobal() {
         </Card>
       </div>
 
-      {/* Progresso do Backfill */}
-      {processandoBackfill && (
-        <Card className="border-primary">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="w-5 h-5 animate-pulse" />
-              Processando Produtos Legados
-            </CardTitle>
-            <CardDescription>
-              Normalizando produtos do estoque que ainda não foram processados
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Processados</p>
-                <p className="text-2xl font-bold">{progressoBackfill.processados}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Auto-aprovados</p>
-                <p className="text-2xl font-bold text-green-600">{progressoBackfill.auto_aprovados}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Para revisão</p>
-                <p className="text-2xl font-bold text-yellow-600">{progressoBackfill.para_revisao}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Restantes</p>
-                <p className="text-2xl font-bold text-blue-600">{progressoBackfill.restantes}</p>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Progresso</span>
-                <span className="font-mono">{progressoBackfill.progresso}</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                <div 
-                  className="bg-primary h-full transition-all duration-300"
-                  style={{ 
-                    width: `${(progressoBackfill.processados / 163) * 100}%` 
-                  }}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Progresso da Consolidação */}
       {consolidando && (

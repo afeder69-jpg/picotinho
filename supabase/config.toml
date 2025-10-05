@@ -8,9 +8,6 @@ verify_jwt = false
 [functions.desmarcar-pagina-open-food-facts]
 verify_jwt = false
 
-[functions.backfill-normalizacao-legados]
-verify_jwt = true
-
 [functions.importar-open-food-facts]
 verify_jwt = false
 
