@@ -405,9 +405,6 @@ export default function NormalizacaoGlobal() {
           limite: limiteImportar,
           pagina: 1,
           comImagem: apenasComImagem
-        },
-        headers: {
-          'x-invoke-timeout': '180' // 180 segundos (3 minutos)
         }
       });
       
