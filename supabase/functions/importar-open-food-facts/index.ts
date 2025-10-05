@@ -330,8 +330,8 @@ serve(async (req) => {
         resultados.logs.push(`❌ ${resultado.mensagem}`);
       }
 
-      // Rate limiting: 1 requisição por segundo
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Rate limiting: 5 requisições por segundo (200ms entre cada)
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
     console.log(`✅ Importação concluída: ${resultados.importados} importados, ${resultados.duplicados} duplicados, ${resultados.erros} erros`);
