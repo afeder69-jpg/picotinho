@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { produtoIds } = await req.json();
+    const { produtoIds, customQueries } = await req.json();
 
     if (!produtoIds || !Array.isArray(produtoIds) || produtoIds.length === 0) {
       throw new Error("Lista de IDs de produtos inválida");
@@ -47,17 +47,19 @@ serve(async (req) => {
     for (const produto of produtos || []) {
       try {
         // Construir query de busca
-        const queryParts = [
+        // Se há uma query customizada para este produto, usar ela
+        const customQuery = customQueries?.[produto.id];
+        
+        const query = customQuery || [
           produto.marca,
           produto.nome_base,
           produto.qtd_valor && produto.qtd_unidade
             ? `${produto.qtd_valor}${produto.qtd_unidade}`
             : null,
-        ].filter(Boolean);
-
-        const query = queryParts.join(" ");
+        ].filter(Boolean).join(" ");
 
         console.log(`🔍 Buscando imagem para: ${query}`);
+        console.log(`${customQuery ? '🎯 Query customizada' : '📋 Query padrão'}`);
         console.log(`📡 Parâmetros: imgSize=MEDIUM, num=3`);
 
         // Chamar Google Custom Search API

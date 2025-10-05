@@ -21,13 +21,15 @@ interface ImagePreviewCardProps {
   };
   onAprovado: () => void;
   onRejeitado: () => void;
+  onResultadoAtualizado?: (novoResultado: ImagePreviewCardProps['resultado']) => void;
 }
 
-export function ImagePreviewCard({ resultado, onAprovado, onRejeitado }: ImagePreviewCardProps) {
+export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResultadoAtualizado }: ImagePreviewCardProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [editando, setEditando] = useState(false);
   const [novaQuery, setNovaQuery] = useState(resultado.query || "");
+  const [buscando, setBuscando] = useState(false);
 
   const aprovarImagem = async () => {
     if (resultado.status !== "success" || !resultado.imageUrl) return;
@@ -69,6 +71,64 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado }: ImagePr
 
   const editarBusca = () => {
     setEditando(!editando);
+  };
+
+  const buscarNovamente = async () => {
+    if (!novaQuery.trim()) {
+      toast({
+        title: "Query inválida",
+        description: "Digite uma query de busca válida",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBuscando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "buscar-imagens-produtos",
+        {
+          body: {
+            produtoIds: [resultado.produtoId],
+            customQueries: {
+              [resultado.produtoId]: novaQuery,
+            },
+          },
+        }
+      );
+
+      if (error) throw error;
+
+      const novoResultado = data.resultados[0];
+      
+      if (novoResultado.status === "success") {
+        toast({
+          title: "✅ Nova imagem encontrada!",
+          description: `Confiança: ${novoResultado.confianca}%`,
+        });
+        
+        // Atualizar o card com o novo resultado
+        if (onResultadoAtualizado) {
+          onResultadoAtualizado(novoResultado);
+        }
+        
+        setEditando(false);
+      } else {
+        toast({
+          title: "Nenhuma imagem encontrada",
+          description: novoResultado.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Erro na busca",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setBuscando(false);
+    }
   };
 
   return (
@@ -172,15 +232,17 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado }: ImagePr
               size="sm"
               variant="secondary"
               className="w-full"
-              onClick={() => {
-                // Aqui implementaríamos uma nova busca
-                toast({
-                  title: "Em breve",
-                  description: "Funcionalidade de nova busca será implementada",
-                });
-              }}
+              onClick={buscarNovamente}
+              disabled={buscando || !novaQuery.trim()}
             >
-              Buscar Novamente
+              {buscando ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Buscando...
+                </>
+              ) : (
+                "Buscar Novamente"
+              )}
             </Button>
           </div>
         )}
