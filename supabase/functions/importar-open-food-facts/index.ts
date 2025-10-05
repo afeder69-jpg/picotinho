@@ -21,6 +21,7 @@ interface ImportacaoParams {
   limite: number;
   pagina: number;
   comImagem: boolean;
+  sessionId?: string;
 }
 
 // Mapear categorias Open Food Facts → Picotinho (11 categorias)
@@ -286,7 +287,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { limite = 50, pagina = 1, comImagem = true } = await req.json();
+    const { limite = 50, pagina = 1, comImagem = true, sessionId } = await req.json();
+    
+    // Criar canal Realtime se sessionId foi fornecido
+    let realtimeChannel = null;
+    if (sessionId) {
+      realtimeChannel = supabaseClient.channel(`import_progress_${sessionId}`);
+      await realtimeChannel.subscribe();
+      console.log(`📡 Canal Realtime criado: import_progress_${sessionId}`);
+    }
 
     console.log(`🔍 Buscando produtos brasileiros do Open Food Facts (página ${pagina}, limite ${limite})`);
 
@@ -308,7 +317,9 @@ serve(async (req) => {
       logs: [] as string[]
     };
 
-    for (const produto of produtos) {
+    for (let i = 0; i < produtos.length; i++) {
+      const produto = produtos[i];
+      
       if (produto.image_url) {
         resultados.comImagem++;
       } else {
@@ -317,21 +328,56 @@ serve(async (req) => {
 
       const resultado = await inserirProdutoStaging(supabaseClient, produto);
       
+      let status = 'processing';
       if (resultado.sucesso) {
         if (resultado.mensagem.includes('já existente')) {
           resultados.duplicados++;
           resultados.logs.push(`⏭️  ${resultado.mensagem}`);
+          status = 'duplicate';
         } else {
           resultados.importados++;
           resultados.logs.push(`✅ ${resultado.mensagem}`);
+          status = 'success';
         }
       } else {
         resultados.erros++;
         resultados.logs.push(`❌ ${resultado.mensagem}`);
+        status = 'error';
+      }
+      
+      // Broadcast progresso em tempo real
+      if (realtimeChannel) {
+        const percentage = Math.round(((i + 1) / produtos.length) * 100);
+        await realtimeChannel.send({
+          type: 'broadcast',
+          event: 'progress',
+          payload: {
+            current: i + 1,
+            total: produtos.length,
+            percentage,
+            productName: produto.product_name || produto.code,
+            status,
+            message: resultado.mensagem
+          }
+        });
       }
 
       // Rate limiting: 5 requisições por segundo (200ms entre cada)
       await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    // Enviar evento de conclusão
+    if (realtimeChannel) {
+      await realtimeChannel.send({
+        type: 'broadcast',
+        event: 'complete',
+        payload: {
+          ...resultados,
+          pagina
+        }
+      });
+      await realtimeChannel.unsubscribe();
+      console.log('📡 Canal Realtime fechado');
     }
 
     console.log(`✅ Importação concluída: ${resultados.importados} importados, ${resultados.duplicados} duplicados, ${resultados.erros} erros`);

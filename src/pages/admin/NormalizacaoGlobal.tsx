@@ -419,24 +419,58 @@ export default function NormalizacaoGlobal() {
     setProgressoImportacao(0);
     setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
     
+    // Gerar sessionId único para Realtime
+    const sessionId = crypto.randomUUID();
+    let realtimeChannel: any = null;
+    
     try {
       toast({
         title: "Importação iniciada",
         description: `Importando página ${paginaSelecionada} do Open Food Facts...`,
       });
+      
+      // Criar subscription Realtime
+      realtimeChannel = supabase.channel(`import_progress_${sessionId}`);
+      
+      realtimeChannel
+        .on('broadcast', { event: 'progress' }, (payload: any) => {
+          const { percentage, productName, status, message, current, total } = payload.payload;
+          
+          setProgressoImportacao(percentage);
+          
+          // Adicionar log em tempo real
+          let emoji = '🔄';
+          if (status === 'success') emoji = '✅';
+          else if (status === 'duplicate') emoji = '⏭️';
+          else if (status === 'error') emoji = '❌';
+          
+          setLogsImportacao(prev => [...prev, `${emoji} [${current}/${total}] ${productName}`]);
+          
+          // Atualizar stats em tempo real
+          setStatsImportacao(prev => ({
+            ...prev,
+            total: total,
+            importados: status === 'success' ? prev.importados + 1 : prev.importados,
+            duplicados: status === 'duplicate' ? prev.duplicados + 1 : prev.duplicados,
+            erros: status === 'error' ? prev.erros + 1 : prev.erros
+          }));
+        })
+        .on('broadcast', { event: 'complete' }, (payload: any) => {
+          console.log('✅ Importação concluída (Realtime):', payload.payload);
+        })
+        .subscribe();
 
       const { data, error } = await supabase.functions.invoke('importar-open-food-facts', {
         body: {
           limite: limiteImportar,
           pagina: paginaSelecionada,
-          comImagem: apenasComImagem
+          comImagem: apenasComImagem,
+          sessionId
         }
       });
       
       if (error) throw error;
       
-      setStatsImportacao(data || {});
-      setLogsImportacao(data.logs || []);
       setProgressoImportacao(100);
       
       // Atualizar lista de páginas importadas
@@ -458,6 +492,11 @@ export default function NormalizacaoGlobal() {
       });
       setLogsImportacao(prev => [...prev, `❌ ERRO: ${error.message}`]);
     } finally {
+      // Cleanup: unsubscribe do canal Realtime
+      if (realtimeChannel) {
+        await realtimeChannel.unsubscribe();
+        console.log('📡 Canal Realtime desconectado');
+      }
       setImportando(false);
     }
   }
