@@ -193,8 +193,8 @@ Deno.serve(async (req) => {
 
           // ✅ NOVA LÓGICA: Verificar se produto já existe antes de criar
           if (normalizacao.produto_master_id) {
-            // 🎯 IA encontrou produto existente - criar candidato aprovado
-            await criarCandidato(supabase, produto, normalizacao, 'aprovado');
+            // 🎯 IA encontrou produto existente - criar candidato auto-aprovado pela IA
+            await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
             totalAutoAprovados++;
             console.log(`✅ Auto-aprovado (variação reconhecida): ${normalizacao.nome_padrao}`);
           } else if (normalizacao.confianca >= 90) {
@@ -208,14 +208,18 @@ Deno.serve(async (req) => {
               .maybeSingle();
 
             if (masterExistente) {
-              // ✅ Produto já existe - não criar duplicado, apenas candidato
+              // ✅ Produto já existe - não criar duplicado, apenas candidato auto-aprovado
               normalizacao.produto_master_id = masterExistente.id;
-              await criarCandidato(supabase, produto, normalizacao, 'aprovado');
+              await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
               totalAutoAprovados++;
               console.log(`✅ Auto-aprovado (master existente encontrado): ${normalizacao.nome_padrao} -> ${masterExistente.sku_global}`);
             } else {
-              // Produto realmente novo - pode criar
+              // Produto realmente novo - pode criar master e candidato auto-aprovado
               await criarProdutoMaster(supabase, normalizacao);
+              
+              // Criar candidato auto-aprovado para manter histórico da decisão da IA
+              await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
+              
               totalAutoAprovados++;
               console.log(`✅ Auto-aprovado (produto novo ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
             }

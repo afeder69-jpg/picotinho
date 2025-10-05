@@ -49,10 +49,11 @@ export default function NormalizacaoGlobal() {
     masterAutoAprovados: 0,
     masterRevisadosManualmente: 0,
     
-    // Fila de Normalização
-    pendentesRevisao: 0,
-    aprovadosNovoMaster: 0,
-    aprovadosMesclados: 0,
+    // Fila de Normalização - NOVA SEPARAÇÃO
+    autoAprovadosIA: 0,           // Auto-aprovados pela IA (confiança >= 90%)
+    aprovadosManualmente: 0,      // Aprovados por revisor humano
+    pendentesRevisao: 0,          // Aguardando revisão
+    rejeitados: 0,                // Rejeitados por revisor
     
     // Outros
     totalUsuarios: 0
@@ -253,21 +254,26 @@ export default function NormalizacaoGlobal() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pendente');
 
-      // Query 6: Aprovados que viraram novo master
-      const { count: aprovadosNovoMaster } = await supabase
+      // Query 6: Auto-aprovados pela IA (confiança >= 90%)
+      const { count: autoAprovadosIA } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'auto_aprovado');
+
+      // Query 7: Aprovados manualmente (revisor humano aprovou)
+      const { count: aprovadosManualmente } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'aprovado')
-        .not('sugestao_produto_master', 'is', null);
+        .not('revisado_por', 'is', null);
 
-      // Query 7: Aprovados que foram mesclados (não criaram master)
-      const { count: aprovadosMesclados } = await supabase
+      // Query 8: Rejeitados
+      const { count: rejeitados } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'aprovado')
-        .is('sugestao_produto_master', null);
+        .eq('status', 'rejeitado');
 
-      // Query 8: Total de usuários
+      // Query 9: Total de usuários
       const { data: usuarios } = await supabase
         .from('profiles')
         .select('id');
@@ -279,10 +285,11 @@ export default function NormalizacaoGlobal() {
         masterAutoAprovados: mastersAutoAprovados,
         masterRevisadosManualmente: mastersRevisados,
         
-        // Fila de Normalização
+        // Fila de Normalização - NOVA SEPARAÇÃO
+        autoAprovadosIA: autoAprovadosIA || 0,
+        aprovadosManualmente: aprovadosManualmente || 0,
         pendentesRevisao: pendentes || 0,
-        aprovadosNovoMaster: aprovadosNovoMaster || 0,
-        aprovadosMesclados: aprovadosMesclados || 0,
+        rejeitados: rejeitados || 0,
         
         // Outros
         totalUsuarios: usuarios?.length || 0
@@ -1270,23 +1277,34 @@ export default function NormalizacaoGlobal() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Aprovados → Novo Master</CardTitle>
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <CardTitle className="text-sm font-medium">✅ Auto-Aprovados (IA ≥90%)</CardTitle>
+              <Sparkles className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.aprovadosNovoMaster}</div>
-              <p className="text-xs text-muted-foreground">criaram produto master</p>
+              <div className="text-2xl font-bold text-green-600">{stats.autoAprovadosIA}</div>
+              <p className="text-xs text-muted-foreground">aprovados automaticamente pela IA</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Aprovados → Mesclado</CardTitle>
-              <Shield className="h-4 w-4 text-blue-500" />
+              <CardTitle className="text-sm font-medium">👤 Aprovados Manualmente</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.aprovadosMesclados}</div>
-              <p className="text-xs text-muted-foreground">mesclados com existentes</p>
+              <div className="text-2xl font-bold text-blue-600">{stats.aprovadosManualmente}</div>
+              <p className="text-xs text-muted-foreground">revisados e aprovados por você</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">❌ Rejeitados</CardTitle>
+              <XCircle className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{stats.rejeitados}</div>
+              <p className="text-xs text-muted-foreground">revisados e rejeitados</p>
             </CardContent>
           </Card>
         </div>
