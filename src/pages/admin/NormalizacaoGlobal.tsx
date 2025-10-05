@@ -1225,6 +1225,16 @@ export default function NormalizacaoGlobal() {
     });
   };
 
+  const handleResultadoAtualizado = (novoResultado: any) => {
+    setImagensSugeridas(prev => 
+      prev.map(item => 
+        item.produtoId === novoResultado.produtoId 
+          ? novoResultado 
+          : item
+      )
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -2127,6 +2137,7 @@ export default function NormalizacaoGlobal() {
                       resultado={resultado}
                       onAprovado={handleImagemAprovada}
                       onRejeitado={handleImagemRejeitada}
+                      onResultadoAtualizado={handleResultadoAtualizado}
                     />
                   ))}
                 </div>
