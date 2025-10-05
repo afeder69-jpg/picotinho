@@ -1416,15 +1416,6 @@ export default function NormalizacaoGlobal() {
             <Package className="w-4 h-4" />
             Catálogo Master
           </TabsTrigger>
-          <TabsTrigger value="historico" className="gap-2">
-            <Sparkles className="w-4 h-4" />
-            Histórico IA
-            {stats.autoAprovadosTotal > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {stats.autoAprovadosTotal}
-              </Badge>
-            )}
-          </TabsTrigger>
           <TabsTrigger value="importar" className="gap-2">
             <Download className="w-4 h-4" />
             Importar Open Food Facts
@@ -1740,43 +1731,6 @@ export default function NormalizacaoGlobal() {
               </Card>
             ))
           )}
-        </TabsContent>
-
-        {/* Histórico de Decisões da IA */}
-        <TabsContent value="historico" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="w-5 h-5" />
-                    Histórico de Decisões da IA
-                  </CardTitle>
-                  <CardDescription className="mt-2">
-                    Produtos reconhecidos automaticamente pela IA como variações de produtos existentes no catálogo master
-                  </CardDescription>
-                </div>
-                <Badge variant="secondary" className="text-lg px-4 py-2">
-                  {stats.autoAprovadosTotal} decisões
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground mb-4">
-                <p>🤖 Estes produtos foram automaticamente aprovados pela IA com base em:</p>
-                <ul className="list-disc ml-6 mt-2 space-y-1">
-                  <li>Busca exata em sinônimos existentes (Camada 1 - ~10ms)</li>
-                  <li>Busca fuzzy com similaridade {'>'} 80% (Camada 2 - ~100ms)</li>
-                  <li>Reconhecimento da IA com confiança ≥ 80% (Camada 3)</li>
-                </ul>
-              </div>
-              
-              <div className="text-xs text-muted-foreground border-l-4 border-primary/20 pl-4 py-2 bg-primary/5 rounded-r">
-                💡 <strong>Nota:</strong> Estas decisões não aparecem na "Fila de Processamento" pois já foram resolvidas automaticamente. 
-                Elas ficam aqui no histórico para transparência e auditoria.
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Importar Open Food Facts */}
