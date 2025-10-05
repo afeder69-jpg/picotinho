@@ -2136,6 +2136,28 @@ export type Database = {
           variante: string
         }[]
       }
+      buscar_produtos_similares: {
+        Args: {
+          categoria_filtro: string
+          limite?: number
+          texto_busca: string
+          threshold?: number
+        }
+        Returns: {
+          categoria: string
+          granel: boolean
+          id: string
+          marca: string
+          nome_base: string
+          nome_padrao: string
+          qtd_unidade: string
+          qtd_valor: number
+          similarity: number
+          sku_global: string
+          tipo_embalagem: string
+          total_usuarios: number
+        }[]
+      }
       calcular_preco_por_unidade_base: {
         Args: {
           preco_unitario: number
@@ -2176,6 +2198,14 @@ export type Database = {
           detalhes: string
           produtos_corrigidos: number
         }[]
+      }
+      criar_sinonimo_global: {
+        Args: {
+          confianca_input?: number
+          produto_master_id_input: string
+          texto_variacao_input: string
+        }
+        Returns: string
       }
       diagnosticar_e_corrigir_estoque: {
         Args: { usuario_uuid: string }
