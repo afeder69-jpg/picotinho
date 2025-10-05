@@ -43,17 +43,24 @@ export default function NormalizacaoGlobal() {
   const [loading, setLoading] = useState(true);
   const [isMaster, setIsMaster] = useState(false);
   const [stats, setStats] = useState({
-    // Catálogo Master
+    // Catálogo Master Global
     totalProdutosMaster: 0,
-    masterOpenFoodFacts: 0,
-    masterAutoAprovados: 0,
-    masterRevisadosManualmente: 0,
+    produtosOpenFoodFacts: 0,
+    produtosNotasFiscais: 0,
     
-    // Fila de Normalização - NOVA SEPARAÇÃO
-    autoAprovadosIA: 0,           // Auto-aprovados pela IA (confiança >= 90%)
-    aprovadosManualmente: 0,      // Aprovados por revisor humano
-    pendentesRevisao: 0,          // Aguardando revisão
-    rejeitados: 0,                // Rejeitados por revisor
+    // Fila de Processamento - Auto-Aprovados
+    autoAprovadosTotal: 0,
+    autoAprovadosOpenFoodFacts: 0,
+    autoAprovadosNotasFiscais: 0,
+    produtosGeradosAutoAprovados: 0,
+    
+    // Fila de Processamento - Aprovados Manualmente
+    aprovadosManuaisTotal: 0,
+    
+    // Fila de Processamento - Pendentes
+    pendentesTotal: 0,
+    pendentesOpenFoodFacts: 0,
+    pendentesNotasFiscais: 0,
     
     // Outros
     totalUsuarios: 0
@@ -213,83 +220,116 @@ export default function NormalizacaoGlobal() {
 
   async function carregarDados() {
     try {
-      // Query 1: Total de produtos master
+      // ===== CATÁLOGO MASTER GLOBAL =====
+      
+      // Total de produtos master
       const { count: totalMaster } = await supabase
         .from('produtos_master_global')
         .select('*', { count: 'exact', head: true });
 
-      // Query 2: Masters de Open Food Facts (que não têm candidatos associados)
-      const { data: todosCandidatos } = await supabase
-        .from('produtos_candidatos_normalizacao')
-        .select('sugestao_produto_master')
-        .not('sugestao_produto_master', 'is', null);
-      
-      const idsComCandidatos = new Set(todosCandidatos?.map(c => c.sugestao_produto_master) || []);
-      const totalMastersComCandidatos = idsComCandidatos.size;
-      const masterOpenFoodFacts = (totalMaster || 0) - totalMastersComCandidatos;
-
-      // Query 3: Masters criados por auto-aprovação (confiança >= 90%)
-      const { data: candidatosAutoAprovados } = await supabase
-        .from('produtos_candidatos_normalizacao')
-        .select('sugestao_produto_master')
-        .eq('status', 'aprovado')
-        .gte('confianca_ia', 90)
-        .not('sugestao_produto_master', 'is', null);
-      
-      const mastersAutoAprovados = new Set(candidatosAutoAprovados?.map(c => c.sugestao_produto_master) || []).size;
-
-      // Query 4: Masters criados por revisão manual (confiança < 90%)
-      const { data: candidatosRevisados } = await supabase
-        .from('produtos_candidatos_normalizacao')
-        .select('sugestao_produto_master')
-        .eq('status', 'aprovado')
-        .lt('confianca_ia', 90)
-        .not('sugestao_produto_master', 'is', null);
-      
-      const mastersRevisados = new Set(candidatosRevisados?.map(c => c.sugestao_produto_master) || []).size;
-
-      // Query 5: Candidatos pendentes de revisão
-      const { count: pendentes } = await supabase
-        .from('produtos_candidatos_normalizacao')
+      // Masters com imagem (OpenFoodFacts)
+      const { count: mastersComImagem } = await supabase
+        .from('produtos_master_global')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'pendente');
+        .not('imagem_url', 'is', null);
+      
+      // Masters sem imagem (Notas Fiscais)
+      const mastersSemImagem = (totalMaster || 0) - (mastersComImagem || 0);
 
-      // Query 6: Auto-aprovados pela IA (confiança >= 90%)
-      const { count: autoAprovadosIA } = await supabase
+      // ===== FILA DE PROCESSAMENTO =====
+      
+      // Auto-aprovados (status = 'auto_aprovado')
+      const { data: autoAprovados } = await supabase
         .from('produtos_candidatos_normalizacao')
-        .select('*', { count: 'exact', head: true })
+        .select('nota_imagem_id, sugestao_produto_master')
         .eq('status', 'auto_aprovado');
+      
+      // Separar auto-aprovados por origem
+      let autoAprovadosOpenFoodFacts = 0;
+      let autoAprovadosNotasFiscais = 0;
+      
+      if (autoAprovados) {
+        for (const candidato of autoAprovados) {
+          if (candidato.nota_imagem_id) {
+            const { data: nota } = await supabase
+              .from('notas_imagens')
+              .select('origem')
+              .eq('id', candidato.nota_imagem_id)
+              .single();
+            
+            if (nota?.origem === 'open_food_facts') {
+              autoAprovadosOpenFoodFacts++;
+            } else {
+              autoAprovadosNotasFiscais++;
+            }
+          }
+        }
+      }
+      
+      // Produtos únicos gerados pelos auto-aprovados
+      const produtosGeradosAutoAprovados = new Set(
+        autoAprovados?.map(c => c.sugestao_produto_master).filter(id => id !== null) || []
+      ).size;
 
-      // Query 7: Aprovados manualmente (revisor humano aprovou)
+      // Aprovados manualmente (status = 'aprovado' com revisado_por não nulo)
       const { count: aprovadosManualmente } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'aprovado')
         .not('revisado_por', 'is', null);
 
-      // Query 8: Rejeitados
-      const { count: rejeitados } = await supabase
+      // Pendentes de revisão (status = 'pendente')
+      const { data: pendentes } = await supabase
         .from('produtos_candidatos_normalizacao')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'rejeitado');
+        .select('nota_imagem_id')
+        .eq('status', 'pendente');
+      
+      // Separar pendentes por origem
+      let pendentesOpenFoodFacts = 0;
+      let pendentesNotasFiscais = 0;
+      
+      if (pendentes) {
+        for (const candidato of pendentes) {
+          if (candidato.nota_imagem_id) {
+            const { data: nota } = await supabase
+              .from('notas_imagens')
+              .select('origem')
+              .eq('id', candidato.nota_imagem_id)
+              .single();
+            
+            if (nota?.origem === 'open_food_facts') {
+              pendentesOpenFoodFacts++;
+            } else {
+              pendentesNotasFiscais++;
+            }
+          }
+        }
+      }
 
-      // Query 9: Total de usuários
+      // Total de usuários
       const { data: usuarios } = await supabase
         .from('profiles')
         .select('id');
 
       setStats({
-        // Catálogo Master
+        // Catálogo Master Global
         totalProdutosMaster: totalMaster || 0,
-        masterOpenFoodFacts: masterOpenFoodFacts,
-        masterAutoAprovados: mastersAutoAprovados,
-        masterRevisadosManualmente: mastersRevisados,
+        produtosOpenFoodFacts: mastersComImagem || 0,
+        produtosNotasFiscais: mastersSemImagem,
         
-        // Fila de Normalização - NOVA SEPARAÇÃO
-        autoAprovadosIA: autoAprovadosIA || 0,
-        aprovadosManualmente: aprovadosManualmente || 0,
-        pendentesRevisao: pendentes || 0,
-        rejeitados: rejeitados || 0,
+        // Fila de Processamento - Auto-Aprovados
+        autoAprovadosTotal: autoAprovados?.length || 0,
+        autoAprovadosOpenFoodFacts,
+        autoAprovadosNotasFiscais,
+        produtosGeradosAutoAprovados,
+        
+        // Fila de Processamento - Aprovados Manualmente
+        aprovadosManuaisTotal: aprovadosManualmente || 0,
+        
+        // Fila de Processamento - Pendentes
+        pendentesTotal: pendentes?.length || 0,
+        pendentesOpenFoodFacts,
+        pendentesNotasFiscais,
         
         // Outros
         totalUsuarios: usuarios?.length || 0
@@ -1204,111 +1244,6 @@ export default function NormalizacaoGlobal() {
         </div>
       </div>
 
-      {/* Seção 1: Catálogo Master */}
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Package className="h-5 w-5 text-primary" />
-          Catálogo Master
-        </h3>
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total de Produtos</CardTitle>
-              <Package className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.totalProdutosMaster}</div>
-              <p className="text-xs text-muted-foreground">produtos no catálogo</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Open Food Facts</CardTitle>
-              <Database className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.masterOpenFoodFacts}</div>
-              <p className="text-xs text-muted-foreground">importados automaticamente</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Auto-Aprovados</CardTitle>
-              <Sparkles className="h-4 w-4 text-purple-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">{stats.masterAutoAprovados}</div>
-              <p className="text-xs text-muted-foreground">confiança ≥ 90%</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Revisados Manualmente</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-yellow-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{stats.masterRevisadosManualmente}</div>
-              <p className="text-xs text-muted-foreground">aprovados por masters</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Seção 2: Fila de Normalização */}
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Fila de Normalização
-        </h3>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Pendentes de Revisão</CardTitle>
-              <Clock className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{stats.pendentesRevisao}</div>
-              <p className="text-xs text-muted-foreground">aguardando sua análise</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">✅ Auto-Aprovados (IA ≥90%)</CardTitle>
-              <Sparkles className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.autoAprovadosIA}</div>
-              <p className="text-xs text-muted-foreground">aprovados automaticamente pela IA</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">👤 Aprovados Manualmente</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.aprovadosManualmente}</div>
-              <p className="text-xs text-muted-foreground">revisados e aprovados por você</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">❌ Rejeitados</CardTitle>
-              <XCircle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{stats.rejeitados}</div>
-              <p className="text-xs text-muted-foreground">revisados e rejeitados</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
 
       {/* Progresso do Backfill */}
       {processandoBackfill && (
@@ -1501,7 +1436,7 @@ export default function NormalizacaoGlobal() {
         <TabsList>
           <TabsTrigger value="pendentes" className="gap-2">
             <Clock className="w-4 h-4" />
-            Pendentes ({stats.pendentesRevisao})
+            Pendentes ({stats.pendentesTotal})
           </TabsTrigger>
           <TabsTrigger value="catalogo" className="gap-2">
             <Package className="w-4 h-4" />
@@ -1620,7 +1555,7 @@ export default function NormalizacaoGlobal() {
           {totalPaginas > 1 && (
             <div className="flex items-center justify-between mt-6">
               <div className="text-sm text-muted-foreground">
-                Página {paginaAtual} de {totalPaginas} • {stats.pendentesRevisao} candidatos no total
+                Página {paginaAtual} de {totalPaginas} • {stats.pendentesTotal} candidatos no total
               </div>
               
               <Pagination>
