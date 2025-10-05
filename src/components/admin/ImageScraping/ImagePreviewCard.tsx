@@ -7,11 +7,21 @@ import { CheckCircle2, XCircle, Edit3, Loader2, AlertCircle } from "lucide-react
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+interface OpcaoImagem {
+  imageUrl: string;
+  imagemPath: string;
+  titulo?: string;
+  contexto?: string;
+  posicao: number;
+  confianca: number;
+}
+
 interface ImagePreviewCardProps {
   resultado: {
     produtoId: string;
     skuGlobal: string;
     nomeProduto: string;
+    opcoesImagens?: OpcaoImagem[];
     imageUrl?: string;
     imagemPath?: string;
     confianca?: number;
@@ -31,17 +41,29 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
   const [novaQuery, setNovaQuery] = useState(resultado.query || "");
   const [buscando, setBuscando] = useState(false);
   const [imagemKey, setImagemKey] = useState(Date.now());
+  const [imagemSelecionada, setImagemSelecionada] = useState(0);
+  
+  // Normalizar para sempre trabalhar com opções de imagens
+  const opcoes: OpcaoImagem[] = resultado.opcoesImagens || 
+    (resultado.imageUrl ? [{
+      imageUrl: resultado.imageUrl,
+      imagemPath: resultado.imagemPath || '',
+      confianca: resultado.confianca || 90,
+      posicao: 1
+    }] : []);
 
   const aprovarImagem = async () => {
-    if (resultado.status !== "success" || !resultado.imageUrl) return;
+    if (resultado.status !== "success" || opcoes.length === 0) return;
+
+    const imagemEscolhida = opcoes[imagemSelecionada];
 
     setLoading(true);
     try {
       const { error } = await supabase
         .from("produtos_master_global")
         .update({
-          imagem_url: resultado.imageUrl,
-          imagem_path: resultado.imagemPath,
+          imagem_url: imagemEscolhida.imageUrl,
+          imagem_path: imagemEscolhida.imagemPath,
           imagem_adicionada_em: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -49,9 +71,18 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
 
       if (error) throw error;
 
+      // Limpar imagens não usadas do Storage
+      for (let i = 0; i < opcoes.length; i++) {
+        if (i !== imagemSelecionada && opcoes[i].imagemPath) {
+          await supabase.storage
+            .from("produtos-master-fotos")
+            .remove([opcoes[i].imagemPath]);
+        }
+      }
+
       toast({
         title: "Imagem aprovada!",
-        description: `Imagem adicionada para ${resultado.nomeProduto}`,
+        description: `Opção ${imagemEscolhida.posicao}/${opcoes.length} selecionada para ${resultado.nomeProduto}`,
       });
 
       onAprovado();
@@ -154,24 +185,77 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
         </div>
 
         {/* Preview da Imagem ou Erro */}
-        {resultado.status === "success" && resultado.imageUrl ? (
+        {resultado.status === "success" && opcoes.length > 0 ? (
           <>
+            {/* Preview da imagem selecionada */}
             <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">
               <img
-                key={imagemKey}
-                src={`${resultado.imageUrl}?t=${imagemKey}`}
-                alt={resultado.nomeProduto}
+                key={`${imagemKey}-${imagemSelecionada}`}
+                src={`${opcoes[imagemSelecionada].imageUrl}?t=${imagemKey}`}
+                alt={opcoes[imagemSelecionada].titulo || resultado.nomeProduto}
                 className="w-full h-full object-contain"
                 loading="lazy"
               />
+              
+              {/* Badge com posição */}
+              {opcoes.length > 1 && (
+                <Badge className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm">
+                  {imagemSelecionada + 1}/{opcoes.length}
+                </Badge>
+              )}
             </div>
 
-            {/* Confiança */}
-            <div className="flex items-center justify-between">
-              <Badge variant={resultado.confianca! >= 90 ? "default" : "secondary"}>
-                {resultado.confianca}% confiança
+            {/* Thumbnails para seleção (se houver múltiplas opções) */}
+            {opcoes.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {opcoes.map((opcao, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setImagemSelecionada(index);
+                      setImagemKey(Date.now());
+                    }}
+                    className={`relative flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all ${
+                      imagemSelecionada === index 
+                        ? 'border-primary ring-2 ring-primary/50 scale-105' 
+                        : 'border-muted hover:border-primary/50'
+                    }`}
+                  >
+                    <img
+                      src={`${opcao.imageUrl}?t=${Date.now()}`}
+                      alt={`Opção ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {imagemSelecionada === index && (
+                      <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5 text-primary" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Info da opção selecionada */}
+            <div className="space-y-1">
+              {opcoes[imagemSelecionada].titulo && (
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  <strong>Título:</strong> {opcoes[imagemSelecionada].titulo}
+                </p>
+              )}
+              {opcoes[imagemSelecionada].contexto && (
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  <strong>Contexto:</strong> {opcoes[imagemSelecionada].contexto}
+                </p>
+              )}
+            </div>
+
+            {/* Confiança e Query */}
+            <div className="flex items-center justify-between gap-2">
+              <Badge variant={opcoes[imagemSelecionada].confianca >= 90 ? "default" : "secondary"}>
+                {opcoes[imagemSelecionada].confianca}% confiança
               </Badge>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground truncate">
                 Query: "{resultado.query}"
               </span>
             </div>

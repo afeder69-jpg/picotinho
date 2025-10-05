@@ -111,9 +111,13 @@ serve(async (req) => {
           continue;
         }
 
-        // Tentar baixar cada imagem até conseguir uma válida
-        let imagemUrl: string | null = null;
-        let imagemBlob: Blob | null = null;
+        // Coletar TODAS as imagens válidas (até 3)
+        const imagensValidas: Array<{
+          url: string;
+          blob: Blob;
+          titulo: string;
+          contexto: string;
+        }> = [];
 
         for (const item of searchData.items) {
           try {
@@ -141,16 +145,23 @@ serve(async (req) => {
               continue;
             }
 
-            imagemUrl = item.link;
-            imagemBlob = blob;
-            break;
+            imagensValidas.push({
+              url: item.link,
+              blob: blob,
+              titulo: item.title || '',
+              contexto: item.snippet || ''
+            });
+
+            // Coletar até 3 imagens
+            if (imagensValidas.length >= 3) break;
+            
           } catch (error) {
             console.error(`Erro ao baixar imagem: ${error}`);
             continue;
           }
         }
 
-        if (!imagemUrl || !imagemBlob) {
+        if (imagensValidas.length === 0) {
           resultados.push({
             produtoId: produto.id,
             skuGlobal: produto.sku_global,
@@ -162,40 +173,50 @@ serve(async (req) => {
           continue;
         }
 
-        // Upload para Storage
-        const fileName = `${produto.sku_global}.jpg`;
-        const filePath = `produtos-master/${fileName}`;
+        // Upload de TODAS as imagens válidas para o Storage
+        const opcoesImagens = [];
 
-        const arrayBuffer = await imagemBlob.arrayBuffer();
-        const { error: uploadError } = await supabase.storage
-          .from("produtos-master-fotos")
-          .upload(filePath, arrayBuffer, {
-            contentType: "image/jpeg",
-            upsert: true,
+        for (let i = 0; i < imagensValidas.length; i++) {
+          const imagem = imagensValidas[i];
+          const sufixo = i === 0 ? '' : `_opcao${i + 1}`;
+          const fileName = `${produto.sku_global}${sufixo}.jpg`;
+          const filePath = `produtos-master/${fileName}`;
+          
+          const arrayBuffer = await imagem.blob.arrayBuffer();
+          const { error: uploadError } = await supabase.storage
+            .from("produtos-master-fotos")
+            .upload(filePath, arrayBuffer, {
+              contentType: "image/jpeg",
+              upsert: true,
+            });
+
+          if (uploadError) {
+            console.error(`Erro ao fazer upload da opção ${i + 1}:`, uploadError);
+            continue;
+          }
+
+          // Obter URL pública
+          const { data: urlData } = supabase.storage
+            .from("produtos-master-fotos")
+            .getPublicUrl(filePath);
+
+          opcoesImagens.push({
+            imageUrl: urlData.publicUrl,
+            imagemPath: filePath,
+            titulo: imagem.titulo,
+            contexto: imagem.contexto,
+            posicao: i + 1,
+            confianca: i === 0 ? 95 : i === 1 ? 85 : 75
           });
-
-        if (uploadError) {
-          throw uploadError;
         }
 
-        // Obter URL pública
-        const { data: urlData } = supabase.storage
-          .from("produtos-master-fotos")
-          .getPublicUrl(filePath);
-
-        const publicUrl = urlData.publicUrl;
-
-        // Calcular confiança baseada na posição do resultado
-        const posicao = searchData.items.findIndex((item: any) => item.link === imagemUrl);
-        const confianca = posicao === 0 ? 95 : posicao === 1 ? 85 : 75;
+        console.log(`✅ ${opcoesImagens.length} imagens processadas para: ${produto.nome_padrao}`);
 
         resultados.push({
           produtoId: produto.id,
           skuGlobal: produto.sku_global,
           nomeProduto: produto.nome_padrao,
-          imageUrl: publicUrl,
-          imagemPath: filePath,
-          confianca,
+          opcoesImagens,
           query,
           status: "success",
         });

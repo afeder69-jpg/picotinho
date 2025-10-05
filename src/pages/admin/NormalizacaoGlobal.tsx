@@ -1229,7 +1229,12 @@ export default function NormalizacaoGlobal() {
     setImagensSugeridas(prev => 
       prev.map(item => 
         item.produtoId === novoResultado.produtoId 
-          ? novoResultado 
+          ? {
+              ...item,
+              ...novoResultado,
+              // Força atualização do key para re-render
+              _updateKey: Date.now()
+            }
           : item
       )
     );
