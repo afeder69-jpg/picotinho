@@ -64,8 +64,7 @@ serve(async (req) => {
           `q=${encodeURIComponent(query)}&` +
           `searchType=image&` +
           `imgSize=medium&` +
-          `num=3&` +
-          `safe=off`;
+          `num=3`;
 
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
