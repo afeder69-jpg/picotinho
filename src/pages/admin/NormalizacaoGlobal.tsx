@@ -25,7 +25,13 @@ import {
   Download,
   Database,
   Image,
-  Trash2
+  Trash2,
+  Globe,
+  FileText,
+  Settings,
+  User,
+  RotateCcw,
+  Loader2
 } from "lucide-react";
 import {
   Pagination,
@@ -36,6 +42,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
 
 export default function NormalizacaoGlobal() {
   const navigate = useNavigate();
@@ -63,7 +71,8 @@ export default function NormalizacaoGlobal() {
     pendentesNotasFiscais: 0,
     
     // Outros
-    totalUsuarios: 0
+    totalUsuarios: 0,
+    estimativaNovos: 0
   });
   const [candidatos, setCandidatos] = useState<any[]>([]);
   const [produtosMaster, setProdutosMaster] = useState<any[]>([]);
@@ -311,6 +320,9 @@ export default function NormalizacaoGlobal() {
         .from('profiles')
         .select('id');
 
+      // Calcular estimativa de novos produtos (30% dos pendentes)
+      const estimativaNovos = Math.round((pendentes?.length || 0) * 0.3);
+
       setStats({
         // Catálogo Master Global
         totalProdutosMaster: totalMaster || 0,
@@ -330,6 +342,7 @@ export default function NormalizacaoGlobal() {
         pendentesTotal: pendentes?.length || 0,
         pendentesOpenFoodFacts,
         pendentesNotasFiscais,
+        estimativaNovos,
         
         // Outros
         totalUsuarios: usuarios?.length || 0
@@ -1244,6 +1257,243 @@ export default function NormalizacaoGlobal() {
         </div>
       </div>
 
+      {/* Dashboard de Estatísticas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* Card 1: Catálogo Master Global */}
+        <Card className="bg-gradient-to-br from-primary/5 to-purple-50 dark:from-primary/10 dark:to-purple-950/20 border-primary/20">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Package className="h-5 w-5 text-primary" />
+                Catálogo Master Global
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center">
+              <div className="text-5xl font-bold text-primary mb-2">
+                {stats.totalProdutosMaster}
+              </div>
+              <p className="text-sm text-muted-foreground">Total de Produtos Únicos</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="bg-card rounded-lg p-3 border border-border hover:bg-accent/50 transition-colors cursor-help">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Globe className="h-4 w-4 text-blue-500" />
+                        <span className="text-xs font-medium text-muted-foreground">OpenFoodFacts</span>
+                      </div>
+                      <div className="text-2xl font-bold text-foreground">
+                        {stats.produtosOpenFoodFacts}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">produtos</p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Produtos importados do Open Food Facts</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="bg-card rounded-lg p-3 border border-border hover:bg-accent/50 transition-colors cursor-help">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="h-4 w-4 text-green-500" />
+                        <span className="text-xs font-medium text-muted-foreground">Notas Fiscais</span>
+                      </div>
+                      <div className="text-2xl font-bold text-foreground">
+                        {stats.produtosNotasFiscais}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">produtos</p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Produtos criados a partir de notas fiscais</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <div className="pt-3 border-t border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                Produtos únicos no catálogo global
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Fila de Processamento */}
+        <Card className="bg-gradient-to-br from-green-50 to-yellow-50 dark:from-green-950/20 dark:to-yellow-950/20 border-green-200 dark:border-green-900">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Settings className="h-5 w-5 text-green-600 dark:text-green-400" />
+              Fila de Processamento
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Auto-Aprovados */}
+            <div className="bg-card rounded-lg p-4 border border-green-200 dark:border-green-900">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <span className="font-semibold text-foreground">Auto-Aprovados</span>
+                <Badge variant="default" className="bg-green-600 text-white">IA ≥ 90%</Badge>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="text-2xl font-bold text-foreground">{stats.autoAprovadosTotal} candidatos</div>
+                
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-3 w-3 text-blue-500" />
+                    <span>OpenFoodFacts: {stats.autoAprovadosOpenFoodFacts}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-3 w-3 text-green-500" />
+                    <span>Notas Fiscais: {stats.autoAprovadosNotasFiscais}</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
+                    <Sparkles className="h-3 w-3 text-purple-500" />
+                    <span className="font-medium">Geraram: {stats.produtosGeradosAutoAprovados} produtos únicos</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Aprovados Manualmente */}
+            <div className="bg-card rounded-lg p-4 border border-border">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <span className="font-semibold text-foreground">Aprovados Manualmente</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground">{stats.aprovadosManuaisTotal}</div>
+              <p className="text-xs text-muted-foreground mt-1">candidatos aprovados por você</p>
+            </div>
+
+            {/* Pendentes */}
+            <div className="bg-card rounded-lg p-4 border border-yellow-200 dark:border-yellow-900">
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                <span className="font-semibold text-foreground">Aguardando Revisão</span>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="text-2xl font-bold text-foreground">{stats.pendentesTotal} candidatos</div>
+                
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-3 w-3 text-blue-500" />
+                    <span>OpenFoodFacts: {stats.pendentesOpenFoodFacts}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-3 w-3 text-green-500" />
+                    <span>Notas Fiscais: {stats.pendentesNotasFiscais}</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
+                    <TrendingUp className="h-3 w-3 text-orange-500" />
+                    <span className="font-medium">Estimativa: ~{stats.estimativaNovos} novos produtos</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                Candidatos com confiança {'<'} 90% aguardam decisão
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Importação OpenFoodFacts */}
+        <Card className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 border-orange-200 dark:border-orange-900">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Globe className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              Importação Open Food Facts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <Button
+                onClick={iniciarImportacao}
+                disabled={importando}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                {importando ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Importar Produtos
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={resetarOpenFoodFacts}
+                disabled={resetando}
+                variant="outline"
+                className="w-full border-orange-300 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950"
+              >
+                {resetando ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Resetando...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Resetar Tudo
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {importando && (
+              <div className="bg-card rounded-lg p-4 border border-border space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Progresso</span>
+                  <span className="font-medium text-foreground">{progressoImportacao}%</span>
+                </div>
+                <Progress value={progressoImportacao} className="h-2" />
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div>✓ Importados: {statsImportacao.importados}</div>
+                  <div>⊘ Duplicados: {statsImportacao.duplicados}</div>
+                  <div>✗ Erros: {statsImportacao.erros}</div>
+                </div>
+              </div>
+            )}
+
+            {stats.produtosOpenFoodFacts > 0 && (
+              <div className="bg-card rounded-lg p-4 border border-border">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium text-foreground">Última importação</span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">{stats.produtosOpenFoodFacts}</div>
+                <p className="text-xs text-muted-foreground mt-1">produtos no catálogo</p>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Database className="h-3 w-3" />
+                Base de dados pública de produtos alimentícios
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Progresso do Backfill */}
       {processandoBackfill && (
