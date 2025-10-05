@@ -1138,35 +1138,6 @@ export default function NormalizacaoGlobal() {
             Sistema de normalização universal de produtos Picotinho
           </p>
         </div>
-        
-        <div className="flex gap-2">
-          <Button 
-            onClick={processarNormalizacao}
-            disabled={processando || consolidando}
-            className="gap-2"
-          >
-            <Sparkles className="w-4 h-4" />
-            {processando ? 'Processando...' : 'Processar Novas Normalizações'}
-          </Button>
-
-          <Button 
-            onClick={() => setConfirmarConsolidacaoOpen(true)}
-            disabled={processando || consolidando}
-            variant="destructive"
-            className="gap-2 relative"
-          >
-            <Database className="w-4 h-4" />
-            {consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
-            {duplicatasEncontradas > 0 && (
-              <Badge 
-                variant="secondary" 
-                className="ml-2 bg-yellow-500 text-yellow-950 hover:bg-yellow-600"
-              >
-                {duplicatasEncontradas}
-              </Badge>
-            )}
-          </Button>
-        </div>
       </div>
 
       {/* Dashboard Otimizado */}
