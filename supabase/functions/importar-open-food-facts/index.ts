@@ -357,7 +357,8 @@ serve(async (req) => {
             percentage,
             productName: produto.product_name || produto.code,
             status,
-            message: resultado.mensagem
+            message: resultado.mensagem,
+            hasImage: !!produto.image_url
           }
         });
       }

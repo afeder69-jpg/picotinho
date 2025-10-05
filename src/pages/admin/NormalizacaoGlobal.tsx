@@ -434,7 +434,7 @@ export default function NormalizacaoGlobal() {
       
       realtimeChannel
         .on('broadcast', { event: 'progress' }, (payload: any) => {
-          const { percentage, productName, status, message, current, total } = payload.payload;
+          const { percentage, productName, status, message, current, total, hasImage } = payload.payload;
           
           setProgressoImportacao(percentage);
           
@@ -452,7 +452,9 @@ export default function NormalizacaoGlobal() {
             total: total,
             importados: status === 'success' ? prev.importados + 1 : prev.importados,
             duplicados: status === 'duplicate' ? prev.duplicados + 1 : prev.duplicados,
-            erros: status === 'error' ? prev.erros + 1 : prev.erros
+            erros: status === 'error' ? prev.erros + 1 : prev.erros,
+            comImagem: hasImage ? prev.comImagem + 1 : prev.comImagem,
+            semImagem: !hasImage ? prev.semImagem + 1 : prev.semImagem
           }));
         })
         .on('broadcast', { event: 'complete' }, (payload: any) => {
