@@ -240,50 +240,43 @@ export default function NormalizacaoGlobal() {
       // Masters sem imagem (Notas Fiscais)
       const mastersSemImagem = (totalMaster || 0) - (mastersComImagem || 0);
 
-      // ===== FILA DE PROCESSAMENTO =====
-      
-      // Auto-aprovados (status = 'auto_aprovado')
-      const { data: autoAprovados } = await supabase
+      // ===== CARREGAR TODOS OS CANDIDATOS =====
+      const { data: todosCandidatos } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select(`
           *,
           notas_imagens(origem)
         `)
-        .eq('status', 'auto_aprovado');
-      
-      // Separar auto-aprovados por origem (NULL ou sem origem = OpenFoodFacts, whatsapp = Notas Fiscais)
-      const autoAprovadosOpenFoodFacts = autoAprovados?.filter(
-        c => !c.notas_imagens || !c.notas_imagens.origem
-      ).length || 0;
-      
-      const autoAprovadosNotasFiscais = autoAprovados?.filter(
-        c => c.notas_imagens?.origem === 'whatsapp'
-      ).length || 0;
+        .order('created_at', { ascending: false });
 
-      // Aprovados manualmente (status = 'aprovado' com revisado_por não nulo)
+      // Separar por status
+      const autoAprovados = todosCandidatos?.filter(c => c.status === 'auto_aprovado') || [];
+      const pendentes = todosCandidatos?.filter(c => c.status === 'pendente') || [];
+
+      // Aprovados manualmente
       const { count: aprovadosManualmente } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'aprovado')
         .not('revisado_por', 'is', null);
-
-      // Pendentes de revisão (status = 'pendente')
-      const { data: pendentes } = await supabase
-        .from('produtos_candidatos_normalizacao')
-        .select(`
-          *,
-          notas_imagens(origem)
-        `)
-        .eq('status', 'pendente');
       
-      // Separar pendentes por origem (NULL ou sem origem = OpenFoodFacts, whatsapp = Notas Fiscais)
-      const pendentesOpenFoodFacts = pendentes?.filter(
+      // Separar auto-aprovados por origem
+      const autoAprovadosOpenFoodFacts = autoAprovados.filter(
         c => !c.notas_imagens || !c.notas_imagens.origem
-      ).length || 0;
+      ).length;
       
-      const pendentesNotasFiscais = pendentes?.filter(
+      const autoAprovadosNotasFiscais = autoAprovados.filter(
         c => c.notas_imagens?.origem === 'whatsapp'
-      ).length || 0;
+      ).length;
+      
+      // Separar pendentes por origem
+      const pendentesOpenFoodFacts = pendentes.filter(
+        c => !c.notas_imagens || !c.notas_imagens.origem
+      ).length;
+      
+      const pendentesNotasFiscais = pendentes.filter(
+        c => c.notas_imagens?.origem === 'whatsapp'
+      ).length;
 
       // Total de usuários
       const { data: usuarios } = await supabase
@@ -291,7 +284,7 @@ export default function NormalizacaoGlobal() {
         .select('id');
 
       // Calcular estimativa de novos produtos (30% dos pendentes)
-      const estimativaNovos = Math.round((pendentes?.length || 0) * 0.3);
+      const estimativaNovos = Math.round(pendentes.length * 0.3);
 
       setStats({
         // Catálogo Master Global
@@ -299,16 +292,16 @@ export default function NormalizacaoGlobal() {
         produtosOpenFoodFacts: mastersComImagem || 0,
         produtosNotasFiscais: mastersSemImagem,
         
-        // Fila de Processamento - Auto-Aprovados
-        autoAprovadosTotal: autoAprovados?.length || 0,
+        // Fila de Processamento - Auto-Aprovados (não conta mais na fila principal)
+        autoAprovadosTotal: autoAprovados.length,
         autoAprovadosOpenFoodFacts,
         autoAprovadosNotasFiscais,
         
         // Fila de Processamento - Aprovados Manualmente
         aprovadosManuaisTotal: aprovadosManualmente || 0,
         
-        // Fila de Processamento - Pendentes
-        pendentesTotal: pendentes?.length || 0,
+        // Fila de Processamento - Pendentes (APENAS pendentes reais)
+        pendentesTotal: pendentes.length, // ✅ Excluindo auto-aprovados
         pendentesOpenFoodFacts,
         pendentesNotasFiscais,
         estimativaNovos,
@@ -317,21 +310,15 @@ export default function NormalizacaoGlobal() {
         totalUsuarios: usuarios?.length || 0
       });
 
-      // Candidatos pendentes com paginação
+      // ===== PAGINAÇÃO APENAS DE PENDENTES =====
       const inicio = (paginaAtual - 1) * itensPorPagina;
-      const fim = inicio + itensPorPagina - 1;
+      const fim = inicio + itensPorPagina;
       
-      const { data: candidatosPendentes, count: totalCandidatos } = await supabase
-        .from('produtos_candidatos_normalizacao')
-        .select('*', { count: 'exact' })
-        .eq('status', 'pendente')
-        .order('confianca_ia', { ascending: false })
-        .range(inicio, fim);
-
-      setCandidatos(candidatosPendentes || []);
+      const candidatosPaginados = pendentes.slice(inicio, fim);
+      setCandidatos(candidatosPaginados);
       
-      // Calcular total de páginas
-      const totalPags = Math.ceil((totalCandidatos || 0) / itensPorPagina);
+      // Calcular total de páginas baseado apenas em pendentes
+      const totalPags = Math.ceil(pendentes.length / itensPorPagina);
       setTotalPaginas(totalPags);
 
       // Carregar produtos recentes iniciais
@@ -1484,6 +1471,15 @@ export default function NormalizacaoGlobal() {
             <Package className="w-4 h-4" />
             Catálogo Master
           </TabsTrigger>
+          <TabsTrigger value="historico" className="gap-2">
+            <Sparkles className="w-4 h-4" />
+            Histórico IA
+            {stats.autoAprovadosTotal > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {stats.autoAprovadosTotal}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="importar" className="gap-2">
             <Download className="w-4 h-4" />
             Importar Open Food Facts
@@ -1799,6 +1795,43 @@ export default function NormalizacaoGlobal() {
               </Card>
             ))
           )}
+        </TabsContent>
+
+        {/* Histórico de Decisões da IA */}
+        <TabsContent value="historico" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    Histórico de Decisões da IA
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    Produtos reconhecidos automaticamente pela IA como variações de produtos existentes no catálogo master
+                  </CardDescription>
+                </div>
+                <Badge variant="secondary" className="text-lg px-4 py-2">
+                  {stats.autoAprovadosTotal} decisões
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm text-muted-foreground mb-4">
+                <p>🤖 Estes produtos foram automaticamente aprovados pela IA com base em:</p>
+                <ul className="list-disc ml-6 mt-2 space-y-1">
+                  <li>Busca exata em sinônimos existentes (Camada 1 - ~10ms)</li>
+                  <li>Busca fuzzy com similaridade {'>'} 80% (Camada 2 - ~100ms)</li>
+                  <li>Reconhecimento da IA com confiança ≥ 80% (Camada 3)</li>
+                </ul>
+              </div>
+              
+              <div className="text-xs text-muted-foreground border-l-4 border-primary/20 pl-4 py-2 bg-primary/5 rounded-r">
+                💡 <strong>Nota:</strong> Estas decisões não aparecem na "Fila de Processamento" pois já foram resolvidas automaticamente. 
+                Elas ficam aqui no histórico para transparência e auditoria.
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Importar Open Food Facts */}

@@ -168,66 +168,99 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Buscar produtos similares no catálogo master (mais contexto para IA)
-          const { data: produtosSimilares } = await supabase
-            .from('produtos_master_global')
-            .select('*')
-            .eq('status', 'ativo')
-            .order('total_usuarios', { ascending: false })
-            .limit(20);
-
-          // Chamar Lovable AI (Gemini) para análise
-          const normalizacao = await normalizarComIA(
+          // 🔍 BUSCA MULTI-CAMADA INTELIGENTE
+          const resultadoBusca = await buscarProdutoSimilar(
+            supabase,
             produto.texto_original,
-            produtosSimilares || [],
-            lovableApiKey
+            produto.texto_original.toUpperCase().trim()
           );
 
           // Adicionar campos de imagem se existirem
-          if (produto.imagem_url) {
-            normalizacao.imagem_url = produto.imagem_url;
-          }
-          if (produto.imagem_path) {
-            normalizacao.imagem_path = produto.imagem_path;
-          }
+          let normalizacao: NormalizacaoSugerida;
 
-          // ✅ NOVA LÓGICA: Verificar se produto já existe antes de criar
-          if (normalizacao.produto_master_id) {
-            // 🎯 IA encontrou produto existente - criar candidato auto-aprovado pela IA
+          // Se encontrou match direto (Camada 1 ou 2 - sinônimo ou fuzzy)
+          if (resultadoBusca.encontrado && resultadoBusca.produto) {
+            console.log(`✅ ${resultadoBusca.metodo}: ${resultadoBusca.produto.nome_padrao} (${resultadoBusca.confianca}%)`);
+            
+            // Criar normalizacao com dados do produto encontrado
+            normalizacao = {
+              sku_global: resultadoBusca.produto.sku_global,
+              nome_padrao: resultadoBusca.produto.nome_padrao,
+              categoria: resultadoBusca.produto.categoria,
+              nome_base: resultadoBusca.produto.nome_base,
+              marca: resultadoBusca.produto.marca,
+              tipo_embalagem: resultadoBusca.produto.tipo_embalagem,
+              qtd_valor: resultadoBusca.produto.qtd_valor,
+              qtd_unidade: resultadoBusca.produto.qtd_unidade,
+              qtd_base: resultadoBusca.produto.qtd_base,
+              unidade_base: resultadoBusca.produto.unidade_base,
+              categoria_unidade: resultadoBusca.produto.categoria_unidade,
+              granel: resultadoBusca.produto.granel,
+              confianca: resultadoBusca.confianca,
+              razao: `Match ${resultadoBusca.metodo}`,
+              produto_master_id: resultadoBusca.produto.id,
+              imagem_url: produto.imagem_url || null,
+              imagem_path: produto.imagem_path || null
+            };
+
+            // Criar candidato auto-aprovado
             await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
+            
+            // Criar sinônimo se for texto novo
+            await supabase.rpc('criar_sinonimo_global', {
+              produto_master_id_input: resultadoBusca.produto.id,
+              texto_variacao_input: produto.texto_original,
+              confianca_input: resultadoBusca.confianca
+            });
+            
             totalAutoAprovados++;
-            console.log(`✅ Auto-aprovado (variação reconhecida): ${normalizacao.nome_padrao}`);
-          } else if (normalizacao.confianca >= 90) {
-            // 🔍 BUSCAR SE JÁ EXISTE produto idêntico (nome_base + marca)
-            const { data: masterExistente } = await supabase
-              .from('produtos_master_global')
-              .select('id, sku_global')
-              .eq('nome_base', normalizacao.nome_base)
-              .eq('marca', normalizacao.marca || null)
-              .eq('status', 'ativo')
-              .maybeSingle();
-
-            if (masterExistente) {
-              // ✅ Produto já existe - não criar duplicado, apenas candidato auto-aprovado
-              normalizacao.produto_master_id = masterExistente.id;
-              await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
-              totalAutoAprovados++;
-              console.log(`✅ Auto-aprovado (master existente encontrado): ${normalizacao.nome_padrao} -> ${masterExistente.sku_global}`);
-            } else {
-              // Produto realmente novo - pode criar master e candidato auto-aprovado
-              await criarProdutoMaster(supabase, normalizacao);
-              
-              // Criar candidato auto-aprovado para manter histórico da decisão da IA
-              await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
-              
-              totalAutoAprovados++;
-              console.log(`✅ Auto-aprovado (produto novo ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
-            }
+            
           } else {
-            // ⏳ ENVIAR PARA REVISÃO
-            await criarCandidato(supabase, produto, normalizacao, 'pendente');
-            totalParaRevisao++;
-            console.log(`⏳ Para revisão (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+            // Camada 3: Enviar para IA com contexto inteligente (apenas candidatos relevantes)
+            console.log(`🤖 Enviando para IA com ${resultadoBusca.candidatos?.length || 0} candidatos contextuais`);
+            
+            normalizacao = await normalizarComIA(
+              produto.texto_original,
+              resultadoBusca.candidatos || [],
+              lovableApiKey
+            );
+
+            // Adicionar campos de imagem
+            if (produto.imagem_url) {
+              normalizacao.imagem_url = produto.imagem_url;
+            }
+            if (produto.imagem_path) {
+              normalizacao.imagem_path = produto.imagem_path;
+            }
+
+            // Processar resultado da IA
+            if (normalizacao.produto_master_id) {
+              // IA encontrou variação - auto-aprovar + criar sinônimo
+              await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
+              
+              await supabase.rpc('criar_sinonimo_global', {
+                produto_master_id_input: normalizacao.produto_master_id,
+                texto_variacao_input: produto.texto_original,
+                confianca_input: normalizacao.confianca
+              });
+              
+              totalAutoAprovados++;
+              console.log(`✅ Auto-aprovado pela IA (variação reconhecida): ${normalizacao.nome_padrao}`);
+              
+            } else if (normalizacao.confianca >= 90) {
+              // Produto novo com alta confiança - criar master e auto-aprovar
+              await criarProdutoMaster(supabase, normalizacao);
+              await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
+              
+              totalAutoAprovados++;
+              console.log(`✅ Auto-aprovado pela IA (produto novo ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+              
+            } else {
+              // Baixa confiança - enviar para revisão manual
+              await criarCandidato(supabase, produto, normalizacao, 'pendente');
+              totalParaRevisao++;
+              console.log(`⏳ Para revisão (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+            }
           }
 
           // Marcar Open Food Facts como processado
@@ -321,6 +354,98 @@ Deno.serve(async (req) => {
 // =====================================================
 // FUNÇÕES AUXILIARES
 // =====================================================
+
+// ============================================
+// BUSCA MULTI-CAMADA OTIMIZADA (3 LAYERS)
+// ============================================
+async function buscarProdutoSimilar(
+  supabase: any,
+  textoOriginal: string,
+  textoNormalizado: string
+) {
+  // CAMADA 1: Busca Exata em Sinônimos (~10ms - resolve 70-80% dos casos)
+  console.log('🔍 Camada 1: Buscando em sinônimos...');
+  
+  const { data: sinonimo } = await supabase
+    .from('produtos_sinonimos_globais')
+    .select('produto_master_id, produtos_master_global(*)')
+    .ilike('texto_variacao', textoNormalizado)
+    .maybeSingle();
+  
+  if (sinonimo?.produtos_master_global) {
+    console.log(`✅ Encontrado em sinônimos: ${sinonimo.produtos_master_global.sku_global}`);
+    return {
+      encontrado: true,
+      produto: sinonimo.produtos_master_global,
+      metodo: 'sinonimo_exato',
+      confianca: 100
+    };
+  }
+
+  // CAMADA 2: Busca Fuzzy com pg_trgm (~50-200ms - resolve 15-20% dos casos)
+  console.log('🔍 Camada 2: Busca fuzzy...');
+  
+  // Tentar extrair categoria básica do nome (simplificado)
+  let categoriaEstimada = 'ALIMENTOS'; // default
+  const textoUpper = textoNormalizado.toUpperCase();
+  
+  if (textoUpper.includes('DETERGENTE') || textoUpper.includes('SABAO') || textoUpper.includes('AMACIANTE')) {
+    categoriaEstimada = 'LIMPEZA';
+  } else if (textoUpper.includes('REFRIGERANTE') || textoUpper.includes('SUCO') || textoUpper.includes('AGUA')) {
+    categoriaEstimada = 'BEBIDAS';
+  } else if (textoUpper.includes('SHAMPOO') || textoUpper.includes('SABONETE') || textoUpper.includes('PASTA')) {
+    categoriaEstimada = 'HIGIENE';
+  }
+  
+  // Buscar fuzzy por categoria usando RPC
+  const { data: similares } = await supabase.rpc('buscar_produtos_similares', {
+    texto_busca: textoNormalizado.split(' ').slice(0, 3).join(' '), // Primeiras 3 palavras
+    categoria_filtro: categoriaEstimada,
+    limite: 10,
+    threshold: 0.3
+  });
+
+  if (similares && similares.length > 0) {
+    const melhorMatch = similares[0];
+    
+    // Se similaridade > 80%, considera match forte
+    if (melhorMatch.similarity > 0.8) {
+      console.log(`✅ Match fuzzy forte: ${melhorMatch.sku_global} (${(melhorMatch.similarity * 100).toFixed(0)}%)`);
+      return {
+        encontrado: true,
+        produto: melhorMatch,
+        metodo: 'fuzzy_forte',
+        confianca: melhorMatch.similarity * 100
+      };
+    }
+
+    // Se > 60%, enviar top candidatos para IA decidir
+    if (melhorMatch.similarity > 0.6) {
+      console.log(`📋 ${similares.length} candidatos fuzzy encontrados para IA avaliar`);
+      return {
+        encontrado: false,
+        candidatos: similares.slice(0, 10),
+        metodo: 'fuzzy_candidatos'
+      };
+    }
+  }
+
+  // CAMADA 3: Busca Ampla (fallback - top 50 gerais para IA)
+  console.log('🔍 Camada 3: Busca ampla para IA...');
+  
+  const { data: topGerais } = await supabase
+    .from('produtos_master_global')
+    .select('*')
+    .eq('status', 'ativo')
+    .order('total_usuarios', { ascending: false })
+    .limit(50);
+
+  return {
+    encontrado: false,
+    candidatos: topGerais || [],
+    metodo: 'busca_ampla'
+  };
+}
 
 async function normalizarComIA(
   textoOriginal: string,
