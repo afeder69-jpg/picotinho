@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       .from('open_food_facts_staging')
       .select('id, codigo_barras, texto_original, dados_brutos, imagem_url, imagem_path')
       .eq('processada', false)
-      .limit(50);
+      .limit(100);
 
     if (offError) {
       console.warn(`⚠️ Erro ao buscar Open Food Facts: ${offError.message}`);
@@ -155,6 +155,16 @@ Deno.serve(async (req) => {
 
           if (jaExiste) {
             console.log(`⏭️  Produto já normalizado: ${produto.texto_original}`);
+            
+            // ✅ Marcar como processado no Open Food Facts
+            if (produto.origem === 'open_food_facts' && produto.open_food_facts_id) {
+              await supabase
+                .from('open_food_facts_staging')
+                .update({ processada: true })
+                .eq('id', produto.open_food_facts_id);
+              console.log(`✅ Marcado como processado: ${produto.open_food_facts_id}`);
+            }
+            
             continue;
           }
 
