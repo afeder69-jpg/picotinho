@@ -22,6 +22,9 @@ serve(async (req) => {
     const GOOGLE_API_KEY = Deno.env.get("GOOGLE_SEARCH_API_KEY");
     const GOOGLE_ENGINE_ID = Deno.env.get("GOOGLE_SEARCH_ENGINE_ID");
 
+    console.log(`✅ API Key carregada: ${GOOGLE_API_KEY ? 'SIM' : 'NÃO'}`);
+    console.log(`✅ Engine ID carregado: ${GOOGLE_ENGINE_ID ? 'SIM' : 'NÃO'}`);
+
     if (!GOOGLE_API_KEY || !GOOGLE_ENGINE_ID) {
       throw new Error("Credenciais do Google não configuradas");
     }
@@ -54,7 +57,8 @@ serve(async (req) => {
 
         const query = queryParts.join(" ");
 
-        console.log(`Buscando imagem para: ${query}`);
+        console.log(`🔍 Buscando imagem para: ${query}`);
+        console.log(`📡 Parâmetros: imgSize=MEDIUM, num=3`);
 
         // Chamar Google Custom Search API
         const searchUrl =
@@ -63,14 +67,15 @@ serve(async (req) => {
           `cx=${GOOGLE_ENGINE_ID}&` +
           `q=${encodeURIComponent(query)}&` +
           `searchType=image&` +
-          `imgSize=medium&` +
+          `imgSize=MEDIUM&` +
           `num=3`;
 
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
 
         if (searchData.error) {
-          throw new Error(searchData.error.message);
+          console.error('❌ Erro detalhado da API Google:', JSON.stringify(searchData.error, null, 2));
+          throw new Error(searchData.error.message || 'Erro desconhecido da API');
         }
 
         if (!searchData.items || searchData.items.length === 0) {
