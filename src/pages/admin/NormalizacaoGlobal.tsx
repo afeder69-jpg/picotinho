@@ -130,6 +130,10 @@ export default function NormalizacaoGlobal() {
   const [consolidando, setConsolidando] = useState(false);
   const [relatorioConsolidacao, setRelatorioConsolidacao] = useState<any>(null);
 
+  // Estados para reset Open Food Facts
+  const [resetando, setResetando] = useState(false);
+  const [logReset, setLogReset] = useState<string[]>([]);
+
   useEffect(() => {
     verificarAcessoMaster();
   }, []);
@@ -611,6 +615,50 @@ export default function NormalizacaoGlobal() {
       });
     } finally {
       setConsolidando(false);
+    }
+  }
+
+  async function resetarOpenFoodFacts() {
+    const confirmacao = confirm(
+      '⚠️ ATENÇÃO: Esta ação vai deletar ~314 produtos master antigos do Open Food Facts e forçar reprocessamento via IA.\n\n' +
+      '✅ Preservará: 18 masters recentes (já processados pela IA) + ~86 masters de notas fiscais\n\n' +
+      'Você tem certeza?'
+    );
+
+    if (!confirmacao) return;
+
+    setResetando(true);
+    setLogReset([]);
+    
+    try {
+      toast({
+        title: "Reset iniciado",
+        description: "Removendo masters antigos do Open Food Facts...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('resetar-open-food-facts');
+
+      if (error) throw error;
+
+      setLogReset(data.log || []);
+      
+      toast({
+        title: "Reset concluído! 🎉",
+        description: `${data.stats.mastersExcluidos} masters deletados. ${data.stats.stagingResetados} produtos prontos para reprocessamento.`,
+      });
+
+      await carregarDados();
+
+    } catch (error: any) {
+      console.error('Erro ao resetar:', error);
+      toast({
+        title: "Erro no reset",
+        description: error.message,
+        variant: "destructive"
+      });
+      setLogReset([`❌ Erro: ${error.message}`]);
+    } finally {
+      setResetando(false);
     }
   }
 
@@ -1314,6 +1362,64 @@ export default function NormalizacaoGlobal() {
         </Card>
       )}
 
+      {/* Progresso do Reset OFF */}
+      {resetando && (
+        <Card className="border-orange-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="w-5 h-5 animate-pulse" />
+              Resetando Open Food Facts
+            </CardTitle>
+            <CardDescription>
+              Removendo masters antigos e preparando reprocessamento...
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Log do Reset */}
+      {logReset.length > 0 && (
+        <Card className="border-green-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              Reset Concluído
+            </CardTitle>
+            <CardDescription>
+              Log da operação
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="max-h-60 overflow-y-auto space-y-1 font-mono text-sm bg-muted p-4 rounded">
+              {logReset.map((linha, idx) => (
+                <div key={idx} className={
+                  linha.startsWith('✅') ? 'text-green-600' :
+                  linha.startsWith('❌') ? 'text-destructive' :
+                  linha.startsWith('⚠️') ? 'text-orange-500' :
+                  linha.startsWith('🎯') ? 'text-primary font-bold' :
+                  'text-foreground'
+                }>
+                  {linha}
+                </div>
+              ))}
+            </div>
+
+            <Button 
+              onClick={() => setLogReset([])} 
+              variant="outline" 
+              className="w-full"
+            >
+              Fechar
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Relatório de Consolidação */}
       {relatorioConsolidacao && (
         <Card className="border-green-500">
@@ -1790,6 +1896,15 @@ export default function NormalizacaoGlobal() {
                     disabled={importando}
                   >
                     Limpar
+                  </Button>
+                  <Button 
+                    variant="destructive"
+                    onClick={resetarOpenFoodFacts}
+                    disabled={resetando || importando}
+                    className="gap-2 ml-auto"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {resetando ? 'Resetando...' : 'Resetar Masters Antigos OFF'}
                   </Button>
                 </div>
               </div>
