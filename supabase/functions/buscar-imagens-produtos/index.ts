@@ -49,6 +49,7 @@ serve(async (req) => {
         // Construir query de busca
         // Se há uma query customizada para este produto, usar ela
         const customQuery = customQueries?.[produto.id];
+        const isCustomSearch = !!customQuery;
         
         const query = customQuery || [
           produto.marca,
@@ -61,6 +62,16 @@ serve(async (req) => {
         console.log(`🔍 Buscando imagem para: ${query}`);
         console.log(`${customQuery ? '🎯 Query customizada' : '📋 Query padrão'}`);
         console.log(`📡 Parâmetros: imgSize=MEDIUM, num=3`);
+        
+        // Se for busca customizada, deletar imagem antiga primeiro
+        if (isCustomSearch) {
+          const oldFilePath = `produtos-master/${produto.sku_global}.jpg`;
+          console.log(`🗑️ Deletando imagem antiga: ${oldFilePath}`);
+          
+          await supabase.storage
+            .from("produtos-master-fotos")
+            .remove([oldFilePath]);
+        }
 
         // Chamar Google Custom Search API
         const searchUrl =
