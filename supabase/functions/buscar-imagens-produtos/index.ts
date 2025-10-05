@@ -33,12 +33,20 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Buscar produtos sem imagem
-    const { data: produtos, error: produtosError } = await supabase
+    // Buscar produtos - se houver customQueries, permite buscar produtos que já têm imagem
+    const hasCustomQueries = customQueries && Object.keys(customQueries).length > 0;
+    
+    let query = supabase
       .from("produtos_master_global")
       .select("*")
-      .in("id", produtoIds)
-      .is("imagem_url", null);
+      .in("id", produtoIds);
+    
+    // Apenas filtrar por imagem nula se NÃO for busca customizada
+    if (!hasCustomQueries) {
+      query = query.is("imagem_url", null);
+    }
+    
+    const { data: produtos, error: produtosError } = await query;
 
     if (produtosError) throw produtosError;
 
