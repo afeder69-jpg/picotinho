@@ -1212,16 +1212,21 @@ export default function NormalizacaoGlobal() {
     }
   };
 
-  const handleImagemAprovada = () => {
+  const handleImagemAprovada = (produtoId: string) => {
+    setImagensSugeridas(prev => prev.filter(item => item.produtoId !== produtoId));
     setTotalProcessadoImagens(prev => prev + 1);
     carregarDados();
+    toast({
+      title: "✅ Imagem aprovada!",
+      description: "Card removido da lista",
+    });
   };
 
-  const handleImagemRejeitada = () => {
-    // Apenas remove da lista de sugestões
+  const handleImagemRejeitada = (produtoId: string) => {
+    setImagensSugeridas(prev => prev.filter(item => item.produtoId !== produtoId));
     toast({
       title: "Imagem rejeitada",
-      description: "Você pode tentar uma nova busca depois",
+      description: "Card removido. Você pode buscar novamente depois",
     });
   };
 

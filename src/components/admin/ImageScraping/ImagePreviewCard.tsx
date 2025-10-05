@@ -29,8 +29,8 @@ interface ImagePreviewCardProps {
     status: "success" | "error";
     error?: string;
   };
-  onAprovado: () => void;
-  onRejeitado: () => void;
+  onAprovado: (produtoId: string) => void;
+  onRejeitado: (produtoId: string) => void;
   onResultadoAtualizado?: (novoResultado: ImagePreviewCardProps['resultado']) => void;
 }
 
@@ -85,7 +85,7 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
         description: `Opção ${imagemEscolhida.posicao}/${opcoes.length} selecionada para ${resultado.nomeProduto}`,
       });
 
-      onAprovado();
+      onAprovado(resultado.produtoId);
     } catch (error: any) {
       toast({
         title: "Erro ao aprovar",
@@ -98,7 +98,7 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
   };
 
   const rejeitarImagem = () => {
-    onRejeitado();
+    onRejeitado(resultado.produtoId);
   };
 
   const editarBusca = () => {
