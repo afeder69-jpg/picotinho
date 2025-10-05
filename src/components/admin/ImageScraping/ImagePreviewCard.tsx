@@ -30,6 +30,7 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
   const [editando, setEditando] = useState(false);
   const [novaQuery, setNovaQuery] = useState(resultado.query || "");
   const [buscando, setBuscando] = useState(false);
+  const [imagemKey, setImagemKey] = useState(Date.now());
 
   const aprovarImagem = async () => {
     if (resultado.status !== "success" || !resultado.imageUrl) return;
@@ -101,6 +102,13 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
 
       const novoResultado = data.resultados[0];
       
+      console.log("🔍 Resultado anterior:", {
+        imageUrl: resultado.imageUrl,
+        confianca: resultado.confianca
+      });
+
+      console.log("🆕 Novo resultado:", novoResultado);
+      
       if (novoResultado.status === "success") {
         toast({
           title: "✅ Nova imagem encontrada!",
@@ -109,7 +117,12 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
         
         // Atualizar o card com o novo resultado
         if (onResultadoAtualizado) {
-          onResultadoAtualizado(novoResultado);
+          onResultadoAtualizado({
+            ...resultado,
+            ...novoResultado,
+            query: novaQuery,
+          });
+          setImagemKey(Date.now());
         }
         
         setEditando(false);
@@ -145,6 +158,7 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
           <>
             <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">
               <img
+                key={imagemKey}
                 src={resultado.imageUrl}
                 alt={resultado.nomeProduto}
                 className="w-full h-full object-contain"
