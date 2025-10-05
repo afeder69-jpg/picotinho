@@ -71,25 +71,35 @@ serve(async (req) => {
         console.log(`${customQuery ? '🎯 Query customizada' : '📋 Query padrão'}`);
         console.log(`📡 Parâmetros: imgSize=MEDIUM, num=3`);
         
-        // Se for busca customizada, deletar imagem antiga primeiro
+        // Se for busca customizada, deletar TODAS as opções antigas
         if (isCustomSearch) {
-          const oldFilePath = `produtos-master/${produto.sku_global}.jpg`;
-          console.log(`🗑️ Deletando imagem antiga: ${oldFilePath}`);
+          const pathsToDelete = [
+            `produtos-master/${produto.sku_global}.jpg`,
+            `produtos-master/${produto.sku_global}_opcao2.jpg`,
+            `produtos-master/${produto.sku_global}_opcao3.jpg`
+          ];
+          console.log(`🗑️ Deletando imagens antigas: ${pathsToDelete.join(', ')}`);
           
           await supabase.storage
             .from("produtos-master-fotos")
-            .remove([oldFilePath]);
+            .remove(pathsToDelete);
         }
 
-        // Chamar Google Custom Search API
+        // Adicionar randomização e timestamp para forçar resultados diferentes
+        const randomOffset = Math.floor(Math.random() * 5); // 0-4
+        const timestamp = Date.now();
+        const searchQuery = `${query} ${isCustomSearch ? `t:${timestamp}` : ''}`;
+
+        // Chamar Google Custom Search API com mais resultados
         const searchUrl =
           `https://www.googleapis.com/customsearch/v1?` +
           `key=${GOOGLE_API_KEY}&` +
           `cx=${GOOGLE_ENGINE_ID}&` +
-          `q=${encodeURIComponent(query)}&` +
+          `q=${encodeURIComponent(searchQuery)}&` +
           `searchType=image&` +
           `imgSize=MEDIUM&` +
-          `num=3`;
+          `start=${randomOffset + 1}&` +
+          `num=10`;
 
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
@@ -121,27 +131,37 @@ serve(async (req) => {
 
         for (const item of searchData.items) {
           try {
+            console.log(`📥 Tentando baixar: ${item.link}`);
+            
             const imageResponse = await fetch(item.link, {
               headers: {
                 "User-Agent": "Mozilla/5.0",
               },
+              signal: AbortSignal.timeout(5000) // 5s timeout
             });
 
-            if (!imageResponse.ok) continue;
+            if (!imageResponse.ok) {
+              console.log(`❌ Resposta não OK: ${imageResponse.status}`);
+              continue;
+            }
 
             const contentType = imageResponse.headers.get("content-type");
+            console.log(`📄 Content-Type: ${contentType}`);
+            
             if (
               !contentType ||
               !["image/jpeg", "image/png", "image/webp"].includes(contentType)
             ) {
+              console.log(`⚠️ Tipo inválido: ${contentType}`);
               continue;
             }
 
             const blob = await imageResponse.blob();
+            console.log(`📦 Blob baixado: ${blob.size} bytes`);
 
             // Validar tamanho (max 5MB)
             if (blob.size > 5 * 1024 * 1024) {
-              console.log(`Imagem muito grande: ${blob.size} bytes`);
+              console.log(`⚠️ Imagem muito grande: ${blob.size} bytes`);
               continue;
             }
 
@@ -152,11 +172,13 @@ serve(async (req) => {
               contexto: item.snippet || ''
             });
 
+            console.log(`✅ Imagem ${imagensValidas.length} adicionada`);
+
             // Coletar até 3 imagens
             if (imagensValidas.length >= 3) break;
             
           } catch (error) {
-            console.error(`Erro ao baixar imagem: ${error}`);
+            console.error(`❌ Erro ao baixar imagem ${item.link}:`, error);
             continue;
           }
         }

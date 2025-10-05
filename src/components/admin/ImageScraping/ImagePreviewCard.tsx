@@ -97,8 +97,26 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
     }
   };
 
-  const rejeitarImagem = () => {
-    onRejeitado(resultado.produtoId);
+  const rejeitarImagem = async () => {
+    try {
+      // Deletar todas as imagens associadas do storage
+      const pathsToDelete = opcoes.map(op => op.imagemPath);
+      
+      if (pathsToDelete.length > 0) {
+        const { error } = await supabase.storage
+          .from("produtos-master-fotos")
+          .remove(pathsToDelete);
+        
+        if (error) {
+          console.error("Erro ao deletar imagens:", error);
+        }
+      }
+      
+      onRejeitado(resultado.produtoId);
+    } catch (error) {
+      console.error("Erro ao rejeitar:", error);
+      onRejeitado(resultado.produtoId);
+    }
   };
 
   const editarBusca = () => {
