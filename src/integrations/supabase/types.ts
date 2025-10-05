@@ -673,6 +673,45 @@ export type Database = {
         }
         Relationships: []
       }
+      open_food_facts_controle: {
+        Row: {
+          com_imagem: boolean
+          created_at: string
+          id: string
+          importado_em: string
+          limite: number
+          pagina: number
+          produtos_duplicados: number
+          produtos_erros: number
+          produtos_importados: number
+          total_produtos_retornados: number
+        }
+        Insert: {
+          com_imagem?: boolean
+          created_at?: string
+          id?: string
+          importado_em?: string
+          limite?: number
+          pagina: number
+          produtos_duplicados?: number
+          produtos_erros?: number
+          produtos_importados?: number
+          total_produtos_retornados?: number
+        }
+        Update: {
+          com_imagem?: boolean
+          created_at?: string
+          id?: string
+          importado_em?: string
+          limite?: number
+          pagina?: number
+          produtos_duplicados?: number
+          produtos_erros?: number
+          produtos_importados?: number
+          total_produtos_retornados?: number
+        }
+        Relationships: []
+      }
       open_food_facts_staging: {
         Row: {
           codigo_barras: string

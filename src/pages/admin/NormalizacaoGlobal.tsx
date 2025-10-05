@@ -114,6 +114,8 @@ export default function NormalizacaoGlobal() {
   const [logsImportacao, setLogsImportacao] = useState<string[]>([]);
   const [limiteImportar, setLimiteImportar] = useState(50);
   const [apenasComImagem, setApenasComImagem] = useState(true);
+  const [paginaSelecionada, setPaginaSelecionada] = useState(1);
+  const [paginasImportadas, setPaginasImportadas] = useState<number[]>([]);
 
   // Estados para consolidação de duplicados
   const [consolidando, setConsolidando] = useState(false);
@@ -122,6 +124,13 @@ export default function NormalizacaoGlobal() {
   useEffect(() => {
     verificarAcessoMaster();
   }, []);
+
+  // Carregar páginas importadas ao montar
+  useEffect(() => {
+    if (isMaster) {
+      carregarPaginasImportadas();
+    }
+  }, [isMaster]);
 
   // useEffect para busca dinâmica com debounce
   useEffect(() => {
@@ -388,6 +397,22 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+  async function carregarPaginasImportadas() {
+    try {
+      const { data, error } = await supabase
+        .from('open_food_facts_controle')
+        .select('pagina')
+        .order('pagina', { ascending: true });
+      
+      if (error) throw error;
+      
+      const paginas = data?.map(item => item.pagina) || [];
+      setPaginasImportadas(paginas);
+    } catch (error: any) {
+      console.error('Erro ao carregar páginas importadas:', error);
+    }
+  }
+
   async function iniciarImportacao() {
     setImportando(true);
     setLogsImportacao([]);
@@ -397,13 +422,13 @@ export default function NormalizacaoGlobal() {
     try {
       toast({
         title: "Importação iniciada",
-        description: "Buscando produtos do Open Food Facts...",
+        description: `Importando página ${paginaSelecionada} do Open Food Facts...`,
       });
 
       const { data, error } = await supabase.functions.invoke('importar-open-food-facts', {
         body: {
           limite: limiteImportar,
-          pagina: 1,
+          pagina: paginaSelecionada,
           comImagem: apenasComImagem
         }
       });
@@ -413,6 +438,9 @@ export default function NormalizacaoGlobal() {
       setStatsImportacao(data || {});
       setLogsImportacao(data.logs || []);
       setProgressoImportacao(100);
+      
+      // Atualizar lista de páginas importadas
+      await carregarPaginasImportadas();
       
       toast({
         title: "Importação concluída!",
@@ -1530,7 +1558,7 @@ export default function NormalizacaoGlobal() {
             <CardContent className="space-y-6">
               {/* Painel de Configuração */}
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="limite">Limite de produtos</Label>
                     <select
@@ -1547,6 +1575,22 @@ export default function NormalizacaoGlobal() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="pagina">Página a importar</Label>
+                    <Input
+                      id="pagina"
+                      type="number"
+                      min={1}
+                      value={paginaSelecionada}
+                      onChange={(e) => setPaginaSelecionada(Number(e.target.value))}
+                      className={paginasImportadas.includes(paginaSelecionada) ? 'border-red-500 bg-red-50' : ''}
+                      placeholder="1"
+                    />
+                    {paginasImportadas.includes(paginaSelecionada) && (
+                      <p className="text-xs text-red-600">⚠️ Página já importada</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="comImagem" className="flex items-center gap-2">
                       <Switch
                         id="comImagem"
@@ -1557,6 +1601,25 @@ export default function NormalizacaoGlobal() {
                     </Label>
                   </div>
                 </div>
+
+                {/* Lista de páginas importadas */}
+                {paginasImportadas.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">Páginas já importadas ({paginasImportadas.length})</Label>
+                    <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-md max-h-24 overflow-y-auto">
+                      {paginasImportadas.map(pagina => (
+                        <Badge
+                          key={pagina}
+                          variant="secondary"
+                          className="cursor-pointer hover:bg-secondary/80"
+                          onClick={() => setPaginaSelecionada(pagina)}
+                        >
+                          {pagina}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <Button 

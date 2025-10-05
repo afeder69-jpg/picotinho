@@ -336,8 +336,31 @@ serve(async (req) => {
 
     console.log(`✅ Importação concluída: ${resultados.importados} importados, ${resultados.duplicados} duplicados, ${resultados.erros} erros`);
 
+    // 📊 Registrar importação no controle
+    try {
+      const { error: controleError } = await supabaseClient
+        .from('open_food_facts_controle')
+        .insert({
+          pagina,
+          limite,
+          com_imagem: comImagem,
+          total_produtos_retornados: produtos.length,
+          produtos_importados: resultados.importados,
+          produtos_duplicados: resultados.duplicados,
+          produtos_erros: resultados.erros,
+        });
+      
+      if (controleError) {
+        console.warn(`⚠️ Erro ao registrar controle: ${controleError.message}`);
+      } else {
+        console.log(`✅ Controle registrado: página ${pagina}`);
+      }
+    } catch (err) {
+      console.warn(`⚠️ Erro ao registrar controle:`, err);
+    }
+
     return new Response(
-      JSON.stringify(resultados),
+      JSON.stringify({ ...resultados, pagina }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
