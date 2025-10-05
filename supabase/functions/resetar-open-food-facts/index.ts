@@ -54,7 +54,7 @@ serve(async (req) => {
       .delete()
       .eq('status', 'ativo')
       .lt('created_at', '2025-10-05 13:00:00')
-      .or('codigo_barras.is.null,codigo_barras.eq.')
+      .is('codigo_barras', null)
       .select('id, nome_padrao');
 
     if (errorMasters) {
