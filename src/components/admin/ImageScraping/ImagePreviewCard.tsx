@@ -159,7 +159,7 @@ export function ImagePreviewCard({ resultado, onAprovado, onRejeitado, onResulta
             <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">
               <img
                 key={imagemKey}
-                src={resultado.imageUrl}
+                src={`${resultado.imageUrl}?t=${imagemKey}`}
                 alt={resultado.nomeProduto}
                 className="w-full h-full object-contain"
                 loading="lazy"
