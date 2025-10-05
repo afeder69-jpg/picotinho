@@ -43,9 +43,18 @@ export default function NormalizacaoGlobal() {
   const [loading, setLoading] = useState(true);
   const [isMaster, setIsMaster] = useState(false);
   const [stats, setStats] = useState({
+    // Catálogo Master
     totalProdutosMaster: 0,
+    masterOpenFoodFacts: 0,
+    masterAutoAprovados: 0,
+    masterRevisadosManualmente: 0,
+    
+    // Fila de Normalização
     pendentesRevisao: 0,
-    autoAprovados: 0,
+    aprovadosNovoMaster: 0,
+    aprovadosMesclados: 0,
+    
+    // Outros
     totalUsuarios: 0
   });
   const [candidatos, setCandidatos] = useState<any[]>([]);
@@ -199,23 +208,79 @@ export default function NormalizacaoGlobal() {
 
   async function carregarDados() {
     try {
-      // Estatísticas
-      const [
-        { count: totalMaster },
-        { count: pendentes },
-        { count: autoAprovados },
-        { data: usuarios }
-      ] = await Promise.all([
-        supabase.from('produtos_master_global').select('*', { count: 'exact', head: true }),
-        supabase.from('produtos_candidatos_normalizacao').select('*', { count: 'exact', head: true }).eq('status', 'pendente'),
-        supabase.from('produtos_candidatos_normalizacao').select('*', { count: 'exact', head: true }).eq('status', 'aprovado'),
-        supabase.from('profiles').select('id')
-      ]);
+      // Query 1: Total de produtos master
+      const { count: totalMaster } = await supabase
+        .from('produtos_master_global')
+        .select('*', { count: 'exact', head: true });
+
+      // Query 2: Masters de Open Food Facts (que não têm candidatos associados)
+      const { data: todosCandidatos } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('sugestao_produto_master')
+        .not('sugestao_produto_master', 'is', null);
+      
+      const idsComCandidatos = new Set(todosCandidatos?.map(c => c.sugestao_produto_master) || []);
+      const totalMastersComCandidatos = idsComCandidatos.size;
+      const masterOpenFoodFacts = (totalMaster || 0) - totalMastersComCandidatos;
+
+      // Query 3: Masters criados por auto-aprovação (confiança >= 90%)
+      const { data: candidatosAutoAprovados } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('sugestao_produto_master')
+        .eq('status', 'aprovado')
+        .gte('confianca_ia', 90)
+        .not('sugestao_produto_master', 'is', null);
+      
+      const mastersAutoAprovados = new Set(candidatosAutoAprovados?.map(c => c.sugestao_produto_master) || []).size;
+
+      // Query 4: Masters criados por revisão manual (confiança < 90%)
+      const { data: candidatosRevisados } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('sugestao_produto_master')
+        .eq('status', 'aprovado')
+        .lt('confianca_ia', 90)
+        .not('sugestao_produto_master', 'is', null);
+      
+      const mastersRevisados = new Set(candidatosRevisados?.map(c => c.sugestao_produto_master) || []).size;
+
+      // Query 5: Candidatos pendentes de revisão
+      const { count: pendentes } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pendente');
+
+      // Query 6: Aprovados que viraram novo master
+      const { count: aprovadosNovoMaster } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'aprovado')
+        .not('sugestao_produto_master', 'is', null);
+
+      // Query 7: Aprovados que foram mesclados (não criaram master)
+      const { count: aprovadosMesclados } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'aprovado')
+        .is('sugestao_produto_master', null);
+
+      // Query 8: Total de usuários
+      const { data: usuarios } = await supabase
+        .from('profiles')
+        .select('id');
 
       setStats({
+        // Catálogo Master
         totalProdutosMaster: totalMaster || 0,
+        masterOpenFoodFacts: masterOpenFoodFacts,
+        masterAutoAprovados: mastersAutoAprovados,
+        masterRevisadosManualmente: mastersRevisados,
+        
+        // Fila de Normalização
         pendentesRevisao: pendentes || 0,
-        autoAprovados: autoAprovados || 0,
+        aprovadosNovoMaster: aprovadosNovoMaster || 0,
+        aprovadosMesclados: aprovadosMesclados || 0,
+        
+        // Outros
         totalUsuarios: usuarios?.length || 0
       });
 
@@ -1084,51 +1149,99 @@ export default function NormalizacaoGlobal() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Produtos Master</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProdutosMaster}</div>
-            <p className="text-xs text-muted-foreground">no catálogo universal</p>
-          </CardContent>
-        </Card>
+      {/* Seção 1: Catálogo Master */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Package className="h-5 w-5 text-primary" />
+          Catálogo Master
+        </h3>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Total de Produtos</CardTitle>
+              <Package className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{stats.totalProdutosMaster}</div>
+              <p className="text-xs text-muted-foreground">produtos no catálogo</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Pendentes Revisão</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.pendentesRevisao}</div>
-            <p className="text-xs text-muted-foreground">aguardando sua aprovação</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Open Food Facts</CardTitle>
+              <Database className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{stats.masterOpenFoodFacts}</div>
+              <p className="text-xs text-muted-foreground">importados automaticamente</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Auto-Aprovados</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.autoAprovados}</div>
-            <p className="text-xs text-muted-foreground">confiança ≥ 90%</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Auto-Aprovados</CardTitle>
+              <Sparkles className="h-4 w-4 text-purple-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">{stats.masterAutoAprovados}</div>
+              <p className="text-xs text-muted-foreground">confiança ≥ 90%</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Usuários</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalUsuarios}</div>
-            <p className="text-xs text-muted-foreground">usando o sistema</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Revisados Manualmente</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-yellow-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{stats.masterRevisadosManualmente}</div>
+              <p className="text-xs text-muted-foreground">aprovados por masters</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Seção 2: Fila de Normalização */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          Fila de Normalização
+        </h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Pendentes de Revisão</CardTitle>
+              <Clock className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{stats.pendentesRevisao}</div>
+              <p className="text-xs text-muted-foreground">aguardando sua análise</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Aprovados → Novo Master</CardTitle>
+              <TrendingUp className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{stats.aprovadosNovoMaster}</div>
+              <p className="text-xs text-muted-foreground">criaram produto master</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Aprovados → Mesclado</CardTitle>
+              <Shield className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{stats.aprovadosMesclados}</div>
+              <p className="text-xs text-muted-foreground">mesclados com existentes</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Progresso do Backfill */}
