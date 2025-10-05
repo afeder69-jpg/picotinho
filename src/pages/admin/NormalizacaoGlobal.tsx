@@ -208,7 +208,7 @@ export default function NormalizacaoGlobal() {
       ] = await Promise.all([
         supabase.from('produtos_master_global').select('*', { count: 'exact', head: true }),
         supabase.from('produtos_candidatos_normalizacao').select('*', { count: 'exact', head: true }).eq('status', 'pendente'),
-        supabase.from('produtos_candidatos_normalizacao').select('*', { count: 'exact', head: true }).eq('status', 'auto_aprovado'),
+        supabase.from('produtos_candidatos_normalizacao').select('*', { count: 'exact', head: true }).eq('status', 'aprovado'),
         supabase.from('profiles').select('id')
       ]);
 
