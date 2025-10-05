@@ -32,7 +32,8 @@ import {
   Settings,
   User,
   RotateCcw,
-  Loader2
+  Loader2,
+  ImageOff
 } from "lucide-react";
 import {
   Pagination,
@@ -54,6 +55,8 @@ export default function NormalizacaoGlobal() {
   const [stats, setStats] = useState({
     // Catálogo Master Global
     totalProdutosMaster: 0,
+    produtosComImagem: 0,
+    produtosSemImagem: 0,
     produtosOpenFoodFacts: 0,
     produtosNotasFiscais: 0,
     
@@ -284,6 +287,8 @@ export default function NormalizacaoGlobal() {
       setStats({
         // Catálogo Master Global
         totalProdutosMaster: totalMaster || 0,
+        produtosComImagem: mastersComImagem || 0,
+        produtosSemImagem: mastersSemImagem,
         produtosOpenFoodFacts: mastersComImagem || 0,
         produtosNotasFiscais: mastersSemImagem,
         
@@ -1215,6 +1220,31 @@ export default function NormalizacaoGlobal() {
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Produtos criados a partir de notas fiscais</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 border-2 border-orange-300 dark:border-orange-700 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors cursor-help">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ImageOff className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                        <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">Produtos sem Fotos</span>
+                      </div>
+                      <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">
+                        {stats.produtosSemImagem}
+                        <span className="text-sm font-normal text-muted-foreground ml-2">
+                          de {stats.totalProdutosMaster}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {stats.produtosComImagem} produtos já possuem imagem
+                      </div>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Produtos do catálogo master que ainda não possuem imagem</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
