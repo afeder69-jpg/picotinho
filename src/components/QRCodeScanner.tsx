@@ -54,25 +54,19 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
       scannerRef.current = html5QrCode;
 
       const config = {
-        fps: 30, // ⚡ FPS aumentado para 30
+        fps: 30,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-          // 📦 qrbox flexível (70% da menor dimensão)
           const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
           const qrboxSize = Math.floor(minEdge * 0.7);
           console.log('📐 Dimensões da câmera:', viewfinderWidth, 'x', viewfinderHeight);
           console.log('📦 Área de detecção (qrbox):', qrboxSize, 'x', qrboxSize);
           return { width: qrboxSize, height: qrboxSize };
         },
-      };
-
-      const videoConstraints = {
-        facingMode: 'environment',
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
+        aspectRatio: 1920 / 1080,
       };
 
       await html5QrCode.start(
-        videoConstraints,
+        { facingMode: 'environment' },
         config,
         handleWebScanSuccess,
         handleWebScanError
