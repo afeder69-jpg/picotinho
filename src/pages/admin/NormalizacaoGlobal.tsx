@@ -1164,15 +1164,19 @@ export default function NormalizacaoGlobal() {
       // Se auto-aprovar, atualizar produtos com confiança >= 80%
       if (autoAprovar) {
         const paraAprovar = resultados.filter(
-          (r: any) => r.status === 'success' && r.confianca >= 80
+          (r: any) => 
+            r.status === 'success' && 
+            r.opcoesImagens?.length > 0 &&
+            r.opcoesImagens[0].confianca >= 80
         );
 
         for (const resultado of paraAprovar) {
+          const primeiraImagem = resultado.opcoesImagens[0];
           await supabase
             .from('produtos_master_global')
             .update({
-              imagem_url: resultado.imageUrl,
-              imagem_path: resultado.imagemPath,
+              imagem_url: primeiraImagem.imageUrl,
+              imagem_path: primeiraImagem.imagemPath,
               imagem_adicionada_em: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })
@@ -1186,7 +1190,9 @@ export default function NormalizacaoGlobal() {
 
         // Mostrar apenas os que precisam revisão
         setImagensSugeridas(resultados.filter((r: any) => 
-          r.status === 'error' || r.confianca < 80
+          r.status === 'error' || 
+          !r.opcoesImagens?.length ||
+          r.opcoesImagens[0].confianca < 80
         ));
         setTotalProcessadoImagens(prev => prev + paraAprovar.length);
       } else {
