@@ -81,30 +81,55 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   const startNativeScanner = async () => {
     try {
+      console.log('🔵 Iniciando scanner nativo Capacitor...');
       setIsScanning(true);
       
-      const result = await BarcodeScanner.scan({
-        formats: [],
+      // Criar promise do scan com timeout de 30s
+      const scanPromise = BarcodeScanner.scan({
+        formats: [], // Aceitar todos os formatos (incluindo QR_CODE)
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: Scanner não detectou QR Code em 30s')), 30000)
+      );
+      
+      const result = await Promise.race([scanPromise, timeoutPromise]) as any;
+      
+      console.log('📦 Resultado completo do scan:', JSON.stringify(result, null, 2));
 
       if (result.barcodes && result.barcodes.length > 0) {
         const code = result.barcodes[0].rawValue;
-        console.log('QR Code escaneado (nativo):', code);
+        console.log('✅ QR Code lido com sucesso (nativo):', code);
         onScanSuccess(code);
+        setIsScanning(false);
+      } else {
+        console.log('⚠️ Nenhum código detectado pelo scanner nativo');
+        setIsScanning(false);
+        toast({
+          title: "Nenhum QR Code detectado",
+          description: "Tente posicionar melhor a câmera",
+        });
       }
       
-      setIsScanning(false);
     } catch (error) {
-      console.error('Erro no scanner nativo:', error);
+      console.error('❌ Erro completo no scanner nativo:', error);
       setIsScanning(false);
       
-      // Fallback para scanner web
-      toast({
-        title: "Scanner nativo falhou",
-        description: "Tentando com scanner web...",
-      });
-      setUseNativeScanner(false);
-      setIsScanning(true);
+      // Fallback para scanner web apenas se for erro de API/permissão
+      if (error instanceof Error && !error.message.includes('Timeout')) {
+        toast({
+          title: "Scanner nativo falhou",
+          description: "Tentando com scanner web...",
+        });
+        setUseNativeScanner(false);
+        setIsScanning(true);
+      } else {
+        toast({
+          title: "Erro no scanner",
+          description: error instanceof Error ? error.message : "Tente novamente",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -122,16 +147,19 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
   const handleWebScan = (detectedCodes: any) => {
     if (detectedCodes && detectedCodes.length > 0) {
       const code = detectedCodes[0].rawValue;
-      console.log('QR Code escaneado (web):', code);
+      console.log('✅ QR Code lido com sucesso (web):', code);
       onScanSuccess(code);
+    } else {
+      console.log('⚠️ Scanner web ativo mas nenhum código detectado ainda');
     }
   };
 
   const handleWebError = (error: any) => {
-    console.error('Erro no scanner web:', error);
+    console.error('❌ Erro no scanner web:', error);
     
-    // Se for erro de permissão, tentar scanner nativo como fallback
+    // Se for erro de permissão e estivermos em mobile, tentar scanner nativo
     if (isNative && error?.name === 'NotAllowedError') {
+      console.log('🔄 Tentando fallback para scanner nativo...');
       toast({
         title: "Tentando scanner nativo...",
         description: "Permissão da câmera web negada",
