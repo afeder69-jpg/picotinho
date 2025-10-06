@@ -119,6 +119,7 @@ export type Database = {
           created_at: string
           granel: boolean | null
           id: string
+          imagem_url: string | null
           marca: string | null
           nome_base: string | null
           nota_id: string | null
@@ -126,12 +127,14 @@ export type Database = {
           preco_por_unidade_base: number | null
           preco_unitario_ultimo: number | null
           produto_hash_normalizado: string | null
+          produto_master_id: string | null
           produto_nome: string
           produto_nome_normalizado: string | null
           qtd_base: number | null
           qtd_unidade: string | null
           qtd_valor: number | null
           quantidade: number
+          sku_global: string | null
           tipo_embalagem: string | null
           unidade_base: string | null
           unidade_medida: string
@@ -144,6 +147,7 @@ export type Database = {
           created_at?: string
           granel?: boolean | null
           id?: string
+          imagem_url?: string | null
           marca?: string | null
           nome_base?: string | null
           nota_id?: string | null
@@ -151,12 +155,14 @@ export type Database = {
           preco_por_unidade_base?: number | null
           preco_unitario_ultimo?: number | null
           produto_hash_normalizado?: string | null
+          produto_master_id?: string | null
           produto_nome: string
           produto_nome_normalizado?: string | null
           qtd_base?: number | null
           qtd_unidade?: string | null
           qtd_valor?: number | null
           quantidade?: number
+          sku_global?: string | null
           tipo_embalagem?: string | null
           unidade_base?: string | null
           unidade_medida?: string
@@ -169,6 +175,7 @@ export type Database = {
           created_at?: string
           granel?: boolean | null
           id?: string
+          imagem_url?: string | null
           marca?: string | null
           nome_base?: string | null
           nota_id?: string | null
@@ -176,19 +183,29 @@ export type Database = {
           preco_por_unidade_base?: number | null
           preco_unitario_ultimo?: number | null
           produto_hash_normalizado?: string | null
+          produto_master_id?: string | null
           produto_nome?: string
           produto_nome_normalizado?: string | null
           qtd_base?: number | null
           qtd_unidade?: string | null
           qtd_valor?: number | null
           quantidade?: number
+          sku_global?: string | null
           tipo_embalagem?: string | null
           unidade_base?: string | null
           unidade_medida?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "estoque_app_produto_master_id_fkey"
+            columns: ["produto_master_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_master_global"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       historico_precos_app: {
         Row: {
