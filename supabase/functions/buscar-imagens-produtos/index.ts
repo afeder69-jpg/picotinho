@@ -69,7 +69,12 @@ serve(async (req) => {
 
         console.log(`🔍 Buscando imagem para: ${query}`);
         console.log(`${customQuery ? '🎯 Query customizada' : '📋 Query padrão'}`);
-        console.log(`📡 Parâmetros: imgSize=MEDIUM, num=3`);
+        
+        // Randomização mais conservadora para buscas customizadas
+        const randomOffset = Math.floor(Math.random() * 3); // 0-2
+        const startParam = isCustomSearch ? randomOffset + 1 : 1;
+        
+        console.log(`📡 Parâmetros: imgSize=MEDIUM, num=10, start=${startParam}`);
         
         // Se for busca customizada, deletar TODAS as opções antigas
         if (isCustomSearch) {
@@ -85,24 +90,25 @@ serve(async (req) => {
             .remove(pathsToDelete);
         }
 
-        // Adicionar randomização e timestamp para forçar resultados diferentes
-        const randomOffset = Math.floor(Math.random() * 5); // 0-4
-        const timestamp = Date.now();
-        const searchQuery = `${query} ${isCustomSearch ? `t:${timestamp}` : ''}`;
-
-        // Chamar Google Custom Search API com mais resultados
+        // Chamar Google Custom Search API (sem timestamp na query)
         const searchUrl =
           `https://www.googleapis.com/customsearch/v1?` +
           `key=${GOOGLE_API_KEY}&` +
           `cx=${GOOGLE_ENGINE_ID}&` +
-          `q=${encodeURIComponent(searchQuery)}&` +
+          `q=${encodeURIComponent(query)}&` +
           `searchType=image&` +
           `imgSize=MEDIUM&` +
-          `start=${randomOffset + 1}&` +
+          `start=${startParam}&` +
           `num=10`;
 
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
+        
+        // Log de resposta da API
+        console.log(`📊 Google retornou: ${searchData.items?.length || 0} imagens`);
+        if (searchData.searchInformation) {
+          console.log(`🔢 Total disponível: ${searchData.searchInformation.totalResults}`);
+        }
 
         if (searchData.error) {
           console.error('❌ Erro detalhado da API Google:', JSON.stringify(searchData.error, null, 2));
