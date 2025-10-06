@@ -22,6 +22,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   const [isScanning, setIsScanning] = useState(false);
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
   const [scannerReady, setScannerReady] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false); // ✨ NOVO: Estado para feedback visual
   const [zoomLevel, setZoomLevel] = useState(() => {
     const saved = localStorage.getItem('qr-scanner-zoom');
     return saved ? parseFloat(saved) : 1.5;
@@ -117,38 +118,31 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   const handleWebScanSuccess = (decodedText: string) => {
     console.log('🌐 QR Code detectado (web):', decodedText);
 
-    if (isValidNFCeUrl(decodedText)) {
-      console.log('✅ NFCe válida detectada (web)!');
-      
-      // Vibração de feedback (se disponível)
-      if (navigator.vibrate) {
-        navigator.vibrate(200);
-      }
-      
-      toast({
-        title: "✅ NFCe Detectada!",
-        description: "Processando nota fiscal...",
-        duration: 2000,
-      });
-      
-      cleanupWebScanner();
-      onScanSuccess(decodedText);
-      onClose();
-    } else {
-      console.log('⚠️ QR Code detectado mas não é NFCe (web)');
-      toast({
-        title: "⚠️ QR Code Inválido",
-        description: "Este não é um QR Code de NFCe",
-        variant: "destructive",
-      });
+    // ✨ ETAPA 1: ACEITAR QUALQUER QR CODE (sem validação restritiva)
+    setIsDetecting(true); // ✨ ETAPA 2: Ativar feedback visual
+    
+    // Vibração de feedback (se disponível)
+    if (navigator.vibrate) {
+      navigator.vibrate(200);
     }
+    
+    toast({
+      title: "✅ QR Code Detectado!",
+      description: "Processando...",
+      duration: 2000,
+    });
+    
+    // Reset do feedback visual após 1 segundo
+    setTimeout(() => setIsDetecting(false), 1000);
+    
+    cleanupWebScanner();
+    onScanSuccess(decodedText);
+    onClose();
   };
 
   const handleWebScanError = (errorMessage: string) => {
-    // Não mostrar erros de "QR code not found" - são esperados
-    if (!errorMessage.includes('NotFoundException')) {
-      console.log('📸 Scanner processando... tentativa em andamento');
-    }
+    // ✨ ETAPA 3: Melhorar logs - mostrar TODOS os erros para debug
+    console.log('📸 Scanner tentando detectar...', errorMessage);
   };
 
   const adjustZoom = (delta: number) => {
@@ -345,10 +339,36 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
                 {/* Texto de Status */}
                 <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 text-center">
                   <p className="text-white text-sm font-medium bg-black/60 px-4 py-2 rounded-full backdrop-blur-sm">
-                    🔍 Procurando QR Code NFCe...
+                    🔍 Procurando QR Code...
                   </p>
                 </div>
               </div>
+
+              {/* ✨ ETAPA 2: 4 Pontinhos Amarelos Piscando (estilo Mood) */}
+              {isDetecting && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="relative w-32 h-32">
+                    {/* Pontinho 1 - Superior Esquerdo */}
+                    <div className="absolute top-0 left-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" />
+                    
+                    {/* Pontinho 2 - Superior Direito */}
+                    <div className="absolute top-0 right-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" style={{ animationDelay: '0.15s' }} />
+                    
+                    {/* Pontinho 3 - Inferior Esquerdo */}
+                    <div className="absolute bottom-0 left-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" style={{ animationDelay: '0.3s' }} />
+                    
+                    {/* Pontinho 4 - Inferior Direito */}
+                    <div className="absolute bottom-0 right-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" style={{ animationDelay: '0.45s' }} />
+
+                    {/* Texto "LENDO AGORA" */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-20">
+                      <p className="text-yellow-400 text-lg font-bold animate-pulse text-center whitespace-nowrap">
+                        📱 LENDO AGORA...
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
