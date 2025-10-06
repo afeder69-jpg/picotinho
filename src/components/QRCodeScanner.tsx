@@ -22,6 +22,10 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   const [isScanning, setIsScanning] = useState(false);
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
   const [scannerReady, setScannerReady] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(() => {
+    const saved = localStorage.getItem('qr-scanner-zoom');
+    return saved ? parseFloat(saved) : 1.5;
+  });
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerRef = useRef<HTMLDivElement>(null);
   const useNativeScanner = Capacitor.isNativePlatform();
@@ -43,31 +47,54 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
     if (!scannerContainerRef.current) return;
 
     try {
-      console.log('🎥 Iniciando scanner web otimizado...');
+      console.log('🎥 Iniciando scanner web otimizado com zoom...');
       setIsScanning(true);
 
       const html5QrCode = new Html5Qrcode('qr-reader');
       scannerRef.current = html5QrCode;
 
       const config = {
-        fps: 15, // Aumentar FPS para melhor detecção
-        qrbox: { width: 300, height: 300 }, // Área de detecção maior
-        aspectRatio: 1.0,
+        fps: 30, // ⚡ FPS aumentado para 30
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          // 📦 qrbox flexível (70% da menor dimensão)
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const qrboxSize = Math.floor(minEdge * 0.7);
+          console.log('📐 Dimensões da câmera:', viewfinderWidth, 'x', viewfinderHeight);
+          console.log('📦 Área de detecção (qrbox):', qrboxSize, 'x', qrboxSize);
+          return { width: qrboxSize, height: qrboxSize };
+        },
+      };
+
+      const videoConstraints = {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
       };
 
       await html5QrCode.start(
-        { facingMode: 'environment' },
+        videoConstraints,
         config,
         handleWebScanSuccess,
         handleWebScanError
       );
 
-      console.log('✅ Scanner web iniciado com sucesso');
+      console.log('✅ Scanner web iniciado com zoom', zoomLevel + 'x');
+      
+      // 🔍 Aplicar zoom digital no vídeo
+      setTimeout(() => {
+        const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
+        if (videoElement) {
+          videoElement.style.transform = `scale(${zoomLevel})`;
+          videoElement.style.transformOrigin = 'center center';
+          console.log('🔎 Zoom aplicado:', zoomLevel + 'x');
+        }
+      }, 500);
+
       setScannerReady(true);
       
       toast({
         title: "📷 Scanner Ativo",
-        description: "Procurando QR Code...",
+        description: `Zoom ${zoomLevel}x | Procurando QR Code...`,
         duration: 2000,
       });
     } catch (error) {
@@ -126,7 +153,25 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   const handleWebScanError = (errorMessage: string) => {
     // Não mostrar erros de "QR code not found" - são esperados
     if (!errorMessage.includes('NotFoundException')) {
-      console.log('Scanner processando...', errorMessage);
+      console.log('📸 Scanner processando... tentativa em andamento');
+    }
+  };
+
+  const adjustZoom = (delta: number) => {
+    const newZoom = Math.max(1, Math.min(3, zoomLevel + delta));
+    setZoomLevel(newZoom);
+    localStorage.setItem('qr-scanner-zoom', newZoom.toString());
+    
+    const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
+    if (videoElement) {
+      videoElement.style.transform = `scale(${newZoom})`;
+      console.log('🔎 Zoom ajustado para:', newZoom + 'x');
+      
+      toast({
+        title: `🔍 Zoom ${newZoom}x`,
+        description: "Nível de zoom ajustado",
+        duration: 1500,
+      });
     }
   };
 
@@ -314,8 +359,33 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
           )}
         </div>
 
-        {/* Footer com instruções e troubleshooting */}
+        {/* Footer com instruções, zoom e troubleshooting */}
         <div className="p-4 bg-black/90 backdrop-blur-sm border-t border-white/10 space-y-3">
+          {/* Controles de Zoom */}
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => adjustZoom(-0.5)}
+              disabled={zoomLevel <= 1}
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20 disabled:opacity-30"
+            >
+              <span className="text-lg">−</span>
+            </Button>
+            <span className="text-white text-sm font-medium px-3 py-1 bg-white/10 rounded-full">
+              Zoom: {zoomLevel.toFixed(1)}x
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => adjustZoom(0.5)}
+              disabled={zoomLevel >= 3}
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20 disabled:opacity-30"
+            >
+              <span className="text-lg">+</span>
+            </Button>
+          </div>
+
           <p className="text-sm text-white/80 text-center">
             Posicione o QR Code da NFCe dentro da área marcada
           </p>
