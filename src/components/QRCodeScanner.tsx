@@ -81,59 +81,75 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
 
   const startNativeScanner = async () => {
     try {
-      console.log('🔵 Iniciando scanner nativo Capacitor...');
+      console.log('🔵 Iniciando scanner nativo ML Kit (API moderna)...');
       setIsScanning(true);
       
-      // Criar promise do scan com timeout de 30s
-      const scanPromise = BarcodeScanner.scan({
-        formats: [], // Aceitar todos os formatos (incluindo QR_CODE)
+      // ✅ API MODERNA: Adicionar listener ANTES de iniciar o scan
+      const listener = await BarcodeScanner.addListener(
+        'barcodeScanned',
+        async (result) => {
+          console.log('📦 Código detectado:', result);
+          
+          if (result.barcode?.rawValue) {
+            const code = result.barcode.rawValue;
+            console.log('✅ QR Code lido com sucesso:', code);
+            
+            // Parar scanner e remover listener
+            await BarcodeScanner.stopScan();
+            listener.remove();
+            setIsScanning(false);
+            
+            // Processar resultado
+            onScanSuccess(code);
+          }
+        }
+      );
+
+      // ✅ API MODERNA: Iniciar scanner com interface nativa transparente
+      await BarcodeScanner.startScan({
+        formats: [], // Array vazio = todos os formatos (incluindo QR_CODE)
       });
       
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: Scanner não detectou QR Code em 30s')), 30000)
-      );
+      console.log('📷 Câmera nativa ativa - detecção contínua iniciada');
       
-      const result = await Promise.race([scanPromise, timeoutPromise]) as any;
-      
-      console.log('📦 Resultado completo do scan:', JSON.stringify(result, null, 2));
-
-      if (result.barcodes && result.barcodes.length > 0) {
-        const code = result.barcodes[0].rawValue;
-        console.log('✅ QR Code lido com sucesso (nativo):', code);
-        onScanSuccess(code);
-        setIsScanning(false);
-      } else {
-        console.log('⚠️ Nenhum código detectado pelo scanner nativo');
-        setIsScanning(false);
-        toast({
-          title: "Nenhum QR Code detectado",
-          description: "Tente posicionar melhor a câmera",
-        });
-      }
+      // Timeout de 60 segundos
+      setTimeout(async () => {
+        if (isScanning) {
+          console.log('⏱️ Timeout: 60s sem detecção');
+          await BarcodeScanner.stopScan();
+          listener.remove();
+          setIsScanning(false);
+          
+          toast({
+            title: "Tempo esgotado",
+            description: "Nenhum QR Code detectado. Tente novamente.",
+          });
+        }
+      }, 60000);
       
     } catch (error) {
-      console.error('❌ Erro completo no scanner nativo:', error);
+      console.error('❌ Erro ao iniciar scanner nativo:', error);
       setIsScanning(false);
       
-      // Fallback para scanner web apenas se for erro de API/permissão
-      if (error instanceof Error && !error.message.includes('Timeout')) {
-        toast({
-          title: "Scanner nativo falhou",
-          description: "Tentando com scanner web...",
-        });
-        setUseNativeScanner(false);
-        setIsScanning(true);
-      } else {
-        toast({
-          title: "Erro no scanner",
-          description: error instanceof Error ? error.message : "Tente novamente",
-          variant: "destructive"
-        });
-      }
+      // Fallback para scanner web
+      toast({
+        title: "Scanner nativo falhou",
+        description: "Tentando com scanner web...",
+      });
+      setUseNativeScanner(false);
+      setIsScanning(true);
     }
   };
 
-  const stopScanner = () => {
+  const stopScanner = async () => {
+    if (useNativeScanner && isScanning) {
+      try {
+        await BarcodeScanner.stopScan();
+        console.log('🛑 Scanner nativo parado');
+      } catch (error) {
+        console.error('Erro ao parar scanner:', error);
+      }
+    }
     setIsScanning(false);
     setHasPermission(null);
     setUseNativeScanner(false);
@@ -212,11 +228,22 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           ) : (
             <>
               {useNativeScanner ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <p className="text-center text-muted-foreground px-4">
-                    📱 Aponte a câmera para o QR Code da NFCe
-                  </p>
-                  <div className="w-48 h-48 border-2 border-primary rounded-lg animate-pulse" />
+                <div className="flex flex-col items-center justify-center py-12 space-y-4 bg-transparent">
+                  <div className="space-y-2 text-center px-4">
+                    <p className="text-lg font-medium text-white">
+                      📱 Aponte para o QR Code
+                    </p>
+                    <p className="text-sm text-white/70">
+                      A câmera nativa está ativa
+                    </p>
+                  </div>
+                  <Button 
+                    variant="secondary" 
+                    onClick={handleClose}
+                    className="mt-4"
+                  >
+                    Cancelar
+                  </Button>
                 </div>
               ) : (
                 <div className="w-full aspect-square bg-black">
