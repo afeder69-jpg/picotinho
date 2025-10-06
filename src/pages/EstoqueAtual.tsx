@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical } from 'lucide-react';
+import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical, Image, ImageOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +45,7 @@ interface EstoqueItem {
   qtd_base?: number | null;
   granel?: boolean | null;
   qtd_unidade?: string | null;
+  imagem_url?: string | null;
 }
 
 interface ProdutoSugestao {
@@ -86,6 +87,9 @@ const EstoqueAtual = () => {
   // Estados para modal de confirmação de exclusão
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
   const [itemParaExcluir, setItemParaExcluir] = useState<EstoqueItem | null>(null);
+  
+  // Estado para visualização de imagem
+  const [imagemVisivel, setImagemVisivel] = useState<string | null>(null);
 
   // Função para obter coordenadas do usuário (prioriza CEP do perfil)
   const obterCoordenadas = async (): Promise<{ latitude: number; longitude: number }> => {
@@ -1809,7 +1813,8 @@ const EstoqueAtual = () => {
                               }`}
                             >
                              <div className="flex-1 overflow-hidden relative">
-                                   <h3 className="text-xs font-medium text-foreground leading-tight relative">
+                               <div className="flex items-center gap-2">
+                                   <h3 className="text-xs font-medium text-foreground leading-tight relative flex-1">
                                      {item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome}
                                     {item.origem === 'manual' && (
                                       <span className="text-red-500 text-xs ml-1">(manual)</span>
@@ -1826,6 +1831,31 @@ const EstoqueAtual = () => {
                                    </Button>
                                  )}
                                </h3>
+                               
+                               {/* Botão de Imagem - bem pequenininho */}
+                               <button
+                                 className={`flex-shrink-0 h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                                   item.imagem_url 
+                                     ? 'text-blue-600 hover:bg-blue-50 active:bg-blue-100' 
+                                     : 'text-gray-300 cursor-not-allowed'
+                                 }`}
+                                 disabled={!item.imagem_url}
+                                 onMouseDown={() => item.imagem_url && setImagemVisivel(item.imagem_url)}
+                                 onMouseUp={() => setImagemVisivel(null)}
+                                 onMouseLeave={() => setImagemVisivel(null)}
+                                 onTouchStart={(e) => {
+                                   e.preventDefault();
+                                   item.imagem_url && setImagemVisivel(item.imagem_url);
+                                 }}
+                                 onTouchEnd={() => setImagemVisivel(null)}
+                               >
+                                 {item.imagem_url ? (
+                                   <Image className="w-4 h-4" />
+                                 ) : (
+                                   <ImageOff className="w-4 h-4" />
+                                 )}
+                               </button>
+                             </div>
                                 <div className="space-y-1 text-xs">
                                    {(() => {
                                      const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
@@ -2222,6 +2252,26 @@ const EstoqueAtual = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Pop-up de imagem - aparece no topo da tela */}
+      {imagemVisivel && (
+        <div 
+          className="fixed top-5 left-1/2 transform -translate-x-1/2 z-[9999] animate-in fade-in duration-200"
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className="bg-white rounded-lg shadow-2xl p-3 border-2 border-blue-200">
+            <img 
+              src={imagemVisivel} 
+              alt="Preview do produto"
+              className="w-[250px] h-[250px] object-contain rounded"
+              onError={(e) => {
+                console.error('Erro ao carregar imagem:', imagemVisivel);
+                e.currentTarget.src = '/placeholder.svg';
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
