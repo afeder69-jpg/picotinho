@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "./use-toast";
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
+import { supabase } from "@/integrations/supabase/client";
 
 export const useQRScanner = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -47,73 +48,123 @@ export const useQRScanner = () => {
   };
 
   const isReceiptUrl = (url: string) => {
-    // Verifica se é uma URL da Receita Federal (NFCe ou NFe)
-    return url.includes('fazenda.') || 
-           url.includes('receita.') || 
-           url.includes('sefaz.') ||
-           url.includes('nfce') ||
-           url.includes('nfe');
+    // Regex específicos para SEFAZ de diferentes estados
+    const sefazPatterns = [
+      // Rio de Janeiro - NFCe (PRIORITÁRIO)
+      /nfce\.fazenda\.rj\.gov\.br/i,
+      /www4\.fazenda\.rj\.gov\.br.*nfce/i,
+      /app\.fazenda\.rj\.gov\.br.*nfce/i,
+      
+      // São Paulo
+      /nfce\.fazenda\.sp\.gov\.br/i,
+      /www\.nfce\.fazenda\.sp\.gov\.br/i,
+      
+      // Minas Gerais
+      /nfce\.fazenda\.mg\.gov\.br/i,
+      
+      // Rio Grande do Sul
+      /nfce\.sefaz\.rs\.gov\.br/i,
+      
+      // Amazonas
+      /sistemas\.sefaz\.am\.gov\.br.*nfce/i,
+      
+      // Genérico - captura outros estados
+      /fazenda\.[a-z]{2}\.gov\.br.*nfce/i,
+      /sefaz\.[a-z]{2}\.gov\.br.*nfce/i,
+      /[a-z]{2}\.fazenda\.gov\.br.*nfce/i,
+    ];
+    
+    return sefazPatterns.some(pattern => pattern.test(url));
   };
 
   const handleScanSuccess = async (result: string) => {
     setLastScannedCode(result);
-    console.log("QR Code escaneado:", result);
+    console.log("🔍 QR Code escaneado:", result);
     
     // Verifica se é uma URL válida
-    if (isValidUrl(result)) {
-      const formattedUrl = formatUrl(result);
-      
-      // Verifica se é uma nota fiscal
-      if (isReceiptUrl(formattedUrl)) {
-        toast({
-          title: "Nota Fiscal detectada!",
-          description: "Abrindo no navegador para visualização...",
-        });
-        
-        // Fecha o scanner e abre diretamente no navegador nativo
-        closeScanner();
-        
-        // Abre direto no navegador nativo sem tela intermediária
-        try {
-          if (Capacitor.isNativePlatform()) {
-            await Browser.open({
-              url: formattedUrl,
-              windowName: '_blank',
-              presentationStyle: 'popover',
-              toolbarColor: '#ffffff'
-            });
-            
-            // Mostra instrução para o usuário
-            toast({
-              title: "📱 Nota aberta no navegador",
-              description: "Após visualizar, volte ao app e acesse 'Minhas Notas' para salvar a captura",
-              duration: 5000,
-            });
-          } else {
-            window.open(formattedUrl, '_blank');
-          }
-        } catch (error) {
-          console.error('Erro ao abrir navegador:', error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível abrir o navegador",
-            variant: "destructive",
-          });
-        }
-      } else {
-        toast({
-          title: "QR Code detectado!",
-          description: `URL: ${formattedUrl}`,
-        });
-        
-        // Para outras URLs, abre em nova aba
-        window.open(formattedUrl, '_blank');
-      }
-    } else {
+    if (!isValidUrl(result)) {
       toast({
-        title: "QR Code detectado!",
+        title: "QR Code detectado",
         description: `Conteúdo: ${result}`,
       });
+      return;
+    }
+    
+    const formattedUrl = formatUrl(result);
+    
+    // Verifica se é uma nota fiscal da SEFAZ
+    if (isReceiptUrl(formattedUrl)) {
+      closeScanner();
+      
+      // 🔥 CAPTURA SILENCIOSA - sem abrir navegador
+      console.log("📄 NFCe detectada! Iniciando captura silenciosa:", formattedUrl);
+      
+      toast({
+        title: "📄 Nota Fiscal NFCe detectada!",
+        description: "Processando automaticamente...",
+        duration: 3000,
+      });
+      
+      try {
+        // Obter usuário autenticado
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          throw new Error('Usuário não autenticado. Faça login para processar notas.');
+        }
+        
+        console.log("👤 Usuário autenticado:", user.id);
+        console.log("🚀 Chamando edge function capture-receipt-external...");
+        
+        // Chamar edge function para captura e processamento automático
+        const { data, error } = await supabase.functions.invoke(
+          'capture-receipt-external',
+          {
+            body: {
+              receiptUrl: formattedUrl,
+              userId: user.id
+            }
+          }
+        );
+        
+        if (error) {
+          console.error("❌ Erro da edge function:", error);
+          throw error;
+        }
+        
+        console.log("✅ Resposta da edge function:", data);
+        
+        // Sucesso!
+        toast({
+          title: "✅ Nota capturada com sucesso!",
+          description: "Processando dados automaticamente... Aguarde alguns segundos e atualize em 'Minhas Notas'.",
+          duration: 8000,
+        });
+        
+      } catch (error: any) {
+        console.error('❌ Erro ao processar nota:', error);
+        
+        // Mensagem de erro mais clara
+        const errorMessage = error?.message || 
+                           error?.error_description || 
+                           "Não foi possível processar a nota. Tente novamente.";
+        
+        toast({
+          title: "❌ Erro ao processar NFCe",
+          description: errorMessage,
+          variant: "destructive",
+          duration: 6000,
+        });
+      }
+      
+    } else {
+      // URL normal (não é nota fiscal) - abrir em nova aba
+      toast({
+        title: "🔗 Link detectado",
+        description: `Abrindo: ${formattedUrl}`,
+      });
+      
+      window.open(formattedUrl, '_blank');
     }
   };
 
