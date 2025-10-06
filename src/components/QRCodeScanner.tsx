@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { X, Zap } from "lucide-react";
 import { Button } from "./ui/button";
-import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
+import { BarcodeScanner, BarcodeFormat } from '@capacitor-mlkit/barcode-scanning';
 import { Capacitor } from '@capacitor/core';
 import { toast } from "@/hooks/use-toast";
 
@@ -105,27 +105,28 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
         }
       );
 
-      // ✅ API MODERNA: Iniciar scanner com interface nativa transparente
+      // ✅ API MODERNA: Iniciar scanner otimizado para NFCe
       await BarcodeScanner.startScan({
-        formats: [], // Array vazio = todos os formatos (incluindo QR_CODE)
+        formats: [BarcodeFormat.QrCode], // QR_CODE específico para NFCe
       });
       
-      console.log('📷 Câmera nativa ativa - detecção contínua iniciada');
+      console.log('📷 Câmera nativa ativa - detecção contínua para NFCe iniciada');
       
-      // Timeout de 60 segundos
+      // Timeout de 90 segundos (mais tempo para NFCe densos)
       setTimeout(async () => {
         if (isScanning) {
-          console.log('⏱️ Timeout: 60s sem detecção');
+          console.log('⏱️ Timeout: 90s sem detecção');
           await BarcodeScanner.stopScan();
           listener.remove();
           setIsScanning(false);
           
           toast({
-            title: "Tempo esgotado",
-            description: "Nenhum QR Code detectado. Tente novamente.",
+            title: "💡 Dica",
+            description: "QR Code não detectado. Tente: 1) Limpar a câmera 2) Melhorar iluminação 3) Afastar/aproximar",
+            duration: 6000,
           });
         }
-      }, 60000);
+      }, 90000);
       
     } catch (error) {
       console.error('❌ Erro ao iniciar scanner nativo:', error);
@@ -228,21 +229,37 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           ) : (
             <>
               {useNativeScanner ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4 bg-transparent">
-                  <div className="space-y-2 text-center px-4">
-                    <p className="text-lg font-medium text-white">
-                      📱 Aponte para o QR Code
-                    </p>
-                    <p className="text-sm text-white/70">
-                      A câmera nativa está ativa
-                    </p>
+                <div className="flex flex-col items-center justify-center py-12 space-y-6 bg-transparent">
+                  {/* Overlay visual com guia */}
+                  <div className="relative w-64 h-64 border-4 border-green-500 rounded-lg shadow-[0_0_20px_rgba(34,197,94,0.5)] animate-pulse">
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-56 h-56 border-2 border-green-400/50 rounded-md"></div>
+                    </div>
+                    {/* Cantos do quadro */}
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-yellow-400"></div>
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-yellow-400"></div>
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-yellow-400"></div>
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-yellow-400"></div>
                   </div>
+                  
+                  {/* Instruções visuais */}
+                  <div className="space-y-3 text-center px-4 max-w-xs">
+                    <p className="text-xl font-bold text-white drop-shadow-lg">
+                      📱 Centralize o QR Code no quadro verde
+                    </p>
+                    <div className="space-y-1 text-sm text-white/90 bg-black/50 rounded-lg p-3">
+                      <p>✓ Segure firme (evite tremores)</p>
+                      <p>✓ Boa iluminação ajuda</p>
+                      <p>✓ Distância: 10-15cm da tela</p>
+                    </div>
+                  </div>
+                  
                   <Button 
                     variant="secondary" 
                     onClick={handleClose}
-                    className="mt-4"
+                    className="mt-2 bg-red-600 hover:bg-red-700 text-white"
                   >
-                    Cancelar
+                    Cancelar Scanner
                   </Button>
                 </div>
               ) : (

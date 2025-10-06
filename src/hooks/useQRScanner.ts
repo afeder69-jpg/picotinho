@@ -74,7 +74,26 @@ export const useQRScanner = () => {
       /[a-z]{2}\.fazenda\.gov\.br.*nfce/i,
     ];
     
-    return sefazPatterns.some(pattern => pattern.test(url));
+    const hasNFCePattern = sefazPatterns.some(pattern => pattern.test(url));
+    
+    // Validação adicional: verificar parâmetros típicos de NFCe
+    const urlObj = new URL(url);
+    const hasChaveNFe = urlObj.searchParams.has('chNFe') || urlObj.searchParams.has('p');
+    const hasNFCeKeyword = /nfce/i.test(url);
+    
+    // Log detalhado para debug
+    if (hasNFCePattern || (hasChaveNFe && hasNFCeKeyword)) {
+      console.log('✅ URL NFCe validada:', {
+        url,
+        hasPattern: hasNFCePattern,
+        hasChave: hasChaveNFe,
+        hasKeyword: hasNFCeKeyword
+      });
+      return true;
+    }
+    
+    console.log('❌ URL NÃO é NFCe:', url);
+    return false;
   };
 
   const handleScanSuccess = async (result: string) => {
