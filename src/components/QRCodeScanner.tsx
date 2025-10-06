@@ -2,9 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { Capacitor } from '@capacitor/core';
-import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint, CapacitorBarcodeScannerCameraDirection, CapacitorBarcodeScannerAndroidScanningLibrary } from '@capacitor/barcode-scanner';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useToast } from "@/hooks/use-toast";
+import { registerPlugin } from '@capacitor/core';
+
+interface MLKitScannerPlugin {
+  scanBarcode(): Promise<{ ScanResult: string }>;
+}
+
+const MLKitScanner = registerPlugin<MLKitScannerPlugin>('MLKitScanner');
 
 interface QRCodeScannerProps {
   onScanSuccess: (code: string) => void;
@@ -53,33 +59,25 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
 
   const startNativeScanner = async () => {
     try {
-      console.log('🔍 Iniciando scanner ZXing para NFCe...');
+      console.log('🔍 Iniciando Google ML Kit Scanner nativo...');
       setIsScanning(true);
 
       toast({
-        title: "📱 Abrindo Scanner",
+        title: "📱 Abrindo Scanner ML Kit",
         description: "Aponte para o QR Code da NFCe",
         duration: 2000,
       });
 
-      const result = await CapacitorBarcodeScanner.scanBarcode({
-        hint: CapacitorBarcodeScannerTypeHint.QR_CODE,
-        cameraDirection: CapacitorBarcodeScannerCameraDirection.BACK,
-        scanInstructions: "Aponte para o QR Code da NFCe",
-        scanButton: false,
-        android: {
-          scanningLibrary: CapacitorBarcodeScannerAndroidScanningLibrary.ZXING,
-        },
-      });
+      const result = await MLKitScanner.scanBarcode();
 
       setIsScanning(false);
 
       if (result.ScanResult) {
         const code = result.ScanResult;
-        console.log('🎯 QR Code detectado:', code);
+        console.log('🎯 QR Code detectado com ML Kit:', code);
 
         if (isValidNFCeUrl(code)) {
-          console.log('✅ NFCe válida detectada com ZXing!');
+          console.log('✅ NFCe válida detectada com ML Kit!');
           toast({
             title: "✅ NFCe Detectada!",
             description: "Processando nota fiscal...",
@@ -103,10 +101,9 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
         });
       }
     } catch (error: any) {
-      console.error('❌ Erro no scanner ZXing:', error);
+      console.error('❌ Erro no scanner ML Kit:', error);
       setIsScanning(false);
       
-      // Não mostrar erro se usuário cancelou
       if (error?.message?.includes('cancel') || error?.message?.includes('User cancelled')) {
         console.log('ℹ️ Usuário cancelou o scanner');
         return;
@@ -158,12 +155,12 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
       <div className="fixed inset-0 z-[9999] bg-background/95 backdrop-blur-sm flex items-center justify-center">
         <div className="bg-card p-8 rounded-lg shadow-lg max-w-sm mx-4 text-center space-y-4">
           <div className="text-6xl mb-4">📱</div>
-          <h2 className="text-2xl font-bold">Preparando Scanner</h2>
+          <h2 className="text-2xl font-bold">Preparando Scanner ML Kit</h2>
           <p className="text-muted-foreground">
-            O scanner ZXing abrirá em tela cheia
+            Scanner nativo Google ML Kit abrirá em tela cheia
           </p>
           <p className="text-sm text-muted-foreground">
-            Otimizado para QR codes de NFCe em papel térmico
+            Com detecção de cantos (4 pontos amarelos) e autofocus contínuo
           </p>
           <Button variant="outline" onClick={onClose}>
             Cancelar
