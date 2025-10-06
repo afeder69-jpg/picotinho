@@ -24,6 +24,7 @@ import java.util.concurrent.Executors
 class MLKitScannerActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
+    private lateinit var overlayView: BarcodeOverlayView
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var barcodeScanner: BarcodeScanner
     private var isScanning = true
@@ -31,7 +32,7 @@ class MLKitScannerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Criar layout programaticamente
+        // Criar layout programaticamente com FrameLayout para sobrepor overlay
         val frameLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -39,6 +40,7 @@ class MLKitScannerActivity : AppCompatActivity() {
             )
         }
         
+        // PreviewView da câmera
         previewView = PreviewView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -46,7 +48,17 @@ class MLKitScannerActivity : AppCompatActivity() {
             )
         }
         
+        // OverlayView para desenhar os 4 pontos amarelos
+        overlayView = BarcodeOverlayView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        
+        // Adicionar preview primeiro, overlay por cima
         frameLayout.addView(previewView)
+        frameLayout.addView(overlayView)
         setContentView(frameLayout)
         
         // Configurar ML Kit para apenas QR_CODE
@@ -128,10 +140,23 @@ class MLKitScannerActivity : AppCompatActivity() {
 
             barcodeScanner.process(image)
                 .addOnSuccessListener { barcodes ->
+                    // Limpar overlay se não há barcodes
+                    if (barcodes.isEmpty()) {
+                        runOnUiThread {
+                            overlayView.clear()
+                        }
+                    }
+                    
                     for (barcode in barcodes) {
+                        // ✅ DESENHAR OS 4 PONTOS AMARELOS (cornerPoints)
+                        runOnUiThread {
+                            overlayView.updateBarcodeCorners(barcode)
+                        }
+                        
                         val rawValue = barcode.rawValue
                         if (rawValue != null) {
                             Log.d("MLKitScanner", "✅ QR Code detectado: $rawValue")
+                            Log.d("MLKitScanner", "📍 cornerPoints: ${barcode.cornerPoints?.contentToString()}")
                             
                             // Parar scanning e retornar resultado
                             isScanning = false
