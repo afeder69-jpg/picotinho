@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, AlertCircle } from "lucide-react";
 import { Capacitor } from '@capacitor/core';
-import { Scanner } from '@yudiel/react-qr-scanner';
+import { Html5Qrcode } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
 import { registerPlugin } from '@capacitor/core';
 
@@ -20,6 +20,10 @@ interface QRCodeScannerProps {
 
 const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, isOpen }) => {
   const [isScanning, setIsScanning] = useState(false);
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
+  const [scannerReady, setScannerReady] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerContainerRef = useRef<HTMLDivElement>(null);
   const useNativeScanner = Capacitor.isNativePlatform();
   const { toast } = useToast();
 
@@ -27,13 +31,104 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
     if (isOpen && useNativeScanner) {
       startNativeScanner();
     } else if (isOpen && !useNativeScanner) {
-      setIsScanning(true);
+      startWebScanner();
     }
 
     return () => {
-      setIsScanning(false);
+      cleanupWebScanner();
     };
   }, [isOpen]);
+
+  const startWebScanner = async () => {
+    if (!scannerContainerRef.current) return;
+
+    try {
+      console.log('🎥 Iniciando scanner web otimizado...');
+      setIsScanning(true);
+
+      const html5QrCode = new Html5Qrcode('qr-reader');
+      scannerRef.current = html5QrCode;
+
+      const config = {
+        fps: 15, // Aumentar FPS para melhor detecção
+        qrbox: { width: 300, height: 300 }, // Área de detecção maior
+        aspectRatio: 1.0,
+      };
+
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        config,
+        handleWebScanSuccess,
+        handleWebScanError
+      );
+
+      console.log('✅ Scanner web iniciado com sucesso');
+      setScannerReady(true);
+      
+      toast({
+        title: "📷 Scanner Ativo",
+        description: "Procurando QR Code...",
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('❌ Erro ao iniciar scanner:', error);
+      toast({
+        title: "Erro ao Iniciar Câmera",
+        description: "Verifique as permissões da câmera",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const cleanupWebScanner = async () => {
+    if (scannerRef.current && scannerRef.current.isScanning) {
+      try {
+        await scannerRef.current.stop();
+        console.log('🛑 Scanner web parado');
+      } catch (error) {
+        console.error('Erro ao parar scanner:', error);
+      }
+    }
+    setIsScanning(false);
+    setScannerReady(false);
+  };
+
+  const handleWebScanSuccess = (decodedText: string) => {
+    console.log('🌐 QR Code detectado (web):', decodedText);
+
+    if (isValidNFCeUrl(decodedText)) {
+      console.log('✅ NFCe válida detectada (web)!');
+      
+      // Vibração de feedback (se disponível)
+      if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
+      
+      toast({
+        title: "✅ NFCe Detectada!",
+        description: "Processando nota fiscal...",
+        duration: 2000,
+      });
+      
+      cleanupWebScanner();
+      onScanSuccess(decodedText);
+      onClose();
+    } else {
+      console.log('⚠️ QR Code detectado mas não é NFCe (web)');
+      toast({
+        title: "⚠️ QR Code Inválido",
+        description: "Este não é um QR Code de NFCe",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleWebScanError = (errorMessage: string) => {
+    // Não mostrar erros de "QR code not found" - são esperados
+    if (!errorMessage.includes('NotFoundException')) {
+      console.log('Scanner processando...', errorMessage);
+    }
+  };
 
   const isValidNFCeUrl = (url: string): boolean => {
     if (!url || typeof url !== 'string') return false;
@@ -117,34 +212,6 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
     }
   };
 
-  const handleWebScan = (result: any) => {
-    if (result && result[0]?.rawValue) {
-      const code = result[0].rawValue;
-      console.log('🌐 QR Code detectado (web):', code);
-
-      if (isValidNFCeUrl(code)) {
-        console.log('✅ NFCe válida detectada (web)!');
-        toast({
-          title: "✅ NFCe Detectada!",
-          description: "Processando nota fiscal...",
-          duration: 2000,
-        });
-        onScanSuccess(code);
-        onClose();
-      } else {
-        console.log('⚠️ QR Code detectado mas não é NFCe (web)');
-        toast({
-          title: "⚠️ QR Code Inválido",
-          description: "Este não é um QR Code de NFCe",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleWebError = (error: any) => {
-    console.error('❌ Erro no scanner web:', error);
-  };
 
   if (!isOpen) return null;
 
@@ -172,51 +239,120 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
 
   // Scanner web (navegador)
   return (
-    <div className="fixed inset-0 z-[9999] bg-background">
+    <div className="fixed inset-0 z-[9999] bg-black">
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between p-4 border-b bg-background">
-          <h2 className="text-lg font-semibold">Escanear QR Code</h2>
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 bg-black/90 backdrop-blur-sm border-b border-white/10">
+          <h2 className="text-lg font-semibold text-white">Escanear QR Code NFCe</h2>
           <Button
             variant="ghost"
             size="icon"
             onClick={onClose}
+            className="text-white hover:bg-white/10"
           >
             <X className="h-5 w-5" />
           </Button>
         </div>
 
-        <div className="flex-1 relative bg-black">
-          <div className="w-full h-full">
-            <Scanner
-              onScan={handleWebScan}
-              onError={handleWebError}
-              constraints={{
-                facingMode: 'environment',
-                aspectRatio: { ideal: 1 }
-              }}
-              styles={{
-                container: {
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative'
-                },
-                video: {
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover'
-                }
-              }}
-            />
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-              <div className="w-64 h-64 border-4 border-white rounded-lg opacity-50"></div>
+        {/* Scanner Container */}
+        <div className="flex-1 relative">
+          <div 
+            id="qr-reader" 
+            ref={scannerContainerRef}
+            className="w-full h-full"
+          />
+
+          {/* Custom Overlay com Cantos Destacados */}
+          {scannerReady && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              {/* Escurecimento das bordas */}
+              <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-black/70" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/70" />
+
+              {/* Frame de detecção com animação */}
+              <div className="relative w-80 h-80 animate-pulse">
+                {/* Quadrado principal */}
+                <div className="absolute inset-0 border-2 border-white/30 rounded-2xl" />
+
+                {/* 4 Cantos Destacados (simulando ML Kit) */}
+                {/* Canto Superior Esquerdo */}
+                <div className="absolute -top-1 -left-1 w-16 h-16">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute top-0 left-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
+                </div>
+
+                {/* Canto Superior Direito */}
+                <div className="absolute -top-1 -right-1 w-16 h-16">
+                  <div className="absolute top-0 right-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute top-0 right-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute top-0 right-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
+                </div>
+
+                {/* Canto Inferior Esquerdo */}
+                <div className="absolute -bottom-1 -left-1 w-16 h-16">
+                  <div className="absolute bottom-0 left-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute bottom-0 left-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute bottom-0 left-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
+                </div>
+
+                {/* Canto Inferior Direito */}
+                <div className="absolute -bottom-1 -right-1 w-16 h-16">
+                  <div className="absolute bottom-0 right-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute bottom-0 right-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
+                </div>
+
+                {/* Texto de Status */}
+                <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 text-center">
+                  <p className="text-white text-sm font-medium bg-black/60 px-4 py-2 rounded-full backdrop-blur-sm">
+                    🔍 Procurando QR Code NFCe...
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <div className="p-4 border-t bg-background">
-          <p className="text-sm text-muted-foreground text-center">
-            Posicione o QR Code dentro da área marcada
+        {/* Footer com instruções e troubleshooting */}
+        <div className="p-4 bg-black/90 backdrop-blur-sm border-t border-white/10 space-y-3">
+          <p className="text-sm text-white/80 text-center">
+            Posicione o QR Code da NFCe dentro da área marcada
           </p>
+          
+          {!showTroubleshooting ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowTroubleshooting(true)}
+              className="w-full text-yellow-400 hover:bg-white/5"
+            >
+              <AlertCircle className="h-4 w-4 mr-2" />
+              Não está lendo? Clique aqui
+            </Button>
+          ) : (
+            <div className="bg-white/10 rounded-lg p-3 space-y-2 text-xs text-white/90">
+              <p className="font-semibold text-yellow-400 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Dicas para melhorar a leitura:
+              </p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Aproxime o QR code da câmera (15-20cm)</li>
+                <li>Melhore a iluminação do ambiente</li>
+                <li>Deixe a câmera focar por 2-3 segundos</li>
+                <li>Evite reflexos e sombras no papel</li>
+                <li>Deixe o papel o mais plano possível</li>
+              </ul>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowTroubleshooting(false)}
+                className="w-full mt-2 text-white/60 hover:bg-white/5"
+              >
+                Fechar dicas
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
