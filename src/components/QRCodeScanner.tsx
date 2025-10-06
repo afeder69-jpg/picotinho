@@ -79,63 +79,102 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
     }
   };
 
+  const tryGoogleCodeScanner = async (): Promise<boolean> => {
+    try {
+      console.log('🔍 Verificando Google Code Scanner...');
+      
+      // Verificar se módulo Google está disponível
+      const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
+      console.log('✅ Google Code Scanner disponível:', available);
+      
+      if (!available) {
+        console.log('📥 Instalando módulo Google Code Scanner...');
+        await BarcodeScanner.installGoogleBarcodeScannerModule();
+      }
+
+      // Usar API scan() do Google (otimizada para NFCe)
+      console.log('🚀 Iniciando Google Code Scanner...');
+      const { barcodes } = await BarcodeScanner.scan({
+        formats: [BarcodeFormat.QrCode],
+      });
+
+      if (barcodes && barcodes.length > 0) {
+        const code = barcodes[0].rawValue;
+        console.log('✅ Google Scanner detectou NFCe:', code);
+        onScanSuccess(code || '');
+        return true;
+      }
+      
+      console.log('⚠️ Google Scanner não detectou código');
+      return false;
+    } catch (error) {
+      console.log('❌ Google Code Scanner falhou, tentando ML Kit manual:', error);
+      return false;
+    }
+  };
+
   const startNativeScanner = async () => {
     try {
-      console.log('🔵 Iniciando scanner nativo ML Kit (API moderna)...');
+      console.log('🚀 Iniciando scanner otimizado para NFCe...');
       setIsScanning(true);
       
-      // ✅ API MODERNA: Adicionar listener ANTES de iniciar o scan
+      // ESTRATÉGIA 1: Tentar Google Code Scanner (melhor para papel térmico)
+      const googleSuccess = await tryGoogleCodeScanner();
+      if (googleSuccess) {
+        setIsScanning(false);
+        return;
+      }
+
+      // ESTRATÉGIA 2: ML Kit manual com configurações otimizadas
+      console.log('📱 Usando ML Kit com foco em QR densos...');
+      
       const listener = await BarcodeScanner.addListener(
         'barcodeScanned',
         async (result) => {
-          console.log('📦 Código detectado:', result);
+          console.log('📦 ML Kit detectou:', result);
           
           if (result.barcode?.rawValue) {
             const code = result.barcode.rawValue;
-            console.log('✅ QR Code lido com sucesso:', code);
+            console.log('✅ NFCe lida com sucesso:', code);
             
-            // Parar scanner e remover listener
             await BarcodeScanner.stopScan();
             listener.remove();
             setIsScanning(false);
-            
-            // Processar resultado
             onScanSuccess(code);
           }
         }
       );
 
-      // ✅ API MODERNA: Iniciar scanner otimizado para NFCe
+      // Configuração otimizada para NFCe em papel térmico
       await BarcodeScanner.startScan({
-        formats: [BarcodeFormat.QrCode], // QR_CODE específico para NFCe
+        formats: [BarcodeFormat.QrCode],
       });
       
-      console.log('📷 Câmera nativa ativa - detecção contínua para NFCe iniciada');
+      console.log('📷 ML Kit ativo com foco otimizado');
       
-      // Timeout de 90 segundos (mais tempo para NFCe densos)
+      // Timeout reduzido (30s) para sugerir fallback mais rápido
       setTimeout(async () => {
         if (isScanning) {
-          console.log('⏱️ Timeout: 90s sem detecção');
+          console.log('⏱️ Timeout ML Kit - QR não detectado');
           await BarcodeScanner.stopScan();
           listener.remove();
           setIsScanning(false);
           
           toast({
-            title: "💡 Dica",
-            description: "QR Code não detectado. Tente: 1) Limpar a câmera 2) Melhorar iluminação 3) Afastar/aproximar",
-            duration: 6000,
+            title: "💡 Dificuldade para ler NFCe?",
+            description: "Dicas: • Segurar a 10-15cm • Iluminação forte • QR limpo e plano • Sem dobras",
+            duration: 7000,
           });
         }
-      }, 90000);
+      }, 30000);
       
     } catch (error) {
-      console.error('❌ Erro ao iniciar scanner nativo:', error);
+      console.error('❌ Erro total no scanner nativo:', error);
       setIsScanning(false);
       
-      // Fallback para scanner web
       toast({
         title: "Scanner nativo falhou",
-        description: "Tentando com scanner web...",
+        description: "Tentando scanner alternativo...",
       });
       setUseNativeScanner(false);
       setIsScanning(true);
@@ -229,37 +268,72 @@ const QRCodeScanner = ({ onScanSuccess, onClose, isOpen }: QRCodeScannerProps) =
           ) : (
             <>
               {useNativeScanner ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-6 bg-transparent">
-                  {/* Overlay visual com guia */}
-                  <div className="relative w-64 h-64 border-4 border-green-500 rounded-lg shadow-[0_0_20px_rgba(34,197,94,0.5)] animate-pulse">
+                <div className="flex flex-col items-center justify-center py-12 space-y-6 bg-gradient-to-b from-black/95 to-black/80">
+                  {/* Quadro otimizado com animação */}
+                  <div className="relative w-72 h-72">
+                    {/* Quadro externo animado */}
+                    <div className="absolute inset-0 border-4 border-green-500/70 rounded-3xl shadow-[0_0_30px_rgba(34,197,94,0.6)] animate-pulse"></div>
+                    
+                    {/* Quadro interno */}
+                    <div className="absolute inset-3 border-2 border-green-400/40 rounded-2xl"></div>
+                    
+                    {/* Cantos destacados - amarelo/verde */}
+                    <div className="absolute -top-1 -left-1 w-14 h-14 border-t-[5px] border-l-[5px] border-yellow-400 rounded-tl-3xl shadow-lg"></div>
+                    <div className="absolute -top-1 -right-1 w-14 h-14 border-t-[5px] border-r-[5px] border-yellow-400 rounded-tr-3xl shadow-lg"></div>
+                    <div className="absolute -bottom-1 -left-1 w-14 h-14 border-b-[5px] border-l-[5px] border-yellow-400 rounded-bl-3xl shadow-lg"></div>
+                    <div className="absolute -bottom-1 -right-1 w-14 h-14 border-b-[5px] border-r-[5px] border-yellow-400 rounded-br-3xl shadow-lg"></div>
+                    
+                    {/* Ícone QR Code no centro */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-56 h-56 border-2 border-green-400/50 rounded-md"></div>
+                      <div className="w-20 h-20 bg-white/20 border-4 border-white/40 rounded-xl p-2 backdrop-blur-sm">
+                        <div className="grid grid-cols-4 gap-1 h-full">
+                          {[...Array(16)].map((_, i) => (
+                            <div key={i} className={`rounded-sm ${i % 3 === 0 ? 'bg-white' : 'bg-white/60'}`}></div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    {/* Cantos do quadro */}
-                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-yellow-400"></div>
-                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-yellow-400"></div>
-                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-yellow-400"></div>
-                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-yellow-400"></div>
+                    
+                    {/* Linha de scan animada */}
+                    <div className="absolute inset-x-0 top-1/2 h-1 bg-gradient-to-r from-transparent via-green-400 to-transparent animate-pulse"></div>
                   </div>
                   
-                  {/* Instruções visuais */}
-                  <div className="space-y-3 text-center px-4 max-w-xs">
-                    <p className="text-xl font-bold text-white drop-shadow-lg">
-                      📱 Centralize o QR Code no quadro verde
+                  {/* Instruções otimizadas para NFCe */}
+                  <div className="space-y-4 text-center px-6 max-w-sm">
+                    <p className="text-2xl font-bold text-green-400 drop-shadow-[0_2px_10px_rgba(34,197,94,0.8)] animate-pulse">
+                      📱 Posicione o QR Code da NFCe
                     </p>
-                    <div className="space-y-1 text-sm text-white/90 bg-black/50 rounded-lg p-3">
-                      <p>✓ Segure firme (evite tremores)</p>
-                      <p>✓ Boa iluminação ajuda</p>
-                      <p>✓ Distância: 10-15cm da tela</p>
+                    
+                    <div className="bg-black/70 rounded-xl p-4 space-y-2.5 border border-green-500/30 shadow-xl">
+                      <p className="text-white font-semibold flex items-center gap-2 justify-center">
+                        <span className="text-green-400 text-lg">✓</span>
+                        <span className="text-sm">Distância: 10-15cm do cupom</span>
+                      </p>
+                      <p className="text-white font-semibold flex items-center gap-2 justify-center">
+                        <span className="text-green-400 text-lg">✓</span>
+                        <span className="text-sm">Iluminação forte (sem reflexo)</span>
+                      </p>
+                      <p className="text-white font-semibold flex items-center gap-2 justify-center">
+                        <span className="text-green-400 text-lg">✓</span>
+                        <span className="text-sm">Segurar firme e centralizado</span>
+                      </p>
+                      <p className="text-white font-semibold flex items-center gap-2 justify-center">
+                        <span className="text-green-400 text-lg">✓</span>
+                        <span className="text-sm">QR limpo, plano e sem dobras</span>
+                      </p>
                     </div>
+                    
+                    <p className="text-white/70 text-xs bg-blue-600/30 rounded-lg px-3 py-2 border border-blue-500/40">
+                      🔥 Scanner Google otimizado para papel térmico
+                    </p>
                   </div>
                   
                   <Button 
                     variant="secondary" 
                     onClick={handleClose}
-                    className="mt-2 bg-red-600 hover:bg-red-700 text-white"
+                    className="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-lg shadow-lg"
                   >
-                    Cancelar Scanner
+                    ✕ Cancelar Scanner
                   </Button>
                 </div>
               ) : (
