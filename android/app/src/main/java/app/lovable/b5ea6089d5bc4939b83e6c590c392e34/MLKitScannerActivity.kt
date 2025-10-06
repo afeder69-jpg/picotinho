@@ -138,6 +138,15 @@ class MLKitScannerActivity : AppCompatActivity() {
                 imageProxy.imageInfo.rotationDegrees
             )
 
+            // Passar informações da imagem para o overlay
+            runOnUiThread {
+                overlayView.setImageSourceInfo(
+                    imageProxy.width,
+                    imageProxy.height,
+                    imageProxy.imageInfo.rotationDegrees
+                )
+            }
+
             barcodeScanner.process(image)
                 .addOnSuccessListener { barcodes ->
                     // Limpar overlay se não há barcodes
