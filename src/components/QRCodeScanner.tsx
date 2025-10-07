@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { X, AlertCircle } from "lucide-react";
-import { Capacitor } from '@capacitor/core';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
-import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 
 interface QRCodeScannerProps {
   onScanSuccess: (code: string) => void;
@@ -23,7 +21,6 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   });
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerRef = useRef<HTMLDivElement>(null);
-  const useNativeScanner = Capacitor.isNativePlatform();
   const { toast } = useToast();
 
   const isValidNFCeUrl = (url: string): boolean => {
@@ -41,76 +38,6 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
     }
   };
 
-  const startNativeScanner = async () => {
-    try {
-      console.log('🔍 Iniciando ML Kit Scanner oficial...');
-      setIsScanning(true);
-
-      // Verificar/solicitar permissões
-      const { camera } = await BarcodeScanner.checkPermissions();
-      
-      if (camera !== 'granted') {
-        const { camera: newPermission } = await BarcodeScanner.requestPermissions();
-        if (newPermission !== 'granted') {
-          throw new Error('Permissão de câmera negada');
-        }
-      }
-
-      toast({
-        title: "📱 Abrindo Scanner ML Kit",
-        description: "Aponte para o QR Code da NFCe",
-        duration: 2000,
-      });
-
-      // Iniciar scan
-      const { barcodes } = await BarcodeScanner.scan();
-
-      setIsScanning(false);
-
-      if (barcodes && barcodes.length > 0) {
-        const code = barcodes[0].rawValue;
-        console.log('🎯 QR Code detectado:', code);
-
-        if (isValidNFCeUrl(code)) {
-          console.log('✅ NFCe válida detectada!');
-          toast({
-            title: "✅ NFCe Detectada!",
-            description: "Processando nota fiscal...",
-            duration: 2000,
-          });
-          onScanSuccess(code);
-          onClose();
-        } else {
-          console.log('⚠️ QR Code detectado mas não é NFCe válida');
-          toast({
-            title: "⚠️ QR Code Inválido",
-            description: "Este não é um QR Code de NFCe",
-            variant: "destructive",
-          });
-        }
-      } else {
-        console.log('ℹ️ Scanner fechado sem detectar código');
-        toast({
-          title: "Scanner Cancelado",
-          description: "Nenhum código foi detectado",
-        });
-      }
-    } catch (error: any) {
-      console.error('❌ Erro no scanner ML Kit:', error);
-      setIsScanning(false);
-      
-      if (error?.message?.includes('cancel') || error?.message?.includes('User cancelled')) {
-        console.log('ℹ️ Usuário cancelou o scanner');
-        return;
-      }
-      
-      toast({
-        title: "Erro no Scanner",
-        description: error.message || "Falha ao escanear. Tente novamente.",
-        variant: "destructive"
-      });
-    }
-  };
 
   const startWebScanner = async () => {
     if (scannerRef.current) return;
@@ -210,28 +137,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   };
 
   useEffect(() => {
-    if (isOpen && useNativeScanner) {
-      (async () => {
-        const timeoutId = setTimeout(() => {
-          console.error('⏱️ TIMEOUT: Scanner não abriu em 2 segundos');
-          setIsScanning(false);
-          toast({
-            title: "❌ Erro ao Abrir Câmera",
-            description: "Tente novamente ou use o scanner web",
-            variant: "destructive",
-            duration: 5000
-          });
-        }, 2000);
-
-        try {
-          await startNativeScanner();
-        } catch (error) {
-          console.error('❌ Erro ao iniciar scanner:', error);
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      })();
-    } else if (isOpen && !useNativeScanner) {
+    if (isOpen) {
       startWebScanner();
     }
 
@@ -241,26 +147,6 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  if (useNativeScanner) {
-    return (
-      <div className="fixed inset-0 z-[9999] bg-background/95 backdrop-blur-sm flex items-center justify-center">
-        <div className="bg-card p-8 rounded-lg shadow-lg max-w-sm mx-4 text-center space-y-4">
-          <div className="text-6xl mb-4">📱</div>
-          <h2 className="text-2xl font-bold">Preparando Scanner ML Kit</h2>
-          <p className="text-muted-foreground">
-            Scanner nativo Google ML Kit abrirá em tela cheia
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Com detecção de cantos (4 pontos amarelos) e autofocus contínuo
-          </p>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black">

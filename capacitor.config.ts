@@ -14,9 +14,6 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true
     },
-    BarcodeScanning: {
-      permissions: ['camera']
-    },
     Browser: {
       androidCustomTabs: false,
       iosCustomTabs: false,
