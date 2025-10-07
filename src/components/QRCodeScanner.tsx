@@ -22,7 +22,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   const [isScanning, setIsScanning] = useState(false);
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
   const [scannerReady, setScannerReady] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false); // ✨ NOVO: Estado para feedback visual
+  const [isDetecting, setIsDetecting] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(() => {
     const saved = localStorage.getItem('qr-scanner-zoom');
     return saved ? parseFloat(saved) : 1.5;
@@ -32,177 +32,14 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
   const useNativeScanner = Capacitor.isNativePlatform();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (isOpen && useNativeScanner) {
-      // Wrapper assíncrono com timeout REDUZIDO para 2s
-      (async () => {
-        const timeoutId = setTimeout(() => {
-          console.error('⏱️ TIMEOUT: Scanner não abriu em 2 segundos');
-          setIsScanning(false);
-          toast({
-            title: "❌ Erro ao Abrir Câmera",
-            description: "Tente novamente ou use o scanner web",
-            variant: "destructive",
-            duration: 5000
-          });
-        }, 2000); // Reduzido de 5s para 2s
-
-        try {
-          await startNativeScanner();
-        } catch (error) {
-          console.error('❌ Erro ao iniciar scanner:', error);
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      })();
-    } else if (isOpen && !useNativeScanner) {
-      startWebScanner();
-    }
-
-    return () => {
-      cleanupWebScanner();
-    };
-  }, [isOpen]);
-
-  const startWebScanner = async () => {
-    if (!scannerContainerRef.current) return;
-
-    try {
-      console.log('🎥 Iniciando scanner web otimizado com zoom...');
-      setIsScanning(true);
-
-      const html5QrCode = new Html5Qrcode('qr-reader');
-      scannerRef.current = html5QrCode;
-
-      // Configurações OTIMIZADAS com alta resolução
-      const config = {
-        fps: 10,
-        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const qrboxSize = Math.floor(minEdge * 0.7); // 70% da tela
-          console.log('📐 Dimensões da câmera:', viewfinderWidth, 'x', viewfinderHeight);
-          console.log('📦 Área de detecção (qrbox):', qrboxSize, 'x', qrboxSize);
-          return { width: qrboxSize, height: qrboxSize };
-        },
-        aspectRatio: 1920 / 1080,
-        videoConstraints: {
-          width: { ideal: 1920 }, // Alta resolução
-          height: { ideal: 1080 }
-        }
-      };
-
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        config,
-        handleWebScanSuccess,
-        handleWebScanError
-      );
-
-      console.log('✅ Scanner web iniciado com zoom', zoomLevel + 'x');
-      
-      // 🔍 Aplicar zoom digital no vídeo
-      setTimeout(() => {
-        const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
-        if (videoElement) {
-          videoElement.style.transform = `scale(${zoomLevel})`;
-          videoElement.style.transformOrigin = 'center center';
-          console.log('🔎 Zoom aplicado:', zoomLevel + 'x');
-        }
-      }, 500);
-
-      setScannerReady(true);
-      
-      toast({
-        title: "📷 Scanner Ativo",
-        description: `Zoom ${zoomLevel}x | Procurando QR Code...`,
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('❌ Erro ao iniciar scanner:', error);
-      toast({
-        title: "Erro ao Iniciar Câmera",
-        description: "Verifique as permissões da câmera",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const cleanupWebScanner = async () => {
-    if (scannerRef.current && scannerRef.current.isScanning) {
-      try {
-        await scannerRef.current.stop();
-        console.log('🛑 Scanner web parado');
-      } catch (error) {
-        console.error('Erro ao parar scanner:', error);
-      }
-    }
-    setIsScanning(false);
-    setScannerReady(false);
-  };
-
-  const handleWebScanSuccess = (decodedText: string) => {
-    console.log('🌐 QR Code detectado (web):', decodedText);
-
-    // ✨ ETAPA 1: ACEITAR QUALQUER QR CODE (sem validação restritiva)
-    setIsDetecting(true); // ✨ ETAPA 2: Ativar feedback visual
-    
-    // Vibração de feedback (se disponível)
-    if (navigator.vibrate) {
-      navigator.vibrate(200);
-    }
-    
-    toast({
-      title: "✅ QR Code Detectado!",
-      description: "Processando...",
-      duration: 2000,
-    });
-    
-    // Reset do feedback visual após 1 segundo
-    setTimeout(() => setIsDetecting(false), 1000);
-    
-    cleanupWebScanner();
-    onScanSuccess(decodedText);
-    onClose();
-  };
-
-  const handleWebScanError = (errorMessage: string) => {
-    // ✨ ETAPA 3: Melhorar logs - mostrar TODOS os erros para debug
-    console.log('📸 Scanner tentando detectar...', errorMessage);
-  };
-
-  const adjustZoom = (delta: number) => {
-    const newZoom = Math.max(1, Math.min(3, zoomLevel + delta));
-    setZoomLevel(newZoom);
-    localStorage.setItem('qr-scanner-zoom', newZoom.toString());
-    
-    const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
-    if (videoElement) {
-      videoElement.style.transform = `scale(${newZoom})`;
-      console.log('🔎 Zoom ajustado para:', newZoom + 'x');
-      
-      toast({
-        title: `🔍 Zoom ${newZoom}x`,
-        description: "Nível de zoom ajustado",
-        duration: 1500,
-      });
-    }
-  };
-
   const isValidNFCeUrl = (url: string): boolean => {
-    if (!url || typeof url !== 'string') return false;
-    
     try {
       const urlObj = new URL(url);
-      const hostname = urlObj.hostname.toLowerCase();
-      
-      const isSefazDomain = hostname.includes('sefaz') || 
-                           hostname.includes('fazenda') ||
-                           hostname.includes('nfce') ||
-                           hostname.includes('nfe');
-      
+      const isSefazDomain = urlObj.hostname.includes('fazenda.') || 
+                            urlObj.hostname.includes('sefaz.');
       const hasNFCeParams = urlObj.searchParams.has('chNFe') || 
-                           urlObj.searchParams.has('p') ||
-                           urlObj.searchParams.has('tpAmb');
+                            urlObj.searchParams.has('p') ||
+                            urlObj.searchParams.has('tpAmb');
       
       return isSefazDomain && hasNFCeParams;
     } catch {
@@ -270,11 +107,136 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
     }
   };
 
+  const startWebScanner = async () => {
+    if (scannerRef.current) return;
+    
+    try {
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      scannerRef.current = html5QrCode;
+
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        {
+          fps: 30,
+          qrbox: { width: 300, height: 300 },
+          aspectRatio: 1.0,
+          disableFlip: false,
+          videoConstraints: {
+            advanced: [
+              { focusMode: "continuous" } as any,
+              { zoom: zoomLevel } as any
+            ]
+          }
+        },
+        handleWebScanSuccess,
+        handleWebScanError
+      );
+
+      setScannerReady(true);
+    } catch (error) {
+      console.error('Erro ao iniciar scanner:', error);
+      toast({
+        title: "Erro ao abrir câmera",
+        description: "Verifique as permissões",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const cleanupWebScanner = () => {
+    if (scannerRef.current) {
+      scannerRef.current.stop().then(() => {
+        scannerRef.current = null;
+        setScannerReady(false);
+      }).catch(err => console.error('Erro ao parar scanner:', err));
+    }
+  };
+
+  const handleWebScanSuccess = (decodedText: string) => {
+    if (isDetecting) return;
+    
+    setIsDetecting(true);
+    console.log('QR Code detectado:', decodedText);
+
+    if (isValidNFCeUrl(decodedText)) {
+      toast({
+        title: "✅ NFCe Detectada!",
+        description: "Processando nota fiscal...",
+        duration: 2000,
+      });
+      
+      setTimeout(() => {
+        onScanSuccess(decodedText);
+        cleanupWebScanner();
+        onClose();
+      }, 500);
+    } else {
+      toast({
+        title: "⚠️ QR Code Inválido",
+        description: "Este não é um QR Code de NFCe",
+        variant: "destructive",
+      });
+      setTimeout(() => setIsDetecting(false), 2000);
+    }
+  };
+
+  const handleWebScanError = (errorMessage: string) => {
+    // Silenciar erros normais de não detecção
+  };
+
+  const adjustZoom = (delta: number) => {
+    const newZoom = Math.max(1, Math.min(3, zoomLevel + delta));
+    setZoomLevel(newZoom);
+    localStorage.setItem('qr-scanner-zoom', newZoom.toString());
+    
+    const videoTrack = scannerRef.current?.getRunningTrackCameraCapabilities();
+    if (videoTrack) {
+      const video = document.querySelector('#qr-reader video') as HTMLVideoElement;
+      if (video && video.srcObject) {
+        const stream = video.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          track.applyConstraints({
+            advanced: [{ zoom: newZoom } as any]
+          }).catch(err => console.log('Zoom não suportado:', err));
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && useNativeScanner) {
+      (async () => {
+        const timeoutId = setTimeout(() => {
+          console.error('⏱️ TIMEOUT: Scanner não abriu em 2 segundos');
+          setIsScanning(false);
+          toast({
+            title: "❌ Erro ao Abrir Câmera",
+            description: "Tente novamente ou use o scanner web",
+            variant: "destructive",
+            duration: 5000
+          });
+        }, 2000);
+
+        try {
+          await startNativeScanner();
+        } catch (error) {
+          console.error('❌ Erro ao iniciar scanner:', error);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      })();
+    } else if (isOpen && !useNativeScanner) {
+      startWebScanner();
+    }
+
+    return () => {
+      cleanupWebScanner();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  // Para Android/iOS, o scanner abre em tela cheia nativamente
-  // então apenas mostramos mensagem enquanto aguarda
   if (useNativeScanner) {
     return (
       <div className="fixed inset-0 z-[9999] bg-background/95 backdrop-blur-sm flex items-center justify-center">
@@ -295,7 +257,6 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
     );
   }
 
-  // Scanner web (navegador)
   return (
     <div className="fixed inset-0 z-[9999] bg-black">
       <div className="flex flex-col h-full">
@@ -320,48 +281,40 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
             className="w-full h-full"
           />
 
-          {/* Custom Overlay com Cantos Destacados */}
+          {/* Custom Overlay */}
           {scannerReady && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              {/* Escurecimento das bordas */}
               <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-black/70" />
               <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/70" />
 
-              {/* Frame de detecção com animação */}
               <div className="relative w-80 h-80 animate-pulse">
-                {/* Quadrado principal */}
                 <div className="absolute inset-0 border-2 border-white/30 rounded-2xl" />
 
-                {/* 4 Cantos Destacados (simulando ML Kit) */}
-                {/* Canto Superior Esquerdo */}
+                {/* 4 Cantos Destacados */}
                 <div className="absolute -top-1 -left-1 w-16 h-16">
                   <div className="absolute top-0 left-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute top-0 left-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
                 </div>
 
-                {/* Canto Superior Direito */}
                 <div className="absolute -top-1 -right-1 w-16 h-16">
                   <div className="absolute top-0 right-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute top-0 right-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute top-0 right-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
                 </div>
 
-                {/* Canto Inferior Esquerdo */}
                 <div className="absolute -bottom-1 -left-1 w-16 h-16">
                   <div className="absolute bottom-0 left-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute bottom-0 left-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute bottom-0 left-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
                 </div>
 
-                {/* Canto Inferior Direito */}
                 <div className="absolute -bottom-1 -right-1 w-16 h-16">
                   <div className="absolute bottom-0 right-0 w-full h-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute bottom-0 right-0 w-1 h-full bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] animate-ping" />
                 </div>
 
-                {/* Texto de Status */}
                 <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 text-center">
                   <p className="text-white text-sm font-medium bg-black/60 px-4 py-2 rounded-full backdrop-blur-sm">
                     🔍 Procurando QR Code...
@@ -369,23 +322,14 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
                 </div>
               </div>
 
-              {/* ✨ ETAPA 2: 4 Pontinhos Amarelos Piscando (estilo Mood) */}
               {isDetecting && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="relative w-32 h-32">
-                    {/* Pontinho 1 - Superior Esquerdo */}
                     <div className="absolute top-0 left-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" />
-                    
-                    {/* Pontinho 2 - Superior Direito */}
                     <div className="absolute top-0 right-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" style={{ animationDelay: '0.15s' }} />
-                    
-                    {/* Pontinho 3 - Inferior Esquerdo */}
                     <div className="absolute bottom-0 left-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" style={{ animationDelay: '0.3s' }} />
-                    
-                    {/* Pontinho 4 - Inferior Direito */}
                     <div className="absolute bottom-0 right-0 w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_30px_rgba(250,204,21,1)] animate-pulse" style={{ animationDelay: '0.45s' }} />
 
-                    {/* Texto "LENDO AGORA" */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-20">
                       <p className="text-yellow-400 text-lg font-bold animate-pulse text-center whitespace-nowrap">
                         📱 LENDO AGORA...
@@ -398,9 +342,8 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
           )}
         </div>
 
-        {/* Footer com instruções, zoom e troubleshooting */}
+        {/* Footer */}
         <div className="p-4 bg-black/90 backdrop-blur-sm border-t border-white/10 space-y-3">
-          {/* Controles de Zoom */}
           <div className="flex items-center justify-center gap-3 mb-2">
             <Button
               variant="outline"
