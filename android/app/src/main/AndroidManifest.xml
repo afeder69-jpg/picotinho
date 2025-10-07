@@ -35,13 +35,6 @@
 
         </activity>
 
-        <!-- ML Kit Scanner Activity -->
-        <activity
-            android:name=".MLKitScannerActivity"
-            android:label="Scanner"
-            android:theme="@style/AppTheme.NoActionBar"
-            android:screenOrientation="portrait"
-            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
