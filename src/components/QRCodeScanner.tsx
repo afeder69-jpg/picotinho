@@ -4,13 +4,7 @@ import { X, AlertCircle } from "lucide-react";
 import { Capacitor } from '@capacitor/core';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
-import { registerPlugin } from '@capacitor/core';
-
-interface MLKitScannerPlugin {
-  scanBarcode(): Promise<{ ScanResult: string }>;
-}
-
-const MLKitScanner = registerPlugin<MLKitScannerPlugin>('MLKitScanner');
+import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 
 interface QRCodeScannerProps {
   onScanSuccess: (code: string) => void;
@@ -49,8 +43,18 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
 
   const startNativeScanner = async () => {
     try {
-      console.log('🔍 Iniciando Google ML Kit Scanner nativo...');
+      console.log('🔍 Iniciando ML Kit Scanner oficial...');
       setIsScanning(true);
+
+      // Verificar/solicitar permissões
+      const { camera } = await BarcodeScanner.checkPermissions();
+      
+      if (camera !== 'granted') {
+        const { camera: newPermission } = await BarcodeScanner.requestPermissions();
+        if (newPermission !== 'granted') {
+          throw new Error('Permissão de câmera negada');
+        }
+      }
 
       toast({
         title: "📱 Abrindo Scanner ML Kit",
@@ -58,16 +62,17 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
         duration: 2000,
       });
 
-      const result = await MLKitScanner.scanBarcode();
+      // Iniciar scan
+      const { barcodes } = await BarcodeScanner.scan();
 
       setIsScanning(false);
 
-      if (result.ScanResult) {
-        const code = result.ScanResult;
-        console.log('🎯 QR Code detectado com ML Kit:', code);
+      if (barcodes && barcodes.length > 0) {
+        const code = barcodes[0].rawValue;
+        console.log('🎯 QR Code detectado:', code);
 
         if (isValidNFCeUrl(code)) {
-          console.log('✅ NFCe válida detectada com ML Kit!');
+          console.log('✅ NFCe válida detectada!');
           toast({
             title: "✅ NFCe Detectada!",
             description: "Processando nota fiscal...",
@@ -101,7 +106,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
       
       toast({
         title: "Erro no Scanner",
-        description: "Falha ao escanear. Tente novamente.",
+        description: error.message || "Falha ao escanear. Tente novamente.",
         variant: "destructive"
       });
     }
