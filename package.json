@@ -13,6 +13,7 @@
     "deploy": "git add . && git commit -am \"Auto update\" || echo \"Nada para commitar\" && git pull origin main && npm install --legacy-peer-deps && npm run build && npx cap sync android && npx cap run android"
   },
   "dependencies": {
+    "@capacitor-community/barcode-scanner": "^4.0.1",
     "@capacitor-mlkit/barcode-scanning": "^6.2.0",
     "@capacitor/android": "^6.1.2",
     "@capacitor/barcode-scanner": "^2.2.0",

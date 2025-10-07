@@ -141,6 +141,15 @@ All colors MUST be HSL.
   .scanner-active {
     background: transparent !important;
   }
+  
+  .scanner-active * {
+    visibility: hidden;
+  }
+  
+  .scanner-active .scanner-ui,
+  .scanner-active .scanner-ui * {
+    visibility: visible;
+  }
 
   /* Compact Notes Styles */
   .compact-notas .nome-mercado {
