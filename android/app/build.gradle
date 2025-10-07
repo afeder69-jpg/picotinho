@@ -1,6 +1,6 @@
 apply plugin: 'com.android.application'
-// Se você usa Kotlin no seu projeto, considere adicionar também:
 apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
 
 android {
     namespace "app.lovable.b5ea6089d5bc4939b83e6c590c392e34"
