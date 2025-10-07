@@ -21,6 +21,9 @@ const config: CapacitorConfig = {
     },
     FilePicker: {
       permissions: ['photos', 'camera']
+    },
+    BarcodeScanner: {
+      enabled: true
     }
   },
   android: {

@@ -1,13 +1,54 @@
 import { Button } from "@/components/ui/button";
 import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
+import QRCodeScanner from "./QRCodeScanner";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { toast } from "@/hooks/use-toast";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleQRScanSuccess = (data: string) => {
+    console.log("QR Code escaneado:", data);
+    
+    // Validar se é uma nota fiscal válida (pode adaptar a validação)
+    if (data && data.length > 0) {
+      toast({
+        title: "QR Code detectado",
+        description: "Processando nota fiscal...",
+      });
+      
+      // Aqui você pode adicionar lógica para processar a nota fiscal
+      // Por exemplo: navegar para uma tela de processamento ou salvar os dados
+      
+    } else {
+      toast({
+        title: "Código inválido",
+        description: "O QR Code escaneado não é uma nota fiscal válida",
+        variant: "destructive"
+      });
+    }
+    
+    setShowQRScanner(false);
+  };
+
+  const handleQRButtonClick = () => {
+    if (!Capacitor.isNativePlatform()) {
+      toast({
+        title: "Função não disponível",
+        description: "O scanner QR está disponível apenas no aplicativo móvel",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setShowQRScanner(true);
+  };
 
   return (
     <>
@@ -24,15 +65,14 @@ const BottomNavigation = () => {
             <Home className="w-6 h-6" />
           </Button>
           
-          {/* Botão Escanear QR - desabilitado por enquanto */}
+          {/* Botão Escanear QR - Funcional apenas em app nativo */}
           {location.pathname === '/' && (
             <Button
               variant="default"
               size="lg"
-              className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
-              onClick={() => {
-                // Não faz nada por enquanto
-              }}
+              className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto disabled:opacity-50"
+              onClick={handleQRButtonClick}
+              disabled={!Capacitor.isNativePlatform()}
             >
               <QrCode className="w-8 h-8" />
             </Button>
@@ -67,6 +107,14 @@ const BottomNavigation = () => {
             <ScreenCaptureComponent />
           </div>
         </div>
+      )}
+
+      {/* QR Code Scanner */}
+      {showQRScanner && (
+        <QRCodeScanner
+          onScanSuccess={handleQRScanSuccess}
+          onClose={() => setShowQRScanner(false)}
+        />
       )}
     </>
   );
