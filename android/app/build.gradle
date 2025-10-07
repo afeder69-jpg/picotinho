@@ -20,6 +20,11 @@ android {
         }
     }
 
+    // ✅ Configuração do Kotlin sourceSets
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
     // ✅ Garantindo compatibilidade com Java 17
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
