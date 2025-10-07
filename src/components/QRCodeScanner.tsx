@@ -52,8 +52,21 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
       
       setIsScanning(true);
 
+      // Timeout de segurança de 30 segundos
+      const scanTimeout = setTimeout(async () => {
+        console.error('Scanner timeout - travou após 30s');
+        toast({
+          title: "Scanner travado",
+          description: "O scanner demorou muito para responder. Tente novamente.",
+          variant: "destructive"
+        });
+        await stopScan();
+      }, 30000);
+
       // Iniciar scanner
       const result = await BarcodeScanner.scan();
+      
+      clearTimeout(scanTimeout);
       
       if (result.barcodes && result.barcodes.length > 0) {
         const scannedData = result.barcodes[0].rawValue;
