@@ -1,12 +1,13 @@
 import { Button } from "@/components/ui/button";
-import { Home, Menu } from "lucide-react";
+import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <>
@@ -22,6 +23,20 @@ const BottomNavigation = () => {
           >
             <Home className="w-6 h-6" />
           </Button>
+          
+          {/* Botão Escanear QR - desabilitado por enquanto */}
+          {location.pathname === '/' && (
+            <Button
+              variant="default"
+              size="lg"
+              className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
+              onClick={() => {
+                // Não faz nada por enquanto
+              }}
+            >
+              <QrCode className="w-8 h-8" />
+            </Button>
+          )}
           
           {/* Botão Menu - sempre presente no canto direito */}
           <Button
