@@ -59,6 +59,9 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:1.2.0"
     implementation "androidx.core:core-splashscreen:1.0.1"
 
+    // Kotlin
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
+
     // Capacitor
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
