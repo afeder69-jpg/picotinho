@@ -5,9 +5,8 @@ import com.getcapacitor.BridgeActivity
 
 class MainActivity : BridgeActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        // Registrar o plugin customizado do ML Kit
+        // Registrar o plugin customizado do ML Kit ANTES do super.onCreate()
         registerPlugin(MLKitScannerPlugin::class.java)
+        super.onCreate(savedInstanceState)
     }
 }
