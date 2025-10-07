@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
-import QRCodeScanner from "./QRCodeScanner";
+import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
@@ -38,15 +38,6 @@ const BottomNavigation = () => {
   };
 
   const handleQRButtonClick = () => {
-    if (!Capacitor.isNativePlatform()) {
-      toast({
-        title: "Função não disponível",
-        description: "O scanner QR está disponível apenas no aplicativo móvel",
-        variant: "destructive"
-      });
-      return;
-    }
-    
     setShowQRScanner(true);
   };
 
@@ -65,14 +56,13 @@ const BottomNavigation = () => {
             <Home className="w-6 h-6" />
           </Button>
           
-          {/* Botão Escanear QR - Funcional apenas em app nativo */}
+          {/* Botão Escanear QR - Funcional em todas as plataformas */}
           {location.pathname === '/' && (
             <Button
               variant="default"
               size="lg"
-              className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto disabled:opacity-50"
+              className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
               onClick={handleQRButtonClick}
-              disabled={!Capacitor.isNativePlatform()}
             >
               <QrCode className="w-8 h-8" />
             </Button>
@@ -111,7 +101,7 @@ const BottomNavigation = () => {
 
       {/* QR Code Scanner */}
       {showQRScanner && (
-        <QRCodeScanner
+        <QRCodeScannerWeb
           onScanSuccess={handleQRScanSuccess}
           onClose={() => setShowQRScanner(false)}
         />
