@@ -49,6 +49,7 @@ class MLKitScannerPlugin : Plugin() {
     }
 
     private fun startScanner() {
+        val call = savedCall ?: return
         val intent = Intent(activity, MLKitScannerActivity::class.java)
         startActivityForResult(call, intent, REQUEST_SCAN_CODE)
     }
@@ -76,7 +77,7 @@ class MLKitScannerPlugin : Plugin() {
         }
     }
 
-    private fun hasRequiredPermissions(): Boolean {
+    override fun hasRequiredPermissions(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.CAMERA
