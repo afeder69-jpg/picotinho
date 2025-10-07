@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { toast } from "./use-toast";
-import { Capacitor } from '@capacitor/core';
 import { supabase } from "@/integrations/supabase/client";
-import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 
 export const useMLKitScanner = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -82,7 +80,7 @@ export const useMLKitScanner = () => {
 
   const handleScanSuccess = async (result: string) => {
     setLastScannedCode(result);
-    console.log("🔍 QR Code escaneado (ML Kit nativo):", result);
+    console.log("🔍 QR Code escaneado:", result);
     
     if (!isValidUrl(result)) {
       toast({
@@ -164,53 +162,7 @@ export const useMLKitScanner = () => {
   };
 
   const startNativeScanner = async () => {
-    if (!Capacitor.isNativePlatform()) {
-      toast({
-        title: "Erro",
-        description: "Scanner ML Kit só funciona em dispositivos Android/iOS",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      console.log('🔍 Iniciando ML Kit Scanner oficial...');
-      
-      // Verificar/solicitar permissões
-      const { camera } = await BarcodeScanner.checkPermissions();
-      
-      if (camera !== 'granted') {
-        const { camera: newPermission } = await BarcodeScanner.requestPermissions();
-        if (newPermission !== 'granted') {
-          throw new Error('Permissão de câmera negada');
-        }
-      }
-      
-      toast({
-        title: "📱 Abrindo Scanner ML Kit",
-        description: "Aponte para o QR Code da NFCe",
-        duration: 2000,
-      });
-
-      // Iniciar scan
-      const { barcodes } = await BarcodeScanner.scan();
-
-      if (barcodes && barcodes.length > 0) {
-        const code = barcodes[0].rawValue;
-        console.log('✅ QR Code detectado:', code);
-        await handleScanSuccess(code);
-      }
-    } catch (error: any) {
-      console.error('❌ Erro no scanner ML Kit:', error);
-      
-      if (!error?.message?.includes('cancel') && !error?.message?.includes('User cancelled')) {
-        toast({
-          title: "Erro no Scanner",
-          description: error.message || "Falha ao escanear. Tente novamente.",
-          variant: "destructive"
-        });
-      }
-    }
+    openScanner();
   };
 
   return {
