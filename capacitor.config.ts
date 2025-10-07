@@ -24,8 +24,8 @@ const config: CapacitorConfig = {
     }
   },
   android: {
-    webContentsDebuggingEnabled: true,
-    allowMixedContent: true,
+    webContentsDebuggingEnabled: false,
+    allowMixedContent: false,
     overrideUserAgent: 'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     backgroundColor: '#ffffff',
     allowNavigation: ['*'],
