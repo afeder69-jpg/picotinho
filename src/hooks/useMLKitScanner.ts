@@ -2,15 +2,7 @@ import { useState } from "react";
 import { toast } from "./use-toast";
 import { Capacitor } from '@capacitor/core';
 import { supabase } from "@/integrations/supabase/client";
-
-// Interface para o plugin nativo
-interface MLKitScannerPlugin {
-  scanBarcode(): Promise<{ ScanResult: string }>;
-}
-
-// Registrar o plugin
-import { registerPlugin } from '@capacitor/core';
-const MLKitScanner = registerPlugin<MLKitScannerPlugin>('MLKitScanner');
+import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 
 export const useMLKitScanner = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -181,13 +173,18 @@ export const useMLKitScanner = () => {
       return;
     }
 
-    // Timeout de 5 segundos
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Scanner timeout')), 5000)
-    );
-
     try {
-      console.log('🔍 Iniciando Google ML Kit Scanner nativo...');
+      console.log('🔍 Iniciando ML Kit Scanner oficial...');
+      
+      // Verificar/solicitar permissões
+      const { camera } = await BarcodeScanner.checkPermissions();
+      
+      if (camera !== 'granted') {
+        const { camera: newPermission } = await BarcodeScanner.requestPermissions();
+        if (newPermission !== 'granted') {
+          throw new Error('Permissão de câmera negada');
+        }
+      }
       
       toast({
         title: "📱 Abrindo Scanner ML Kit",
@@ -195,30 +192,21 @@ export const useMLKitScanner = () => {
         duration: 2000,
       });
 
-      // Race entre scan e timeout
-      const result = await Promise.race([
-        MLKitScanner.scanBarcode(),
-        timeoutPromise
-      ]) as { ScanResult: string };
+      // Iniciar scan
+      const { barcodes } = await BarcodeScanner.scan();
 
-      if (result.ScanResult) {
-        console.log('✅ QR Code detectado com ML Kit:', result.ScanResult);
-        await handleScanSuccess(result.ScanResult);
+      if (barcodes && barcodes.length > 0) {
+        const code = barcodes[0].rawValue;
+        console.log('✅ QR Code detectado:', code);
+        await handleScanSuccess(code);
       }
     } catch (error: any) {
       console.error('❌ Erro no scanner ML Kit:', error);
       
-      if (error?.message?.includes('timeout')) {
-        toast({
-          title: "⏱️ Timeout",
-          description: "Scanner demorou muito. Tente novamente.",
-          variant: "destructive",
-          duration: 5000,
-        });
-      } else if (!error?.message?.includes('cancel')) {
+      if (!error?.message?.includes('cancel') && !error?.message?.includes('User cancelled')) {
         toast({
           title: "Erro no Scanner",
-          description: "Falha ao escanear. Tente novamente.",
+          description: error.message || "Falha ao escanear. Tente novamente.",
           variant: "destructive"
         });
       }
