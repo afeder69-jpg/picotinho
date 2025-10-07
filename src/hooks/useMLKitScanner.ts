@@ -181,6 +181,11 @@ export const useMLKitScanner = () => {
       return;
     }
 
+    // Timeout de 5 segundos
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Scanner timeout')), 5000)
+    );
+
     try {
       console.log('🔍 Iniciando Google ML Kit Scanner nativo...');
       
@@ -190,7 +195,11 @@ export const useMLKitScanner = () => {
         duration: 2000,
       });
 
-      const result = await MLKitScanner.scanBarcode();
+      // Race entre scan e timeout
+      const result = await Promise.race([
+        MLKitScanner.scanBarcode(),
+        timeoutPromise
+      ]) as { ScanResult: string };
 
       if (result.ScanResult) {
         console.log('✅ QR Code detectado com ML Kit:', result.ScanResult);
@@ -199,7 +208,14 @@ export const useMLKitScanner = () => {
     } catch (error: any) {
       console.error('❌ Erro no scanner ML Kit:', error);
       
-      if (!error?.message?.includes('cancel')) {
+      if (error?.message?.includes('timeout')) {
+        toast({
+          title: "⏱️ Timeout",
+          description: "Scanner demorou muito. Tente novamente.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      } else if (!error?.message?.includes('cancel')) {
         toast({
           title: "Erro no Scanner",
           description: "Falha ao escanear. Tente novamente.",

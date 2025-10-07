@@ -34,7 +34,28 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
 
   useEffect(() => {
     if (isOpen && useNativeScanner) {
-      startNativeScanner();
+      // Wrapper assíncrono com timeout
+      (async () => {
+        const timeoutId = setTimeout(() => {
+          console.error('⏱️ Timeout: Scanner não abriu em 5 segundos');
+          toast({
+            title: "❌ Erro ao Abrir Scanner",
+            description: "O scanner demorou muito para responder. Tente novamente.",
+            variant: "destructive",
+            duration: 5000,
+          });
+          setIsScanning(false);
+          onClose();
+        }, 5000);
+
+        try {
+          await startNativeScanner();
+        } catch (error) {
+          console.error('❌ Erro ao iniciar scanner:', error);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      })();
     } else if (isOpen && !useNativeScanner) {
       startWebScanner();
     }
