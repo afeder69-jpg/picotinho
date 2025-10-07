@@ -1,25 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Home, FileText, Menu, QrCode } from "lucide-react";
-import QRCodeScanner from "./QRCodeScanner";
+import { Home, Menu } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
-import ReceiptViewer from "./ReceiptViewer";
-import { useQRScanner } from "@/hooks/useQRScanner";
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const BottomNavigation = () => {
-  const { 
-    isOpen, 
-    showReceiptViewer,
-    currentReceiptUrl,
-    openScanner, 
-    closeScanner, 
-    closeReceiptViewer,
-    handleScanSuccess 
-  } = useQRScanner();
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
 
   return (
     <>
@@ -35,18 +22,6 @@ const BottomNavigation = () => {
           >
             <Home className="w-6 h-6" />
           </Button>
-          
-          {/* Botão Escanear QR - apenas na página inicial */}
-          {location.pathname === '/' && (
-            <Button
-              variant="default"
-              size="lg"
-              className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
-              onClick={openScanner}
-            >
-              <QrCode className="w-8 h-8" />
-            </Button>
-          )}
           
           {/* Botão Menu - sempre presente no canto direito */}
           <Button
@@ -77,23 +52,6 @@ const BottomNavigation = () => {
             <ScreenCaptureComponent />
           </div>
         </div>
-      )}
-      
-      {/* QR Code Scanner ativo */}
-      <QRCodeScanner
-        isOpen={isOpen}
-        onClose={closeScanner}
-        onScanSuccess={handleScanSuccess}
-      />
-
-      {/* Receipt Viewer */}
-      {showReceiptViewer && currentReceiptUrl && (
-        <ReceiptViewer
-          url={currentReceiptUrl}
-          isOpen={showReceiptViewer}
-          onClose={closeReceiptViewer}
-          onConfirm={closeReceiptViewer}
-        />
       )}
     </>
   );

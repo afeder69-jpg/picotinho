@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import QRCodeScanner from "@/components/QRCodeScanner";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -9,18 +7,8 @@ import { LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 const Index = () => {
-  const [showScanner, setShowScanner] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-
-  const handleScanSuccess = (result: string) => {
-    toast.success(`QR Code escaneado: ${result}`);
-    setShowScanner(false);
-  };
-
-  const handleCloseScanner = () => {
-    setShowScanner(false);
-  };
 
   const handleSignOut = async () => {
     try {
@@ -97,13 +85,6 @@ const Index = () => {
           )}
         </div>
       </div>
-      
-      {/* QR Code Scanner */}
-      <QRCodeScanner 
-        isOpen={showScanner}
-        onScanSuccess={handleScanSuccess}
-        onClose={handleCloseScanner}
-      />
     </div>
   );
 };
