@@ -31,6 +31,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // ✨ Configuração para gerar APK de debug
+            debuggable true
+            minifyEnabled false
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
