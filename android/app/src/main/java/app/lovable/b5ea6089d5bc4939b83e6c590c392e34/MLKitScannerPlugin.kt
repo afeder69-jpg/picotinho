@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
-import androidx.core.app.ActivityCompat
+import androidx.activity.result.ActivityResult
 import androidx.core.content.ContextCompat
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -30,80 +30,103 @@ class MLKitScannerPlugin : Plugin() {
 
     @PluginMethod
     fun scanBarcode(call: PluginCall) {
-        Log.d("MLKitScanner", "🔍 scanBarcode() chamado")
+        Log.d("MLKitScanner", "🔍 [PLUGIN] scanBarcode() chamado")
         
         if (!hasRequiredPermissions()) {
-            Log.w("MLKitScanner", "⚠️ Permissão de câmera não concedida, solicitando...")
+            Log.w("MLKitScanner", "⚠️ [PLUGIN] Permissão de câmera não concedida, solicitando...")
             requestAllPermissions(call, "cameraPermissionCallback")
             return
         }
 
-        Log.d("MLKitScanner", "✅ Permissão OK, iniciando scanner...")
+        Log.d("MLKitScanner", "✅ [PLUGIN] Permissão OK, iniciando scanner...")
         savedCall = call
         startScanner()
     }
 
     @PluginMethod
     fun cameraPermissionCallback(call: PluginCall) {
+        Log.d("MLKitScanner", "🔑 [PLUGIN] cameraPermissionCallback chamado")
         if (hasRequiredPermissions()) {
+            Log.d("MLKitScanner", "✅ [PLUGIN] Permissão concedida")
             savedCall = call
             startScanner()
         } else {
+            Log.e("MLKitScanner", "❌ [PLUGIN] Permissão negada pelo usuário")
             call.reject("Permissão de câmera negada")
         }
     }
 
     private fun startScanner() {
         val currentCall = savedCall ?: run {
-            Log.e("MLKitScanner", "❌ savedCall é null em startScanner()")
+            Log.e("MLKitScanner", "❌ [PLUGIN] savedCall é null em startScanner()")
             return
         }
         
         try {
-            Log.d("MLKitScanner", "🚀 Criando Intent para MLKitScannerActivity...")
+            Log.d("MLKitScanner", "🚀 [PLUGIN] Criando Intent para MLKitScannerActivity...")
             val intent = Intent(activity, MLKitScannerActivity::class.java)
             
-            Log.d("MLKitScanner", "📱 Iniciando Activity com startActivityForResult...")
-            startActivityForResult(currentCall, intent, REQUEST_SCAN_CODE)
+            Log.d("MLKitScanner", "📱 [PLUGIN] Iniciando Activity com startActivityForResult...")
             
-            Log.d("MLKitScanner", "✅ Activity iniciada com sucesso")
+            // Usar ActivityResultLauncher moderno via Capacitor
+            startActivityForResult(currentCall, intent, "scannerCallback")
+            
+            Log.d("MLKitScanner", "✅ [PLUGIN] startActivityForResult chamado com sucesso")
         } catch (e: Exception) {
-            Log.e("MLKitScanner", "❌ ERRO ao iniciar MLKitScannerActivity: ${e.message}", e)
+            Log.e("MLKitScanner", "❌ [PLUGIN] ERRO ao iniciar MLKitScannerActivity: ${e.message}", e)
             currentCall.reject("Erro ao abrir scanner: ${e.message}")
             savedCall = null
         }
     }
 
-    override fun handleOnActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.handleOnActivityResult(requestCode, resultCode, data)
-
-        Log.d("MLKitScanner", "📲 handleOnActivityResult - requestCode: $requestCode, resultCode: $resultCode")
-
-        if (requestCode == REQUEST_SCAN_CODE) {
-            val currentCall = savedCall ?: run {
-                Log.w("MLKitScanner", "⚠️ savedCall é null em handleOnActivityResult")
-                return
-            }
+    @PluginMethod
+    fun scannerCallback(call: PluginCall) {
+        Log.d("MLKitScanner", "📲 [PLUGIN] scannerCallback chamado")
+        
+        val currentCall = savedCall ?: run {
+            Log.w("MLKitScanner", "⚠️ [PLUGIN] savedCall é null em scannerCallback")
+            call.reject("Erro interno: savedCall é null")
+            return
+        }
+        
+        if (!call.data.has("activityResult")) {
+            Log.e("MLKitScanner", "❌ [PLUGIN] activityResult não encontrado")
+            currentCall.reject("Erro ao processar resultado")
+            savedCall = null
+            return
+        }
+        
+        try {
+            val result = call.getObject("activityResult")
+            val resultCode = result.getInt("resultCode")
+            
+            Log.d("MLKitScanner", "📲 [PLUGIN] resultCode: $resultCode")
             
             if (resultCode == android.app.Activity.RESULT_OK) {
-                val scanResult = data?.getStringExtra("SCAN_RESULT")
-                Log.d("MLKitScanner", "✅ Scan OK - Resultado: $scanResult")
+                val data = result.getJSONObject("data")
+                val scanResult = data?.getString("SCAN_RESULT")
+                
+                Log.d("MLKitScanner", "✅ [PLUGIN] Scan OK - Resultado: $scanResult")
                 
                 if (scanResult != null) {
-                    val result = JSObject()
-                    result.put("ScanResult", scanResult)
-                    currentCall.resolve(result)
+                    val jsResult = JSObject()
+                    jsResult.put("ScanResult", scanResult)
+                    currentCall.resolve(jsResult)
+                    Log.d("MLKitScanner", "✅ [PLUGIN] Resultado enviado para JS")
                 } else {
-                    Log.w("MLKitScanner", "⚠️ Resultado vazio")
+                    Log.w("MLKitScanner", "⚠️ [PLUGIN] Resultado vazio")
                     currentCall.reject("Nenhum código detectado")
                 }
             } else {
-                Log.d("MLKitScanner", "ℹ️ Scanner cancelado pelo usuário")
+                Log.d("MLKitScanner", "ℹ️ [PLUGIN] Scanner cancelado pelo usuário")
                 currentCall.reject("Scanner cancelado")
             }
-            
-            savedCall = null
+        } catch (e: Exception) {
+            Log.e("MLKitScanner", "❌ [PLUGIN] Erro ao processar resultado: ${e.message}", e)
+            currentCall.reject("Erro ao processar resultado: ${e.message}")
         }
+        
+        savedCall = null
     }
 
     override fun hasRequiredPermissions(): Boolean {

@@ -34,19 +34,18 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
 
   useEffect(() => {
     if (isOpen && useNativeScanner) {
-      // Wrapper assíncrono com timeout
+      // Wrapper assíncrono com timeout REDUZIDO para 2s
       (async () => {
         const timeoutId = setTimeout(() => {
-          console.error('⏱️ Timeout: Scanner não abriu em 5 segundos');
-          toast({
-            title: "❌ Erro ao Abrir Scanner",
-            description: "O scanner demorou muito para responder. Tente novamente.",
-            variant: "destructive",
-            duration: 5000,
-          });
+          console.error('⏱️ TIMEOUT: Scanner não abriu em 2 segundos');
           setIsScanning(false);
-          onClose();
-        }, 5000);
+          toast({
+            title: "❌ Erro ao Abrir Câmera",
+            description: "Tente novamente ou use o scanner web",
+            variant: "destructive",
+            duration: 5000
+          });
+        }, 2000); // Reduzido de 5s para 2s
 
         try {
           await startNativeScanner();
@@ -75,16 +74,21 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose, i
       const html5QrCode = new Html5Qrcode('qr-reader');
       scannerRef.current = html5QrCode;
 
+      // Configurações OTIMIZADAS com alta resolução
       const config = {
-        fps: 30,
+        fps: 10,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
           const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const qrboxSize = Math.floor(minEdge * 0.7);
+          const qrboxSize = Math.floor(minEdge * 0.7); // 70% da tela
           console.log('📐 Dimensões da câmera:', viewfinderWidth, 'x', viewfinderHeight);
           console.log('📦 Área de detecção (qrbox):', qrboxSize, 'x', qrboxSize);
           return { width: qrboxSize, height: qrboxSize };
         },
         aspectRatio: 1920 / 1080,
+        videoConstraints: {
+          width: { ideal: 1920 }, // Alta resolução
+          height: { ideal: 1080 }
+        }
       };
 
       await html5QrCode.start(

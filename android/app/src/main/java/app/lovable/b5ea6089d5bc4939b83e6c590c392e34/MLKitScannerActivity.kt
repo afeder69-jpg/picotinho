@@ -32,6 +32,8 @@ class MLKitScannerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        Log.d("MLKitScanner", "🎬 [ACTIVITY] onCreate() - Activity iniciada")
+        
         // Criar layout programaticamente com FrameLayout para sobrepor overlay
         val frameLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -69,14 +71,17 @@ class MLKitScannerActivity : AppCompatActivity() {
         barcodeScanner = BarcodeScanning.getClient(options)
         cameraExecutor = Executors.newSingleThreadExecutor()
         
+        Log.d("MLKitScanner", "📷 [ACTIVITY] Iniciando câmera...")
         startCamera()
     }
 
     @SuppressLint("UnsafeOptInUsageError")
     private fun startCamera() {
+        Log.d("MLKitScanner", "📸 [ACTIVITY] startCamera() chamado")
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
         cameraProviderFuture.addListener({
+            Log.d("MLKitScanner", "📸 [ACTIVITY] CameraProvider obtido")
             val cameraProvider = cameraProviderFuture.get()
 
             // Preview
@@ -103,6 +108,8 @@ class MLKitScannerActivity : AppCompatActivity() {
             try {
                 cameraProvider.unbindAll()
                 
+                Log.d("MLKitScanner", "🎥 [ACTIVITY] Binding camera lifecycle...")
+                
                 // Bind com autofocus
                 val camera = cameraProvider.bindToLifecycle(
                     this,
@@ -111,13 +118,15 @@ class MLKitScannerActivity : AppCompatActivity() {
                     imageAnalyzer
                 )
                 
+                Log.d("MLKitScanner", "✅ [ACTIVITY] Câmera iniciada com sucesso!")
+                
                 // Habilitar autofocus contínuo
                 val cameraControl = camera.cameraControl
                 cameraControl.enableTorch(false) // flash desligado por padrão
 
             } catch (e: Exception) {
-                Log.e("MLKitScanner", "Erro ao iniciar câmera", e)
-                Toast.makeText(this, "Erro ao iniciar câmera", Toast.LENGTH_SHORT).show()
+                Log.e("MLKitScanner", "❌ [ACTIVITY] Erro ao iniciar câmera", e)
+                Toast.makeText(this, "Erro ao iniciar câmera: ${e.message}", Toast.LENGTH_SHORT).show()
                 finish()
             }
 
@@ -164,8 +173,8 @@ class MLKitScannerActivity : AppCompatActivity() {
                         
                         val rawValue = barcode.rawValue
                         if (rawValue != null) {
-                            Log.d("MLKitScanner", "✅ QR Code detectado: $rawValue")
-                            Log.d("MLKitScanner", "📍 cornerPoints: ${barcode.cornerPoints?.contentToString()}")
+                            Log.d("MLKitScanner", "✅ [ACTIVITY] QR Code detectado: $rawValue")
+                            Log.d("MLKitScanner", "📍 [ACTIVITY] cornerPoints: ${barcode.cornerPoints?.contentToString()}")
                             
                             // Parar scanning e retornar resultado
                             isScanning = false
