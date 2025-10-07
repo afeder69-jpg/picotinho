@@ -49,28 +49,28 @@ class MLKitScannerPlugin : Plugin() {
     }
 
     private fun startScanner() {
-        val call = savedCall ?: return
+        val currentCall = savedCall ?: return
         val intent = Intent(activity, MLKitScannerActivity::class.java)
-        startActivityForResult(call, intent, REQUEST_SCAN_CODE)
+        startActivityForResult(currentCall, intent, REQUEST_SCAN_CODE)
     }
 
     override fun handleOnActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.handleOnActivityResult(requestCode, resultCode, data)
 
         if (requestCode == REQUEST_SCAN_CODE) {
-            val call = savedCall ?: return
+            val currentCall = savedCall ?: return
             
             if (resultCode == android.app.Activity.RESULT_OK) {
                 val scanResult = data?.getStringExtra("SCAN_RESULT")
                 if (scanResult != null) {
                     val result = JSObject()
                     result.put("ScanResult", scanResult)
-                    call.resolve(result)
+                    currentCall.resolve(result)
                 } else {
-                    call.reject("Nenhum código detectado")
+                    currentCall.reject("Nenhum código detectado")
                 }
             } else {
-                call.reject("Scanner cancelado")
+                currentCall.reject("Scanner cancelado")
             }
             
             savedCall = null
