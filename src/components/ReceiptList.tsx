@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
-import { ProcessReceiptButton } from './ProcessReceiptButton';
+
 
 interface Receipt {
   id: string;
@@ -1052,13 +1052,6 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                 </div>
               </div>
               
-              {/* Botão flutuante de processar apenas para notas pendentes destacadas */}
-              {isPending && isHighlighted && (
-                <ProcessReceiptButton 
-                  notaId={receipt.id} 
-                  onProcessed={loadReceipts} 
-                />
-              )}
             </Card>
           );
           })}
