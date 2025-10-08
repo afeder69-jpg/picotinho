@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ImageUpload } from "./ImageUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -17,6 +18,8 @@ interface ReceitaDialogProps {
 
 export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [imagemUrl, setImagemUrl] = useState<string>("");
+  const [imagemPath, setImagemPath] = useState<string>("");
   const queryClient = useQueryClient();
   const { register, handleSubmit, reset, setValue } = useForm();
 
@@ -34,6 +37,8 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
         instrucoes: data.modo_preparo || "",
         fonte: 'minha',
         user_id: user.id,
+        imagem_url: imagemUrl || null,
+        imagem_path: imagemPath || null,
       });
 
       if (error) throw error;
@@ -41,6 +46,8 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
       toast.success("Receita criada com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["receitas-disponiveis"] });
       reset();
+      setImagemUrl("");
+      setImagemPath("");
       onOpenChange(false);
     } catch (error: any) {
       toast.error(error.message || "Erro ao criar receita");
@@ -56,6 +63,21 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
           <DialogTitle>Nova Receita</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Label>Foto da Receita</Label>
+            <ImageUpload
+              currentImage={imagemUrl}
+              onImageUploaded={(url, path) => {
+                setImagemUrl(url);
+                setImagemPath(path);
+              }}
+              onImageRemoved={() => {
+                setImagemUrl("");
+                setImagemPath("");
+              }}
+            />
+          </div>
+
           <div>
             <Label>Título</Label>
             <Input {...register("titulo", { required: true })} placeholder="Nome da receita" />
@@ -77,14 +99,10 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
             </Select>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Preparo (min)</Label>
+              <Label>Tempo Preparo (min)</Label>
               <Input type="number" {...register("tempo_preparo")} placeholder="30" />
-            </div>
-            <div>
-              <Label>Cozimento (min)</Label>
-              <Input type="number" {...register("tempo_cozimento")} placeholder="0" />
             </div>
             <div>
               <Label>Porções</Label>
