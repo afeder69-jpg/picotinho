@@ -49,6 +49,32 @@ serve(async (req) => {
 
     console.log(`🔍 Processando imagem: ${nota.imagem_url}`);
 
+    // 🔍 Verificar se imagem é válida (não é o fallback vazio)
+    let useHtmlFallback = false;
+    let htmlCapturado = null;
+
+    try {
+      const imageResponse = await fetch(nota.imagem_url);
+      const imageSize = parseInt(imageResponse.headers.get('content-length') || '0');
+      
+      if (imageSize < 10000) { // < 10KB = provavelmente o fallback vazio
+        console.log(`⚠️ Imagem muito pequena detectada (${imageSize} bytes). Buscando HTML capturado...`);
+        
+        // Buscar HTML do dados_extraidos
+        if (nota.dados_extraidos && nota.dados_extraidos.html_capturado) {
+          htmlCapturado = nota.dados_extraidos.html_capturado;
+          useHtmlFallback = true;
+          console.log('✅ HTML capturado encontrado! Usando como alternativa.');
+        } else {
+          console.log('⚠️ HTML capturado não encontrado. Tentando com imagem mesmo assim...');
+        }
+      } else {
+        console.log(`✅ Imagem válida detectada (${imageSize} bytes). Processando imagem...`);
+      }
+    } catch (sizeCheckError) {
+      console.log('⚠️ Não foi possível verificar tamanho da imagem. Tentando com imagem...', sizeCheckError);
+    }
+
     // Prompt para extração completa de dados de notas fiscais com categorização aprimorada
     const extractionPrompt = `Você é um especialista em análise de notas fiscais brasileiras. Analise esta imagem de nota fiscal e extraia TODOS os dados estruturados em JSON.
 
@@ -119,7 +145,48 @@ REGRAS CRÍTICAS DE CATEGORIZAÇÃO:
 
 Retorne APENAS o JSON válido, sem explicações.`;
 
-    // Chamar OpenAI Vision
+    // Construir mensagens para OpenAI baseado em qual fonte de dados está disponível
+    const openaiMessages = [
+      {
+        role: 'system',
+        content: extractionPrompt
+      }
+    ];
+
+    if (useHtmlFallback && htmlCapturado) {
+      // Usar HTML em vez da imagem
+      console.log('📄 Extraindo dados do HTML capturado...');
+      openaiMessages.push({
+        role: 'user',
+        content: `Extraia todos os dados desta nota fiscal a partir do HTML fornecido.
+Siga TODAS as regras de categorização.
+
+HTML DA NOTA FISCAL:
+${htmlCapturado}
+
+Retorne APENAS o JSON estruturado conforme especificado, sem explicações.`
+      });
+    } else {
+      // Usar imagem (fluxo original)
+      console.log('🖼️ Extraindo dados da imagem...');
+      openaiMessages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Extraia todos os dados desta nota fiscal seguindo as regras de categorização:'
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: nota.imagem_url
+            }
+          }
+        ]
+      });
+    }
+
+    // Chamar OpenAI Vision/Chat
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -128,27 +195,7 @@ Retorne APENAS o JSON válido, sem explicações.`;
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: extractionPrompt
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Extraia todos os dados desta nota fiscal seguindo as regras de categorização:'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: nota.imagem_url
-                }
-              }
-            ]
-          }
-        ],
+        messages: openaiMessages,
         max_tokens: 4000,
         temperature: 0.1
       }),
