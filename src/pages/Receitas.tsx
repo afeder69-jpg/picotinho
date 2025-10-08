@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { Plus, Search, Filter, ChefHat } from "lucide-react";
+import { Plus, Search, Filter, ChefHat, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReceitasList } from "@/components/receitas/ReceitasList";
 import { ReceitaDialog } from "@/components/receitas/ReceitaDialog";
+import { BuscarReceitasApi } from "@/components/receitas/BuscarReceitasApi";
 
 export default function Receitas() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [apiDialogOpen, setApiDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("todas");
 
   return (
@@ -20,14 +22,25 @@ export default function Receitas() {
             <ChefHat className="h-8 w-8" />
             <h1 className="text-2xl font-bold">Receitas</h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setDialogOpen(true)}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Receita
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setApiDialogOpen(true)}
+              className="text-primary-foreground hover:bg-white/10"
+            >
+              <Globe className="h-4 w-4 mr-2" />
+              Buscar Online
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setDialogOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Nova
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -67,8 +80,9 @@ export default function Receitas() {
         </Tabs>
       </div>
 
-      {/* Create Dialog */}
+      {/* Dialogs */}
       <ReceitaDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <BuscarReceitasApi open={apiDialogOpen} onOpenChange={setApiDialogOpen} />
     </div>
   );
 }
