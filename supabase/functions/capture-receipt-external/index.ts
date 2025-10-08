@@ -243,12 +243,53 @@ serve(async (req) => {
     
     console.log('✅ Captura externa concluída com sucesso:', notaImagem.id);
     
+    // 🤖 PROCESSAMENTO AUTOMÁTICO: Extração + Adição ao Estoque
+    console.log('🤖 Iniciando processamento automático da nota...');
+    
+    try {
+      // Passo 1: Extrair dados com IA
+      console.log('📊 Chamando extract-receipt-image...');
+      const extractResult = await supabase.functions.invoke('extract-receipt-image', {
+        body: { 
+          imagemId: notaImagem.id,
+          notaImagemId: notaImagem.id,
+          userId: userId
+        }
+      });
+
+      if (extractResult.error) {
+        console.error('⚠️ Erro na extração automática:', extractResult.error);
+        // Continua mesmo com erro - usuário pode processar manualmente depois
+      } else {
+        console.log('✅ Extração automática concluída!');
+        
+        // Passo 2: Processar e adicionar ao estoque
+        console.log('📦 Chamando process-receipt-full...');
+        const processResult = await supabase.functions.invoke('process-receipt-full', {
+          body: { 
+            notaId: notaImagem.id,
+            force: true
+          }
+        });
+
+        if (processResult.error) {
+          console.error('⚠️ Erro no processamento automático:', processResult.error);
+          // Continua mesmo com erro - usuário pode processar manualmente depois
+        } else {
+          console.log('✅ Processamento automático concluído! Produtos adicionados ao estoque.');
+        }
+      }
+    } catch (autoProcessError) {
+      console.error('⚠️ Erro no processamento automático:', autoProcessError);
+      // Não quebra o fluxo - captura foi bem-sucedida
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: true, 
         notaImagemId: notaImagem.id,
         imageUrl: imageUrl,
-        message: 'Nota fiscal capturada com sucesso! Revise os dados antes de processar.'
+        message: 'Nota fiscal capturada e processada com sucesso!'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
