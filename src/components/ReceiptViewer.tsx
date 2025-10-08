@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, X, Loader2 } from "lucide-react";
+import { Check, X, Loader2, ExternalLink } from "lucide-react";
+import { Browser } from "@capacitor/browser";
+import { useToast } from "@/hooks/use-toast";
 
 interface ReceiptViewerProps {
   url: string;
@@ -11,11 +13,61 @@ interface ReceiptViewerProps {
 
 const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [browserOpened, setBrowserOpened] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen && !browserOpened) {
+      openReceiptInBrowser();
+    }
+  }, [isOpen, browserOpened]);
+
+  const openReceiptInBrowser = async () => {
+    try {
+      // Abre a URL em navegador nativo fullscreen
+      await Browser.open({ 
+        url,
+        presentationStyle: 'fullscreen',
+        toolbarColor: '#ffffff'
+      });
+      
+      setBrowserOpened(true);
+      
+      // Listener para quando o usuário fechar o browser diretamente
+      Browser.addListener('browserFinished', () => {
+        handleBrowserClosed();
+      });
+      
+    } catch (error) {
+      console.error('Erro ao abrir browser:', error);
+      toast({
+        title: "Erro ao abrir nota",
+        description: "Não foi possível visualizar a nota fiscal",
+        variant: "destructive"
+      });
+      onClose();
+    }
+  };
+
+  const handleBrowserClosed = () => {
+    setBrowserOpened(false);
+    onClose();
+  };
 
   const handleConfirm = async () => {
     setIsProcessing(true);
+    // Fecha o browser antes de confirmar
+    await Browser.close();
     await onConfirm();
     setIsProcessing(false);
+    setBrowserOpened(false);
+  };
+
+  const handleCancel = async () => {
+    // Fecha o browser antes de cancelar
+    await Browser.close();
+    setBrowserOpened(false);
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -30,20 +82,34 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
         </Button>
       </div>
 
-      {/* Iframe com HTML da Receita Federal */}
-      <div className="flex-1 relative">
-        <iframe 
-          src={url} 
-          className="w-full h-full border-0"
-          title="Nota Fiscal - Receita Federal"
-          sandbox="allow-same-origin allow-scripts allow-forms"
-        />
-        
-        {/* Overlay com instrução */}
-        <div className="absolute top-4 left-4 right-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg">
-          <p className="text-sm font-medium text-center">
-            📋 Verifique se a nota fiscal carregou corretamente
-          </p>
+      {/* Tela de espera enquanto usuário visualiza no navegador nativo */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-background to-muted/20">
+        <div className="max-w-md w-full space-y-6 text-center">
+          <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
+            <ExternalLink className="w-10 h-10 text-primary" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="text-xl font-semibold">Nota aberta no navegador</h3>
+            <p className="text-muted-foreground">
+              A nota fiscal da Receita Federal foi aberta em uma nova janela do navegador.
+            </p>
+          </div>
+
+          <div className="bg-card border rounded-lg p-4 space-y-2 text-left">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">1</span>
+              Verifique se a nota carregou corretamente
+            </p>
+            <p className="text-sm font-medium flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">2</span>
+              Volte para este app
+            </p>
+            <p className="text-sm font-medium flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">3</span>
+              Clique em "OK - Confirmar" para processar
+            </p>
+          </div>
         </div>
       </div>
 
@@ -51,7 +117,7 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
       <div className="bg-background/95 backdrop-blur-sm border-t p-4">
         <div className="flex gap-3 max-w-md mx-auto">
           <Button
-            onClick={onClose}
+            onClick={handleCancel}
             variant="destructive"
             size="lg"
             className="flex-1 font-semibold"
