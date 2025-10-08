@@ -257,16 +257,21 @@ async function processarPrecosUsuario(supabase: any, limite: number) {
 }
 
 async function normalizarProduto(supabase: any, nomeOriginal: string) {
-  // Chamar a função de normalização IA-2
-  const response = await supabase.functions.invoke('normalizar-produto-ia2', {
-    body: { nomeOriginal }
-  });
-
-  if (response.error) {
-    throw new Error(`Erro na normalização: ${response.error.message}`);
-  }
-
-  return response.data;
+  // ⚠️ Função desabilitada - normalizar-produto-ia2 foi removida
+  // Retorna estrutura básica sem normalização IA
+  const nomeNormalizado = nomeOriginal.toUpperCase().trim();
+  
+  return {
+    produto_nome_normalizado: nomeNormalizado,
+    nome_base: nomeNormalizado,
+    marca: null,
+    tipo_embalagem: null,
+    qtd_valor: null,
+    qtd_unidade: null,
+    qtd_base: null,
+    granel: false,
+    produto_hash_normalizado: null
+  };
 }
 
 async function consolidarEstoque(supabase: any) {
