@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
+import { ProcessReceiptButton } from './ProcessReceiptButton';
 
 interface Receipt {
   id: string;
@@ -248,7 +249,11 @@ function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; 
   };
 }
 
-const ReceiptList = () => {
+interface ReceiptListProps {
+  highlightNotaId?: string | null;
+}
+
+const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
@@ -256,6 +261,7 @@ const ReceiptList = () => {
   const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(highlightNotaId || null);
   const { toast } = useToast();
   
 
@@ -264,6 +270,17 @@ const ReceiptList = () => {
     const interval = setInterval(loadReceipts, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-expandir e scroll para nota destacada
+  useEffect(() => {
+    if (highlightNotaId) {
+      setExpandedNoteId(highlightNotaId);
+      setTimeout(() => {
+        const element = document.getElementById(`nota-${highlightNotaId}`);
+        element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }, [highlightNotaId]);
 
 
   const loadReceipts = async () => {
@@ -901,10 +918,18 @@ const ReceiptList = () => {
     <>
       <div className="compact-notas">
         <div>
-          {receipts.map((receipt) => (
-            <Card key={receipt.id} className="card">
-              <div className="flex justify-between items-start">
-                <div className="flex-1" style={{ marginRight: '8px' }}>
+          {receipts.map((receipt) => {
+            const isHighlighted = receipt.id === highlightNotaId;
+            const isPending = !receipt.processada && receipt.dados_extraidos;
+            
+            return (
+              <Card 
+                key={receipt.id} 
+                id={`nota-${receipt.id}`}
+                className={`card ${isHighlighted ? 'border-4 border-green-500 shadow-lg animate-pulse' : ''}`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1" style={{ marginRight: '8px' }}>
                   {receipt.processada && receipt.dados_extraidos ? (
                     <>
                       {/* Para notas processadas com dados estruturados da IA */}
@@ -1026,8 +1051,17 @@ const ReceiptList = () => {
                   </Button>
                 </div>
               </div>
+              
+              {/* Botão flutuante de processar apenas para notas pendentes destacadas */}
+              {isPending && isHighlighted && (
+                <ProcessReceiptButton 
+                  notaId={receipt.id} 
+                  onProcessed={loadReceipts} 
+                />
+              )}
             </Card>
-          ))}
+          );
+          })}
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

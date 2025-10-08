@@ -241,30 +241,14 @@ serve(async (req) => {
     
     if (dbError) throw dbError;
     
-    // ✅ FLUXO DIRETO: processar a nota imediatamente com o HTML capturado
-    console.log("🚀 Captura externa finalizada, disparando processamento completo...");
-    
-    EdgeRuntime.waitUntil(
-      supabase.functions.invoke('process-receipt-full', {
-        body: { 
-          nota_id: notaImagem.id,
-          force: true
-        }
-      }).then((result) => {
-        console.log("✅ Nota processada automaticamente:", result);
-      }).catch((error) => {
-        console.error('❌ Falha no processamento automático:', error);
-      })
-    );
-    
-    console.log('Captura externa concluída com sucesso:', notaImagem.id);
+    console.log('✅ Captura externa concluída com sucesso:', notaImagem.id);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         notaImagemId: notaImagem.id,
         imageUrl: imageUrl,
-        message: 'Nota fiscal capturada e sendo processada'
+        message: 'Nota fiscal capturada com sucesso! Revise os dados antes de processar.'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

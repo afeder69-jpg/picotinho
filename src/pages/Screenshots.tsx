@@ -9,6 +9,10 @@ import { LogIn } from "lucide-react";
 const Screenshots = () => {
   const { user, loading, signInAnonymously } = useAuth();
   const [refreshKey, setRefreshKey] = React.useState(0);
+  
+  // Detectar parâmetro ?highlight= na URL
+  const searchParams = new URLSearchParams(window.location.search);
+  const highlightNotaId = searchParams.get('highlight');
 
   const handleUploadSuccess = () => {
     setRefreshKey(prev => prev + 1);
@@ -50,7 +54,7 @@ const Screenshots = () => {
         <div className="mb-6">
           <UploadNoteButton onUploadSuccess={handleUploadSuccess} />
         </div>
-        <ReceiptList key={refreshKey} />
+        <ReceiptList key={refreshKey} highlightNotaId={highlightNotaId} />
       </div>
     </div>
   );

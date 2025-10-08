@@ -68,12 +68,12 @@ const BottomNavigation = () => {
       }
       
       toast({
-        title: "Nota fiscal processada!",
-        description: "A nota foi adicionada ao sistema e está sendo processada.",
+        title: "✅ Nota capturada!",
+        description: "Revise os dados antes de processar.",
       });
       
-      // Navegar para a página de notas fiscais
-      navigate('/screenshots');
+      // Navegar para a página de notas fiscais com destaque
+      navigate(`/screenshots?highlight=${result.notaImagemId}`);
       
     } catch (error) {
       console.error("Erro ao processar QR Code:", error);
