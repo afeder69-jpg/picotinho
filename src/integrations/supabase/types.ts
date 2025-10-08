@@ -14,6 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      cardapio_receitas: {
+        Row: {
+          cardapio_id: string
+          created_at: string
+          dia_semana: number
+          id: string
+          receita_id: string
+          refeicao: string
+        }
+        Insert: {
+          cardapio_id: string
+          created_at?: string
+          dia_semana: number
+          id?: string
+          receita_id: string
+          refeicao: string
+        }
+        Update: {
+          cardapio_id?: string
+          created_at?: string
+          dia_semana?: number
+          id?: string
+          receita_id?: string
+          refeicao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cardapio_receitas_cardapio_id_fkey"
+            columns: ["cardapio_id"]
+            isOneToOne: false
+            referencedRelation: "cardapios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cardapio_receitas_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cardapios: {
+        Row: {
+          created_at: string
+          id: string
+          semana_fim: string
+          semana_inicio: string
+          titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          semana_fim: string
+          semana_inicio: string
+          titulo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          semana_fim?: string
+          semana_inicio?: string
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       categorias: {
         Row: {
           ativa: boolean | null
@@ -288,6 +360,102 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      listas_compras: {
+        Row: {
+          cardapio_id: string | null
+          created_at: string
+          id: string
+          origem: string
+          receita_id: string | null
+          titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cardapio_id?: string | null
+          created_at?: string
+          id?: string
+          origem: string
+          receita_id?: string | null
+          titulo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cardapio_id?: string | null
+          created_at?: string
+          id?: string
+          origem?: string
+          receita_id?: string | null
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listas_compras_cardapio_id_fkey"
+            columns: ["cardapio_id"]
+            isOneToOne: false
+            referencedRelation: "cardapios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listas_compras_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listas_compras_itens: {
+        Row: {
+          comprado: boolean
+          created_at: string
+          id: string
+          lista_id: string
+          produto_id: string | null
+          produto_nome: string
+          quantidade: number
+          unidade_medida: string
+        }
+        Insert: {
+          comprado?: boolean
+          created_at?: string
+          id?: string
+          lista_id: string
+          produto_id?: string | null
+          produto_nome: string
+          quantidade: number
+          unidade_medida: string
+        }
+        Update: {
+          comprado?: boolean
+          created_at?: string
+          id?: string
+          lista_id?: string
+          produto_id?: string | null
+          produto_nome?: string
+          quantidade?: number
+          unidade_medida?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listas_compras_itens_lista_id_fkey"
+            columns: ["lista_id"]
+            isOneToOne: false
+            referencedRelation: "listas_compras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listas_compras_itens_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_app"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       marcas_conhecidas: {
         Row: {
@@ -1624,6 +1792,111 @@ export type Database = {
         }
         Relationships: []
       }
+      receita_ingredientes: {
+        Row: {
+          created_at: string
+          id: string
+          opcional: boolean
+          produto_id: string | null
+          produto_nome_busca: string
+          quantidade: number
+          receita_id: string
+          unidade_medida: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          opcional?: boolean
+          produto_id?: string | null
+          produto_nome_busca: string
+          quantidade: number
+          receita_id: string
+          unidade_medida: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          opcional?: boolean
+          produto_id?: string | null
+          produto_nome_busca?: string
+          quantidade?: number
+          receita_id?: string
+          unidade_medida?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receita_ingredientes_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_app"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receita_ingredientes_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receitas: {
+        Row: {
+          api_source_id: string | null
+          api_source_name: string | null
+          created_at: string
+          descricao: string | null
+          fonte: Database["public"]["Enums"]["fonte_receita"]
+          id: string
+          imagem_path: string | null
+          imagem_url: string | null
+          instrucoes: string
+          porcoes: number | null
+          publica: boolean
+          status: Database["public"]["Enums"]["status_receita"]
+          tempo_preparo: number | null
+          titulo: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          api_source_id?: string | null
+          api_source_name?: string | null
+          created_at?: string
+          descricao?: string | null
+          fonte?: Database["public"]["Enums"]["fonte_receita"]
+          id?: string
+          imagem_path?: string | null
+          imagem_url?: string | null
+          instrucoes: string
+          porcoes?: number | null
+          publica?: boolean
+          status?: Database["public"]["Enums"]["status_receita"]
+          tempo_preparo?: number | null
+          titulo: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          api_source_id?: string | null
+          api_source_name?: string | null
+          created_at?: string
+          descricao?: string | null
+          fonte?: Database["public"]["Enums"]["fonte_receita"]
+          id?: string
+          imagem_path?: string | null
+          imagem_url?: string | null
+          instrucoes?: string
+          porcoes?: number | null
+          publica?: boolean
+          status?: Database["public"]["Enums"]["status_receita"]
+          tempo_preparo?: number | null
+          titulo?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       sinonimos_produtos: {
         Row: {
           aprovado_por: string | null
@@ -2637,6 +2910,9 @@ export type Database = {
     }
     Enums: {
       app_role: "master" | "user" | "admin"
+      fonte_receita: "minha" | "picotinho" | "comunidade" | "api_externa"
+      status_receita: "rascunho" | "publicada" | "arquivada"
+      tipo_disponibilidade: "completo" | "parcial" | "faltando"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2765,6 +3041,9 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["master", "user", "admin"],
+      fonte_receita: ["minha", "picotinho", "comunidade", "api_externa"],
+      status_receita: ["rascunho", "publicada", "arquivada"],
+      tipo_disponibilidade: ["completo", "parcial", "faltando"],
     },
   },
 } as const
