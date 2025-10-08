@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
+import ReceiptViewer from "./ReceiptViewer";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
@@ -11,10 +12,12 @@ import { supabase } from "@/integrations/supabase/client";
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
+  const [receiptUrl, setReceiptUrl] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleQRScanSuccess = async (data: string) => {
+  const handleQRScanSuccess = (data: string) => {
     console.log("QR Code escaneado:", data);
     
     // Validar se é uma URL de nota fiscal válida
@@ -30,11 +33,16 @@ const BottomNavigation = () => {
       return;
     }
     
+    // Abrir visualização do HTML da Receita Federal
+    setReceiptUrl(data);
+    setShowReceiptViewer(true);
     setShowQRScanner(false);
-    
+  };
+
+  const handleConfirmReceipt = async () => {
     toast({
-      title: "Processando nota fiscal",
-      description: "Capturando e extraindo dados da nota...",
+      title: "Capturando nota fiscal",
+      description: "Salvando imagem da nota...",
     });
     
     try {
@@ -49,19 +57,19 @@ const BottomNavigation = () => {
         return;
       }
       
-      // Enviar para processamento via edge function
+      // Capturar e salvar nota
       const { data: result, error } = await supabase.functions.invoke('capture-receipt-external', {
         body: {
-          receiptUrl: data,
+          receiptUrl: receiptUrl,
           userId: user.id
         }
       });
       
       if (error) {
-        console.error("Erro ao processar nota:", error);
+        console.error("Erro ao capturar nota:", error);
         toast({
-          title: "Erro ao processar nota",
-          description: "Não foi possível processar a nota fiscal. Tente novamente.",
+          title: "Erro ao capturar nota",
+          description: "Não foi possível capturar a nota fiscal. Tente novamente.",
           variant: "destructive",
         });
         return;
@@ -69,20 +77,28 @@ const BottomNavigation = () => {
       
       toast({
         title: "✅ Nota capturada!",
-        description: "Revise os dados antes de processar.",
+        description: "Nota salva com sucesso. Processando dados...",
       });
       
-      // Navegar para a página de notas fiscais com destaque
+      setShowReceiptViewer(false);
+      
+      // Navegar para página de notas com destaque
       navigate(`/screenshots?highlight=${result.notaImagemId}`);
       
     } catch (error) {
-      console.error("Erro ao processar QR Code:", error);
+      console.error("Erro ao processar nota:", error);
       toast({
         title: "Erro no processamento",
-        description: "Ocorreu um erro ao processar o QR Code.",
+        description: "Ocorreu um erro ao capturar a nota.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleCancelReceipt = () => {
+    setShowReceiptViewer(false);
+    setReceiptUrl("");
+    navigate('/');
   };
 
   const handleQRButtonClick = () => {
@@ -152,6 +168,16 @@ const BottomNavigation = () => {
         <QRCodeScannerWeb
           onScanSuccess={handleQRScanSuccess}
           onClose={() => setShowQRScanner(false)}
+        />
+      )}
+
+      {/* Receipt Viewer - Visualização do HTML da Receita Federal */}
+      {showReceiptViewer && (
+        <ReceiptViewer
+          url={receiptUrl}
+          isOpen={showReceiptViewer}
+          onClose={handleCancelReceipt}
+          onConfirm={handleConfirmReceipt}
         />
       )}
     </>
