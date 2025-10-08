@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "./ImageUpload";
+import { IngredientesManager } from "./IngredientesManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
   const [loading, setLoading] = useState(false);
   const [imagemUrl, setImagemUrl] = useState<string>("");
   const [imagemPath, setImagemPath] = useState<string>("");
+  const [ingredientes, setIngredientes] = useState<any[]>([]);
   const queryClient = useQueryClient();
   const { register, handleSubmit, reset, setValue } = useForm();
 
@@ -29,7 +31,7 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { error } = await supabase.from("receitas").insert({
+      const { data: receitaCriada, error } = await supabase.from("receitas").insert({
         titulo: data.titulo,
         descricao: data.descricao,
         tempo_preparo: parseInt(data.tempo_preparo) || 0,
@@ -39,15 +41,33 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
         user_id: user.id,
         imagem_url: imagemUrl || null,
         imagem_path: imagemPath || null,
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Adicionar ingredientes se houver
+      if (ingredientes.length > 0 && receitaCriada) {
+        const ingredientesParaInserir = ingredientes.map(ing => ({
+          receita_id: receitaCriada.id,
+          produto_nome_busca: ing.ingrediente,
+          quantidade: parseFloat(ing.quantidade) || 1,
+          unidade_medida: ing.unidade_medida,
+          opcional: false,
+        }));
+
+        const { error: ingError } = await supabase
+          .from('receita_ingredientes')
+          .insert(ingredientesParaInserir);
+
+        if (ingError) console.error('Erro ao adicionar ingredientes:', ingError);
+      }
 
       toast.success("Receita criada com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["receitas-disponiveis"] });
       reset();
       setImagemUrl("");
       setImagemPath("");
+      setIngredientes([]);
       onOpenChange(false);
     } catch (error: any) {
       toast.error(error.message || "Erro ao criar receita");
@@ -119,6 +139,11 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
             <Label>Modo de Preparo</Label>
             <Textarea {...register("modo_preparo")} placeholder="Digite cada passo em uma linha" rows={6} />
           </div>
+
+          <IngredientesManager
+            ingredientes={ingredientes}
+            onChange={setIngredientes}
+          />
 
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
