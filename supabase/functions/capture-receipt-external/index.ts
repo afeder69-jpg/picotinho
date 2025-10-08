@@ -241,23 +241,19 @@ serve(async (req) => {
     
     if (dbError) throw dbError;
     
-    // ✅ FLUXO AUTOMÁTICO: IA-1 (extração de imagem) → IA-2 (estoque)
-    console.log("🚀 Captura externa finalizada, disparando extração de dados...");
+    // ✅ FLUXO DIRETO: processar a nota imediatamente com o HTML capturado
+    console.log("🚀 Captura externa finalizada, disparando processamento completo...");
     
     EdgeRuntime.waitUntil(
-      supabase.functions.invoke('extract-receipt-image', {
-        body: { imagemId: notaImagem.id, userId: userId }
-      }).then((extractResult) => {
-        console.log("✅ Extração de dados concluída:", extractResult);
-        
-        // Após extração, disparar inserção no estoque
-        return supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        });
+      supabase.functions.invoke('process-receipt-full', {
+        body: { 
+          nota_id: notaImagem.id,
+          force: true
+        }
       }).then((result) => {
-        console.log("✅ IA-2 executada automaticamente com sucesso:", result);
+        console.log("✅ Nota processada automaticamente:", result);
       }).catch((error) => {
-        console.error('❌ Falha na execução automática:', error);
+        console.error('❌ Falha no processamento automático:', error);
       })
     );
     
