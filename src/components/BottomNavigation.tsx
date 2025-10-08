@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
@@ -13,28 +14,72 @@ const BottomNavigation = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleQRScanSuccess = (data: string) => {
+  const handleQRScanSuccess = async (data: string) => {
     console.log("QR Code escaneado:", data);
     
-    // Validar se é uma nota fiscal válida (pode adaptar a validação)
-    if (data && data.length > 0) {
+    // Validar se é uma URL de nota fiscal válida
+    const urlPattern = /^https?:\/\/.+/i;
+    
+    if (!urlPattern.test(data)) {
       toast({
-        title: "QR Code detectado",
-        description: "Processando nota fiscal...",
+        title: "QR Code inválido",
+        description: "Este não parece ser um QR Code de nota fiscal válido.",
+        variant: "destructive",
       });
-      
-      // Aqui você pode adicionar lógica para processar a nota fiscal
-      // Por exemplo: navegar para uma tela de processamento ou salvar os dados
-      
-    } else {
-      toast({
-        title: "Código inválido",
-        description: "O QR Code escaneado não é uma nota fiscal válida",
-        variant: "destructive"
-      });
+      setShowQRScanner(false);
+      return;
     }
     
     setShowQRScanner(false);
+    
+    toast({
+      title: "Processando nota fiscal",
+      description: "Capturando e extraindo dados da nota...",
+    });
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Erro de autenticação",
+          description: "Você precisa estar logado para processar notas.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Enviar para processamento via edge function
+      const { data: result, error } = await supabase.functions.invoke('capture-receipt-external', {
+        body: {
+          receiptUrl: data,
+          userId: user.id
+        }
+      });
+      
+      if (error) {
+        console.error("Erro ao processar nota:", error);
+        toast({
+          title: "Erro ao processar nota",
+          description: "Não foi possível processar a nota fiscal. Tente novamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      toast({
+        title: "Nota fiscal processada!",
+        description: "A nota foi adicionada ao sistema e está sendo processada.",
+      });
+      
+    } catch (error) {
+      console.error("Erro ao processar QR Code:", error);
+      toast({
+        title: "Erro no processamento",
+        description: "Ocorreu um erro ao processar o QR Code.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleQRButtonClick = () => {
