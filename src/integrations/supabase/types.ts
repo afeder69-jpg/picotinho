@@ -2448,6 +2448,23 @@ export type Database = {
           total_usuarios: number
         }[]
       }
+      buscar_receitas_disponiveis: {
+        Args: { p_user_id: string }
+        Returns: {
+          descricao: string
+          disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
+          fonte: Database["public"]["Enums"]["fonte_receita"]
+          imagem_url: string
+          ingredientes_disponiveis: number
+          ingredientes_faltantes: Json
+          percentual_disponivel: number
+          porcoes: number
+          receita_id: string
+          tempo_preparo: number
+          titulo: string
+          total_ingredientes: number
+        }[]
+      }
       calcular_preco_por_unidade_base: {
         Args: {
           preco_unitario: number
@@ -2488,6 +2505,14 @@ export type Database = {
           detalhes: string
           produtos_corrigidos: number
         }[]
+      }
+      criar_lista_compras_de_cardapio: {
+        Args: { p_cardapio_id: string; p_titulo?: string; p_user_id: string }
+        Returns: string
+      }
+      criar_lista_compras_de_receita: {
+        Args: { p_receita_id: string; p_titulo?: string; p_user_id: string }
+        Returns: string
       }
       criar_sinonimo_global: {
         Args: {
@@ -2620,6 +2645,21 @@ export type Database = {
       hnswhandler: {
         Args: { "": unknown }
         Returns: unknown
+      }
+      importar_receita_api: {
+        Args: {
+          p_api_source_id: string
+          p_api_source_name: string
+          p_descricao: string
+          p_imagem_url: string
+          p_ingredientes: Json
+          p_instrucoes: string
+          p_porcoes: number
+          p_tempo_preparo: number
+          p_titulo: string
+          p_user_id: string
+        }
+        Returns: string
       }
       is_master: {
         Args: Record<PropertyKey, never>
@@ -2906,6 +2946,14 @@ export type Database = {
       vector_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
+      }
+      verificar_disponibilidade_receita: {
+        Args: { p_receita_id: string; p_user_id: string }
+        Returns: {
+          disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
+          ingredientes: Json
+          percentual_disponivel: number
+        }[]
       }
     }
     Enums: {
