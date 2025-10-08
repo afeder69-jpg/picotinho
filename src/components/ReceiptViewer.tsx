@@ -56,8 +56,6 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
 
   const handleConfirm = async () => {
     setIsProcessing(true);
-    // Fecha o browser antes de confirmar
-    await Browser.close();
     await onConfirm();
     setIsProcessing(false);
     setBrowserOpened(false);
