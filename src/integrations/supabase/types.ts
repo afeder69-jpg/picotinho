@@ -1858,6 +1858,7 @@ export type Database = {
           publica: boolean
           status: Database["public"]["Enums"]["status_receita"]
           tempo_preparo: number | null
+          tipo_refeicao: Database["public"]["Enums"]["tipo_refeicao"] | null
           titulo: string
           updated_at: string
           user_id: string | null
@@ -1880,6 +1881,7 @@ export type Database = {
           publica?: boolean
           status?: Database["public"]["Enums"]["status_receita"]
           tempo_preparo?: number | null
+          tipo_refeicao?: Database["public"]["Enums"]["tipo_refeicao"] | null
           titulo: string
           updated_at?: string
           user_id?: string | null
@@ -1902,6 +1904,7 @@ export type Database = {
           publica?: boolean
           status?: Database["public"]["Enums"]["status_receita"]
           tempo_preparo?: number | null
+          tipo_refeicao?: Database["public"]["Enums"]["tipo_refeicao"] | null
           titulo?: string
           updated_at?: string
           user_id?: string | null
@@ -2984,6 +2987,7 @@ export type Database = {
       fonte_receita: "minha" | "picotinho" | "comunidade" | "api_externa"
       status_receita: "rascunho" | "publicada" | "arquivada"
       tipo_disponibilidade: "completo" | "parcial" | "faltando"
+      tipo_refeicao: "cafe_manha" | "almoco" | "jantar" | "lanche" | "sobremesa"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3115,6 +3119,7 @@ export const Constants = {
       fonte_receita: ["minha", "picotinho", "comunidade", "api_externa"],
       status_receita: ["rascunho", "publicada", "arquivada"],
       tipo_disponibilidade: ["completo", "parcial", "faltando"],
+      tipo_refeicao: ["cafe_manha", "almoco", "jantar", "lanche", "sobremesa"],
     },
   },
 } as const

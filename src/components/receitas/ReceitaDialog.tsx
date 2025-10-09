@@ -11,6 +11,7 @@ import { IngredientesManager } from "./IngredientesManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
 interface ReceitaDialogProps {
   open: boolean;
@@ -24,6 +25,18 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
   const [ingredientes, setIngredientes] = useState<any[]>([]);
   const queryClient = useQueryClient();
   const { register, handleSubmit, reset, setValue } = useForm();
+
+  // Buscar categorias disponíveis
+  const { data: categorias } = useQuery({
+    queryKey: ["categorias-receitas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("buscar-receitas-api", {
+        body: { mode: "categories", api: "themealdb" }
+      });
+      if (error) throw error;
+      return data?.receitas || [];
+    },
+  });
 
   const onSubmit = async (data: any) => {
     setLoading(true);
@@ -41,6 +54,8 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
         user_id: user.id,
         imagem_url: imagemUrl || null,
         imagem_path: imagemPath || null,
+        categoria: data.categoria || null,
+        tipo_refeicao: data.tipo_refeicao || null,
       }).select().single();
 
       if (error) throw error;
@@ -104,10 +119,10 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
           </div>
 
           <div>
-            <Label>Categoria</Label>
-            <Select onValueChange={(value) => setValue("categoria", value)}>
+            <Label>Tipo de Refeição</Label>
+            <Select onValueChange={(value) => setValue("tipo_refeicao", value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
+                <SelectValue placeholder="Selecione o tipo de refeição" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cafe_manha">Café da Manhã</SelectItem>
@@ -115,6 +130,22 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
                 <SelectItem value="jantar">Jantar</SelectItem>
                 <SelectItem value="lanche">Lanche</SelectItem>
                 <SelectItem value="sobremesa">Sobremesa</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Categoria</Label>
+            <Select onValueChange={(value) => setValue("categoria", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a categoria de comida" />
+              </SelectTrigger>
+              <SelectContent>
+                {categorias?.map((cat: any) => (
+                  <SelectItem key={cat.idCategory} value={cat.strCategory}>
+                    {cat.strCategory}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

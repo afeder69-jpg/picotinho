@@ -111,9 +111,17 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
                 🌍 {(receita as any).area}
               </Badge>
             )}
-            {(receita as any)?.categoria && (
+            {receita?.categoria && (
               <Badge variant="outline">
-                {(receita as any).categoria}
+                📁 {receita.categoria}
+              </Badge>
+            )}
+            {receita?.tipo_refeicao && (
+              <Badge variant="outline">
+                🍽️ {receita.tipo_refeicao === 'cafe_manha' ? 'Café da Manhã' : 
+                     receita.tipo_refeicao === 'almoco' ? 'Almoço' :
+                     receita.tipo_refeicao === 'jantar' ? 'Jantar' :
+                     receita.tipo_refeicao === 'lanche' ? 'Lanche' : 'Sobremesa'}
               </Badge>
             )}
           </div>
