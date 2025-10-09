@@ -1845,6 +1845,7 @@ export type Database = {
           api_source_id: string | null
           api_source_name: string | null
           area: string | null
+          categoria: string | null
           created_at: string
           descricao: string | null
           fonte: Database["public"]["Enums"]["fonte_receita"]
@@ -1852,6 +1853,7 @@ export type Database = {
           imagem_path: string | null
           imagem_url: string | null
           instrucoes: string
+          modo_preparo: string | null
           porcoes: number | null
           publica: boolean
           status: Database["public"]["Enums"]["status_receita"]
@@ -1859,11 +1861,13 @@ export type Database = {
           titulo: string
           updated_at: string
           user_id: string | null
+          video_url: string | null
         }
         Insert: {
           api_source_id?: string | null
           api_source_name?: string | null
           area?: string | null
+          categoria?: string | null
           created_at?: string
           descricao?: string | null
           fonte?: Database["public"]["Enums"]["fonte_receita"]
@@ -1871,6 +1875,7 @@ export type Database = {
           imagem_path?: string | null
           imagem_url?: string | null
           instrucoes: string
+          modo_preparo?: string | null
           porcoes?: number | null
           publica?: boolean
           status?: Database["public"]["Enums"]["status_receita"]
@@ -1878,11 +1883,13 @@ export type Database = {
           titulo: string
           updated_at?: string
           user_id?: string | null
+          video_url?: string | null
         }
         Update: {
           api_source_id?: string | null
           api_source_name?: string | null
           area?: string | null
+          categoria?: string | null
           created_at?: string
           descricao?: string | null
           fonte?: Database["public"]["Enums"]["fonte_receita"]
@@ -1890,6 +1897,7 @@ export type Database = {
           imagem_path?: string | null
           imagem_url?: string | null
           instrucoes?: string
+          modo_preparo?: string | null
           porcoes?: number | null
           publica?: boolean
           status?: Database["public"]["Enums"]["status_receita"]
@@ -1897,6 +1905,7 @@ export type Database = {
           titulo?: string
           updated_at?: string
           user_id?: string | null
+          video_url?: string | null
         }
         Relationships: []
       }
