@@ -11,12 +11,24 @@ import { toast } from "sonner";
 interface CardapioDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  cardapio?: {
+    id: string;
+    titulo: string;
+    semana_inicio: string;
+    semana_fim: string;
+  };
 }
 
-export function CardapioDialog({ open, onOpenChange }: CardapioDialogProps) {
+export function CardapioDialog({ open, onOpenChange, cardapio }: CardapioDialogProps) {
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset } = useForm({
+    defaultValues: cardapio ? {
+      titulo: cardapio.titulo,
+      semana_inicio: cardapio.semana_inicio,
+      semana_fim: cardapio.semana_fim,
+    } : {},
+  });
 
   const onSubmit = async (data: any) => {
     setLoading(true);
@@ -24,21 +36,37 @@ export function CardapioDialog({ open, onOpenChange }: CardapioDialogProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { error } = await supabase.from("cardapios").insert({
-        user_id: user.id,
-        titulo: data.titulo,
-        semana_inicio: data.semana_inicio,
-        semana_fim: data.semana_fim,
-      });
+      if (cardapio) {
+        // Editar cardápio existente
+        const { error } = await supabase
+          .from("cardapios")
+          .update({
+            titulo: data.titulo,
+            semana_inicio: data.semana_inicio,
+            semana_fim: data.semana_fim,
+          })
+          .eq("id", cardapio.id);
 
-      if (error) throw error;
+        if (error) throw error;
+        toast.success("Cardápio atualizado com sucesso!");
+      } else {
+        // Criar novo cardápio
+        const { error } = await supabase.from("cardapios").insert({
+          user_id: user.id,
+          titulo: data.titulo,
+          semana_inicio: data.semana_inicio,
+          semana_fim: data.semana_fim,
+        });
 
-      toast.success("Cardápio criado com sucesso!");
+        if (error) throw error;
+        toast.success("Cardápio criado com sucesso!");
+      }
+
       queryClient.invalidateQueries({ queryKey: ["cardapios"] });
       reset();
       onOpenChange(false);
     } catch (error: any) {
-      toast.error(error.message || "Erro ao criar cardápio");
+      toast.error(error.message || "Erro ao salvar cardápio");
     } finally {
       setLoading(false);
     }
@@ -48,7 +76,7 @@ export function CardapioDialog({ open, onOpenChange }: CardapioDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Novo Cardápio Semanal</DialogTitle>
+          <DialogTitle>{cardapio ? "Editar Cardápio" : "Novo Cardápio Semanal"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
@@ -72,7 +100,7 @@ export function CardapioDialog({ open, onOpenChange }: CardapioDialogProps) {
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Criando..." : "Criar Cardápio"}
+              {loading ? "Salvando..." : cardapio ? "Atualizar" : "Criar Cardápio"}
             </Button>
           </div>
         </form>

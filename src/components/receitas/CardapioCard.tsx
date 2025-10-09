@@ -1,10 +1,24 @@
 import { useState } from "react";
-import { Calendar, ShoppingCart } from "lucide-react";
+import { Calendar, ShoppingCart, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { CardapioDialog } from "./CardapioDialog";
 
 interface CardapioCardProps {
   cardapio: {
@@ -18,6 +32,25 @@ interface CardapioCardProps {
 
 export function CardapioCard({ cardapio }: CardapioCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleDelete = async () => {
+    try {
+      const { error } = await supabase
+        .from("cardapios")
+        .delete()
+        .eq("id", cardapio.id);
+
+      if (error) throw error;
+
+      toast.success("Cardápio excluído com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["cardapios"] });
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao excluir cardápio");
+    }
+  };
 
   const formatDate = (date: string) => {
     return format(new Date(date), "dd/MM/yyyy", { locale: ptBR });
@@ -35,6 +68,22 @@ export function CardapioCard({ cardapio }: CardapioCardProps) {
                 {formatDate(cardapio.semana_inicio)} - {formatDate(cardapio.semana_fim)}
               </span>
             </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowEditDialog(true)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -61,6 +110,27 @@ export function CardapioCard({ cardapio }: CardapioCardProps) {
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o cardápio "{cardapio.titulo}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <CardapioDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        cardapio={cardapio}
+      />
     </Card>
   );
 }
