@@ -142,8 +142,8 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
               </SelectTrigger>
               <SelectContent>
                 {categorias?.map((cat: any) => (
-                  <SelectItem key={cat.idCategory} value={cat.strCategory}>
-                    {cat.strCategory}
+                  <SelectItem key={cat.id} value={cat.titulo_original}>
+                    {cat.titulo}
                   </SelectItem>
                 ))}
               </SelectContent>
