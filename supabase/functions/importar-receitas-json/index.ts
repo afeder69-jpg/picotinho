@@ -64,21 +64,39 @@ serve(async (req) => {
     for (let i = 0; i < receitasArray.length; i += BATCH_SIZE) {
       const batch = receitasArray.slice(i, i + BATCH_SIZE);
       
-      // Mapear com campos corretos do afrodite.json e adicionar validação
+      // Mapear com estrutura REAL do afrodite.json
       const receitasParaInserir = batch
-        .map((receita: any) => ({
-          titulo: receita.titulo || receita.name || 'Sem título',
-          categoria: receita.categoria || receita.category || 'Diversos',
-          modo_preparo: receita.preparo || receita.method || receita.modo_preparo || '',
-          ingredientes: Array.isArray(receita.ingredientes) 
-            ? receita.ingredientes 
-            : (Array.isArray(receita.ingredients) ? receita.ingredients : []),
-          tempo_preparo: receita.tempo || receita.preparationTime || receita.tempo_preparo || null,
-          rendimento: receita.rendimento || receita.portions || receita.porcoes || null,
-          imagem_url: receita.imagem || receita.image || receita.imagem_url || null,
-          tags: Array.isArray(receita.tags) ? receita.tags : [],
-          fonte: 'afrodite-json',
-        }))
+        .map((receita: any) => {
+          // Extrair ingredientes da seção "Ingredientes"
+          const secaoIngredientes = receita.secao?.find((s: any) => 
+            s.nome?.toLowerCase().includes('ingrediente')
+          );
+          const ingredientes = secaoIngredientes?.conteudo?.filter((i: string) => i.trim()) || [];
+
+          // Extrair modo de preparo da seção "Modo de Preparo"
+          const secaoPreparo = receita.secao?.find((s: any) => 
+            s.nome?.toLowerCase().includes('preparo')
+          );
+          const modoPreparo = secaoPreparo?.conteudo?.join('\n') || '';
+
+          // Extrair rendimento da seção "Outras informações"
+          const secaoOutras = receita.secao?.find((s: any) => 
+            s.nome?.toLowerCase().includes('outras')
+          );
+          const rendimento = secaoOutras?.conteudo?.[0] || null;
+
+          return {
+            titulo: receita.nome || 'Sem título',
+            categoria: 'Diversos', // Não tem categoria no JSON
+            modo_preparo: modoPreparo,
+            ingredientes: ingredientes,
+            tempo_preparo: null, // Não tem tempo no JSON
+            rendimento: rendimento,
+            imagem_url: null, // Não tem imagem no JSON
+            tags: [],
+            fonte: 'afrodite-json',
+          };
+        })
         // ✅ VALIDAÇÃO: Só inserir receitas com título válido
         .filter((r: any) => {
           const tituloValido = r.titulo && r.titulo !== 'Sem título' && r.titulo.trim() !== '';
