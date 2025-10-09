@@ -23,12 +23,19 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
 
   const carregarCategorias = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('buscar-receitas-api', {
-        body: { mode: 'categories' }
-      });
+      const { data, error } = await supabase
+        .from('receitas_publicas_brasileiras')
+        .select('categoria')
+        .not('categoria', 'is', null);
 
       if (error) throw error;
-      setCategorias(data.receitas || []);
+      
+      const categoriasUnicas = Array.from(new Set(data.map(r => r.categoria)))
+        .filter(Boolean)
+        .sort()
+        .map(cat => ({ id: cat, titulo: cat }));
+      
+      setCategorias(categoriasUnicas);
     } catch (error) {
       console.error('Erro ao carregar categorias:', error);
     }
@@ -36,12 +43,26 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
 
   const carregarAreas = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('buscar-receitas-api', {
-        body: { mode: 'areas' }
-      });
+      const { data, error } = await supabase
+        .from('receitas_publicas_brasileiras')
+        .select('tags')
+        .not('tags', 'is', null);
 
       if (error) throw error;
-      setAreas(data.receitas || []);
+      
+      // Extrair todas as tags únicas (culinárias)
+      const tagsUnicas = new Set<string>();
+      data?.forEach(r => {
+        if (Array.isArray(r.tags)) {
+          r.tags.forEach(tag => tagsUnicas.add(tag));
+        }
+      });
+      
+      const areasUnicas = Array.from(tagsUnicas)
+        .sort()
+        .map(area => ({ id: area, titulo: area }));
+      
+      setAreas(areasUnicas);
     } catch (error) {
       console.error('Erro ao carregar áreas:', error);
     }
@@ -65,9 +86,6 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
                 className="justify-start"
                 onClick={() => onFiltroChange('category', cat.titulo)}
               >
-                {cat.imagem_url && (
-                  <img src={cat.imagem_url} alt={cat.titulo} className="w-8 h-8 rounded mr-2" />
-                )}
                 {cat.titulo}
               </Button>
             ))}

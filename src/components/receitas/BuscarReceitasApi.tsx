@@ -67,7 +67,7 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
         porcoes: receita.porcoes,
         ingredientes: receita.ingredientes,
         tags: receita.tags,
-        fonte: 'receitas-json'
+        fonte: 'brasileiras'
       };
 
       const { error } = await supabase.functions.invoke('importar-receita-api', {

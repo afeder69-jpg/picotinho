@@ -2508,6 +2508,23 @@ export type Database = {
           total_usuarios: number
         }[]
       }
+      buscar_receitas_brasileiras_disponiveis: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          area: string
+          categoria: string
+          descricao: string
+          disponibilidade: string
+          imagem_url: string
+          ingredientes_disponiveis: number
+          porcoes: string
+          receita_id: string
+          tags: string[]
+          titulo: string
+          total_ingredientes: number
+          video_url: string
+        }[]
+      }
       buscar_receitas_disponiveis: {
         Args: Record<PropertyKey, never> | { p_user_id: string }
         Returns: {
@@ -3029,7 +3046,12 @@ export type Database = {
     }
     Enums: {
       app_role: "master" | "user" | "admin"
-      fonte_receita: "minha" | "picotinho" | "comunidade" | "api_externa"
+      fonte_receita:
+        | "minha"
+        | "picotinho"
+        | "comunidade"
+        | "api_externa"
+        | "brasileiras"
       status_receita: "rascunho" | "publicada" | "arquivada"
       tipo_disponibilidade: "completo" | "parcial" | "faltando"
       tipo_refeicao: "cafe_manha" | "almoco" | "jantar" | "lanche" | "sobremesa"
@@ -3161,7 +3183,13 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["master", "user", "admin"],
-      fonte_receita: ["minha", "picotinho", "comunidade", "api_externa"],
+      fonte_receita: [
+        "minha",
+        "picotinho",
+        "comunidade",
+        "api_externa",
+        "brasileiras",
+      ],
       status_receita: ["rascunho", "publicada", "arquivada"],
       tipo_disponibilidade: ["completo", "parcial", "faltando"],
       tipo_refeicao: ["cafe_manha", "almoco", "jantar", "lanche", "sobremesa"],

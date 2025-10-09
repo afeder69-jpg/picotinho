@@ -88,16 +88,36 @@ export default function Receitas() {
           </TabsList>
 
           <TabsContent value="todas">
-            <ReceitasList filtro="todas" searchTerm={searchTerm} />
+            <ReceitasList 
+              filtro="todas" 
+              searchTerm={searchTerm}
+              categoria={filtroAtivo?.tipo === 'category' ? filtroAtivo.valor : undefined}
+              area={filtroAtivo?.tipo === 'area' ? filtroAtivo.valor : undefined}
+            />
           </TabsContent>
           <TabsContent value="completo">
-            <ReceitasList filtro="completo" searchTerm={searchTerm} />
+            <ReceitasList 
+              filtro="completo" 
+              searchTerm={searchTerm}
+              categoria={filtroAtivo?.tipo === 'category' ? filtroAtivo.valor : undefined}
+              area={filtroAtivo?.tipo === 'area' ? filtroAtivo.valor : undefined}
+            />
           </TabsContent>
           <TabsContent value="parcial">
-            <ReceitasList filtro="parcial" searchTerm={searchTerm} />
+            <ReceitasList 
+              filtro="parcial" 
+              searchTerm={searchTerm}
+              categoria={filtroAtivo?.tipo === 'category' ? filtroAtivo.valor : undefined}
+              area={filtroAtivo?.tipo === 'area' ? filtroAtivo.valor : undefined}
+            />
           </TabsContent>
           <TabsContent value="favoritas">
-            <ReceitasList filtro="favoritas" searchTerm={searchTerm} />
+            <ReceitasList 
+              filtro="favoritas" 
+              searchTerm={searchTerm}
+              categoria={filtroAtivo?.tipo === 'category' ? filtroAtivo.valor : undefined}
+              area={filtroAtivo?.tipo === 'area' ? filtroAtivo.valor : undefined}
+            />
           </TabsContent>
         </Tabs>
       </div>

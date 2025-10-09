@@ -7,13 +7,15 @@ import { AlertCircle } from "lucide-react";
 interface ReceitasListProps {
   filtro: "todas" | "completo" | "parcial" | "favoritas";
   searchTerm: string;
+  categoria?: string;
+  area?: string;
 }
 
-export function ReceitasList({ filtro, searchTerm }: ReceitasListProps) {
+export function ReceitasList({ filtro, searchTerm, categoria, area }: ReceitasListProps) {
   const { data: receitas, isLoading } = useQuery({
-    queryKey: ["receitas-disponiveis", filtro],
+    queryKey: ["receitas-brasileiras", filtro, searchTerm, categoria, area],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("buscar_receitas_disponiveis");
+      const { data, error } = await supabase.rpc("buscar_receitas_brasileiras_disponiveis");
       if (error) throw error;
       return data;
     },
@@ -36,10 +38,19 @@ export function ReceitasList({ filtro, searchTerm }: ReceitasListProps) {
     }
     if (filtro === "favoritas") return true; // TODO: implementar favoritos
 
+    // Filtro por categoria
+    if (categoria && receita.categoria !== categoria) return false;
+
+    // Filtro por culinária (tags)
+    if (area && !receita.tags?.includes(area)) return false;
+
     // Filtro por busca
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
-      return receita.titulo?.toLowerCase().includes(search);
+      const matchTitle = receita.titulo?.toLowerCase().includes(search);
+      const matchCategory = receita.categoria?.toLowerCase().includes(search);
+      const matchTags = receita.tags?.some(tag => tag.toLowerCase().includes(search));
+      return matchTitle || matchCategory || matchTags;
     }
 
     return true;
@@ -61,6 +72,8 @@ export function ReceitasList({ filtro, searchTerm }: ReceitasListProps) {
           id: receita.receita_id,
           titulo: receita.titulo,
           descricao: receita.descricao,
+          imagem_url: receita.imagem_url,
+          categoria: receita.categoria,
           status_disponibilidade: receita.disponibilidade,
           ingredientes_faltantes: receita.total_ingredientes - receita.ingredientes_disponiveis,
           ingredientes_totais: receita.total_ingredientes,

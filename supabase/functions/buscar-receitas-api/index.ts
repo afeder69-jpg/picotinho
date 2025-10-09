@@ -138,7 +138,7 @@ serve(async (req) => {
           })
         : [],
       tags: receita.tags || [],
-      fonte: 'afrodite-json',
+      fonte: 'brasileiras',
       tipo: receita.tipo // Para categorias
     }));
 
