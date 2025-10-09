@@ -68,11 +68,18 @@ serve(async (req) => {
         descricao: receitaData.descricao || receitaData.modo_preparo,
         modo_preparo: receitaData.modo_preparo || receitaData.descricao,
         tempo_preparo: receitaData.tempo_preparo,
-        porcoes: receitaData.porcoes || receitaData.rendimento,
+        porcoes: (() => {
+          let porcoes = receitaData.porcoes || receitaData.rendimento;
+          if (typeof porcoes === 'string') {
+            const match = porcoes.match(/\d+/);
+            return match ? parseInt(match[0]) : null;
+          }
+          return porcoes;
+        })(),
         imagem_url: receitaData.imagem_url,
         categoria: receitaData.categoria,
         fonte: receitaData.fonte === 'afrodite-json' ? 'brasileiras' : (receitaData.fonte || 'api_externa'),
-        status: 'ativa',
+        status: 'publicada',
         publica: false,
       })
       .select()

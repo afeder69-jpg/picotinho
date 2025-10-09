@@ -71,7 +71,7 @@ export function ReceitasList({ filtro, searchTerm, categoria, area }: ReceitasLi
         <ReceitaCard key={receita.receita_id} receita={{
           id: receita.receita_id,
           titulo: receita.titulo,
-          descricao: receita.descricao,
+          descricao: receita.modo_preparo,
           imagem_url: receita.imagem_url,
           categoria: receita.categoria,
           status_disponibilidade: receita.disponibilidade,

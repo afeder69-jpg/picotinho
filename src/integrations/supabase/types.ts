@@ -2511,18 +2511,16 @@ export type Database = {
       buscar_receitas_brasileiras_disponiveis: {
         Args: Record<PropertyKey, never>
         Returns: {
-          area: string
           categoria: string
-          descricao: string
           disponibilidade: string
           imagem_url: string
           ingredientes_disponiveis: number
-          porcoes: string
+          modo_preparo: string
           receita_id: string
+          rendimento: string
           tags: string[]
           titulo: string
           total_ingredientes: number
-          video_url: string
         }[]
       }
       buscar_receitas_disponiveis: {
