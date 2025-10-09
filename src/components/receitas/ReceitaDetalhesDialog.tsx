@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
-import { Clock, Users, ShoppingCart, Star } from "lucide-react";
+import { Clock, Users, ShoppingCart, Youtube } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -32,15 +32,11 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
   const { data: disponibilidade, isLoading: loadingDisp } = useQuery({
     queryKey: ["receita-disponibilidade", receitaId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Não autenticado");
-
       const { data, error } = await supabase.rpc("verificar_disponibilidade_receita", {
-        p_receita_id: receitaId,
-        p_user_id: user.id,
+        receita_uuid: receitaId
       });
       if (error) throw error;
-      return data?.[0];
+      return data;
     },
     enabled: open,
   });
@@ -49,12 +45,8 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
 
   const handleCriarLista = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Não autenticado");
-
-      const { error } = await supabase.rpc("criar_lista_compras_de_receita", {
-        p_receita_id: receitaId,
-        p_user_id: user.id,
+      const { data, error } = await supabase.rpc("criar_lista_compras_de_receita", {
+        receita_uuid: receitaId
       });
       if (error) throw error;
       toast.success("Lista de compras criada!");
@@ -74,9 +66,14 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
     );
   }
 
+  const ingredientesDisponiveis = disponibilidade?.filter((i: any) => i.disponivel).length || 0;
+  const ingredientesTotais = disponibilidade?.length || 0;
+  const status = ingredientesDisponiveis === ingredientesTotais ? 'completo' : 
+                 ingredientesDisponiveis > 0 ? 'parcial' : 'faltando';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {receita?.titulo}
@@ -84,6 +81,14 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
         </DialogHeader>
 
         <div className="space-y-4">
+          {receita?.imagem_url && (
+            <img 
+              src={receita.imagem_url} 
+              alt={receita.titulo}
+              className="w-full h-48 object-cover rounded-lg"
+            />
+          )}
+
           {receita?.descricao && (
             <p className="text-sm text-muted-foreground">{receita.descricao}</p>
           )}
@@ -101,52 +106,88 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
                 {receita.porcoes} porções
               </Badge>
             )}
+            {receita?.area && (
+              <Badge variant="secondary">
+                🌍 {receita.area}
+              </Badge>
+            )}
+            {receita?.categoria && (
+              <Badge variant="outline">
+                {receita.categoria}
+              </Badge>
+            )}
           </div>
 
           <Separator />
 
           <div>
-            <h4 className="font-semibold mb-2">Ingredientes</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold">Ingredientes</h4>
+              <Badge 
+                variant={status === 'completo' ? 'default' : status === 'parcial' ? 'secondary' : 'destructive'}
+              >
+                {ingredientesDisponiveis}/{ingredientesTotais} disponíveis
+              </Badge>
+            </div>
             <div className="space-y-2">
-              {disponibilidade?.ingredientes && Array.isArray(disponibilidade.ingredientes) && 
-                disponibilidade.ingredientes.map((ing: any, idx: number) => (
+              {disponibilidade && Array.isArray(disponibilidade) && 
+                disponibilidade.map((ing: any, idx: number) => (
                   <div
                     key={idx}
-                    className={`flex items-center justify-between p-2 rounded-md ${
-                      ing.tem_estoque
-                        ? "bg-green-500/10 text-green-700"
-                        : "bg-red-500/10 text-red-700"
+                    className={`flex items-center justify-between p-3 rounded-md border ${
+                      ing.disponivel
+                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
                     }`}
                   >
-                    <span className="text-sm">
-                      {ing.quantidade} {ing.unidade_medida} - {ing.ingrediente}
-                    </span>
-                    <span className="text-xs">
-                      {ing.tem_estoque ? "✓ Disponível" : "✗ Faltando"}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {ing.quantidade_necessaria} - {ing.ingrediente_nome}
+                      </span>
+                      {ing.disponivel && ing.quantidade_estoque > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          (estoque: {ing.quantidade_estoque})
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold">
+                      {ing.disponivel ? "✓ Disponível" : "✗ Faltando"}
                     </span>
                   </div>
                 ))}
             </div>
           </div>
 
-          {receita?.instrucoes && (
+          {receita?.modo_preparo && (
             <>
               <Separator />
               <div>
                 <h4 className="font-semibold mb-2">Modo de Preparo</h4>
-                <div className="text-sm whitespace-pre-line">
-                  {receita.instrucoes}
+                <div className="text-sm whitespace-pre-line bg-muted/30 p-4 rounded-lg">
+                  {receita.modo_preparo}
                 </div>
               </div>
             </>
           )}
 
-          {disponibilidade?.disponibilidade === 'parcial' && (
-            <Button onClick={handleCriarLista} className="w-full">
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Criar Lista de Compras
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {status === 'parcial' && (
+              <Button onClick={handleCriarLista} className="flex-1">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Criar Lista de Compras
+              </Button>
+            )}
+            {receita?.video_url && (
+              <Button 
+                variant="outline"
+                onClick={() => window.open(receita.video_url, '_blank')}
+                className="flex-1"
+              >
+                <Youtube className="h-4 w-4 mr-2" />
+                Ver Vídeo
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

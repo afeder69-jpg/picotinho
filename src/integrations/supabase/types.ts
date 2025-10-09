@@ -1844,6 +1844,7 @@ export type Database = {
         Row: {
           api_source_id: string | null
           api_source_name: string | null
+          area: string | null
           created_at: string
           descricao: string | null
           fonte: Database["public"]["Enums"]["fonte_receita"]
@@ -1862,6 +1863,7 @@ export type Database = {
         Insert: {
           api_source_id?: string | null
           api_source_name?: string | null
+          area?: string | null
           created_at?: string
           descricao?: string | null
           fonte?: Database["public"]["Enums"]["fonte_receita"]
@@ -1880,6 +1882,7 @@ export type Database = {
         Update: {
           api_source_id?: string | null
           api_source_name?: string | null
+          area?: string | null
           created_at?: string
           descricao?: string | null
           fonte?: Database["public"]["Enums"]["fonte_receita"]
@@ -2507,11 +2510,15 @@ export type Database = {
         }[]
       }
       criar_lista_compras_de_cardapio: {
-        Args: { p_cardapio_id: string; p_titulo?: string; p_user_id: string }
+        Args:
+          | { cardapio_uuid: string }
+          | { p_cardapio_id: string; p_titulo?: string; p_user_id: string }
         Returns: string
       }
       criar_lista_compras_de_receita: {
-        Args: { p_receita_id: string; p_titulo?: string; p_user_id: string }
+        Args:
+          | { p_receita_id: string; p_titulo?: string; p_user_id: string }
+          | { receita_uuid: string }
         Returns: string
       }
       criar_sinonimo_global: {
@@ -2952,11 +2959,14 @@ export type Database = {
         Returns: number
       }
       verificar_disponibilidade_receita: {
-        Args: { p_receita_id: string; p_user_id: string }
+        Args:
+          | { p_receita_id: string; p_user_id: string }
+          | { receita_uuid: string }
         Returns: {
-          disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
-          ingredientes: Json
-          percentual_disponivel: number
+          disponivel: boolean
+          ingrediente_nome: string
+          quantidade_estoque: number
+          quantidade_necessaria: string
         }[]
       }
     }

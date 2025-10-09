@@ -29,28 +29,55 @@ serve(async (req) => {
       throw new Error('Usuário não autenticado');
     }
 
-    const { receita } = await req.json();
+    console.log('👤 Usuário autenticado:', user.id);
+
+    const receitaData = await req.json();
     
-    if (!receita || !receita.titulo) {
-      throw new Error('Dados da receita inválidos');
+    console.log('📦 Dados recebidos:', {
+      titulo: receitaData.titulo,
+      id: receitaData.id,
+      api_source: receitaData.api_source,
+      area: receitaData.area
+    });
+
+    // Verificar se receita já existe (evitar duplicação)
+    const { data: existente } = await supabase
+      .from('receitas')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('api_source_id', receitaData.id)
+      .eq('api_source_name', receitaData.api_source || 'themealdb')
+      .maybeSingle();
+
+    if (existente) {
+      console.log('⚠️ Receita já importada:', existente.id);
+      return new Response(
+        JSON.stringify({ 
+          message: 'Receita já foi importada anteriormente',
+          receita_id: existente.id,
+          duplicada: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
     }
 
-    console.log(`📥 Importando receita: ${receita.titulo}`);
-
-    // 1. Criar a receita
+    // Criar a receita
     const { data: receitaCriada, error: receitaError } = await supabase
       .from('receitas')
       .insert({
         user_id: user.id,
-        titulo: receita.titulo,
-        descricao: receita.descricao,
-        instrucoes: receita.instrucoes || '',
-        tempo_preparo: receita.tempo_preparo,
-        porcoes: receita.porcoes,
-        imagem_url: receita.imagem_url,
-        api_source_id: receita.api_source_id,
-        api_source_name: receita.api_source_name,
-        fonte: 'api_externa',
+        titulo: receitaData.titulo,
+        descricao: receitaData.descricao,
+        modo_preparo: receitaData.modo_preparo || receitaData.descricao,
+        tempo_preparo: receitaData.tempo_preparo,
+        porcoes: receitaData.porcoes,
+        imagem_url: receitaData.imagem_url,
+        categoria: receitaData.categoria,
+        area: receitaData.area, // NOVO: salvar área/culinária
+        video_url: receitaData.video_url, // NOVO: salvar link do YouTube
+        api_source_id: receitaData.id,
+        api_source_name: receitaData.api_source || 'themealdb',
+        fonte: receitaData.api_source || 'themealdb',
         status: 'ativa',
         publica: false,
       })
@@ -61,13 +88,13 @@ serve(async (req) => {
 
     console.log(`✅ Receita criada: ${receitaCriada.id}`);
 
-    // 2. Adicionar ingredientes
-    if (receita.ingredientes && receita.ingredientes.length > 0) {
-      const ingredientesParaInserir = receita.ingredientes.map((ing: any) => ({
+    // Adicionar ingredientes
+    if (receitaData.ingredientes && receitaData.ingredientes.length > 0) {
+      const ingredientesParaInserir = receitaData.ingredientes.map((ing: any) => ({
         receita_id: receitaCriada.id,
-        ingrediente: ing.ingrediente,
-        quantidade: ing.quantidade || null,
-        unidade_medida: ing.unidade_medida || 'un',
+        produto_nome_busca: ing.nome || ing.ingrediente,
+        quantidade: ing.quantidade?.toString() || '1',
+        unidade_medida: ing.unidade || ing.unidade_medida || 'un',
         opcional: false,
       }));
 
@@ -82,9 +109,9 @@ serve(async (req) => {
       }
     }
 
-    // 3. Adicionar tags se existirem
-    if (receita.tags && receita.tags.length > 0) {
-      const tagsParaInserir = receita.tags.map((tag: string) => ({
+    // Adicionar tags se existirem
+    if (receitaData.tags && receitaData.tags.length > 0) {
+      const tagsParaInserir = receitaData.tags.map((tag: string) => ({
         receita_id: receitaCriada.id,
         tag: tag.toLowerCase().trim(),
       }));

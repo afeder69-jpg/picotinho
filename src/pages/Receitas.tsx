@@ -6,12 +6,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReceitasList } from "@/components/receitas/ReceitasList";
 import { ReceitaDialog } from "@/components/receitas/ReceitaDialog";
 import { BuscarReceitasApi } from "@/components/receitas/BuscarReceitasApi";
+import { ReceitaAleatoria } from "@/components/receitas/ReceitaAleatoria";
+import { FiltrosReceitas } from "@/components/receitas/FiltrosReceitas";
 
 export default function Receitas() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("todas");
+  const [filtroAtivo, setFiltroAtivo] = useState<{ tipo: string; valor: string } | null>(null);
+
+  const handleFiltroChange = (tipo: 'category' | 'area' | 'ingredient', valor: string) => {
+    if (!valor) {
+      setFiltroAtivo(null);
+    } else {
+      setFiltroAtivo({ tipo, valor });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -23,6 +34,7 @@ export default function Receitas() {
             <h1 className="text-2xl font-bold">Receitas</h1>
           </div>
           <div className="flex gap-2">
+            <ReceitaAleatoria />
             <Button
               variant="ghost"
               size="sm"
@@ -57,6 +69,14 @@ export default function Receitas() {
 
       {/* Content */}
       <div className="p-4">
+        {/* Filtros */}
+        <div className="mb-4">
+          <FiltrosReceitas 
+            onFiltroChange={handleFiltroChange}
+            filtroAtivo={filtroAtivo}
+          />
+        </div>
+
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
           <TabsList className="w-full grid grid-cols-4 mb-4">
             <TabsTrigger value="todas">Todas</TabsTrigger>
