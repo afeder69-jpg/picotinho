@@ -106,14 +106,14 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
                 {receita.porcoes} porções
               </Badge>
             )}
-            {receita?.area && (
+            {(receita as any)?.area && (
               <Badge variant="secondary">
-                🌍 {receita.area}
+                🌍 {(receita as any).area}
               </Badge>
             )}
-            {receita?.categoria && (
+            {(receita as any)?.categoria && (
               <Badge variant="outline">
-                {receita.categoria}
+                {(receita as any).categoria}
               </Badge>
             )}
           </div>
@@ -158,13 +158,13 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
             </div>
           </div>
 
-          {receita?.modo_preparo && (
+          {(receita as any)?.modo_preparo && (
             <>
               <Separator />
               <div>
                 <h4 className="font-semibold mb-2">Modo de Preparo</h4>
                 <div className="text-sm whitespace-pre-line bg-muted/30 p-4 rounded-lg">
-                  {receita.modo_preparo}
+                  {(receita as any).modo_preparo}
                 </div>
               </div>
             </>
@@ -177,10 +177,10 @@ export function ReceitaDetalhesDialog({ receitaId, open, onOpenChange }: Receita
                 Criar Lista de Compras
               </Button>
             )}
-            {receita?.video_url && (
+            {(receita as any)?.video_url && (
               <Button 
                 variant="outline"
-                onClick={() => window.open(receita.video_url, '_blank')}
+                onClick={() => window.open((receita as any).video_url, '_blank')}
                 className="flex-1"
               >
                 <Youtube className="h-4 w-4 mr-2" />
