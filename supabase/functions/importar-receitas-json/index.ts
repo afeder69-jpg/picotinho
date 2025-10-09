@@ -85,23 +85,29 @@ serve(async (req) => {
           );
           const rendimento = secaoOutras?.conteudo?.[0] || null;
 
+          const tituloReceita = receita.nome || 'Sem título';
+          
+          // Log detalhado da primeira receita do primeiro lote
+          if (i === 0 && batch.indexOf(receita) === 0) {
+            console.log('🔍 DEBUG - Primeira receita mapeada:', {
+              titulo: tituloReceita,
+              ingredientes_count: ingredientes.length,
+              tem_preparo: modoPreparo.length > 0,
+              rendimento: rendimento
+            });
+          }
+
           return {
-            titulo: receita.nome || 'Sem título',
-            categoria: 'Diversos', // Não tem categoria no JSON
+            titulo: tituloReceita,
+            categoria: 'Diversos',
             modo_preparo: modoPreparo,
             ingredientes: ingredientes,
-            tempo_preparo: null, // Não tem tempo no JSON
+            tempo_preparo: null,
             rendimento: rendimento,
-            imagem_url: null, // Não tem imagem no JSON
+            imagem_url: null,
             tags: [],
             fonte: 'afrodite-json',
           };
-        })
-        // ✅ VALIDAÇÃO: Só inserir receitas com título válido
-        .filter((r: any) => {
-          const tituloValido = r.titulo && r.titulo !== 'Sem título' && r.titulo.trim() !== '';
-          if (!tituloValido) receitasVazias++;
-          return tituloValido;
         });
 
       const { data, error } = await supabase
