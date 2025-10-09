@@ -19,8 +19,8 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // URL do repositório receitas-json no GitHub
-    const RECEITAS_JSON_URL = 'https://raw.githubusercontent.com/bryanbarreto/receitas-json/main/receitas.json';
+    // URL do repositório afrodite.json no GitHub (maior livro de receitas em português)
+    const RECEITAS_JSON_URL = 'https://raw.githubusercontent.com/adrianosferreira/afrodite.json/master/afrodite.json';
 
     console.log('📥 Fazendo download do JSON do GitHub...');
     const response = await fetch(RECEITAS_JSON_URL);
@@ -59,17 +59,17 @@ serve(async (req) => {
       const batch = receitasArray.slice(i, i + BATCH_SIZE);
       
       const receitasParaInserir = batch.map((receita: any) => ({
-        titulo: receita.name || receita.titulo || 'Sem título',
-        categoria: receita.category || receita.categoria || 'Diversos',
-        modo_preparo: receita.method || receita.modo_preparo || '',
-        ingredientes: Array.isArray(receita.ingredients) 
-          ? receita.ingredients 
-          : (receita.ingredientes || []),
-        tempo_preparo: receita.preparationTime || receita.tempo_preparo || null,
-        rendimento: receita.portions || receita.rendimento || null,
-        imagem_url: receita.image || receita.imagem_url || null,
+        titulo: receita.titulo || receita.name || 'Sem título',
+        categoria: receita.categoria || receita.category || 'Diversos',
+        modo_preparo: receita.preparo || receita.method || receita.modo_preparo || '',
+        ingredientes: Array.isArray(receita.ingredientes) 
+          ? receita.ingredientes 
+          : (Array.isArray(receita.ingredients) ? receita.ingredients : []),
+        tempo_preparo: receita.tempo || receita.preparationTime || receita.tempo_preparo || null,
+        rendimento: receita.rendimento || receita.portions || receita.porcoes || null,
+        imagem_url: receita.imagem || receita.image || receita.imagem_url || null,
         tags: Array.isArray(receita.tags) ? receita.tags : [],
-        fonte: 'receitas-json',
+        fonte: 'afrodite-json',
       }));
 
       const { data, error } = await supabase
