@@ -4,9 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { CardapioReceitasManager } from "./CardapioReceitasManager";
 
 interface CardapioDialogProps {
   open: boolean;
@@ -74,36 +76,73 @@ export function CardapioDialog({ open, onOpenChange, cardapio }: CardapioDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{cardapio ? "Editar Cardápio" : "Novo Cardápio Semanal"}</DialogTitle>
+          <DialogTitle>
+            {cardapio ? "Editar Cardápio" : "Novo Cardápio"}
+          </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <Label>Título do Cardápio</Label>
-            <Input {...register("titulo", { required: true })} placeholder="Ex: Cardápio da Semana" />
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Data Início</Label>
-              <Input type="date" {...register("semana_inicio", { required: true })} />
-            </div>
-            <div>
-              <Label>Data Fim</Label>
-              <Input type="date" {...register("semana_fim", { required: true })} />
-            </div>
-          </div>
+        <Tabs defaultValue="info" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="info">Informações</TabsTrigger>
+            <TabsTrigger value="receitas" disabled={!cardapio}>
+              Receitas {!cardapio && "(Salve primeiro)"}
+            </TabsTrigger>
+          </TabsList>
 
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Salvando..." : cardapio ? "Atualizar" : "Criar Cardápio"}
-            </Button>
-          </div>
-        </form>
+          <TabsContent value="info">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="titulo">Título do Cardápio</Label>
+                <Input
+                  id="titulo"
+                  {...register("titulo")}
+                  placeholder="Ex: Cardápio Semanal - Janeiro"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="semana_inicio">Data Início</Label>
+                  <Input
+                    id="semana_inicio"
+                    type="date"
+                    {...register("semana_inicio")}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="semana_fim">Data Fim</Label>
+                  <Input
+                    id="semana_fim"
+                    type="date"
+                    {...register("semana_fim")}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Salvando..." : cardapio ? "Atualizar" : "Salvar"}
+                </Button>
+              </div>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="receitas">
+            {cardapio && (
+              <CardapioReceitasManager cardapioId={cardapio.id} />
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
