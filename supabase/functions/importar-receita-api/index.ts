@@ -71,7 +71,7 @@ serve(async (req) => {
         porcoes: receitaData.porcoes || receitaData.rendimento,
         imagem_url: receitaData.imagem_url,
         categoria: receitaData.categoria,
-        fonte: receitaData.fonte || 'receitas-json',
+        fonte: receitaData.fonte || 'api_externa',
         status: 'ativa',
         publica: false,
       })

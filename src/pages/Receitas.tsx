@@ -70,13 +70,12 @@ export default function Receitas() {
 
       {/* Content */}
       <div className="p-4">
-        {/* Filtros e Botão de Importação */}
-        <div className="mb-4 flex gap-2 flex-wrap items-center">
+        {/* Filtros */}
+        <div className="mb-4">
           <FiltrosReceitas 
             onFiltroChange={handleFiltroChange}
             filtroAtivo={filtroAtivo}
           />
-          <ImportarReceitasBrasileiras />
         </div>
 
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>

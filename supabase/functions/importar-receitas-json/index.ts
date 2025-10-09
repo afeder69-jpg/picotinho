@@ -50,27 +50,41 @@ serve(async (req) => {
       );
     }
 
+    // Debug: logar primeira receita para verificar estrutura real
+    if (receitasArray.length > 0) {
+      console.log('📋 Estrutura da primeira receita do JSON:', JSON.stringify(receitasArray[0], null, 2));
+    }
+
     // Processar e inserir receitas em lotes
     const BATCH_SIZE = 100;
     let totalImportadas = 0;
     let totalErros = 0;
+    let receitasVazias = 0;
 
     for (let i = 0; i < receitasArray.length; i += BATCH_SIZE) {
       const batch = receitasArray.slice(i, i + BATCH_SIZE);
       
-      const receitasParaInserir = batch.map((receita: any) => ({
-        titulo: receita.titulo || receita.name || 'Sem título',
-        categoria: receita.categoria || receita.category || 'Diversos',
-        modo_preparo: receita.preparo || receita.method || receita.modo_preparo || '',
-        ingredientes: Array.isArray(receita.ingredientes) 
-          ? receita.ingredientes 
-          : (Array.isArray(receita.ingredients) ? receita.ingredients : []),
-        tempo_preparo: receita.tempo || receita.preparationTime || receita.tempo_preparo || null,
-        rendimento: receita.rendimento || receita.portions || receita.porcoes || null,
-        imagem_url: receita.imagem || receita.image || receita.imagem_url || null,
-        tags: Array.isArray(receita.tags) ? receita.tags : [],
-        fonte: 'afrodite-json',
-      }));
+      // Mapear com campos corretos do afrodite.json e adicionar validação
+      const receitasParaInserir = batch
+        .map((receita: any) => ({
+          titulo: receita.titulo || receita.name || 'Sem título',
+          categoria: receita.categoria || receita.category || 'Diversos',
+          modo_preparo: receita.preparo || receita.method || receita.modo_preparo || '',
+          ingredientes: Array.isArray(receita.ingredientes) 
+            ? receita.ingredientes 
+            : (Array.isArray(receita.ingredients) ? receita.ingredients : []),
+          tempo_preparo: receita.tempo || receita.preparationTime || receita.tempo_preparo || null,
+          rendimento: receita.rendimento || receita.portions || receita.porcoes || null,
+          imagem_url: receita.imagem || receita.image || receita.imagem_url || null,
+          tags: Array.isArray(receita.tags) ? receita.tags : [],
+          fonte: 'afrodite-json',
+        }))
+        // ✅ VALIDAÇÃO: Só inserir receitas com título válido
+        .filter((r: any) => {
+          const tituloValido = r.titulo && r.titulo !== 'Sem título' && r.titulo.trim() !== '';
+          if (!tituloValido) receitasVazias++;
+          return tituloValido;
+        });
 
       const { data, error } = await supabase
         .from('receitas_publicas_brasileiras')
@@ -89,6 +103,7 @@ serve(async (req) => {
     console.log(`🎉 Importação concluída!`);
     console.log(`   - Total importadas: ${totalImportadas}`);
     console.log(`   - Total com erro: ${totalErros}`);
+    console.log(`   - Receitas vazias descartadas: ${receitasVazias}`);
 
     return new Response(
       JSON.stringify({ 
