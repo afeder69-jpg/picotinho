@@ -54,7 +54,7 @@ export function ReceitaAleatoria() {
         porcoes: receita.porcoes,
         ingredientes: receita.ingredientes,
         tags: receita.tags,
-        fonte: 'receitas-json'
+        fonte: 'afrodite-json'
       };
 
       const { error } = await supabase.functions.invoke('importar-receita-api', {

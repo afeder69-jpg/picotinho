@@ -85,22 +85,28 @@ serve(async (req) => {
 
     } else {
       // Busca normal por título, categoria ou tags
-      let queryBuilder = supabase
+      const { data, error } = await supabase
         .from('receitas_publicas_brasileiras')
-        .select('*');
-
-      if (query && query.trim()) {
-        queryBuilder = queryBuilder.or(
-          `titulo.ilike.%${query}%,categoria.ilike.%${query}%,tags.cs.{${query}}`
-        );
-      }
-
-      queryBuilder = queryBuilder.limit(maxResults);
-
-      const { data, error } = await queryBuilder;
+        .select('*')
+        .or(query && query.trim() 
+          ? `titulo.ilike.%${query}%,categoria.ilike.%${query}%`
+          : 'id.not.is.null'
+        )
+        .limit(maxResults);
 
       if (error) throw error;
-      receitas = data || [];
+      
+      // Filtrar também por tags (array contém)
+      receitas = (data || []).filter((r: any) => {
+        if (!query || !query.trim()) return true;
+        
+        const queryLower = query.toLowerCase();
+        const tagsMatch = r.tags?.some((tag: string) => 
+          tag.toLowerCase().includes(queryLower)
+        );
+        
+        return tagsMatch;
+      });
     }
 
     // Formatar receitas para o formato esperado pelo frontend
@@ -132,7 +138,7 @@ serve(async (req) => {
           })
         : [],
       tags: receita.tags || [],
-      fonte: 'receitas-json',
+      fonte: 'afrodite-json',
       tipo: receita.tipo // Para categorias
     }));
 
