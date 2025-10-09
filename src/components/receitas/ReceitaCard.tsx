@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Clock, Users, ChefHat, ShoppingCart, Star, ImageIcon } from "lucide-react";
+import { Clock, Users, ChefHat, ShoppingCart, Star, ImageIcon, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ReceitaDetalhesDialog } from "./ReceitaDetalhesDialog";
+import { AdicionarReceitaCardapioDialog } from "./AdicionarReceitaCardapioDialog";
 
 interface ReceitaCardProps {
   receita: {
@@ -24,6 +25,7 @@ interface ReceitaCardProps {
 
 export function ReceitaCard({ receita }: ReceitaCardProps) {
   const [detalhesOpen, setDetalhesOpen] = useState(false);
+  const [cardapioDialogOpen, setCardapioDialogOpen] = useState(false);
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -112,11 +114,23 @@ export function ReceitaCard({ receita }: ReceitaCardProps) {
                 <Badge className={getStatusColor(receita.status_disponibilidade)}>
                   {getStatusLabel(receita.status_disponibilidade)}
                 </Badge>
-                {receita.status_disponibilidade === "parcial" && (
-                  <Button variant="ghost" size="sm">
-                    <ShoppingCart className="h-4 w-4" />
+                <div className="flex gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCardapioDialogOpen(true);
+                    }}
+                  >
+                    <Calendar className="h-4 w-4" />
                   </Button>
-                )}
+                  {receita.status_disponibilidade === "parcial" && (
+                    <Button variant="ghost" size="sm">
+                      <ShoppingCart className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -127,6 +141,13 @@ export function ReceitaCard({ receita }: ReceitaCardProps) {
         receitaId={receita.id}
         open={detalhesOpen}
         onOpenChange={setDetalhesOpen}
+      />
+
+      <AdicionarReceitaCardapioDialog
+        open={cardapioDialogOpen}
+        onOpenChange={setCardapioDialogOpen}
+        receitaId={receita.id}
+        receitaNome={receita.titulo}
       />
     </>
   );

@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CardapioDialog } from "./CardapioDialog";
+import { CardapioReceitasGrid } from "./CardapioReceitasGrid";
 
 interface CardapioCardProps {
   cardapio: {
@@ -104,9 +105,7 @@ export function CardapioCard({ cardapio }: CardapioCardProps) {
 
         {expanded && (
           <div className="mt-4 pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              Receitas do cardápio aparecerão aqui
-            </p>
+            <CardapioReceitasGrid cardapioId={cardapio.id} />
           </div>
         )}
       </CardContent>
