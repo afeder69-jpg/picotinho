@@ -2509,7 +2509,7 @@ export type Database = {
         }[]
       }
       buscar_receitas_disponiveis: {
-        Args: { p_user_id: string }
+        Args: Record<PropertyKey, never> | { p_user_id: string }
         Returns: {
           descricao: string
           disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]

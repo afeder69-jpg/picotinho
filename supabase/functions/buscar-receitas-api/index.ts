@@ -60,6 +60,29 @@ serve(async (req) => {
         tipo: 'category'
       }));
 
+    } else if (mode === 'areas') {
+      // Buscar todas as tags (culinárias/áreas)
+      const { data, error } = await supabase
+        .from('receitas_publicas_brasileiras')
+        .select('tags')
+        .not('tags', 'is', null);
+
+      if (error) throw error;
+
+      // Extrair todas as tags únicas
+      const tagsUnicas = new Set<string>();
+      data?.forEach(r => {
+        if (Array.isArray(r.tags)) {
+          r.tags.forEach(tag => tagsUnicas.add(tag));
+        }
+      });
+
+      receitas = Array.from(tagsUnicas).map(tag => ({
+        id: tag,
+        titulo: tag,
+        tipo: 'area'
+      }));
+
     } else {
       // Busca normal por título, categoria ou tags
       let queryBuilder = supabase
