@@ -22,6 +22,7 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
   }, []);
 
   const carregarCategorias = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('receitas_publicas_brasileiras')
@@ -36,12 +37,16 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
         .map(cat => ({ id: cat, titulo: cat }));
       
       setCategorias(categoriasUnicas);
+      console.log('✅ Categorias carregadas:', categoriasUnicas.length);
     } catch (error) {
       console.error('Erro ao carregar categorias:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const carregarAreas = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('receitas_publicas_brasileiras')
@@ -63,8 +68,11 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
         .map(area => ({ id: area, titulo: area }));
       
       setAreas(areasUnicas);
+      console.log('✅ Áreas (tags) carregadas:', areasUnicas.length);
     } catch (error) {
       console.error('Erro ao carregar áreas:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -79,16 +87,22 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
         </PopoverTrigger>
         <PopoverContent className="w-80 max-h-96 overflow-y-auto">
           <div className="grid gap-2">
-            {categorias.map((cat) => (
-              <Button
-                key={cat.id}
-                variant="ghost"
-                className="justify-start"
-                onClick={() => onFiltroChange('category', cat.titulo)}
-              >
-                {cat.titulo}
-              </Button>
-            ))}
+            {loading ? (
+              <div className="text-sm text-muted-foreground p-2">Carregando...</div>
+            ) : categorias.length === 0 ? (
+              <div className="text-sm text-muted-foreground p-2">Nenhuma categoria disponível</div>
+            ) : (
+              categorias.map((cat) => (
+                <Button
+                  key={cat.id}
+                  variant="ghost"
+                  className="justify-start"
+                  onClick={() => onFiltroChange('category', cat.titulo)}
+                >
+                  {cat.titulo}
+                </Button>
+              ))
+            )}
           </div>
         </PopoverContent>
       </Popover>
@@ -101,16 +115,22 @@ export function FiltrosReceitas({ onFiltroChange, filtroAtivo }: FiltrosReceitas
         </PopoverTrigger>
         <PopoverContent className="w-80 max-h-96 overflow-y-auto">
           <div className="grid grid-cols-2 gap-2">
-            {areas.map((area) => (
-              <Button
-                key={area.id}
-                variant="ghost"
-                size="sm"
-                onClick={() => onFiltroChange('area', area.titulo)}
-              >
-                {area.titulo}
-              </Button>
-            ))}
+            {loading ? (
+              <div className="text-sm text-muted-foreground p-2">Carregando...</div>
+            ) : areas.length === 0 ? (
+              <div className="text-sm text-muted-foreground p-2">Nenhuma culinária disponível</div>
+            ) : (
+              areas.map((area) => (
+                <Button
+                  key={area.id}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onFiltroChange('area', area.titulo)}
+                >
+                  {area.titulo}
+                </Button>
+              ))
+            )}
           </div>
         </PopoverContent>
       </Popover>

@@ -31,6 +31,10 @@ export function ReceitasList({ filtro, searchTerm, categoria, area }: ReceitasLi
     );
   }
 
+  // Normalizar texto para busca (remover acentos e converter para minúsculas)
+  const normalizeText = (text: string) => 
+    text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
   const receitasFiltradas = receitas?.filter((receita) => {
     // Filtro por disponibilidade
     if (filtro !== "todas" && filtro !== "favoritas") {
@@ -44,12 +48,12 @@ export function ReceitasList({ filtro, searchTerm, categoria, area }: ReceitasLi
     // Filtro por culinária (tags)
     if (area && !receita.tags?.includes(area)) return false;
 
-    // Filtro por busca
+    // Filtro por busca (case-insensitive, sem acentos)
     if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      const matchTitle = receita.titulo?.toLowerCase().includes(search);
-      const matchCategory = receita.categoria?.toLowerCase().includes(search);
-      const matchTags = receita.tags?.some(tag => tag.toLowerCase().includes(search));
+      const search = normalizeText(searchTerm);
+      const matchTitle = normalizeText(receita.titulo || '').includes(search);
+      const matchCategory = normalizeText(receita.categoria || '').includes(search);
+      const matchTags = receita.tags?.some(tag => normalizeText(tag).includes(search));
       return matchTitle || matchCategory || matchTags;
     }
 

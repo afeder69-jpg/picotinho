@@ -67,6 +67,7 @@ serve(async (req) => {
         titulo: receitaData.titulo,
         descricao: receitaData.descricao || receitaData.modo_preparo,
         modo_preparo: receitaData.modo_preparo || receitaData.descricao,
+        instrucoes: receitaData.modo_preparo || receitaData.descricao || receitaData.instrucoes || 'Instruções não disponíveis',
         tempo_preparo: receitaData.tempo_preparo,
         porcoes: (() => {
           let porcoes = receitaData.porcoes || receitaData.rendimento;
