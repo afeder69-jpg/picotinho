@@ -36,8 +36,7 @@ serve(async (req) => {
     console.log('📦 Dados recebidos:', {
       titulo: receitaData.titulo,
       id: receitaData.id,
-      api_source: receitaData.api_source,
-      area: receitaData.area
+      fonte: receitaData.fonte
     });
 
     // Verificar se receita já existe (evitar duplicação)
@@ -45,8 +44,7 @@ serve(async (req) => {
       .from('receitas')
       .select('id')
       .eq('user_id', user.id)
-      .eq('api_source_id', receitaData.id)
-      .eq('api_source_name', receitaData.api_source || 'themealdb')
+      .eq('titulo', receitaData.titulo)
       .maybeSingle();
 
     if (existente) {
@@ -67,17 +65,13 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         titulo: receitaData.titulo,
-        descricao: receitaData.descricao,
+        descricao: receitaData.descricao || receitaData.modo_preparo,
         modo_preparo: receitaData.modo_preparo || receitaData.descricao,
         tempo_preparo: receitaData.tempo_preparo,
-        porcoes: receitaData.porcoes,
+        porcoes: receitaData.porcoes || receitaData.rendimento,
         imagem_url: receitaData.imagem_url,
         categoria: receitaData.categoria,
-        area: receitaData.area, // NOVO: salvar área/culinária
-        video_url: receitaData.video_url, // NOVO: salvar link do YouTube
-        api_source_id: receitaData.id,
-        api_source_name: receitaData.api_source || 'themealdb',
-        fonte: receitaData.api_source || 'themealdb',
+        fonte: receitaData.fonte || 'receitas-json',
         status: 'ativa',
         publica: false,
       })
@@ -92,9 +86,9 @@ serve(async (req) => {
     if (receitaData.ingredientes && receitaData.ingredientes.length > 0) {
       const ingredientesParaInserir = receitaData.ingredientes.map((ing: any) => ({
         receita_id: receitaCriada.id,
-        produto_nome_busca: ing.nome || ing.ingrediente,
-        quantidade: ing.quantidade?.toString() || '1',
-        unidade_medida: ing.unidade || ing.unidade_medida || 'un',
+        produto_nome_busca: ing.nome || ing.ingrediente || ing,
+        quantidade: ing.quantidade?.toString() || ing.quantity?.toString() || '1',
+        unidade_medida: ing.unidade || ing.unidade_medida || ing.unit || 'un',
         opcional: false,
       }));
 

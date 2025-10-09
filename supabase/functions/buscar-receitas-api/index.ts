@@ -1,11 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { 
-  traduzirCategoria, 
-  traduzirArea, 
-  traduzirIngrediente, 
-  traduzirMedida 
-} from "../_shared/traducoes.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,158 +14,109 @@ serve(async (req) => {
 
   try {
     const { 
-      query, 
-      mode = 'search', // search, random, lookup, categories, areas, ingredients, filter
-      filterType, // ingredient, category, area (when mode = filter)
-      id, // meal ID (when mode = lookup)
-      api = 'themealdb', 
+      query = '', 
+      mode = 'search', // search, random, categories
       maxResults = 10 
     } = await req.json();
 
-    console.log('🔍 Buscando receitas:', { query, mode, filterType, id, api });
+    console.log('🔍 Buscando receitas brasileiras:', { query, mode, maxResults });
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     let receitas: any[] = [];
 
-    if (api === 'themealdb') {
-      const baseUrl = 'https://www.themealdb.com/api/json/v1/1';
-      let url = '';
+    if (mode === 'random') {
+      // Buscar receita aleatória
+      const { data, error } = await supabase
+        .from('receitas_publicas_brasileiras')
+        .select('*')
+        .limit(20); // Pegar 20 para ter variedade
 
-      // Determinar endpoint baseado no modo
-      switch (mode) {
-        case 'random':
-          url = `${baseUrl}/random.php`;
-          break;
-        case 'lookup':
-          url = `${baseUrl}/lookup.php?i=${id}`;
-          break;
-        case 'categories':
-          url = `${baseUrl}/categories.php`;
-          break;
-        case 'areas':
-          url = `${baseUrl}/list.php?a=list`;
-          break;
-        case 'ingredients':
-          url = `${baseUrl}/list.php?i=list`;
-          break;
-        case 'filter':
-          if (filterType === 'ingredient') {
-            url = `${baseUrl}/filter.php?i=${query}`;
-          } else if (filterType === 'category') {
-            url = `${baseUrl}/filter.php?c=${query}`;
-          } else if (filterType === 'area') {
-            url = `${baseUrl}/filter.php?a=${query}`;
-          }
-          break;
-        case 'search':
-        default:
-          url = `${baseUrl}/search.php?s=${query || ''}`;
-          break;
+      if (error) throw error;
+
+      // Selecionar uma aleatória
+      if (data && data.length > 0) {
+        const randomIndex = Math.floor(Math.random() * data.length);
+        receitas = [data[randomIndex]];
       }
 
-      console.log('📡 URL da API:', url);
-      const response = await fetch(url);
-      const data = await response.json();
+    } else if (mode === 'categories') {
+      // Buscar categorias únicas
+      const { data, error } = await supabase
+        .from('receitas_publicas_brasileiras')
+        .select('categoria')
+        .not('categoria', 'is', null);
 
-      // Processar resposta baseado no modo
-      if (mode === 'categories') {
-        receitas = (data.categories || []).map((cat: any) => ({
-          id: cat.idCategory,
-          titulo: traduzirCategoria(cat.strCategory),
-          titulo_original: cat.strCategory,
-          descricao: cat.strCategoryDescription,
-          imagem_url: cat.strCategoryThumb,
-          tipo: 'category'
-        }));
-      } else if (mode === 'areas') {
-        receitas = (data.meals || []).map((area: any) => ({
-          id: area.strArea,
-          titulo: traduzirArea(area.strArea),
-          titulo_original: area.strArea,
-          tipo: 'area'
-        }));
-      } else if (mode === 'ingredients') {
-        receitas = (data.meals || []).map((ing: any) => ({
-          id: ing.idIngredient,
-          titulo: traduzirIngrediente(ing.strIngredient),
-          titulo_original: ing.strIngredient,
-          descricao: ing.strDescription,
-          imagem_url: `https://www.themealdb.com/images/ingredients/${ing.strIngredient}.png`,
-          tipo: 'ingredient'
-        }));
-      } else if (mode === 'filter') {
-        // Filtros retornam apenas informações básicas, buscar detalhes completos
-        const meals = data.meals || [];
-        const detalhesPromises = meals.slice(0, maxResults).map(async (meal: any) => {
-          const detailsRes = await fetch(`${baseUrl}/lookup.php?i=${meal.idMeal}`);
-          const detailsData = await detailsRes.json();
-          const fullMeal = detailsData.meals?.[0];
-          
-          if (!fullMeal) return null;
+      if (error) throw error;
 
-          return {
-            id: fullMeal.idMeal,
-            titulo: fullMeal.strMeal,
-            descricao: fullMeal.strInstructions,
-            imagem_url: fullMeal.strMealThumb,
-            categoria: traduzirCategoria(fullMeal.strCategory),
-            area: traduzirArea(fullMeal.strArea),
-            video_url: fullMeal.strYoutube,
-            ingredientes: extrairIngredientesTraduzidos(fullMeal),
-            api_source: 'themealdb'
-          };
-        });
-        
-        const detalhesCompletos = await Promise.all(detalhesPromises);
-        receitas = detalhesCompletos.filter(r => r !== null);
-      } else {
-        // search, random, lookup
-        const meals = data.meals || [];
-        receitas = meals.slice(0, maxResults).map((meal: any) => ({
-          id: meal.idMeal,
-          titulo: meal.strMeal,
-          descricao: meal.strInstructions,
-          imagem_url: meal.strMealThumb,
-          categoria: traduzirCategoria(meal.strCategory),
-          area: traduzirArea(meal.strArea),
-          video_url: meal.strYoutube,
-          ingredientes: extrairIngredientesTraduzidos(meal),
-          api_source: 'themealdb'
-        }));
-      }
-
-    } else if (api === 'edamam') {
-      const APP_ID = Deno.env.get('EDAMAM_APP_ID');
-      const APP_KEY = Deno.env.get('EDAMAM_APP_KEY');
-      
-      if (!APP_ID || !APP_KEY) {
-        throw new Error('Credenciais Edamam não configuradas');
-      }
-
-      const url = `https://api.edamam.com/search?q=${query}&app_id=${APP_ID}&app_key=${APP_KEY}&to=${maxResults}`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      receitas = (data.hits || []).map((hit: any) => ({
-        id: hit.recipe.uri,
-        titulo: hit.recipe.label,
-        descricao: hit.recipe.url,
-        imagem_url: hit.recipe.image,
-        categoria: hit.recipe.dishType?.[0],
-        area: hit.recipe.cuisineType?.[0],
-        ingredientes: hit.recipe.ingredients.map((ing: any) => ({
-          nome: ing.food,
-          quantidade: ing.quantity?.toString() || '1',
-          unidade: ing.measure || 'un',
-          imagem_url: ing.image
-        })),
-        api_source: 'edamam'
+      // Agrupar categorias únicas
+      const categoriasUnicas = [...new Set(data.map(r => r.categoria))];
+      receitas = categoriasUnicas.map(cat => ({
+        id: cat,
+        titulo: cat,
+        titulo_original: cat,
+        tipo: 'category'
       }));
+
+    } else {
+      // Busca normal por título, categoria ou tags
+      let queryBuilder = supabase
+        .from('receitas_publicas_brasileiras')
+        .select('*');
+
+      if (query && query.trim()) {
+        queryBuilder = queryBuilder.or(
+          `titulo.ilike.%${query}%,categoria.ilike.%${query}%,tags.cs.{${query}}`
+        );
+      }
+
+      queryBuilder = queryBuilder.limit(maxResults);
+
+      const { data, error } = await queryBuilder;
+
+      if (error) throw error;
+      receitas = data || [];
     }
 
-    console.log(`✅ ${receitas.length} receitas encontradas`);
+    // Formatar receitas para o formato esperado pelo frontend
+    const receitasFormatadas = receitas.map((receita: any) => ({
+      id: receita.id,
+      titulo: receita.titulo,
+      descricao: receita.modo_preparo,
+      modo_preparo: receita.modo_preparo,
+      imagem_url: receita.imagem_url,
+      categoria: receita.categoria,
+      tempo_preparo: receita.tempo_preparo,
+      porcoes: receita.rendimento,
+      ingredientes: Array.isArray(receita.ingredientes) 
+        ? receita.ingredientes.map((ing: any) => {
+            // Se o ingrediente já é um objeto com nome/quantidade, usar direto
+            if (typeof ing === 'object' && ing.nome) {
+              return {
+                nome: ing.nome || ing.name,
+                quantidade: ing.quantidade || ing.quantity || '1',
+                unidade: ing.unidade || ing.unit || 'un'
+              };
+            }
+            // Se é string, retornar como nome apenas
+            return {
+              nome: ing,
+              quantidade: '1',
+              unidade: 'un'
+            };
+          })
+        : [],
+      tags: receita.tags || [],
+      fonte: 'receitas-json',
+      tipo: receita.tipo // Para categorias
+    }));
+
+    console.log(`✅ ${receitasFormatadas.length} receitas encontradas`);
 
     return new Response(
-      JSON.stringify({ receitas, total: receitas.length }),
+      JSON.stringify({ receitas: receitasFormatadas, total: receitasFormatadas.length }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
@@ -182,27 +128,3 @@ serve(async (req) => {
     );
   }
 });
-
-// Função auxiliar para extrair ingredientes traduzidos do TheMealDB
-function extrairIngredientesTraduzidos(meal: any): any[] {
-  const ingredientes = [];
-  for (let i = 1; i <= 20; i++) {
-    const ingrediente = meal[`strIngredient${i}`];
-    const medida = meal[`strMeasure${i}`];
-    
-    if (ingrediente && ingrediente.trim()) {
-      const ingredienteOriginal = ingrediente.trim();
-      const medidaOriginal = medida?.trim() || '';
-      
-      ingredientes.push({
-        nome: traduzirIngrediente(ingredienteOriginal),
-        nome_original: ingredienteOriginal,
-        quantidade: traduzirMedida(medidaOriginal) || '1',
-        quantidade_original: medidaOriginal || '1',
-        unidade: 'un',
-        imagem_url: `https://www.themealdb.com/images/ingredients/${ingredienteOriginal}.png`
-      });
-    }
-  }
-  return ingredientes;
-}

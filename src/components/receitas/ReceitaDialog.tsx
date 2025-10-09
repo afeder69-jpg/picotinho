@@ -26,12 +26,12 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
   const queryClient = useQueryClient();
   const { register, handleSubmit, reset, setValue } = useForm();
 
-  // Buscar categorias disponíveis
+  // Buscar categorias disponíveis das receitas brasileiras
   const { data: categorias } = useQuery({
     queryKey: ["categorias-receitas"],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("buscar-receitas-api", {
-        body: { mode: "categories", api: "themealdb" }
+        body: { mode: "categories" }
       });
       if (error) throw error;
       return data?.receitas || [];
@@ -142,7 +142,7 @@ export function ReceitaDialog({ open, onOpenChange }: ReceitaDialogProps) {
               </SelectTrigger>
               <SelectContent>
                 {categorias?.map((cat: any) => (
-                  <SelectItem key={cat.id} value={cat.titulo_original}>
+                  <SelectItem key={cat.id} value={cat.titulo}>
                     {cat.titulo}
                   </SelectItem>
                 ))}

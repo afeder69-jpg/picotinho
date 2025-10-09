@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Search, Download, ExternalLink } from "lucide-react";
+import { Search, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface BuscarReceitasApiProps {
   open: boolean;
@@ -16,10 +16,10 @@ interface BuscarReceitasApiProps {
 
 export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps) {
   const [query, setQuery] = useState("");
-  const [api, setApi] = useState("themealdb");
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
   const [receitas, setReceitas] = useState<any[]>([]);
+  const queryClient = useQueryClient();
 
   const handleBuscar = async () => {
     if (!query.trim()) {
@@ -30,7 +30,7 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('buscar-receitas-api', {
-        body: { query, api, maxResults: 10 }
+        body: { query, mode: 'search', maxResults: 10 }
       });
 
       if (error) throw error;
@@ -40,7 +40,7 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
       if (data.receitas.length === 0) {
         toast.info("Nenhuma receita encontrada");
       } else {
-        toast.success(`${data.receitas.length} receitas encontradas!`);
+        toast.success(`${data.receitas.length} receitas brasileiras encontradas!`);
       }
     } catch (error: any) {
       console.error('Erro ao buscar:', error);
@@ -51,15 +51,33 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
   };
 
   const handleImportar = async (receita: any) => {
-    setImporting(receita.api_source_id);
+    setImporting(receita.id);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const receitaParaImportar = {
+        id: receita.id,
+        titulo: receita.titulo,
+        descricao: receita.descricao,
+        modo_preparo: receita.modo_preparo,
+        imagem_url: receita.imagem_url,
+        categoria: receita.categoria,
+        tempo_preparo: receita.tempo_preparo,
+        porcoes: receita.porcoes,
+        ingredientes: receita.ingredientes,
+        tags: receita.tags,
+        fonte: 'receitas-json'
+      };
+
       const { error } = await supabase.functions.invoke('importar-receita-api', {
-        body: { receita }
+        body: receitaParaImportar
       });
 
       if (error) throw error;
 
       toast.success("Receita importada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ['receitas-disponiveis'] });
       onOpenChange(false);
     } catch (error: any) {
       console.error('Erro ao importar:', error);
@@ -73,24 +91,14 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Buscar Receitas Online</DialogTitle>
+          <DialogTitle>🇧🇷 Buscar Receitas Brasileiras</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Busca */}
           <div className="flex gap-2">
-            <Select value={api} onValueChange={setApi}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="themealdb">TheMealDB</SelectItem>
-                <SelectItem value="edamam">Edamam</SelectItem>
-              </SelectContent>
-            </Select>
-            
             <Input
-              placeholder="Buscar receitas..."
+              placeholder="Ex: bolo de chocolate, feijoada, moqueca..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleBuscar()}
@@ -111,13 +119,19 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
 
           {!loading && receitas.length === 0 && query && (
             <div className="text-center py-8 text-muted-foreground">
-              Faça uma busca para encontrar receitas
+              Nenhuma receita encontrada. Tente buscar por outro nome.
+            </div>
+          )}
+
+          {!loading && receitas.length === 0 && !query && (
+            <div className="text-center py-8 text-muted-foreground">
+              Digite algo para buscar receitas brasileiras
             </div>
           )}
 
           <div className="space-y-3">
             {receitas.map((receita) => (
-              <Card key={receita.api_source_id}>
+              <Card key={receita.id}>
                 <CardContent className="p-4">
                   <div className="flex gap-4">
                     {receita.imagem_url && (
@@ -131,7 +145,7 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
                     <div className="flex-1">
                       <h4 className="font-semibold mb-1">{receita.titulo}</h4>
                       {receita.descricao && (
-                        <p className="text-sm text-muted-foreground mb-2">
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
                           {receita.descricao}
                         </p>
                       )}
@@ -147,28 +161,21 @@ export function BuscarReceitasApi({ open, onOpenChange }: BuscarReceitasApiProps
                             {receita.ingredientes.length} ingredientes
                           </Badge>
                         )}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleImportar(receita)}
-                          disabled={importing === receita.api_source_id}
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          {importing === receita.api_source_id ? "Importando..." : "Importar"}
-                        </Button>
-                        {receita.instrucoes && receita.instrucoes.startsWith('http') && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(receita.instrucoes, '_blank')}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Ver Original
-                          </Button>
+                        {receita.tempo_preparo && (
+                          <Badge variant="outline" className="text-xs">
+                            ⏱️ {receita.tempo_preparo} min
+                          </Badge>
                         )}
                       </div>
+
+                      <Button
+                        size="sm"
+                        onClick={() => handleImportar(receita)}
+                        disabled={importing === receita.id}
+                      >
+                        <Download className="h-3 w-3 mr-1" />
+                        {importing === receita.id ? "Importando..." : "Importar"}
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

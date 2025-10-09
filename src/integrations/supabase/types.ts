@@ -1912,6 +1912,51 @@ export type Database = {
         }
         Relationships: []
       }
+      receitas_publicas_brasileiras: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          fonte: string | null
+          id: string
+          imagem_url: string | null
+          ingredientes: Json
+          modo_preparo: string | null
+          rendimento: string | null
+          tags: string[] | null
+          tempo_preparo: number | null
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          fonte?: string | null
+          id?: string
+          imagem_url?: string | null
+          ingredientes?: Json
+          modo_preparo?: string | null
+          rendimento?: string | null
+          tags?: string[] | null
+          tempo_preparo?: number | null
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          fonte?: string | null
+          id?: string
+          imagem_url?: string | null
+          ingredientes?: Json
+          modo_preparo?: string | null
+          rendimento?: string | null
+          tags?: string[] | null
+          tempo_preparo?: number | null
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sinonimos_produtos: {
         Row: {
           aprovado_por: string | null

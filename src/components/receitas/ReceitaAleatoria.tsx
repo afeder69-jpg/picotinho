@@ -16,7 +16,7 @@ export function ReceitaAleatoria() {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('buscar-receitas-api', {
-        body: { mode: 'random', api: 'themealdb' }
+        body: { mode: 'random' }
       });
 
       if (error) throw error;
@@ -47,13 +47,14 @@ export function ReceitaAleatoria() {
         id: receita.id,
         titulo: receita.titulo,
         descricao: receita.descricao,
+        modo_preparo: receita.modo_preparo || receita.descricao,
         imagem_url: receita.imagem_url,
         categoria: receita.categoria,
-        area: receita.area,
-        video_url: receita.video_url,
-        modo_preparo: receita.descricao,
+        tempo_preparo: receita.tempo_preparo,
+        porcoes: receita.porcoes,
         ingredientes: receita.ingredientes,
-        api_source: 'themealdb'
+        tags: receita.tags,
+        fonte: 'receitas-json'
       };
 
       const { error } = await supabase.functions.invoke('importar-receita-api', {
@@ -89,7 +90,7 @@ export function ReceitaAleatoria() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>🎲 Receita Aleatória do Dia</DialogTitle>
+            <DialogTitle>🎲 Receita Brasileira Aleatória</DialogTitle>
           </DialogHeader>
 
           {receita && (
