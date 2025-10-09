@@ -1,5 +1,11 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { 
+  traduzirCategoria, 
+  traduzirArea, 
+  traduzirIngrediente, 
+  traduzirMedida 
+} from "../_shared/traducoes.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,7 +75,8 @@ serve(async (req) => {
       if (mode === 'categories') {
         receitas = (data.categories || []).map((cat: any) => ({
           id: cat.idCategory,
-          titulo: cat.strCategory,
+          titulo: traduzirCategoria(cat.strCategory),
+          titulo_original: cat.strCategory,
           descricao: cat.strCategoryDescription,
           imagem_url: cat.strCategoryThumb,
           tipo: 'category'
@@ -77,13 +84,15 @@ serve(async (req) => {
       } else if (mode === 'areas') {
         receitas = (data.meals || []).map((area: any) => ({
           id: area.strArea,
-          titulo: area.strArea,
+          titulo: traduzirArea(area.strArea),
+          titulo_original: area.strArea,
           tipo: 'area'
         }));
       } else if (mode === 'ingredients') {
         receitas = (data.meals || []).map((ing: any) => ({
           id: ing.idIngredient,
-          titulo: ing.strIngredient,
+          titulo: traduzirIngrediente(ing.strIngredient),
+          titulo_original: ing.strIngredient,
           descricao: ing.strDescription,
           imagem_url: `https://www.themealdb.com/images/ingredients/${ing.strIngredient}.png`,
           tipo: 'ingredient'
@@ -103,10 +112,10 @@ serve(async (req) => {
             titulo: fullMeal.strMeal,
             descricao: fullMeal.strInstructions,
             imagem_url: fullMeal.strMealThumb,
-            categoria: fullMeal.strCategory,
-            area: fullMeal.strArea,
+            categoria: traduzirCategoria(fullMeal.strCategory),
+            area: traduzirArea(fullMeal.strArea),
             video_url: fullMeal.strYoutube,
-            ingredientes: extrairIngredientes(fullMeal),
+            ingredientes: extrairIngredientesTraduzidos(fullMeal),
             api_source: 'themealdb'
           };
         });
@@ -121,10 +130,10 @@ serve(async (req) => {
           titulo: meal.strMeal,
           descricao: meal.strInstructions,
           imagem_url: meal.strMealThumb,
-          categoria: meal.strCategory,
-          area: meal.strArea,
+          categoria: traduzirCategoria(meal.strCategory),
+          area: traduzirArea(meal.strArea),
           video_url: meal.strYoutube,
-          ingredientes: extrairIngredientes(meal),
+          ingredientes: extrairIngredientesTraduzidos(meal),
           api_source: 'themealdb'
         }));
       }
@@ -174,19 +183,24 @@ serve(async (req) => {
   }
 });
 
-// Função auxiliar para extrair ingredientes do TheMealDB
-function extrairIngredientes(meal: any): any[] {
+// Função auxiliar para extrair ingredientes traduzidos do TheMealDB
+function extrairIngredientesTraduzidos(meal: any): any[] {
   const ingredientes = [];
   for (let i = 1; i <= 20; i++) {
     const ingrediente = meal[`strIngredient${i}`];
     const medida = meal[`strMeasure${i}`];
     
     if (ingrediente && ingrediente.trim()) {
+      const ingredienteOriginal = ingrediente.trim();
+      const medidaOriginal = medida?.trim() || '';
+      
       ingredientes.push({
-        nome: ingrediente.trim(),
-        quantidade: medida?.trim() || '1',
+        nome: traduzirIngrediente(ingredienteOriginal),
+        nome_original: ingredienteOriginal,
+        quantidade: traduzirMedida(medidaOriginal) || '1',
+        quantidade_original: medidaOriginal || '1',
         unidade: 'un',
-        imagem_url: `https://www.themealdb.com/images/ingredients/${ingrediente.trim()}.png`
+        imagem_url: `https://www.themealdb.com/images/ingredients/${ingredienteOriginal}.png`
       });
     }
   }
