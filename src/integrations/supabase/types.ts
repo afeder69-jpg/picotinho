@@ -14,6 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      cardapio_receitas: {
+        Row: {
+          cardapio_id: string
+          created_at: string
+          dia_semana: number
+          id: string
+          receita_id: string
+          refeicao: string
+        }
+        Insert: {
+          cardapio_id: string
+          created_at?: string
+          dia_semana: number
+          id?: string
+          receita_id: string
+          refeicao: string
+        }
+        Update: {
+          cardapio_id?: string
+          created_at?: string
+          dia_semana?: number
+          id?: string
+          receita_id?: string
+          refeicao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cardapio_receitas_cardapio_id_fkey"
+            columns: ["cardapio_id"]
+            isOneToOne: false
+            referencedRelation: "cardapios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cardapio_receitas_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cardapios: {
+        Row: {
+          created_at: string
+          id: string
+          semana_fim: string
+          semana_inicio: string
+          titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          semana_fim: string
+          semana_inicio: string
+          titulo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          semana_fim?: string
+          semana_inicio?: string
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       categorias: {
         Row: {
           ativa: boolean | null
@@ -288,6 +360,102 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      listas_compras: {
+        Row: {
+          cardapio_id: string | null
+          created_at: string
+          id: string
+          origem: string
+          receita_id: string | null
+          titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cardapio_id?: string | null
+          created_at?: string
+          id?: string
+          origem: string
+          receita_id?: string | null
+          titulo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cardapio_id?: string | null
+          created_at?: string
+          id?: string
+          origem?: string
+          receita_id?: string | null
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listas_compras_cardapio_id_fkey"
+            columns: ["cardapio_id"]
+            isOneToOne: false
+            referencedRelation: "cardapios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listas_compras_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listas_compras_itens: {
+        Row: {
+          comprado: boolean
+          created_at: string
+          id: string
+          lista_id: string
+          produto_id: string | null
+          produto_nome: string
+          quantidade: number
+          unidade_medida: string
+        }
+        Insert: {
+          comprado?: boolean
+          created_at?: string
+          id?: string
+          lista_id: string
+          produto_id?: string | null
+          produto_nome: string
+          quantidade: number
+          unidade_medida: string
+        }
+        Update: {
+          comprado?: boolean
+          created_at?: string
+          id?: string
+          lista_id?: string
+          produto_id?: string | null
+          produto_nome?: string
+          quantidade?: number
+          unidade_medida?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listas_compras_itens_lista_id_fkey"
+            columns: ["lista_id"]
+            isOneToOne: false
+            referencedRelation: "listas_compras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listas_compras_itens_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_app"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       marcas_conhecidas: {
         Row: {
@@ -762,6 +930,39 @@ export type Database = {
           processada?: boolean | null
           texto_original?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pontos_regras: {
+        Row: {
+          ativo: boolean | null
+          categoria: string
+          created_at: string
+          descricao: string | null
+          id: string
+          pontos: number
+          tipo_evento: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          pontos: number
+          tipo_evento: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          pontos?: number
+          tipo_evento?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1624,6 +1825,218 @@ export type Database = {
         }
         Relationships: []
       }
+      receita_ingredientes: {
+        Row: {
+          created_at: string
+          id: string
+          opcional: boolean
+          produto_id: string | null
+          produto_nome_busca: string
+          quantidade: number
+          receita_id: string
+          unidade_medida: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          opcional?: boolean
+          produto_id?: string | null
+          produto_nome_busca: string
+          quantidade: number
+          receita_id: string
+          unidade_medida: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          opcional?: boolean
+          produto_id?: string | null
+          produto_nome_busca?: string
+          quantidade?: number
+          receita_id?: string
+          unidade_medida?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receita_ingredientes_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_app"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receita_ingredientes_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receitas: {
+        Row: {
+          api_source_id: string | null
+          api_source_name: string | null
+          area: string | null
+          categoria: string | null
+          created_at: string
+          descricao: string | null
+          fonte: Database["public"]["Enums"]["fonte_receita"]
+          id: string
+          imagem_path: string | null
+          imagem_url: string | null
+          instrucoes: string
+          media_estrelas: number | null
+          modo_preparo: string | null
+          porcoes: number | null
+          publica: boolean
+          soma_estrelas: number | null
+          status: Database["public"]["Enums"]["status_receita"]
+          tempo_preparo: number | null
+          tipo_refeicao: Database["public"]["Enums"]["tipo_refeicao"] | null
+          titulo: string
+          total_avaliacoes: number | null
+          updated_at: string
+          user_id: string | null
+          video_url: string | null
+        }
+        Insert: {
+          api_source_id?: string | null
+          api_source_name?: string | null
+          area?: string | null
+          categoria?: string | null
+          created_at?: string
+          descricao?: string | null
+          fonte?: Database["public"]["Enums"]["fonte_receita"]
+          id?: string
+          imagem_path?: string | null
+          imagem_url?: string | null
+          instrucoes: string
+          media_estrelas?: number | null
+          modo_preparo?: string | null
+          porcoes?: number | null
+          publica?: boolean
+          soma_estrelas?: number | null
+          status?: Database["public"]["Enums"]["status_receita"]
+          tempo_preparo?: number | null
+          tipo_refeicao?: Database["public"]["Enums"]["tipo_refeicao"] | null
+          titulo: string
+          total_avaliacoes?: number | null
+          updated_at?: string
+          user_id?: string | null
+          video_url?: string | null
+        }
+        Update: {
+          api_source_id?: string | null
+          api_source_name?: string | null
+          area?: string | null
+          categoria?: string | null
+          created_at?: string
+          descricao?: string | null
+          fonte?: Database["public"]["Enums"]["fonte_receita"]
+          id?: string
+          imagem_path?: string | null
+          imagem_url?: string | null
+          instrucoes?: string
+          media_estrelas?: number | null
+          modo_preparo?: string | null
+          porcoes?: number | null
+          publica?: boolean
+          soma_estrelas?: number | null
+          status?: Database["public"]["Enums"]["status_receita"]
+          tempo_preparo?: number | null
+          tipo_refeicao?: Database["public"]["Enums"]["tipo_refeicao"] | null
+          titulo?: string
+          total_avaliacoes?: number | null
+          updated_at?: string
+          user_id?: string | null
+          video_url?: string | null
+        }
+        Relationships: []
+      }
+      receitas_avaliacoes: {
+        Row: {
+          comentario: string | null
+          created_at: string
+          estrelas: number
+          id: string
+          receita_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comentario?: string | null
+          created_at?: string
+          estrelas: number
+          id?: string
+          receita_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comentario?: string | null
+          created_at?: string
+          estrelas?: number
+          id?: string
+          receita_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receitas_avaliacoes_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receitas_publicas_brasileiras: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          fonte: string | null
+          id: string
+          imagem_url: string | null
+          ingredientes: Json
+          modo_preparo: string | null
+          rendimento: string | null
+          tags: string[] | null
+          tempo_preparo: number | null
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          fonte?: string | null
+          id?: string
+          imagem_url?: string | null
+          ingredientes?: Json
+          modo_preparo?: string | null
+          rendimento?: string | null
+          tags?: string[] | null
+          tempo_preparo?: number | null
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          fonte?: string | null
+          id?: string
+          imagem_url?: string | null
+          ingredientes?: Json
+          modo_preparo?: string | null
+          rendimento?: string | null
+          tags?: string[] | null
+          tempo_preparo?: number | null
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sinonimos_produtos: {
         Row: {
           aprovado_por: string | null
@@ -1838,6 +2251,92 @@ export type Database = {
           nome?: string | null
         }
         Relationships: []
+      }
+      usuarios_pontos: {
+        Row: {
+          created_at: string
+          id: string
+          pontos_disponiveis: number | null
+          pontos_resgatados: number | null
+          pontos_totais_ganhos: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pontos_disponiveis?: number | null
+          pontos_resgatados?: number | null
+          pontos_totais_ganhos?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pontos_disponiveis?: number | null
+          pontos_resgatados?: number | null
+          pontos_totais_ganhos?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usuarios_pontos_log: {
+        Row: {
+          avaliacao_id: string | null
+          categoria: string
+          created_at: string
+          descricao: string | null
+          id: string
+          metadata: Json | null
+          nota_id: string | null
+          pontos_ganhos: number | null
+          pontos_gastos: number | null
+          produto_id: string | null
+          receita_id: string | null
+          tipo_evento: string
+          user_id: string
+        }
+        Insert: {
+          avaliacao_id?: string | null
+          categoria: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          nota_id?: string | null
+          pontos_ganhos?: number | null
+          pontos_gastos?: number | null
+          produto_id?: string | null
+          receita_id?: string | null
+          tipo_evento: string
+          user_id: string
+        }
+        Update: {
+          avaliacao_id?: string | null
+          categoria?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          nota_id?: string | null
+          pontos_ganhos?: number | null
+          pontos_gastos?: number | null
+          produto_id?: string | null
+          receita_id?: string | null
+          tipo_evento?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuarios_pontos_log_receita_id_fkey"
+            columns: ["receita_id"]
+            isOneToOne: false
+            referencedRelation: "receitas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_configuracoes: {
         Row: {
@@ -2123,6 +2622,20 @@ export type Database = {
       }
     }
     Functions: {
+      adicionar_pontos: {
+        Args: {
+          p_avaliacao_id?: string
+          p_categoria: string
+          p_descricao?: string
+          p_metadata?: Json
+          p_nota_id?: string
+          p_produto_id?: string
+          p_receita_id?: string
+          p_tipo_evento: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       anonymize_user_profile: {
         Args: { profile_user_id: string }
         Returns: boolean
@@ -2175,6 +2688,38 @@ export type Database = {
           total_usuarios: number
         }[]
       }
+      buscar_receitas_brasileiras_disponiveis: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          categoria: string
+          disponibilidade: string
+          imagem_url: string
+          ingredientes_disponiveis: number
+          modo_preparo: string
+          receita_id: string
+          rendimento: string
+          tags: string[]
+          titulo: string
+          total_ingredientes: number
+        }[]
+      }
+      buscar_receitas_disponiveis: {
+        Args: Record<PropertyKey, never> | { p_user_id: string }
+        Returns: {
+          descricao: string
+          disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
+          fonte: Database["public"]["Enums"]["fonte_receita"]
+          imagem_url: string
+          ingredientes_disponiveis: number
+          ingredientes_faltantes: Json
+          percentual_disponivel: number
+          porcoes: number
+          receita_id: string
+          tempo_preparo: number
+          titulo: string
+          total_ingredientes: number
+        }[]
+      }
       calcular_preco_por_unidade_base: {
         Args: {
           preco_unitario: number
@@ -2215,6 +2760,18 @@ export type Database = {
           detalhes: string
           produtos_corrigidos: number
         }[]
+      }
+      criar_lista_compras_de_cardapio: {
+        Args:
+          | { cardapio_uuid: string }
+          | { p_cardapio_id: string; p_titulo?: string; p_user_id: string }
+        Returns: string
+      }
+      criar_lista_compras_de_receita: {
+        Args:
+          | { p_receita_id: string; p_titulo?: string; p_user_id: string }
+          | { receita_uuid: string }
+        Returns: string
       }
       criar_sinonimo_global: {
         Args: {
@@ -2348,8 +2905,27 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      importar_receita_api: {
+        Args: {
+          p_api_source_id: string
+          p_api_source_name: string
+          p_descricao: string
+          p_imagem_url: string
+          p_ingredientes: Json
+          p_instrucoes: string
+          p_porcoes: number
+          p_tempo_preparo: number
+          p_titulo: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       is_master: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_receita_image_owner: {
+        Args: { image_path: string }
         Returns: boolean
       }
       ivfflat_bit_support: {
@@ -2634,9 +3210,29 @@ export type Database = {
         Args: { "": unknown[] }
         Returns: number
       }
+      verificar_disponibilidade_receita: {
+        Args:
+          | { p_receita_id: string; p_user_id: string }
+          | { receita_uuid: string }
+        Returns: {
+          disponivel: boolean
+          ingrediente_nome: string
+          quantidade_estoque: number
+          quantidade_necessaria: string
+        }[]
+      }
     }
     Enums: {
       app_role: "master" | "user" | "admin"
+      fonte_receita:
+        | "minha"
+        | "picotinho"
+        | "comunidade"
+        | "api_externa"
+        | "brasileiras"
+      status_receita: "rascunho" | "publicada" | "arquivada"
+      tipo_disponibilidade: "completo" | "parcial" | "faltando"
+      tipo_refeicao: "cafe_manha" | "almoco" | "jantar" | "lanche" | "sobremesa"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2765,6 +3361,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["master", "user", "admin"],
+      fonte_receita: [
+        "minha",
+        "picotinho",
+        "comunidade",
+        "api_externa",
+        "brasileiras",
+      ],
+      status_receita: ["rascunho", "publicada", "arquivada"],
+      tipo_disponibilidade: ["completo", "parcial", "faltando"],
+      tipo_refeicao: ["cafe_manha", "almoco", "jantar", "lanche", "sobremesa"],
     },
   },
 } as const

@@ -95,8 +95,8 @@ const Menu = () => {
       title: 'Receitas',
       description: 'Gerenciar receitas e ingredientes',
       icon: ChefHat,
-      onClick: () => {},
-      isActive: false
+      onClick: () => navigate('/receitas'),
+      isActive: true
     },
     {
       id: 'user-settings',
