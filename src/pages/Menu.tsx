@@ -9,7 +9,6 @@ import {
   BarChart3, 
   ChefHat, 
   ShoppingCart,
-  Calendar,
   LogIn,
   LogOut,
   MapPin,
@@ -96,16 +95,8 @@ const Menu = () => {
       title: 'Receitas',
       description: 'Gerenciar receitas e ingredientes',
       icon: ChefHat,
-      onClick: () => navigate('/receitas'),
-      isActive: true
-    },
-    {
-      id: 'menus',
-      title: 'Cardápios',
-      description: 'Planejar cardápios semanais',
-      icon: Calendar,
-      onClick: () => navigate('/cardapios'),
-      isActive: true
+      onClick: () => {},
+      isActive: false
     },
     {
       id: 'user-settings',

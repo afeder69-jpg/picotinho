@@ -15,8 +15,6 @@ import CadastroUsuario from "./pages/CadastroUsuario";
 import WhatsAppConfig from "./pages/WhatsAppConfig";
 import CleanupUserData from "./pages/CleanupUserData";
 import Relatorios from "./pages/Relatorios";
-import Receitas from "./pages/Receitas";
-import Cardapios from "./pages/Cardapios";
 import NormalizacaoGlobal from "./pages/admin/NormalizacaoGlobal";
 import GerenciarMasters from "./pages/admin/GerenciarMasters";
 
@@ -59,8 +57,6 @@ const App = () => {
                 <Route path="/whatsapp" element={<WhatsAppConfig />} />
                 <Route path="/cleanup" element={<CleanupUserData />} />
                 <Route path="/relatorios" element={<Relatorios />} />
-                <Route path="/receitas" element={<Receitas />} />
-                <Route path="/cardapios" element={<Cardapios />} />
                 <Route path="/admin/normalizacao" element={<NormalizacaoGlobal />} />
                 <Route path="/admin/gerenciar-masters" element={<GerenciarMasters />} />
                 

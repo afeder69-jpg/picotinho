@@ -2,15 +2,6 @@ project_id = "mjsbwrtegorjxcepvrik"
 
 # Build forçado para deploy de consolidar-masters-duplicados - 2025-10-04
 
-[functions.buscar-receitas-api]
-verify_jwt = false
-
-[functions.importar-receita-api]
-verify_jwt = false
-
-[functions.importar-receitas-json]
-verify_jwt = false
-
 [functions.buscar-imagens-produtos]
 verify_jwt = false
 
