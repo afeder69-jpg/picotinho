@@ -166,23 +166,20 @@ export default function ReceitaDetalhes() {
                 )}
               </div>
 
-              <div className="flex items-center gap-4 flex-wrap">
-                {(receita.total_avaliacoes || 0) > 0 && (
-                  <AvaliacaoEstrelas 
-                    media={receita.media_estrelas || 0}
-                    total={receita.total_avaliacoes || 0}
-                    tamanho="lg"
-                  />
-                )}
+              <div className="flex items-center gap-4">
+                <AvaliacaoEstrelas 
+                  media={receita.media_estrelas || 0} 
+                  total={receita.total_avaliacoes || 0}
+                  tamanho="lg"
+                />
                 
-                {/* Botão de Avaliar (só aparece para receitas públicas que NÃO são suas) */}
                 {receita.publica && !isPropriaReceita && (
                   <Button 
                     onClick={() => setAvaliacaoDialogOpen(true)}
                     variant="outline"
-                    className="gap-2"
+                    size="sm"
                   >
-                    <Star className="h-4 w-4" />
+                    <Star className="mr-2 h-4 w-4" />
                     {(receita.total_avaliacoes || 0) > 0 ? 'Avaliar Receita' : 'Seja o primeiro a avaliar'}
                   </Button>
                 )}
