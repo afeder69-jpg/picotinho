@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChefHat, Clock, Users, Edit, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -9,11 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { AvaliacaoEstrelas } from "@/components/receitas/AvaliacaoEstrelas";
+import { ReceitaDialog } from "@/components/receitas/ReceitaDialog";
 
 export default function ReceitaDetalhes() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [dialogAberto, setDialogAberto] = useState(false);
 
   const { data: receita, isLoading } = useQuery({
     queryKey: ['receita', id],
@@ -88,7 +92,7 @@ export default function ReceitaDetalhes() {
                   </div>
                 </div>
                 {isPropriaReceita && (
-                  <Button>
+                  <Button onClick={() => setDialogAberto(true)}>
                     <Edit className="mr-2 h-4 w-4" />
                     Editar
                   </Button>
@@ -154,6 +158,17 @@ export default function ReceitaDetalhes() {
             </CardContent>
           </Card>
         )}
+
+        {/* Dialog de Edição */}
+        <ReceitaDialog
+          open={dialogAberto}
+          onOpenChange={setDialogAberto}
+          receita={receita}
+          onSuccess={() => {
+            setDialogAberto(false);
+            queryClient.invalidateQueries({ queryKey: ['receita', id] });
+          }}
+        />
       </div>
     </div>
   );

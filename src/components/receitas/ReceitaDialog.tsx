@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Plus, Trash2, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +52,7 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
   const [tabAtual, setTabAtual] = useState("info");
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
     defaultValues: {
       titulo: receita?.titulo || '',
       tempo_preparo: receita?.tempo_preparo || null,
@@ -62,6 +62,55 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
       publica: receita?.publica ?? true,
     }
   });
+
+  // Carregar ingredientes ao abrir para edição
+  useEffect(() => {
+    if (receita?.id && open) {
+      // Resetar o form com os dados da receita
+      reset({
+        titulo: receita.titulo || '',
+        tempo_preparo: receita.tempo_preparo || null,
+        porcoes: receita.porcoes || null,
+        video_url: receita.video_url || '',
+        modo_preparo: receita.modo_preparo || '',
+        publica: receita.publica ?? true,
+      });
+
+      // Atualizar preview da imagem
+      setImagemPreview(receita.imagem_url || null);
+      setImagemFile(null);
+
+      // Buscar ingredientes existentes
+      supabase
+        .from('receita_ingredientes')
+        .select('*')
+        .eq('receita_id', receita.id)
+        .then(({ data }) => {
+          if (data) {
+            setIngredientes(data.map(ing => ({
+              produto_id: ing.produto_id || '',
+              produto_nome: ing.produto_nome_busca,
+              quantidade: ing.quantidade,
+              unidade_medida: ing.unidade_medida,
+              opcional: ing.opcional || false
+            })));
+          }
+        });
+    } else if (!receita && open) {
+      // Limpar form ao abrir para nova receita
+      reset({
+        titulo: '',
+        tempo_preparo: null,
+        porcoes: null,
+        video_url: '',
+        modo_preparo: '',
+        publica: true,
+      });
+      setIngredientes([]);
+      setImagemPreview(null);
+      setImagemFile(null);
+    }
+  }, [receita, open, reset]);
 
   const handleImagemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
