@@ -12,6 +12,35 @@ import { Badge } from "@/components/ui/badge";
 import { AvaliacaoEstrelas } from "@/components/receitas/AvaliacaoEstrelas";
 import { ReceitaDialog } from "@/components/receitas/ReceitaDialog";
 
+// Função para converter URL do YouTube para formato embed
+const getYouTubeEmbedUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    let videoId = '';
+    
+    // youtube.com/watch?v=VIDEO_ID
+    if (urlObj.hostname.includes('youtube.com') && urlObj.searchParams.has('v')) {
+      videoId = urlObj.searchParams.get('v') || '';
+    }
+    // youtu.be/VIDEO_ID
+    else if (urlObj.hostname.includes('youtu.be')) {
+      videoId = urlObj.pathname.slice(1);
+    }
+    // youtube.com/embed/VIDEO_ID (já está correto)
+    else if (urlObj.pathname.includes('/embed/')) {
+      return url;
+    }
+    
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    
+    return url;
+  } catch {
+    return url;
+  }
+};
+
 export default function ReceitaDetalhes() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -148,7 +177,7 @@ export default function ReceitaDetalhes() {
                 <iframe
                   width="100%"
                   height="100%"
-                  src={receita.video_url.replace('watch?v=', 'embed/')}
+                  src={getYouTubeEmbedUrl(receita.video_url)}
                   title={receita.titulo}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
