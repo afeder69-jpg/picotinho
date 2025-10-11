@@ -1858,13 +1858,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "receita_ingredientes_produto_id_fkey"
-            columns: ["produto_id"]
-            isOneToOne: false
-            referencedRelation: "estoque_app"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "receita_ingredientes_receita_id_fkey"
             columns: ["receita_id"]
             isOneToOne: false
