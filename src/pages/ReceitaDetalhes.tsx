@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChefHat, Clock, Users, Edit, ArrowLeft } from "lucide-react";
+import { ChefHat, Clock, Users, Edit, ArrowLeft, Star } from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
@@ -11,6 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { AvaliacaoEstrelas } from "@/components/receitas/AvaliacaoEstrelas";
 import { ReceitaDialog } from "@/components/receitas/ReceitaDialog";
+import { AvaliacaoReceitaDialog } from "@/components/receitas/AvaliacaoReceitaDialog";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 // Função para converter URL do YouTube para formato embed
 const getYouTubeEmbedUrl = (url: string): string => {
@@ -47,6 +51,7 @@ export default function ReceitaDetalhes() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogAberto, setDialogAberto] = useState(false);
+  const [avaliacaoDialogOpen, setAvaliacaoDialogOpen] = useState(false);
 
   const { data: receita, isLoading } = useQuery({
     queryKey: ['receita', id],
@@ -60,6 +65,24 @@ export default function ReceitaDetalhes() {
       return data;
     },
     enabled: !!id
+  });
+
+  const { data: avaliacoes = [] } = useQuery({
+    queryKey: ['receitas_avaliacoes', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('receitas_avaliacoes')
+        .select(`
+          *,
+          profiles:user_id (nome, nome_completo)
+        `)
+        .eq('receita_id', id!)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id && !!receita?.publica
   });
 
   if (isLoading) {
@@ -143,15 +166,27 @@ export default function ReceitaDetalhes() {
                 )}
               </div>
 
-              {(receita.total_avaliacoes || 0) > 0 && (
-                <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
+                {(receita.total_avaliacoes || 0) > 0 && (
                   <AvaliacaoEstrelas 
                     media={receita.media_estrelas || 0}
                     total={receita.total_avaliacoes || 0}
                     tamanho="lg"
                   />
-                </div>
-              )}
+                )}
+                
+                {/* Botão de Avaliar (só aparece para receitas públicas que NÃO são suas) */}
+                {receita.publica && !isPropriaReceita && (
+                  <Button 
+                    onClick={() => setAvaliacaoDialogOpen(true)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Star className="h-4 w-4" />
+                    {(receita.total_avaliacoes || 0) > 0 ? 'Avaliar Receita' : 'Seja o primeiro a avaliar'}
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -188,6 +223,60 @@ export default function ReceitaDetalhes() {
           </Card>
         )}
 
+        {/* Avaliações dos Usuários */}
+        {receita.publica && (receita.total_avaliacoes || 0) > 0 && avaliacoes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Avaliações</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {avaliacoes.map((avaliacao: any) => (
+                <div key={avaliacao.id} className="border-b last:border-0 pb-4 last:pb-0">
+                  <div className="flex items-start gap-3">
+                    <Avatar>
+                      <AvatarFallback>
+                        {(avaliacao.profiles?.nome || avaliacao.profiles?.nome_completo || 'U')[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-medium">
+                          {avaliacao.profiles?.nome || avaliacao.profiles?.nome_completo || 'Usuário'}
+                        </p>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={cn(
+                                "h-4 w-4",
+                                i < avaliacao.estrelas
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-gray-300"
+                              )}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      {avaliacao.comentario && (
+                        <p className="text-sm text-muted-foreground">
+                          {avaliacao.comentario}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(avaliacao.created_at).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Dialog de Edição */}
         <ReceitaDialog
           open={dialogAberto}
@@ -196,6 +285,19 @@ export default function ReceitaDetalhes() {
           onSuccess={() => {
             setDialogAberto(false);
             queryClient.invalidateQueries({ queryKey: ['receita', id] });
+          }}
+        />
+
+        <AvaliacaoReceitaDialog
+          open={avaliacaoDialogOpen}
+          onOpenChange={setAvaliacaoDialogOpen}
+          receitaId={receita?.id || ''}
+          receitaTitulo={receita?.titulo || ''}
+          onSuccess={() => {
+            setAvaliacaoDialogOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['receita', id] });
+            queryClient.invalidateQueries({ queryKey: ['receitas_avaliacoes', id] });
+            toast.success('Avaliação enviada com sucesso!');
           }}
         />
       </div>
