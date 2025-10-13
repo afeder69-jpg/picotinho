@@ -574,6 +574,50 @@ export type Database = {
           },
         ]
       }
+      normalizacao_falhas: {
+        Row: {
+          created_at: string | null
+          erro_detalhes: Json | null
+          erro_mensagem: string | null
+          id: string
+          nota_imagem_id: string | null
+          resolvido: boolean | null
+          tentativas: number | null
+          texto_original: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          erro_detalhes?: Json | null
+          erro_mensagem?: string | null
+          id?: string
+          nota_imagem_id?: string | null
+          resolvido?: boolean | null
+          tentativas?: number | null
+          texto_original: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          erro_detalhes?: Json | null
+          erro_mensagem?: string | null
+          id?: string
+          nota_imagem_id?: string | null
+          resolvido?: boolean | null
+          tentativas?: number | null
+          texto_original?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "normalizacao_falhas_nota_imagem_id_fkey"
+            columns: ["nota_imagem_id"]
+            isOneToOne: false
+            referencedRelation: "notas_imagens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       normalizacoes_embalagens: {
         Row: {
           ativo: boolean
@@ -817,8 +861,11 @@ export type Database = {
           imagem_url: string
           nome_original: string | null
           normalizada: boolean | null
+          normalizada_em: string | null
           origem: string | null
           processada: boolean | null
+          produtos_normalizados: number | null
+          tentativas_normalizacao: number | null
           updated_at: string | null
           usuario_id: string
         }
@@ -834,8 +881,11 @@ export type Database = {
           imagem_url: string
           nome_original?: string | null
           normalizada?: boolean | null
+          normalizada_em?: string | null
           origem?: string | null
           processada?: boolean | null
+          produtos_normalizados?: number | null
+          tentativas_normalizacao?: number | null
           updated_at?: string | null
           usuario_id: string
         }
@@ -851,8 +901,11 @@ export type Database = {
           imagem_url?: string
           nome_original?: string | null
           normalizada?: boolean | null
+          normalizada_em?: string | null
           origem?: string | null
           processada?: boolean | null
+          produtos_normalizados?: number | null
+          tentativas_normalizacao?: number | null
           updated_at?: string | null
           usuario_id?: string
         }
@@ -1182,6 +1235,7 @@ export type Database = {
           nome_base_sugerido: string | null
           nome_padrao_sugerido: string | null
           nota_imagem_id: string | null
+          nota_item_hash: string | null
           observacoes_revisor: string | null
           qtd_base_sugerida: number | null
           qtd_unidade_sugerido: string | null
@@ -1210,6 +1264,7 @@ export type Database = {
           nome_base_sugerido?: string | null
           nome_padrao_sugerido?: string | null
           nota_imagem_id?: string | null
+          nota_item_hash?: string | null
           observacoes_revisor?: string | null
           qtd_base_sugerida?: number | null
           qtd_unidade_sugerido?: string | null
@@ -1238,6 +1293,7 @@ export type Database = {
           nome_base_sugerido?: string | null
           nome_padrao_sugerido?: string | null
           nota_imagem_id?: string | null
+          nota_item_hash?: string | null
           observacoes_revisor?: string | null
           qtd_base_sugerida?: number | null
           qtd_unidade_sugerido?: string | null
