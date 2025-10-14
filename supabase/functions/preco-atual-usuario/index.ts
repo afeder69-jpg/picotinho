@@ -14,6 +14,39 @@ interface RequestBody {
   raioKm?: number; // opcional: se não vier, usa configuracoes_usuario
 }
 
+// Função auxiliar para detectar produtos multi-unidade (ovos, etc)
+function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number) {
+  const nomeUpper = nomeProduto.toUpperCase();
+  
+  // Detectar se é ovo
+  if (!nomeUpper.includes('OVO') && !nomeUpper.includes('OVOS')) {
+    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+  }
+  
+  // Padrões para detectar quantidade
+  const patterns = [
+    /C\/(\d+)/,           // C/30, C/20
+    /(\d+)\s*UN(?:IDADE)?S?/i,  // 30UN, 20 UNIDADES
+    /BANDEJAS?\s*C\/?\s*(\d+)/i, // BANDEJA C/30
+  ];
+  
+  for (const pattern of patterns) {
+    const match = nomeUpper.match(pattern);
+    if (match) {
+      const qty = parseInt(match[1]);
+      if (qty >= 6 && qty <= 100) { // Validação: ovos vêm entre 6 e 100 unidades
+        return {
+          isMultiUnit: true,
+          quantity: qty,
+          unitPrice: precoTotal / qty
+        };
+      }
+    }
+  }
+  
+  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+}
+
 interface PrecoResultado {
   produto_nome: string;
   valor_unitario: number;
@@ -191,8 +224,15 @@ serve(async (req) => {
 
       // Extrair itens da nota
       for (const item of dados.itens) {
-        const valorUnitario = Number(item.valor_unitario || item.preco_unitario || 0);
+        let valorUnitario = Number(item.valor_unitario || item.preco_unitario || 0);
         if (!item.descricao || valorUnitario <= 0) continue;
+
+        // 🥚 Aplicar lógica de detecção de ovos
+        const embalagem = detectarQuantidadeEmbalagem(item.descricao, valorUnitario);
+        if (embalagem.isMultiUnit) {
+          valorUnitario = embalagem.unitPrice;
+          console.log(`🥚 OVO DETECTADO NA ÁREA: ${item.descricao} → ${embalagem.quantity} unidades @ R$ ${valorUnitario.toFixed(3)}`);
+        }
 
         candidatos.push({
           produto_nome: item.descricao,
@@ -201,6 +241,11 @@ serve(async (req) => {
           estabelecimento_cnpj: cnpjNota,
           estabelecimento_nome: nomeEstabelecimento,
         });
+
+        // Log adicional para ovos
+        if (item.descricao.toUpperCase().includes('OVO')) {
+          console.log(`🥚 PREÇO OVO SALVO: "${item.descricao}" = R$ ${valorUnitario.toFixed(3)}/un em ${nomeEstabelecimento}`);
+        }
       }
     }
 

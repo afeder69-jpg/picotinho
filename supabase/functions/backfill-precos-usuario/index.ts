@@ -12,6 +12,39 @@ interface BackfillUsuarioRequest {
   produtos?: string[]; // opcional: limitar a um subconjunto
 }
 
+// Função auxiliar para detectar produtos multi-unidade (ovos, etc)
+function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number) {
+  const nomeUpper = nomeProduto.toUpperCase();
+  
+  // Detectar se é ovo
+  if (!nomeUpper.includes('OVO') && !nomeUpper.includes('OVOS')) {
+    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+  }
+  
+  // Padrões para detectar quantidade
+  const patterns = [
+    /C\/(\d+)/,           // C/30, C/20
+    /(\d+)\s*UN(?:IDADE)?S?/i,  // 30UN, 20 UNIDADES
+    /BANDEJAS?\s*C\/?\s*(\d+)/i, // BANDEJA C/30
+  ];
+  
+  for (const pattern of patterns) {
+    const match = nomeUpper.match(pattern);
+    if (match) {
+      const qty = parseInt(match[1]);
+      if (qty >= 6 && qty <= 100) { // Validação: ovos vêm entre 6 e 100 unidades
+        return {
+          isMultiUnit: true,
+          quantity: qty,
+          unitPrice: precoTotal / qty
+        };
+      }
+    }
+  }
+  
+  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+}
+
 interface CandidatoPreco {
   produtoNome: string;
   estabelecimentoCnpj: string;
@@ -99,9 +132,17 @@ serve(async (req) => {
             const desc = normalizarTexto(item?.descricao ?? item?.nome ?? "");
             const alvo = normalizarTexto(produtoNome);
             const unidade = (item?.unidade ?? item?.un ?? item?.medida ?? "UN").toString().toUpperCase();
-            const valorUnit = Number(item?.valor_unitario ?? item?.preco_unitario ?? 0);
+            let valorUnit = Number(item?.valor_unitario ?? item?.preco_unitario ?? 0);
 
             if (!desc || valorUnit <= 0) continue;
+
+            // 🥚 Aplicar lógica de detecção de ovos
+            const nomeOriginal = item?.descricao ?? item?.nome ?? "";
+            const embalagem = detectarQuantidadeEmbalagem(nomeOriginal, valorUnit);
+            if (embalagem.isMultiUnit) {
+              valorUnit = embalagem.unitPrice;
+              console.log(`🥚 BACKFILL - OVO DETECTADO: ${nomeOriginal} → ${embalagem.quantity} unidades @ R$ ${valorUnit.toFixed(3)}`);
+            }
 
             if (verificarSimilaridadeProduto(desc, alvo)) {
               candidatos.push({
@@ -111,6 +152,11 @@ serve(async (req) => {
                 valorUnitario: valorUnit,
                 dataAtualizacaoISO: dataISO,
               });
+
+              // Log adicional para ovos
+              if (nomeOriginal.toUpperCase().includes('OVO')) {
+                console.log(`🥚 BACKFILL OVO: "${produtoNome}" = R$ ${valorUnit.toFixed(3)}/un`);
+              }
             }
           }
         }
