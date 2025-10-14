@@ -14,6 +14,36 @@ interface IngredienteComPreco {
   custo_item: number;
 }
 
+function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number) {
+  const nomeUpper = nomeProduto.toUpperCase();
+  
+  if (!nomeUpper.includes('OVO') && !nomeUpper.includes('OVOS')) {
+    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+  }
+  
+  const patterns = [
+    /C\/(\d+)/,
+    /(\d+)\s*UN(?:IDADE)?S?/i,
+    /BANDEJAS?\s*C\/?\s*(\d+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = nomeUpper.match(pattern);
+    if (match) {
+      const qty = parseInt(match[1]);
+      if (qty >= 6 && qty <= 100) {
+        return {
+          isMultiUnit: true,
+          quantity: qty,
+          unitPrice: precoTotal / qty
+        };
+      }
+    }
+  }
+  
+  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -111,7 +141,7 @@ Deno.serve(async (req) => {
       // Verificar disponibilidade no estoque
       const { data: estoque } = await supabase
         .from('estoque_app')
-        .select('quantidade, preco_unitario_ultimo')
+        .select('quantidade, preco_unitario_ultimo, produto_nome')
         .eq('user_id', user.id)
         .or(`produto_nome.ilike.%${nomeBusca}%,produto_nome_normalizado.ilike.%${nomeBusca}%`)
         .limit(1)
@@ -126,7 +156,7 @@ Deno.serve(async (req) => {
       // 1. Tentar buscar de precos_atuais_usuario
       const { data: precoUsuario } = await supabase
         .from('precos_atuais_usuario')
-        .select('valor_unitario')
+        .select('valor_unitario, produto_nome')
         .eq('user_id', user.id)
         .or(`produto_nome.ilike.%${nomeBusca}%,produto_nome_normalizado.ilike.%${nomeBusca}%`)
         .order('data_atualizacao', { ascending: false })
@@ -134,8 +164,15 @@ Deno.serve(async (req) => {
         .single();
 
       if (precoUsuario?.valor_unitario) {
-        precoUnitario = precoUsuario.valor_unitario;
-        console.log(`[calcular-custo-receita] Preço do usuário encontrado: R$ ${precoUnitario}`);
+        const nomeProduto = precoUsuario.produto_nome || nomeBusca;
+        const embalagem = detectarQuantidadeEmbalagem(nomeProduto, precoUsuario.valor_unitario);
+        precoUnitario = embalagem.unitPrice;
+        
+        if (embalagem.isMultiUnit) {
+          console.log(`[calcular-custo-receita] 🥚 OVO DETECTADO (usuário): ${nomeProduto} → ${embalagem.quantity}un @ R$ ${precoUnitario.toFixed(3)}`);
+        } else {
+          console.log(`[calcular-custo-receita] Preço do usuário encontrado: R$ ${precoUnitario}`);
+        }
       } else if (userLat && userLon) {
         // 2. Buscar de precos_atuais (estabelecimentos na área)
         const { data: precosArea } = await supabase
@@ -173,8 +210,15 @@ Deno.serve(async (req) => {
                 const distancia = calcularDistancia(userLat, userLon, estabLat, estabLon);
                 
                 if (distancia <= raioBusca && preco.valor_unitario > 0) {
-                  if (precoUnitario === 0 || preco.valor_unitario < precoUnitario) {
-                    precoUnitario = preco.valor_unitario;
+                  const embalagem = detectarQuantidadeEmbalagem(preco.produto_nome, preco.valor_unitario);
+                  const precoCalculado = embalagem.unitPrice;
+                  
+                  if (precoUnitario === 0 || precoCalculado < precoUnitario) {
+                    precoUnitario = precoCalculado;
+                    
+                    if (embalagem.isMultiUnit) {
+                      console.log(`[calcular-custo-receita] 🥚 OVO DETECTADO (área): ${preco.produto_nome} → ${embalagem.quantity}un @ R$ ${precoUnitario.toFixed(3)}`);
+                    }
                   }
                 }
               }
@@ -189,12 +233,25 @@ Deno.serve(async (req) => {
 
       // 3. Se ainda não tem preço, usar do estoque
       if (precoUnitario === 0 && estoque?.preco_unitario_ultimo) {
-        precoUnitario = estoque.preco_unitario_ultimo;
-        console.log(`[calcular-custo-receita] Preço do estoque: R$ ${precoUnitario}`);
+        const nomeProdutoEstoque = estoque.produto_nome || nomeBusca;
+        const embalagem = detectarQuantidadeEmbalagem(nomeProdutoEstoque, estoque.preco_unitario_ultimo);
+        precoUnitario = embalagem.unitPrice;
+        
+        if (embalagem.isMultiUnit) {
+          console.log(`[calcular-custo-receita] 🥚 OVO DETECTADO (estoque): ${nomeProdutoEstoque} → ${embalagem.quantity}un @ R$ ${precoUnitario.toFixed(3)}`);
+        } else {
+          console.log(`[calcular-custo-receita] Preço do estoque: R$ ${precoUnitario}`);
+        }
       }
 
-      const custoItem = precoUnitario;
+      // Parse da quantidade (ex: "2", "500g", "1kg")
+      const quantidadeStr = ingrediente.quantidade || '1';
+      const quantidadeNumerica = parseFloat(quantidadeStr.replace(/[^\d.,]/g, '').replace(',', '.')) || 1;
+
+      const custoItem = precoUnitario * quantidadeNumerica;
       custoTotal += custoItem;
+
+      console.log(`[calcular-custo-receita] ${nomeBusca}: ${quantidadeNumerica}x R$ ${precoUnitario.toFixed(3)} = R$ ${custoItem.toFixed(2)}`);
 
       ingredientesComPreco.push({
         nome: ingrediente.produto_nome_busca,
