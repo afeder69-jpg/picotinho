@@ -35,3 +35,25 @@ export function formatarDistancia(distancia: number | string): string {
 export function formatarQuantidade(quantity: number): string {
   return quantity.toFixed(3).replace('.', ',');
 }
+
+/**
+ * Formata nome de produto para exibição em Title Case
+ * @param nome Nome do produto em qualquer formato
+ * @returns String formatada com primeira letra de cada palavra em maiúscula
+ */
+export function formatarNomeParaExibicao(nome: string): string {
+  if (!nome) return '';
+  
+  const palavras = nome.toLowerCase().split(' ');
+  
+  return palavras.map((palavra, index) => {
+    // Preposições que devem ficar em minúscula (exceto no início)
+    const preposicoes = ['de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'em', 'a', 'o', 'e', 'no', 'na'];
+    
+    if (index > 0 && preposicoes.includes(palavra)) {
+      return palavra;
+    }
+    
+    return palavra.charAt(0).toUpperCase() + palavra.slice(1);
+  }).join(' ');
+}

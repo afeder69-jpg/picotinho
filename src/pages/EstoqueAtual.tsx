@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { formatarQuantidade } from '@/lib/utils';
+import { formatarQuantidade, formatarNomeParaExibicao } from '@/lib/utils';
 import PicotinhoLogo from '@/components/PicotinhoLogo';
 import { normalizarCategoria, categoriasEquivalentes, ordemCategorias, categoriasNormalizadas } from '@/lib/categorias';
 
@@ -1813,9 +1813,9 @@ const EstoqueAtual = () => {
                               }`}
                             >
                              <div className="flex-1 overflow-hidden relative">
-                               <div className="flex items-center gap-2">
-                                   <h3 className="text-xs font-medium text-foreground leading-tight relative flex-1">
-                                     {item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome}
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-xs font-medium text-foreground leading-tight relative flex-1">
+                                      {formatarNomeParaExibicao(item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome)}
                                     {item.origem === 'manual' && (
                                       <span className="text-red-500 text-xs ml-1">(manual)</span>
                                     )}
@@ -1993,9 +1993,9 @@ const EstoqueAtual = () => {
           </DialogHeader>
           
           {itemEditando && (
-            <div className="space-y-4">
-               <div className="text-center">
-                 <h3 className="font-semibold text-lg">{itemEditando.produto_nome_exibicao || itemEditando.produto_nome_normalizado || itemEditando.produto_nome}</h3>
+             <div className="space-y-4">
+                <div className="text-center">
+                  <h3 className="font-semibold text-lg">{formatarNomeParaExibicao(itemEditando.produto_nome_exibicao || itemEditando.produto_nome_normalizado || itemEditando.produto_nome)}</h3>
                 <p className="text-sm text-muted-foreground">
                   Quantidade atual: {formatarQuantidade(itemEditando.quantidade)} {itemEditando.unidade_medida.replace('Unidade', 'Un')}
                 </p>
