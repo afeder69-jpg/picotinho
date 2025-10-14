@@ -12,6 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +61,7 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
   const [imagemPreview, setImagemPreview] = useState<string | null>(receita?.imagem_url || null);
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
   const [tabAtual, setTabAtual] = useState("info");
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
     defaultValues: {
@@ -141,17 +152,7 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
   const handleExcluirReceita = async () => {
     if (!receita?.id) return;
     
-    const confirmar = window.confirm(
-      `Tem certeza que deseja excluir "${receita.titulo}"?\n\n` +
-      `Isso vai deletar:\n` +
-      `• Todos os ingredientes\n` +
-      `• Todas as avaliações\n` +
-      `• A imagem (se houver)\n\n` +
-      `Esta ação não pode ser desfeita!`
-    );
-    
-    if (!confirmar) return;
-    
+    setConfirmarExclusao(false);
     setLoading(true);
     
     try {
@@ -403,7 +404,7 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
               <Button 
                 type="button" 
                 variant="destructive" 
-                onClick={handleExcluirReceita}
+                onClick={() => setConfirmarExclusao(true)}
                 disabled={loading}
                 className="mr-auto"
               >
@@ -420,6 +421,32 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
           </DialogFooter>
         </form>
       </DialogContent>
+
+      {/* AlertDialog de Confirmação de Exclusão */}
+      <AlertDialog open={confirmarExclusao} onOpenChange={setConfirmarExclusao}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza que deseja excluir esta receita?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Esta ação não pode ser desfeita. A seguinte informação será permanentemente removida:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Todos os ingredientes</li>
+                <li>Todas as avaliações</li>
+                <li>A imagem (se houver)</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleExcluirReceita}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir Receita
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
