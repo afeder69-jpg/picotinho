@@ -2789,6 +2789,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      corrigir_notas_estado_inconsistente: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          acao: string
+          detalhes: string
+          nota_id: string
+        }[]
+      }
       corrigir_precos_manuais: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3264,10 +3272,9 @@ export type Database = {
           | { p_receita_id: string; p_user_id: string }
           | { receita_uuid: string }
         Returns: {
-          disponivel: boolean
-          ingrediente_nome: string
-          quantidade_estoque: number
-          quantidade_necessaria: string
+          disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
+          ingredientes: Json
+          percentual_disponivel: number
         }[]
       }
     }

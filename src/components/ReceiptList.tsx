@@ -439,17 +439,45 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
 
   const deleteReceipt = async (id: string) => {
     try {
-      // Para notas processadas, marcar como não processadas e limpar dados extraídos
-      // ao invés de deletar completamente para evitar falsos positivos de duplicata
-      const { data: nota } = await supabase
+      console.log('🗑️ Iniciando exclusão da nota:', id);
+      
+      // Mostrar loading
+      toast({
+        title: "Excluindo nota...",
+        description: "Por favor aguarde.",
+      });
+      
+      // Buscar a nota antes de deletar para verificar estado
+      const { data: nota, error: fetchError } = await supabase
         .from('notas_imagens')
-        .select('processada, dados_extraidos')
+        .select('processada, normalizada, dados_extraidos, nome_original')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
+      if (fetchError) {
+        console.error('❌ Erro ao buscar nota:', fetchError);
+        toast({
+          title: "Erro ao buscar nota",
+          description: `Falha ao verificar estado da nota. Erro: ${fetchError.message}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!nota) {
+        toast({
+          title: "Nota não encontrada",
+          description: "A nota já foi excluída ou não existe.",
+          variant: "destructive",
+        });
+        await loadReceipts();
+        return;
+      }
+
+      // Se estava processada, marcar como não processada
       if (nota?.processada) {
-        // Se estava processada, marcar como não processada e limpar dados extraídos
-        await supabase
+        console.log('📝 Nota foi processada, marcando como não processada...');
+        const { error: updateError } = await supabase
           .from('notas_imagens')
           .update({ 
             processada: false, 
@@ -457,7 +485,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
           })
           .eq('id', id);
         
-        console.log('📝 Nota marcada como não processada para evitar falsos positivos de duplicata');
+        if (updateError) {
+          console.error('⚠️ Aviso ao atualizar status da nota:', updateError);
+        }
       }
 
       // Deletar registros das tabelas
@@ -466,17 +496,51 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         supabase.from('notas_imagens').delete().eq('id', id)
       ]);
 
-      const receiptsSuccess = !receiptsResult.error;
-      const notasSuccess = !notasImagensResult.error;
-      if (!receiptsSuccess && !notasSuccess) {
-        throw new Error('Erro ao excluir nota fiscal');
+      // Verificar erros específicos
+      if (receiptsResult.error) {
+        console.error('❌ Erro ao deletar receipts:', receiptsResult.error);
+      }
+      
+      if (notasImagensResult.error) {
+        console.error('❌ Erro ao deletar notas_imagens:', notasImagensResult.error);
+        
+        // Mensagem de erro específica
+        let errorMsg = notasImagensResult.error.message;
+        if (notasImagensResult.error.code === '23503') {
+          errorMsg = 'Esta nota está vinculada a outros registros e não pôde ser excluída. Por favor, contate o suporte com este ID: ' + id;
+        } else if (notasImagensResult.error.message.includes('foreign key')) {
+          errorMsg = 'Esta nota possui dependências que impedem sua exclusão. ID: ' + id;
+        }
+        
+        toast({
+          title: "Erro ao excluir nota",
+          description: errorMsg,
+          variant: "destructive",
+        });
+        return;
       }
 
+      const receiptsSuccess = !receiptsResult.error;
+      const notasSuccess = !notasImagensResult.error;
+      
+      if (!receiptsSuccess && !notasSuccess) {
+        throw new Error('Erro ao excluir nota fiscal de ambas as tabelas');
+      }
+
+      console.log('✅ Nota deletada com sucesso');
       await loadReceipts();
-      toast({ title: "Sucesso", description: "Nota fiscal excluída com sucesso" });
+      
+      toast({ 
+        title: "Sucesso", 
+        description: `Nota "${nota.nome_original || 'sem nome'}" excluída com sucesso` 
+      });
     } catch (error) {
-      console.error('Error deleting receipt:', error);
-      toast({ title: "Erro", description: "Erro ao excluir nota fiscal", variant: "destructive" });
+      console.error('❌ Erro crítico ao deletar nota:', error);
+      toast({ 
+        title: "Erro crítico", 
+        description: `Erro inesperado: ${error instanceof Error ? error.message : 'Desconhecido'}. ID: ${id}`,
+        variant: "destructive" 
+      });
     }
   };
 
