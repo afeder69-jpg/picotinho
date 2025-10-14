@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChefHat, Clock, Users, Edit, ArrowLeft, Star } from "lucide-react";
+import { ChefHat, Clock, Users, Edit, ArrowLeft, Star, ShoppingCart, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,6 +67,19 @@ export default function ReceitaDetalhes() {
     enabled: !!id
   });
 
+  const { data: ingredientes = [] } = useQuery({
+    queryKey: ['receita-ingredientes', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('receita_ingredientes')
+        .select('produto_nome_busca, quantidade')
+        .eq('receita_id', id!);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id
+  });
+
   const { data: avaliacoes = [] } = useQuery({
     queryKey: ['receitas_avaliacoes', id],
     queryFn: async () => {
@@ -83,6 +96,31 @@ export default function ReceitaDetalhes() {
       return data;
     },
     enabled: !!id && !!receita?.publica
+  });
+
+  const { data: custoReceita, isLoading: loadingCusto } = useQuery({
+    queryKey: ['receita-custo', id],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('calcular-custo-receita', {
+        body: { receitaId: id }
+      });
+
+      if (error) throw error;
+      return data as {
+        custo_total: number;
+        custo_por_porcao: number;
+        percentual_disponivel: number;
+        ingredientes: Array<{
+          nome: string;
+          quantidade: string;
+          disponivel: boolean;
+          quantidade_estoque: number;
+          preco_unitario: number;
+          custo_item: number;
+        }>;
+      };
+    },
+    enabled: !!id && !!user
   });
 
   if (isLoading) {
@@ -187,6 +225,129 @@ export default function ReceitaDetalhes() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Card de Custo e Disponibilidade */}
+        {user && (
+          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Custo da Receita</CardTitle>
+                {custoReceita && (
+                  <Badge 
+                    variant={custoReceita.percentual_disponivel >= 80 ? "default" : 
+                            custoReceita.percentual_disponivel >= 50 ? "secondary" : "destructive"}
+                  >
+                    {custoReceita.percentual_disponivel.toFixed(0)}% disponível
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingCusto ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-40" />
+                  <Skeleton className="h-6 w-32" />
+                </div>
+              ) : custoReceita ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Custo Total</p>
+                      <p className="text-2xl font-bold text-primary">
+                        R$ {custoReceita.custo_total.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Por Porção</p>
+                      <p className="text-2xl font-bold text-primary">
+                        R$ {custoReceita.custo_por_porcao.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {custoReceita.ingredientes.some(i => !i.disponivel) && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        toast.info("Lista de compras", {
+                          description: "Funcionalidade em desenvolvimento"
+                        });
+                      }}
+                    >
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Gerar Lista de Compras
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Não foi possível calcular o custo
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Ingredientes com disponibilidade */}
+        {ingredientes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Ingredientes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {user && custoReceita ? (
+                <div className="space-y-3">
+                  {custoReceita.ingredientes.map((ingrediente, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-start justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                    >
+                      <div className="flex items-start flex-1">
+                        {ingrediente.disponivel ? (
+                          <CheckCircle className="h-5 w-5 text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-destructive mr-3 mt-0.5 flex-shrink-0" />
+                        )}
+                        <div className="flex-1">
+                          <p className="font-medium">{ingrediente.nome}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {ingrediente.quantidade}
+                            {ingrediente.disponivel && ingrediente.quantidade_estoque > 0 && (
+                              <span className="ml-2 text-green-600">
+                                ({ingrediente.quantidade_estoque.toFixed(1)} em estoque)
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {ingrediente.preco_unitario > 0 && (
+                        <div className="text-right ml-4">
+                          <p className="font-semibold text-primary">
+                            R$ {ingrediente.custo_item.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            R$ {ingrediente.preco_unitario.toFixed(2)}/un
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {ingredientes.map((ingrediente, index) => (
+                    <li key={index} className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span>{ingrediente.produto_nome_busca} - {ingrediente.quantidade}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Modo de Preparo */}
         <Card>

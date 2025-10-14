@@ -1,9 +1,12 @@
-import { ChefHat, Clock, Users, ChevronRight, ImageOff, Crown } from "lucide-react";
+import { ChefHat, Clock, Users, ChevronRight, Crown, ShoppingCart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { AvaliacaoEstrelas } from "./AvaliacaoEstrelas";
 import { Database } from "@/integrations/supabase/types";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 type Receita = Database['public']['Tables']['receitas']['Row'];
 
@@ -16,6 +19,24 @@ interface ReceitaCardProps {
 export function ReceitaCard({ receita, modoVisualizacao, onClick }: ReceitaCardProps) {
   const isTopRated = (receita.media_estrelas || 0) >= 4.5 && (receita.total_avaliacoes || 0) >= 10;
   const currentUserId = ''; // Será preenchido via AuthContext quando necessário
+  const { user } = useAuth();
+
+  const { data: custoReceita } = useQuery({
+    queryKey: ['receita-custo-card', receita.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('calcular-custo-receita', {
+        body: { receitaId: receita.id }
+      });
+      if (error) throw error;
+      return data as {
+        custo_total: number;
+        custo_por_porcao: number;
+        percentual_disponivel: number;
+      };
+    },
+    enabled: !!user && !!receita.id,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  });
 
   return (
     <Card 
@@ -57,18 +78,39 @@ export function ReceitaCard({ receita, modoVisualizacao, onClick }: ReceitaCardP
               <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
             </div>
 
-            <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-muted-foreground">
               {receita.tempo_preparo && (
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{receita.tempo_preparo}min</span>
-                </div>
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {receita.tempo_preparo}min
+                </Badge>
               )}
               {receita.porcoes && (
-                <div className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  <span>{receita.porcoes} {receita.porcoes === 1 ? 'porção' : 'porções'}</span>
-                </div>
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {receita.porcoes} {receita.porcoes === 1 ? 'porção' : 'porções'}
+                </Badge>
+              )}
+              
+              {user && custoReceita && (
+                <>
+                  <Badge 
+                    variant="outline" 
+                    className="flex items-center gap-1 bg-primary/10 text-primary border-primary/20"
+                  >
+                    R$ {custoReceita.custo_por_porcao.toFixed(2)}/porção
+                  </Badge>
+                  
+                  {custoReceita.percentual_disponivel < 100 && (
+                    <Badge 
+                      variant={custoReceita.percentual_disponivel >= 50 ? "secondary" : "destructive"}
+                      className="flex items-center gap-1"
+                    >
+                      <ShoppingCart className="h-3 w-3" />
+                      {custoReceita.percentual_disponivel.toFixed(0)}%
+                    </Badge>
+                  )}
+                </>
               )}
             </div>
 
