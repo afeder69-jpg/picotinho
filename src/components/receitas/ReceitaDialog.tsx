@@ -138,6 +138,85 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
     setIngredientes(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleExcluirReceita = async () => {
+    if (!receita?.id) return;
+    
+    const confirmar = window.confirm(
+      `Tem certeza que deseja excluir "${receita.titulo}"?\n\n` +
+      `Isso vai deletar:\n` +
+      `• Todos os ingredientes\n` +
+      `• Todas as avaliações\n` +
+      `• A imagem (se houver)\n\n` +
+      `Esta ação não pode ser desfeita!`
+    );
+    
+    if (!confirmar) return;
+    
+    setLoading(true);
+    
+    try {
+      // 1. Deletar ingredientes
+      const { error: ingredientesError } = await supabase
+        .from('receita_ingredientes')
+        .delete()
+        .eq('receita_id', receita.id);
+      
+      if (ingredientesError) throw ingredientesError;
+      
+      // 2. Deletar avaliações
+      const { error: avaliacoesError } = await supabase
+        .from('receitas_avaliacoes')
+        .delete()
+        .eq('receita_id', receita.id);
+      
+      if (avaliacoesError) throw avaliacoesError;
+      
+      // 3. Deletar imagem do storage (se houver)
+      if (receita.imagem_path) {
+        const { error: storageError } = await supabase.storage
+          .from('receitas-imagens')
+          .remove([receita.imagem_path]);
+        
+        if (storageError) {
+          console.warn('Erro ao deletar imagem:', storageError);
+        }
+      }
+      
+      // 4. Deletar a receita
+      const { error: receitaError } = await supabase
+        .from('receitas')
+        .delete()
+        .eq('id', receita.id);
+      
+      if (receitaError) throw receitaError;
+      
+      // TODO: Quando implementar sistema de pontos, adicionar aqui:
+      // await supabase.rpc('reverter_pontos_receita', { receita_id: receita.id });
+      
+      toast({ 
+        title: "Receita excluída com sucesso!", 
+        description: "Todos os dados relacionados foram removidos." 
+      });
+      
+      onSuccess();
+      
+      // Navegar para lista de receitas (se estiver na página de detalhes)
+      if (window.location.pathname.includes('/receita/')) {
+        window.location.href = '/receitas';
+      }
+      
+    } catch (error: any) {
+      console.error('Erro ao excluir receita:', error);
+      toast({ 
+        title: "Erro ao excluir", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onSubmit = async (data: FormData) => {
     if (!user) return;
 
@@ -320,6 +399,18 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
           </Tabs>
 
           <DialogFooter className="mt-6">
+            {receita?.id && (
+              <Button 
+                type="button" 
+                variant="destructive" 
+                onClick={handleExcluirReceita}
+                disabled={loading}
+                className="mr-auto"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Excluir Receita
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>

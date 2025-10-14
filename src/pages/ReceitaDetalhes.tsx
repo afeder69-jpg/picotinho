@@ -442,7 +442,12 @@ export default function ReceitaDetalhes() {
           receita={receita}
           onSuccess={() => {
             setDialogAberto(false);
-            queryClient.invalidateQueries({ queryKey: ['receita', id] });
+            
+            if (window.location.pathname.includes('/receita/')) {
+              queryClient.invalidateQueries({ queryKey: ['receita', id] });
+              queryClient.invalidateQueries({ queryKey: ['receita-ingredientes', id] });
+              queryClient.invalidateQueries({ queryKey: ['receitas_avaliacoes', id] });
+            }
           }}
         />
 
