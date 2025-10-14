@@ -46,6 +46,46 @@ function normalizarUnidadeMedida(unidade: string): string {
   return mapeamento[unidadeLimpa] || unidadeLimpa;
 }
 
+// 🥚 Detectar quantidade em embalagem para produtos multi-unidade (ex: ovos)
+function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): { 
+  isMultiUnit: boolean; 
+  quantity: number; 
+  unitPrice: number;
+} {
+  const nomeUpper = nomeProduto.toUpperCase();
+  
+  // Verificar se é produto de ovos
+  const isOvo = /\b(OVO|OVOS)\b/.test(nomeUpper) && 
+                !/\b(MASSA|MACARRAO|PASCOA|CHOCOLATE)\b/.test(nomeUpper);
+  
+  if (!isOvo) {
+    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+  }
+  
+  // Padrões de detecção de quantidade em embalagens
+  const patterns = [
+    /\bC\/(\d+)\b/i,           // C/30, C/20
+    /\b(\d+)\s*UN(IDADES)?\b/i, // 30 UNIDADES, 30UN
+    /\b(\d+)\s*OVO/i,          // 30 OVOS
+    /\bDZ(\d+)\b/i             // DZ12 (dúzia)
+  ];
+  
+  for (const pattern of patterns) {
+    const match = nomeProduto.match(pattern);
+    if (match) {
+      const qty = parseInt(match[1]);
+      if (qty > 1 && qty <= 60) { // Razoável para ovos
+        const unitPrice = precoTotal / qty;
+        console.log(`🥚 OVOS DETECTADO: "${nomeProduto}" → ${qty} unidades (R$ ${unitPrice.toFixed(2)}/un)`);
+        return { isMultiUnit: true, quantity: qty, unitPrice };
+      }
+    }
+  }
+  
+  // Não encontrou quantidade específica, assumir 1
+  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+}
+
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -177,12 +217,20 @@ serve(async (req) => {
     for (const item of itens) {
       const key = item.descricao; // usar descrição como chave para consolidar
       
+      // 🥚 TRATAMENTO ESPECIAL: Detectar quantidade em embalagem
+      const valorTotal = item.quantidade * item.valor_unitario;
+      const embalagemInfo = detectarQuantidadeEmbalagem(item.descricao, valorTotal);
+      
+      // Quantidade e preço final considerando embalagem
+      const quantidadeFinal = embalagemInfo.isMultiUnit ? embalagemInfo.quantity : item.quantidade;
+      const precoUnitarioFinal = embalagemInfo.isMultiUnit ? embalagemInfo.unitPrice : item.valor_unitario;
+      
       if (produtosConsolidados.has(key)) {
         // Item já existe, somar quantidades
         const itemExistente = produtosConsolidados.get(key);
-        itemExistente.quantidade += item.quantidade;
+        itemExistente.quantidade += quantidadeFinal;
         // Manter o preço unitário mais recente (último item)
-        itemExistente.preco_unitario_ultimo = item.valor_unitario;
+        itemExistente.preco_unitario_ultimo = precoUnitarioFinal;
       } else {
         // Novo item
         produtosConsolidados.set(key, {
@@ -190,9 +238,9 @@ serve(async (req) => {
           nota_id: nota.id,
           produto_nome: item.descricao,
           categoria: item.categoria || 'outros',
-          quantidade: item.quantidade,
+          quantidade: quantidadeFinal,
           unidade_medida: normalizarUnidadeMedida(item.unidade || 'unidade'),
-          preco_unitario_ultimo: item.valor_unitario,
+          preco_unitario_ultimo: precoUnitarioFinal,
           compra_id: nota.compra_id,
           origem: "nota_fiscal",
         });

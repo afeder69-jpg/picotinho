@@ -5,6 +5,44 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 🥚 Detectar quantidade em embalagem para produtos multi-unidade (ex: ovos)
+function detectarQuantidadeEmbalagem(nomeProduto: string): { 
+  isMultiUnit: boolean; 
+  quantity: number;
+} {
+  const nomeUpper = nomeProduto.toUpperCase();
+  
+  // Verificar se é produto de ovos
+  const isOvo = /\b(OVO|OVOS)\b/.test(nomeUpper) && 
+                !/\b(MASSA|MACARRAO|PASCOA|CHOCOLATE)\b/.test(nomeUpper);
+  
+  if (!isOvo) {
+    return { isMultiUnit: false, quantity: 1 };
+  }
+  
+  // Padrões de detecção de quantidade em embalagens
+  const patterns = [
+    /\bC\/(\d+)\b/i,           // C/30, C/20
+    /\b(\d+)\s*UN(IDADES)?\b/i, // 30 UNIDADES, 30UN
+    /\b(\d+)\s*OVO/i,          // 30 OVOS
+    /\bDZ(\d+)\b/i             // DZ12 (dúzia)
+  ];
+  
+  for (const pattern of patterns) {
+    const match = nomeProduto.match(pattern);
+    if (match) {
+      const qty = parseInt(match[1]);
+      if (qty > 1 && qty <= 60) { // Razoável para ovos
+        console.log(`🥚 OVOS DETECTADO NA NORMALIZAÇÃO: "${nomeProduto}" → ${qty} unidades`);
+        return { isMultiUnit: true, quantity: qty };
+      }
+    }
+  }
+  
+  // Não encontrou quantidade específica, assumir 1
+  return { isMultiUnit: false, quantity: 1 };
+}
+
 interface ProdutoParaNormalizar {
   texto_original: string;
   usuario_id?: string;
