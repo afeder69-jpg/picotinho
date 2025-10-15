@@ -11,7 +11,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('🚀 COMPARAR-PRECOS-LISTA V2.0 - Nova lógica OR ativa');
+  console.log('🚀 COMPARAR-PRECOS-LISTA V3.0 - user_id implementado + lógica OR ativa');
 
   try {
     const authHeader = req.headers.get('Authorization')!;
@@ -183,11 +183,12 @@ serve(async (req) => {
         }
       }
       
-      // 3. Busca exata em precos_atuais (com estabelecimento)
+      // 3. Busca exata em precos_atuais (com estabelecimento e user_id)
       if (estabelecimentoNome) {
         const { data: precoGeralExato } = await supabase
           .from('precos_atuais')
           .select('valor_unitario, produto_nome, estabelecimento_nome')
+          .eq('user_id', userId)
           .ilike('estabelecimento_nome', `%${estabelecimentoNome}%`)
           .ilike('produto_nome', produtoUpper)
           .order('data_atualizacao', { ascending: false })
@@ -199,7 +200,7 @@ serve(async (req) => {
           return precoGeralExato.valor_unitario;
         }
         
-        // 4. Busca com 2 palavras principais em precos_atuais (estratégia OR)
+        // 4. Busca com 2 palavras principais em precos_atuais (estratégia OR com user_id)
         if (palavrasChave.length >= 2) {
           const palavra1 = palavrasChave[0];
           const palavra2 = palavrasChave[1];
@@ -207,6 +208,7 @@ serve(async (req) => {
           const { data: precosGeralOr } = await supabase
             .from('precos_atuais')
             .select('valor_unitario, produto_nome, estabelecimento_nome')
+            .eq('user_id', userId)
             .ilike('estabelecimento_nome', `%${estabelecimentoNome}%`)
             .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
             .order('data_atualizacao', { ascending: false })
@@ -228,7 +230,7 @@ serve(async (req) => {
         }
       }
       
-      // 5. Fallback: buscar com 2 palavras em qualquer estabelecimento
+      // 5. Fallback: buscar com 2 palavras em qualquer estabelecimento (mas filtrado por user_id)
       if (palavrasChave.length >= 2) {
         const palavra1 = palavrasChave[0];
         const palavra2 = palavrasChave[1];
@@ -236,6 +238,7 @@ serve(async (req) => {
         const { data: precosFallback } = await supabase
           .from('precos_atuais')
           .select('valor_unitario, produto_nome, estabelecimento_nome')
+          .eq('user_id', userId)
           .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
           .order('data_atualizacao', { ascending: false })
           .limit(5);

@@ -1038,6 +1038,7 @@ export type Database = {
           qtd_unidade: string | null
           qtd_valor: number | null
           tipo_embalagem: string | null
+          user_id: string | null
           valor_unitario: number
         }
         Insert: {
@@ -1058,6 +1059,7 @@ export type Database = {
           qtd_unidade?: string | null
           qtd_valor?: number | null
           tipo_embalagem?: string | null
+          user_id?: string | null
           valor_unitario: number
         }
         Update: {
@@ -1078,9 +1080,25 @@ export type Database = {
           qtd_unidade?: string | null
           qtd_valor?: number | null
           tipo_embalagem?: string | null
+          user_id?: string | null
           valor_unitario?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "precos_atuais_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "precos_atuais_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public_safe"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       precos_atuais_usuario: {
         Row: {
