@@ -177,6 +177,11 @@ Deno.serve(async (req) => {
       console.log(`[calcular-custo-receita] 🔍 Buscando: "${nomeBusca}"`);
       console.log(`[calcular-custo-receita] 📝 Normalizado: "${nomeBuscaNormalizado}"`);
       
+      // Converter quantidade da receita para número
+      const quantidadeStr = String(ingrediente.quantidade || 1);
+      const quantidadeNecessaria = parseFloat(quantidadeStr.replace(/[^\d.,]/g, '').replace(',', '.')) || 1;
+      console.log(`[calcular-custo-receita] 📊 Quantidade necessária da receita: ${quantidadeNecessaria}`);
+      
       // Buscar TODOS os produtos do estoque do usuário para fazer fuzzy matching
       const { data: estoqueItems } = await supabase
         .from('estoque_app')
@@ -204,12 +209,18 @@ Deno.serve(async (req) => {
       
       if (estoque) {
         console.log(`[calcular-custo-receita] ✅ MATCH! ${estoque.produto_nome} (${(melhorSimilaridade * 100).toFixed(0)}%)`);
+        console.log(`[calcular-custo-receita] 📦 Estoque disponível: ${estoque.quantidade}, necessário: ${quantidadeNecessaria}`);
       } else {
         console.log(`[calcular-custo-receita] ❌ Nenhum produto similar encontrado no estoque`);
       }
 
-      const disponivel = !!estoque && estoque.quantidade > 0;
+      // Verificar se há quantidade suficiente no estoque
+      const disponivel = !!estoque && Number(estoque.quantidade) >= quantidadeNecessaria;
       const quantidadeEstoque = estoque?.quantidade || 0;
+      
+      if (estoque) {
+        console.log(`[calcular-custo-receita] ${disponivel ? '✅' : '❌'} Disponível: ${disponivel ? 'SIM' : 'NÃO (insuficiente)'}`);
+      }
 
       // Buscar preço mais recente
       let precoUnitario = 0;
