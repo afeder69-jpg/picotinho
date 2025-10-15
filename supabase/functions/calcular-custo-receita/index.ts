@@ -244,8 +244,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Parse da quantidade (ex: "2", "500g", "1kg")
-      const quantidadeStr = ingrediente.quantidade || '1';
+      // Parse da quantidade (ex: "2", "500g", "1kg") - converte para string se for número
+      const quantidadeStr = String(ingrediente.quantidade || 1);
       const quantidadeNumerica = parseFloat(quantidadeStr.replace(/[^\d.,]/g, '').replace(',', '.')) || 1;
 
       const custoItem = precoUnitario * quantidadeNumerica;
