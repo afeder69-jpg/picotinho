@@ -19,6 +19,8 @@ import NormalizacaoGlobal from "./pages/admin/NormalizacaoGlobal";
 import GerenciarMasters from "./pages/admin/GerenciarMasters";
 import Receitas from "./pages/Receitas";
 import ReceitaDetalhes from "./pages/ReceitaDetalhes";
+import Cardapios from "./pages/Cardapios";
+import CardapioDetalhes from "./pages/CardapioDetalhes";
 
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
@@ -63,6 +65,8 @@ const App = () => {
                 <Route path="/admin/gerenciar-masters" element={<GerenciarMasters />} />
                 <Route path="/receitas" element={<Receitas />} />
                 <Route path="/receita/:id" element={<ReceitaDetalhes />} />
+                <Route path="/cardapios" element={<Cardapios />} />
+                <Route path="/cardapio/:id" element={<CardapioDetalhes />} />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>
