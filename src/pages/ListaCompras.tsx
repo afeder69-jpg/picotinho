@@ -12,6 +12,7 @@ import { CardResumoOtimizado } from "@/components/listaCompras/CardResumoOtimiza
 import { GrupoMercado } from "@/components/listaCompras/GrupoMercado";
 import { TabelaComparativa } from "@/components/listaCompras/TabelaComparativa";
 import { ExportarListaDialog } from "@/components/listaCompras/ExportarListaDialog";
+import { EditarListaDialog } from "@/components/listaCompras/EditarListaDialog";
 
 export default function ListaCompras() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,7 @@ export default function ListaCompras() {
   const [tabAtiva, setTabAtiva] = useState('otimizado');
   const [tabelaAberta, setTabelaAberta] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Buscar lista
   const { data: lista, isLoading: loadingLista } = useQuery({
@@ -134,6 +136,7 @@ export default function ListaCompras() {
             onVoltar={() => navigate('/listas-compras')}
             onVerTabela={() => {}}
             onExportar={() => {}}
+            onEditar={() => setEditDialogOpen(true)}
           />
 
           <Alert>
@@ -161,6 +164,7 @@ export default function ListaCompras() {
           onVoltar={() => navigate('/listas-compras')}
           onVerTabela={() => setTabelaAberta(true)}
           onExportar={() => setExportDialogOpen(true)}
+          onEditar={() => setEditDialogOpen(true)}
         />
 
         {produtosSemPreco.length > 0 && (
@@ -225,6 +229,12 @@ export default function ListaCompras() {
               lista={lista}
               comparacao={comparacao}
               modoAtivo={tabAtiva}
+            />
+
+            <EditarListaDialog
+              open={editDialogOpen}
+              onClose={() => setEditDialogOpen(false)}
+              lista={lista}
             />
           </>
         )}

@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, Share2, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Share2, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -11,6 +11,7 @@ interface ListaComprasHeaderProps {
   onVoltar: () => void;
   onVerTabela: () => void;
   onExportar: () => void;
+  onEditar?: () => void;
   onLimpar?: () => void;
 }
 
@@ -20,6 +21,7 @@ export function ListaComprasHeader({
   onVoltar, 
   onVerTabela, 
   onExportar,
+  onEditar,
   onLimpar 
 }: ListaComprasHeaderProps) {
   const origemLabel = {
@@ -44,6 +46,12 @@ export function ListaComprasHeader({
       </div>
       
       <div className="flex items-center gap-2">
+        {onEditar && (
+          <Button variant="outline" size="sm" onClick={onEditar}>
+            <Pencil className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Editar</span>
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={onVerTabela}>
           <FileText className="mr-2 h-4 w-4" />
           <span className="hidden sm:inline">Tabela</span>
