@@ -234,6 +234,7 @@ export default function ListaCompras() {
             />
 
             <EditarListaDialog
+              key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
               open={editDialogOpen}
               onClose={() => {
                 setEditDialogOpen(false);
