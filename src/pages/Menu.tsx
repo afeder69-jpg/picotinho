@@ -76,14 +76,6 @@ const Menu = () => {
       isActive: true
     },
     {
-      id: 'shopping-list',
-      title: 'Lista de Compras',
-      description: 'Organizar próximas compras',
-      icon: ShoppingCart,
-      onClick: () => {},
-      isActive: false
-    },
-    {
       id: 'reports',
       title: 'Relatórios',
       description: 'Visualizar Relatórios de Compras, Consumo e Estoque',
