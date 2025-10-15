@@ -26,6 +26,8 @@ serve(async (req) => {
 
     const { userId, listaId } = await req.json();
 
+    console.log(`📍 Iniciando comparação para usuário: ${userId}`);
+
     // Buscar configuração do usuário
     const { data: config } = await supabase
       .from('configuracoes_usuario')
@@ -34,39 +36,70 @@ serve(async (req) => {
       .single();
 
     const raioBusca = config?.raio_busca_km || 5;
+    console.log(`📍 Raio de busca: ${raioBusca}km`);
 
-    // Buscar localização do usuário (última nota)
-    const { data: ultimaNota } = await supabase
-      .from('notas_imagens')
-      .select('dados_extraidos')
-      .eq('usuario_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    // Buscar localização do perfil do usuário
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('latitude, longitude')
+      .eq('user_id', userId)
       .single();
 
-    let mercados: any[] = [];
-
-    // Se tiver localização, buscar mercados próximos
-    if (ultimaNota?.dados_extraidos?.estabelecimento?.coordenadas) {
-      const { latitude, longitude } = ultimaNota.dados_extraidos.estabelecimento.coordenadas;
+    if (!profile?.latitude || !profile?.longitude) {
+      console.log('❌ Usuário sem localização cadastrada no perfil');
       
-      const { data: mercadosProximos } = await supabase
-        .from('supermercados_publicos')
+      // Buscar itens para retornar na resposta
+      const { data: itens } = await supabase
+        .from('listas_compras_itens')
         .select('*')
-        .not('latitude', 'is', null)
-        .not('longitude', 'is', null);
+        .eq('lista_id', listaId);
 
-      if (mercadosProximos) {
-        mercados = mercadosProximos
-          .map(m => ({
-            ...m,
-            distancia: calcularDistancia(latitude, longitude, m.latitude, m.longitude)
-          }))
-          .filter(m => m.distancia <= raioBusca)
-          .sort((a, b) => a.distancia - b.distancia)
-          .slice(0, 3);
-      }
+      return new Response(
+        JSON.stringify({
+          otimizado: { total: 0, economia: 0, percentualEconomia: 0, totalMercados: 0, mercados: [] },
+          comparacao: {},
+          produtosSemPreco: itens || []
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    console.log(`📍 Localização do usuário: ${profile.latitude}, ${profile.longitude}`);
+
+    // Usar a Edge Function existente que já funciona corretamente
+    const { data: resultadoMercados, error: mercadosError } = await supabase.functions.invoke(
+      'buscar-supermercados-area',
+      {
+        body: {
+          latitude: profile.latitude,
+          longitude: profile.longitude,
+          raio: raioBusca,
+          userId: userId
+        }
+      }
+    );
+
+    if (mercadosError || !resultadoMercados?.success) {
+      console.log('❌ Erro ao buscar mercados:', mercadosError);
+      
+      // Buscar itens para retornar na resposta
+      const { data: itens } = await supabase
+        .from('listas_compras_itens')
+        .select('*')
+        .eq('lista_id', listaId);
+
+      return new Response(
+        JSON.stringify({
+          otimizado: { total: 0, economia: 0, percentualEconomia: 0, totalMercados: 0, mercados: [] },
+          comparacao: {},
+          produtosSemPreco: itens || []
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const mercados = (resultadoMercados.supermercados || []).slice(0, 3);
+    console.log(`✅ ${mercados.length} mercados encontrados para comparação`);
 
     // Buscar itens da lista
     const { data: itens, error: itensError } = await supabase
