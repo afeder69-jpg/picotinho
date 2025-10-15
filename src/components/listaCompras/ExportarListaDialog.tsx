@@ -6,6 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { SeletorTelefoneWhatsApp } from "./SeletorTelefoneWhatsApp";
 
 interface ExportarListaDialogProps {
   open: boolean;
@@ -23,6 +24,7 @@ export function ExportarListaDialog({
   modoAtivo 
 }: ExportarListaDialogProps) {
   const [gerando, setGerando] = useState(false);
+  const [mostrarSeletorTelefone, setMostrarSeletorTelefone] = useState(false);
 
   const gerarTextoProdutos = (dados: any) => {
     if (!dados?.mercados) return '';
@@ -87,8 +89,54 @@ ${gerarTextoProdutos(dados)}
     }
   };
 
-  const enviarPDFWhatsApp = async () => {
+  const verificarTelefonesEEnviar = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: "Usuário não autenticado", variant: "destructive" });
+        return;
+      }
+
+      // Buscar telefones verificados
+      const { data: telefones, error } = await supabase
+        .from('whatsapp_telefones_autorizados')
+        .select('*')
+        .eq('usuario_id', user.id)
+        .eq('verificado', true)
+        .eq('ativo', true);
+
+      if (error) throw error;
+
+      if (!telefones || telefones.length === 0) {
+        toast({ 
+          title: "❌ Nenhum telefone WhatsApp verificado", 
+          description: "Configure e verifique seu número WhatsApp primeiro",
+          variant: "destructive" 
+        });
+        return;
+      }
+
+      // Se tem apenas 1 telefone, enviar direto
+      if (telefones.length === 1) {
+        await enviarPDFComTelefone(telefones[0].id);
+        return;
+      }
+
+      // Se tem múltiplos, mostrar seletor
+      setMostrarSeletorTelefone(true);
+    } catch (error: any) {
+      console.error('Erro ao verificar telefones:', error);
+      toast({ 
+        title: "Erro ao verificar telefones", 
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const enviarPDFComTelefone = async (telefoneId?: string) => {
     setGerando(true);
+    setMostrarSeletorTelefone(false);
+    
     try {
       toast({ title: "Gerando PDF..." });
       
@@ -115,7 +163,8 @@ ${gerarTextoProdutos(dados)}
       const { data, error } = await supabase.functions.invoke('enviar-pdf-whatsapp', {
         body: {
           pdf_base64: pdfBase64,
-          filename: `lista-${lista.titulo}.pdf`
+          filename: `lista-${lista.titulo}.pdf`,
+          telefone_id: telefoneId // Incluir telefone específico se foi selecionado
         }
       });
 
@@ -156,7 +205,7 @@ ${gerarTextoProdutos(dados)}
           </Button>
 
           <Button 
-            onClick={enviarPDFWhatsApp} 
+            onClick={verificarTelefonesEEnviar} 
             className="w-full"
             disabled={gerando}
           >
@@ -191,6 +240,13 @@ ${gerarTextoProdutos(dados)}
             {gerarTextoProdutos(comparacao[modoAtivo])}
           </div>
         </div>
+
+        {/* Seletor de telefone WhatsApp */}
+        <SeletorTelefoneWhatsApp
+          open={mostrarSeletorTelefone}
+          onSelect={enviarPDFComTelefone}
+          onCancel={() => setMostrarSeletorTelefone(false)}
+        />
       </DialogContent>
     </Dialog>
   );

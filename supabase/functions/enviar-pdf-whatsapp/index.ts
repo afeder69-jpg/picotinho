@@ -9,6 +9,7 @@ const corsHeaders = {
 interface EnviarPDFRequest {
   pdf_base64: string;
   filename: string;
+  telefone_id?: string; // ID do telefone específico (opcional)
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -38,7 +39,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('User not authenticated');
     }
 
-    const { pdf_base64, filename }: EnviarPDFRequest = await req.json();
+    const { pdf_base64, filename, telefone_id }: EnviarPDFRequest = await req.json();
 
     if (!pdf_base64 || !filename) {
       throw new Error('PDF e filename são obrigatórios');
@@ -47,14 +48,24 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`📄 Enviando PDF "${filename}" para usuário ${user.id}`);
 
     // Buscar número verificado do usuário
-    const { data: telefone, error: telefoneError } = await supabase
+    // Se telefone_id foi informado, usar esse específico
+    // Caso contrário, usar o principal (comportamento padrão)
+    let query = supabase
       .from('whatsapp_telefones_autorizados')
       .select('numero_whatsapp')
       .eq('usuario_id', user.id)
       .eq('verificado', true)
-      .eq('ativo', true)
-      .eq('tipo', 'principal')
-      .maybeSingle();
+      .eq('ativo', true);
+
+    if (telefone_id) {
+      query = query.eq('id', telefone_id);
+      console.log(`🎯 Usando telefone específico: ${telefone_id}`);
+    } else {
+      query = query.eq('tipo', 'principal');
+      console.log('📱 Usando telefone principal');
+    }
+
+    const { data: telefone, error: telefoneError } = await query.maybeSingle();
 
     if (telefoneError || !telefone) {
       console.error('❌ Usuário sem número WhatsApp verificado');
