@@ -14,7 +14,8 @@ import {
   MapPin,
   Settings,
   Database,
-  Shield
+  Shield,
+  Calendar
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -96,6 +97,14 @@ const Menu = () => {
       description: 'Gerenciar receitas e ingredientes',
       icon: ChefHat,
       onClick: () => navigate('/receitas'),
+      isActive: true
+    },
+    {
+      id: 'cardapios',
+      title: 'Cardápios',
+      description: 'Planejar refeições semanais',
+      icon: Calendar,
+      onClick: () => navigate('/cardapios'),
       isActive: true
     },
     {
