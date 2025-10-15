@@ -51,6 +51,40 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
 
   const handleAdicionarNovo = async (produto: any, qtd: number, unidade: string) => {
     try {
+      // Verificar se o produto já existe na lista
+      const produtoExistente = produtosEditados.find(
+        p => p.produto_nome.toUpperCase() === produto.nome_padrao.toUpperCase()
+      );
+
+      if (produtoExistente) {
+        // Atualizar quantidade do produto existente
+        const novaQuantidade = produtoExistente.quantidade + qtd;
+        
+        const { error } = await supabase
+          .from('listas_compras_itens')
+          .update({ quantidade: novaQuantidade })
+          .eq('id', produtoExistente.id);
+
+        if (error) throw error;
+
+        setProdutosEditados(prev =>
+          prev.map(p => p.id === produtoExistente.id 
+            ? { ...p, quantidade: novaQuantidade } 
+            : p
+          )
+        );
+
+        toast({ 
+          title: `✅ ${produto.nome_padrao} atualizado!`,
+          description: `Quantidade aumentada para ${novaQuantidade} ${unidade}`
+        });
+        
+        queryClient.invalidateQueries({ queryKey: ['lista-compras', lista.id] });
+        queryClient.invalidateQueries({ queryKey: ['comparacao-precos', lista.id] });
+        return;
+      }
+
+      // Produto novo - inserir normalmente
       const { data, error } = await supabase
         .from('listas_compras_itens')
         .insert({
@@ -78,6 +112,9 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         title: `✅ ${produto.nome_padrao} adicionado!`,
         description: "Produto salvo e disponível para comparação"
       });
+      
+      queryClient.invalidateQueries({ queryKey: ['lista-compras', lista.id] });
+      queryClient.invalidateQueries({ queryKey: ['comparacao-precos', lista.id] });
     } catch (error: any) {
       console.error('Erro ao adicionar produto:', error);
       toast({

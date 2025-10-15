@@ -11,6 +11,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  console.log('🚀 COMPARAR-PRECOS-LISTA V2.0 - Nova lógica OR ativa');
+
   try {
     const authHeader = req.headers.get('Authorization')!;
     const supabase = createClient(

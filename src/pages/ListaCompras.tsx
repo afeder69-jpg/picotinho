@@ -39,6 +39,7 @@ export default function ListaCompras() {
     },
     enabled: !!id,
     refetchOnWindowFocus: true,
+    refetchInterval: 10000, // Atualizar a cada 10s
   });
 
   // Buscar comparação de preços
@@ -55,8 +56,9 @@ export default function ListaCompras() {
       return data;
     },
     enabled: !!lista && !!user,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0, // Sempre buscar dados frescos
     refetchOnWindowFocus: true,
+    refetchInterval: 15000, // Atualizar a cada 15s
   });
 
   // Mutation para marcar produto como comprado
