@@ -357,11 +357,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Parse da quantidade (ex: "2", "500g", "1kg") - converte para string se for número
-      const quantidadeStr = String(ingrediente.quantidade || 1);
-      const quantidadeNumerica = parseFloat(quantidadeStr.replace(/[^\d.,]/g, '').replace(',', '.')) || 1;
-
-      const custoItem = precoUnitario * quantidadeNumerica;
+      // Usar quantidadeNecessaria já calculada anteriormente (linha 182)
+      const custoItem = precoUnitario * quantidadeNecessaria;
       custoTotal += custoItem;
 
       // Extrair unidade de medida da string quantidade
