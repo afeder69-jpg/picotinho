@@ -182,12 +182,28 @@ Deno.serve(async (req) => {
       const quantidadeNecessaria = parseFloat(quantidadeStr.replace(/[^\d.,]/g, '').replace(',', '.')) || 1;
       console.log(`[calcular-custo-receita] 📊 Quantidade necessária da receita: ${quantidadeNecessaria}`);
       
-      // Buscar TODOS os produtos do estoque do usuário para fazer fuzzy matching
+      // Extrair palavras-chave relevantes do ingrediente (> 3 caracteres)
+      const palavrasChave = nomeBuscaNormalizado
+        .split(' ')
+        .filter(palavra => palavra.length > 3)
+        .slice(0, 2); // Limitar a 2 palavras principais
+      
+      console.log(`[calcular-custo-receita] 🔍 Palavras-chave de busca: ${palavrasChave.join(', ')}`);
+      
+      // Construir condições OR para busca indexada
+      const condicoesOr = palavrasChave
+        .map(palavra => `produto_nome.ilike.%${palavra}%`)
+        .join(',');
+      
+      // Buscar apenas produtos relevantes usando índice do banco (escalável para 100k+ produtos)
       const { data: estoqueItems } = await supabase
         .from('estoque_app')
         .select('quantidade, preco_unitario_ultimo, produto_nome')
         .eq('user_id', user.id)
-        .limit(100);
+        .or(condicoesOr)  // Busca indexada por palavras-chave (rápida)
+        .limit(50);  // Limite reduzido (já são produtos pré-filtrados)
+      
+      console.log(`[calcular-custo-receita] 📦 Produtos candidatos encontrados: ${estoqueItems?.length || 0}`);
       
       // Filtrar manualmente por similaridade - PRIORIZAR produtos com estoque suficiente
       let estoqueMatch = null;
