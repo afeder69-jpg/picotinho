@@ -72,10 +72,10 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Configure e verifique seu número WhatsApp primeiro');
     }
 
-    // Remover prefixo 55 para envio
-    const numeroSemPrefixo = telefone.numero_whatsapp.startsWith('55') 
-      ? telefone.numero_whatsapp.substring(2) 
-      : telefone.numero_whatsapp;
+    // Garantir prefixo 55 (Brasil) para envio via Z-API
+    const numeroComPrefixo = telefone.numero_whatsapp.startsWith('55') 
+      ? telefone.numero_whatsapp 
+      : `55${telefone.numero_whatsapp}`;
 
     // Validar tamanho do PDF (limite Z-API ~5MB)
     const pdfSize = pdf_base64.length * 0.75 / 1024 / 1024; // Estimar tamanho em MB
@@ -100,7 +100,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Enviar documento via Z-API
     const sendDocumentUrl = `${instanceUrl}/token/${apiToken}/send-document`;
     
-    console.log(`📱 Enviando PDF para ${numeroSemPrefixo}`);
+    console.log(`📱 Enviando PDF para ${numeroComPrefixo}`);
     console.log(`📊 Tamanho estimado: ${pdfSize.toFixed(2)}MB`);
 
     const whatsappResponse = await fetch(sendDocumentUrl, {
@@ -110,7 +110,7 @@ const handler = async (req: Request): Promise<Response> => {
         'Client-Token': accountSecret,
       },
       body: JSON.stringify({
-        phone: numeroSemPrefixo,
+        phone: numeroComPrefixo,
         document: `data:application/pdf;base64,${pdf_base64}`,
         filename: filename,
       }),
