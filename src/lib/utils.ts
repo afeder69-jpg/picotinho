@@ -57,3 +57,34 @@ export function formatarNomeParaExibicao(nome: string): string {
     return palavra.charAt(0).toUpperCase() + palavra.slice(1);
   }).join(' ');
 }
+
+/**
+ * Formata unidade de medida para exibição
+ * @param unidade Unidade de medida (ex: "kg", "g", "un", "l", "ml")
+ * @returns String formatada com abreviação correta
+ */
+export function formatarUnidadeMedida(unidade: string): string {
+  if (!unidade) return 'un';
+  
+  const unidadeLower = unidade.toLowerCase().trim();
+  
+  // Mapear abreviações comuns
+  const mapeamento: Record<string, string> = {
+    'kg': 'kg',
+    'g': 'g',
+    'l': 'L',
+    'ml': 'ml',
+    'un': 'un',
+    'unidade': 'un',
+    'unidades': 'un',
+    'pct': 'pct',
+    'pacote': 'pct',
+    'cx': 'cx',
+    'caixa': 'cx',
+    'dz': 'dz',
+    'duzia': 'dz',
+    'mg': 'mg',
+  };
+  
+  return mapeamento[unidadeLower] || unidadeLower;
+}

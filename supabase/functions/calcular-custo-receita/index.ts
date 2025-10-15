@@ -8,10 +8,12 @@ const corsHeaders = {
 interface IngredienteComPreco {
   nome: string;
   quantidade: string;
+  unidade_medida: string;
   disponivel: boolean;
   quantidade_estoque: number;
   preco_unitario: number;
   custo_item: number;
+  fonte_preco: string;
 }
 
 function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number) {
@@ -138,14 +140,25 @@ Deno.serve(async (req) => {
     for (const ingrediente of ingredientes || []) {
       const nomeBusca = ingrediente.produto_nome_busca.toUpperCase().trim();
       
-      // Verificar disponibilidade no estoque
-      const { data: estoque } = await supabase
+      // Normalizar removendo preposições comuns que causam erro de matching
+      const nomeNormalizado = nomeBusca
+        .replace(/\s+(C\/|COM|NO|NA|DE|DA|DO)\s+/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      console.log(`[calcular-custo-receita] 🔍 Buscando: "${nomeBusca}" (normalizado: "${nomeNormalizado}")`);
+      
+      // Verificar disponibilidade no estoque (busca mais flexível)
+      const { data: estoqueItems } = await supabase
         .from('estoque_app')
         .select('quantidade, preco_unitario_ultimo, produto_nome')
         .eq('user_id', user.id)
-        .or(`produto_nome.ilike.%${nomeBusca}%,produto_nome_normalizado.ilike.%${nomeBusca}%`)
-        .limit(1)
-        .single();
+        .or(`produto_nome.ilike.%${nomeNormalizado}%,produto_nome_normalizado.ilike.%${nomeNormalizado}%`)
+        .limit(5);
+      
+      const estoque = estoqueItems && estoqueItems.length > 0 ? estoqueItems[0] : null;
+      
+      console.log(`[calcular-custo-receita] 📦 Estoque: ${estoque ? `ENCONTRADO (${estoque.produto_nome})` : 'NÃO ENCONTRADO'}`);
 
       const disponivel = !!estoque && estoque.quantidade > 0;
       const quantidadeEstoque = estoque?.quantidade || 0;
@@ -158,10 +171,12 @@ Deno.serve(async (req) => {
         .from('precos_atuais_usuario')
         .select('valor_unitario, produto_nome')
         .eq('user_id', user.id)
-        .or(`produto_nome.ilike.%${nomeBusca}%,produto_nome_normalizado.ilike.%${nomeBusca}%`)
+        .or(`produto_nome.ilike.%${nomeNormalizado}%,produto_nome_normalizado.ilike.%${nomeNormalizado}%`)
         .order('data_atualizacao', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
+      
+      console.log(`[calcular-custo-receita] 💰 Preço usuário: ${precoUsuario ? `R$ ${precoUsuario.valor_unitario}` : 'NÃO ENCONTRADO'}`);
 
       if (precoUsuario?.valor_unitario) {
         const nomeProduto = precoUsuario.produto_nome || nomeBusca;
@@ -178,7 +193,9 @@ Deno.serve(async (req) => {
         const { data: precosArea } = await supabase
           .from('precos_atuais')
           .select('*')
-          .or(`produto_nome.ilike.%${nomeBusca}%,produto_nome_normalizado.ilike.%${nomeBusca}%`);
+          .or(`produto_nome.ilike.%${nomeNormalizado}%,produto_nome_normalizado.ilike.%${nomeNormalizado}%`);
+        
+        console.log(`[calcular-custo-receita] 🏪 Preços na área: ${precosArea?.length || 0} estabelecimentos`);
 
         if (precosArea && precosArea.length > 0) {
           // Filtrar por distância usando a localização do estabelecimento
@@ -226,12 +243,29 @@ Deno.serve(async (req) => {
           }
           
           if (precoUnitario > 0) {
-            console.log(`[calcular-custo-receita] Preço da área encontrado: R$ ${precoUnitario}`);
+            console.log(`[calcular-custo-receita] 🏪 Preço área usado: R$ ${precoUnitario.toFixed(3)}`);
           }
         }
       }
+      
+      // 4. Se AINDA não tem preço, buscar de precos_atuais (qualquer estabelecimento - fallback)
+      if (precoUnitario === 0) {
+        const { data: precoGeral } = await supabase
+          .from('precos_atuais')
+          .select('valor_unitario, produto_nome')
+          .or(`produto_nome.ilike.%${nomeNormalizado}%,produto_nome_normalizado.ilike.%${nomeNormalizado}%`)
+          .order('data_atualizacao', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      // 3. Se ainda não tem preço, usar do estoque
+        if (precoGeral?.valor_unitario) {
+          const embalagem = detectarQuantidadeEmbalagem(precoGeral.produto_nome, precoGeral.valor_unitario);
+          precoUnitario = embalagem.unitPrice;
+          console.log(`[calcular-custo-receita] 🌐 Preço geral encontrado: R$ ${precoUnitario.toFixed(3)} (${precoGeral.produto_nome})`);
+        }
+      }
+
+      // 5. Se ainda não tem preço, usar do estoque
       if (precoUnitario === 0 && estoque?.preco_unitario_ultimo) {
         const nomeProdutoEstoque = estoque.produto_nome || nomeBusca;
         const embalagem = detectarQuantidadeEmbalagem(nomeProdutoEstoque, estoque.preco_unitario_ultimo);
@@ -240,7 +274,7 @@ Deno.serve(async (req) => {
         if (embalagem.isMultiUnit) {
           console.log(`[calcular-custo-receita] 🥚 OVO DETECTADO (estoque): ${nomeProdutoEstoque} → ${embalagem.quantity}un @ R$ ${precoUnitario.toFixed(3)}`);
         } else {
-          console.log(`[calcular-custo-receita] Preço do estoque: R$ ${precoUnitario}`);
+          console.log(`[calcular-custo-receita] 📊 Preço do estoque: R$ ${precoUnitario.toFixed(3)}`);
         }
       }
 
@@ -251,15 +285,21 @@ Deno.serve(async (req) => {
       const custoItem = precoUnitario * quantidadeNumerica;
       custoTotal += custoItem;
 
-      console.log(`[calcular-custo-receita] ${nomeBusca}: ${quantidadeNumerica}x R$ ${precoUnitario.toFixed(3)} = R$ ${custoItem.toFixed(2)}`);
+      // Extrair unidade de medida da string quantidade
+      const unidadeMatch = quantidadeStr.match(/[a-zA-Z]+/);
+      const unidadeMedida = unidadeMatch ? unidadeMatch[0] : 'un';
+
+      console.log(`[calcular-custo-receita] ${nomeBusca}: ${quantidadeNumerica}x R$ ${precoUnitario.toFixed(3)} = R$ ${custoItem.toFixed(2)} | Fonte: ${precoUnitario > 0 ? '✅' : '❌'}`);
 
       ingredientesComPreco.push({
         nome: ingrediente.produto_nome_busca,
         quantidade: ingrediente.quantidade,
+        unidade_medida: unidadeMedida,
         disponivel,
         quantidade_estoque: quantidadeEstoque,
         preco_unitario: precoUnitario,
         custo_item: custoItem,
+        fonte_preco: precoUnitario > 0 ? 'encontrado' : 'nao_encontrado',
       });
     }
 
@@ -268,7 +308,11 @@ Deno.serve(async (req) => {
       ? (ingredientesComPreco.filter(i => i.disponivel).length / ingredientes.length) * 100 
       : 0;
 
-    console.log(`[calcular-custo-receita] Custo total: R$ ${custoTotal.toFixed(2)}, Por porção: R$ ${custoPorPorcao.toFixed(2)}`);
+    const totalComPreco = ingredientesComPreco.filter(i => i.preco_unitario > 0).length;
+    const totalSemPreco = ingredientesComPreco.filter(i => i.preco_unitario === 0).length;
+
+    console.log(`[calcular-custo-receita] ✅ Custo total: R$ ${custoTotal.toFixed(2)}, Por porção: R$ ${custoPorPorcao.toFixed(2)}`);
+    console.log(`[calcular-custo-receita] 📊 Preços: ${totalComPreco} encontrados, ${totalSemPreco} não encontrados`);
 
     return new Response(
       JSON.stringify({
@@ -276,6 +320,11 @@ Deno.serve(async (req) => {
         custo_por_porcao: custoPorPorcao,
         percentual_disponivel: percentualDisponivel,
         ingredientes: ingredientesComPreco,
+        debug: {
+          total_ingredientes: ingredientes.length,
+          com_preco: totalComPreco,
+          sem_preco: totalSemPreco,
+        }
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

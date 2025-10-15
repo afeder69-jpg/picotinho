@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChefHat, Clock, Users, Edit, ArrowLeft, Star, ShoppingCart, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatarUnidadeMedida } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
@@ -113,11 +113,18 @@ export default function ReceitaDetalhes() {
         ingredientes: Array<{
           nome: string;
           quantidade: string;
+          unidade_medida: string;
           disponivel: boolean;
           quantidade_estoque: number;
           preco_unitario: number;
           custo_item: number;
+          fonte_preco: string;
         }>;
+        debug?: {
+          total_ingredientes: number;
+          com_preco: number;
+          sem_preco: number;
+        };
       };
     },
     enabled: !!id && !!user
@@ -250,19 +257,33 @@ export default function ReceitaDetalhes() {
                 </div>
               ) : custoReceita ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Custo Total</p>
-                      <p className="text-2xl font-bold text-primary">
-                        R$ {custoReceita.custo_total.toFixed(2)}
-                      </p>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Custo Total</p>
+                        <p className="text-2xl font-bold text-primary">
+                          R$ {custoReceita.custo_total.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Por Porção</p>
+                        <p className="text-2xl font-bold text-primary">
+                          R$ {custoReceita.custo_por_porcao.toFixed(2)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Por Porção</p>
-                      <p className="text-2xl font-bold text-primary">
-                        R$ {custoReceita.custo_por_porcao.toFixed(2)}
-                      </p>
-                    </div>
+                    
+                    {custoReceita.custo_total === 0 && custoReceita.debug && (
+                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                        <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                          ⚠️ Nenhum preço foi encontrado para os ingredientes. 
+                          Adicione notas fiscais ou preços manuais para calcular o custo.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {custoReceita.debug.sem_preco} de {custoReceita.debug.total_ingredientes} ingredientes sem preço
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {custoReceita.ingredientes.some(i => !i.disponivel) && (
@@ -312,7 +333,7 @@ export default function ReceitaDetalhes() {
                         <div className="flex-1">
                           <p className="font-medium">{ingrediente.nome}</p>
                           <p className="text-sm text-muted-foreground">
-                            {ingrediente.quantidade}
+                            {ingrediente.quantidade} {formatarUnidadeMedida(ingrediente.unidade_medida)}
                             {ingrediente.disponivel && ingrediente.quantidade_estoque > 0 && (
                               <span className="ml-2 text-green-600">
                                 ({ingrediente.quantidade_estoque.toFixed(1)} em estoque)
@@ -322,16 +343,22 @@ export default function ReceitaDetalhes() {
                         </div>
                       </div>
                       
-                      {ingrediente.preco_unitario > 0 && (
-                        <div className="text-right ml-4">
-                          <p className="font-semibold text-primary">
-                            R$ {ingrediente.custo_item.toFixed(2)}
+                      <div className="text-right ml-4">
+                        {ingrediente.preco_unitario > 0 ? (
+                          <>
+                            <p className="font-semibold text-primary">
+                              R$ {ingrediente.custo_item.toFixed(2)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              R$ {ingrediente.preco_unitario.toFixed(2)}/{formatarUnidadeMedida(ingrediente.unidade_medida)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-xs text-destructive">
+                            Preço não encontrado
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            R$ {ingrediente.preco_unitario.toFixed(2)}/un
-                          </p>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
