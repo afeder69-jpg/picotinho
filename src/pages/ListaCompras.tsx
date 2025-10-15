@@ -127,8 +127,12 @@ export default function ListaCompras() {
   const dadosAtivos = comparacao?.[tabAtiva];
   const totalProdutos = lista.listas_compras_itens?.length || 0;
 
-  // Se não houver mercados próximos
-  if (comparacao && (!comparacao.otimizado?.mercados || comparacao.otimizado.mercados.length === 0)) {
+  // Verificar se existem mercados próximos E se conseguimos encontrar preços
+  const temMercadosProximos = comparacao?.supermercados && comparacao.supermercados.length > 0;
+  const temPrecosEncontrados = comparacao?.otimizado?.mercados && comparacao.otimizado.mercados.length > 0;
+
+  // CENÁRIO 1: Sem mercados próximos de fato
+  if (comparacao && !temMercadosProximos) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
         <div className="container max-w-5xl mx-auto p-4 space-y-6">
@@ -149,6 +153,53 @@ export default function ListaCompras() {
               Configure sua localização ou aumente o raio de busca em Configurações.
             </AlertDescription>
           </Alert>
+
+          <EditarListaDialog
+            key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
+            open={editDialogOpen}
+            onClose={() => {
+              setEditDialogOpen(false);
+              queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
+            }}
+            lista={lista}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // CENÁRIO 2: Mercados encontrados mas sem preços
+  if (comparacao && temMercadosProximos && !temPrecosEncontrados) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <div className="container max-w-5xl mx-auto p-4 space-y-6">
+          <ListaComprasHeader
+            lista={lista}
+            totalProdutos={totalProdutos}
+            onVoltar={() => navigate('/listas-compras')}
+            onVerTabela={() => {}}
+            onExportar={() => {}}
+            onEditar={() => setEditDialogOpen(true)}
+          />
+
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Mercados encontrados, mas sem preços</AlertTitle>
+            <AlertDescription>
+              Encontramos {comparacao.supermercados.length} mercado(s) próximo(s), mas não há preços cadastrados para os produtos desta lista.
+              Adicione notas fiscais desses mercados para habilitar a comparação de preços.
+            </AlertDescription>
+          </Alert>
+
+          <EditarListaDialog
+            key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
+            open={editDialogOpen}
+            onClose={() => {
+              setEditDialogOpen(false);
+              queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
+            }}
+            lista={lista}
+          />
         </div>
       </div>
     );
@@ -167,6 +218,7 @@ export default function ListaCompras() {
           onVerTabela={() => setTabelaAberta(true)}
           onExportar={() => setExportDialogOpen(true)}
           onEditar={() => setEditDialogOpen(true)}
+          loading={loadingLista || loadingComparacao}
         />
 
         {produtosSemPreco.length > 0 && (

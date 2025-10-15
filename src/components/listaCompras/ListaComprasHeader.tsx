@@ -13,6 +13,7 @@ interface ListaComprasHeaderProps {
   onExportar: () => void;
   onEditar?: () => void;
   onLimpar?: () => void;
+  loading?: boolean;
 }
 
 export function ListaComprasHeader({ 
@@ -22,7 +23,8 @@ export function ListaComprasHeader({
   onVerTabela, 
   onExportar,
   onEditar,
-  onLimpar 
+  onLimpar,
+  loading = false
 }: ListaComprasHeaderProps) {
   const origemLabel = {
     manual: 'Manual',
@@ -47,21 +49,29 @@ export function ListaComprasHeader({
       
       <div className="flex items-center gap-2">
         {onEditar && (
-          <Button variant="outline" size="sm" onClick={onEditar}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              console.log('🖊️ Botão Editar clicado!');
+              onEditar();
+            }}
+            disabled={loading}
+          >
             <Pencil className="mr-2 h-4 w-4" />
             <span className="hidden sm:inline">Editar</span>
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={onVerTabela}>
+        <Button variant="outline" size="sm" onClick={onVerTabela} disabled={loading}>
           <FileText className="mr-2 h-4 w-4" />
           <span className="hidden sm:inline">Tabela</span>
         </Button>
-        <Button variant="outline" size="sm" onClick={onExportar}>
+        <Button variant="outline" size="sm" onClick={onExportar} disabled={loading}>
           <Share2 className="mr-2 h-4 w-4" />
           <span className="hidden sm:inline">Exportar</span>
         </Button>
         {onLimpar && (
-          <Button variant="outline" size="sm" onClick={onLimpar}>
+          <Button variant="outline" size="sm" onClick={onLimpar} disabled={loading}>
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
