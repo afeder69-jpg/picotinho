@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
       const unidadeMatch = quantidadeStr.match(/[a-zA-Z]+/);
       const unidadeMedida = unidadeMatch ? unidadeMatch[0] : 'un';
 
-      console.log(`[calcular-custo-receita] ${nomeBusca}: ${quantidadeNumerica}x R$ ${precoUnitario.toFixed(3)} = R$ ${custoItem.toFixed(2)} | Fonte: ${precoUnitario > 0 ? '✅' : '❌'}`);
+      console.log(`[calcular-custo-receita] ${nomeBusca}: ${quantidadeNecessaria}x R$ ${precoUnitario.toFixed(3)} = R$ ${custoItem.toFixed(2)} | Fonte: ${precoUnitario > 0 ? '✅' : '❌'}`);
 
       // Gerar sugestão se não encontrou preço
       let sugestao: string | undefined = undefined;
