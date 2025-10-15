@@ -114,7 +114,11 @@ ${gerarTextoProdutos(dados)}
         </div>
 
         {/* Elemento oculto para gerar PDF */}
-        <div id="lista-para-exportar" className="hidden">
+        <div 
+          id="lista-para-exportar" 
+          className="fixed -left-[9999px] top-0 w-full max-w-4xl bg-white p-8"
+          style={{ zIndex: -1 }}
+        >
           <div className="p-4">
             <h1 className="text-xl font-bold mb-2">{lista.titulo}</h1>
             <div className="mb-4">
