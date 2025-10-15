@@ -14,6 +14,39 @@ interface IngredienteComPreco {
   preco_unitario: number;
   custo_item: number;
   fonte_preco: string;
+  sugestao?: string;
+}
+
+function normalizarParaBusca(texto: string): string {
+  return texto
+    .toUpperCase()
+    .trim()
+    // Remover palavras conectoras comuns
+    .replace(/\s+(C\/|COM|NO|NA|DE|DA|DO|EM|PARA|POR)\s+/gi, ' ')
+    .replace(/\s+(C\/|COM|NO|NA|DE|DA|DO|EM|PARA|POR)$/gi, '')
+    .replace(/^(C\/|COM|NO|NA|DE|DA|DO|EM|PARA|POR)\s+/gi, '')
+    // Remover "UNIDADE(S)" e variações
+    .replace(/UNIDADES?/gi, '')
+    // Normalizar números com barra: "C/30" → "30"
+    .replace(/C\/(\d+)/gi, '$1')
+    // Remover espaços múltiplos
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function calcularSimilaridade(texto1: string, texto2: string): number {
+  const palavras1 = texto1.split(' ').filter(p => p.length > 2);
+  const palavras2 = texto2.split(' ').filter(p => p.length > 2);
+  
+  if (palavras1.length === 0 || palavras2.length === 0) return 0;
+  
+  const matches = palavras1.filter(palavra => 
+    palavras2.some(palavraItem => 
+      palavraItem.includes(palavra) || palavra.includes(palavraItem)
+    )
+  );
+  
+  return matches.length / palavras1.length;
 }
 
 function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number) {
@@ -139,26 +172,41 @@ Deno.serve(async (req) => {
 
     for (const ingrediente of ingredientes || []) {
       const nomeBusca = ingrediente.produto_nome_busca.toUpperCase().trim();
+      const nomeBuscaNormalizado = normalizarParaBusca(nomeBusca);
       
-      // Normalizar removendo preposições comuns que causam erro de matching
-      const nomeNormalizado = nomeBusca
-        .replace(/\s+(C\/|COM|NO|NA|DE|DA|DO)\s+/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      console.log(`[calcular-custo-receita] 🔍 Buscando: "${nomeBusca}"`);
+      console.log(`[calcular-custo-receita] 📝 Normalizado: "${nomeBuscaNormalizado}"`);
       
-      console.log(`[calcular-custo-receita] 🔍 Buscando: "${nomeBusca}" (normalizado: "${nomeNormalizado}")`);
-      
-      // Verificar disponibilidade no estoque (busca mais flexível)
+      // Buscar TODOS os produtos do estoque do usuário para fazer fuzzy matching
       const { data: estoqueItems } = await supabase
         .from('estoque_app')
         .select('quantidade, preco_unitario_ultimo, produto_nome')
         .eq('user_id', user.id)
-        .or(`produto_nome.ilike.%${nomeNormalizado}%,produto_nome_normalizado.ilike.%${nomeNormalizado}%`)
-        .limit(5);
+        .limit(100);
       
-      const estoque = estoqueItems && estoqueItems.length > 0 ? estoqueItems[0] : null;
+      // Filtrar manualmente por similaridade
+      let estoqueMatch = null;
+      let melhorSimilaridade = 0;
       
-      console.log(`[calcular-custo-receita] 📦 Estoque: ${estoque ? `ENCONTRADO (${estoque.produto_nome})` : 'NÃO ENCONTRADO'}`);
+      for (const item of estoqueItems || []) {
+        const nomeItemNormalizado = normalizarParaBusca(item.produto_nome);
+        const similaridade = calcularSimilaridade(nomeBuscaNormalizado, nomeItemNormalizado);
+        
+        console.log(`[calcular-custo-receita] 🔎 "${nomeBuscaNormalizado}" vs "${nomeItemNormalizado}" → ${(similaridade * 100).toFixed(0)}%`);
+        
+        if (similaridade >= 0.6 && similaridade > melhorSimilaridade) {
+          melhorSimilaridade = similaridade;
+          estoqueMatch = item;
+        }
+      }
+      
+      const estoque = estoqueMatch;
+      
+      if (estoque) {
+        console.log(`[calcular-custo-receita] ✅ MATCH! ${estoque.produto_nome} (${(melhorSimilaridade * 100).toFixed(0)}%)`);
+      } else {
+        console.log(`[calcular-custo-receita] ❌ Nenhum produto similar encontrado no estoque`);
+      }
 
       const disponivel = !!estoque && estoque.quantidade > 0;
       const quantidadeEstoque = estoque?.quantidade || 0;
@@ -166,27 +214,37 @@ Deno.serve(async (req) => {
       // Buscar preço mais recente
       let precoUnitario = 0;
 
-      // 1. Tentar buscar de precos_atuais_usuario
-      const { data: precoUsuario } = await supabase
+      // 1. Tentar buscar de precos_atuais_usuario com fuzzy matching
+      const { data: precosUsuarioItems } = await supabase
         .from('precos_atuais_usuario')
         .select('valor_unitario, produto_nome')
         .eq('user_id', user.id)
-        .or(`produto_nome.ilike.%${nomeNormalizado}%,produto_nome_normalizado.ilike.%${nomeNormalizado}%`)
-        .order('data_atualizacao', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(100);
       
-      console.log(`[calcular-custo-receita] 💰 Preço usuário: ${precoUsuario ? `R$ ${precoUsuario.valor_unitario}` : 'NÃO ENCONTRADO'}`);
+      let precoUsuarioMatch = null;
+      let melhorSimilaridadePreco = 0;
+      
+      for (const item of precosUsuarioItems || []) {
+        const nomeItemNormalizado = normalizarParaBusca(item.produto_nome);
+        const similaridade = calcularSimilaridade(nomeBuscaNormalizado, nomeItemNormalizado);
+        
+        if (similaridade >= 0.6 && similaridade > melhorSimilaridadePreco) {
+          melhorSimilaridadePreco = similaridade;
+          precoUsuarioMatch = item;
+        }
+      }
+      
+      console.log(`[calcular-custo-receita] 💰 Preço usuário: ${precoUsuarioMatch ? `R$ ${precoUsuarioMatch.valor_unitario} (${precoUsuarioMatch.produto_nome})` : 'NÃO ENCONTRADO'}`);
 
-      if (precoUsuario?.valor_unitario) {
-        const nomeProduto = precoUsuario.produto_nome || nomeBusca;
-        const embalagem = detectarQuantidadeEmbalagem(nomeProduto, precoUsuario.valor_unitario);
+      if (precoUsuarioMatch?.valor_unitario) {
+        const nomeProduto = precoUsuarioMatch.produto_nome || nomeBusca;
+        const embalagem = detectarQuantidadeEmbalagem(nomeProduto, precoUsuarioMatch.valor_unitario);
         precoUnitario = embalagem.unitPrice;
         
         if (embalagem.isMultiUnit) {
           console.log(`[calcular-custo-receita] 🥚 OVO DETECTADO (usuário): ${nomeProduto} → ${embalagem.quantity}un @ R$ ${precoUnitario.toFixed(3)}`);
         } else {
-          console.log(`[calcular-custo-receita] Preço do usuário encontrado: R$ ${precoUnitario}`);
+          console.log(`[calcular-custo-receita] ✅ Preço do usuário: R$ ${precoUnitario}`);
         }
       } else if (userLat && userLon) {
         // 2. Buscar de precos_atuais (estabelecimentos na área)
@@ -248,20 +306,30 @@ Deno.serve(async (req) => {
         }
       }
       
-      // 4. Se AINDA não tem preço, buscar de precos_atuais (qualquer estabelecimento - fallback)
+      // 4. Se AINDA não tem preço, buscar de precos_atuais (qualquer estabelecimento) com fuzzy matching
       if (precoUnitario === 0) {
-        const { data: precoGeral } = await supabase
+        const { data: precosGeraisItems } = await supabase
           .from('precos_atuais')
           .select('valor_unitario, produto_nome')
-          .or(`produto_nome.ilike.%${nomeNormalizado}%,produto_nome_normalizado.ilike.%${nomeNormalizado}%`)
-          .order('data_atualizacao', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(1000);
+        
+        let precoGeralMatch = null;
+        let melhorSimilaridadeGeral = 0;
+        
+        for (const item of precosGeraisItems || []) {
+          const nomeItemNormalizado = normalizarParaBusca(item.produto_nome);
+          const similaridade = calcularSimilaridade(nomeBuscaNormalizado, nomeItemNormalizado);
+          
+          if (similaridade >= 0.6 && similaridade > melhorSimilaridadeGeral) {
+            melhorSimilaridadeGeral = similaridade;
+            precoGeralMatch = item;
+          }
+        }
 
-        if (precoGeral?.valor_unitario) {
-          const embalagem = detectarQuantidadeEmbalagem(precoGeral.produto_nome, precoGeral.valor_unitario);
+        if (precoGeralMatch?.valor_unitario) {
+          const embalagem = detectarQuantidadeEmbalagem(precoGeralMatch.produto_nome, precoGeralMatch.valor_unitario);
           precoUnitario = embalagem.unitPrice;
-          console.log(`[calcular-custo-receita] 🌐 Preço geral encontrado: R$ ${precoUnitario.toFixed(3)} (${precoGeral.produto_nome})`);
+          console.log(`[calcular-custo-receita] 🌐 Preço geral encontrado: R$ ${precoUnitario.toFixed(3)} (${precoGeralMatch.produto_nome}, ${(melhorSimilaridadeGeral * 100).toFixed(0)}%)`);
         }
       }
 
@@ -291,6 +359,16 @@ Deno.serve(async (req) => {
 
       console.log(`[calcular-custo-receita] ${nomeBusca}: ${quantidadeNumerica}x R$ ${precoUnitario.toFixed(3)} = R$ ${custoItem.toFixed(2)} | Fonte: ${precoUnitario > 0 ? '✅' : '❌'}`);
 
+      // Gerar sugestão se não encontrou preço
+      let sugestao: string | undefined = undefined;
+      if (precoUnitario === 0) {
+        if (estoqueMatch) {
+          sugestao = `Produto similar encontrado no estoque: ${estoqueMatch.produto_nome}`;
+        } else {
+          sugestao = 'Adicione este produto ao estoque ou cadastre um preço manual';
+        }
+      }
+
       ingredientesComPreco.push({
         nome: ingrediente.produto_nome_busca,
         quantidade: ingrediente.quantidade,
@@ -300,6 +378,7 @@ Deno.serve(async (req) => {
         preco_unitario: precoUnitario,
         custo_item: custoItem,
         fonte_preco: precoUnitario > 0 ? 'encontrado' : 'nao_encontrado',
+        sugestao,
       });
     }
 
