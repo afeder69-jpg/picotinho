@@ -11,6 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -36,6 +46,12 @@ export function SelecionarReceitaDialog({
 }: SelecionarReceitaDialogProps) {
   const { user } = useAuth();
   const [busca, setBusca] = useState("");
+  const [receitaDuplicada, setReceitaDuplicada] = useState<{
+    id: string;
+    nome: string;
+    dia: string;
+    refeicao: string;
+  } | null>(null);
 
   const { data: minhasReceitas = [] } = useQuery({
     queryKey: ['minhas-receitas', user?.id],
@@ -74,17 +90,7 @@ export function SelecionarReceitaDialog({
     );
   };
 
-  const handleSelecionarReceita = async (receitaId: string) => {
-    // Verificar se a receita já foi adicionada nesta refeição
-    if (receitasJaAdicionadas.includes(receitaId)) {
-      toast({ 
-        title: "Receita já adicionada", 
-        description: "Esta receita já está nesta refeição",
-        variant: "destructive" 
-      });
-      return;
-    }
-
+  const adicionarReceita = async (receitaId: string) => {
     try {
       const { error } = await supabase
         .from('cardapio_receitas')
@@ -98,10 +104,40 @@ export function SelecionarReceitaDialog({
       if (error) throw error;
       
       toast({ title: "Receita adicionada ao cardápio!" });
+      setReceitaDuplicada(null);
       onSuccess();
     } catch (error: any) {
-      toast({ title: "Erro ao adicionar", description: error.message, variant: "destructive" });
+      toast({ 
+        title: "Erro ao adicionar", 
+        description: error.message, 
+        variant: "destructive" 
+      });
     }
+  };
+
+  const handleSelecionarReceita = async (receitaId: string) => {
+    // Verificar se a receita já foi adicionada nesta refeição
+    if (receitasJaAdicionadas.includes(receitaId)) {
+      // Buscar nome da receita
+      const receitaSelecionada = [...minhasReceitas, ...receitasPublicas]
+        .find(r => r.id === receitaId);
+      
+      const nomeReceita = receitaSelecionada?.titulo || 'Esta receita';
+      const nomeDia = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 
+                       'Quinta-feira', 'Sexta-feira', 'Sábado'][diaSemana];
+      
+      // Mostrar dialog de confirmação
+      setReceitaDuplicada({
+        id: receitaId,
+        nome: nomeReceita,
+        dia: nomeDia,
+        refeicao: refeicao.toLowerCase()
+      });
+      return;
+    }
+
+    // Se não é duplicata, adicionar direto
+    await adicionarReceita(receitaId);
   };
 
   return (
@@ -199,6 +235,30 @@ export function SelecionarReceitaDialog({
           </TabsContent>
         </Tabs>
       </DialogContent>
+
+      <AlertDialog open={!!receitaDuplicada} onOpenChange={() => setReceitaDuplicada(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Receita Duplicada</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>"{receitaDuplicada?.nome}"</strong> já está no{' '}
+              {receitaDuplicada?.refeicao} de {receitaDuplicada?.dia}.
+              <br /><br />
+              Deseja adicionar mesmo assim?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (receitaDuplicada) {
+                adicionarReceita(receitaDuplicada.id);
+              }
+            }}>
+              Sim, Adicionar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
