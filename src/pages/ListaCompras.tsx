@@ -37,7 +37,8 @@ export default function ListaCompras() {
       if (error) throw error;
       return data;
     },
-    enabled: !!id
+    enabled: !!id,
+    refetchOnWindowFocus: true,
   });
 
   // Buscar comparação de preços
@@ -55,6 +56,7 @@ export default function ListaCompras() {
     },
     enabled: !!lista && !!user,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   // Mutation para marcar produto como comprado
@@ -233,7 +235,11 @@ export default function ListaCompras() {
 
             <EditarListaDialog
               open={editDialogOpen}
-              onClose={() => setEditDialogOpen(false)}
+              onClose={() => {
+                setEditDialogOpen(false);
+                queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
+                queryClient.invalidateQueries({ queryKey: ['comparacao-precos', id] });
+              }}
               lista={lista}
             />
           </>
