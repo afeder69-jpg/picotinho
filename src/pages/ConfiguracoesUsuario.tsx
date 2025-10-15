@@ -6,12 +6,36 @@ import {
   MapPin,
   ArrowLeft,
   Settings,
-  MessageCircle
+  MessageCircle,
+  Shield
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 
 const ConfiguracoesUsuario = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    async function checkAdminRole() {
+      if (!user?.id) return;
+
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .is('revogado_em', null);
+
+      if (roles) {
+        setIsAdmin(roles.some(r => r.role === 'admin'));
+      }
+    }
+    
+    checkAdminRole();
+  }, [user]);
 
   const configOptions = [
     {
@@ -20,7 +44,8 @@ const ConfiguracoesUsuario = () => {
       description: 'Complete suas informações pessoais e endereço',
       icon: Settings,
       onClick: () => navigate('/cadastro-usuario'),
-      isActive: true
+      isActive: true,
+      isAdminOnly: false
     },
     {
       id: 'area-atuacao',
@@ -28,7 +53,8 @@ const ConfiguracoesUsuario = () => {
       description: 'Configurar raio geográfico dos supermercados',
       icon: MapPin,
       onClick: () => navigate('/area-atuacao'),
-      isActive: true
+      isActive: true,
+      isAdminOnly: false
     },
     {
       id: 'whatsapp',
@@ -36,9 +62,23 @@ const ConfiguracoesUsuario = () => {
       description: 'Configure comandos do Picotinho via WhatsApp e gerencie múltiplos telefones',
       icon: MessageCircle,
       onClick: () => navigate('/whatsapp'),
-      isActive: true
+      isActive: true,
+      isAdminOnly: false
     }
   ];
+
+  // Adicionar opção admin condicionalmente
+  const adminOptions = isAdmin ? [{
+    id: 'gerenciar-masters',
+    title: 'Gerenciar Masters',
+    description: 'Promover e gerenciar usuários Masters',
+    icon: Shield,
+    onClick: () => navigate('/admin/gerenciar-masters'),
+    isActive: true,
+    isAdminOnly: true
+  }] : [];
+
+  const allOptions = [...configOptions, ...adminOptions];
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col pb-32">
@@ -73,11 +113,13 @@ const ConfiguracoesUsuario = () => {
           </div>
           
           <div className="space-y-3">
-            {configOptions.map((option) => (
+            {allOptions.map((option) => (
               <Card 
                 key={option.id}
                 className={`transition-all duration-200 hover:shadow-md ${
                   option.isActive ? 'cursor-pointer' : 'cursor-default opacity-75'
+                } ${
+                  option.isAdminOnly ? 'border-2 border-destructive bg-gradient-to-r from-destructive/5 to-destructive/10' : ''
                 }`}
                 onClick={option.isActive ? option.onClick : undefined}
               >
@@ -85,17 +127,34 @@ const ConfiguracoesUsuario = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className={`p-3 rounded-full ${
-                        option.isActive ? 'bg-primary/10' : 'bg-muted'
+                        option.isAdminOnly 
+                          ? 'bg-destructive/20' 
+                          : option.isActive 
+                            ? 'bg-primary/10' 
+                            : 'bg-muted'
                       }`}>
                         <option.icon className={`w-6 h-6 ${
-                          option.isActive ? 'text-primary' : 'text-muted-foreground'
+                          option.isAdminOnly
+                            ? 'text-destructive'
+                            : option.isActive 
+                              ? 'text-primary' 
+                              : 'text-muted-foreground'
                         }`} />
                       </div>
                       <div>
-                        <h3 className={`font-semibold ${
-                          option.isActive ? 'text-foreground' : 'text-muted-foreground'
+                        <h3 className={`font-semibold flex items-center gap-2 ${
+                          option.isAdminOnly 
+                            ? 'text-destructive' 
+                            : option.isActive 
+                              ? 'text-foreground' 
+                              : 'text-muted-foreground'
                         }`}>
                           {option.title}
+                          {option.isAdminOnly && (
+                            <span className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded">
+                              ADMIN
+                            </span>
+                          )}
                         </h3>
                         <p className="text-sm text-muted-foreground">
                           {option.description}
@@ -108,7 +167,9 @@ const ConfiguracoesUsuario = () => {
                       </div>
                     </div>
                     {option.isActive && (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      <ChevronRight className={`w-5 h-5 ${
+                        option.isAdminOnly ? 'text-destructive' : 'text-muted-foreground'
+                      }`} />
                     )}
                   </div>
                 </CardContent>

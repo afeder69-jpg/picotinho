@@ -181,35 +181,6 @@ const Menu = () => {
             </Card>
           )}
 
-          {/* Painel Admin - Exclusivo */}
-          {isAdmin && (
-            <Card 
-              className="mb-6 border-2 border-destructive cursor-pointer transition-all duration-200 hover:shadow-lg bg-gradient-to-r from-destructive/5 to-destructive/10"
-              onClick={() => navigate('/admin/gerenciar-masters')}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-full bg-destructive/20">
-                      <Shield className="w-6 h-6 text-destructive" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-destructive flex items-center gap-2">
-                        Gerenciar Masters
-                        <span className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded">
-                          ADMIN
-                        </span>
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Promover e gerenciar usuários Masters
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-destructive" />
-                </div>
-              </CardContent>
-            </Card>
-          )}
           
           <div className="space-y-3">
             {menuOptions.map((option) => (
