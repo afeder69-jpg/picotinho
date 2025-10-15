@@ -25,15 +25,38 @@ export function SeletorProdutoNormalizado({ onAdicionar }: SeletorProdutoNormali
     }
 
     const timer = setTimeout(async () => {
-      const { data } = await supabase
+      // Detectar busca multi-termo com ';'
+      const termos = termoBusca.split(';').map(t => t.trim()).filter(t => t.length > 0);
+      
+      if (termos.length === 0) {
+        setSugestoes([]);
+        return;
+      }
+
+      // Construir query base
+      let query = supabase
         .from('produtos_master_global')
         .select('id, nome_padrao, nome_base, categoria, qtd_unidade, granel, categoria_unidade')
-        .or(`nome_padrao.ilike.%${termoBusca}%,nome_base.ilike.%${termoBusca}%`)
-        .eq('status', 'ativo')
-        .limit(10);
-      
+        .eq('status', 'ativo');
+
+      // Para cada termo, aplicar busca inteligente por palavras-chave
+      termos.forEach(termo => {
+        // Extrair palavras-chave (> 2 caracteres, max 4 palavras)
+        const palavras = termo
+          .toUpperCase()
+          .split(/\s+/)
+          .filter(p => p.length > 2)
+          .slice(0, 4);
+
+        // Cada palavra deve estar presente em nome_padrao OU nome_base
+        palavras.forEach(palavra => {
+          query = query.or(`nome_padrao.ilike.%${palavra}%,nome_base.ilike.%${palavra}%`);
+        });
+      });
+
+      const { data } = await query.limit(10);
       setSugestoes(data || []);
-    }, 500);
+    }, 300); // Reduzido de 500ms para 300ms
 
     return () => clearTimeout(timer);
   }, [termoBusca]);
@@ -66,10 +89,17 @@ export function SeletorProdutoNormalizado({ onAdicionar }: SeletorProdutoNormali
           <Input
             value={termoBusca}
             onChange={(e) => setTermoBusca(e.target.value)}
-            placeholder="Digite o nome do produto..."
+            placeholder="Digite o nome (ex: biscoito; maizena para múltiplos termos)"
             className="pl-10"
           />
         </div>
+        
+        {/* Indicador de busca multi-termo */}
+        {termoBusca.includes(';') && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            🔍 Buscando {termoBusca.split(';').length} termo(s)
+          </div>
+        )}
         
         {/* Dropdown de sugestões */}
         {sugestoes.length > 0 && (
