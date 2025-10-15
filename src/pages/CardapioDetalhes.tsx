@@ -76,8 +76,8 @@ export default function CardapioDetalhes() {
     );
   }
 
-  const dataInicio = new Date(cardapio.semana_inicio);
-  const dataFim = new Date(cardapio.semana_fim);
+  const dataInicio = new Date(cardapio.semana_inicio + 'T12:00:00');
+  const dataFim = new Date(cardapio.semana_fim + 'T12:00:00');
   
   // Calcular número real de dias entre as datas
   const totalDias = Math.ceil((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;

@@ -75,8 +75,8 @@ export function CardapioCard({ cardapio, onClick, onSuccess }: CardapioCardProps
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
                 <span>
-                  {format(new Date(cardapio.semana_inicio), "dd/MM", { locale: ptBR })} até{' '}
-                  {format(new Date(cardapio.semana_fim), "dd/MM/yyyy", { locale: ptBR })}
+                  {format(new Date(cardapio.semana_inicio + 'T12:00:00'), "dd/MM", { locale: ptBR })} até{' '}
+                  {format(new Date(cardapio.semana_fim + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
                 </span>
               </div>
               
