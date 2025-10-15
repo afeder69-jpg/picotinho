@@ -121,38 +121,71 @@ serve(async (req) => {
       );
     }
 
+    // Função auxiliar para busca inteligente de produtos
+    const buscarPrecoInteligente = (query: any, produtoNome: string): any => {
+      // Extrair palavras-chave importantes (> 2 caracteres)
+      const palavrasChave = produtoNome
+        .toUpperCase()
+        .split(/\s+/)
+        .filter(palavra => palavra.length > 2)
+        .slice(0, 4); // Limitar a 4 palavras principais
+
+      // Aplicar filtros para cada palavra-chave
+      palavrasChave.forEach(palavra => {
+        query = query.ilike('produto_nome', `%${palavra}%`);
+      });
+
+      return query;
+    };
+
     // Buscar preços para cada produto em cada mercado
     const precosPromises = itens.map(async (item) => {
+      console.log(`\n🔍 Buscando preços para: ${item.produto_nome}`);
+      console.log(`📦 Quantidade: ${item.quantidade} ${item.unidade_medida}`);
+      
       const precosMap = new Map();
 
       for (const mercado of mercados) {
-        // Tentar preço do usuário primeiro
-        const { data: precoUsuario } = await supabase
+        const nomeNormalizado = mercado.nome?.toUpperCase().trim() || '';
+        console.log(`\n🏪 Mercado: ${nomeNormalizado}`);
+        
+        // Tentar preço do usuário primeiro com busca inteligente
+        let queryUsuario = supabase
           .from('precos_atuais_usuario')
           .select('valor_unitario')
-          .eq('user_id', userId)
-          .ilike('produto_nome', `%${item.produto_nome}%`)
+          .eq('user_id', userId);
+        
+        queryUsuario = buscarPrecoInteligente(queryUsuario, item.produto_nome);
+        
+        const { data: precoUsuario } = await queryUsuario
           .order('data_atualizacao', { ascending: false })
           .limit(1)
           .single();
 
         if (precoUsuario) {
+          console.log(`  ✅ Preço usuário encontrado: R$ ${precoUsuario.valor_unitario}`);
           precosMap.set(mercado.id, precoUsuario.valor_unitario);
           continue;
         }
 
-        // Tentar preço geral
-        const { data: precoGeral } = await supabase
+        // Tentar preço geral com busca inteligente e nome do estabelecimento
+        let queryGeral = supabase
           .from('precos_atuais')
           .select('valor_unitario')
-          .eq('estabelecimento_cnpj', mercado.cnpj)
-          .ilike('produto_nome', `%${item.produto_nome}%`)
+          .ilike('estabelecimento_nome', `%${nomeNormalizado}%`);
+        
+        queryGeral = buscarPrecoInteligente(queryGeral, item.produto_nome);
+        
+        const { data: precoGeral } = await queryGeral
           .order('data_atualizacao', { ascending: false })
           .limit(1)
           .single();
 
         if (precoGeral) {
+          console.log(`  ✅ Preço geral encontrado: R$ ${precoGeral.valor_unitario}`);
           precosMap.set(mercado.id, precoGeral.valor_unitario);
+        } else {
+          console.log(`  ❌ Nenhum preço encontrado`);
         }
       }
 
