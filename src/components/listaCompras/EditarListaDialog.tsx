@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -39,10 +39,14 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
   const queryClient = useQueryClient();
   
   const [produtosEditados, setProdutosEditados] = useState(lista.listas_compras_itens);
+  const prevOpenRef = useRef(open);
 
-  // Sincronizar estado sempre que a lista mudar ou o dialog abrir
+  // Sincronizar apenas quando o dialog ABRIR (transição de false -> true)
   useEffect(() => {
-    setProdutosEditados(lista.listas_compras_itens);
+    if (open && !prevOpenRef.current) {
+      setProdutosEditados(lista.listas_compras_itens);
+    }
+    prevOpenRef.current = open;
   }, [open, lista.listas_compras_itens]);
 
   const handleAdicionarNovo = async (produto: any, qtd: number, unidade: string) => {
