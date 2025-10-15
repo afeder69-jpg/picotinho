@@ -290,10 +290,22 @@ export default function ReceitaDetalhes() {
                     <Button 
                       variant="outline" 
                       className="w-full"
-                      onClick={() => {
-                        toast.info("Lista de compras", {
-                          description: "Funcionalidade em desenvolvimento"
-                        });
+                      onClick={async () => {
+                        try {
+                          const { data, error } = await supabase.functions.invoke('gerar-lista-otimizada', {
+                            body: {
+                              userId: user?.id,
+                              origem: 'receita',
+                              receitaId: id,
+                              titulo: `Lista: ${receita?.titulo}`
+                            }
+                          });
+                          if (error) throw error;
+                          toast.success("Lista criada!");
+                          navigate(`/lista-compras/${data.listaId}`);
+                        } catch (error) {
+                          toast.error("Erro ao criar lista");
+                        }
                       }}
                     >
                       <ShoppingCart className="mr-2 h-4 w-4" />

@@ -1,0 +1,63 @@
+import { ArrowLeft, FileText, Share2, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+interface ListaComprasHeaderProps {
+  lista: {
+    titulo: string;
+    origem: string;
+  };
+  totalProdutos: number;
+  onVoltar: () => void;
+  onVerTabela: () => void;
+  onExportar: () => void;
+  onLimpar?: () => void;
+}
+
+export function ListaComprasHeader({ 
+  lista, 
+  totalProdutos,
+  onVoltar, 
+  onVerTabela, 
+  onExportar,
+  onLimpar 
+}: ListaComprasHeaderProps) {
+  const origemLabel = {
+    manual: 'Manual',
+    receita: 'Receita',
+    cardapio: 'Cardápio'
+  }[lista.origem] || 'Outro';
+
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onVoltar}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">{lista.titulo}</h1>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Badge variant="secondary">{origemLabel}</Badge>
+            <span>• {totalProdutos} produtos</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={onVerTabela}>
+          <FileText className="mr-2 h-4 w-4" />
+          <span className="hidden sm:inline">Tabela</span>
+        </Button>
+        <Button variant="outline" size="sm" onClick={onExportar}>
+          <Share2 className="mr-2 h-4 w-4" />
+          <span className="hidden sm:inline">Exportar</span>
+        </Button>
+        {onLimpar && (
+          <Button variant="outline" size="sm" onClick={onLimpar}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}

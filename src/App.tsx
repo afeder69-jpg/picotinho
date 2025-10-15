@@ -21,6 +21,8 @@ import Receitas from "./pages/Receitas";
 import ReceitaDetalhes from "./pages/ReceitaDetalhes";
 import Cardapios from "./pages/Cardapios";
 import CardapioDetalhes from "./pages/CardapioDetalhes";
+import ListaCompras from "./pages/ListaCompras";
+import ListasComprasIndex from "./pages/ListasComprasIndex";
 
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
@@ -67,6 +69,8 @@ const App = () => {
                 <Route path="/receita/:id" element={<ReceitaDetalhes />} />
                 <Route path="/cardapios" element={<Cardapios />} />
                 <Route path="/cardapio/:id" element={<CardapioDetalhes />} />
+                <Route path="/listas-compras" element={<ListasComprasIndex />} />
+                <Route path="/lista-compras/:id" element={<ListaCompras />} />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>

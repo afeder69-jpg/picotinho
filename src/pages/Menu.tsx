@@ -108,6 +108,14 @@ const Menu = () => {
       isActive: true
     },
     {
+      id: 'listas-compras',
+      title: 'Listas de Compras',
+      description: 'Criar e comparar preços',
+      icon: ShoppingCart,
+      onClick: () => navigate('/listas-compras'),
+      isActive: true
+    },
+    {
       id: 'user-settings',
       title: 'Configurações do Usuário',
       description: 'Gerenciar configurações pessoais',

@@ -84,10 +84,28 @@ export default function CardapioDetalhes() {
   });
 
   const handleGerarListaCompras = async () => {
-    toast({
-      title: "Gerando lista de compras...",
-      description: "Esta funcionalidade será implementada em breve"
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-lista-otimizada', {
+        body: {
+          userId: user?.id,
+          origem: 'cardapio',
+          cardapioId: id,
+          titulo: `Lista: ${cardapio?.titulo}`
+        }
+      });
+
+      if (error) throw error;
+
+      toast({ title: "Lista criada com sucesso!" });
+      navigate(`/lista-compras/${data.listaId}`);
+    } catch (error) {
+      console.error('Erro ao criar lista:', error);
+      toast({ 
+        title: "Erro ao criar lista",
+        description: "Tente novamente mais tarde",
+        variant: "destructive" 
+      });
+    }
   };
 
   if (isLoading) {
