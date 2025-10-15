@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { SelecionarReceitaDialog } from "./SelecionarReceitaDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 
 interface DiaCardapioProps {
@@ -21,6 +24,7 @@ export function DiaCardapio({
   receitasAtuais = [], 
   onSuccess 
 }: DiaCardapioProps) {
+  const { user } = useAuth();
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const handleRemover = async (receitaId: string) => {
@@ -39,43 +43,97 @@ export function DiaCardapio({
     }
   };
 
+  // Componente para cada card de receita
+  const ReceitaCard = ({ receita }: { receita: any }) => {
+    const { data: custoReceita, isLoading } = useQuery({
+      queryKey: ['receita-custo', receita.receita_id],
+      queryFn: async () => {
+        const { data, error } = await supabase.functions.invoke('calcular-custo-receita', {
+          body: { receitaId: receita.receita_id }
+        });
+        if (error) throw error;
+        return data as {
+          custo_total: number;
+          custo_por_porcao: number;
+          percentual_disponivel: number;
+        };
+      },
+      enabled: !!receita.receita_id && !!user,
+      staleTime: 5 * 60 * 1000,
+    });
+
+    const faltaIngredientes = custoReceita && custoReceita.percentual_disponivel < 100;
+    const percentualBaixo = custoReceita && custoReceita.percentual_disponivel < 50;
+
+    return (
+      <Card 
+        className="p-3 min-h-[120px] relative group hover:shadow-md transition-shadow"
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          onClick={() => handleRemover(receita.id)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        
+        <div className="space-y-2">
+          {receita.receitas?.imagem_url && (
+            <img 
+              src={receita.receitas.imagem_url} 
+              alt={receita.receitas.titulo}
+              className="w-full h-20 object-cover rounded"
+            />
+          )}
+          
+          <div>
+            <div className="flex items-start gap-1">
+              <h4 className="font-medium text-sm line-clamp-2 flex-1">
+                {receita.receitas?.titulo || 'Receita'}
+              </h4>
+              {faltaIngredientes && (
+                <div title="Faltam ingredientes">
+                  <AlertTriangle 
+                    className={`h-4 w-4 flex-shrink-0 ${
+                      percentualBaixo ? 'text-destructive' : 'text-yellow-600'
+                    }`}
+                  />
+                </div>
+              )}
+            </div>
+            
+            {receita.receitas?.tempo_preparo && (
+              <p className="text-xs text-muted-foreground">
+                {receita.receitas.tempo_preparo} min
+              </p>
+            )}
+            
+            {/* Custo e Disponibilidade */}
+            {!isLoading && custoReceita && (
+              <div className="space-y-1 mt-2">
+                <p className="text-xs font-medium text-primary">
+                  R$ {custoReceita.custo_por_porcao.toFixed(2)}/porção
+                </p>
+                <Badge 
+                  variant={percentualBaixo ? "destructive" : faltaIngredientes ? "secondary" : "outline"}
+                  className="text-xs"
+                >
+                  {custoReceita.percentual_disponivel.toFixed(0)}% disponível
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-2">
       {/* Renderizar todas as receitas existentes */}
       {receitasAtuais.map((receita) => (
-        <Card 
-          key={receita.id} 
-          className="p-3 min-h-[120px] relative group hover:shadow-md transition-shadow"
-        >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-            onClick={() => handleRemover(receita.id)}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          
-          <div className="space-y-2">
-            {receita.receitas?.imagem_url && (
-              <img 
-                src={receita.receitas.imagem_url} 
-                alt={receita.receitas.titulo}
-                className="w-full h-20 object-cover rounded"
-              />
-            )}
-            <div>
-              <h4 className="font-medium text-sm line-clamp-2">
-                {receita.receitas?.titulo || 'Receita'}
-              </h4>
-              {receita.receitas?.tempo_preparo && (
-                <p className="text-xs text-muted-foreground">
-                  {receita.receitas.tempo_preparo} min
-                </p>
-              )}
-            </div>
-          </div>
-        </Card>
+        <ReceitaCard key={receita.id} receita={receita} />
       ))}
 
       {/* Botão para adicionar mais receitas */}

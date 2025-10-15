@@ -45,6 +45,44 @@ export default function CardapioDetalhes() {
     enabled: !!id
   });
 
+  // Buscar custos de todas as receitas
+  const { data: custosReceitas } = useQuery({
+    queryKey: ['cardapio-custos', id, receitas],
+    queryFn: async () => {
+      if (!receitas.length) return { total: 0, porDia: {} };
+      
+      const receitasIds = [...new Set(receitas.map(r => r.receita_id))];
+      
+      // Buscar custos em paralelo
+      const custosPromises = receitasIds.map(async (receitaId) => {
+        const { data } = await supabase.functions.invoke('calcular-custo-receita', {
+          body: { receitaId }
+        });
+        return { 
+          receitaId, 
+          custo: data?.custo_total || 0 
+        };
+      });
+      
+      const custos = await Promise.all(custosPromises);
+      const custosMap = new Map(custos.map(c => [c.receitaId, c.custo]));
+      
+      // Calcular custo por dia
+      const porDia: Record<number, number> = {};
+      receitas.forEach(receita => {
+        const custoPorReceita = custosMap.get(receita.receita_id) || 0;
+        porDia[receita.dia_semana] = (porDia[receita.dia_semana] || 0) + custoPorReceita;
+      });
+      
+      // Calcular total geral
+      const total = Object.values(porDia).reduce((sum, valor) => sum + valor, 0);
+      
+      return { total, porDia };
+    },
+    enabled: receitas.length > 0 && !!user,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const handleGerarListaCompras = async () => {
     toast({
       title: "Gerando lista de compras...",
@@ -99,7 +137,14 @@ export default function CardapioDetalhes() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">{cardapio.titulo}</h1>
+              <h1 className="text-2xl font-bold">
+                {cardapio.titulo}
+                {custosReceitas?.total !== undefined && custosReceitas.total > 0 && (
+                  <span className="text-lg text-primary ml-3">
+                    💰 R$ {custosReceitas.total.toFixed(2)}
+                  </span>
+                )}
+              </h1>
               <p className="text-sm text-muted-foreground">
                 {format(new Date(cardapio.semana_inicio), "d 'de' MMMM", { locale: ptBR })} até{' '}
                 {format(new Date(cardapio.semana_fim), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -117,16 +162,25 @@ export default function CardapioDetalhes() {
           <div className={totalDias <= 3 ? '' : 'min-w-[1400px]'}>
             {/* Cabeçalho dos Dias */}
             <div className={`grid gap-2 mb-2`} style={{ gridTemplateColumns: `repeat(${totalDias}, minmax(0, 1fr))` }}>
-              {dias.map(({ data, diaSemana }) => (
-                <div key={diaSemana} className="text-center">
-                  <div className="font-semibold">
-                    {format(data, 'EEEE', { locale: ptBR })}
+              {dias.map(({ data, diaSemana }) => {
+                const custoDia = custosReceitas?.porDia?.[diaSemana] || 0;
+                
+                return (
+                  <div key={diaSemana} className="text-center space-y-1">
+                    <div className="font-semibold">
+                      {format(data, 'EEEE', { locale: ptBR })}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(data, 'dd/MM', { locale: ptBR })}
+                    </div>
+                    {custoDia > 0 && (
+                      <div className="text-xs font-medium text-primary">
+                        💰 R$ {custoDia.toFixed(2)}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {format(data, 'dd/MM', { locale: ptBR })}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Grid de Refeições */}
