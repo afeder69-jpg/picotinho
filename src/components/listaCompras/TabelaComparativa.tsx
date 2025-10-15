@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TabelaComparativaProps {
   open: boolean;
@@ -43,13 +44,18 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
   const produtos = Array.from(todosProdutos.values());
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[80vh] overflow-auto">
-        <DialogHeader>
-          <DialogTitle>📊 Comparação de Preços</DialogTitle>
-        </DialogHeader>
-        
-        <div className="overflow-x-auto">
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-5xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>📊 Comparação de Preços</DialogTitle>
+            <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+              <span className="text-green-500">🟢</span>
+              <span>= Menor preço disponível para este produto</span>
+            </div>
+          </DialogHeader>
+          
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -76,7 +82,16 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
                       <div className="flex items-center justify-end gap-1">
                         R$ {produto.otimizado.toFixed(2)}
                         <span className="text-xs text-muted-foreground">({produto.mercadoOtimizado})</span>
-                        {produto.otimizado === menorPreco && <span className="text-green-500">🟢</span>}
+                        {produto.otimizado === menorPreco && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-green-500 cursor-help">🟢</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Melhor preço entre todos os mercados</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                     </TableCell>
                     {mercadosKeys.map(key => {
@@ -86,7 +101,16 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
                           {preco ? (
                             <div className="flex items-center justify-end gap-1">
                               R$ {preco.toFixed(2)}
-                              {preco === menorPreco && <span className="text-green-500">🟢</span>}
+                              {preco === menorPreco && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-green-500 cursor-help">🟢</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Melhor preço entre todos os mercados</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
                             </div>
                           ) : (
                             <span className="text-muted-foreground">-</span>
@@ -123,5 +147,6 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
         </div>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   );
 }
