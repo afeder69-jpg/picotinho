@@ -189,20 +189,46 @@ Deno.serve(async (req) => {
         .eq('user_id', user.id)
         .limit(100);
       
-      // Filtrar manualmente por similaridade
+      // Filtrar manualmente por similaridade - PRIORIZAR produtos com estoque suficiente
       let estoqueMatch = null;
       let melhorSimilaridade = 0;
+      let candidatosComEstoque = [];
+      let candidatosSemEstoque = [];
       
       for (const item of estoqueItems || []) {
         const nomeItemNormalizado = normalizarParaBusca(item.produto_nome);
         const similaridade = calcularSimilaridade(nomeBuscaNormalizado, nomeItemNormalizado);
         
-        console.log(`[calcular-custo-receita] 🔎 "${nomeBuscaNormalizado}" vs "${nomeItemNormalizado}" → ${(similaridade * 100).toFixed(0)}%`);
+        console.log(`[calcular-custo-receita] 🔎 "${nomeBuscaNormalizado}" vs "${nomeItemNormalizado}" → ${(similaridade * 100).toFixed(0)}% | Qtd: ${item.quantidade}`);
         
-        if (similaridade >= 0.6 && similaridade > melhorSimilaridade) {
-          melhorSimilaridade = similaridade;
-          estoqueMatch = item;
+        if (similaridade >= 0.6) {
+          const temEstoqueSuficiente = Number(item.quantidade) >= quantidadeNecessaria;
+          
+          if (temEstoqueSuficiente) {
+            candidatosComEstoque.push({ item, similaridade });
+          } else {
+            candidatosSemEstoque.push({ item, similaridade });
+          }
         }
+      }
+      
+      // PRIORIDADE 1: Pegar o melhor match COM estoque suficiente
+      if (candidatosComEstoque.length > 0) {
+        const melhor = candidatosComEstoque.reduce((prev, current) => 
+          current.similaridade > prev.similaridade ? current : prev
+        );
+        estoqueMatch = melhor.item;
+        melhorSimilaridade = melhor.similaridade;
+        console.log(`[calcular-custo-receita] ✅ Selecionado COM estoque: ${melhor.item.produto_nome} (${(melhor.similaridade * 100).toFixed(0)}%)`);
+      }
+      // PRIORIDADE 2: Se não há com estoque, pegar o melhor match SEM estoque
+      else if (candidatosSemEstoque.length > 0) {
+        const melhor = candidatosSemEstoque.reduce((prev, current) => 
+          current.similaridade > prev.similaridade ? current : prev
+        );
+        estoqueMatch = melhor.item;
+        melhorSimilaridade = melhor.similaridade;
+        console.log(`[calcular-custo-receita] ⚠️ Selecionado SEM estoque: ${melhor.item.produto_nome} (${(melhor.similaridade * 100).toFixed(0)}%)`);
       }
       
       const estoque = estoqueMatch;
