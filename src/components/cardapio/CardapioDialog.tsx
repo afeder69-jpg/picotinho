@@ -43,8 +43,12 @@ export function CardapioDialog({ open, onOpenChange, onSuccess, cardapio }: Card
   const onSubmit = async (data: FormData) => {
     if (!user) return;
 
+    // Normalizar datas para evitar problemas de timezone
+    const dataInicioNormalizada = new Date(data.semana_inicio + 'T12:00:00');
+    const dataFimNormalizada = new Date(data.semana_fim + 'T12:00:00');
+
     // Validar datas - permite cardápios de um único dia
-    if (new Date(data.semana_inicio) > new Date(data.semana_fim)) {
+    if (dataInicioNormalizada > dataFimNormalizada) {
       toast({ 
         title: "Data inválida", 
         description: "A data final não pode ser anterior à data inicial",
