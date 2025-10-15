@@ -402,6 +402,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
+        supermercados: mercados,
         otimizado: {
           total: totalOtimizado,
           economia,
