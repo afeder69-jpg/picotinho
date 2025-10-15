@@ -21,6 +21,7 @@ interface SelecionarReceitaDialogProps {
   cardapioId: string;
   diaSemana: number;
   refeicao: string;
+  receitasJaAdicionadas?: string[];
   onSuccess: () => void;
 }
 
@@ -30,6 +31,7 @@ export function SelecionarReceitaDialog({
   cardapioId, 
   diaSemana, 
   refeicao,
+  receitasJaAdicionadas = [],
   onSuccess 
 }: SelecionarReceitaDialogProps) {
   const { user } = useAuth();
@@ -73,6 +75,16 @@ export function SelecionarReceitaDialog({
   };
 
   const handleSelecionarReceita = async (receitaId: string) => {
+    // Verificar se a receita já foi adicionada nesta refeição
+    if (receitasJaAdicionadas.includes(receitaId)) {
+      toast({ 
+        title: "Receita já adicionada", 
+        description: "Esta receita já está nesta refeição",
+        variant: "destructive" 
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('cardapio_receitas')

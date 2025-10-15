@@ -140,7 +140,7 @@ export default function CardapioDetalhes() {
                       cardapioId={cardapio.id}
                       diaSemana={diaSemana}
                       refeicao={refeicao}
-                      receitaAtual={receitas.find(
+                      receitasAtuais={receitas.filter(
                         r => r.dia_semana === diaSemana && r.refeicao === refeicao
                       )}
                       onSuccess={refetch}
