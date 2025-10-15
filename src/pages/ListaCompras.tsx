@@ -237,8 +237,14 @@ export default function ListaCompras() {
               open={editDialogOpen}
               onClose={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
-                queryClient.invalidateQueries({ queryKey: ['comparacao-precos', id] });
+                queryClient.invalidateQueries({ 
+                  queryKey: ['lista-compras', id],
+                  refetchType: 'active'
+                });
+                queryClient.invalidateQueries({ 
+                  queryKey: ['comparacao-precos', id],
+                  refetchType: 'active'
+                });
               }}
               lista={lista}
             />

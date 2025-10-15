@@ -65,9 +65,6 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         comprado: data.comprado
       }]);
 
-      queryClient.invalidateQueries({ queryKey: ['lista-compras', lista.id] });
-      queryClient.invalidateQueries({ queryKey: ['comparacao-precos', lista.id] });
-
       toast({ 
         title: `✅ ${produto.nome_padrao} adicionado!`,
         description: "Produto salvo e disponível para comparação"
@@ -92,9 +89,6 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
       if (error) throw error;
 
       setProdutosEditados(prev => prev.filter(p => p.id !== itemId));
-
-      queryClient.invalidateQueries({ queryKey: ['lista-compras', lista.id] });
-      queryClient.invalidateQueries({ queryKey: ['comparacao-precos', lista.id] });
 
       toast({ title: "🗑️ Produto removido" });
     } catch (error: any) {
@@ -121,8 +115,6 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         .eq('id', itemId);
 
       if (error) throw error;
-
-      queryClient.invalidateQueries({ queryKey: ['comparacao-precos', lista.id] });
     } catch (error: any) {
       console.error('Erro ao atualizar quantidade:', error);
       
