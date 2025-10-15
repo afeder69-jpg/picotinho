@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { FileText, MessageCircle } from "lucide-react";
+import { FileText, MessageCircle, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -86,6 +87,57 @@ ${gerarTextoProdutos(dados)}
     }
   };
 
+  const enviarPDFWhatsApp = async () => {
+    setGerando(true);
+    try {
+      toast({ title: "Gerando PDF..." });
+      
+      const elemento = document.getElementById('lista-para-exportar');
+      if (!elemento) {
+        toast({ title: "Erro ao gerar PDF", variant: "destructive" });
+        return;
+      }
+
+      const canvas = await html2canvas(elemento);
+      const imgData = canvas.toDataURL('image/png');
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 190;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+      
+      // Converter PDF para Base64
+      const pdfBase64 = pdf.output('datauristring').split(',')[1];
+      
+      toast({ title: "Enviando para WhatsApp..." });
+
+      const { data, error } = await supabase.functions.invoke('enviar-pdf-whatsapp', {
+        body: {
+          pdf_base64: pdfBase64,
+          filename: `lista-${lista.titulo}.pdf`
+        }
+      });
+
+      if (error) throw error;
+      
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao enviar PDF');
+      }
+
+      toast({ title: "✅ PDF enviado para seu WhatsApp!" });
+      onClose();
+    } catch (error: any) {
+      console.error('Erro ao enviar PDF:', error);
+      toast({ 
+        title: error.message || "Erro ao enviar PDF", 
+        variant: "destructive" 
+      });
+    } finally {
+      setGerando(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
@@ -102,6 +154,15 @@ ${gerarTextoProdutos(dados)}
             <FileText className="mr-2 h-4 w-4" />
             {gerando ? 'Gerando PDF...' : 'Exportar como PDF'}
           </Button>
+
+          <Button 
+            onClick={enviarPDFWhatsApp} 
+            className="w-full"
+            disabled={gerando}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            {gerando ? 'Enviando...' : 'Enviar PDF via WhatsApp'}
+          </Button>
           
           <Button 
             onClick={compartilharWhatsApp} 
@@ -109,7 +170,7 @@ ${gerarTextoProdutos(dados)}
             variant="outline"
           >
             <MessageCircle className="mr-2 h-4 w-4" />
-            Compartilhar no WhatsApp
+            Compartilhar Texto no WhatsApp
           </Button>
         </div>
 
