@@ -121,18 +121,27 @@ serve(async (req) => {
       );
     }
 
-    // Função auxiliar para busca inteligente de produtos
+    // Função auxiliar para busca inteligente de produtos com estratégia OR
     const buscarPrecoInteligente = async (
       userId: string,
       produtoNome: string,
       estabelecimentoNome?: string
     ): Promise<number | null> => {
       const produtoUpper = produtoNome.toUpperCase().trim();
+      console.log(`  🔍 Buscando preço para: "${produtoNome}"`);
       
-      // 1. Tentar busca exata em precos_atuais_usuario
+      // Extrair palavras-chave relevantes (>2 letras, sem números puros)
+      const palavrasChave = produtoUpper
+        .split(/\s+/)
+        .filter(palavra => palavra.length > 2 && !/^\d+$/.test(palavra))
+        .slice(0, 4); // Pegar até 4 palavras principais
+      
+      console.log(`  📝 Palavras-chave extraídas: [${palavrasChave.join(', ')}]`);
+      
+      // 1. Busca exata em precos_atuais_usuario
       const { data: precoUsuarioExato } = await supabase
         .from('precos_atuais_usuario')
-        .select('valor_unitario')
+        .select('valor_unitario, produto_nome')
         .eq('user_id', userId)
         .ilike('produto_nome', produtoUpper)
         .order('data_atualizacao', { ascending: false })
@@ -140,41 +149,43 @@ serve(async (req) => {
         .maybeSingle();
       
       if (precoUsuarioExato?.valor_unitario) {
-        console.log(`  ✅ Preço usuário (exato): R$ ${precoUsuarioExato.valor_unitario}`);
+        console.log(`  ✅ [USUÁRIO-EXATO] R$ ${precoUsuarioExato.valor_unitario} - "${precoUsuarioExato.produto_nome}"`);
         return precoUsuarioExato.valor_unitario;
       }
       
-      // 2. Tentar busca por palavras-chave em precos_atuais_usuario
-      const palavrasChave = produtoUpper
-        .split(/\s+/)
-        .filter(palavra => palavra.length > 2)
-        .slice(0, 3);
-      
-      if (palavrasChave.length > 0) {
-        let queryUsuario = supabase
+      // 2. Busca com 2 palavras principais em precos_atuais_usuario (estratégia OR)
+      if (palavrasChave.length >= 2) {
+        const palavra1 = palavrasChave[0];
+        const palavra2 = palavrasChave[1];
+        
+        const { data: precosUsuarioOr } = await supabase
           .from('precos_atuais_usuario')
           .select('valor_unitario, produto_nome')
-          .eq('user_id', userId);
-        
-        palavrasChave.forEach(palavra => {
-          queryUsuario = queryUsuario.ilike('produto_nome', `%${palavra}%`);
-        });
-        
-        const { data: precosUsuarioFuzzy } = await queryUsuario
+          .eq('user_id', userId)
+          .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
           .order('data_atualizacao', { ascending: false })
-          .limit(1);
+          .limit(5);
         
-        if (precosUsuarioFuzzy && precosUsuarioFuzzy.length > 0) {
-          console.log(`  ✅ Preço usuário (fuzzy): R$ ${precosUsuarioFuzzy[0].valor_unitario} (${precosUsuarioFuzzy[0].produto_nome})`);
-          return precosUsuarioFuzzy[0].valor_unitario;
+        if (precosUsuarioOr && precosUsuarioOr.length > 0) {
+          // Ordenar por quantidade de matches (priorizar produtos com mais palavras em comum)
+          const scored = precosUsuarioOr.map(p => ({
+            ...p,
+            score: palavrasChave.filter(palavra => 
+              p.produto_nome.toUpperCase().includes(palavra)
+            ).length
+          })).sort((a, b) => b.score - a.score);
+          
+          const melhor = scored[0];
+          console.log(`  ✅ [USUÁRIO-OR] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" (${melhor.score}/${palavrasChave.length} palavras)`);
+          return melhor.valor_unitario;
         }
       }
       
-      // 3. Tentar busca em precos_atuais com estabelecimento
+      // 3. Busca exata em precos_atuais (com estabelecimento)
       if (estabelecimentoNome) {
         const { data: precoGeralExato } = await supabase
           .from('precos_atuais')
-          .select('valor_unitario')
+          .select('valor_unitario, produto_nome, estabelecimento_nome')
           .ilike('estabelecimento_nome', `%${estabelecimentoNome}%`)
           .ilike('produto_nome', produtoUpper)
           .order('data_atualizacao', { ascending: false })
@@ -182,52 +193,67 @@ serve(async (req) => {
           .maybeSingle();
         
         if (precoGeralExato?.valor_unitario) {
-          console.log(`  ✅ Preço geral (exato): R$ ${precoGeralExato.valor_unitario}`);
+          console.log(`  ✅ [GERAL-EXATO] R$ ${precoGeralExato.valor_unitario} - "${precoGeralExato.produto_nome}" @ ${precoGeralExato.estabelecimento_nome}`);
           return precoGeralExato.valor_unitario;
         }
         
-        // 4. Tentar busca fuzzy em precos_atuais
-        if (palavrasChave.length > 0) {
-          let queryGeral = supabase
+        // 4. Busca com 2 palavras principais em precos_atuais (estratégia OR)
+        if (palavrasChave.length >= 2) {
+          const palavra1 = palavrasChave[0];
+          const palavra2 = palavrasChave[1];
+          
+          const { data: precosGeralOr } = await supabase
             .from('precos_atuais')
-            .select('valor_unitario, produto_nome')
-            .ilike('estabelecimento_nome', `%${estabelecimentoNome}%`);
-          
-          palavrasChave.forEach(palavra => {
-            queryGeral = queryGeral.ilike('produto_nome', `%${palavra}%`);
-          });
-          
-          const { data: precosGeralFuzzy } = await queryGeral
+            .select('valor_unitario, produto_nome, estabelecimento_nome')
+            .ilike('estabelecimento_nome', `%${estabelecimentoNome}%`)
+            .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
             .order('data_atualizacao', { ascending: false })
-            .limit(1);
+            .limit(5);
           
-          if (precosGeralFuzzy && precosGeralFuzzy.length > 0) {
-            console.log(`  ✅ Preço geral (fuzzy): R$ ${precosGeralFuzzy[0].valor_unitario} (${precosGeralFuzzy[0].produto_nome})`);
-            return precosGeralFuzzy[0].valor_unitario;
+          if (precosGeralOr && precosGeralOr.length > 0) {
+            // Ordenar por quantidade de matches
+            const scored = precosGeralOr.map(p => ({
+              ...p,
+              score: palavrasChave.filter(palavra => 
+                p.produto_nome.toUpperCase().includes(palavra)
+              ).length
+            })).sort((a, b) => b.score - a.score);
+            
+            const melhor = scored[0];
+            console.log(`  ✅ [GERAL-OR] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" @ ${melhor.estabelecimento_nome} (${melhor.score}/${palavrasChave.length} palavras)`);
+            return melhor.valor_unitario;
           }
         }
       }
       
-      // 5. Fallback: buscar qualquer preço semelhante em precos_atuais (sem filtro de estabelecimento)
-      if (palavrasChave.length > 0) {
-        let queryFallback = supabase
+      // 5. Fallback: buscar com 2 palavras em qualquer estabelecimento
+      if (palavrasChave.length >= 2) {
+        const palavra1 = palavrasChave[0];
+        const palavra2 = palavrasChave[1];
+        
+        const { data: precosFallback } = await supabase
           .from('precos_atuais')
-          .select('valor_unitario, produto_nome, estabelecimento_nome');
-        
-        palavrasChave.forEach(palavra => {
-          queryFallback = queryFallback.ilike('produto_nome', `%${palavra}%`);
-        });
-        
-        const { data: precosFallback } = await queryFallback
+          .select('valor_unitario, produto_nome, estabelecimento_nome')
+          .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
           .order('data_atualizacao', { ascending: false })
-          .limit(1);
+          .limit(5);
         
         if (precosFallback && precosFallback.length > 0) {
-          console.log(`  ⚠️ Preço fallback: R$ ${precosFallback[0].valor_unitario} (${precosFallback[0].produto_nome} - ${precosFallback[0].estabelecimento_nome})`);
-          return precosFallback[0].valor_unitario;
+          // Ordenar por quantidade de matches
+          const scored = precosFallback.map(p => ({
+            ...p,
+            score: palavrasChave.filter(palavra => 
+              p.produto_nome.toUpperCase().includes(palavra)
+            ).length
+          })).sort((a, b) => b.score - a.score);
+          
+          const melhor = scored[0];
+          console.log(`  ⚠️ [FALLBACK] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" @ ${melhor.estabelecimento_nome} (${melhor.score}/${palavrasChave.length} palavras)`);
+          return melhor.valor_unitario;
         }
       }
       
+      console.log(`  ❌ Nenhum preço encontrado`);
       return null;
     };
 
