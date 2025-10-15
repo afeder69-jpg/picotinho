@@ -43,11 +43,11 @@ export function CardapioDialog({ open, onOpenChange, onSuccess, cardapio }: Card
   const onSubmit = async (data: FormData) => {
     if (!user) return;
 
-    // Validar datas
-    if (new Date(data.semana_inicio) >= new Date(data.semana_fim)) {
+    // Validar datas - permite cardápios de um único dia
+    if (new Date(data.semana_inicio) > new Date(data.semana_fim)) {
       toast({ 
         title: "Data inválida", 
-        description: "A data final deve ser posterior à data inicial",
+        description: "A data final não pode ser anterior à data inicial",
         variant: "destructive" 
       });
       return;

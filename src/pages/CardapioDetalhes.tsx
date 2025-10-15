@@ -77,7 +77,12 @@ export default function CardapioDetalhes() {
   }
 
   const dataInicio = new Date(cardapio.semana_inicio);
-  const dias = Array.from({ length: 7 }, (_, i) => ({
+  const dataFim = new Date(cardapio.semana_fim);
+  
+  // Calcular número real de dias entre as datas
+  const totalDias = Math.ceil((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  
+  const dias = Array.from({ length: totalDias }, (_, i) => ({
     data: addDays(dataInicio, i),
     diaSemana: i + 1
   }));
@@ -109,9 +114,9 @@ export default function CardapioDetalhes() {
 
         {/* Grid Semanal */}
         <div className="overflow-x-auto">
-          <div className="min-w-[1400px]">
+          <div className={totalDias <= 3 ? '' : 'min-w-[1400px]'}>
             {/* Cabeçalho dos Dias */}
-            <div className="grid grid-cols-7 gap-2 mb-2">
+            <div className={`grid gap-2 mb-2`} style={{ gridTemplateColumns: `repeat(${totalDias}, minmax(0, 1fr))` }}>
               {dias.map(({ data, diaSemana }) => (
                 <div key={diaSemana} className="text-center">
                   <div className="font-semibold">
@@ -128,7 +133,7 @@ export default function CardapioDetalhes() {
             {refeicoes.map((refeicao, refeicaoIndex) => (
               <div key={refeicao} className="mb-6">
                 <h3 className="text-lg font-semibold mb-3 px-2">{refeicao}</h3>
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${totalDias}, minmax(0, 1fr))` }}>
                   {dias.map(({ diaSemana }) => (
                     <DiaCardapio
                       key={`${diaSemana}-${refeicao}`}
