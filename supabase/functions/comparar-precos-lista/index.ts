@@ -15,18 +15,23 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization')!;
+    
+    // Usar Service Role Key quando chamado de outra edge function
+    const supabaseKey = authHeader?.includes('service_role') 
+      ? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      : Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      supabaseKey,
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('Não autenticado');
-    }
-
     const { userId, listaId } = await req.json();
+    
+    if (!userId || !listaId) {
+      throw new Error('userId e listaId são obrigatórios');
+    }
 
     console.log(`📍 Iniciando comparação para usuário: ${userId}`);
 
