@@ -1952,6 +1952,7 @@ async function processarSolicitarLista(supabase: any, mensagem: any): Promise<st
     }
     
     console.log(`🔍 Buscando lista com título similar a: "${tituloSolicitado}"`);
+    console.log('✅ [VERSÃO NOVA] Usando normalização de texto - v2');
     
     // Normalizar texto removendo acentos e convertendo para minúsculas
     const normalizarTexto = (texto: string) => {
@@ -1963,6 +1964,7 @@ async function processarSolicitarLista(supabase: any, mensagem: any): Promise<st
     };
     
     const tituloNormalizado = normalizarTexto(tituloSolicitado);
+    console.log(`🔍 Título normalizado para busca: "${tituloNormalizado}"`);
     
     // Buscar TODAS as listas do usuário e filtrar no código
     const { data: todasAsListas, error } = await supabase
@@ -1976,11 +1978,16 @@ async function processarSolicitarLista(supabase: any, mensagem: any): Promise<st
       throw error;
     }
     
+    console.log(`📋 Total de listas do usuário: ${todasAsListas?.length || 0}`);
+    
     // Filtrar listas que contenham o texto normalizado
     const listas = todasAsListas?.filter((lista: any) => {
       const tituloListaNormalizado = normalizarTexto(lista.titulo);
+      console.log(`  🔍 Comparando: "${tituloListaNormalizado}" contains "${tituloNormalizado}"? ${tituloListaNormalizado.includes(tituloNormalizado)}`);
       return tituloListaNormalizado.includes(tituloNormalizado);
     }) || [];
+    
+    console.log(`✅ Listas encontradas após filtro: ${listas.length}`);
     
     if (!listas || listas.length === 0) {
       // Nenhuma lista encontrada - sugerir listas disponíveis
