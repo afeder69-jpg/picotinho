@@ -2036,34 +2036,28 @@ async function processarSolicitarLista(supabase: any, mensagem: any): Promise<st
     
     // Invocar função de comparação de preços
     console.log('💰 Invocando comparação de preços...');
+    console.log(`📋 Lista ID: ${lista.id}, User ID: ${mensagem.usuario_id}`);
     
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    const comparacaoResponse = await fetch(
-      `${supabaseUrl}/functions/v1/comparar-precos-lista`,
+    const { data: comparacao, error: erroComparacao } = await supabase.functions.invoke(
+      'comparar-precos-lista',
       {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+        body: {
           userId: mensagem.usuario_id,
           listaId: lista.id
-        })
+        }
       }
     );
     
-    if (!comparacaoResponse.ok) {
-      console.error('❌ Erro ao comparar preços:', await comparacaoResponse.text());
+    console.log('📊 Resposta da comparação:', JSON.stringify(comparacao).substring(0, 200));
+    
+    if (erroComparacao) {
+      console.error('❌ Erro ao comparar preços:', erroComparacao);
       return `❌ Erro ao processar a lista "${lista.titulo}".\n\nTente novamente em alguns instantes.`;
     }
     
-    const comparacao = await comparacaoResponse.json();
-    
-    if (!comparacao) {
-      return `❌ Erro ao processar a lista "${lista.titulo}".\n\nTente novamente em alguns instantes.`;
+    if (!comparacao || !comparacao.otimizado) {
+      console.error('❌ Comparação retornou dados inválidos');
+      return `❌ Não foi possível processar a lista "${lista.titulo}".\n\nVerifique se os produtos têm preços cadastrados.`;
     }
     
     // Verificar se há produtos sem preço
