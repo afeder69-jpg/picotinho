@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, Info, ShoppingCart } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ListaComprasHeader } from "@/components/listaCompras/ListaComprasHeader";
 import { ComparacaoTabs } from "@/components/listaCompras/ComparacaoTabs";
 import { CardResumoOtimizado } from "@/components/listaCompras/CardResumoOtimizado";
@@ -246,6 +247,17 @@ export default function ListaCompras() {
               modo={tabAtiva === 'otimizado' ? 'otimizado' : 'mercado'}
               dados={dadosAtivos}
             />
+
+            <div className="flex justify-center">
+              <Button 
+                size="lg" 
+                className="w-full max-w-md gap-2"
+                onClick={() => navigate(`/lista-compras/${id}/comprar?modo=${tabAtiva}`)}
+              >
+                <ShoppingCart className="h-5 w-5" />
+                Ir às Compras com esta Opção
+              </Button>
+            </div>
 
             {tabAtiva === 'otimizado' && dadosAtivos?.mercados?.map((mercado: any) => (
               <GrupoMercado
