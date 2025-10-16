@@ -243,37 +243,50 @@ export default function ListaCompras() {
               mercados={comparacao.otimizado.mercados}
             />
 
-            <CardResumoOtimizado 
-              modo={tabAtiva === 'otimizado' ? 'otimizado' : 'mercado'}
-              listaId={id!}
-              tabAtiva={tabAtiva}
-              dados={dadosAtivos}
-            />
-
-            {tabAtiva === 'otimizado' && dadosAtivos?.mercados?.map((mercado: any) => (
-              <GrupoMercado
-                key={mercado.id}
-                mercado={mercado}
-                produtos={mercado.produtos}
-                onToggleComprado={handleToggleComprado}
-                onQuantidadeChange={handleQuantidadeChange}
-              />
-            ))}
+            {tabAtiva === 'otimizado' && (
+              <>
+                <CardResumoOtimizado 
+                  modo="otimizado"
+                  listaId={id!}
+                  tabAtiva={tabAtiva}
+                  dados={dadosAtivos}
+                />
+                
+                {dadosAtivos?.mercados?.map((mercado: any) => (
+                  <GrupoMercado
+                    key={mercado.id}
+                    mercado={mercado}
+                    produtos={mercado.produtos}
+                    onToggleComprado={handleToggleComprado}
+                    onQuantidadeChange={handleQuantidadeChange}
+                  />
+                ))}
+              </>
+            )}
 
             {tabAtiva !== 'otimizado' && dadosAtivos?.produtos && (
-              <div className="space-y-2">
-                {dadosAtivos.produtos.map((produto: any) => (
-                  <div key={produto.id} className="p-3 bg-card rounded border">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{produto.produto_nome}</span>
-                      <div className="flex items-center gap-2">
-                        <span>R$ {produto.preco_unitario.toFixed(2)}</span>
-                        {produto.melhor_preco && <span className="text-green-500">🟢</span>}
+              <>
+                <CardResumoOtimizado 
+                  modo="mercado"
+                  listaId={id!}
+                  tabAtiva={tabAtiva}
+                  dados={dadosAtivos}
+                />
+                
+                <div className="space-y-2">
+                  {dadosAtivos.produtos.map((produto: any) => (
+                    <div key={produto.id} className="p-3 bg-card rounded border">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{produto.produto_nome}</span>
+                        <div className="flex items-center gap-2">
+                          <span>R$ {produto.preco_unitario.toFixed(2)}</span>
+                          {produto.melhor_preco && <span className="text-green-500">🟢</span>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
 
             <TabelaComparativa
