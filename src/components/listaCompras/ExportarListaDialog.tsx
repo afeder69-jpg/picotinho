@@ -211,18 +211,143 @@ ${gerarTextoProdutos(dados)}
         {/* Elemento oculto para gerar PDF */}
         <div 
           id="lista-para-exportar" 
-          className="fixed -left-[9999px] top-0 w-full max-w-4xl bg-white p-8"
-          style={{ zIndex: -1 }}
+          className="fixed -left-[9999px] top-0 bg-white"
+          style={{ 
+            zIndex: -1,
+            width: '210mm',
+            minHeight: '297mm',
+            padding: '20mm',
+            fontFamily: 'Arial, sans-serif'
+          }}
         >
-          <div className="p-4">
-            <h1 className="text-xl font-bold mb-2">{lista.titulo}</h1>
-            <div className="mb-4">
-              <p>Total: R$ {comparacao[modoAtivo]?.total.toFixed(2)}</p>
+          {/* CABEÇALHO */}
+          <div style={{ borderBottom: '3px solid #2563eb', paddingBottom: '12px', marginBottom: '20px' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e40af', marginBottom: '8px' }}>
+              🛒 {lista.titulo}
+            </h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#6b7280' }}>
+              <span>📋 Modo: {modoAtivo === 'otimizado' ? 'Otimizado' : comparacao[modoAtivo]?.nome}</span>
+              <span>📅 {new Date().toLocaleDateString('pt-BR')}</span>
+            </div>
+          </div>
+
+          {/* RESUMO DESTACADO */}
+          <div style={{ 
+            backgroundColor: '#dbeafe', 
+            border: '2px solid #2563eb',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '24px'
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e40af', marginBottom: '8px' }}>
+              💰 RESUMO
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Total Geral:</span>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1e40af' }}>
+                  R$ {comparacao[modoAtivo]?.total.toFixed(2)}
+                </div>
+              </div>
               {comparacao[modoAtivo]?.economia && comparacao[modoAtivo].economia > 0 && (
-                <p>Economia: R$ {comparacao[modoAtivo].economia.toFixed(2)}</p>
+                <div>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>Economia:</span>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>
+                    🎯 R$ {comparacao[modoAtivo].economia.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#16a34a' }}>
+                    ({comparacao[modoAtivo].percentualEconomia.toFixed(1)}% de desconto)
+                  </div>
+                </div>
               )}
             </div>
-            {gerarTextoProdutos(comparacao[modoAtivo])}
+          </div>
+
+          {/* PRODUTOS POR MERCADO */}
+          <div style={{ marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', marginBottom: '16px' }}>
+              📦 PRODUTOS
+            </h2>
+            
+            {comparacao[modoAtivo]?.mercados?.map((mercado: any, idx: number) => (
+              <div 
+                key={idx}
+                style={{ 
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '16px',
+                  backgroundColor: '#f9fafb'
+                }}
+              >
+                {/* Cabeçalho do Mercado */}
+                <div style={{ 
+                  borderBottom: '2px solid #e5e7eb',
+                  paddingBottom: '8px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937', marginBottom: '4px' }}>
+                    🏪 {mercado.nome}
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                    Subtotal: <span style={{ fontWeight: 'bold', color: '#2563eb' }}>
+                      R$ {mercado.total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Lista de Produtos do Mercado */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {mercado.produtos.map((produto: any, pIdx: number) => (
+                    <div 
+                      key={pIdx}
+                      style={{ 
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px',
+                        backgroundColor: 'white',
+                        borderRadius: '4px',
+                        fontSize: '13px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                        <span style={{ fontSize: '16px' }}>☐</span>
+                        <span style={{ fontWeight: '500', color: '#374151' }}>
+                          {produto.produto_nome}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '16px', 
+                        alignItems: 'center',
+                        color: '#6b7280'
+                      }}>
+                        <span>{produto.quantidade} {produto.unidade_medida}</span>
+                        <span>×</span>
+                        <span>R$ {produto.preco_unitario.toFixed(2)}</span>
+                        <span>=</span>
+                        <span style={{ fontWeight: 'bold', color: '#2563eb', minWidth: '80px', textAlign: 'right' }}>
+                          R$ {(produto.quantidade * produto.preco_unitario).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* RODAPÉ */}
+          <div style={{ 
+            borderTop: '1px solid #d1d5db',
+            paddingTop: '12px',
+            marginTop: '24px',
+            fontSize: '12px',
+            color: '#9ca3af',
+            textAlign: 'center'
+          }}>
+            Gerado por Picotinho em {new Date().toLocaleString('pt-BR')}
           </div>
         </div>
 
