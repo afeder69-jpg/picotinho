@@ -2,6 +2,9 @@ project_id = "mjsbwrtegorjxcepvrik"
 
 # Build forçado para deploy de consolidar-masters-duplicados - 2025-10-04
 
+[functions.enviar-lista-whatsapp]
+verify_jwt = true
+
 [functions.enviar-pdf-whatsapp]
 verify_jwt = true
 

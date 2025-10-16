@@ -89,7 +89,9 @@ ${gerarTextoProdutos(dados)}
     }
   };
 
-  const verificarTelefonesEEnviar = async () => {
+  const enviarListaWhatsApp = async () => {
+    setGerando(true);
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -97,7 +99,6 @@ ${gerarTextoProdutos(dados)}
         return;
       }
 
-      // Buscar telefones verificados
       const { data: telefones, error } = await supabase
         .from('whatsapp_telefones_autorizados')
         .select('*')
@@ -113,73 +114,57 @@ ${gerarTextoProdutos(dados)}
           description: "Configure e verifique seu número WhatsApp primeiro",
           variant: "destructive" 
         });
+        setGerando(false);
         return;
       }
 
-      // Se tem apenas 1 telefone, enviar direto
       if (telefones.length === 1) {
-        await enviarPDFComTelefone(telefones[0].id);
+        await enviarListaComTelefone(telefones[0].id);
         return;
       }
 
-      // Se tem múltiplos, mostrar seletor
       setMostrarSeletorTelefone(true);
+      setGerando(false);
     } catch (error: any) {
       console.error('Erro ao verificar telefones:', error);
       toast({ 
         title: "Erro ao verificar telefones", 
         variant: "destructive" 
       });
+      setGerando(false);
     }
   };
 
-  const enviarPDFComTelefone = async (telefoneId?: string) => {
+  const enviarListaComTelefone = async (telefoneId?: string) => {
     setGerando(true);
     setMostrarSeletorTelefone(false);
     
     try {
-      toast({ title: "Gerando PDF..." });
+      toast({ title: "Enviando lista para WhatsApp..." });
       
-      const elemento = document.getElementById('lista-para-exportar');
-      if (!elemento) {
-        toast({ title: "Erro ao gerar PDF", variant: "destructive" });
-        return;
-      }
-
-      const canvas = await html2canvas(elemento);
-      const imgData = canvas.toDataURL('image/png');
+      const dados = comparacao[modoAtivo];
       
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 190;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
-      
-      // Converter PDF para Base64
-      const pdfBase64 = pdf.output('datauristring').split(',')[1];
-      
-      toast({ title: "Enviando para WhatsApp..." });
-
-      const { data, error } = await supabase.functions.invoke('enviar-pdf-whatsapp', {
+      const { data, error } = await supabase.functions.invoke('enviar-lista-whatsapp', {
         body: {
-          pdf_base64: pdfBase64,
-          filename: `lista-${lista.titulo}.pdf`,
-          telefone_id: telefoneId // Incluir telefone específico se foi selecionado
+          lista_titulo: lista.titulo,
+          modo_ativo: modoAtivo,
+          dados_comparacao: dados,
+          telefone_id: telefoneId
         }
       });
 
       if (error) throw error;
       
       if (!data?.success) {
-        throw new Error(data?.error || 'Erro ao enviar PDF');
+        throw new Error(data?.error || 'Erro ao enviar lista');
       }
 
-      toast({ title: "✅ PDF enviado para seu WhatsApp!" });
+      toast({ title: "✅ Lista enviada para seu WhatsApp!" });
       onClose();
     } catch (error: any) {
-      console.error('Erro ao enviar PDF:', error);
+      console.error('Erro ao enviar lista:', error);
       toast({ 
-        title: error.message || "Erro ao enviar PDF", 
+        title: error.message || "Erro ao enviar lista", 
         variant: "destructive" 
       });
     } finally {
@@ -205,12 +190,12 @@ ${gerarTextoProdutos(dados)}
           </Button>
 
           <Button 
-            onClick={verificarTelefonesEEnviar} 
+            onClick={enviarListaWhatsApp} 
             className="w-full"
             disabled={gerando}
           >
             <Send className="mr-2 h-4 w-4" />
-            {gerando ? 'Enviando...' : 'Enviar PDF via WhatsApp'}
+            {gerando ? 'Enviando...' : 'Enviar Lista via WhatsApp'}
           </Button>
           
           <Button 
@@ -219,7 +204,7 @@ ${gerarTextoProdutos(dados)}
             variant="outline"
           >
             <MessageCircle className="mr-2 h-4 w-4" />
-            Compartilhar Texto no WhatsApp
+            Compartilhar Texto (App WhatsApp)
           </Button>
         </div>
 
@@ -244,7 +229,7 @@ ${gerarTextoProdutos(dados)}
         {/* Seletor de telefone WhatsApp */}
         <SeletorTelefoneWhatsApp
           open={mostrarSeletorTelefone}
-          onSelect={enviarPDFComTelefone}
+          onSelect={enviarListaComTelefone}
           onCancel={() => setMostrarSeletorTelefone(false)}
         />
       </DialogContent>
