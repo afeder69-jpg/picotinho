@@ -2044,6 +2044,9 @@ async function processarSolicitarLista(supabase: any, mensagem: any): Promise<st
         body: {
           userId: mensagem.usuario_id,
           listaId: lista.id
+        },
+        headers: {
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
         }
       }
     );
