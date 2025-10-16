@@ -141,10 +141,23 @@ const handler = async (req: Request): Promise<Response> => {
             comando_identificado = 'consultar_categoria';
           } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar|estoque)\b/)) {
             comando_identificado = 'consultar_estoque';
-          } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
+        } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
             comando_identificado = 'adicionar_produto';
           } else if (textoLimpo.match(/\b(inserir nota|inserir notas|enviar nota|enviar notas|nota fiscal|notas fiscais)\b/)) {
             comando_identificado = 'solicitar_nota';
+          } else if (textoLimpo.match(/\b(lista|listas)\s+(de\s+compras?)?\s*(.+)/)) {
+            comando_identificado = 'solicitar_lista';
+            
+            // Extrair nome da lista do comando
+            const matchLista = textoLimpo.match(/\b(lista|listas)\s+(de\s+compras?)?\s*(.+)/);
+            const tituloLista = matchLista ? matchLista[3].trim() : '';
+            
+            console.log('📋 Comando SOLICITAR LISTA identificado:', tituloLista);
+            
+            // Salvar título no webhook_data para usar no processador
+            webhookData.picotinho_params = {
+              titulo_lista: tituloLista
+            };
           }
         }
         
@@ -178,6 +191,7 @@ const handler = async (req: Request): Promise<Response> => {
           tipo_mensagem: anexoInfo ? anexoInfo.tipo : 'text',
           webhook_data: webhookData,
           comando_identificado,
+          parametros_comando: webhookData.picotinho_params || null,
           anexo_info: anexoInfo,
           data_recebimento: new Date().toISOString()
         })

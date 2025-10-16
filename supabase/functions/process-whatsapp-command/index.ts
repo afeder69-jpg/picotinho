@@ -284,6 +284,10 @@ const handler = async (req: Request): Promise<Response> => {
           console.log('📋 Comando SOLICITAR NOTA identificado (texto apenas)');
           resposta += "📂 Para inserir uma nota fiscal, envie o arquivo (PDF, XML ou imagem) anexado na mensagem.\n\nTipos aceitos:\n• PDF da nota fiscal\n• XML da nota fiscal\n• Foto/imagem da nota fiscal\n\nApenas envie o arquivo que eu processarei automaticamente!";
           comandoExecutado = true;
+        } else if (mensagem.comando_identificado === 'solicitar_lista') {
+          console.log('📋 Comando SOLICITAR LISTA identificado');
+          resposta += await processarSolicitarLista(supabase, mensagem);
+          comandoExecutado = true;
         } else if (isBaixar) {
           console.log('📉 Comando BAIXAR identificado:', temSinalMenos ? 'simbolo menos' : textoNormalizado);
           resposta += await processarBaixarEstoque(supabase, mensagem);
@@ -1932,6 +1936,178 @@ async function processarNotaEmBackground(
     // Enviar mensagem de erro específica
     await enviarRespostaWhatsApp(mensagem.remetente, mensagemErro);
   }
+}
+
+async function processarSolicitarLista(supabase: any, mensagem: any): Promise<string> {
+  console.log('📋 Processando solicitação de lista de compras');
+  
+  try {
+    // Extrair título da lista dos parâmetros
+    const parametros = mensagem.webhook_data?.picotinho_params || 
+                       mensagem.parametros_comando;
+    const tituloSolicitado = parametros?.titulo_lista || '';
+    
+    if (!tituloSolicitado) {
+      return "❌ Por favor, informe o nome da lista que deseja receber.\n\nExemplo: *lista de compras Semana 1*";
+    }
+    
+    console.log(`🔍 Buscando lista com título similar a: "${tituloSolicitado}"`);
+    
+    // Buscar listas do usuário com título similar (case-insensitive)
+    const { data: listas, error } = await supabase
+      .from('listas_compras')
+      .select('*, listas_compras_itens(*)')
+      .eq('user_id', mensagem.usuario_id)
+      .ilike('titulo', `%${tituloSolicitado}%`)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('❌ Erro ao buscar listas:', error);
+      throw error;
+    }
+    
+    if (!listas || listas.length === 0) {
+      // Nenhuma lista encontrada - sugerir listas disponíveis
+      const { data: todasListas } = await supabase
+        .from('listas_compras')
+        .select('titulo')
+        .eq('user_id', mensagem.usuario_id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      let resposta = `❌ Não encontrei nenhuma lista com o nome "${tituloSolicitado}".\n\n`;
+      
+      if (todasListas && todasListas.length > 0) {
+        resposta += "📋 *Suas listas disponíveis:*\n\n";
+        todasListas.forEach((lista: any) => {
+          resposta += `• ${lista.titulo}\n`;
+        });
+        resposta += "\n💡 Digite: *lista de compras [nome exato]*";
+      } else {
+        resposta += "Você ainda não tem listas de compras criadas.";
+      }
+      
+      return resposta;
+    }
+    
+    if (listas.length > 1) {
+      // Múltiplas listas encontradas - pedir especificação
+      let resposta = `📋 Encontrei ${listas.length} listas com esse nome:\n\n`;
+      listas.forEach((lista: any, index: number) => {
+        const totalItens = lista.listas_compras_itens?.length || 0;
+        resposta += `${index + 1}. *${lista.titulo}* (${totalItens} produtos)\n`;
+      });
+      resposta += "\n💡 Digite o nome completo da lista que deseja receber.";
+      
+      return resposta;
+    }
+    
+    // Lista encontrada - processar e enviar
+    const lista = listas[0];
+    console.log(`✅ Lista encontrada: ${lista.titulo} (ID: ${lista.id})`);
+    
+    // Verificar se tem itens
+    if (!lista.listas_compras_itens || lista.listas_compras_itens.length === 0) {
+      return `📋 A lista *"${lista.titulo}"* está vazia.\n\nAdicione produtos para poder compará-la entre mercados!`;
+    }
+    
+    // Invocar função de comparação de preços
+    console.log('💰 Invocando comparação de preços...');
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    const comparacaoResponse = await fetch(
+      `${supabaseUrl}/functions/v1/comparar-precos-lista`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: mensagem.usuario_id,
+          listaId: lista.id
+        })
+      }
+    );
+    
+    if (!comparacaoResponse.ok) {
+      console.error('❌ Erro ao comparar preços:', await comparacaoResponse.text());
+      return `❌ Erro ao processar a lista "${lista.titulo}".\n\nTente novamente em alguns instantes.`;
+    }
+    
+    const comparacao = await comparacaoResponse.json();
+    
+    if (!comparacao) {
+      return `❌ Erro ao processar a lista "${lista.titulo}".\n\nTente novamente em alguns instantes.`;
+    }
+    
+    // Verificar se há produtos sem preço
+    if (comparacao.produtosSemPreco && comparacao.produtosSemPreco.length > 0) {
+      let avisoPrecos = `⚠️ Alguns produtos não têm preços cadastrados:\n`;
+      comparacao.produtosSemPreco.forEach((prod: string) => {
+        avisoPrecos += `• ${prod}\n`;
+      });
+      avisoPrecos += "\nℹ️ Estes produtos não serão incluídos na comparação.\n\n";
+    }
+    
+    // Formatar usando a mesma função do enviar-lista-whatsapp
+    const mensagemFormatada = formatarListaComprasParaWhatsApp({
+      lista_titulo: lista.titulo,
+      modo_ativo: 'otimizado',
+      dados_comparacao: comparacao.otimizado
+    });
+    
+    console.log('✅ Lista formatada e pronta para envio');
+    return mensagemFormatada;
+    
+  } catch (error: any) {
+    console.error('❌ Erro ao processar solicitação de lista:', error);
+    return `❌ Erro ao processar sua solicitação: ${error.message}\n\nTente novamente ou entre em contato com o suporte.`;
+  }
+}
+
+// Função auxiliar para formatar lista (reutilizar lógica)
+function formatarListaComprasParaWhatsApp(dados: any): string {
+  const { lista_titulo, dados_comparacao } = dados;
+  
+  if (!dados_comparacao) {
+    return `❌ Não foi possível gerar a comparação de preços para a lista "${lista_titulo}".`;
+  }
+  
+  let mensagem = `🛒 *Lista: ${lista_titulo}*\n\n`;
+  mensagem += `💰 *Opção Otimizada*\n`;
+  mensagem += `*Total: R$ ${dados_comparacao.total.toFixed(2)}*\n\n`;
+  
+  if (dados_comparacao.economia && dados_comparacao.economia > 0) {
+    mensagem += `🎯 *Economia de R$ ${dados_comparacao.economia.toFixed(2)}*\n`;
+    mensagem += `   (${dados_comparacao.percentualEconomia?.toFixed(1)}% mais barato)\n\n`;
+  }
+  
+  mensagem += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  
+  // Listar produtos por mercado
+  dados_comparacao.mercados?.forEach((mercado: any, index: number) => {
+    mensagem += `🏪 *${mercado.nome}*\n`;
+    mensagem += `💵 Subtotal: R$ ${mercado.total.toFixed(2)}\n\n`;
+    
+    mercado.produtos?.forEach((produto: any) => {
+      mensagem += `  ☐ ${produto.produto_nome}\n`;
+      mensagem += `     ${produto.quantidade} ${produto.unidade_medida} × R$ ${produto.preco_unitario.toFixed(2)}\n`;
+      mensagem += `     = R$ ${(produto.quantidade * produto.preco_unitario).toFixed(2)}\n\n`;
+    });
+    
+    if (index < dados_comparacao.mercados.length - 1) {
+      mensagem += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    }
+  });
+  
+  mensagem += `━━━━━━━━━━━━━━━━━━━━\n`;
+  mensagem += `✅ *TOTAL GERAL: R$ ${dados_comparacao.total.toFixed(2)}*\n\n`;
+  mensagem += `📱 _Lista gerada pelo Picotinho_`;
+  
+  return mensagem;
 }
 
 serve(handler);
