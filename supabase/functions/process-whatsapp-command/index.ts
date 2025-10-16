@@ -1953,18 +1953,34 @@ async function processarSolicitarLista(supabase: any, mensagem: any): Promise<st
     
     console.log(`🔍 Buscando lista com título similar a: "${tituloSolicitado}"`);
     
-    // Buscar listas do usuário com título similar (case-insensitive)
-    const { data: listas, error } = await supabase
+    // Normalizar texto removendo acentos e convertendo para minúsculas
+    const normalizarTexto = (texto: string) => {
+      return texto
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    };
+    
+    const tituloNormalizado = normalizarTexto(tituloSolicitado);
+    
+    // Buscar TODAS as listas do usuário e filtrar no código
+    const { data: todasAsListas, error } = await supabase
       .from('listas_compras')
       .select('*, listas_compras_itens(*)')
       .eq('user_id', mensagem.usuario_id)
-      .ilike('titulo', `%${tituloSolicitado}%`)
       .order('created_at', { ascending: false });
     
     if (error) {
       console.error('❌ Erro ao buscar listas:', error);
       throw error;
     }
+    
+    // Filtrar listas que contenham o texto normalizado
+    const listas = todasAsListas?.filter((lista: any) => {
+      const tituloListaNormalizado = normalizarTexto(lista.titulo);
+      return tituloListaNormalizado.includes(tituloNormalizado);
+    }) || [];
     
     if (!listas || listas.length === 0) {
       // Nenhuma lista encontrada - sugerir listas disponíveis
