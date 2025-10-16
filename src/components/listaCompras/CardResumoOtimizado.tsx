@@ -1,8 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ShoppingCart } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface CardResumoOtimizadoProps {
   modo: 'otimizado' | 'mercado';
+  listaId: string;
+  tabAtiva: string;
   dados: {
     total: number;
     economia?: number;
@@ -20,8 +25,19 @@ interface CardResumoOtimizadoProps {
   };
 }
 
-export function CardResumoOtimizado({ modo, dados }: CardResumoOtimizadoProps) {
+export function CardResumoOtimizado({ modo, listaId, tabAtiva, dados }: CardResumoOtimizadoProps) {
+  const navigate = useNavigate();
+  
   if (!dados) return null;
+  
+  const handleIrAsCompras = () => {
+    navigate(`/lista-compras/${listaId}/comprar?modo=${tabAtiva}`);
+  };
+  
+  const textosBotao = {
+    otimizado: '🛒 Comprar em Múltiplos Mercados (Otimizado)',
+    mercado: dados.nome ? `🛒 Comprar Tudo no ${dados.nome}` : '🛒 Ir às Compras'
+  };
   
   return (
     <Card className="mb-4">
@@ -70,6 +86,17 @@ export function CardResumoOtimizado({ modo, dados }: CardResumoOtimizadoProps) {
             </p>
           </div>
         )}
+        
+        <div className="mt-4">
+          <Button 
+            onClick={handleIrAsCompras}
+            size="lg" 
+            className="w-full"
+          >
+            <ShoppingCart className="mr-2 h-5 w-5" />
+            {textosBotao[modo]}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

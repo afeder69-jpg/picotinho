@@ -245,19 +245,10 @@ export default function ListaCompras() {
 
             <CardResumoOtimizado 
               modo={tabAtiva === 'otimizado' ? 'otimizado' : 'mercado'}
+              listaId={id!}
+              tabAtiva={tabAtiva}
               dados={dadosAtivos}
             />
-
-            <div className="flex justify-center">
-              <Button 
-                size="lg" 
-                className="w-full max-w-md gap-2"
-                onClick={() => navigate(`/lista-compras/${id}/comprar?modo=${tabAtiva}`)}
-              >
-                <ShoppingCart className="h-5 w-5" />
-                Ir às Compras com esta Opção
-              </Button>
-            </div>
 
             {tabAtiva === 'otimizado' && dadosAtivos?.mercados?.map((mercado: any) => (
               <GrupoMercado
