@@ -145,12 +145,23 @@ const handler = async (req: Request): Promise<Response> => {
             comando_identificado = 'adicionar_produto';
           } else if (textoLimpo.match(/\b(inserir nota|inserir notas|enviar nota|enviar notas|nota fiscal|notas fiscais)\b/)) {
             comando_identificado = 'solicitar_nota';
-          } else if (textoLimpo.match(/\b(lista|listas)\s+(de\s+compras?)?\s*(.+)/)) {
+          } else if (textoLimpo.match(/\b(lista|listas)\b/)) {
             comando_identificado = 'solicitar_lista';
             
-            // Extrair nome da lista do comando
-            const matchLista = textoLimpo.match(/\b(lista|listas)\s+(de\s+compras?)?\s*(.+)/);
-            const tituloLista = matchLista ? matchLista[3].trim() : '';
+            // Extrair nome da lista removendo palavras-chave
+            const matchLista = textoLimpo.match(/\b(lista|listas)\b\s*(de\s+compras?)?\s*(.+)/);
+            let tituloLista = '';
+            
+            if (matchLista && matchLista[3]) {
+              // Pegar o texto após "lista" ou "lista de compras"
+              tituloLista = matchLista[3].trim();
+            } else {
+              // Fallback: remover todas as palavras-chave
+              tituloLista = textoLimpo
+                .replace(/\b(lista|listas)\b/g, '')
+                .replace(/\b(de\s+)?compras?\b/g, '')
+                .trim();
+            }
             
             console.log('📋 Comando SOLICITAR LISTA identificado:', tituloLista);
             
