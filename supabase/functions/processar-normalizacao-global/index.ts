@@ -196,6 +196,26 @@ Deno.serve(async (req) => {
         const MAX_TENTATIVAS = 3;
         
         try {
+          // 🥚 DETECTAR PRODUTOS MULTI-UNIDADE (OVOS)
+          const embalagemInfo = detectarQuantidadeEmbalagem(produto.texto_original);
+
+          let textoParaNormalizar = produto.texto_original;
+          let obsEmbalagem: string | null = null;
+
+          if (embalagemInfo.isMultiUnit) {
+            // Remover quantidade da embalagem para normalizar como produto unitário
+            textoParaNormalizar = produto.texto_original
+              .replace(/\bC\/\d+\b/i, '')
+              .replace(/\b\d+\s*UN(IDADES)?\b/i, '')
+              .replace(/\b\d+\s*OVO(S)?\b/i, '')
+              .replace(/\bDZ\d+\b/i, '')
+              .trim();
+            
+            obsEmbalagem = `Produto multi-unidade detectado: ${embalagemInfo.quantity} unidades na embalagem original. Normalizado como 1 unidade.`;
+            
+            console.log(`🥚 OVOS MULTI-UNIDADE: "${produto.texto_original}" → "${textoParaNormalizar}" (${embalagemInfo.quantity} un)`);
+          }
+          
           // Verificar se já foi normalizado usando hash único
           const { data: jaExiste } = await supabase
             .from('produtos_candidatos_normalizacao')
@@ -227,8 +247,8 @@ Deno.serve(async (req) => {
           // 🔍 BUSCA MULTI-CAMADA INTELIGENTE
           const resultadoBusca = await buscarProdutoSimilar(
             supabase,
-            produto.texto_original,
-            produto.texto_original.toUpperCase().trim()
+            textoParaNormalizar,
+            textoParaNormalizar.toUpperCase().trim()
           );
 
           // Adicionar campos de imagem se existirem
@@ -262,7 +282,7 @@ Deno.serve(async (req) => {
             // 🔄 RETRY: Tentar criar candidato até 3x
             while (tentativas < MAX_TENTATIVAS) {
               try {
-                await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
+                await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
                 break;
               } catch (erro: any) {
                 tentativas++;
@@ -287,9 +307,10 @@ Deno.serve(async (req) => {
             console.log(`🤖 Enviando para IA com ${resultadoBusca.candidatos?.length || 0} candidatos contextuais`);
             
             normalizacao = await normalizarComIA(
-              produto.texto_original,
+              textoParaNormalizar,
               resultadoBusca.candidatos || [],
-              lovableApiKey
+              lovableApiKey,
+              embalagemInfo
             );
 
             // Adicionar campos de imagem
@@ -307,7 +328,7 @@ Deno.serve(async (req) => {
               // IA encontrou variação - auto-aprovar + criar sinônimo
               while (tentativas < MAX_TENTATIVAS) {
                 try {
-                  await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
+                  await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
                   break;
                 } catch (erro: any) {
                   tentativas++;
@@ -330,7 +351,7 @@ Deno.serve(async (req) => {
               while (tentativas < MAX_TENTATIVAS) {
                 try {
                   await criarProdutoMaster(supabase, normalizacao);
-                  await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado');
+                  await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
                   break;
                 } catch (erro: any) {
                   tentativas++;
@@ -346,7 +367,7 @@ Deno.serve(async (req) => {
               // Baixa confiança - enviar para revisão manual
               while (tentativas < MAX_TENTATIVAS) {
                 try {
-                  await criarCandidato(supabase, produto, normalizacao, 'pendente');
+                  await criarCandidato(supabase, produto, normalizacao, 'pendente', obsEmbalagem);
                   break;
                 } catch (erro: any) {
                   tentativas++;
@@ -620,11 +641,29 @@ async function buscarProdutoSimilar(
 async function normalizarComIA(
   textoOriginal: string,
   produtosSimilares: any[],
-  apiKey: string
+  apiKey: string,
+  embalagemInfo?: { isMultiUnit: boolean; quantity: number }
 ): Promise<NormalizacaoSugerida> {
   console.log(`🤖 Analisando com Gemini: "${textoOriginal}"`);
 
-  const prompt = `Você é um especialista em normalização de produtos de supermercado brasileiros.
+  const promptExtra = embalagemInfo?.isMultiUnit 
+    ? `
+
+⚠️ ATENÇÃO ESPECIAL - PRODUTO MULTI-UNIDADE DETECTADO:
+- Embalagem original continha ${embalagemInfo.quantity} unidades
+- Você DEVE normalizar como PRODUTO UNITÁRIO (1 unidade)
+- qtd_valor: 1
+- qtd_unidade: "UN"
+- qtd_base: 1
+- unidade_base: "un"
+- categoria_unidade: "UNIDADE"
+- granel: false
+- Nome deve ser SINGULAR sem número de embalagem
+  Exemplo: "OVOS BRANCOS" NÃO "OVOS BRANCOS 30 UN"
+`
+    : '';
+
+  const prompt = `Você é um especialista em normalização de produtos de supermercado brasileiros.${promptExtra}
 
 PRODUTO PARA NORMALIZAR: "${textoOriginal}"
 
@@ -730,6 +769,40 @@ RESPONDA APENAS COM JSON (sem markdown):
     
     const resultado = JSON.parse(jsonLimpo);
     
+    // 🥚 FORÇAR CORREÇÃO PARA PRODUTOS MULTI-UNIDADE
+    if (embalagemInfo?.isMultiUnit) {
+      console.log(`🥚 Aplicando correção de multi-unidade para: ${resultado.nome_padrao}`);
+      
+      resultado.qtd_valor = 1;
+      resultado.qtd_unidade = 'UN';
+      resultado.qtd_base = 1;
+      resultado.unidade_base = 'un';
+      resultado.categoria_unidade = 'UNIDADE';
+      resultado.granel = false;
+      
+      // Remover números e "UN" do nome padrao (ex: "OVOS BRANCOS 30 UN" → "OVOS BRANCOS")
+      resultado.nome_padrao = resultado.nome_padrao
+        .replace(/\bC\/\d+\b/i, '')
+        .replace(/\b\d+\s*UN(IDADES)?\b/i, '')
+        .replace(/\b\d+\s*OVO(S)?\b/i, '')
+        .replace(/\bDZ\d+\b/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      resultado.nome_base = resultado.nome_base
+        .replace(/\bC\/\d+\b/i, '')
+        .replace(/\b\d+\s*UN(IDADES)?\b/i, '')
+        .replace(/\b\d+\s*OVO(S)?\b/i, '')
+        .replace(/\bDZ\d+\b/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Atualizar SKU para refletir produto unitário
+      resultado.sku_global = `${resultado.categoria}-${resultado.nome_base.replace(/\s+/g, '_')}-${resultado.marca || 'GENERICO'}-1UN`;
+      
+      console.log(`🥚 Correção aplicada: "${resultado.nome_padrao}" (1 UN)`);
+    }
+    
     // 🔥 APLICAR UPPERCASE EM TODOS OS CAMPOS DE TEXTO
     resultado.nome_padrao = resultado.nome_padrao?.toUpperCase() || '';
     resultado.nome_base = resultado.nome_base?.toUpperCase() || '';
@@ -833,7 +906,8 @@ async function criarCandidato(
   supabase: any,
   produto: ProdutoParaNormalizar,
   normalizacao: NormalizacaoSugerida,
-  status: string
+  status: string,
+  obsEmbalagem?: string | null
 ) {
   const { error } = await supabase
     .from('produtos_candidatos_normalizacao')
@@ -857,7 +931,8 @@ async function criarCandidato(
       categoria_unidade_sugerida: normalizacao.categoria_unidade,
       granel_sugerido: normalizacao.granel,
       razao_ia: normalizacao.razao,
-      status: status
+      status: status,
+      observacoes_revisor: obsEmbalagem || null
     });
 
   if (error) {
