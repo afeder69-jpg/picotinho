@@ -481,6 +481,51 @@ export type Database = {
         }
         Relationships: []
       }
+      masters_duplicatas_ignoradas: {
+        Row: {
+          created_at: string | null
+          decidido_em: string | null
+          decidido_por: string | null
+          id: string
+          observacao: string | null
+          produto_1_id: string
+          produto_2_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          decidido_em?: string | null
+          decidido_por?: string | null
+          id?: string
+          observacao?: string | null
+          produto_1_id: string
+          produto_2_id: string
+        }
+        Update: {
+          created_at?: string | null
+          decidido_em?: string | null
+          decidido_por?: string | null
+          id?: string
+          observacao?: string | null
+          produto_1_id?: string
+          produto_2_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "masters_duplicatas_ignoradas_produto_1_id_fkey"
+            columns: ["produto_1_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_master_global"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "masters_duplicatas_ignoradas_produto_2_id_fkey"
+            columns: ["produto_2_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_master_global"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mercados: {
         Row: {
           bairro: string | null

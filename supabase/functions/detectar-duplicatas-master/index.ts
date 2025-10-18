@@ -19,6 +19,26 @@ serve(async (req) => {
     console.log('🔍 Iniciando detecção inteligente de duplicatas...');
     const startTime = Date.now();
 
+    // 🆕 BUSCAR PARES JÁ MARCADOS COMO NÃO-DUPLICATAS
+    console.log('🔍 Carregando decisões de não-duplicatas...');
+    const { data: paresIgnorados, error: ignoradosError } = await supabase
+      .from('masters_duplicatas_ignoradas')
+      .select('produto_1_id, produto_2_id');
+
+    if (ignoradosError) {
+      console.error('⚠️ Erro ao carregar pares ignorados:', ignoradosError);
+      // Não bloquear execução, apenas logar
+    }
+
+    // Criar Set para lookup rápido O(1)
+    const paresIgnoradosSet = new Set<string>();
+    paresIgnorados?.forEach(par => {
+      const [menor, maior] = [par.produto_1_id, par.produto_2_id].sort();
+      paresIgnoradosSet.add(`${menor}_${maior}`);
+    });
+
+    console.log(`📝 Total de pares já analisados e marcados como não-duplicatas: ${paresIgnoradosSet.size}`);
+
     // Buscar apenas produtos master ativos com pelo menos 1 nota (otimização)
     const { data: masters, error: mastersError } = await supabase
       .from('produtos_master_global')
@@ -103,6 +123,15 @@ serve(async (req) => {
         
         for (let j = i + 1; j < produtosCategoria.length; j++) {
           const produto2 = produtosCategoria[j];
+          
+          // 🆕 VERIFICAR SE ESSE PAR JÁ FOI MARCADO COMO NÃO-DUPLICATA
+          const [idMenor, idMaior] = [produto1.id, produto2.id].sort();
+          const parKey = `${idMenor}_${idMaior}`;
+
+          if (paresIgnoradosSet.has(parKey)) {
+            console.log(`⏭️ Par já analisado (não-duplicata): ${produto1.nome_padrao} <-> ${produto2.nome_padrao}`);
+            continue; // Pular essa comparação
+          }
           
           // Verificar se passam nas regras de negócio antes de comparar
           if (!saoRealmenteDuplicatas(produto1, produto2)) {

@@ -3137,13 +3137,54 @@ export default function NormalizacaoGlobal() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            setGruposIgnorados(prev => new Set(prev).add(grupo.id));
-                            toast({
-                              title: "✅ Grupo ignorado",
-                              description: "Marcado como NÃO-DUPLICATAS. Ambos os produtos serão mantidos.",
-                            });
-                          }}
+                  onClick={async () => {
+                    try {
+                      // Adicionar ao estado local
+                      setGruposIgnorados(prev => new Set(prev).add(grupo.id));
+                      
+                      // 🆕 PERSISTIR NO BANCO: Inserir todos os pares deste grupo
+                      const pares: any[] = [];
+                      for (let i = 0; i < grupo.produtos.length; i++) {
+                        for (let j = i + 1; j < grupo.produtos.length; j++) {
+                          const [id1, id2] = [grupo.produtos[i].id, grupo.produtos[j].id].sort();
+                          pares.push({
+                            produto_1_id: id1,
+                            produto_2_id: id2,
+                            decidido_por: (await supabase.auth.getUser()).data.user?.id,
+                            observacao: `Grupo ${grupo.id} - Score: ${(grupo.score_similaridade * 100).toFixed(1)}%`
+                          });
+                        }
+                      }
+                      
+                      const { error } = await supabase
+                        .from('masters_duplicatas_ignoradas')
+                        .insert(pares);
+                      
+                      if (error) {
+                        console.error('Erro ao persistir decisão:', error);
+                        toast({
+                          title: "⚠️ Aviso",
+                          description: "Decisão aplicada localmente, mas erro ao salvar no banco",
+                          variant: "destructive"
+                        });
+                      } else {
+                        console.log(`✅ ${pares.length} par(es) persistido(s) no banco`);
+                      }
+                      
+                      toast({
+                        title: "✅ Grupo ignorado",
+                        description: "Marcado como NÃO-DUPLICATAS. Não aparecerá nas próximas buscas.",
+                      });
+                      
+                    } catch (error: any) {
+                      console.error('Erro ao marcar como não-duplicata:', error);
+                      toast({
+                        title: "Erro",
+                        description: error.message,
+                        variant: "destructive"
+                      });
+                    }
+                  }}
                           className="w-full"
                         >
                           <X className="w-4 h-4 mr-2" />
