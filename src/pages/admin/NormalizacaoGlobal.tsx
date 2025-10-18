@@ -2908,17 +2908,35 @@ export default function NormalizacaoGlobal() {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={produtoMasterEditando ? salvarEdicaoProdutoMaster : aprovarComModificacoes} 
-              disabled={!editForm.nome_padrao || !editForm.categoria || !editForm.nome_base || uploadingImage}
-            >
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              {uploadingImage ? 'Enviando imagem...' : produtoMasterEditando ? 'Salvar Alterações' : 'Aprovar com Modificações'}
-            </Button>
+          <DialogFooter className="flex justify-between items-center">
+            {/* Lado esquerdo - Botão de Exclusão (só quando editando Master) */}
+            {produtoMasterEditando && (
+              <Button 
+                variant="destructive" 
+                onClick={() => {
+                  setEditModalOpen(false);
+                  setConfirmarExclusaoOpen(true);
+                }}
+                className="gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir Produto
+              </Button>
+            )}
+            
+            {/* Lado direito - Botões normais */}
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={produtoMasterEditando ? salvarEdicaoProdutoMaster : aprovarComModificacoes} 
+                disabled={!editForm.nome_padrao || !editForm.categoria || !editForm.nome_base || uploadingImage}
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                {uploadingImage ? 'Enviando imagem...' : produtoMasterEditando ? 'Salvar Alterações' : 'Aprovar com Modificações'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
