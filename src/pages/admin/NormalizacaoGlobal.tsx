@@ -150,6 +150,11 @@ export default function NormalizacaoGlobal() {
   const [produtosSimilares, setProdutosSimilares] = useState<any[]>([]);
   const [carregandoSimilares, setCarregandoSimilares] = useState(false);
 
+  // Estados para filtro e busca de candidatos pendentes
+  const [filtroPendentes, setFiltroPendentes] = useState('');
+  const [buscandoPendentes, setBuscandoPendentes] = useState(false);
+  const [resultadosBuscaPendentes, setResultadosBuscaPendentes] = useState<any[]>([]);
+
   // Estados para importação Open Food Facts
   const [importando, setImportando] = useState(false);
   const [progressoImportacao, setProgressoImportacao] = useState(0);
@@ -198,6 +203,20 @@ export default function NormalizacaoGlobal() {
 
     return () => clearTimeout(timer);
   }, [filtroMaster]);
+
+  // useEffect para busca dinâmica de pendentes com debounce
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (filtroPendentes.trim()) {
+        await buscarCandidatosPendentes(filtroPendentes.trim());
+      } else {
+        // Se filtro vazio, limpar resultados
+        setResultadosBuscaPendentes([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [filtroPendentes]);
   
   // useEffect para recarregar dados ao mudar de página
   useEffect(() => {
@@ -418,6 +437,61 @@ export default function NormalizacaoGlobal() {
       });
     } finally {
       setBuscandoMaster(false);
+    }
+  }
+
+  async function buscarCandidatosPendentes(termo: string) {
+    setBuscandoPendentes(true);
+    try {
+      // Detectar se tem múltiplos termos separados por ";"
+      const termos = termo.includes(';') 
+        ? termo.split(';').map(t => t.trim()).filter(t => t.length > 0)
+        : [termo.trim()];
+
+      // Buscar todos os candidatos pendentes
+      const { data, error } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('*')
+        .eq('status', 'pendente')
+        .order('confianca_ia', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Filtrar localmente (mais flexível que SQL OR)
+      let resultados: any[] = [];
+      
+      for (const t of termos) {
+        const termoUpper = t.toUpperCase();
+        
+        const filtrados = (data || []).filter(candidato => 
+          candidato.texto_original?.toUpperCase().includes(termoUpper) ||
+          candidato.nome_padrao_sugerido?.toUpperCase().includes(termoUpper) ||
+          candidato.nome_base_sugerido?.toUpperCase().includes(termoUpper) ||
+          candidato.marca_sugerida?.toUpperCase().includes(termoUpper) ||
+          candidato.categoria_sugerida?.toUpperCase().includes(termoUpper) ||
+          candidato.sugestao_sku_global?.toUpperCase().includes(termoUpper)
+        );
+        
+        resultados.push(...filtrados);
+      }
+      
+      // Remover duplicatas (se buscou múltiplos termos)
+      const unicos = Array.from(
+        new Map(resultados.map(item => [item.id, item])).values()
+      );
+      
+      setResultadosBuscaPendentes(unicos);
+      
+    } catch (error: any) {
+      console.error('Erro ao buscar candidatos:', error);
+      toast({
+        title: "Erro na busca",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setBuscandoPendentes(false);
     }
   }
 
@@ -1665,6 +1739,28 @@ export default function NormalizacaoGlobal() {
 
         {/* Candidatos Pendentes */}
         <TabsContent value="pendentes" className="space-y-4">
+          {/* Campo de busca */}
+          <div className="mb-4 space-y-2">
+            <Input
+              placeholder="Buscar pendentes... (use ; para múltiplos termos: ex: manteiga ; aviação)"
+              value={filtroPendentes}
+              onChange={(e) => setFiltroPendentes(e.target.value)}
+              className="max-w-md"
+            />
+            {filtroPendentes && filtroPendentes.includes(';') && (
+              <div className="text-xs text-muted-foreground">
+                🔍 Buscando por {filtroPendentes.split(';').filter(t => t.trim()).length} termos
+              </div>
+            )}
+            {filtroPendentes && (
+              <p className="text-sm text-muted-foreground">
+                {buscandoPendentes 
+                  ? 'Buscando...' 
+                  : `Mostrando ${resultadosBuscaPendentes.length} de ${candidatos.length} pendente(s)`}
+              </p>
+            )}
+          </div>
+
           {candidatos.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -1675,8 +1771,25 @@ export default function NormalizacaoGlobal() {
                 </p>
               </CardContent>
             </Card>
+          ) : buscandoPendentes ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Clock className="w-16 h-16 text-muted-foreground mb-4 animate-pulse" />
+                <p className="text-muted-foreground">Buscando candidatos...</p>
+              </CardContent>
+            </Card>
+          ) : (filtroPendentes ? resultadosBuscaPendentes : candidatos).length === 0 && filtroPendentes ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <AlertCircle className="w-16 h-16 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Nenhum resultado encontrado</h3>
+                <p className="text-muted-foreground text-center">
+                  Tente outros termos de busca ou remova o filtro
+                </p>
+              </CardContent>
+            </Card>
           ) : (
-            candidatos.map((candidato) => (
+            (filtroPendentes ? resultadosBuscaPendentes : candidatos).map((candidato) => (
               <Card key={candidato.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
