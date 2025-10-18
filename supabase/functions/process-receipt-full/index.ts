@@ -320,6 +320,68 @@ serve(async (req) => {
       console.log('✅ Validação OK: Todos os itens foram inseridos corretamente');
     }
 
+    // 💰 ATUALIZAÇÃO AUTOMÁTICA DE PREÇOS
+    console.log('💰 Iniciando atualização automática de preços atuais...');
+    
+    // Extrair dados do estabelecimento
+    const estabelecimentoCnpj = dadosExtraidos.cnpj || 
+                                 dadosExtraidos.estabelecimento?.cnpj || 
+                                 dadosExtraidos.supermercado?.cnpj || 
+                                 dadosExtraidos.emitente?.cnpj || '';
+    
+    const estabelecimentoNome = dadosExtraidos.estabelecimento?.nome || 
+                                 dadosExtraidos.supermercado?.nome || 
+                                 dadosExtraidos.emitente?.nome || 
+                                 dadosExtraidos.nome_estabelecimento || '';
+    
+    const dataCompra = dadosExtraidos.data_emissao || 
+                      dadosExtraidos.data || 
+                      dadosExtraidos.emissao || 
+                      new Date().toISOString().split('T')[0];
+    
+    const horaCompra = dadosExtraidos.hora_emissao || 
+                      dadosExtraidos.hora || 
+                      '00:00:00';
+
+    console.log(`📍 Estabelecimento: ${estabelecimentoNome} (${estabelecimentoCnpj})`);
+    console.log(`📅 Data/Hora: ${dataCompra} ${horaCompra}`);
+
+    // Atualizar preços para cada item do estoque
+    let precosAtualizados = 0;
+    let errosAtualizacao = 0;
+    
+    for (const item of produtosEstoque) {
+      if (item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
+        try {
+          const { error: erroPrecosAtuais } = await supabase.functions.invoke('update-precos-atuais', {
+            body: {
+              compraId: finalNotaId,
+              produtoNome: item.produto_nome,
+              precoUnitario: item.preco_unitario_ultimo,
+              estabelecimentoCnpj,
+              estabelecimentoNome,
+              dataCompra,
+              horaCompra,
+              userId
+            }
+          });
+
+          if (erroPrecosAtuais) {
+            console.error(`⚠️ Erro ao atualizar preço para ${item.produto_nome}:`, erroPrecosAtuais);
+            errosAtualizacao++;
+          } else {
+            console.log(`💾 Preço atualizado: ${item.produto_nome} = R$ ${item.preco_unitario_ultimo}`);
+            precosAtualizados++;
+          }
+        } catch (error) {
+          console.error(`⚠️ Erro ao chamar update-precos-atuais para ${item.produto_nome}:`, error);
+          errosAtualizacao++;
+        }
+      }
+    }
+    
+    console.log(`✅ Atualização de preços concluída: ${precosAtualizados} atualizados, ${errosAtualizacao} erros`);
+
     // Marcar nota como processada com retry em caso de falha
     const { error: updateError } = await supabase
       .from("notas_imagens")
