@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { categoriasNormalizadas } from "@/lib/categorias";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -129,6 +130,21 @@ export default function NormalizacaoGlobal() {
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const itensPorPagina = 20;
+
+  // Lista de categorias padrão do Picotinho (11 categorias fixas)
+  const categoriasPadrao = [
+    'AÇOUGUE',
+    'BEBIDAS',
+    'CONGELADOS',
+    'HIGIENE/FARMÁCIA',
+    'HORTIFRUTI',
+    'LATICÍNIOS/FRIOS',
+    'LIMPEZA',
+    'MERCEARIA',
+    'OUTROS',
+    'PADARIA',
+    'PET'
+  ];
 
   // Estados para importação Open Food Facts
   const [importando, setImportando] = useState(false);
@@ -2187,12 +2203,17 @@ export default function NormalizacaoGlobal() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="categoria">Categoria *</Label>
-                <Input
+                <select
                   id="categoria"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={editForm.categoria}
                   onChange={(e) => setEditForm({...editForm, categoria: e.target.value})}
-                  placeholder="Ex: Alimentos"
-                />
+                >
+                  <option value="">Selecione uma categoria...</option>
+                  {categoriasPadrao.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">
