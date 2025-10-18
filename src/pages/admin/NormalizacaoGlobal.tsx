@@ -1413,7 +1413,19 @@ export default function NormalizacaoGlobal() {
         }
       }
 
-      // 2. Deletar o produto master
+      // 2. Desvincular candidatos que referenciam este master
+      const { data: candidatosAfetados, error: updateError } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .update({ sugestao_produto_master: null })
+        .eq('sugestao_produto_master', produtoMasterEditando)
+        .select('id');
+
+      if (updateError) {
+        console.error('Erro ao desvincular candidatos:', updateError);
+        throw updateError;
+      }
+
+      // 3. Deletar o produto master
       const { error } = await supabase
         .from('produtos_master_global')
         .delete()
@@ -1423,7 +1435,7 @@ export default function NormalizacaoGlobal() {
 
       toast({
         title: "✅ Produto excluído",
-        description: "O produto foi removido permanentemente do catálogo master",
+        description: `Produto removido. ${candidatosAfetados?.length || 0} candidatos desvinculados.`,
       });
 
       // 3. Fechar modais e recarregar dados
