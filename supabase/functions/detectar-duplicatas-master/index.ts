@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('🔍 Iniciando detecção inteligente de duplicatas...');
+    console.log('🔍 Iniciando detecção inteligente de duplicatas...', new Date().toISOString());
     const startTime = Date.now();
 
     // 🆕 BUSCAR PARES JÁ MARCADOS COMO NÃO-DUPLICATAS
