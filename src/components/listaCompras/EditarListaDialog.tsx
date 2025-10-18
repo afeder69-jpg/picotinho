@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -10,6 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,8 +48,10 @@ interface EditarListaDialogProps {
 
 export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   
   const [produtosEditados, setProdutosEditados] = useState(lista.listas_compras_itens);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const prevOpenRef = useRef(open);
 
   // Sincronizar apenas quando o dialog ABRIR (transição de false -> true)
@@ -183,7 +196,49 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
     onClose();
   };
 
+  const handleExcluirLista = async () => {
+    try {
+      // 1. Deletar todos os itens da lista
+      const { error: errorItens } = await supabase
+        .from('listas_compras_itens')
+        .delete()
+        .eq('lista_id', lista.id);
+
+      if (errorItens) throw errorItens;
+
+      // 2. Deletar a lista
+      const { error: errorLista } = await supabase
+        .from('listas_compras')
+        .delete()
+        .eq('id', lista.id);
+
+      if (errorLista) throw errorLista;
+
+      toast({
+        title: "🗑️ Lista excluída com sucesso",
+        description: `A lista "${lista.titulo}" foi removida.`
+      });
+
+      // 3. Fechar dialogs
+      setConfirmDeleteOpen(false);
+      onClose();
+      
+      // 4. Invalidar cache e navegar
+      queryClient.invalidateQueries({ queryKey: ['listas-compras'] });
+      navigate('/listas-compras');
+      
+    } catch (error: any) {
+      console.error('Erro ao excluir lista:', error);
+      toast({
+        title: "❌ Erro ao excluir lista",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -272,12 +327,45 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
           </div>
         </div>
 
-        <DialogFooter className="flex justify-end">
+        <DialogFooter className="flex justify-between gap-2">
+          <Button 
+            variant="destructive" 
+            onClick={() => setConfirmDeleteOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Excluir Lista
+          </Button>
+          
           <Button onClick={handleFechar}>
             Fechar
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>🗑️ Excluir Lista de Compras?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir a lista <strong>"{lista.titulo}"</strong>?
+            <br /><br />
+            Esta ação não pode ser desfeita. Todos os {produtosEditados.length} produtos 
+            desta lista serão removidos permanentemente.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={handleExcluirLista}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Sim, excluir lista
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
