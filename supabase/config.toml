@@ -55,3 +55,6 @@ verify_jwt = false
 
 [functions.processar-normalizacao-global]
 verify_jwt = false
+
+[functions.reconciliar-estoque-master]
+verify_jwt = false
