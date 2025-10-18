@@ -36,7 +36,8 @@ import {
   Loader2,
   ImageOff,
   BarChart3,
-  Zap
+  Zap,
+  Check
 } from "lucide-react";
 import {
   Pagination,
@@ -48,6 +49,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { ScrapingControls } from "@/components/admin/ImageScraping/ScrapingControls";
 import { ImagePreviewCard } from "@/components/admin/ImageScraping/ImagePreviewCard";
@@ -177,6 +179,11 @@ export default function NormalizacaoGlobal() {
   const [relatorioConsolidacao, setRelatorioConsolidacao] = useState<any>(null);
   const [confirmarConsolidacaoOpen, setConfirmarConsolidacaoOpen] = useState(false);
   const [duplicatasEncontradas, setDuplicatasEncontradas] = useState(0);
+  
+  // Estados para consolidação inteligente
+  const [gruposDuplicatas, setGruposDuplicatas] = useState<any[]>([]);
+  const [produtosEscolhidos, setProdutosEscolhidos] = useState<Record<string, string>>({});
+  const [modalDuplicatasOpen, setModalDuplicatasOpen] = useState(false);
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -698,45 +705,121 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function consolidarMastersDuplicados() {
+  async function handleConsolidarDuplicatas() {
     setConsolidando(true);
-    setRelatorioConsolidacao(null);
     setConfirmarConsolidacaoOpen(false);
     
     try {
       toast({
-        title: "Consolidação iniciada",
-        description: "Processando duplicados...",
+        title: "🔍 Detectando duplicatas...",
+        description: "Analisando produtos com IA de similaridade"
       });
 
-      const { data, error } = await supabase.functions.invoke('consolidar-masters-duplicados');
-
+      const { data, error } = await supabase.functions.invoke('detectar-duplicatas-master');
+      
       if (error) throw error;
-
-      setRelatorioConsolidacao({
-        grupos_consolidados: data.total_grupos_consolidados,
-        masters_removidos: data.total_masters_removidos,
-        sinonimos_criados: data.total_sinonimos_criados,
-        grupos: data.grupos
+      
+      if (data.total_grupos === 0) {
+        toast({
+          title: "✅ Nenhuma duplicata encontrada",
+          description: "Catálogo Master já está consolidado!"
+        });
+        return;
+      }
+      
+      // Preparar escolhas pré-selecionadas (produto com mais notas)
+      const escolhas: Record<string, string> = {};
+      data.grupos.forEach((grupo: any) => {
+        // Pré-selecionar o com mais notas
+        const maisNotas = [...grupo.produtos].sort((a: any, b: any) => 
+          b.total_notas - a.total_notas
+        )[0];
+        escolhas[grupo.id] = maisNotas.id;
       });
       
+      setGruposDuplicatas(data.grupos);
+      setProdutosEscolhidos(escolhas);
+      setModalDuplicatasOpen(true);
+      setDuplicatasEncontradas(data.total_duplicatas);
+      
       toast({
-        title: "Consolidação concluída! 🎉",
-        description: `${data.total_grupos_consolidados} grupos processados`,
+        title: "🎯 Duplicatas detectadas!",
+        description: `${data.total_grupos} grupo(s) com ${data.total_duplicatas} produto(s) duplicado(s)`
       });
-
-      await carregarDados();
-
+      
     } catch (error: any) {
-      console.error('Erro ao consolidar:', error);
+      console.error('Erro ao detectar duplicatas:', error);
       toast({
-        title: "Erro na consolidação",
+        title: "❌ Erro ao detectar duplicatas",
         description: error.message,
         variant: "destructive"
       });
     } finally {
       setConsolidando(false);
     }
+  }
+
+  async function executarConsolidacaoManual() {
+    setConsolidando(true);
+    
+    try {
+      // Preparar payload
+      const grupos = gruposDuplicatas.map(grupo => {
+        const manterID = produtosEscolhidos[grupo.id];
+        const removerIDs = grupo.produtos
+          .filter((p: any) => p.id !== manterID)
+          .map((p: any) => p.id);
+        
+        return {
+          manter_id: manterID,
+          remover_ids: removerIDs
+        };
+      });
+
+      toast({
+        title: "⚙️ Consolidando...",
+        description: "Criando sinônimos e atualizando referências"
+      });
+
+      const { data, error } = await supabase.functions.invoke(
+        'consolidar-masters-manual',
+        { body: { grupos } }
+      );
+
+      if (error) throw error;
+
+      setRelatorioConsolidacao(data);
+      
+      toast({
+        title: "✅ Consolidação concluída!",
+        description: `${data.total_masters_removidos} produto(s) consolidado(s) em ${data.total_grupos_consolidados} grupo(s)`,
+        duration: 5000
+      });
+
+      // Fechar modal e limpar estados
+      setModalDuplicatasOpen(false);
+      setGruposDuplicatas([]);
+      setProdutosEscolhidos({});
+      
+      // Recarregar dados
+      await carregarDados();
+      await carregarProdutosRecentes();
+
+    } catch (error: any) {
+      console.error('Erro ao consolidar:', error);
+      toast({
+        title: "❌ Erro na consolidação",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setConsolidando(false);
+    }
+  }
+
+  async function consolidarMastersDuplicados() {
+    // Redirecionar para nova função
+    await handleConsolidarDuplicatas();
   }
 
 
@@ -2767,6 +2850,147 @@ export default function NormalizacaoGlobal() {
             >
               <XCircle className="w-4 h-4 mr-2" />
               Rejeitar com Feedback
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Escolha de Duplicatas */}
+      <Dialog open={modalDuplicatasOpen} onOpenChange={setModalDuplicatasOpen}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Database className="w-6 h-6 text-primary" />
+              Duplicatas Detectadas ({gruposDuplicatas.length} {gruposDuplicatas.length === 1 ? 'grupo' : 'grupos'})
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Selecione qual produto <strong>MANTER</strong> em cada grupo. Os demais serão consolidados automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {gruposDuplicatas.map((grupo, idx) => (
+              <Card key={grupo.id} className="border-2 border-primary/20 shadow-sm">
+                <CardHeader className="pb-3 bg-muted/30">
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      Grupo {idx + 1}: {grupo.categoria}
+                    </span>
+                    <Badge variant="outline" className="text-sm">
+                      <Sparkles className="w-3 h-3 mr-1" />
+                      {Math.round(grupo.score_similaridade * 100)}% similar
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-4">
+                  <RadioGroup 
+                    value={produtosEscolhidos[grupo.id] || ''}
+                    onValueChange={(value) => {
+                      setProdutosEscolhidos(prev => ({
+                        ...prev,
+                        [grupo.id]: value
+                      }));
+                    }}
+                  >
+                    {grupo.produtos.map((produto: any) => {
+                      const isEscolhido = produtosEscolhidos[grupo.id] === produto.id;
+                      
+                      return (
+                        <div 
+                          key={produto.id}
+                          className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                            isEscolhido
+                              ? 'border-green-500 bg-green-50 shadow-md'
+                              : 'border-gray-200 hover:border-gray-400 bg-white'
+                          }`}
+                        >
+                          <RadioGroupItem 
+                            value={produto.id} 
+                            id={produto.id}
+                            className="mt-1"
+                          />
+                          <label 
+                            htmlFor={produto.id} 
+                            className="flex-1 cursor-pointer space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1">
+                                <div className="font-semibold text-sm leading-tight">
+                                  {produto.nome_padrao}
+                                </div>
+                                <div className="text-xs text-muted-foreground font-mono mt-1 bg-gray-100 px-2 py-1 rounded">
+                                  SKU: {produto.sku_global}
+                                </div>
+                              </div>
+                              {isEscolhido && (
+                                <Badge className="bg-green-600 text-white gap-1 shrink-0">
+                                  <Check className="w-3 h-3" />
+                                  MANTER
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2">
+                              {produto.marca && (
+                                <Badge variant="secondary" className="text-xs">
+                                  🏷️ {produto.marca}
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs">
+                                📊 {produto.total_notas} {produto.total_notas === 1 ? 'nota' : 'notas'}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                👥 {produto.total_usuarios} {produto.total_usuarios === 1 ? 'usuário' : 'usuários'}
+                              </Badge>
+                            </div>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
+                  
+                  {/* Resumo do que será feito */}
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+                    <p className="font-semibold text-blue-900 mb-1">
+                      ⚙️ O que será feito:
+                    </p>
+                    <ul className="text-blue-800 space-y-0.5 ml-4 list-disc">
+                      <li>Produto escolhido será <strong>mantido</strong></li>
+                      <li>SKUs dos demais viram <strong>sinônimos</strong> automáticos</li>
+                      <li>Todas as referências serão <strong>atualizadas</strong></li>
+                      <li>Produtos duplicados serão <strong>removidos</strong></li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setModalDuplicatasOpen(false)}
+              disabled={consolidando}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={executarConsolidacaoManual}
+              disabled={consolidando}
+              className="gap-2 min-w-[200px]"
+            >
+              {consolidando ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Consolidando...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Consolidar {gruposDuplicatas.length} {gruposDuplicatas.length === 1 ? 'Grupo' : 'Grupos'}
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

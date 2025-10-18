@@ -58,3 +58,9 @@ verify_jwt = false
 
 [functions.reconciliar-estoque-master]
 verify_jwt = false
+
+[functions.detectar-duplicatas-master]
+verify_jwt = false
+
+[functions.consolidar-masters-manual]
+verify_jwt = false

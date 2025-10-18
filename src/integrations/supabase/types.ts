@@ -2817,6 +2817,15 @@ export type Database = {
         Args: { days_old?: number }
         Returns: number
       }
+      comparar_masters_similares: {
+        Args: {
+          m1_marca: string
+          m1_nome: string
+          m2_marca: string
+          m2_nome: string
+        }
+        Returns: number
+      }
       consolidar_estoque_duplicado: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3138,6 +3147,10 @@ export type Database = {
         Returns: Json
       }
       normalizar_texto: {
+        Args: { texto: string }
+        Returns: string
+      }
+      normalizar_texto_similaridade: {
         Args: { texto: string }
         Returns: string
       }
