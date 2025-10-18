@@ -37,7 +37,8 @@ import {
   ImageOff,
   BarChart3,
   Zap,
-  Check
+  Check,
+  Trash2
 } from "lucide-react";
 import {
   Pagination,
@@ -127,6 +128,8 @@ export default function NormalizacaoGlobal() {
   const [filtroMaster, setFiltroMaster] = useState('');
   const [buscandoMaster, setBuscandoMaster] = useState(false);
   const [resultadosBusca, setResultadosBusca] = useState<any[]>([]);
+  const [confirmarExclusaoOpen, setConfirmarExclusaoOpen] = useState(false);
+  const [excluindoProduto, setExcluindoProduto] = useState(false);
   
   // Estados para paginação de candidatos
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -1390,6 +1393,54 @@ export default function NormalizacaoGlobal() {
         description: error.message,
         variant: "destructive"
       });
+    }
+  }
+
+  async function excluirProdutoMaster() {
+    if (!produtoMasterEditando) return;
+
+    try {
+      setExcluindoProduto(true);
+
+      // 1. Deletar imagem do storage (se existir)
+      if (imagemPreview && imagemPreview.includes('produtos-master-fotos')) {
+        const pathMatch = imagemPreview.match(/produtos-master-fotos\/(.+)$/);
+        if (pathMatch) {
+          const filePath = pathMatch[1].split('?')[0];
+          await supabase.storage
+            .from('produtos-master-fotos')
+            .remove([filePath]);
+        }
+      }
+
+      // 2. Deletar o produto master
+      const { error } = await supabase
+        .from('produtos_master_global')
+        .delete()
+        .eq('id', produtoMasterEditando);
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Produto excluído",
+        description: "O produto foi removido permanentemente do catálogo master",
+      });
+
+      // 3. Fechar modais e recarregar dados
+      setConfirmarExclusaoOpen(false);
+      setEditModalOpen(false);
+      setProdutoMasterEditando(null);
+      await carregarDados();
+
+    } catch (error: any) {
+      console.error('Erro ao excluir produto:', error);
+      toast({
+        title: "Erro ao excluir",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setExcluindoProduto(false);
     }
   }
 
@@ -3146,6 +3197,62 @@ export default function NormalizacaoGlobal() {
               className="bg-destructive hover:bg-destructive/90"
             >
               Sim, Consolidar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog de Confirmação de Exclusão */}
+      <AlertDialog open={confirmarExclusaoOpen} onOpenChange={setConfirmarExclusaoOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-5 h-5" />
+              Confirmar Exclusão do Produto Master
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                Você está prestes a <strong>excluir permanentemente</strong> o produto:
+              </p>
+              <div className="p-3 bg-muted rounded-lg space-y-1">
+                <p className="font-semibold">{editForm.nome_padrao}</p>
+                <p className="text-sm text-muted-foreground">SKU: {editForm.sku_global}</p>
+                {editForm.categoria && (
+                  <p className="text-sm text-muted-foreground">Categoria: {editForm.categoria}</p>
+                )}
+              </div>
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>ATENÇÃO:</strong> Esta ação NÃO pode ser desfeita!
+                </p>
+                <ul className="text-xs text-yellow-700 mt-2 space-y-1 ml-4 list-disc">
+                  <li>O produto será removido do catálogo master global</li>
+                  <li>Produtos normalizados de usuários vinculados a este master perderão a referência</li>
+                  <li>Candidatos pendentes vinculados serão desvinculados</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluindoProduto}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={excluirProdutoMaster}
+              disabled={excluindoProduto}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {excluindoProduto ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Sim, Excluir Permanentemente
+                </>
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
