@@ -86,6 +86,130 @@ function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): {
   return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
 }
 
+// ================== NORMALIZAÇÃO MASTER - FASE 2 ==================
+
+// 🔥 Cache em memória para produtos master já buscados
+const masterCache = new Map<string, any>();
+
+// 🎚️ Feature flag: pode desabilitar busca master via env var
+const ENABLE_MASTER_SEARCH = Deno.env.get('ENABLE_MASTER_SEARCH') !== 'false';
+
+// 📊 Calcular similaridade entre dois textos (Levenshtein distance simplificada)
+function calcularSimilaridade(s1: string, s2: string): number {
+  const len1 = s1.length;
+  const len2 = s2.length;
+  const matrix: number[][] = [];
+
+  // Inicializar matriz
+  for (let i = 0; i <= len1; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= len2; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Preencher matriz
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // Deleção
+        matrix[i][j - 1] + 1,      // Inserção
+        matrix[i - 1][j - 1] + cost // Substituição
+      );
+    }
+  }
+
+  // Calcular porcentagem de similaridade
+  const maxLen = Math.max(len1, len2);
+  const distance = matrix[len1][len2];
+  return 1 - (distance / maxLen);
+}
+
+// 🔍 Buscar produto master correspondente com timeout e fallback
+async function buscarProdutoMaster(
+  produtoNome: string,
+  categoria: string,
+  supabase: any
+): Promise<{ found: boolean; master: any | null }> {
+  
+  // 1️⃣ Verificar feature flag
+  if (!ENABLE_MASTER_SEARCH) {
+    return { found: false, master: null };
+  }
+  
+  // 2️⃣ Verificar cache
+  const cacheKey = `${produtoNome}|${categoria}`.toUpperCase();
+  if (masterCache.has(cacheKey)) {
+    const cached = masterCache.get(cacheKey);
+    if (cached) {
+      console.log(`🔥 Cache HIT: ${produtoNome} → ${cached.nome_padrao}`);
+      return { found: true, master: cached };
+    }
+  }
+  
+  try {
+    // 3️⃣ Buscar com timeout de 2 segundos
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout')), 2000)
+    );
+    
+    const searchPromise = supabase
+      .from('produtos_master_global')
+      .select('*')
+      .eq('categoria', categoria)
+      .eq('status', 'ativo')
+      .limit(10);
+    
+    const result = await Promise.race([searchPromise, timeoutPromise]) as any;
+    const { data, error } = result;
+    
+    if (error || !data || data.length === 0) {
+      masterCache.set(cacheKey, null);
+      return { found: false, master: null };
+    }
+    
+    // 4️⃣ Calcular similaridade e encontrar melhor match
+    const nomeNormalizado = produtoNome.toUpperCase();
+    let melhorMatch = null;
+    let melhorScore = 0;
+    
+    for (const master of data) {
+      const score = calcularSimilaridade(
+        nomeNormalizado, 
+        master.nome_padrao.toUpperCase()
+      );
+      
+      // Threshold: 85% de similaridade mínima
+      if (score > melhorScore && score >= 0.85) {
+        melhorScore = score;
+        melhorMatch = master;
+      }
+    }
+    
+    if (melhorMatch) {
+      // 5️⃣ Salvar no cache
+      masterCache.set(cacheKey, melhorMatch);
+      console.log(`✅ Master encontrado: ${produtoNome} → ${melhorMatch.nome_padrao} (${(melhorScore * 100).toFixed(0)}%)`);
+      return { found: true, master: melhorMatch };
+    }
+    
+    // Não encontrou match com similaridade suficiente
+    masterCache.set(cacheKey, null);
+    return { found: false, master: null };
+    
+  } catch (error: any) {
+    // 6️⃣ FALLBACK: Em caso de erro/timeout, continuar sem master
+    if (error.message === 'Timeout') {
+      console.warn(`⏱️ Timeout ao buscar master para "${produtoNome}" - continuando sem normalização`);
+    } else {
+      console.warn(`⚠️ Erro ao buscar master para "${produtoNome}": ${error.message}`);
+    }
+    masterCache.set(cacheKey, null);
+    return { found: false, master: null };
+  }
+}
+
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -251,6 +375,49 @@ serve(async (req) => {
     const produtosEstoque = Array.from(produtosConsolidados.values());
     
     console.log(`📦 Itens únicos para inserir no estoque: ${produtosEstoque.length} (de ${itens.length} itens originais)`);
+    
+    // 🔍 FASE 2: BUSCAR PRODUTO MASTER PARA CADA ITEM
+    console.log('🔍 Iniciando busca de produtos master...');
+    let masterEncontrados = 0;
+    let masterNaoEncontrados = 0;
+    
+    for (const produto of produtosEstoque) {
+      try {
+        const resultado = await buscarProdutoMaster(
+          produto.produto_nome,
+          produto.categoria,
+          supabase
+        );
+        
+        if (resultado.found && resultado.master) {
+          // ✅ Master encontrado! Atualizar produto com dados normalizados
+          produto.sku_global = resultado.master.sku_global;
+          produto.produto_master_id = resultado.master.id;
+          produto.produto_nome = resultado.master.nome_padrao; // Nome normalizado
+          produto.marca = resultado.master.marca;
+          produto.categoria = resultado.master.categoria;
+          produto.produto_nome_normalizado = resultado.master.nome_padrao;
+          produto.nome_base = resultado.master.nome_base;
+          masterEncontrados++;
+          
+          console.log(`✅ Normalizado: ${produto.produto_nome} (SKU: ${produto.sku_global})`);
+        } else {
+          // ⚠️ Master não encontrado, inserir sem normalizar (sku_global = NULL)
+          masterNaoEncontrados++;
+          console.log(`⚠️ Sem master: ${produto.produto_nome} (será enviado para aprovação)`);
+        }
+      } catch (error: any) {
+        // 🛡️ FALLBACK: Erro ao buscar master, continuar sem ele
+        console.error(`❌ Erro ao buscar master para ${produto.produto_nome}:`, error.message);
+        masterNaoEncontrados++;
+      }
+    }
+    
+    console.log(`📊 Busca de master concluída: ${masterEncontrados} normalizados (${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%), ${masterNaoEncontrados} sem master`);
+    
+    if (masterEncontrados > 0) {
+      console.log(`🎉 Taxa de normalização automática: ${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%`);
+    }
     
     // 🚨 DEBUG CRÍTICO: Verificar se os produtos problemáticos estão na lista
     const produtosProblematicos = ['Queijo Parmesão President', 'Filé de Peito de Frango', 'Creme de Leite Italac', 'Requeijão Cremoso Tirolez'];
