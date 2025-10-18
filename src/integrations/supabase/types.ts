@@ -2755,6 +2755,20 @@ export type Database = {
           total_usuarios: number
         }[]
       }
+      buscar_produtos_similares_master: {
+        Args: { p_categoria: string; p_limite?: number; p_nome_base: string }
+        Returns: {
+          categoria: string
+          id: string
+          marca: string
+          nome_base: string
+          nome_padrao: string
+          qtd_unidade: string
+          qtd_valor: number
+          score: number
+          sku_global: string
+        }[]
+      }
       buscar_receitas_brasileiras_disponiveis: {
         Args: Record<PropertyKey, never>
         Returns: {

@@ -146,6 +146,10 @@ export default function NormalizacaoGlobal() {
     'PET'
   ];
 
+  // Estados para detecção de produtos similares
+  const [produtosSimilares, setProdutosSimilares] = useState<any[]>([]);
+  const [carregandoSimilares, setCarregandoSimilares] = useState(false);
+
   // Estados para importação Open Food Facts
   const [importando, setImportando] = useState(false);
   const [progressoImportacao, setProgressoImportacao] = useState(0);
@@ -723,6 +727,10 @@ export default function NormalizacaoGlobal() {
       granel: candidato.granel_sugerido || false,
       sku_global: candidato.sugestao_sku_global || ''
     });
+    
+    // Buscar produtos similares antes de abrir o modal
+    buscarProdutosSimilares(candidato);
+    
     setEditModalOpen(true);
   }
 
@@ -856,6 +864,95 @@ export default function NormalizacaoGlobal() {
       });
     }
   }
+
+  const buscarProdutosSimilares = async (candidato: any) => {
+    if (!candidato.nome_base_sugerido || !candidato.categoria_sugerida) {
+      setProdutosSimilares([]);
+      return;
+    }
+
+    setCarregandoSimilares(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('buscar_produtos_similares_master', {
+          p_nome_base: candidato.nome_base_sugerido,
+          p_categoria: candidato.categoria_sugerida,
+          p_limite: 10
+        });
+
+      if (error) throw error;
+      
+      // Filtrar apenas com score >= 0.6 (60%)
+      const similares = (data || []).filter((p: any) => p.score >= 0.6);
+      setProdutosSimilares(similares);
+      
+      if (similares.length > 0) {
+        console.log(`✅ Encontrados ${similares.length} produtos similares para "${candidato.nome_base_sugerido}"`);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar similares:', error);
+      setProdutosSimilares([]);
+    } finally {
+      setCarregandoSimilares(false);
+    }
+  };
+
+  const vincularAProdutoExistente = async (produtoMasterId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Não autenticado');
+
+      // Atualizar candidato para vincular ao master existente
+      const { error } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .update({ 
+          status: 'aprovado',
+          revisado_por: user.id,
+          revisado_em: new Date().toISOString(),
+          sugestao_produto_master: produtoMasterId,
+          observacoes_revisor: 'Vinculado a produto master existente via detecção de similaridade'
+        })
+        .eq('id', candidatoAtual.id);
+
+      if (error) throw error;
+
+      // Salvar no log de decisões
+      const { error: errorLog } = await supabase
+        .from('normalizacao_decisoes_log')
+        .insert({
+          texto_original: candidatoAtual.texto_original,
+          candidato_id: candidatoAtual.id,
+          decisao: 'vinculado_a_existente',
+          sugestao_ia: {
+            nome_padrao: candidatoAtual.nome_padrao_sugerido,
+            categoria: candidatoAtual.categoria_sugerida,
+            nome_base: candidatoAtual.nome_base_sugerido
+          },
+          decidido_por: user.id,
+          produto_master_final: produtoMasterId
+        });
+
+      if (errorLog) console.error('Erro ao salvar log:', errorLog);
+
+      toast({
+        title: "✅ Vinculado com sucesso",
+        description: "Produto vinculado ao master existente sem criar duplicata"
+      });
+
+      // Fechar modal e recarregar
+      setEditModalOpen(false);
+      setProdutosSimilares([]);
+      await carregarDados();
+      
+    } catch (error: any) {
+      console.error('Erro ao vincular:', error);
+      toast({
+        title: "❌ Erro ao vincular",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
 
   async function aprovarSemModificacoes(candidatoId: string) {
     try {
@@ -2188,6 +2285,95 @@ export default function NormalizacaoGlobal() {
               Modifique os campos conforme necessário. Suas correções ajudarão a IA a aprender.
             </DialogDescription>
           </DialogHeader>
+
+          {/* ⚠️ ALERTA DE PRODUTOS SIMILARES */}
+          {carregandoSimilares ? (
+            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg mb-4">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm text-muted-foreground">
+                Buscando produtos similares no catálogo...
+              </span>
+            </div>
+          ) : produtosSimilares.length > 0 && (
+            <div className="p-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg space-y-3 mb-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-yellow-900 flex items-center gap-2">
+                    ⚠️ {produtosSimilares.length} Produto{produtosSimilares.length > 1 ? 's' : ''} Similar{produtosSimilares.length > 1 ? 'es' : ''} Encontrado{produtosSimilares.length > 1 ? 's' : ''}
+                  </h4>
+                  <p className="text-sm text-yellow-800 mt-1">
+                    Já existem produtos parecidos no catálogo. Se este produto é igual a algum abaixo, 
+                    clique em <strong>"🔗 Vincular"</strong> para evitar duplicação.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {produtosSimilares.map((similar: any) => (
+                  <div 
+                    key={similar.id}
+                    className="p-3 bg-white border-2 border-yellow-300 rounded-lg space-y-2 hover:border-yellow-400 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-900 truncate">
+                          {similar.nome_padrao}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                            📦 {similar.categoria}
+                          </Badge>
+                          {similar.marca && (
+                            <Badge variant="secondary" className="text-xs bg-purple-50 text-purple-700">
+                              🏷️ {similar.marca}
+                            </Badge>
+                          )}
+                          {similar.qtd_valor && similar.qtd_unidade && (
+                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                              ⚖️ {similar.qtd_valor}{similar.qtd_unidade}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1.5 font-mono bg-gray-50 px-2 py-1 rounded border border-gray-200 inline-block">
+                          SKU: {similar.sku_global}
+                        </p>
+                      </div>
+                      
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                        <Badge 
+                          variant={similar.score >= 0.8 ? "default" : "secondary"}
+                          className={`text-xs whitespace-nowrap ${
+                            similar.score >= 0.9 ? 'bg-red-500' :
+                            similar.score >= 0.8 ? 'bg-orange-500' :
+                            'bg-yellow-500'
+                          }`}
+                        >
+                          📊 {Math.round(similar.score * 100)}%
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => vincularAProdutoExistente(similar.id)}
+                          className="text-xs h-7 bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+                        >
+                          🔗 Vincular
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-xs text-yellow-700 bg-yellow-100 p-2 rounded border border-yellow-300 flex items-start gap-2">
+                <Zap className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  <strong>Dica:</strong> Produtos com 90%+ de similaridade geralmente são idênticos. 
+                  Se decidir criar novo produto mesmo assim, certifique-se de que existe diferença real.
+                </span>
+              </div>
+            </div>
+          )}
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
