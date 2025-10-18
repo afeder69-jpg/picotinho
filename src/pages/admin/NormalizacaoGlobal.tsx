@@ -712,14 +712,56 @@ export default function NormalizacaoGlobal() {
     try {
       toast({
         title: "🔍 Detectando duplicatas...",
-        description: "Analisando produtos com IA de similaridade"
+        description: "Analisando produtos master com IA. Isso pode levar alguns minutos.",
       });
 
-      const { data, error } = await supabase.functions.invoke('detectar-duplicatas-master');
+      // Chamar Edge Function para detectar duplicatas com IA (com timeout e retry)
+      const detectarComTimeout = async (tentativa = 1): Promise<any> => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+        try {
+          const { data, error } = await supabase.functions.invoke('detectar-duplicatas-master', {
+            body: {},
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          clearTimeout(timeoutId);
+
+          if (error) {
+            console.error(`❌ Erro ao detectar duplicatas (tentativa ${tentativa}):`, error);
+            
+            // Retry em caso de timeout ou erro de rede
+            if (tentativa < 2 && (error.message?.includes('timeout') || error.message?.includes('network'))) {
+              toast({
+                title: "⚠️ Timeout detectado",
+                description: `Tentando novamente... (${tentativa + 1}/2)`,
+              });
+              await new Promise(resolve => setTimeout(resolve, 2000)); // Aguardar 2s antes de retry
+              return detectarComTimeout(tentativa + 1);
+            }
+            
+            throw error;
+          }
+
+          return data;
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          
+          if (err.name === 'AbortError') {
+            console.error('❌ Timeout na detecção de duplicatas');
+            throw new Error('A detecção de duplicatas demorou muito. Tente filtrar por categoria específica.');
+          }
+          
+          throw err;
+        }
+      };
+
+      const data = await detectarComTimeout();
       
-      if (error) throw error;
-      
-      if (data.total_grupos === 0) {
+      if (!data || data.total_grupos === 0) {
         toast({
           title: "✅ Nenhuma duplicata encontrada",
           description: "Catálogo Master já está consolidado!"
@@ -744,14 +786,14 @@ export default function NormalizacaoGlobal() {
       
       toast({
         title: "🎯 Duplicatas detectadas!",
-        description: `${data.total_grupos} grupo(s) com ${data.total_duplicatas} produto(s) duplicado(s)`
+        description: `${data.total_grupos} grupo(s) com ${data.total_duplicatas} produto(s) duplicado(s). Tempo: ${data.tempo_decorrido_s}s`
       });
       
     } catch (error: any) {
       console.error('Erro ao detectar duplicatas:', error);
       toast({
         title: "❌ Erro ao detectar duplicatas",
-        description: error.message,
+        description: error.message || "Erro desconhecido ao chamar Edge Function",
         variant: "destructive"
       });
     } finally {

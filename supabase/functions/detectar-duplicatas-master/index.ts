@@ -17,14 +17,17 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('🔍 Iniciando detecção inteligente de duplicatas...');
+    const startTime = Date.now();
 
-    // Buscar todos os produtos master ativos
+    // Buscar apenas produtos master ativos com pelo menos 1 nota (otimização)
     const { data: masters, error: mastersError } = await supabase
       .from('produtos_master_global')
       .select('*')
       .eq('status', 'ativo')
+      .gte('total_notas', 1) // Só produtos que têm notas
       .order('categoria', { ascending: true })
-      .order('total_notas', { ascending: false });
+      .order('total_notas', { ascending: false })
+      .limit(1000); // Limitar a 1000 produtos por execução
 
     if (mastersError) {
       console.error('❌ Erro ao buscar masters:', mastersError);
@@ -48,6 +51,9 @@ serve(async (req) => {
 
     const gruposDuplicatas: any[] = [];
     let grupoIdCounter = 1;
+    let comparacoesRealizadas = 0;
+    const maxComparacoes = 5000; // Limite de comparações por execução
+    const cache = new Map<string, number>(); // Cache de comparações já feitas
 
     // Para cada categoria, comparar produtos
     for (const [categoria, produtosCategoria] of mastersPorCategoria.entries()) {
@@ -63,21 +69,37 @@ serve(async (req) => {
         for (let j = i + 1; j < produtosCategoria.length; j++) {
           const produto2 = produtosCategoria[j];
           
-          // Usar função SQL para calcular similaridade
-          const { data: scoreData, error: scoreError } = await supabase
-            .rpc('comparar_masters_similares', {
-              m1_nome: produto1.nome_padrao,
-              m1_marca: produto1.marca,
-              m2_nome: produto2.nome_padrao,
-              m2_marca: produto2.marca
-            });
-
-          if (scoreError) {
-            console.error('❌ Erro ao calcular score:', scoreError);
-            continue;
+          // Verificar limite de comparações
+          if (comparacoesRealizadas >= maxComparacoes) {
+            console.log(`⚠️ Limite de ${maxComparacoes} comparações atingido. Interrompendo.`);
+            break;
           }
+          
+          // Verificar cache
+          const cacheKey = `${produto1.id}_${produto2.id}`;
+          let score: number;
+          
+          if (cache.has(cacheKey)) {
+            score = cache.get(cacheKey)!;
+          } else {
+            // Usar função SQL para calcular similaridade
+            const { data: scoreData, error: scoreError } = await supabase
+              .rpc('comparar_masters_similares', {
+                m1_nome: produto1.nome_padrao,
+                m1_marca: produto1.marca,
+                m2_nome: produto2.nome_padrao,
+                m2_marca: produto2.marca
+              });
 
-          const score = scoreData as number;
+            if (scoreError) {
+              console.error('❌ Erro ao calcular score:', scoreError);
+              continue;
+            }
+
+            score = scoreData as number;
+            cache.set(cacheKey, score);
+            comparacoesRealizadas++;
+          }
 
           // Threshold de 85% de similaridade
           if (score >= 0.85) {
@@ -87,6 +109,12 @@ serve(async (req) => {
             
             produtosSimilares.push(produto2);
           }
+        }
+        
+        // Verificar limite entre categorias também
+        if (comparacoesRealizadas >= maxComparacoes) {
+          console.log(`⚠️ Limite de comparações atingido. Parando análise.`);
+          break;
         }
 
         // Se encontrou similares (mais de 1 produto), criar grupo
@@ -137,15 +165,21 @@ serve(async (req) => {
       acc + (grupo.produtos.length - 1), 0
     );
 
-    console.log(`✅ Detecção concluída:`);
+    const tempoDecorrido = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    console.log(`✅ Detecção concluída em ${tempoDecorrido}s:`);
     console.log(`   - ${gruposDuplicatas.length} grupo(s) encontrado(s)`);
     console.log(`   - ${totalDuplicatas} produto(s) duplicado(s)`);
+    console.log(`   - ${comparacoesRealizadas} comparações realizadas`);
+    console.log(`   - ${cache.size} comparações em cache`);
 
     return new Response(
       JSON.stringify({
         grupos: gruposDuplicatas,
         total_grupos: gruposDuplicatas.length,
         total_duplicatas: totalDuplicatas,
+        comparacoes_realizadas: comparacoesRealizadas,
+        tempo_decorrido_s: parseFloat(tempoDecorrido),
         executado_em: new Date().toISOString()
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
