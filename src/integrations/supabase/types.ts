@@ -2818,12 +2818,23 @@ export type Database = {
         Returns: number
       }
       comparar_masters_similares: {
-        Args: {
-          m1_marca: string
-          m1_nome: string
-          m2_marca: string
-          m2_nome: string
-        }
+        Args:
+          | {
+              m1_marca: string
+              m1_nome: string
+              m1_qtd_unidade: string
+              m1_qtd_valor: number
+              m2_marca: string
+              m2_nome: string
+              m2_qtd_unidade: string
+              m2_qtd_valor: number
+            }
+          | {
+              m1_marca: string
+              m1_nome: string
+              m2_marca: string
+              m2_nome: string
+            }
         Returns: number
       }
       consolidar_estoque_duplicado: {

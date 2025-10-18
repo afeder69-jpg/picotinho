@@ -49,6 +49,41 @@ serve(async (req) => {
 
     console.log(`📊 Total de categorias: ${mastersPorCategoria.size}`);
 
+    // Função auxiliar para validar se são realmente duplicatas
+    function saoRealmenteDuplicatas(p1: any, p2: any): boolean {
+      // Regra 1: Gramaturas/volumes diferentes > 15% → NÃO são duplicatas
+      if (p1.qtd_valor && p2.qtd_valor && p1.qtd_unidade && p2.qtd_unidade) {
+        // Unidades diferentes → definitivamente não são duplicatas
+        if (p1.qtd_unidade.toUpperCase() !== p2.qtd_unidade.toUpperCase()) {
+          return false;
+        }
+        
+        // Mesma unidade mas valores muito diferentes (>15%)
+        const diffPercentual = Math.abs(p1.qtd_valor - p2.qtd_valor) / Math.max(p1.qtd_valor, p2.qtd_valor);
+        if (diffPercentual > 0.15) {
+          console.log(`⚠️ Produtos com gramaturas diferentes (${(diffPercentual * 100).toFixed(1)}%): ${p1.nome_padrao} (${p1.qtd_valor}${p1.qtd_unidade}) vs ${p2.nome_padrao} (${p2.qtd_valor}${p2.qtd_unidade})`);
+          return false;
+        }
+      }
+      
+      // Regra 2: Marcas completamente diferentes → NÃO são duplicatas
+      if (p1.marca && p2.marca) {
+        const marcasIguais = p1.marca.toUpperCase() === p2.marca.toUpperCase();
+        if (!marcasIguais) {
+          console.log(`⚠️ Marcas diferentes: ${p1.marca} vs ${p2.marca}`);
+          return false;
+        }
+      }
+      
+      // Regra 3: Categorias diferentes → NÃO são duplicatas
+      if (p1.categoria !== p2.categoria) {
+        console.log(`⚠️ Categorias diferentes: ${p1.categoria} vs ${p2.categoria}`);
+        return false;
+      }
+      
+      return true;
+    }
+
     const gruposDuplicatas: any[] = [];
     let grupoIdCounter = 1;
     let comparacoesRealizadas = 0;
@@ -69,6 +104,11 @@ serve(async (req) => {
         for (let j = i + 1; j < produtosCategoria.length; j++) {
           const produto2 = produtosCategoria[j];
           
+          // Verificar se passam nas regras de negócio antes de comparar
+          if (!saoRealmenteDuplicatas(produto1, produto2)) {
+            continue;
+          }
+          
           // Verificar limite de comparações
           if (comparacoesRealizadas >= maxComparacoes) {
             console.log(`⚠️ Limite de ${maxComparacoes} comparações atingido. Interrompendo.`);
@@ -82,13 +122,17 @@ serve(async (req) => {
           if (cache.has(cacheKey)) {
             score = cache.get(cacheKey)!;
           } else {
-            // Usar função SQL para calcular similaridade
+            // Usar função SQL para calcular similaridade (agora com qtd_valor e qtd_unidade)
             const { data: scoreData, error: scoreError } = await supabase
               .rpc('comparar_masters_similares', {
                 m1_nome: produto1.nome_padrao,
                 m1_marca: produto1.marca,
+                m1_qtd_valor: produto1.qtd_valor,
+                m1_qtd_unidade: produto1.qtd_unidade,
                 m2_nome: produto2.nome_padrao,
-                m2_marca: produto2.marca
+                m2_marca: produto2.marca,
+                m2_qtd_valor: produto2.qtd_valor,
+                m2_qtd_unidade: produto2.qtd_unidade
               });
 
             if (scoreError) {
@@ -149,6 +193,8 @@ serve(async (req) => {
               nome_padrao: p.nome_padrao,
               sku_global: p.sku_global,
               marca: p.marca,
+              qtd_valor: p.qtd_valor,
+              qtd_unidade: p.qtd_unidade,
               total_notas: p.total_notas,
               total_usuarios: p.total_usuarios,
               created_at: p.created_at
