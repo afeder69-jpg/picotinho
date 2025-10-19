@@ -706,8 +706,21 @@ INSTRUÇÕES:
 
 4. Gere um SKU global único no formato: CATEGORIA-NOME_BASE-MARCA-QTDUNIDADE
 
-5. Categorize em uma dessas categorias brasileiras:
-   ALIMENTOS, BEBIDAS, HIGIENE, LIMPEZA, HORTIFRUTI, ACOUGUE, PADARIA, OUTROS
+5. Categorize em uma dessas categorias OFICIAIS do Picotinho (use EXATAMENTE como escrito):
+   AÇOUGUE (com Ç), BEBIDAS, CONGELADOS, HIGIENE/FARMÁCIA, HORTIFRUTI, LATICÍNIOS/FRIOS, LIMPEZA, MERCEARIA, PADARIA, PET, OUTROS
+   
+   Exemplos por categoria:
+   - MERCEARIA: Ketchup, molhos, temperos, massas, arroz, feijão, enlatados, conservas, óleos
+   - LATICÍNIOS/FRIOS: Queijos, leite, iogurte, requeijão, manteiga, embutidos, presunto
+   - HIGIENE/FARMÁCIA: Produtos de higiene pessoal, cosméticos, remédios, fraldas
+   - AÇOUGUE: Carnes, frango, peixe, linguiça (sempre com Ç)
+   - BEBIDAS: Refrigerantes, sucos, águas, energéticos, bebidas alcoólicas
+   - HORTIFRUTI: Frutas, verduras, legumes
+   - LIMPEZA: Produtos de limpeza doméstica
+   - CONGELADOS: Alimentos congelados
+   - PADARIA: Pães, bolos, tortas
+   - PET: Produtos para animais
+   - OUTROS: Quando não se encaixa em nenhuma categoria acima
 
 6. Atribua uma confiança de 0-100 baseado em:
    - 90-100: Nome muito claro e estruturado (ou produto encontrado no catálogo)
@@ -768,6 +781,43 @@ RESPONDA APENAS COM JSON (sem markdown):
       .trim();
     
     const resultado = JSON.parse(jsonLimpo);
+    
+    // 🔧 VALIDAR E CORRIGIR CATEGORIA (GARANTIR CATEGORIAS OFICIAIS DO PICOTINHO)
+    const CATEGORIAS_VALIDAS = [
+      'AÇOUGUE', 'BEBIDAS', 'CONGELADOS', 'HIGIENE/FARMÁCIA',
+      'HORTIFRUTI', 'LATICÍNIOS/FRIOS', 'LIMPEZA', 'MERCEARIA',
+      'PADARIA', 'PET', 'OUTROS'
+    ];
+    
+    const CORRECOES_CATEGORIA: Record<string, string> = {
+      'ALIMENTOS': 'MERCEARIA',
+      'HIGIENE': 'HIGIENE/FARMÁCIA',
+      'FARMACIA': 'HIGIENE/FARMÁCIA',
+      'LATICÍNIOS': 'LATICÍNIOS/FRIOS',
+      'LATICINIOS': 'LATICÍNIOS/FRIOS',
+      'FRIOS': 'LATICÍNIOS/FRIOS',
+      'ACOUGUE': 'AÇOUGUE',
+      'ASOUGUE': 'AÇOUGUE',
+      'CARNES': 'AÇOUGUE'
+    };
+    
+    // Aplicar correção de categoria se necessário
+    if (resultado.categoria) {
+      const categoriaOriginal = resultado.categoria.toUpperCase();
+      
+      if (CORRECOES_CATEGORIA[categoriaOriginal]) {
+        console.log(`🔧 Corrigindo categoria: ${categoriaOriginal} → ${CORRECOES_CATEGORIA[categoriaOriginal]}`);
+        resultado.categoria = CORRECOES_CATEGORIA[categoriaOriginal];
+      } else if (!CATEGORIAS_VALIDAS.includes(categoriaOriginal)) {
+        console.log(`⚠️ Categoria inválida detectada: ${categoriaOriginal} → OUTROS`);
+        resultado.categoria = 'OUTROS';
+      } else {
+        resultado.categoria = categoriaOriginal;
+      }
+      
+      // Reconstruir SKU com categoria corrigida
+      resultado.sku_global = `${resultado.categoria}-${resultado.nome_base.replace(/\s+/g, '_')}-${resultado.marca || 'GENERICO'}-${resultado.qtd_valor}${resultado.qtd_unidade}`;
+    }
     
     // 🥚 FORÇAR CORREÇÃO PARA PRODUTOS MULTI-UNIDADE
     if (embalagemInfo?.isMultiUnit) {
