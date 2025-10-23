@@ -1,19 +1,22 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, X, Loader2, ExternalLink } from "lucide-react";
-import { Browser } from "@capacitor/browser";
+import { InAppBrowser } from "@awesome-cordova-plugins/in-app-browser";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ReceiptViewerProps {
   url: string;
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
+  userId: string;
 }
 
-const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) => {
+const ReceiptViewer = ({ url, isOpen, onClose, onConfirm, userId }: ReceiptViewerProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [browserOpened, setBrowserOpened] = useState(false);
+  const [htmlCapturado, setHtmlCapturado] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -24,22 +27,62 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
 
   const openReceiptInBrowser = async () => {
     try {
-      // Abre a URL em navegador nativo fullscreen
-      await Browser.open({ 
-        url,
-        presentationStyle: 'fullscreen',
-        toolbarColor: '#ffffff'
+      console.log('🌐 Abrindo nota fiscal com InAppBrowser...');
+      
+      // Abre a URL com InAppBrowser (permite injetar scripts)
+      const browser = InAppBrowser.create(url, '_blank', {
+        location: 'yes',
+        clearcache: 'yes',
+        clearsessioncache: 'yes',
+        zoom: 'no',
+        hardwareback: 'yes',
+        mediaPlaybackRequiresUserAction: 'no',
+        shouldPauseOnSuspend: 'no',
+        closebuttoncaption: 'Fechar',
+        disallowoverscroll: 'no',
+        toolbar: 'yes',
+        enableViewportScale: 'no',
+        allowInlineMediaPlayback: 'no',
+        presentationstyle: 'fullscreen',
+        fullscreen: 'yes',
       });
       
       setBrowserOpened(true);
       
-      // Listener para quando o usuário fechar o browser diretamente
-      Browser.addListener('browserFinished', () => {
+      // Aguardar carregamento da página e capturar HTML
+      browser.on('loadstop').subscribe(() => {
+        console.log('📄 Página carregada! Executando script para capturar HTML...');
+        
+        browser.executeScript({
+          code: 'document.documentElement.outerHTML'
+        }).then((result: any) => {
+          if (result && result.length > 0) {
+            const html = result[0];
+            console.log(`✅ HTML capturado: ${html.length} caracteres`);
+            setHtmlCapturado(html);
+            
+            toast({
+              title: "Nota carregada!",
+              description: "HTML capturado com sucesso. Clique em OK quando terminar de revisar.",
+            });
+          }
+        }).catch((scriptError: any) => {
+          console.error('❌ Erro ao capturar HTML:', scriptError);
+          toast({
+            title: "Aviso",
+            description: "Não foi possível capturar automaticamente. Verifique a nota e clique em OK.",
+            variant: "default"
+          });
+        });
+      });
+      
+      browser.on('exit').subscribe(() => {
+        console.log('🔙 Browser fechado pelo usuário');
         handleBrowserClosed();
       });
       
     } catch (error) {
-      console.error('Erro ao abrir browser:', error);
+      console.error('❌ Erro ao abrir browser:', error);
       toast({
         title: "Erro ao abrir nota",
         description: "Não foi possível visualizar a nota fiscal",
@@ -55,16 +98,60 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm }: ReceiptViewerProps) 
   };
 
   const handleConfirm = async () => {
+    if (!htmlCapturado) {
+      toast({
+        title: "Erro",
+        description: "HTML da nota não foi capturado. Aguarde o carregamento ou tente novamente.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setIsProcessing(true);
-    await onConfirm();
-    setIsProcessing(false);
-    setBrowserOpened(false);
+    
+    try {
+      console.log('📤 Enviando HTML capturado para processamento...');
+      
+      // Enviar HTML capturado para edge function
+      const { data, error } = await supabase.functions.invoke('process-html-capturado', {
+        body: {
+          html: htmlCapturado,
+          userId: userId,
+          url: url
+        }
+      });
+      
+      if (error) throw error;
+      
+      console.log('✅ HTML enviado com sucesso:', data);
+      
+      toast({
+        title: "Processando nota",
+        description: "A nota fiscal está sendo extraída...",
+      });
+      
+      // Browser será fechado pelo usuário ou automaticamente
+      
+      // Chamar onConfirm original (atualizar lista)
+      await onConfirm();
+      
+    } catch (error) {
+      console.error('❌ Erro ao processar HTML:', error);
+      toast({
+        title: "Erro ao processar",
+        description: "Não foi possível processar a nota fiscal",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+      setBrowserOpened(false);
+    }
   };
 
-  const handleCancel = async () => {
-    // Fecha o browser antes de cancelar
-    await Browser.close();
+  const handleCancel = () => {
+    // InAppBrowser será fechado pelo usuário
     setBrowserOpened(false);
+    setHtmlCapturado(null);
     onClose();
   };
 

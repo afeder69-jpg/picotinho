@@ -3,7 +3,7 @@ import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import ReceiptViewer from "./ReceiptViewer";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
@@ -14,8 +14,17 @@ const BottomNavigation = () => {
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showReceiptViewer, setShowReceiptViewer] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id || null);
+    };
+    fetchUser();
+  }, []);
 
   const handleQRScanSuccess = (data: string) => {
     console.log("QR Code escaneado:", data);
@@ -172,12 +181,13 @@ const BottomNavigation = () => {
       )}
 
       {/* Receipt Viewer - Visualização do HTML da Receita Federal */}
-      {showReceiptViewer && (
+      {showReceiptViewer && currentUserId && (
         <ReceiptViewer
           url={receiptUrl}
           isOpen={showReceiptViewer}
           onClose={handleCancelReceipt}
           onConfirm={handleConfirmReceipt}
+          userId={currentUserId}
         />
       )}
     </>
