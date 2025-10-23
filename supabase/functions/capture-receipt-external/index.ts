@@ -91,20 +91,29 @@ async function convertHtmlToImage(html: string, url: string): Promise<string> {
       }
     }
     
-    // Fallback: criar uma imagem PNG válida com informações da nota
-    console.log('Usando fallback: criando imagem com dados da nota');
+    // ⚠️ TODAS as APIs de screenshot falharam
+    console.log('⚠️ TODAS as APIs de screenshot falharam!');
+    console.log('🔍 Validando HTML para dados de nota fiscal...');
     
-    // Extrair informações básicas do HTML
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const title = titleMatch ? titleMatch[1] : 'Nota Fiscal';
+    // 🔒 VALIDAÇÃO CRÍTICA: Verificar se HTML contém dados de nota fiscal válidos
+    const hasNotaFiscalData = html.includes('DANFE') || 
+                              html.includes('NF-e') || 
+                              html.includes('Nota Fiscal') ||
+                              html.includes('CNPJ') ||
+                              html.includes('Chave de Acesso');
     
-    // Criar uma imagem PNG simples mas válida
-    const canvas = {
-      width: 800,
-      height: 600
-    };
+    if (!hasNotaFiscalData) {
+      console.error('❌ HTML não contém dados de nota fiscal válidos');
+      console.error('📄 Amostra do HTML:', html.substring(0, 500));
+      throw new Error('Não foi possível capturar a nota fiscal. A página pode estar vazia ou inacessível. Por favor, tente novamente ou use o método de foto.');
+    }
     
-    // Criar um PNG válido com header correto
+    console.log('✅ HTML contém dados de nota fiscal válidos. Prosseguindo com fallback PNG...');
+    
+    // Fallback: criar uma imagem PNG válida (será substituída pelo HTML na extração)
+    console.log('Criando imagem PNG de fallback (extração usará HTML)...');
+    
+    // Criar um PNG válido mínimo
     const createValidPNG = () => {
       // PNG signature + IHDR chunk para 800x600 RGB
       const pngData = new Uint8Array([
@@ -124,7 +133,7 @@ async function convertHtmlToImage(html: string, url: string): Promise<string> {
     };
     
     const base64 = createValidPNG();
-    console.log('Imagem PNG válida criada como fallback');
+    console.log('✅ PNG de fallback criado (extração usará html_capturado)');
     return `data:image/png;base64,${base64}`;
     
   } catch (error) {
@@ -230,7 +239,7 @@ serve(async (req) => {
         imagem_path: path,
         processada: false,
         dados_extraidos: {
-          html_capturado: html.substring(0, 10000), // Primeiros 10k caracteres
+          html_capturado: html.substring(0, 50000), // Primeiros 50k caracteres (aumentado de 10k)
           url_original: receiptUrl,
           metodo_captura: 'external_browser',
           timestamp: new Date().toISOString()

@@ -237,11 +237,21 @@ Retorne APENAS o JSON estruturado conforme especificado, sem explicações.`
 
     console.log(`✅ Extraídos ${dadosExtraidos.itens.length} itens com categorização`);
 
-    // Salvar dados extraídos na nota
+    // 🔧 CORREÇÃO: Mesclar dados_extraidos preservando html_capturado e metadados
+    const dadosExistentes = nota.dados_extraidos || {};
+    
+    const dadosCompletos = {
+      ...dadosExistentes,              // Preserva html_capturado, url_original, metodo_captura
+      ...dadosExtraidos,                // Adiciona estabelecimento, compra, itens extraídos
+      timestamp_extracao: new Date().toISOString(),
+      metodo_extracao: useHtmlFallback ? 'html_capturado' : 'imagem'
+    };
+
+    // Salvar dados extraídos MESCLADOS (não sobrescrever)
     const { error: updateError } = await supabase
       .from("notas_imagens")
       .update({ 
-        dados_extraidos: dadosExtraidos,
+        dados_extraidos: dadosCompletos,  // ✅ MESCLADO em vez de sobrescrito
         debug_texto: 'EXTRAÇÃO_IMAGEM_CONCLUÍDA'
       })
       .eq("id", finalNotaId);
