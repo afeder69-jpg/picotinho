@@ -165,6 +165,9 @@ const BottomNavigation = () => {
   };
 
   const handleQRButtonClick = () => {
+    console.log('🔘 Botão QR Code clicado');
+    console.log('📱 Plataforma:', Capacitor.getPlatform());
+    console.log('🏠 Nativo?', Capacitor.isNativePlatform());
     setShowQRScanner(true);
   };
 

@@ -48,9 +48,57 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
         return;
       }
 
+      // Verificar se módulo ML Kit está disponível (apenas Android)
+      if (Capacitor.getPlatform() === 'android') {
+        console.log('🔍 Verificando disponibilidade do módulo ML Kit...');
+        
+        const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
+        
+        if (!available) {
+          console.log('📥 Módulo ML Kit não disponível. Instalando...');
+          
+          toast({
+            title: "Preparando Scanner",
+            description: "Baixando componentes necessários pela primeira vez...",
+            duration: 10000,
+          });
+          
+          // Listener para progresso de instalação
+          const listener = await BarcodeScanner.addListener(
+            'googleBarcodeScannerModuleInstallProgress',
+            (event) => {
+              console.log(`📊 Progresso da instalação: ${JSON.stringify(event)}`);
+              
+              if (event.progress >= 100) {
+                console.log('✅ Módulo ML Kit instalado com sucesso!');
+                toast({
+                  title: "Scanner Pronto!",
+                  description: "Componentes instalados. Iniciando scanner...",
+                });
+              }
+            }
+          );
+          
+          // Iniciar instalação
+          await BarcodeScanner.installGoogleBarcodeScannerModule();
+          
+          // Aguardar alguns segundos para garantir que a instalação foi concluída
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Remover listener
+          await listener.remove();
+        } else {
+          console.log('✅ Módulo ML Kit já disponível!');
+        }
+      }
+
       document.body.classList.add('scanner-active');
-      
       setIsScanning(true);
+
+      toast({
+        title: "Scanner Ativo",
+        description: "Aponte para o QR Code da nota fiscal",
+      });
 
       // Timeout de segurança de 30 segundos
       const scanTimeout = setTimeout(async () => {
@@ -82,13 +130,23 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
       await stopScan();
       
     } catch (error) {
-      console.error('Erro ao escanear:', error);
+      console.error('❌ Erro ao escanear:', error);
       
-      toast({
-        title: "Erro no scanner",
-        description: "Não foi possível iniciar o scanner. Tente novamente.",
-        variant: "destructive"
-      });
+      // Verificar se é erro de módulo não instalado
+      if (error.message?.includes('module') || error.message?.includes('DEPENDENCIES')) {
+        toast({
+          title: "Erro: Módulo não instalado",
+          description: "Reinstale o aplicativo ou verifique sua conexão com internet.",
+          variant: "destructive",
+          duration: 8000,
+        });
+      } else {
+        toast({
+          title: "Erro no scanner",
+          description: "Não foi possível iniciar o scanner. Tente novamente.",
+          variant: "destructive"
+        });
+      }
       
       await stopScan();
     }
