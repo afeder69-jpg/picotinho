@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- SDK Version -->
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" tools:overrideLibrary="com.capacitorjs.barcodescanner" />
+    
     <!-- Permissions -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
