@@ -145,10 +145,11 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm, userId }: ReceiptViewe
         description: "A nota fiscal está sendo extraída...",
       });
       
-      // Browser será fechado pelo usuário ou automaticamente
-      
-      // Chamar onConfirm original (atualizar lista)
+      // Chamar onConfirm original (fechar viewer e navegar)
       await onConfirm();
+      
+      // Fechar viewer após confirmação
+      onClose();
       
     } catch (error) {
       console.error('❌ Erro ao processar HTML:', error);

@@ -49,65 +49,26 @@ const BottomNavigation = () => {
   };
 
   const handleConfirmReceipt = async () => {
+    console.log('✅ Nota confirmada pelo usuário no BottomNavigation');
+    
+    // Fechar viewer e navegar para página de notas
+    setShowReceiptViewer(false);
+    setReceiptUrl("");
+    
     toast({
-      title: "Capturando nota fiscal",
-      description: "Salvando imagem da nota...",
+      title: "Processando nota",
+      description: "A nota está sendo extraída. Aguarde...",
     });
     
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast({
-          title: "Erro de autenticação",
-          description: "Você precisa estar logado para processar notas.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Capturar e salvar nota
-      const { data: result, error } = await supabase.functions.invoke('capture-receipt-external', {
-        body: {
-          receiptUrl: receiptUrl,
-          userId: user.id
-        }
-      });
-      
-      if (error) {
-        console.error("Erro ao capturar nota:", error);
-        toast({
-          title: "Erro ao capturar nota",
-          description: "Não foi possível capturar a nota fiscal. Tente novamente.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      toast({
-        title: "✅ Nota capturada!",
-        description: "Nota salva com sucesso. Processando dados...",
-      });
-      
-      setShowReceiptViewer(false);
-      
-      // Navegar para página de notas com destaque
-      navigate(`/screenshots?highlight=${result.notaImagemId}`);
-      
-    } catch (error) {
-      console.error("Erro ao processar nota:", error);
-      toast({
-        title: "Erro no processamento",
-        description: "Ocorreu um erro ao capturar a nota.",
-        variant: "destructive",
-      });
-    }
+    // Navegar para página de notas
+    navigate('/screenshots');
   };
 
   const handleCancelReceipt = () => {
+    console.log('❌ Nota cancelada pelo usuário');
     setShowReceiptViewer(false);
     setReceiptUrl("");
-    navigate('/');
+    // Não navegar automaticamente - deixar usuário na página atual
   };
 
   const handleQRButtonClick = () => {
