@@ -4,9 +4,6 @@ const config: CapacitorConfig = {
   appId: 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34',
   appName: 'Picotinho',
   webDir: 'dist',
-  server: {
-    androidScheme: 'https'
-  },
   plugins: {
     Camera: {
       permissions: ['camera']
@@ -27,7 +24,7 @@ const config: CapacitorConfig = {
     }
   },
   android: {
-    webContentsDebuggingEnabled: false,
+    webContentsDebuggingEnabled: true,
     allowMixedContent: false,
     overrideUserAgent: 'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     backgroundColor: '#ffffff',
