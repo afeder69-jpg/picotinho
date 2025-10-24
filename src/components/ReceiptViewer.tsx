@@ -78,7 +78,14 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm, userId }: ReceiptViewe
       
       browser.on('exit').subscribe(() => {
         console.log('🔙 Browser fechado pelo usuário');
-        handleBrowserClosed();
+        setBrowserOpened(false);
+        
+        toast({
+          title: "Volte para o app",
+          description: htmlCapturado 
+            ? "✅ Nota capturada! Clique em 'OK - Confirmar'."
+            : "⚠️ Aguardando captura. Clique em OK quando pronto.",
+        });
       });
       
     } catch (error) {
@@ -98,7 +105,15 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm, userId }: ReceiptViewe
   };
 
   const handleConfirm = async () => {
+    console.log('🟢 handleConfirm CHAMADO!', {
+      htmlCapturado: !!htmlCapturado,
+      htmlLength: htmlCapturado?.length,
+      userId,
+      url
+    });
+    
     if (!htmlCapturado) {
+      console.error('❌ HTML não capturado ainda!');
       toast({
         title: "Erro",
         description: "HTML da nota não foi capturado. Aguarde o carregamento ou tente novamente.",

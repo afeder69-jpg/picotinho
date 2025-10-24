@@ -51,7 +51,7 @@ serve(async (req) => {
       .from('notas_imagens')
       .insert({
         id: notaId,
-        user_id: userId,
+        usuario_id: userId,
         imagem_url: url || 'inappbrowser_capture',
         processada: false,
         dados_extraidos: {
