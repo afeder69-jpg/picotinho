@@ -24,27 +24,9 @@ const BottomNavigation = () => {
     fetchUser();
   }, []);
 
-  const handleQRScanSuccess = async (data: string) => {
-    console.log("QR Code escaneado:", data);
-    
-    // Validar se é uma URL de nota fiscal válida
-    const urlPattern = /^https?:\/\/.+/i;
-    
-    if (!urlPattern.test(data)) {
-      toast({
-        title: "QR Code inválido",
-        description: "Este não parece ser um QR Code de nota fiscal válido.",
-        variant: "destructive",
-      });
-      setShowQRScanner(false);
-      return;
-    }
-    
-    setShowQRScanner(false);
-    
-    // Abrir InAppBrowser DIRETAMENTE (sem ReceiptViewer intermediário)
+  const handleNativeFlow = async (data: string) => {
     try {
-      console.log('🌐 Abrindo nota fiscal com InAppBrowser...');
+      console.log('🌐 [NATIVO] Abrindo InAppBrowser...');
       
       const browser = InAppBrowser.create(data, '_blank', {
         location: 'yes',
@@ -60,39 +42,35 @@ const BottomNavigation = () => {
       
       let htmlCapturado: string | null = null;
       
-      // Capturar HTML quando página carregar
       browser.on('loadstop').subscribe(() => {
-        console.log('📄 Página carregada! Executando script para capturar HTML...');
+        console.log('📄 [NATIVO] Página carregada! Capturando HTML...');
         
         browser.executeScript({
           code: 'document.documentElement.outerHTML'
         }).then((result: any) => {
           if (result && result.length > 0) {
             htmlCapturado = result[0];
-            console.log(`✅ HTML capturado: ${htmlCapturado.length} caracteres`);
+            console.log(`✅ [NATIVO] HTML capturado: ${htmlCapturado.length} caracteres`);
           }
         }).catch((error: any) => {
-          console.error('❌ Erro ao capturar HTML:', error);
+          console.error('❌ [NATIVO] Erro ao capturar HTML:', error);
         });
       });
       
-      // Quando usuário fechar browser, processar automaticamente
       browser.on('exit').subscribe(async () => {
-        console.log('🔙 Browser fechado pelo usuário');
+        console.log('🔙 [NATIVO] Browser fechado pelo usuário');
         
         if (!htmlCapturado) {
           toast({
-            title: "Aviso",
+            title: "Erro",
             description: "HTML não foi capturado. Tente novamente.",
             variant: "destructive"
           });
           return;
         }
         
-        // Navegar IMEDIATAMENTE para tela de notas
         navigate('/screenshots');
         
-        // Processar nota em background
         toast({
           title: "Processando nota",
           description: "A nota está sendo extraída...",
@@ -109,7 +87,7 @@ const BottomNavigation = () => {
           
           if (error) throw error;
           
-          console.log('✅ Nota processada com sucesso:', processData);
+          console.log('✅ [NATIVO] Nota processada com sucesso:', processData);
           
           toast({
             title: "✅ Nota salva!",
@@ -117,7 +95,7 @@ const BottomNavigation = () => {
           });
           
         } catch (error) {
-          console.error('❌ Erro ao processar nota:', error);
+          console.error('❌ [NATIVO] Erro ao processar nota:', error);
           toast({
             title: "Erro ao processar",
             description: "Não foi possível processar a nota fiscal",
@@ -127,12 +105,62 @@ const BottomNavigation = () => {
       });
       
     } catch (error) {
-      console.error('❌ Erro ao abrir browser:', error);
+      console.error('❌ [NATIVO] Erro ao abrir browser:', error);
       toast({
         title: "Erro ao abrir nota",
         description: "Não foi possível visualizar a nota fiscal",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleWebFlow = async (url: string) => {
+    console.log('🌐 [WEB] Modo navegador detectado - funcionalidade limitada');
+    
+    toast({
+      title: "⚠️ Modo de Teste (Web)",
+      description: "O InAppBrowser só funciona completamente no APK Android. Abrindo nota em nova aba para visualização...",
+      duration: 6000,
+    });
+    
+    window.open(url, '_blank');
+    
+    setTimeout(() => {
+      console.log('🔄 [WEB] Simulando retorno do navegador...');
+      navigate('/screenshots');
+      
+      toast({
+        title: "💡 Teste em modo web",
+        description: "Para captura automática de notas, compile e teste no APK Android. No navegador, este fluxo é apenas demonstrativo.",
+        duration: 8000,
+      });
+    }, 4000);
+  };
+
+  const handleQRScanSuccess = async (data: string) => {
+    console.log("QR Code escaneado:", data);
+    
+    const urlPattern = /^https?:\/\/.+/i;
+    
+    if (!urlPattern.test(data)) {
+      toast({
+        title: "QR Code inválido",
+        description: "Este não parece ser um QR Code de nota fiscal válido.",
+        variant: "destructive",
+      });
+      setShowQRScanner(false);
+      return;
+    }
+    
+    setShowQRScanner(false);
+    
+    const isNative = Capacitor.isNativePlatform();
+    console.log(`🔍 Plataforma detectada: ${isNative ? 'NATIVA (Android/iOS)' : 'WEB (navegador)'}`);
+    
+    if (isNative) {
+      handleNativeFlow(data);
+    } else {
+      handleWebFlow(data);
     }
   };
 
