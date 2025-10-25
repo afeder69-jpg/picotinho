@@ -1,29 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
+import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
+import ReceiptViewer from "./ReceiptViewer";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Browser } from "@capacitor/browser";
-import { App } from "@capacitor/app";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [showConfirmOpenDialog, setShowConfirmOpenDialog] = useState(false);
+  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -37,121 +27,15 @@ const BottomNavigation = () => {
     fetchUser();
   }, []);
 
-  // Listener para quando o usuário volta do navegador (visibilitychange)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👀 [VISIBILITY] App ficou visível novamente');
-        
-        const pendingUrl = localStorage.getItem('pending_nota_url');
-        const timestamp = localStorage.getItem('pending_nota_timestamp');
-        
-        if (pendingUrl && timestamp) {
-          // Verificar se não passou muito tempo (5 minutos)
-          const elapsed = Date.now() - parseInt(timestamp);
-          const FIVE_MINUTES = 5 * 60 * 1000;
-          
-          if (elapsed < FIVE_MINUTES) {
-            console.log('✅ [VISIBILITY] URL pendente válida, processando automaticamente');
-            
-            // Limpar localStorage ANTES de processar
-            localStorage.removeItem('pending_nota_url');
-            localStorage.removeItem('pending_nota_timestamp');
-            
-            // Processar automaticamente
-            processNotaUrl(pendingUrl);
-          } else {
-            console.log('⏰ [VISIBILITY] URL pendente expirada (>5min), ignorando');
-            localStorage.removeItem('pending_nota_url');
-            localStorage.removeItem('pending_nota_timestamp');
-          }
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [currentUserId]);
-
-  const processNotaUrl = async (url: string) => {
-    if (!currentUserId) {
-      toast({
-        title: "Erro",
-        description: "Usuário não identificado",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    console.log('🔄 [PROCESSAR] Processando nota automaticamente:', url);
-    
+  const handleReceiptConfirm = async () => {
+    console.log('✅ [RECEIPT VIEWER] Nota confirmada, navegando para screenshots');
     navigate('/screenshots');
-    
-    toast({
-      title: "🔄 Processando nota",
-      description: "Aguarde enquanto extraímos os dados...",
-    });
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('process-url-nota', {
-        body: { url, userId: currentUserId }
-      });
-      
-      if (error) throw error;
-      
-      console.log('✅ [PROCESSAR] Sucesso:', data);
-      
-      toast({
-        title: "✅ Nota processada!",
-        description: "A nota fiscal foi capturada com sucesso",
-      });
-      
-    } catch (error) {
-      console.error('❌ [PROCESSAR] Erro:', error);
-      toast({
-        title: "Erro ao processar",
-        description: "Não foi possível processar a nota. Tente novamente.",
-        variant: "destructive"
-      });
-    }
   };
 
-  const handleConfirmOpen = async () => {
-    if (!pendingQrUrl) return;
-    
-    setShowConfirmOpenDialog(false);
-    
-    try {
-      console.log('🌐 [NATIVO] Abrindo nota no navegador padrão...');
-      
-      // Salvar URL e timestamp no localStorage
-      localStorage.setItem('pending_nota_url', pendingQrUrl);
-      localStorage.setItem('pending_nota_timestamp', Date.now().toString());
-      console.log('💾 [NATIVO] URL salva no localStorage');
-      
-      // Abrir no navegador nativo do Android
-      await Browser.open({ url: pendingQrUrl });
-      
-      // Limpar estado
-      setPendingQrUrl(null);
-      
-      toast({
-        title: "📄 Nota fiscal aberta",
-        description: "Quando terminar de visualizar, pressione 'Voltar' que processaremos automaticamente",
-        duration: 6000,
-      });
-      
-    } catch (error) {
-      console.error('❌ [NATIVO] Erro ao abrir navegador:', error);
-      toast({
-        title: "Erro ao abrir nota",
-        description: "Não foi possível abrir o navegador",
-        variant: "destructive"
-      });
-    }
+  const handleReceiptClose = () => {
+    console.log('❌ [RECEIPT VIEWER] Viewer fechado');
+    setShowReceiptViewer(false);
+    setPendingQrUrl(null);
   };
 
   const handleWebFlow = async (url: string) => {
@@ -198,9 +82,14 @@ const BottomNavigation = () => {
     console.log(`🔍 Plataforma detectada: ${isNative ? 'NATIVA (Android/iOS)' : 'WEB (navegador)'}`);
     
     if (isNative) {
-      // Salvar URL e mostrar dialog ANTES de abrir
+      // Abrir ReceiptViewer com InAppBrowser
       setPendingQrUrl(data);
-      setShowConfirmOpenDialog(true);
+      setShowReceiptViewer(true);
+      
+      toast({
+        title: "📄 Abrindo nota fiscal",
+        description: "Aguarde o carregamento da página...",
+      });
     } else {
       handleWebFlow(data);
     }
@@ -271,37 +160,31 @@ const BottomNavigation = () => {
         </div>
       )}
 
-      {/* QR Code Scanner */}
+      {/* QR Code Scanner - Nativo ou Web dependendo da plataforma */}
       {showQRScanner && (
-        <QRCodeScannerWeb
-          onScanSuccess={handleQRScanSuccess}
-          onClose={() => setShowQRScanner(false)}
-        />
+        Capacitor.isNativePlatform() ? (
+          <QRCodeScanner
+            onScanSuccess={handleQRScanSuccess}
+            onClose={() => setShowQRScanner(false)}
+          />
+        ) : (
+          <QRCodeScannerWeb
+            onScanSuccess={handleQRScanSuccess}
+            onClose={() => setShowQRScanner(false)}
+          />
+        )
       )}
 
-      {/* Dialog de Confirmação ANTES de abrir o navegador */}
-      <AlertDialog open={showConfirmOpenDialog} onOpenChange={setShowConfirmOpenDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>🔍 Abrir nota e processar?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Vamos abrir a nota fiscal no navegador para você visualizar. 
-              Quando você voltar para o app, processaremos automaticamente!
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setShowConfirmOpenDialog(false);
-              setPendingQrUrl(null);
-            }}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmOpen}>
-              Sim, abrir e processar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Receipt Viewer com InAppBrowser */}
+      {showReceiptViewer && pendingQrUrl && currentUserId && (
+        <ReceiptViewer
+          url={pendingQrUrl}
+          isOpen={showReceiptViewer}
+          onClose={handleReceiptClose}
+          onConfirm={handleReceiptConfirm}
+          userId={currentUserId}
+        />
+      )}
     </>
   );
 };
