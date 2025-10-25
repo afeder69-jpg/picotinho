@@ -41,26 +41,27 @@ const BottomNavigation = () => {
       });
       
       let htmlCapturado: string | null = null;
+      let processado = false;
+      let timerId: NodeJS.Timeout | null = null;
       
-      browser.on('loadstop').subscribe(() => {
-        console.log('📄 [NATIVO] Página carregada! Capturando HTML...');
+      // Função para processar a nota capturada
+      const processarNota = async () => {
+        if (processado) {
+          console.log('⚠️ [NATIVO] Processamento já foi executado, ignorando...');
+          return;
+        }
         
-        browser.executeScript({
-          code: 'document.documentElement.outerHTML'
-        }).then((result: any) => {
-          if (result && result.length > 0) {
-            htmlCapturado = result[0];
-            console.log(`✅ [NATIVO] HTML capturado: ${htmlCapturado.length} caracteres`);
-          }
-        }).catch((error: any) => {
-          console.error('❌ [NATIVO] Erro ao capturar HTML:', error);
-        });
-      });
-      
-      browser.on('exit').subscribe(async () => {
-        console.log('🔙 [NATIVO] Browser fechado pelo usuário');
+        processado = true;
+        console.log('🔄 [NATIVO] Iniciando processamento da nota...');
+        
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = null;
+          console.log('⏱️ [NATIVO] Timer cancelado (processamento manual)');
+        }
         
         if (!htmlCapturado) {
+          console.error('❌ [NATIVO] HTML não foi capturado');
           toast({
             title: "Erro",
             description: "HTML não foi capturado. Tente novamente.",
@@ -69,10 +70,11 @@ const BottomNavigation = () => {
           return;
         }
         
+        console.log(`📦 [NATIVO] Processando HTML capturado (${htmlCapturado.length} caracteres)`);
         navigate('/screenshots');
         
         toast({
-          title: "Processando nota",
+          title: "🔄 Processando nota",
           description: "A nota está sendo extraída...",
         });
         
@@ -102,6 +104,59 @@ const BottomNavigation = () => {
             variant: "destructive"
           });
         }
+      };
+      
+      browser.on('loadstop').subscribe(() => {
+        console.log('📄 [NATIVO] Página carregada! Capturando HTML...');
+        
+        browser.executeScript({
+          code: 'document.documentElement.outerHTML'
+        }).then((result: any) => {
+          if (result && result.length > 0) {
+            htmlCapturado = result[0];
+            console.log(`✅ [NATIVO] HTML capturado: ${htmlCapturado.length} caracteres`);
+            
+            // Mostrar feedback visual
+            toast({
+              title: "✅ Nota capturada!",
+              description: "Você pode fechar o navegador agora ou aguardar 5 segundos...",
+              duration: 5000,
+            });
+            
+            // Iniciar timer de 5 segundos
+            console.log('⏱️ [NATIVO] Iniciando timer de 5 segundos...');
+            timerId = setTimeout(async () => {
+              console.log('⏰ [NATIVO] Timer de 5 segundos disparou! Processando automaticamente...');
+              
+              // Fechar o browser automaticamente
+              try {
+                browser.close();
+                console.log('🚪 [NATIVO] Browser fechado automaticamente');
+              } catch (e) {
+                console.error('❌ [NATIVO] Erro ao fechar browser:', e);
+              }
+              
+              // Processar a nota
+              await processarNota();
+            }, 5000);
+          } else {
+            console.error('❌ [NATIVO] Resultado vazio ao capturar HTML');
+          }
+        }).catch((error: any) => {
+          console.error('❌ [NATIVO] Erro ao capturar HTML:', error);
+          toast({
+            title: "Erro",
+            description: "Não foi possível capturar o HTML da nota",
+            variant: "destructive"
+          });
+        });
+      });
+      
+      browser.on('exit').subscribe(async () => {
+        console.log('🔙 [NATIVO] Browser fechado pelo usuário (evento exit)');
+        
+        // Processar imediatamente se o usuário fechar antes dos 5 segundos
+        await processarNota();
       });
       
     } catch (error) {
