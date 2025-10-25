@@ -53,7 +53,8 @@ npx cap sync android
 Write-Host "  ✓ Capacitor sync concluído" -ForegroundColor Gray
 
 # Verificar se index.html foi copiado
-if (Test-Path "android\app\src\main\assets\public\index.html") {
+$indexPath = "android\app\src\main\assets\public\index.html"
+if (Test-Path $indexPath) {
     Write-Host "  ✓ index.html encontrado em assets" -ForegroundColor Gray
 } else {
     Write-Host "  ⚠️  AVISO: index.html não encontrado em assets!" -ForegroundColor Red
