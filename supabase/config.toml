@@ -11,6 +11,9 @@ verify_jwt = true
 [functions.buscar-imagens-produtos]
 verify_jwt = false
 
+[functions.process-url-nota]
+verify_jwt = false
+
 [functions.consolidar-masters-duplicados]
 verify_jwt = false
 

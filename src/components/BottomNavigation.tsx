@@ -5,13 +5,25 @@ import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+import { App } from "@capacitor/app";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { InAppBrowser } from "@awesome-cordova-plugins/in-app-browser";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showProcessDialog, setShowProcessDialog] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,149 +36,126 @@ const BottomNavigation = () => {
     fetchUser();
   }, []);
 
-  const handleNativeFlow = async (data: string) => {
-    try {
-      console.log('🌐 [NATIVO] Abrindo InAppBrowser...');
-      
-      const browser = InAppBrowser.create(data, '_blank', {
-        location: 'yes',
-        clearcache: 'yes',
-        clearsessioncache: 'yes',
-        zoom: 'no',
-        hardwareback: 'yes',
-        closebuttoncaption: 'Fechar',
-        toolbar: 'yes',
-        presentationstyle: 'fullscreen',
-        fullscreen: 'yes',
-      });
-      
-      let htmlCapturado: string | null = null;
-      let processado = false;
-      let timerId: NodeJS.Timeout | null = null;
-      
-      // Função para processar a nota capturada
-      const processarNota = async () => {
-        if (processado) {
-          console.log('⚠️ [NATIVO] Processamento já foi executado, ignorando...');
-          return;
-        }
-        
-        processado = true;
-        console.log('🔄 [NATIVO] Iniciando processamento da nota...');
-        
-        if (timerId) {
-          clearTimeout(timerId);
-          timerId = null;
-          console.log('⏱️ [NATIVO] Timer cancelado (processamento manual)');
-        }
-        
-        if (!htmlCapturado) {
-          console.error('❌ [NATIVO] HTML não foi capturado');
-          toast({
-            title: "Erro",
-            description: "HTML não foi capturado. Tente novamente.",
-            variant: "destructive"
-          });
-          return;
-        }
-        
-        console.log(`📦 [NATIVO] Processando HTML capturado (${htmlCapturado.length} caracteres)`);
-        navigate('/screenshots');
-        
-        toast({
-          title: "🔄 Processando nota",
-          description: "A nota está sendo extraída...",
-        });
-        
-        try {
-          const { data: processData, error } = await supabase.functions.invoke('process-html-capturado', {
-            body: {
-              html: htmlCapturado,
-              userId: currentUserId,
-              url: data
-            }
-          });
+  // Listener para quando o app volta ao foco (usuário volta do navegador)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let listenerHandle: any;
+
+    const setupListener = async () => {
+      listenerHandle = await App.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          console.log('📱 [APP] App voltou ao foco');
           
-          if (error) throw error;
-          
-          console.log('✅ [NATIVO] Nota processada com sucesso:', processData);
-          
-          toast({
-            title: "✅ Nota salva!",
-            description: "Nota fiscal capturada e salva com sucesso.",
-          });
-          
-        } catch (error) {
-          console.error('❌ [NATIVO] Erro ao processar nota:', error);
-          toast({
-            title: "Erro ao processar",
-            description: "Não foi possível processar a nota fiscal",
-            variant: "destructive"
-          });
-        }
-      };
-      
-      browser.on('loadstop').subscribe(() => {
-        console.log('📄 [NATIVO] Página carregada! Capturando HTML...');
-        
-        browser.executeScript({
-          code: 'document.documentElement.outerHTML'
-        }).then((result: any) => {
-          if (result && result.length > 0) {
-            htmlCapturado = result[0];
-            console.log(`✅ [NATIVO] HTML capturado: ${htmlCapturado.length} caracteres`);
-            
-            // Mostrar feedback visual
-            toast({
-              title: "✅ Nota capturada!",
-              description: "Você pode fechar o navegador agora ou aguardar 5 segundos...",
-              duration: 5000,
-            });
-            
-            // Iniciar timer de 5 segundos
-            console.log('⏱️ [NATIVO] Iniciando timer de 5 segundos...');
-            timerId = setTimeout(async () => {
-              console.log('⏰ [NATIVO] Timer de 5 segundos disparou! Processando automaticamente...');
-              
-              // Fechar o browser automaticamente
-              try {
-                browser.close();
-                console.log('🚪 [NATIVO] Browser fechado automaticamente');
-              } catch (e) {
-                console.error('❌ [NATIVO] Erro ao fechar browser:', e);
-              }
-              
-              // Processar a nota
-              await processarNota();
-            }, 5000);
-          } else {
-            console.error('❌ [NATIVO] Resultado vazio ao capturar HTML');
+          // Verificar se há URL pendente para processar
+          const pendingUrl = localStorage.getItem('pending_nota_url');
+          if (pendingUrl) {
+            console.log('🔔 [APP] URL pendente encontrada:', pendingUrl);
+            setShowProcessDialog(true);
           }
-        }).catch((error: any) => {
-          console.error('❌ [NATIVO] Erro ao capturar HTML:', error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível capturar o HTML da nota",
-            variant: "destructive"
-          });
-        });
+        }
       });
+    };
+
+    setupListener();
+
+    return () => {
+      if (listenerHandle) {
+        listenerHandle.remove();
+      }
+    };
+  }, []);
+
+  const handleNativeFlow = async (url: string) => {
+    try {
+      console.log('🌐 [NATIVO] Abrindo nota no navegador padrão...');
       
-      browser.on('exit').subscribe(async () => {
-        console.log('🔙 [NATIVO] Browser fechado pelo usuário (evento exit)');
-        
-        // Processar imediatamente se o usuário fechar antes dos 5 segundos
-        await processarNota();
+      // Salvar URL no localStorage para processar depois
+      localStorage.setItem('pending_nota_url', url);
+      console.log('💾 [NATIVO] URL salva no localStorage');
+      
+      // Abrir no navegador nativo do Android
+      await Browser.open({ url });
+      
+      toast({
+        title: "📄 Nota fiscal aberta",
+        description: "Visualize a nota e pressione 'Voltar' quando terminar",
+        duration: 5000,
       });
       
     } catch (error) {
-      console.error('❌ [NATIVO] Erro ao abrir browser:', error);
+      console.error('❌ [NATIVO] Erro ao abrir navegador:', error);
       toast({
         title: "Erro ao abrir nota",
-        description: "Não foi possível visualizar a nota fiscal",
+        description: "Não foi possível abrir o navegador",
         variant: "destructive"
       });
     }
+  };
+
+  const handleProcessConfirm = async () => {
+    const pendingUrl = localStorage.getItem('pending_nota_url');
+    
+    if (!pendingUrl || !currentUserId) {
+      toast({
+        title: "Erro",
+        description: "Nenhuma nota para processar",
+        variant: "destructive"
+      });
+      setShowProcessDialog(false);
+      return;
+    }
+
+    console.log('🔄 [PROCESSAR] Iniciando processamento da nota:', pendingUrl);
+    
+    // Fechar dialog e limpar localStorage
+    setShowProcessDialog(false);
+    localStorage.removeItem('pending_nota_url');
+    
+    // Navegar para screenshots
+    navigate('/screenshots');
+    
+    toast({
+      title: "🔄 Processando nota",
+      description: "A nota está sendo extraída...",
+    });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('process-url-nota', {
+        body: {
+          url: pendingUrl,
+          userId: currentUserId
+        }
+      });
+
+      if (error) throw error;
+
+      console.log('✅ [PROCESSAR] Nota processada com sucesso:', data);
+
+      toast({
+        title: "✅ Nota processada!",
+        description: "A nota fiscal foi capturada e salva com sucesso",
+      });
+
+    } catch (error) {
+      console.error('❌ [PROCESSAR] Erro ao processar nota:', error);
+      toast({
+        title: "Erro ao processar",
+        description: "Não foi possível processar a nota fiscal. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleProcessCancel = () => {
+    console.log('❌ [PROCESSAR] Usuário cancelou o processamento');
+    localStorage.removeItem('pending_nota_url');
+    setShowProcessDialog(false);
+    
+    toast({
+      title: "Cancelado",
+      description: "A nota não foi processada",
+    });
   };
 
   const handleWebFlow = async (url: string) => {
@@ -291,6 +280,26 @@ const BottomNavigation = () => {
           onClose={() => setShowQRScanner(false)}
         />
       )}
+
+      {/* Dialog de Confirmação para Processar Nota */}
+      <AlertDialog open={showProcessDialog} onOpenChange={setShowProcessDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>📄 Processar nota fiscal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A nota foi visualizada no navegador. Deseja processar e salvar esta nota agora?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleProcessCancel}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleProcessConfirm}>
+              Sim, processar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
