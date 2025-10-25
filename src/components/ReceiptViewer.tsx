@@ -51,40 +51,70 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm, userId }: ReceiptViewe
       
       // Aguardar carregamento da página e capturar HTML
       browser.on('loadstop').subscribe(() => {
-        console.log('📄 Página carregada! Executando script para capturar HTML...');
+        console.log('📄 [LOADSTOP] Página carregada! Timestamp:', new Date().toISOString());
+        console.log('🔧 [SCRIPT] Executando script para capturar HTML...');
         
         browser.executeScript({
           code: 'document.documentElement.outerHTML'
         }).then((result: any) => {
+          console.log('📦 [SCRIPT RESULT] Resultado do executeScript:', {
+            resultExists: !!result,
+            resultLength: result?.length,
+            resultType: typeof result,
+            timestamp: new Date().toISOString()
+          });
+          
           if (result && result.length > 0) {
             const html = result[0];
-            console.log(`✅ HTML capturado: ${html.length} caracteres`);
+            console.log('✅ [HTML CAPTURADO] Sucesso!', {
+              htmlLength: html.length,
+              htmlPreview: html.substring(0, 200),
+              containsNFCe: html.includes('NFCe') || html.includes('Nota Fiscal'),
+              containsDanfe: html.includes('DANFE') || html.includes('NF-e'),
+              timestamp: new Date().toISOString()
+            });
             setHtmlCapturado(html);
             
             toast({
               title: "Nota carregada!",
-              description: "HTML capturado com sucesso. Clique em OK quando terminar de revisar.",
+              description: `HTML capturado: ${html.length} caracteres`,
+            });
+          } else {
+            console.error('❌ [HTML VAZIO] Script retornou vazio ou null:', result);
+            toast({
+              title: "Aviso",
+              description: "HTML não capturado. Verifique a nota e tente novamente.",
+              variant: "default"
             });
           }
         }).catch((scriptError: any) => {
-          console.error('❌ Erro ao capturar HTML:', scriptError);
+          console.error('❌ [SCRIPT ERROR] Erro ao executar script:', {
+            error: scriptError,
+            errorMessage: scriptError?.message,
+            errorStack: scriptError?.stack,
+            timestamp: new Date().toISOString()
+          });
           toast({
-            title: "Aviso",
-            description: "Não foi possível capturar automaticamente. Verifique a nota e clique em OK.",
-            variant: "default"
+            title: "Erro na captura",
+            description: "Não foi possível capturar HTML automaticamente.",
+            variant: "destructive"
           });
         });
       });
       
       browser.on('exit').subscribe(() => {
-        console.log('🔙 Browser fechado pelo usuário');
+        console.log('🔙 [EXIT] Browser fechado pelo usuário', {
+          htmlCapturado: !!htmlCapturado,
+          htmlLength: htmlCapturado?.length,
+          timestamp: new Date().toISOString()
+        });
         setBrowserOpened(false);
         
         toast({
           title: "Volte para o app",
           description: htmlCapturado 
-            ? "✅ Nota capturada! Clique em 'OK - Confirmar'."
-            : "⚠️ Aguardando captura. Clique em OK quando pronto.",
+            ? `✅ HTML capturado (${htmlCapturado.length} caracteres)! Clique em 'OK - Confirmar'.`
+            : "⚠️ HTML não capturado. Tente novamente.",
         });
       });
       
@@ -125,10 +155,30 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm, userId }: ReceiptViewe
     setIsProcessing(true);
     
     try {
-      console.log('📤 Enviando HTML capturado para processamento...');
+      console.log('📤 [ENVIO] Preparando envio para process-html-capturado:', {
+        htmlLength: htmlCapturado.length,
+        htmlPreview: htmlCapturado.substring(0, 300),
+        userId,
+        url,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Validação básica do HTML
+      if (htmlCapturado.length < 100) {
+        console.warn('⚠️ [VALIDAÇÃO] HTML muito pequeno:', htmlCapturado.length);
+        toast({
+          title: "HTML incompleto",
+          description: `HTML capturado parece incompleto (${htmlCapturado.length} caracteres)`,
+          variant: "destructive"
+        });
+        setIsProcessing(false);
+        return;
+      }
       
       // Enviar HTML capturado para edge function
-      const { data, error } = await supabase.functions.invoke('process-html-capturado', {
+      console.log('🚀 [INVOKE] Chamando supabase.functions.invoke...');
+      
+      const result = await supabase.functions.invoke('process-html-capturado', {
         body: {
           html: htmlCapturado,
           userId: userId,
@@ -136,26 +186,53 @@ const ReceiptViewer = ({ url, isOpen, onClose, onConfirm, userId }: ReceiptViewe
         }
       });
       
-      if (error) throw error;
+      console.log('📥 [RESPOSTA COMPLETA] Retorno do invoke:', {
+        data: result.data,
+        error: result.error,
+        hasData: !!result.data,
+        hasError: !!result.error,
+        timestamp: new Date().toISOString()
+      });
       
-      console.log('✅ HTML enviado com sucesso:', data);
+      // Verificar erro na resposta
+      if (result.error) {
+        console.error('❌ [ERRO SUPABASE] Erro retornado:', {
+          message: result.error.message,
+          name: result.error.name,
+          stack: result.error.stack,
+          fullError: result.error
+        });
+        throw new Error(result.error.message || 'Erro ao chamar edge function');
+      }
+      
+      // Verificar erro dentro de data
+      if (result.data?.error) {
+        console.error('❌ [ERRO NO DATA] Erro dentro de data:', result.data.error);
+        throw new Error(result.data.error);
+      }
+      
+      console.log('✅ [SUCESSO] HTML enviado e processado com sucesso:', result.data);
       
       toast({
         title: "Processando nota",
-        description: "A nota fiscal está sendo extraída...",
+        description: "Nota fiscal está sendo extraída e adicionada ao estoque...",
       });
       
-      // Chamar onConfirm original (fechar viewer e navegar)
       await onConfirm();
-      
-      // Fechar viewer após confirmação
       onClose();
       
-    } catch (error) {
-      console.error('❌ Erro ao processar HTML:', error);
+    } catch (error: any) {
+      console.error('❌ [ERRO CATCH] Erro capturado no try-catch:', {
+        errorMessage: error?.message,
+        errorName: error?.name,
+        errorStack: error?.stack,
+        fullError: error,
+        timestamp: new Date().toISOString()
+      });
+      
       toast({
         title: "Erro ao processar",
-        description: "Não foi possível processar a nota fiscal",
+        description: error?.message || "Não foi possível processar a nota fiscal",
         variant: "destructive"
       });
     } finally {
