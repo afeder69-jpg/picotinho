@@ -69,7 +69,7 @@ serve(async (req) => {
 
     console.log('✅ Nota criada com sucesso:', notaId);
 
-    // Chamar extração diretamente do HTML
+    // Passo 1: Chamar extração diretamente do HTML
     console.log('🔄 Iniciando extração de dados...');
     
     const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
@@ -84,6 +84,23 @@ serve(async (req) => {
       // Não falhamos aqui, a extração será tentada posteriormente
     } else {
       console.log('✅ Extração iniciada:', extractData);
+    }
+
+    // Passo 2: Processar e adicionar ao estoque
+    console.log('📦 Chamando process-receipt-full...');
+    
+    const { data: processData, error: processError } = await supabase.functions.invoke('process-receipt-full', {
+      body: { 
+        imagemId: notaId,
+        force: true
+      }
+    });
+
+    if (processError) {
+      console.error('⚠️ Erro no processamento do estoque:', processError);
+      // Não falha aqui - usuário pode processar manualmente depois
+    } else {
+      console.log('✅ Produtos adicionados ao estoque com sucesso!', processData);
     }
 
     return new Response(
