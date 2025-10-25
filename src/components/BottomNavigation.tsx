@@ -4,28 +4,20 @@ import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import ReceiptViewer from "./ReceiptViewer";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showReceiptViewer, setShowReceiptViewer] = useState(false);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || null);
-    };
-    fetchUser();
-  }, []);
+  const { user } = useAuth();
 
   const handleReceiptConfirm = async () => {
     console.log('✅ [RECEIPT VIEWER] Nota confirmada, navegando para screenshots');
@@ -63,6 +55,20 @@ const BottomNavigation = () => {
 
   const handleQRScanSuccess = async (data: string) => {
     console.log("QR Code escaneado:", data);
+    
+    // Validação de autenticação
+    if (!user?.id) {
+      console.error('❌ [AUTH] Usuário não identificado ao escanear QR');
+      toast({
+        title: "❌ Usuário não identificado",
+        description: "Faça login para escanear notas fiscais",
+        variant: "destructive",
+      });
+      setShowQRScanner(false);
+      return;
+    }
+    
+    console.log('👤 [AUTH] Usuário autenticado:', user.id);
     
     const urlPattern = /^https?:\/\/.+/i;
     
@@ -176,13 +182,13 @@ const BottomNavigation = () => {
       )}
 
       {/* Receipt Viewer com InAppBrowser */}
-      {showReceiptViewer && pendingQrUrl && currentUserId && (
+      {showReceiptViewer && pendingQrUrl && user?.id && (
         <ReceiptViewer
           url={pendingQrUrl}
           isOpen={showReceiptViewer}
           onClose={handleReceiptClose}
           onConfirm={handleReceiptConfirm}
-          userId={currentUserId}
+          userId={user.id}
         />
       )}
     </>
