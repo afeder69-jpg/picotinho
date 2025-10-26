@@ -632,7 +632,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
           </style>
         </head>
         <body>
-          <button class="close-btn" onclick="if(window.Capacitor){window.Capacitor.Plugins.Browser.close()}else{window.close()}" title="Fechar">×</button>
+          <button class="close-btn" onclick="window.close()" title="Fechar">×</button>
           
           <div class="center border-bottom">
             <h2 class="bold">${receipt.dados_extraidos.estabelecimento?.nome || receipt.dados_extraidos.loja?.nome || 'ESTABELECIMENTO'}</h2>
