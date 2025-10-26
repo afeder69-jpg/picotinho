@@ -76,8 +76,37 @@ async function getAccessToken(): Promise<string> {
 }
 
 // ============================================================================
-// EXTRAÇÃO E VALIDAÇÃO DE CHAVE NFE
+// MAPEAMENTO DE UF E EXTRAÇÃO DE CHAVE NFE
 // ============================================================================
+
+/**
+ * Mapeamento de códigos IBGE → sigla UF
+ * Os 2 primeiros dígitos da chave NFe indicam o código IBGE da UF
+ */
+const UF_MAP: Record<string, string> = {
+  '11': 'ro', '12': 'ac', '13': 'am', '14': 'rr', '15': 'pa',
+  '16': 'ap', '17': 'to', '21': 'ma', '22': 'pi', '23': 'ce',
+  '24': 'rn', '25': 'pb', '26': 'pe', '27': 'al', '28': 'se',
+  '29': 'ba', '31': 'mg', '32': 'es', '33': 'rj', // ← RIO DE JANEIRO
+  '35': 'sp', // ← SÃO PAULO
+  '41': 'pr', '42': 'sc', '43': 'rs', '50': 'ms', '51': 'mt',
+  '52': 'go', '53': 'df'
+};
+
+/**
+ * Detecta UF pela chave NFe (primeiros 2 dígitos = código IBGE)
+ */
+function detectarUF(chaveNFe: string): string {
+  const codigoUF = chaveNFe.substring(0, 2);
+  const uf = UF_MAP[codigoUF];
+  
+  if (!uf) {
+    throw new Error(`❌ Código de UF não reconhecido: ${codigoUF} (chave: ${chaveNFe})`);
+  }
+  
+  console.log(`📍 [UF] Detectada: ${uf.toUpperCase()} (código ${codigoUF})`);
+  return uf;
+}
 
 /**
  * Extrai chave de 44 dígitos da URL da NFe
@@ -187,17 +216,21 @@ async function saveToCache(supabase: any, chaveNFe: string, dadosNFe: any): Prom
 // ============================================================================
 
 /**
- * Consulta NFe na API Serpro
+ * Consulta NFe na API Serpro (endpoint dinâmico baseado na UF)
  */
 async function consultarNFeSerpro(chaveNFe: string, accessToken: string): Promise<any> {
-  const apiUrl = Deno.env.get('SERPRO_API_URL');
+  const apiBase = Deno.env.get('SERPRO_API_BASE');
   
-  if (!apiUrl) {
-    throw new Error('❌ SERPRO_API_URL não configurada nos secrets');
+  if (!apiBase) {
+    throw new Error('❌ SERPRO_API_BASE não configurada nos secrets');
   }
   
-  const url = `${apiUrl}/${chaveNFe}`;
+  // Detectar UF pela chave e construir endpoint dinâmico
+  const uf = detectarUF(chaveNFe);
+  const url = `${apiBase}/consulta-nfe-${uf}/api/${chaveNFe}`;
+  
   console.log('📡 [SERPRO] Consultando API:', url);
+  console.log('📍 [SERPRO] UF detectada:', uf.toUpperCase());
   
   const response = await fetch(url, {
     method: 'GET',
