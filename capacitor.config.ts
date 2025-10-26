@@ -29,6 +29,7 @@ const config: CapacitorConfig = {
     overrideUserAgent: 'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     backgroundColor: '#ffffff',
     allowNavigation: ['*'],
+    appendUserAgent: ' Picotinho/1.0 NoCache/' + Date.now(),
     permissions: [
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.WRITE_EXTERNAL_STORAGE',
