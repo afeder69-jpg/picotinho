@@ -31,10 +31,14 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       await html5QrCode.start(
         { facingMode: "environment" }, // Câmera traseira
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 }
+          fps: 20, // Aumentar para 20 FPS (mais responsivo)
+          qrbox: { width: 300, height: 300 }, // Área maior
+          aspectRatio: 1.0, // Quadrado perfeito
+          disableFlip: false // Permitir espelhamento
         },
         (decodedText) => {
+          console.log('🔍 [WEB SCANNER] QR detectado:', decodedText);
+          
           toast({
             title: "QR Code detectado",
             description: "Processando informações...",

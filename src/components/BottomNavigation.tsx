@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScanner from "./QRCodeScanner";
@@ -154,16 +155,44 @@ const BottomNavigation = () => {
         )
       )}
 
-      {/* Internal Web Viewer com API Serpro */}
-      {showInternalWebViewer && pendingQrUrl && user?.id && (
-        <InternalWebViewer
-          url={pendingQrUrl}
-          isOpen={showInternalWebViewer}
-          onClose={handleNoteClose}
-          onConfirm={handleNoteConfirm}
-          userId={user.id}
-        />
+      {/* Fallback: Se não estiver autenticado, mostrar modal de login */}
+      {showInternalWebViewer && pendingQrUrl && !user?.id && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="max-w-md">
+            <CardHeader>
+              <CardTitle>Login Necessário</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>Você precisa estar logado para processar notas fiscais.</p>
+              <Button onClick={() => navigate('/auth')} className="mt-4 w-full">
+                Fazer Login
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
+
+      {/* Internal Web Viewer com API Serpro */}
+      {showInternalWebViewer && pendingQrUrl && user?.id ? (
+        <>
+          {console.log('✅ [RENDER] InternalWebViewer:', { showInternalWebViewer, pendingQrUrl: !!pendingQrUrl, userId: user?.id })}
+          <InternalWebViewer
+            url={pendingQrUrl}
+            isOpen={showInternalWebViewer}
+            onClose={handleNoteClose}
+            onConfirm={handleNoteConfirm}
+            userId={user.id}
+          />
+        </>
+      ) : showInternalWebViewer && pendingQrUrl ? (
+        <>
+          {console.log('❌ [RENDER] InternalWebViewer NÃO renderizado:', { 
+            showInternalWebViewer, 
+            pendingQrUrl: !!pendingQrUrl, 
+            userId: user?.id 
+          })}
+        </>
+      ) : null}
     </>
   );
 };
