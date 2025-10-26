@@ -562,6 +562,51 @@ export type Database = {
         }
         Relationships: []
       }
+      nfe_cache_serpro: {
+        Row: {
+          chave_nfe: string
+          cnpj_emitente: string | null
+          consultado_em: string
+          created_at: string
+          dados_completos: Json
+          data_emissao: string | null
+          id: string
+          nome_emitente: string | null
+          total_consultas: number
+          ultima_consulta: string
+          updated_at: string
+          valor_total: number | null
+        }
+        Insert: {
+          chave_nfe: string
+          cnpj_emitente?: string | null
+          consultado_em?: string
+          created_at?: string
+          dados_completos: Json
+          data_emissao?: string | null
+          id?: string
+          nome_emitente?: string | null
+          total_consultas?: number
+          ultima_consulta?: string
+          updated_at?: string
+          valor_total?: number | null
+        }
+        Update: {
+          chave_nfe?: string
+          cnpj_emitente?: string | null
+          consultado_em?: string
+          created_at?: string
+          dados_completos?: Json
+          data_emissao?: string | null
+          id?: string
+          nome_emitente?: string | null
+          total_consultas?: number
+          ultima_consulta?: string
+          updated_at?: string
+          valor_total?: number | null
+        }
+        Relationships: []
+      }
       normalizacao_decisoes_log: {
         Row: {
           candidato_id: string | null
@@ -1578,7 +1623,7 @@ export type Database = {
           accessed_at: string | null
           accessed_user_id: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           success: boolean | null
           user_agent: string | null
           user_id: string
@@ -1588,7 +1633,7 @@ export type Database = {
           accessed_at?: string | null
           accessed_user_id: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           success?: boolean | null
           user_agent?: string | null
           user_id: string
@@ -1598,7 +1643,7 @@ export type Database = {
           accessed_at?: string | null
           accessed_user_id?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           success?: boolean | null
           user_agent?: string | null
           user_id?: string
@@ -1611,7 +1656,7 @@ export type Database = {
           blocked: boolean | null
           created_at: string | null
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           target_user_id: string | null
           user_agent: string | null
           user_id: string | null
@@ -1621,7 +1666,7 @@ export type Database = {
           blocked?: boolean | null
           created_at?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           target_user_id?: string | null
           user_agent?: string | null
           user_id?: string | null
@@ -1631,7 +1676,7 @@ export type Database = {
           blocked?: boolean | null
           created_at?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           target_user_id?: string | null
           user_agent?: string | null
           user_id?: string | null
@@ -2752,10 +2797,6 @@ export type Database = {
         Args: { profile_user_id: string }
         Returns: boolean
       }
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
       buscar_categoria_por_termo: {
         Args: { termo_busca: string }
         Returns: {
@@ -2815,7 +2856,7 @@ export type Database = {
         }[]
       }
       buscar_receitas_brasileiras_disponiveis: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           categoria: string
           disponibilidade: string
@@ -2829,23 +2870,39 @@ export type Database = {
           total_ingredientes: number
         }[]
       }
-      buscar_receitas_disponiveis: {
-        Args: Record<PropertyKey, never> | { p_user_id: string }
-        Returns: {
-          descricao: string
-          disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
-          fonte: Database["public"]["Enums"]["fonte_receita"]
-          imagem_url: string
-          ingredientes_disponiveis: number
-          ingredientes_faltantes: Json
-          percentual_disponivel: number
-          porcoes: number
-          receita_id: string
-          tempo_preparo: number
-          titulo: string
-          total_ingredientes: number
-        }[]
-      }
+      buscar_receitas_disponiveis:
+        | {
+            Args: { p_user_id: string }
+            Returns: {
+              descricao: string
+              disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
+              fonte: Database["public"]["Enums"]["fonte_receita"]
+              imagem_url: string
+              ingredientes_disponiveis: number
+              ingredientes_faltantes: Json
+              percentual_disponivel: number
+              porcoes: number
+              receita_id: string
+              tempo_preparo: number
+              titulo: string
+              total_ingredientes: number
+            }[]
+          }
+        | {
+            Args: never
+            Returns: {
+              categoria: string
+              descricao: string
+              disponibilidade: string
+              imagem_url: string
+              ingredientes_disponiveis: number
+              porcoes: string
+              receita_id: string
+              tempo_preparo: string
+              titulo: string
+              total_ingredientes: number
+            }[]
+          }
       calcular_preco_por_unidade_base: {
         Args: {
           preco_unitario: number
@@ -2862,9 +2919,18 @@ export type Database = {
         Args: { days_old?: number }
         Returns: number
       }
-      comparar_masters_similares: {
-        Args:
-          | {
+      comparar_masters_similares:
+        | {
+            Args: {
+              m1_marca: string
+              m1_nome: string
+              m2_marca: string
+              m2_nome: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
               m1_marca: string
               m1_nome: string
               m1_qtd_unidade: string
@@ -2874,32 +2940,20 @@ export type Database = {
               m2_qtd_unidade: string
               m2_qtd_valor: number
             }
-          | {
-              m1_marca: string
-              m1_nome: string
-              m2_marca: string
-              m2_nome: string
-            }
-        Returns: number
-      }
-      consolidar_estoque_duplicado: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+            Returns: number
+          }
+      consolidar_estoque_duplicado: { Args: never; Returns: undefined }
       corrigir_notas_estado_inconsistente: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           acao: string
           detalhes: string
           nota_id: string
         }[]
       }
-      corrigir_precos_manuais: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      corrigir_precos_manuais: { Args: never; Returns: undefined }
       corrigir_produtos_manuais_sem_preco: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           acao_realizada: string
           preco_sugerido: number
@@ -2909,24 +2963,28 @@ export type Database = {
         }[]
       }
       corrigir_produtos_marcados_incorretamente_como_manuais: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           detalhes: string
           produtos_corrigidos: number
         }[]
       }
-      criar_lista_compras_de_cardapio: {
-        Args:
-          | { cardapio_uuid: string }
-          | { p_cardapio_id: string; p_titulo?: string; p_user_id: string }
-        Returns: string
-      }
-      criar_lista_compras_de_receita: {
-        Args:
-          | { p_receita_id: string; p_titulo?: string; p_user_id: string }
-          | { receita_uuid: string }
-        Returns: string
-      }
+      criar_lista_compras_de_cardapio:
+        | {
+            Args: {
+              p_cardapio_id: string
+              p_titulo?: string
+              p_user_id: string
+            }
+            Returns: string
+          }
+        | { Args: { cardapio_uuid: string }; Returns: string }
+      criar_lista_compras_de_receita:
+        | {
+            Args: { p_receita_id: string; p_titulo?: string; p_user_id: string }
+            Returns: string
+          }
+        | { Args: { receita_uuid: string }; Returns: string }
       criar_sinonimo_global: {
         Args: {
           confianca_input?: number
@@ -2945,7 +3003,7 @@ export type Database = {
         }[]
       }
       get_current_user_profile: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           avatar_url: string
           created_at: string
@@ -2996,68 +3054,13 @@ export type Database = {
           tem_acesso_completo: boolean
         }[]
       }
-      get_user_email: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      gtrgm_compress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_decompress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_options: {
-        Args: { "": unknown }
-        Returns: undefined
-      }
-      gtrgm_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
+      get_user_email: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
-      }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
       }
       importar_receita_api: {
         Args: {
@@ -3074,64 +3077,26 @@ export type Database = {
         }
         Returns: string
       }
-      is_master: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_receita_image_owner: {
-        Args: { image_path: string }
-        Returns: boolean
-      }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
-      }
-      limpar_dados_antigos: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      limpar_dados_usuario_completo: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      is_master: { Args: never; Returns: boolean }
+      is_receita_image_owner: { Args: { image_path: string }; Returns: boolean }
+      limpar_dados_antigos: { Args: never; Returns: undefined }
+      limpar_dados_usuario_completo: { Args: never; Returns: undefined }
       limpar_duplicacoes_processamento: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           acao_realizada: string
           detalhes: string
           quantidade: number
         }[]
       }
-      limpar_duplicados_estoque_temporario: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      limpar_estoque_completo_usuario: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      limpar_duplicados_estoque_temporario: { Args: never; Returns: undefined }
+      limpar_estoque_completo_usuario: { Args: never; Returns: undefined }
       limpar_estoque_usuario: {
         Args: { usuario_uuid: string }
         Returns: undefined
       }
       limpar_produtos_fantasmas_e_corrigir_precos: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           acao_realizada: string
           detalhes: string
@@ -3146,10 +3111,7 @@ export type Database = {
           produto_afetado: string
         }[]
       }
-      limpar_produtos_inconsistentes: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      limpar_produtos_inconsistentes: { Args: never; Returns: undefined }
       limpar_residuos_usuario_completo: {
         Args: { target_user_id: string }
         Returns: {
@@ -3158,10 +3120,7 @@ export type Database = {
           tabela_limpa: string
         }[]
       }
-      limpar_sessoes_expiradas: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      limpar_sessoes_expiradas: { Args: never; Returns: undefined }
       log_profile_access: {
         Args: { access_type: string; user_uuid: string }
         Returns: undefined
@@ -3178,10 +3137,7 @@ export type Database = {
         }
         Returns: undefined
       }
-      mask_phone_number: {
-        Args: { phone_number: string }
-        Returns: string
-      }
+      mask_phone_number: { Args: { phone_number: string }; Returns: string }
       mask_sensitive_profile_data: {
         Args: {
           email_val?: string
@@ -3194,42 +3150,21 @@ export type Database = {
         Args: { nome_input: string }
         Returns: string
       }
-      normalizar_produto_completo: {
-        Args: { nome: string }
-        Returns: string
-      }
-      normalizar_produto_v1: {
-        Args: { nome_original: string }
-        Returns: Json
-      }
-      normalizar_texto: {
-        Args: { texto: string }
-        Returns: string
-      }
+      normalizar_produto_completo: { Args: { nome: string }; Returns: string }
+      normalizar_produto_v1: { Args: { nome_original: string }; Returns: Json }
+      normalizar_texto: { Args: { texto: string }; Returns: string }
       normalizar_texto_similaridade: {
         Args: { texto: string }
         Returns: string
       }
-      popular_precos_atuais_das_notas: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      recalcular_estoque_completo: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      popular_precos_atuais_das_notas: { Args: never; Returns: undefined }
+      recalcular_estoque_completo: { Args: never; Returns: undefined }
       recalcular_estoque_usuario: {
         Args: { usuario_uuid: string }
         Returns: undefined
       }
-      refresh_estoque_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      refresh_stats_normalizacao: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      refresh_estoque_stats: { Args: never; Returns: undefined }
+      refresh_stats_normalizacao: { Args: never; Returns: undefined }
       safe_mask_personal_data: {
         Args: {
           cep_input?: string
@@ -3243,30 +3178,8 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: boolean
       }
-      set_limit: {
-        Args: { "": number }
-        Returns: number
-      }
-      show_limit: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      show_trgm: {
-        Args: { "": string }
-        Returns: string[]
-      }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       sync_historical_access_keys: {
         Args: { target_user_id?: string }
         Returns: {
@@ -3319,34 +3232,8 @@ export type Database = {
         Args: { operation_type: string; target_user_id: string }
         Returns: boolean
       }
-      validate_security_setup: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      validate_user_access: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
-      }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
-        Args: { "": string }
-        Returns: number
-      }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
-        Returns: string
-      }
+      validate_security_setup: { Args: never; Returns: string }
+      validate_user_access: { Args: { user_uuid: string }; Returns: boolean }
       vector_similarity_search: {
         Args: {
           match_count?: number
@@ -3364,20 +3251,24 @@ export type Database = {
           variante: string
         }[]
       }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      verificar_disponibilidade_receita: {
-        Args:
-          | { p_receita_id: string; p_user_id: string }
-          | { receita_uuid: string }
-        Returns: {
-          disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
-          ingredientes: Json
-          percentual_disponivel: number
-        }[]
-      }
+      verificar_disponibilidade_receita:
+        | {
+            Args: { p_receita_id: string; p_user_id: string }
+            Returns: {
+              disponibilidade: Database["public"]["Enums"]["tipo_disponibilidade"]
+              ingredientes: Json
+              percentual_disponivel: number
+            }[]
+          }
+        | {
+            Args: { receita_uuid: string }
+            Returns: {
+              disponivel: boolean
+              ingrediente_nome: string
+              quantidade_estoque: number
+              quantidade_necessaria: string
+            }[]
+          }
     }
     Enums: {
       app_role: "master" | "user" | "admin"

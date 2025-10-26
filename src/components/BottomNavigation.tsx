@@ -3,7 +3,7 @@ import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
-import ReceiptViewer from "./ReceiptViewer";
+import InternalWebViewer from "./InternalWebViewer";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
@@ -13,20 +13,22 @@ import { useAuth } from "@/components/auth/AuthProvider";
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
+  const [showInternalWebViewer, setShowInternalWebViewer] = useState(false);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
 
-  const handleReceiptConfirm = async () => {
-    console.log('✅ [RECEIPT VIEWER] Nota confirmada, navegando para screenshots');
+  const handleNoteConfirm = async () => {
+    console.log('✅ [INTERNAL VIEWER] Nota confirmada, navegando para screenshots');
+    setShowInternalWebViewer(false);
+    setPendingQrUrl(null);
     navigate('/screenshots');
   };
 
-  const handleReceiptClose = () => {
-    console.log('❌ [RECEIPT VIEWER] Viewer fechado');
-    setShowReceiptViewer(false);
+  const handleNoteClose = () => {
+    console.log('❌ [INTERNAL VIEWER] Viewer fechado');
+    setShowInternalWebViewer(false);
     setPendingQrUrl(null);
   };
 
@@ -88,13 +90,13 @@ const BottomNavigation = () => {
     console.log(`🔍 Plataforma detectada: ${isNative ? 'NATIVA (Android/iOS)' : 'WEB (navegador)'}`);
     
     if (isNative) {
-      // Abrir ReceiptViewer com InAppBrowser
+      // Abrir InternalWebViewer (novo componente com API Serpro)
       setPendingQrUrl(data);
-      setShowReceiptViewer(true);
+      setShowInternalWebViewer(true);
       
       toast({
-        title: "📄 Abrindo nota fiscal",
-        description: "Aguarde o carregamento da página...",
+        title: "📄 Visualizando nota fiscal",
+        description: "A nota será processada via API Serpro",
       });
     } else {
       handleWebFlow(data);
@@ -181,13 +183,13 @@ const BottomNavigation = () => {
         )
       )}
 
-      {/* Receipt Viewer com InAppBrowser */}
-      {showReceiptViewer && pendingQrUrl && user?.id && (
-        <ReceiptViewer
+      {/* Internal Web Viewer com API Serpro */}
+      {showInternalWebViewer && pendingQrUrl && user?.id && (
+        <InternalWebViewer
           url={pendingQrUrl}
-          isOpen={showReceiptViewer}
-          onClose={handleReceiptClose}
-          onConfirm={handleReceiptConfirm}
+          isOpen={showInternalWebViewer}
+          onClose={handleNoteClose}
+          onConfirm={handleNoteConfirm}
           userId={user.id}
         />
       )}
