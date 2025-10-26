@@ -5,16 +5,19 @@ import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import InternalWebViewer from "./InternalWebViewer";
+import { NFCeWebViewer } from "./NFCeWebViewer";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { detectarTipoDocumento } from "@/lib/documentDetection";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showInternalWebViewer, setShowInternalWebViewer] = useState(false);
+  const [showNFCeViewer, setShowNFCeViewer] = useState(false);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,6 +33,7 @@ const BottomNavigation = () => {
   const handleNoteClose = () => {
     console.log('❌ [INTERNAL VIEWER] Viewer fechado');
     setShowInternalWebViewer(false);
+    setShowNFCeViewer(false);
     setPendingQrUrl(null);
   };
 
@@ -63,16 +67,38 @@ const BottomNavigation = () => {
       return;
     }
     
+    // Detectar tipo de documento (NFe vs NFCe)
+    const tipoDocumento = detectarTipoDocumento(data);
+    console.log(`🔍 Tipo de documento: ${tipoDocumento || 'DESCONHECIDO'}`);
+    
     setShowQRScanner(false);
-    
-    // Abrir InternalWebViewer (funciona tanto no APK quanto na web)
     setPendingQrUrl(data);
-    setShowInternalWebViewer(true);
     
-    toast({
-      title: "📄 Visualizando nota fiscal",
-      description: "A nota será processada via API Serpro",
-    });
+    if (tipoDocumento === 'NFCe') {
+      // NFCe: Abrir WebView com botões flutuantes
+      console.log('🎫 [NFCE] Abrindo NFCeWebViewer...');
+      setShowNFCeViewer(true);
+      toast({
+        title: "🎫 Nota Fiscal de Consumidor",
+        description: "Visualize a nota e confirme o processamento",
+      });
+    } else if (tipoDocumento === 'NFe') {
+      // NFe: Usar API Serpro
+      console.log('📄 [NFE] Abrindo InternalWebViewer (Serpro)...');
+      setShowInternalWebViewer(true);
+      toast({
+        title: "📄 Nota Fiscal Eletrônica",
+        description: "A nota será processada via API Serpro",
+      });
+    } else {
+      // Tipo desconhecido: tentar como NFCe
+      console.warn('⚠️ Tipo desconhecido, tentando como NFCe...');
+      setShowNFCeViewer(true);
+      toast({
+        title: "📄 Nota Fiscal",
+        description: "Visualize a nota e confirme o processamento",
+      });
+    }
   };
 
   const handleQRButtonClick = () => {
@@ -172,7 +198,7 @@ const BottomNavigation = () => {
         </div>
       )}
 
-      {/* Internal Web Viewer com API Serpro */}
+      {/* Internal Web Viewer com API Serpro (NFe) */}
       {showInternalWebViewer && pendingQrUrl && user?.id ? (
         <>
           {console.log('✅ [RENDER] InternalWebViewer:', { showInternalWebViewer, pendingQrUrl: !!pendingQrUrl, userId: user?.id })}
@@ -193,6 +219,17 @@ const BottomNavigation = () => {
           })}
         </>
       ) : null}
+
+      {/* NFCe Web Viewer (NFCe) */}
+      {showNFCeViewer && pendingQrUrl && user?.id && (
+        <NFCeWebViewer
+          url={pendingQrUrl}
+          userId={user.id}
+          isOpen={showNFCeViewer}
+          onClose={handleNoteClose}
+          onConfirm={() => navigate('/screenshots')}
+        />
+      )}
     </>
   );
 };
