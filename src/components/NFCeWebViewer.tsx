@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
 import { Check, X, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,18 +21,8 @@ export function NFCeWebViewer({ url, userId, isOpen, onClose, onConfirm }: NFCeW
     try {
       console.log('🌐 [WEBVIEW] Abrindo URL da NFCe:', url);
       
-      if (Capacitor.isNativePlatform()) {
-        // Em plataforma nativa, usar o Browser plugin
-        const { Browser } = await import('@capacitor/browser');
-        await Browser.open({ 
-          url,
-          presentationStyle: 'popover',
-          toolbarColor: '#10b981',
-        });
-      } else {
-        // Na web, abrir em nova aba
-        window.open(url, '_blank');
-      }
+      // Abrir em nova aba/janela (funciona tanto na web quanto no mobile)
+      window.open(url, '_blank');
       
       console.log('✅ [WEBVIEW] WebView aberto com sucesso');
     } catch (error) {
@@ -52,16 +41,6 @@ export function NFCeWebViewer({ url, userId, isOpen, onClose, onConfirm }: NFCeW
     try {
       console.log('✅ [WEBVIEW] Usuário confirmou processamento');
       console.log('📡 [API] Chamando process-url-nota...');
-      
-      // Fechar o browser primeiro (apenas em plataforma nativa)
-      if (Capacitor.isNativePlatform()) {
-        try {
-          const { Browser } = await import('@capacitor/browser');
-          await Browser.close();
-        } catch (error) {
-          // Ignorar erro se não conseguir fechar
-        }
-      }
       
       // Processar a nota fiscal via Edge Function
       const { data, error } = await supabase.functions.invoke('process-url-nota', {
@@ -104,15 +83,6 @@ export function NFCeWebViewer({ url, userId, isOpen, onClose, onConfirm }: NFCeW
 
   const handleCancel = async () => {
     console.log('❌ [WEBVIEW] Usuário cancelou');
-    
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const { Browser } = await import('@capacitor/browser');
-        await Browser.close();
-      } catch (error) {
-        // Ignorar erro se o browser já estiver fechado
-      }
-    }
     
     toast({
       title: "Cancelado",
