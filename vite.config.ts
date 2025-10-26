@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     rollupOptions: {
+      external: ['@capacitor/browser'],
       output: {
         entryFileNames: `assets/[name].[hash]-${Date.now()}.js`,
         chunkFileNames: `assets/[name].[hash]-${Date.now()}.js`,
