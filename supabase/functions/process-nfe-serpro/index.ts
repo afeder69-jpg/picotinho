@@ -225,10 +225,15 @@ async function consultarNFeSerpro(chaveNFe: string, accessToken: string): Promis
     throw new Error('❌ SERPRO_API_BASE não configurada nos secrets');
   }
   
+  // Detectar UF pela chave NFe
+  const uf = detectarUF(chaveNFe);
+  
   // Construir URL do endpoint oficial da Serpro
-  const url = `${apiBase}/${chaveNFe}`;
+  // Formato: https://gateway.apiserpro.serpro.gov.br/consulta-nfe-[uf]/api/v1/nfe/[chave]
+  const url = `${apiBase}/consulta-nfe-${uf}/api/v1/nfe/${chaveNFe}`;
   
   console.log('📡 [SERPRO] Consultando API:', url);
+  console.log('📍 [SERPRO] UF detectada:', uf.toUpperCase());
   console.log('🔑 [SERPRO] Chave NFe:', chaveNFe);
   
   const response = await fetch(url, {
