@@ -5,20 +5,21 @@ import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import InternalWebViewer from "./InternalWebViewer";
-import { NFCeWebViewer } from "./NFCeWebViewer";
+import { SimplifiedInAppBrowser } from "./SimplifiedInAppBrowser";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { detectarTipoDocumento } from "@/lib/documentDetection";
+import { detectarTipoDocumento, TipoDocumento } from "@/lib/documentDetection";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showSimplifiedBrowser, setShowSimplifiedBrowser] = useState(false);
   const [showInternalWebViewer, setShowInternalWebViewer] = useState(false);
-  const [showNFCeViewer, setShowNFCeViewer] = useState(false);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
+  const [pendingDocType, setPendingDocType] = useState<TipoDocumento>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -31,10 +32,11 @@ const BottomNavigation = () => {
   };
 
   const handleNoteClose = () => {
-    console.log('❌ [INTERNAL VIEWER] Viewer fechado');
+    console.log('❌ [VIEWER] Viewer fechado');
     setShowInternalWebViewer(false);
-    setShowNFCeViewer(false);
+    setShowSimplifiedBrowser(false);
     setPendingQrUrl(null);
+    setPendingDocType(null);
   };
 
 
@@ -73,31 +75,34 @@ const BottomNavigation = () => {
     
     setShowQRScanner(false);
     setPendingQrUrl(data);
+    setPendingDocType(tipoDocumento);
     
-    if (tipoDocumento === 'NFCe') {
-      // NFCe: Abrir WebView com botões flutuantes
-      console.log('🎫 [NFCE] Abrindo NFCeWebViewer...');
-      setShowNFCeViewer(true);
+    // Verificar se é plataforma nativa (Android/iOS)
+    if (Capacitor.isNativePlatform()) {
+      // Em plataforma nativa: usar SimplifiedInAppBrowser
+      console.log('📱 [NATIVO] Abrindo SimplifiedInAppBrowser...');
+      setShowSimplifiedBrowser(true);
       toast({
-        title: "🎫 Nota Fiscal de Consumidor",
-        description: "Visualize a nota e confirme o processamento",
-      });
-    } else if (tipoDocumento === 'NFe') {
-      // NFe: Usar API Serpro
-      console.log('📄 [NFE] Abrindo InternalWebViewer (Serpro)...');
-      setShowInternalWebViewer(true);
-      toast({
-        title: "📄 Nota Fiscal Eletrônica",
-        description: "A nota será processada via API Serpro",
+        title: tipoDocumento === 'NFe' ? "📄 Nota Fiscal Eletrônica" : "🎫 Nota Fiscal de Consumidor",
+        description: "Visualize a nota e confirme",
       });
     } else {
-      // Tipo desconhecido: tentar como NFCe
-      console.warn('⚠️ Tipo desconhecido, tentando como NFCe...');
-      setShowNFCeViewer(true);
-      toast({
-        title: "📄 Nota Fiscal",
-        description: "Visualize a nota e confirme o processamento",
-      });
+      // Em plataforma web: usar InternalWebViewer (NFe/Serpro)
+      if (tipoDocumento === 'NFe') {
+        console.log('📄 [WEB/NFE] Abrindo InternalWebViewer (Serpro)...');
+        setShowInternalWebViewer(true);
+        toast({
+          title: "📄 Nota Fiscal Eletrônica",
+          description: "A nota será processada via API Serpro",
+        });
+      } else {
+        // NFCe na web: mostrar aviso
+        toast({
+          title: "⚠️ NFCe detectada",
+          description: "Use o app Android/iOS para processar NFCe",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -198,36 +203,26 @@ const BottomNavigation = () => {
         </div>
       )}
 
-      {/* Internal Web Viewer com API Serpro (NFe) */}
-      {showInternalWebViewer && pendingQrUrl && user?.id ? (
-        <>
-          {console.log('✅ [RENDER] InternalWebViewer:', { showInternalWebViewer, pendingQrUrl: !!pendingQrUrl, userId: user?.id })}
-          <InternalWebViewer
-            url={pendingQrUrl}
-            isOpen={showInternalWebViewer}
-            onClose={handleNoteClose}
-            onConfirm={handleNoteConfirm}
-            userId={user.id}
-          />
-        </>
-      ) : showInternalWebViewer && pendingQrUrl ? (
-        <>
-          {console.log('❌ [RENDER] InternalWebViewer NÃO renderizado:', { 
-            showInternalWebViewer, 
-            pendingQrUrl: !!pendingQrUrl, 
-            userId: user?.id 
-          })}
-        </>
-      ) : null}
-
-      {/* NFCe Web Viewer (NFCe) */}
-      {showNFCeViewer && pendingQrUrl && user?.id && (
-        <NFCeWebViewer
+      {/* Simplified In-App Browser (Nativo - NFe/NFCe) */}
+      {showSimplifiedBrowser && pendingQrUrl && user?.id && (
+        <SimplifiedInAppBrowser
           url={pendingQrUrl}
           userId={user.id}
-          isOpen={showNFCeViewer}
+          tipoDocumento={pendingDocType}
+          isOpen={showSimplifiedBrowser}
           onClose={handleNoteClose}
-          onConfirm={() => navigate('/screenshots')}
+          onConfirm={handleNoteConfirm}
+        />
+      )}
+
+      {/* Internal Web Viewer com API Serpro (NFe - Web only) */}
+      {showInternalWebViewer && pendingQrUrl && user?.id && (
+        <InternalWebViewer
+          url={pendingQrUrl}
+          isOpen={showInternalWebViewer}
+          onClose={handleNoteClose}
+          onConfirm={handleNoteConfirm}
+          userId={user.id}
         />
       )}
     </>

@@ -17,54 +17,51 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { url, userId } = await req.json();
+    const { url, userId, chaveAcesso, tipoDocumento } = await req.json();
 
     if (!url || !userId) {
       throw new Error('URL e userId são obrigatórios');
     }
 
-    console.log('🌐 Iniciando scraping da URL:', {
+    console.log('🌐 Processando URL da nota:', {
       userId,
       url,
+      tipoDocumento,
+      chaveAcesso: chaveAcesso ? `${chaveAcesso.substring(0, 4)}...${chaveAcesso.substring(40)}` : 'não fornecida',
       timestamp: new Date().toISOString()
     });
 
-    // Fazer fetch da URL com User-Agent de celular Android
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+    // Extrair chave de acesso se não fornecida
+    let chave = chaveAcesso;
+    if (!chave) {
+      // Tentar extrair da URL
+      const urlObj = new URL(url);
+      const params = urlObj.searchParams.get('p') || urlObj.searchParams.get('chNFe');
+      
+      if (params) {
+        chave = params.split('|')[0];
+      } else {
+        // Tentar regex
+        const match = url.match(/(\d{44})/);
+        if (match) {
+          chave = match[1];
+        }
       }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Erro ao acessar URL: ${response.status} ${response.statusText}`);
     }
 
-    const html = await response.text();
-    console.log('✅ HTML obtido com sucesso:', {
-      htmlLength: html.length,
-      statusCode: response.status
-    });
-
-    // Validar se HTML contém dados de nota fiscal
-    const hasNotaFiscalData = html.includes('DANFE') || 
-                              html.includes('NF-e') || 
-                              html.includes('Nota Fiscal') ||
-                              html.includes('CNPJ') ||
-                              html.includes('Chave de Acesso');
-
-    if (!hasNotaFiscalData) {
-      console.error('❌ HTML não contém dados de nota fiscal válidos');
-      throw new Error('A URL não contém dados de nota fiscal válidos. Verifique se o link está correto.');
+    if (!chave || chave.length !== 44) {
+      throw new Error('Não foi possível extrair a chave de acesso da URL');
     }
 
-    console.log('✅ HTML contém dados de nota fiscal válidos');
+    console.log('🔑 Chave de acesso extraída:', `${chave.substring(0, 4)}...${chave.substring(40)}`);
 
-    // Criar registro na notas_imagens
+    // Detectar UF e modelo pelos dígitos da chave
+    const uf = chave.substring(0, 2);
+    const modelo = chave.substring(20, 22);
+    
+    console.log(`📍 UF: ${uf}, Modelo: ${modelo} (${modelo === '55' ? 'NFe' : modelo === '65' ? 'NFCe' : 'Desconhecido'})`);
+
+    // Criar registro na notas_imagens com status pending
     const notaId = crypto.randomUUID();
 
     const { error: insertError } = await supabase
@@ -75,9 +72,12 @@ serve(async (req) => {
         imagem_url: url,
         processada: false,
         dados_extraidos: {
-          html_capturado: html.substring(0, 100000), // Primeiros 100k caracteres
+          chave_acesso: chave,
+          uf_emitente: uf,
+          modelo_documento: modelo,
+          tipo_documento: tipoDocumento || (modelo === '55' ? 'NFe' : 'NFCe'),
           url_original: url,
-          metodo_captura: 'browser_url_scraping',
+          metodo_captura: 'qrcode_url_direct',
           timestamp: new Date().toISOString()
         }
       });
@@ -89,21 +89,58 @@ serve(async (req) => {
 
     console.log('✅ Nota criada com sucesso:', notaId);
 
-    // Chamar extração diretamente do HTML
-    console.log('🔄 Iniciando extração de dados...');
-    
-    const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
-      body: { 
-        notaImagemId: notaId,
-        userId: userId
-      }
-    });
+    // Processar via API apropriada
+    if (modelo === '55') {
+      // NFe: Usar Serpro
+      console.log('📄 [NFE] Processando via Serpro...');
+      
+      const { data: nfeData, error: nfeError } = await supabase.functions.invoke('process-nfe-serpro', {
+        body: { 
+          chaveAcesso: chave,
+          userId: userId,
+          notaImagemId: notaId
+        }
+      });
 
-    if (extractError) {
-      console.error('⚠️ Erro ao iniciar extração:', extractError);
-      // Não falhamos aqui, a extração será tentada posteriormente
+      if (nfeError) {
+        console.error('⚠️ Erro ao processar NFe via Serpro:', nfeError);
+        throw nfeError;
+      }
+
+      console.log('✅ NFe processada via Serpro:', nfeData);
+      
+    } else if (modelo === '65') {
+      // NFCe: Tentar extrair via HTML (fallback)
+      console.log('🎫 [NFCE] Tentando extrair dados via HTML...');
+      
+      const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
+        body: { 
+          notaImagemId: notaId,
+          userId: userId
+        }
+      });
+
+      if (extractError) {
+        console.error('⚠️ Erro ao extrair NFCe:', extractError);
+        // Não falhar completamente, a nota já foi criada
+      } else {
+        console.log('✅ NFCe extraída:', extractData);
+      }
     } else {
-      console.log('✅ Extração iniciada:', extractData);
+      console.warn('⚠️ Modelo desconhecido, tentando extração genérica...');
+      
+      const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
+        body: { 
+          notaImagemId: notaId,
+          userId: userId
+        }
+      });
+
+      if (extractError) {
+        console.error('⚠️ Erro na extração genérica:', extractError);
+      } else {
+        console.log('✅ Extração genérica concluída:', extractData);
+      }
     }
 
     return new Response(
