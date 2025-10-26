@@ -168,119 +168,121 @@ const InternalWebViewer = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background">
-      {/* Header com botão fechar */}
-      <div className="absolute top-0 left-0 right-0 z-10 bg-background/95 backdrop-blur-sm border-b">
-        <div className="flex items-center justify-between p-4">
-          <h2 className="text-lg font-semibold">Visualizar Nota Fiscal</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleCancel}
-            disabled={isProcessing}
-          >
-            <X className="w-5 h-5" />
-          </Button>
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-background rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-auto relative">
+        {/* Header com botão fechar */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b rounded-t-2xl">
+          <div className="flex items-center justify-between p-4">
+            <h2 className="text-lg font-semibold">Visualizar Nota Fiscal</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCancel}
+              disabled={isProcessing}
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Área de visualização com resumo da nota */}
-      <div className="pt-16 pb-28 h-full">
-        <div className="w-full h-full bg-muted/30 flex flex-col items-center justify-center p-6">
-          <ShoppingCart className="w-20 h-20 text-green-600 mb-6" />
-          
-          <h3 className="text-2xl font-bold mb-6 text-center">
-            Você escaneou uma nota de:
-          </h3>
-          
-          {/* Card de resumo da nota */}
-          <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 max-w-md w-full mb-6 shadow-lg">
-            {dadosNota ? (
-              <>
-                {/* Nome do estabelecimento */}
-                <div className="mb-4">
-                  <p className="text-2xl font-bold text-gray-900 text-center">
-                    {dadosNota.nomeEmitente || `Estabelecimento no ${dadosNota.uf}`}
-                  </p>
-                  {dadosNota.nomeEmitente && (
-                    <p className="text-sm text-gray-600 text-center mt-1">
-                      {dadosNota.uf}
+        {/* Área de visualização com resumo da nota */}
+        <div className="p-6">
+          <div className="flex flex-col items-center justify-center">
+            <ShoppingCart className="w-20 h-20 text-green-600 mb-6" />
+            
+            <h3 className="text-2xl font-bold mb-6 text-center">
+              Você escaneou uma nota de:
+            </h3>
+            
+            {/* Card de resumo da nota */}
+            <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 max-w-md w-full mb-6 shadow-lg">
+              {dadosNota ? (
+                <>
+                  {/* Nome do estabelecimento */}
+                  <div className="mb-4">
+                    <p className="text-2xl font-bold text-gray-900 text-center">
+                      {dadosNota.nomeEmitente || `Estabelecimento no ${dadosNota.uf}`}
                     </p>
+                    {dadosNota.nomeEmitente && (
+                      <p className="text-sm text-gray-600 text-center mt-1">
+                        {dadosNota.uf}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Valor total */}
+                  {dadosNota.valorTotal && (
+                    <div className="bg-white rounded-lg p-4 border border-green-300">
+                      <p className="text-sm text-gray-600 text-center mb-1">💰 Valor total</p>
+                      <p className="text-3xl font-bold text-green-700 text-center">
+                        R$ {parseFloat(dadosNota.valorTotal).toFixed(2).replace('.', ',')}
+                      </p>
+                    </div>
                   )}
-                </div>
-                
-                {/* Valor total */}
-                {dadosNota.valorTotal && (
-                  <div className="bg-white rounded-lg p-4 border border-green-300">
-                    <p className="text-sm text-gray-600 text-center mb-1">💰 Valor total</p>
-                    <p className="text-3xl font-bold text-green-700 text-center">
-                      R$ {parseFloat(dadosNota.valorTotal).toFixed(2).replace('.', ',')}
+                  
+                  {/* Chave de acesso (truncada) */}
+                  <div className="mt-4 text-center">
+                    <p className="text-xs text-gray-500 font-mono">
+                      {dadosNota.chaveAcesso.substring(0, 8)}...{dadosNota.chaveAcesso.substring(36)}
                     </p>
                   </div>
-                )}
-                
-                {/* Chave de acesso (truncada) */}
-                <div className="mt-4 text-center">
-                  <p className="text-xs text-gray-500 font-mono">
-                    {dadosNota.chaveAcesso.substring(0, 8)}...{dadosNota.chaveAcesso.substring(36)}
+                </>
+              ) : (
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-gray-700">
+                    Nota Fiscal Eletrônica
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Processando informações...
                   </p>
                 </div>
-              </>
-            ) : (
-              <div className="text-center">
-                <p className="text-lg font-semibold text-gray-700">
-                  Nota Fiscal Eletrônica
-                </p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Processando informações...
-                </p>
-              </div>
-            )}
-          </div>
-          
-          {/* Mensagem de confirmação */}
-          <div className="space-y-3 text-center max-w-md">
-            <p className="text-lg font-semibold text-gray-800">
-              ✅ Confirmar para processar esta nota?
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Os dados serão importados automaticamente via API oficial da Serpro
-            </p>
-            <p className="text-xs text-muted-foreground opacity-70">
-              📡 Conexão segura com a Receita Federal
-            </p>
+              )}
+            </div>
+            
+            {/* Mensagem de confirmação */}
+            <div className="space-y-3 text-center max-w-md">
+              <p className="text-lg font-semibold text-gray-800">
+                ✅ Confirmar para processar esta nota?
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Os dados serão importados automaticamente via API oficial da Serpro
+              </p>
+              <p className="text-xs text-muted-foreground opacity-70">
+                📡 Conexão segura com a Receita Federal
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Botões flutuantes na parte inferior */}
-      <div className="fixed bottom-0 left-0 right-0 z-10 bg-background border-t p-4 safe-area-inset-bottom">
-        <div className="flex gap-3 max-w-screen-lg mx-auto">
-          <Button
-            variant="outline"
-            size="lg"
-            className="flex-1 gap-2 h-14 text-base"
-            onClick={handleCancel}
-            disabled={isProcessing}
-          >
-            <XCircle className="w-5 h-5" />
-            Cancelar
-          </Button>
-          <Button
-            variant="default"
-            size="lg"
-            className="flex-1 gap-2 h-14 text-base bg-green-600 hover:bg-green-700"
-            onClick={handleConfirm}
-            disabled={isProcessing}
-          >
-            <CheckCircle2 className="w-5 h-5" />
-            {isProcessing 
-              ? "Processando..." 
-              : dadosNota?.valorTotal 
-                ? `OK - Confirmar R$ ${parseFloat(dadosNota.valorTotal).toFixed(2).replace('.', ',')}` 
-                : "OK - Confirmar"
-            }
-          </Button>
+        {/* Botões fixos na parte inferior do modal */}
+        <div className="sticky bottom-0 z-10 bg-background border-t p-4 rounded-b-2xl">
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1 gap-2 h-14 text-base"
+              onClick={handleCancel}
+              disabled={isProcessing}
+            >
+              <XCircle className="w-5 h-5" />
+              Cancelar
+            </Button>
+            <Button
+              variant="default"
+              size="lg"
+              className="flex-1 gap-2 h-14 text-base bg-green-600 hover:bg-green-700"
+              onClick={handleConfirm}
+              disabled={isProcessing}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              {isProcessing 
+                ? "Processando..." 
+                : dadosNota?.valorTotal 
+                  ? `OK - Confirmar R$ ${parseFloat(dadosNota.valorTotal).toFixed(2).replace('.', ',')}` 
+                  : "OK - Confirmar"
+              }
+            </Button>
+          </div>
         </div>
       </div>
     </div>

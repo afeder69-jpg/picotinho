@@ -32,28 +32,6 @@ const BottomNavigation = () => {
     setPendingQrUrl(null);
   };
 
-  const handleWebFlow = async (url: string) => {
-    console.log('🌐 [WEB] Modo navegador detectado - funcionalidade limitada');
-    
-    toast({
-      title: "⚠️ Modo de Teste (Web)",
-      description: "O InAppBrowser só funciona completamente no APK Android. Abrindo nota em nova aba para visualização...",
-      duration: 6000,
-    });
-    
-    window.open(url, '_blank');
-    
-    setTimeout(() => {
-      console.log('🔄 [WEB] Simulando retorno do navegador...');
-      navigate('/screenshots');
-      
-      toast({
-        title: "💡 Teste em modo web",
-        description: "Para captura automática de notas, compile e teste no APK Android. No navegador, este fluxo é apenas demonstrativo.",
-        duration: 8000,
-      });
-    }, 4000);
-  };
 
   const handleQRScanSuccess = async (data: string) => {
     console.log("QR Code escaneado:", data);
@@ -86,21 +64,14 @@ const BottomNavigation = () => {
     
     setShowQRScanner(false);
     
-    const isNative = Capacitor.isNativePlatform();
-    console.log(`🔍 Plataforma detectada: ${isNative ? 'NATIVA (Android/iOS)' : 'WEB (navegador)'}`);
+    // Abrir InternalWebViewer (funciona tanto no APK quanto na web)
+    setPendingQrUrl(data);
+    setShowInternalWebViewer(true);
     
-    if (isNative) {
-      // Abrir InternalWebViewer (novo componente com API Serpro)
-      setPendingQrUrl(data);
-      setShowInternalWebViewer(true);
-      
-      toast({
-        title: "📄 Visualizando nota fiscal",
-        description: "A nota será processada via API Serpro",
-      });
-    } else {
-      handleWebFlow(data);
-    }
+    toast({
+      title: "📄 Visualizando nota fiscal",
+      description: "A nota será processada via API Serpro",
+    });
   };
 
   const handleQRButtonClick = () => {
