@@ -7,7 +7,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 
 
@@ -562,11 +561,8 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
       const blob = new Blob([cupomHtml], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       
-      Browser.open({
-        url: url,
-        windowName: '_self',
-        presentationStyle: 'fullscreen'
-      });
+      // Usar window.open que funciona em todas as plataformas
+      window.open(url, '_blank');
     } else {
       // No desktop, manter comportamento atual
       const newWindow = window.open('', '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
