@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import { InAppBrowser } from '@capgo/inappbrowser';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { TipoDocumento, extrairChaveNFe } from '@/lib/documentDetection';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 interface SimplifiedInAppBrowserProps {
   url: string;
@@ -25,41 +25,6 @@ export const SimplifiedInAppBrowser = ({
 }: SimplifiedInAppBrowserProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      openBrowser();
-    }
-
-    return () => {
-      InAppBrowser.close();
-    };
-  }, [isOpen, url]);
-
-  const openBrowser = async () => {
-    try {
-      console.log('🌐 [BROWSER] Abrindo WebView interno:', { url, tipoDocumento });
-      
-      await InAppBrowser.open({
-        url,
-        isPresentAfterPageLoad: true
-      });
-
-      // Listener para quando usuário fecha manualmente
-      InAppBrowser.addListener('closeEvent', () => {
-        console.log('❌ [BROWSER] Usuário fechou o WebView');
-        onClose();
-      });
-
-    } catch (error) {
-      console.error('❌ [BROWSER] Erro ao abrir WebView:', error);
-      toast({
-        title: "Erro ao abrir navegador",
-        description: "Não foi possível abrir a nota fiscal",
-        variant: "destructive",
-      });
-      onClose();
-    }
-  };
 
   const handleConfirm = async () => {
     setIsProcessing(true);
@@ -95,8 +60,7 @@ export const SimplifiedInAppBrowser = ({
         description: "Atualizando seu estoque...",
       });
 
-      // Fechar WebView e confirmar
-      await InAppBrowser.close();
+      // Confirmar processamento
       onConfirm();
 
     } catch (error: any) {
@@ -112,43 +76,55 @@ export const SimplifiedInAppBrowser = ({
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
     console.log('❌ [CANCEL] Cancelando visualização');
-    await InAppBrowser.close();
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed bottom-20 left-0 right-0 z-[9999] pointer-events-none">
-      <div className="flex justify-center items-center gap-4 w-full max-w-screen-lg mx-auto p-4">
-        {/* Botão Cancelar - Vermelho */}
-        <Button
-          variant="destructive"
-          size="lg"
-          className="h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-2xl pointer-events-auto"
-          onClick={handleCancel}
-          disabled={isProcessing}
-        >
-          <X className="w-8 h-8" />
-        </Button>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-full w-full h-full p-0 gap-0">
+        {/* IFrame da Nota Fiscal */}
+        <div className="relative w-full h-full">
+          <iframe
+            src={url}
+            className="w-full h-full border-0"
+            title="Nota Fiscal"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+          />
+          
+          {/* Botões Flutuantes */}
+          <div className="fixed bottom-8 left-0 right-0 z-[9999]">
+            <div className="flex justify-center items-center gap-6 w-full p-4">
+              {/* Botão Cancelar - Vermelho */}
+              <Button
+                variant="destructive"
+                size="lg"
+                className="h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-2xl"
+                onClick={handleCancel}
+                disabled={isProcessing}
+              >
+                <X className="w-8 h-8" />
+              </Button>
 
-        {/* Botão Confirmar - Verde */}
-        <Button
-          variant="default"
-          size="lg"
-          className="h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-2xl pointer-events-auto disabled:opacity-50"
-          onClick={handleConfirm}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
-          ) : (
-            <Check className="w-10 h-10" />
-          )}
-        </Button>
-      </div>
-    </div>
+              {/* Botão Confirmar - Verde */}
+              <Button
+                variant="default"
+                size="lg"
+                className="h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-2xl disabled:opacity-50"
+                onClick={handleConfirm}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                ) : (
+                  <Check className="w-10 h-10" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };

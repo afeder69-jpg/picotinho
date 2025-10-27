@@ -11,9 +11,6 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true
     },
-    InAppBrowser: {
-      enabled: true
-    },
     FilePicker: {
       permissions: ['photos', 'camera']
     },
