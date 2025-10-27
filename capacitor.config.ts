@@ -36,7 +36,7 @@ const config: CapacitorConfig = {
       'android.permission.READ_MEDIA_AUDIO'
     ],
     adaptiveIcon: {
-      foreground: '/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png',
+      foreground: '/app-icon-adaptive.png',
       background: '#FFFFFF'
     }
   },
@@ -46,7 +46,7 @@ const config: CapacitorConfig = {
     allowsBackForwardNavigationGestures: true,
     backgroundColor: '#ffffff',
     overrideUserAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-    icon: '/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png'
+    icon: '/app-icon-adaptive.png'
   }
 };
 
