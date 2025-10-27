@@ -489,7 +489,41 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         }
       }
 
-      // Deletar registros das tabelas
+      // 1. Deletar produtos candidatos à normalização vinculados (com cascade agora, mas fazemos manualmente para controle)
+      console.log('🗑️ Deletando produtos candidatos vinculados...');
+      const { error: candidatosError } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .delete()
+        .eq('nota_imagem_id', id);
+      
+      if (candidatosError) {
+        console.error('⚠️ Aviso ao deletar candidatos:', candidatosError);
+      }
+      
+      // 2. Deletar falhas de normalização vinculadas (com cascade agora, mas fazemos manualmente para controle)
+      console.log('🗑️ Deletando falhas de normalização vinculadas...');
+      const { error: falhasError } = await supabase
+        .from('normalizacao_falhas')
+        .delete()
+        .eq('nota_imagem_id', id);
+      
+      if (falhasError) {
+        console.error('⚠️ Aviso ao deletar falhas:', falhasError);
+      }
+      
+      // 3. Deletar itens do estoque vinculados
+      console.log('🗑️ Deletando itens do estoque vinculados...');
+      const { error: estoqueError } = await supabase
+        .from('estoque_app')
+        .delete()
+        .or(`nota_id.eq.${id},compra_id.eq.${id}`);
+      
+      if (estoqueError) {
+        console.error('⚠️ Aviso ao deletar estoque:', estoqueError);
+      }
+      
+      // 4. Deletar registros das tabelas principais
+      console.log('🗑️ Deletando nota das tabelas principais...');
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').delete().eq('id', id),
         supabase.from('notas_imagens').delete().eq('id', id)
@@ -503,17 +537,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
       if (notasImagensResult.error) {
         console.error('❌ Erro ao deletar notas_imagens:', notasImagensResult.error);
         
-        // Mensagem de erro específica
-        let errorMsg = notasImagensResult.error.message;
-        if (notasImagensResult.error.code === '23503') {
-          errorMsg = 'Esta nota está vinculada a outros registros e não pôde ser excluída. Por favor, contate o suporte com este ID: ' + id;
-        } else if (notasImagensResult.error.message.includes('foreign key')) {
-          errorMsg = 'Esta nota possui dependências que impedem sua exclusão. ID: ' + id;
-        }
-        
         toast({
           title: "Erro ao excluir nota",
-          description: errorMsg,
+          description: notasImagensResult.error.message,
           variant: "destructive",
         });
         return;
@@ -531,7 +557,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
       
       toast({ 
         title: "Sucesso", 
-        description: `Nota "${nota.nome_original || 'sem nome'}" excluída com sucesso` 
+        description: `Nota "${nota.nome_original || 'sem nome'}" e todos os registros vinculados foram excluídos com sucesso` 
       });
     } catch (error) {
       console.error('❌ Erro crítico ao deletar nota:', error);
@@ -1248,7 +1274,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             <AlertDialogDescription>
               ❗ Você tem certeza que deseja excluir esta nota fiscal?
               <br />
-              Essa operação é irreversível e removerá todos os itens associados a esta nota do seu estoque.
+              Essa operação é irreversível e removerá todos os registros associados a esta nota (produtos em normalização, histórico, estoque, etc.).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
