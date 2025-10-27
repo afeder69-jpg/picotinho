@@ -94,31 +94,35 @@ export const SimplifiedInAppBrowser = ({
           />
           
           {/* Botões Flutuantes */}
-          <div className="fixed bottom-8 left-0 right-0 z-[9999]">
-            <div className="flex justify-center items-center gap-6 w-full p-4">
+          <div className="fixed bottom-4 left-0 right-0 z-[9999]">
+            <div className="flex justify-center items-center gap-3 w-full px-4 pb-safe">
               {/* Botão Cancelar - Vermelho */}
               <Button
                 variant="destructive"
                 size="lg"
-                className="h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-2xl"
+                className="h-14 flex-1 rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-2xl"
                 onClick={handleCancel}
                 disabled={isProcessing}
               >
-                <X className="w-8 h-8" />
+                <X className="w-6 h-6" />
+                <span>Cancelar</span>
               </Button>
 
               {/* Botão Confirmar - Verde */}
               <Button
                 variant="default"
                 size="lg"
-                className="h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-2xl disabled:opacity-50"
+                className="h-14 flex-1 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-2xl disabled:opacity-50"
                 onClick={handleConfirm}
                 disabled={isProcessing}
               >
                 {isProcessing ? (
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
                 ) : (
-                  <Check className="w-10 h-10" />
+                  <>
+                    <Check className="w-6 h-6" />
+                    <span>Confirmar</span>
+                  </>
                 )}
               </Button>
             </div>
