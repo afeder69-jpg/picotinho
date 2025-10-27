@@ -23,6 +23,7 @@ async function checkCache(supabase: any, chaveNFCe: string): Promise<CacheEntry 
     .from('nfce_cache_infosimples')
     .select('*')
     .eq('chave_nfce', chaveNFCe)
+    .eq('tipo_consulta', 'completa')
     .single();
 
   if (error) {
@@ -70,6 +71,7 @@ async function saveToCache(supabase: any, chaveNFCe: string, dadosNFCe: any): Pr
         nome_emitente: emitente?.nome_razao_social,
         data_emissao: info?.data_emissao ? parseDataBrasileira(info.data_emissao) : null,
         valor_total: dadosNFCe.data?.[0]?.normalizado_valor_total || 0,
+        tipo_consulta: 'completa',
         dados_completos: dadosNFCe
       });
 
@@ -109,7 +111,7 @@ async function consultarNFCeInfoSimples(chaveNFCe: string): Promise<any> {
     throw new Error('Credenciais InfoSimples não configuradas');
   }
 
-  const apiUrl = `https://api.infosimples.com/api/v2/consultas/sefaz/rj/nfce-resumida?nfce=${chaveNFCe}`;
+  const apiUrl = `https://api.infosimples.com/api/v2/consultas/sefaz/rj/nfce-completa?nfce=${chaveNFCe}`;
   
   console.log('🌐 [INFOSIMPLES] Consultando API...');
   console.log(`   URL: ${apiUrl}`);
@@ -163,15 +165,41 @@ async function processarNFCe(
     throw new Error('Dados da NFC-e não encontrados na resposta');
   }
 
-  // Extrair produtos
-  const produtos = nfceData.produtos?.map((p: any) => ({
-    codigo: p.codigo,
-    nome: p.nome,
-    quantidade: p.normalizado_quantidade,
-    valor_unitario: p.normalizado_valor_unitario,
-    valor_total: p.normalizado_valor_total_produto,
-    unidade: p.unidade
-  })) || [];
+  // Extrair produtos com preços FINAIS (já com desconto aplicado)
+  let produtosComDesconto = 0;
+  let economiaTotal = 0;
+  
+  const produtos = nfceData.produtos?.map((p: any) => {
+    // Valor do desconto aplicado (pode ser 0)
+    const valorDesconto = parseFloat(p.normalizado_valor_desconto || '0');
+    const valorOriginal = parseFloat(p.normalizado_valor_unitario || '0');
+    
+    // Preço FINAL = preço unitário - desconto
+    const valorUnitarioFinal = valorOriginal - valorDesconto;
+    const valorTotalFinal = parseFloat(p.normalizado_valor_total_com_desconto || p.normalizado_valor_total_produto || '0');
+    
+    const temDesconto = valorDesconto > 0;
+    
+    if (temDesconto) {
+      produtosComDesconto++;
+      economiaTotal += valorDesconto * parseFloat(p.normalizado_quantidade || '1');
+    }
+    
+    return {
+      codigo: p.codigo,
+      nome: p.nome,
+      quantidade: p.normalizado_quantidade,
+      unidade: p.unidade,
+      // PREÇOS FINAIS (já com desconto)
+      valor_unitario: valorUnitarioFinal,
+      valor_total: valorTotalFinal,
+      // Flag para UI futura (🏷️)
+      tem_desconto: temDesconto,
+      // Campos opcionais para análise (não usados na UI)
+      _valor_desconto_aplicado: temDesconto ? valorDesconto : undefined,
+      _valor_original: temDesconto ? valorOriginal : undefined
+    };
+  }) || [];
 
   // Extrair emitente
   const emitente = {
@@ -190,19 +218,26 @@ async function processarNFCe(
     data_emissao: infoNota?.data_emissao,
     hora_emissao: infoNota?.hora_emissao,
     valor_total: nfceData.normalizado_valor_total,
-    valor_desconto: nfceData.normalizado_valor_desconto,
+    valor_desconto_total: nfceData.normalizado_valor_desconto,
     valor_a_pagar: nfceData.normalizado_valor_a_pagar,
     quantidade_itens: nfceData.normalizado_quantidade_total_items,
-    produtos,
+    produtos, // Produtos já com preços finais (com desconto aplicado)
     emitente,
     formas_pagamento: nfceData.formas_pagamento,
-    origem_api: 'infosimples',
+    origem_api: 'infosimples_completa',
     url_html_nota: nfceData.site_receipt,
     timestamp_processamento: new Date().toISOString()
   };
 
   console.log(`   ✅ ${produtos.length} produtos extraídos`);
   console.log(`   💵 Valor total: R$ ${dadosExtraidos.valor_total}`);
+  
+  // Logs de desconto para tracking
+  if (produtosComDesconto > 0) {
+    console.log(`   🏷️  ${produtosComDesconto} produtos com desconto`);
+    console.log(`   💰 Economia total: R$ ${economiaTotal.toFixed(2)}`);
+  }
+  
   console.log(`   🏪 Emitente: ${emitente.nome}`);
 
   // Atualizar nota_imagens com os dados processados

@@ -572,6 +572,7 @@ export type Database = {
           id: string
           nome_emitente: string | null
           primeira_consulta: string
+          tipo_consulta: string | null
           total_consultas: number
           ultima_consulta: string
           updated_at: string
@@ -586,6 +587,7 @@ export type Database = {
           id?: string
           nome_emitente?: string | null
           primeira_consulta?: string
+          tipo_consulta?: string | null
           total_consultas?: number
           ultima_consulta?: string
           updated_at?: string
@@ -600,6 +602,7 @@ export type Database = {
           id?: string
           nome_emitente?: string | null
           primeira_consulta?: string
+          tipo_consulta?: string | null
           total_consultas?: number
           ultima_consulta?: string
           updated_at?: string
