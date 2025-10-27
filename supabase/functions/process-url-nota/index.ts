@@ -69,6 +69,7 @@ serve(async (req) => {
       .insert({
         id: notaId,
         usuario_id: userId,
+        imagem_path: 'qrcode://url',
         imagem_url: url,
         processada: false,
         dados_extraidos: {
