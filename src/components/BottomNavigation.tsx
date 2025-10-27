@@ -11,7 +11,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { detectarTipoDocumento, TipoDocumento } from "@/lib/documentDetection";
+import { detectarTipoDocumento, TipoDocumento, extrairChaveNFe } from "@/lib/documentDetection";
+import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
@@ -20,6 +23,8 @@ const BottomNavigation = () => {
   const [showInternalWebViewer, setShowInternalWebViewer] = useState(false);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
   const [pendingDocType, setPendingDocType] = useState<TipoDocumento>(null);
+  const [pendingNotaData, setPendingNotaData] = useState<any>(null);
+  const [isProcessingQRCode, setIsProcessingQRCode] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -74,20 +79,81 @@ const BottomNavigation = () => {
     console.log(`🔍 Tipo de documento: ${tipoDocumento || 'DESCONHECIDO'}`);
     
     setShowQRScanner(false);
-    setPendingQrUrl(data);
-    setPendingDocType(tipoDocumento);
     
     // Verificar se é plataforma nativa (Android/iOS)
     if (Capacitor.isNativePlatform()) {
-      // Em plataforma nativa: usar SimplifiedInAppBrowser
-      console.log('📱 [NATIVO] Abrindo SimplifiedInAppBrowser...');
-      setShowSimplifiedBrowser(true);
-      toast({
-        title: tipoDocumento === 'NFe' ? "📄 Nota Fiscal Eletrônica" : "🎫 Nota Fiscal de Consumidor",
-        description: "Visualize a nota e confirme",
-      });
+      // NOVO FLUXO: Processar ANTES de abrir o visualizador
+      console.log('📱 [NATIVO] Processando nota via InfoSimples...');
+      setIsProcessingQRCode(true);
+      
+      try {
+        const chaveAcesso = extrairChaveNFe(data);
+        
+        if (!chaveAcesso) {
+          throw new Error('Não foi possível extrair a chave de acesso da URL');
+        }
+        
+        console.log('🔑 Chave extraída:', chaveAcesso);
+        
+        // Chamar process-url-nota IMEDIATAMENTE
+        const { data: processData, error: processError } = await supabase.functions.invoke('process-url-nota', {
+          body: {
+            url: data,
+            userId: user.id,
+            chaveAcesso,
+            tipoDocumento,
+          },
+        });
+        
+        if (processError) throw processError;
+        
+        console.log('✅ Processamento iniciado:', processData);
+        
+        // Aguardar alguns segundos para o InfoSimples processar
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        
+        // Buscar os dados processados
+        const { data: notaData, error: notaError } = await supabase
+          .from('notas_imagens')
+          .select('id, dados_extraidos, nome_original')
+          .eq('id', processData.notaId)
+          .single();
+        
+        if (notaError) throw notaError;
+        
+        console.log('📄 Dados da nota buscados:', notaData);
+        
+        if (!notaData.dados_extraidos) {
+          throw new Error('Nota ainda está sendo processada. Tente novamente em alguns segundos.');
+        }
+        
+        // Abrir SimplifiedInAppBrowser com os DADOS
+        setPendingQrUrl(data);
+        setPendingDocType(tipoDocumento);
+        setPendingNotaData(notaData);
+        setShowSimplifiedBrowser(true);
+        setIsProcessingQRCode(false);
+        
+        toast({
+          title: "✅ Nota carregada",
+          description: "Confira os dados e confirme",
+        });
+        
+      } catch (error: any) {
+        console.error('❌ Erro ao processar nota:', error);
+        setIsProcessingQRCode(false);
+        
+        toast({
+          title: "Erro ao processar nota",
+          description: error.message || "Tente novamente",
+          variant: "destructive",
+        });
+      }
     } else {
       // Em plataforma web: usar InternalWebViewer (NFe/Serpro)
+      setPendingQrUrl(data);
+      setPendingDocType(tipoDocumento);
+      
       if (tipoDocumento === 'NFe') {
         console.log('📄 [WEB/NFE] Abrindo InternalWebViewer (Serpro)...');
         setShowInternalWebViewer(true);
@@ -203,10 +269,22 @@ const BottomNavigation = () => {
         </div>
       )}
 
+      {/* Loading Dialog - Processando QR Code */}
+      <Dialog open={isProcessingQRCode}>
+        <DialogContent className="max-w-sm">
+          <div className="text-center py-8">
+            <Loader2 className="w-16 h-16 animate-spin text-primary mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Processando nota fiscal...</h3>
+            <p className="text-sm text-muted-foreground">Aguarde enquanto buscamos os dados da nota</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Simplified In-App Browser (Nativo - NFe/NFCe) */}
-      {showSimplifiedBrowser && pendingQrUrl && user?.id && (
+      {showSimplifiedBrowser && pendingNotaData && user?.id && (
         <SimplifiedInAppBrowser
-          url={pendingQrUrl}
+          notaId={pendingNotaData.id}
+          dadosExtraidos={pendingNotaData.dados_extraidos}
           userId={user.id}
           tipoDocumento={pendingDocType}
           isOpen={showSimplifiedBrowser}
