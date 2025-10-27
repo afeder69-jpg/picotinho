@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Browser } from '@capacitor/browser';
+import { InAppBrowser } from '@capgo/inappbrowser';
 import { Button } from '@/components/ui/button';
 import { Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,28 +31,27 @@ export const SimplifiedInAppBrowser = ({
     }
 
     return () => {
-      Browser.close();
+      InAppBrowser.close();
     };
   }, [isOpen, url]);
 
   const openBrowser = async () => {
     try {
-      console.log('🌐 [BROWSER] Abrindo navegador interno:', { url, tipoDocumento });
+      console.log('🌐 [BROWSER] Abrindo WebView interno:', { url, tipoDocumento });
       
-      await Browser.open({
+      await InAppBrowser.open({
         url,
-        presentationStyle: 'fullscreen',
-        toolbarColor: '#10b981', // green-500
+        isPresentAfterPageLoad: true
       });
 
       // Listener para quando usuário fecha manualmente
-      Browser.addListener('browserFinished', () => {
-        console.log('❌ [BROWSER] Usuário fechou o navegador');
+      InAppBrowser.addListener('closeEvent', () => {
+        console.log('❌ [BROWSER] Usuário fechou o WebView');
         onClose();
       });
 
     } catch (error) {
-      console.error('❌ [BROWSER] Erro ao abrir navegador:', error);
+      console.error('❌ [BROWSER] Erro ao abrir WebView:', error);
       toast({
         title: "Erro ao abrir navegador",
         description: "Não foi possível abrir a nota fiscal",
@@ -96,8 +95,8 @@ export const SimplifiedInAppBrowser = ({
         description: "Atualizando seu estoque...",
       });
 
-      // Fechar navegador e confirmar
-      await Browser.close();
+      // Fechar WebView e confirmar
+      await InAppBrowser.close();
       onConfirm();
 
     } catch (error: any) {
@@ -115,14 +114,14 @@ export const SimplifiedInAppBrowser = ({
 
   const handleCancel = async () => {
     console.log('❌ [CANCEL] Cancelando visualização');
-    await Browser.close();
+    await InAppBrowser.close();
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-20 left-0 right-0 z-[100] pointer-events-none">
+    <div className="fixed bottom-20 left-0 right-0 z-[9999] pointer-events-none">
       <div className="flex justify-center items-center gap-4 w-full max-w-screen-lg mx-auto p-4">
         {/* Botão Cancelar - Vermelho */}
         <Button

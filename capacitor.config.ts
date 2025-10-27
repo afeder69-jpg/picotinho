@@ -11,10 +11,8 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true
     },
-    Browser: {
-      androidCustomTabs: false,
-      iosCustomTabs: false,
-      presentationStyle: 'fullscreen'
+    InAppBrowser: {
+      enabled: true
     },
     FilePicker: {
       permissions: ['photos', 'camera']
