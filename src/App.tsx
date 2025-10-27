@@ -29,6 +29,7 @@ import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
 
 console.log("App.tsx carregando...");
+console.log("🚀 Picotinho versionCode: 3, versionName: 1.2");
 
 const queryClient = new QueryClient({
   defaultOptions: {
