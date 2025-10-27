@@ -89,9 +89,9 @@ serve(async (req) => {
 
     console.log('✅ Nota criada com sucesso:', notaId);
 
-    // Processar via API apropriada
+    // ROTEAMENTO INTELIGENTE: Escolher API apropriada
     if (modelo === '55') {
-      // NFe: Usar Serpro
+      // NFe (modelo 55): Usar Serpro (qualquer UF)
       console.log('📄 [NFE] Processando via Serpro...');
       
       const { data: nfeData, error: nfeError } = await supabase.functions.invoke('process-nfe-serpro', {
@@ -109,9 +109,42 @@ serve(async (req) => {
 
       console.log('✅ NFe processada via Serpro:', nfeData);
       
+    } else if (modelo === '65' && uf === '33') {
+      // NFCe (modelo 65) do RJ (UF 33): Usar InfoSimples
+      console.log('🎫 [NFCE-RJ] Processando via InfoSimples...');
+      
+      const { data: nfceData, error: nfceError } = await supabase.functions.invoke('process-nfce-infosimples', {
+        body: { 
+          chaveAcesso: chave,
+          userId: userId,
+          notaImagemId: notaId
+        }
+      });
+
+      if (nfceError) {
+        console.error('⚠️ Erro ao processar NFCe via InfoSimples:', nfceError);
+        console.log('🔄 Tentando fallback via extração HTML...');
+        
+        // Fallback: Extração genérica
+        const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
+          body: { 
+            notaImagemId: notaId,
+            userId: userId
+          }
+        });
+
+        if (extractError) {
+          console.error('⚠️ Erro no fallback HTML:', extractError);
+        } else {
+          console.log('✅ Fallback concluído:', extractData);
+        }
+      } else {
+        console.log('✅ NFCe-RJ processada via InfoSimples:', nfceData);
+      }
+      
     } else if (modelo === '65') {
-      // NFCe: Tentar extrair via HTML (fallback)
-      console.log('🎫 [NFCE] Tentando extrair dados via HTML...');
+      // NFCe de outras UFs: Extrair via HTML
+      console.log(`🎫 [NFCE-${uf}] Processando via extração HTML (UF não suportada pelo InfoSimples)...`);
       
       const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
         body: { 
@@ -122,11 +155,11 @@ serve(async (req) => {
 
       if (extractError) {
         console.error('⚠️ Erro ao extrair NFCe:', extractError);
-        // Não falhar completamente, a nota já foi criada
       } else {
         console.log('✅ NFCe extraída:', extractData);
       }
     } else {
+      // Modelo desconhecido: Fallback genérico
       console.warn('⚠️ Modelo desconhecido, tentando extração genérica...');
       
       const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {

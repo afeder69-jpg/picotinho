@@ -562,6 +562,51 @@ export type Database = {
         }
         Relationships: []
       }
+      nfce_cache_infosimples: {
+        Row: {
+          chave_nfce: string
+          cnpj_emitente: string | null
+          created_at: string
+          dados_completos: Json
+          data_emissao: string | null
+          id: string
+          nome_emitente: string | null
+          primeira_consulta: string
+          total_consultas: number
+          ultima_consulta: string
+          updated_at: string
+          valor_total: number | null
+        }
+        Insert: {
+          chave_nfce: string
+          cnpj_emitente?: string | null
+          created_at?: string
+          dados_completos: Json
+          data_emissao?: string | null
+          id?: string
+          nome_emitente?: string | null
+          primeira_consulta?: string
+          total_consultas?: number
+          ultima_consulta?: string
+          updated_at?: string
+          valor_total?: number | null
+        }
+        Update: {
+          chave_nfce?: string
+          cnpj_emitente?: string | null
+          created_at?: string
+          dados_completos?: Json
+          data_emissao?: string | null
+          id?: string
+          nome_emitente?: string | null
+          primeira_consulta?: string
+          total_consultas?: number
+          ultima_consulta?: string
+          updated_at?: string
+          valor_total?: number | null
+        }
+        Relationships: []
+      }
       nfe_cache_serpro: {
         Row: {
           chave_nfe: string

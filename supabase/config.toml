@@ -5,6 +5,9 @@ project_id = "mjsbwrtegorjxcepvrik"
 [functions.process-nfe-serpro]
 verify_jwt = false
 
+[functions.process-nfce-infosimples]
+verify_jwt = false
+
 [functions.enviar-lista-whatsapp]
 verify_jwt = true
 
