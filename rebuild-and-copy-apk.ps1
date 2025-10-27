@@ -4,7 +4,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Configurar JAVA_HOME
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
 Write-Host "Configurado JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Green
 
 # Fase 1: Limpeza agressiva
