@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { createHtmlPlugin } from 'vite-plugin-html';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -19,6 +20,16 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    createHtmlPlugin({
+      minify: true,
+      inject: {
+        data: {
+          injectScript: `<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+            <meta http-equiv="Pragma" content="no-cache" />
+            <meta http-equiv="Expires" content="0" />`
+        }
+      }
+    }),
     // Only include componentTagger in development and if available
     ...(mode === 'development' ? (() => {
       try {

@@ -29,7 +29,32 @@ import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
 
 console.log("App.tsx carregando...");
-console.log("🚀 Picotinho versionCode: 3, versionName: 1.2");
+console.log("🚀 Picotinho versionCode: 4, versionName: 1.3");
+
+// Limpeza agressiva de cache
+const APP_VERSION = "1.3";
+const STORED_VERSION = localStorage.getItem("app_version");
+
+if (STORED_VERSION !== APP_VERSION) {
+  console.log(`🔄 Versão mudou de ${STORED_VERSION} para ${APP_VERSION} - limpando cache`);
+  
+  // Desregistrar service workers
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      registrations.forEach(registration => registration.unregister());
+    });
+  }
+  
+  // Limpar storage
+  localStorage.clear();
+  sessionStorage.clear();
+  
+  // Salvar nova versão
+  localStorage.setItem("app_version", APP_VERSION);
+  
+  // Force reload sem cache
+  window.location.reload();
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
