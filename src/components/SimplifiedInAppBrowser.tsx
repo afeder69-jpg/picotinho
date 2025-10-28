@@ -93,8 +93,34 @@ export const SimplifiedInAppBrowser = ({
     }
   };
 
-  const handleCancel = () => {
-    console.log('❌ [CANCEL] Cancelando visualização');
+  const handleCancel = async () => {
+    console.log('❌ [CANCEL] Cancelando e deletando nota não confirmada');
+    
+    try {
+      // Deletar a nota de notas_imagens
+      const { error } = await supabase
+        .from('notas_imagens')
+        .delete()
+        .eq('id', notaId);
+      
+      if (error) {
+        console.error('❌ Erro ao deletar nota:', error);
+        toast({
+          title: "Aviso",
+          description: "Não foi possível limpar a nota do sistema",
+          variant: "destructive",
+        });
+      } else {
+        console.log('✅ Nota deletada com sucesso');
+        toast({
+          title: "Nota descartada",
+          description: "A nota foi removida do sistema",
+        });
+      }
+    } catch (error) {
+      console.error('❌ Erro ao deletar nota:', error);
+    }
+    
     onClose();
   };
 
