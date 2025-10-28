@@ -220,47 +220,66 @@ async function processarNFCe(
   // Extrair emitente
   const emitente = {
     cnpj: nfceData.emitente?.cnpj?.replace(/\D/g, ''),
-    nome: nfceData.emitente?.nome_razao_social,
+    nome: nfceData.emitente?.nome_razao_social || nfceData.emitente?.nome_fantasia,
+    endereco: nfceData.emitente?.endereco
+  };
+
+  // ✅ Criar estabelecimento no formato esperado pelo frontend
+  const estabelecimento = {
+    cnpj: nfceData.emitente?.cnpj?.replace(/\D/g, ''),
+    nome: nfceData.emitente?.nome_fantasia || nfceData.emitente?.nome_razao_social,
     endereco: nfceData.emitente?.endereco
   };
 
   // Extrair informações da nota
   const infoNota = nfceData.informacoes_nota || nfceData;
   
+  // ✅ Converter data brasileira para ISO
+  const dataEmissaoRaw = infoNota?.data_emissao || nfceData.data_emissao;
+  const dataEmissaoISO = dataEmissaoRaw ? parseDataBrasileira(dataEmissaoRaw) : null;
+  
   const dadosExtraidos = {
     chave_acesso: (infoNota?.chave_acesso || nfceData.chave)?.replace(/\s/g, ''),
     numero_nota: infoNota?.numero || nfceData.numero,
     serie: infoNota?.serie || nfceData.serie,
-    data_emissao: infoNota?.data_emissao || nfceData.data_emissao,
+    
+    // ✅ Data em formato ISO para o frontend
+    data_emissao: dataEmissaoISO,
     hora_emissao: infoNota?.hora_emissao || nfceData.hora_emissao,
     
     // ✅ CRÍTICO: Salvar HTML da nota para fallback
     html_capturado: nfceData.site_receipt || null,
     
-    // Tentar ambos formatos
+    // ✅ Valores numéricos (não strings)
     valor_total: parseFloat(
-      nfceData.valor_total || 
       nfceData.normalizado_valor_total || 
+      nfceData.valor_total || 
       infoNota?.valor_total ||
       '0'
     ),
     valor_desconto_total: parseFloat(
-      nfceData.valor_desconto || 
       nfceData.normalizado_valor_desconto || 
+      nfceData.valor_desconto || 
       '0'
     ),
     valor_a_pagar: parseFloat(
-      nfceData.valor_a_pagar || 
       nfceData.normalizado_valor_a_pagar || 
+      nfceData.valor_a_pagar || 
       '0'
     ),
     quantidade_itens: parseInt(
-      nfceData.quantidade_itens || 
       nfceData.normalizado_quantidade_total_items || 
+      nfceData.quantidade_itens || 
       produtos.length.toString()
     ),
     produtos,
+    
+    // ✅ Formato esperado pelo SimplifiedInAppBrowser
+    estabelecimento,
+    
+    // Manter compatibilidade com formato antigo
     emitente,
+    
     formas_pagamento: nfceData.formas_pagamento || nfceData.pagamento,
     origem_api: 'infosimples_completa',
     url_html_nota: nfceData.site_receipt,
