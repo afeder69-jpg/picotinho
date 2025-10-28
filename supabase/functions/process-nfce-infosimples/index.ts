@@ -160,13 +160,23 @@ async function processarNFCe(
     throw new Error('Dados da NFC-e não encontrados na resposta');
   }
 
-  // 🔍 DEBUG: Ver estrutura real do primeiro produto
-  if (nfceData.produtos?.[0]) {
-    console.log('🔍 [DEBUG] Estrutura do primeiro produto:', JSON.stringify(nfceData.produtos[0], null, 2));
-  }
-
-  // 🔍 DEBUG: Ver campos disponíveis no nfceData
-  console.log('🔍 [DEBUG] Campos disponíveis no nfceData:', Object.keys(nfceData));
+  // 🔍 DEBUG COMPLETO: Ver toda estrutura da resposta
+  console.log('🔍 [DEBUG] Estrutura completa nfceData:', JSON.stringify({
+    keys: Object.keys(nfceData),
+    emitente_keys: nfceData.emitente ? Object.keys(nfceData.emitente) : 'null',
+    info_nota_keys: nfceData.informacoes_nota ? Object.keys(nfceData.informacoes_nota) : 'null',
+    primeiro_produto: nfceData.produtos?.[0] ? Object.keys(nfceData.produtos[0]) : 'null',
+    campos_valor: {
+      valor_total: nfceData.valor_total,
+      normalizado_valor_total: nfceData.normalizado_valor_total,
+      valor_a_pagar: nfceData.valor_a_pagar
+    },
+    campos_emitente: {
+      nome_razao_social: nfceData.emitente?.nome_razao_social,
+      nome_fantasia: nfceData.emitente?.nome_fantasia,
+      cnpj: nfceData.emitente?.cnpj
+    }
+  }, null, 2));
 
   // Processar produtos
   let produtosComDesconto = 0;
@@ -223,10 +233,15 @@ async function processarNFCe(
     serie: infoNota?.serie || nfceData.serie,
     data_emissao: infoNota?.data_emissao || nfceData.data_emissao,
     hora_emissao: infoNota?.hora_emissao || nfceData.hora_emissao,
+    
+    // ✅ CRÍTICO: Salvar HTML da nota para fallback
+    html_capturado: nfceData.site_receipt || null,
+    
     // Tentar ambos formatos
     valor_total: parseFloat(
       nfceData.valor_total || 
       nfceData.normalizado_valor_total || 
+      infoNota?.valor_total ||
       '0'
     ),
     valor_desconto_total: parseFloat(
@@ -324,9 +339,9 @@ serve(async (req) => {
     if (notaImagemId) {
       await processarNFCe(supabase, userId, notaImagemId, dadosNFCe, '');
       
-      // 5. Invocar extract-receipt-image para processar estoque
-      console.log('🔄 [ESTOQUE] Invocando processamento de estoque...');
-      const { error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
+      // 5. Invocar process-structured-receipt para processar estoque direto (sem OpenAI)
+      console.log('🔄 [ESTOQUE] Invocando processamento de estoque estruturado...');
+      const { error: extractError } = await supabase.functions.invoke('process-structured-receipt', {
         body: { 
           notaImagemId,
           userId 
