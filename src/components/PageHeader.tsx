@@ -25,9 +25,8 @@ const PageHeader = ({ title, backTo = '/menu', onBack, children }: PageHeaderPro
   return (
     <header className="bg-card border-b border-border p-4 sticky top-0 z-10">
       <div className="flex items-center justify-between gap-3">
-        {/* Lado esquerdo: Logo + Seta + Título */}
+        {/* Lado esquerdo: Seta + Logo + Título */}
         <div className="flex items-center gap-3">
-          <PicotinhoLogo size="sm" />
           <Button 
             variant="ghost" 
             size="icon"
@@ -36,6 +35,7 @@ const PageHeader = ({ title, backTo = '/menu', onBack, children }: PageHeaderPro
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
+          <PicotinhoLogo size="sm" />
           <h1 className="text-xl font-semibold">{title}</h1>
         </div>
         

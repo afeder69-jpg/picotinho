@@ -56,7 +56,7 @@ export default function ListasComprasIndex() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <PageHeader title="🛒 Listas de Compras">
+      <PageHeader title="Listas de Compras">
         <Button onClick={() => setCriarDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Nova Lista
