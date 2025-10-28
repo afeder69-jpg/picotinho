@@ -58,33 +58,67 @@ export const SimplifiedInAppBrowser = ({
     setIsProcessing(true);
     
     try {
-      console.log('✅ [CONFIRM] Adicionando nota ao estoque:', notaId);
+      console.log('✅ [CONFIRM] Iniciando validação e processamento:', notaId);
 
-      // A nota JÁ FOI PROCESSADA pelo InfoSimples
-      // Só precisamos adicionar os produtos ao estoque
-      const { error } = await supabase.functions.invoke('extract-receipt-image', {
+      // PASSO 1: Buscar dados da nota para obter imageUrl
+      const { data: notaData, error: notaError } = await supabase
+        .from('notas_imagens')
+        .select('imagem_url')
+        .eq('id', notaId)
+        .single();
+
+      if (notaError) throw notaError;
+
+      // PASSO 2: Validar a nota (verificar duplicidade, chave de acesso)
+      console.log('🔍 Validando nota...');
+      const { data: validationResult, error: validationError } = await supabase.functions.invoke('validate-receipt', {
         body: {
           notaImagemId: notaId,
+          imageUrl: notaData?.imagem_url,
           userId,
         },
       });
 
-      if (error) throw error;
+      if (validationError) throw validationError;
 
-      console.log('✅ Produtos adicionados ao estoque');
+      if (!validationResult.approved) {
+        console.warn('❌ Nota reprovada na validação:', validationResult.reason);
+        toast({
+          title: "Nota não aprovada",
+          description: validationResult.message,
+          variant: "destructive",
+        });
+        onClose();
+        return;
+      }
+
+      console.log('✅ Nota aprovada na validação');
+
+      // PASSO 3: Processar a nota (categorizar, normalizar, adicionar ao estoque)
+      console.log('⚙️ Processando nota...');
+      const { data: processResult, error: processError } = await supabase.functions.invoke('process-receipt-full', {
+        body: {
+          imagemId: notaId,
+          force: false,
+        },
+      });
+
+      if (processError) throw processError;
+
+      console.log('✅ Nota processada com sucesso:', processResult);
 
       toast({
         title: "✅ Nota adicionada ao estoque",
-        description: "Produtos disponíveis no seu estoque",
+        description: `${processResult.itens_inseridos} produtos adicionados`,
       });
 
       onConfirm();
 
     } catch (error: any) {
-      console.error('❌ [ERRO] Falha ao adicionar ao estoque:', error);
+      console.error('❌ [ERRO] Falha ao processar nota:', error);
       
       toast({
-        title: "Erro ao adicionar ao estoque",
+        title: "Erro ao processar nota",
         description: error.message || "Tente novamente",
         variant: "destructive",
       });
