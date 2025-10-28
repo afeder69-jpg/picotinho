@@ -7,6 +7,7 @@ import { TipoDocumento } from '@/lib/documentDetection';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import PicotinhoLogo from '@/components/PicotinhoLogo';
 
 interface SimplifiedInAppBrowserProps {
   notaId: string;
@@ -41,7 +42,7 @@ export const SimplifiedInAppBrowser = ({
         return dataStr;
       }
       
-      return format(data, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+      return format(data, "dd/MM/yyyy HH:mm:ss", { locale: ptBR });
     } catch (error) {
       console.error('Erro ao formatar data:', error, dataStr);
       return dataStr;
@@ -110,9 +111,12 @@ export const SimplifiedInAppBrowser = ({
           <div className="p-6 max-w-2xl mx-auto pb-32">
             {/* Cabeçalho */}
             <div className="mb-6 pb-4 border-b">
-              <h2 className="text-2xl font-bold mb-2">
-                {dadosExtraidos?.estabelecimento?.nome || 'Nota Fiscal'}
-              </h2>
+              <div className="flex justify-between items-start mb-2">
+                <h2 className="text-2xl font-bold flex-1">
+                  {dadosExtraidos?.estabelecimento?.nome || 'Nota Fiscal'}
+                </h2>
+                <PicotinhoLogo size="md" className="ml-2" />
+              </div>
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p><span className="font-medium">CNPJ:</span> {dadosExtraidos?.estabelecimento?.cnpj || 'N/A'}</p>
                 <p><span className="font-medium">Data:</span> {dadosExtraidos?.data_emissao ? formatarData(dadosExtraidos.data_emissao) : 'N/A'}</p>
