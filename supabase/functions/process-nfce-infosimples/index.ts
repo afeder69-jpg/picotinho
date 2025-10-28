@@ -186,11 +186,11 @@ async function processarNFCe(
     // ✅ Extrair valores dos campos corretos da API InfoSimples
     const valorDesconto = parseFloat(p.valor_desconto || p.normalizado_valor_desconto || '0');
     
-    // ✅ Valor unitário comercial é o campo correto
+    // ✅ Priorizar normalizado_valor (já vem correto com centavos)
     const valorOriginal = parseFloat(
-      p.valor_unitario_comercial || 
-      p.normalizado_valor || 
-      p.valor || 
+      p.normalizado_valor ||          // ← Prioridade 1: número correto
+      p.valor ||                      // ← Prioridade 2: fallback
+      p.valor_unitario_comercial ||   // ← Prioridade 3: último recurso
       '0'
     );
     
@@ -214,6 +214,14 @@ async function processarNFCe(
       produtosComDesconto++;
       economiaTotal += valorDesconto * quantidade;
     }
+    
+    // 🔍 Debug de valores extraídos
+    console.log(`   📦 ${p.descricao || p.nome}:`);
+    console.log(`      - normalizado_valor: ${p.normalizado_valor}`);
+    console.log(`      - valor: ${p.valor}`);
+    console.log(`      - valor_unitario_comercial: ${p.valor_unitario_comercial}`);
+    console.log(`      - 💰 Valor usado: ${valorOriginal}`);
+    console.log(`      - 📊 Qtd: ${quantidade} | Total: ${valorTotalFinal}`);
     
     return {
       codigo: p.codigo,

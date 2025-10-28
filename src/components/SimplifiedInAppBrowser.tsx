@@ -30,10 +30,20 @@ export const SimplifiedInAppBrowser = ({
   const [isProcessing, setIsProcessing] = useState(false);
 
   const formatarData = (dataStr: string) => {
+    if (!dataStr) return 'Data não disponível';
+    
     try {
       const data = new Date(dataStr);
+      
+      // Validar se a data é válida
+      if (isNaN(data.getTime())) {
+        console.error('Data inválida:', dataStr);
+        return dataStr;
+      }
+      
       return format(data, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-    } catch {
+    } catch (error) {
+      console.error('Erro ao formatar data:', error, dataStr);
       return dataStr;
     }
   };
