@@ -160,37 +160,48 @@ async function processarNFCe(
     throw new Error('Dados da NFC-e não encontrados na resposta');
   }
 
-  // Extrair produtos com preços FINAIS (já com desconto aplicado)
+  // 🔍 DEBUG: Ver estrutura real do primeiro produto
+  if (nfceData.produtos?.[0]) {
+    console.log('🔍 [DEBUG] Estrutura do primeiro produto:', JSON.stringify(nfceData.produtos[0], null, 2));
+  }
+
+  // 🔍 DEBUG: Ver campos disponíveis no nfceData
+  console.log('🔍 [DEBUG] Campos disponíveis no nfceData:', Object.keys(nfceData));
+
+  // Processar produtos
   let produtosComDesconto = 0;
   let economiaTotal = 0;
   
   const produtos = nfceData.produtos?.map((p: any) => {
-    // Valor do desconto aplicado (pode ser 0)
-    const valorDesconto = parseFloat(p.normalizado_valor_desconto || '0');
-    const valorOriginal = parseFloat(p.normalizado_valor_unitario || '0');
+    // 🔍 Tentar ambos os formatos (com e sem normalizado_)
+    const valorDesconto = parseFloat(p.valor_desconto || p.normalizado_valor_desconto || '0');
+    const valorOriginal = parseFloat(p.valor_unitario || p.normalizado_valor_unitario || '0');
+    const quantidade = parseFloat(p.quantidade || p.normalizado_quantidade || '1');
     
     // Preço FINAL = preço unitário - desconto
     const valorUnitarioFinal = valorOriginal - valorDesconto;
-    const valorTotalFinal = parseFloat(p.normalizado_valor_total_com_desconto || p.normalizado_valor_total_produto || '0');
+    const valorTotalFinal = parseFloat(
+      p.valor_total || 
+      p.normalizado_valor_total_com_desconto || 
+      p.normalizado_valor_total_produto || 
+      '0'
+    );
     
     const temDesconto = valorDesconto > 0;
     
     if (temDesconto) {
       produtosComDesconto++;
-      economiaTotal += valorDesconto * parseFloat(p.normalizado_quantidade || '1');
+      economiaTotal += valorDesconto * quantidade;
     }
     
     return {
       codigo: p.codigo,
-      nome: p.nome,
-      quantidade: p.normalizado_quantidade,
-      unidade: p.unidade,
-      // PREÇOS FINAIS (já com desconto)
+      nome: p.nome || p.descricao,
+      quantidade: quantidade,
+      unidade: p.unidade || 'UN',
       valor_unitario: valorUnitarioFinal,
       valor_total: valorTotalFinal,
-      // Flag para UI futura (🏷️)
       tem_desconto: temDesconto,
-      // Campos opcionais para análise (não usados na UI)
       _valor_desconto_aplicado: temDesconto ? valorDesconto : undefined,
       _valor_original: temDesconto ? valorOriginal : undefined
     };
@@ -204,21 +215,38 @@ async function processarNFCe(
   };
 
   // Extrair informações da nota
-  const infoNota = nfceData.informacoes_nota;
+  const infoNota = nfceData.informacoes_nota || nfceData;
   
   const dadosExtraidos = {
-    chave_acesso: infoNota?.chave_acesso?.replace(/\s/g, ''),
-    numero_nota: infoNota?.numero,
-    serie: infoNota?.serie,
-    data_emissao: infoNota?.data_emissao,
-    hora_emissao: infoNota?.hora_emissao,
-    valor_total: nfceData.normalizado_valor_total,
-    valor_desconto_total: nfceData.normalizado_valor_desconto,
-    valor_a_pagar: nfceData.normalizado_valor_a_pagar,
-    quantidade_itens: nfceData.normalizado_quantidade_total_items,
-    produtos, // Produtos já com preços finais (com desconto aplicado)
+    chave_acesso: (infoNota?.chave_acesso || nfceData.chave)?.replace(/\s/g, ''),
+    numero_nota: infoNota?.numero || nfceData.numero,
+    serie: infoNota?.serie || nfceData.serie,
+    data_emissao: infoNota?.data_emissao || nfceData.data_emissao,
+    hora_emissao: infoNota?.hora_emissao || nfceData.hora_emissao,
+    // Tentar ambos formatos
+    valor_total: parseFloat(
+      nfceData.valor_total || 
+      nfceData.normalizado_valor_total || 
+      '0'
+    ),
+    valor_desconto_total: parseFloat(
+      nfceData.valor_desconto || 
+      nfceData.normalizado_valor_desconto || 
+      '0'
+    ),
+    valor_a_pagar: parseFloat(
+      nfceData.valor_a_pagar || 
+      nfceData.normalizado_valor_a_pagar || 
+      '0'
+    ),
+    quantidade_itens: parseInt(
+      nfceData.quantidade_itens || 
+      nfceData.normalizado_quantidade_total_items || 
+      produtos.length.toString()
+    ),
+    produtos,
     emitente,
-    formas_pagamento: nfceData.formas_pagamento,
+    formas_pagamento: nfceData.formas_pagamento || nfceData.pagamento,
     origem_api: 'infosimples_completa',
     url_html_nota: nfceData.site_receipt,
     timestamp_processamento: new Date().toISOString()
