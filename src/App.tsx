@@ -27,12 +27,12 @@ import ListaComprasComprar from "./pages/ListaComprasComprar";
 
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
+import { APP_VERSION } from "./lib/constants";
 
 console.log("App.tsx carregando...");
-console.log("🚀 Picotinho versionCode: 4, versionName: 1.3");
+console.log(`🚀 Picotinho versionName: ${APP_VERSION}`);
 
 // Limpeza agressiva de cache
-const APP_VERSION = "1.3";
 const STORED_VERSION = localStorage.getItem("app_version");
 
 if (STORED_VERSION !== APP_VERSION) {

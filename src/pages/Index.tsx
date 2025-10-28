@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import { APP_VERSION } from "@/lib/constants";
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -25,8 +26,10 @@ const Index = () => {
       <div className="flex justify-between items-center p-4 relative">
         <PicotinhoLogo />
         <div className="flex-1"></div> {/* Spacer */}
-        {/* Indicador de versão APK */}
-        <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full"></div>
+        {/* Badge de versão APK */}
+        <div className="absolute top-2 right-2 text-[10px] text-muted-foreground/60 font-mono">
+          V {APP_VERSION}
+        </div>
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
