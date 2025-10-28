@@ -183,19 +183,30 @@ async function processarNFCe(
   let economiaTotal = 0;
   
   const produtos = nfceData.produtos?.map((p: any) => {
-    // 🔍 Tentar ambos os formatos (com e sem normalizado_)
+    // ✅ Extrair valores dos campos corretos da API InfoSimples
     const valorDesconto = parseFloat(p.valor_desconto || p.normalizado_valor_desconto || '0');
-    const valorOriginal = parseFloat(p.valor_unitario || p.normalizado_valor_unitario || '0');
-    const quantidade = parseFloat(p.quantidade || p.normalizado_quantidade || '1');
+    
+    // ✅ Valor unitário comercial é o campo correto
+    const valorOriginal = parseFloat(
+      p.valor_unitario_comercial || 
+      p.normalizado_valor || 
+      p.valor || 
+      '0'
+    );
+    
+    // ✅ Quantidade do produto
+    const quantidade = parseFloat(
+      p.qtd || 
+      p.quantidade_comercial || 
+      p.quantidade || 
+      '1'
+    );
     
     // Preço FINAL = preço unitário - desconto
     const valorUnitarioFinal = valorOriginal - valorDesconto;
-    const valorTotalFinal = parseFloat(
-      p.valor_total || 
-      p.normalizado_valor_total_com_desconto || 
-      p.normalizado_valor_total_produto || 
-      '0'
-    );
+    
+    // ✅ Calcular valor total (valor unitário × quantidade)
+    const valorTotalFinal = valorUnitarioFinal * quantidade;
     
     const temDesconto = valorDesconto > 0;
     
@@ -234,8 +245,8 @@ async function processarNFCe(
   // Extrair informações da nota
   const infoNota = nfceData.informacoes_nota || nfceData;
   
-  // ✅ Converter data brasileira para ISO
-  const dataEmissaoRaw = infoNota?.data_emissao || nfceData.data_emissao;
+  // ✅ Converter data brasileira para ISO - buscar no objeto nfe primeiro
+  const dataEmissaoRaw = nfceData.nfe?.data_emissao || infoNota?.data_emissao || nfceData.data_emissao;
   const dataEmissaoISO = dataEmissaoRaw ? parseDataBrasileira(dataEmissaoRaw) : null;
   
   const dadosExtraidos = {
@@ -250,11 +261,11 @@ async function processarNFCe(
     // ✅ CRÍTICO: Salvar HTML da nota para fallback
     html_capturado: nfceData.site_receipt || null,
     
-    // ✅ Valores numéricos (não strings)
+    // ✅ Valores numéricos (não strings) - buscar em totais primeiro
     valor_total: parseFloat(
-      nfceData.normalizado_valor_total || 
+      nfceData.totais?.normalizado_valor_nfe || 
+      nfceData.nfe?.normalizado_valor_total ||
       nfceData.valor_total || 
-      infoNota?.valor_total ||
       '0'
     ),
     valor_desconto_total: parseFloat(
