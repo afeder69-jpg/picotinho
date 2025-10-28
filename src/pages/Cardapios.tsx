@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
-import PicotinhoLogo from "@/components/PicotinhoLogo";
+import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { CardapioCard } from "@/components/cardapio/CardapioCard";
 import { CardapioDialog } from "@/components/cardapio/CardapioDialog";
@@ -42,21 +42,13 @@ export default function Cardapios() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <PageHeader title="Cardápios">
+        <Button onClick={() => setDialogAberto(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Novo Cardápio
+        </Button>
+      </PageHeader>
       <div className="container max-w-6xl mx-auto p-4 space-y-6 pb-24">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <PicotinhoLogo />
-            <div>
-              <h1 className="text-2xl font-bold">Cardápios</h1>
-              <p className="text-sm text-muted-foreground">Planeje suas refeições semanais</p>
-            </div>
-          </div>
-          <Button onClick={() => setDialogAberto(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Cardápio
-          </Button>
-        </div>
 
         {/* Lista de Cardápios */}
         {isLoading ? (

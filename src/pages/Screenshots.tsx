@@ -2,6 +2,7 @@ import React from "react";
 
 import ReceiptList from "@/components/ReceiptList";
 import UploadNoteButton from "@/components/UploadNoteButton";
+import PageHeader from "@/components/PageHeader";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,8 +50,8 @@ const Screenshots = () => {
 
   return (
     <div className="min-h-screen bg-background pb-32">
+      <PageHeader title="Minhas Notas Fiscais" />
       <div className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-6">Minhas Notas Fiscais</h1>
         <div className="mb-6">
           <UploadNoteButton onUploadSuccess={handleUploadSuccess} />
         </div>

@@ -1,10 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import PicotinhoLogo from "@/components/PicotinhoLogo";
+import PageHeader from "@/components/PageHeader";
 import { 
   ChevronRight, 
   MapPin,
-  ArrowLeft,
   Settings,
   MessageCircle,
   Shield
@@ -82,35 +81,11 @@ const ConfiguracoesUsuario = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col pb-32">
-      {/* Header com logo e botão de voltar */}
-      <div className="flex justify-between items-center p-4">
-        <Button 
-          variant="ghost" 
-          onClick={() => navigate('/menu')}
-          className="flex items-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar
-        </Button>
-        <PicotinhoLogo />
-        <div className="w-16" /> {/* Spacer para centralizar o logo */}
-      </div>
+      <PageHeader title="Configurações do Usuário" />
 
       {/* Main content area */}
-      <div className="flex-1 px-6 pb-8">
+      <div className="flex-1 px-6 pb-8 pt-6">
         <div className="max-w-md mx-auto">
-          {/* Título da página */}
-          <div className="text-center mb-6">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Settings className="w-6 h-6 text-primary" />
-              <h1 className="text-2xl font-bold text-foreground">
-                Configurações do Usuário
-              </h1>
-            </div>
-            <p className="text-muted-foreground">
-              Gerencie suas configurações pessoais
-            </p>
-          </div>
           
           <div className="space-y-3">
             {allOptions.map((option) => (

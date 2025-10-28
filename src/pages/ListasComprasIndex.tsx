@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Plus, ShoppingCart, Calendar, User, ArrowLeft } from "lucide-react";
+import { Plus, ShoppingCart, Calendar, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
+import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,25 +56,13 @@ export default function ListasComprasIndex() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <PageHeader title="🛒 Listas de Compras">
+        <Button onClick={() => setCriarDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nova Lista
+        </Button>
+      </PageHeader>
       <div className="container max-w-5xl mx-auto p-4 space-y-6 pb-24">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/menu')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold">🛒 Listas de Compras</h1>
-              <p className="text-sm text-muted-foreground">
-                {listas.length} lista{listas.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => setCriarDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Lista
-          </Button>
-        </div>
 
         {/* Grid de Listas */}
         {listas.length === 0 ? (

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
-import PicotinhoLogo from "@/components/PicotinhoLogo";
+import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,15 +65,13 @@ export default function Receitas() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <PageHeader title="Receitas">
+        <Button onClick={() => setDialogAberto(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nova Receita
+        </Button>
+      </PageHeader>
       <div className="container max-w-6xl mx-auto p-4 space-y-6 pb-24">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <PicotinhoLogo />
-          <Button onClick={() => setDialogAberto(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Receita
-          </Button>
-        </div>
 
         {/* Busca */}
         <div className="relative">

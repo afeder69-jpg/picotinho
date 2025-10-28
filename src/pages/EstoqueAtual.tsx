@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { formatarQuantidade, formatarNomeParaExibicao } from '@/lib/utils';
-import PicotinhoLogo from '@/components/PicotinhoLogo';
+import PageHeader from '@/components/PageHeader';
 import { normalizarCategoria, categoriasEquivalentes, ordemCategorias, categoriasNormalizadas } from '@/lib/categorias';
 
 interface EstoqueItem {
@@ -1474,12 +1474,7 @@ const EstoqueAtual = () => {
     console.log('❌ Tipo do estoque:', typeof estoque, Array.isArray(estoque));
     return (
       <div className="min-h-screen bg-background text-foreground">
-        {/* Header com logo */}
-        <div className="bg-card border-b border-border">
-          <div className="flex justify-center items-center p-4">
-            <PicotinhoLogo />
-          </div>
-        </div>
+        <PageHeader title="Estoque Atual" />
         
         <div className="container mx-auto p-6">
           <div className="text-center p-8">
@@ -1541,70 +1536,18 @@ const EstoqueAtual = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Botão Ações flutuante fixo alinhado com o botão Menu */}
-      <div className="fixed top-14 left-0 right-0 z-40 pointer-events-none">
-        <div className="flex justify-end w-full max-w-screen-lg mx-auto p-4">
-          <div className="pointer-events-auto">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              size="lg"
-              className="h-16 w-16 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg"
-            >
-              <MoreVertical className="w-6 h-6" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 bg-background z-50">
-            <DropdownMenuItem onClick={abrirModalInserir}>
-              <Plus className="w-4 h-4 mr-2" />
-              Inserir Produto
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setModoEdicao(!modoEdicao)}>
-              <Edit3 className="w-4 h-4 mr-2" />
-              {modoEdicao ? "Sair da Edição" : "Ajustar Estoque"}
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => setMostrarItensZerados(!mostrarItensZerados)}
-              className="justify-between"
-            >
-              <div className="flex items-center">
-                <Package className="w-4 h-4 mr-2" />
-                Mostrar itens zerados
-              </div>
-              <div className={`w-4 h-4 border-2 border-gray-400 rounded-sm flex items-center justify-center ${mostrarItensZerados ? 'bg-green-600 border-green-600' : ''}`}>
-                {mostrarItensZerados && (
-                  <div className="w-2 h-2 bg-white rounded-sm"></div>
-                )}
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Limpar Estoque
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
-      {/* Header com logo */}
-      <div className="bg-card border-b border-border">
-        <div className="flex justify-center items-center p-4">
-          <PicotinhoLogo />
-        </div>
-      </div>
+      <PageHeader title="Estoque Atual">
+        <Button onClick={abrirModalInserir}>
+          <Plus className="h-4 w-4 mr-2" />
+          Inserir
+        </Button>
+        <Button onClick={() => setMostrarItensZerados(!mostrarItensZerados)} variant="outline">
+          {mostrarItensZerados ? 'Ocultar' : 'Mostrar'} Zerados
+        </Button>
+      </PageHeader>
       
       <div className="container mx-auto p-6">
         <div className="space-y-4">
-          {/* Header da página - sem o botão ações */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-foreground">Estoque Atual</h1>
-            </div>
-          </div>
 
           {/* Mensagem de carregamento de preços atuais */}
           {loadingPrecosAtuais && (
