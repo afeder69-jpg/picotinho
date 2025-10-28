@@ -15,7 +15,7 @@ const PicotinhoLogo = ({ size = 'md', className = '' }: PicotinhoLogoProps) => {
 
   return (
     <img 
-      src="/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png" 
+      src="/app-icon.png" 
       alt="Mascote Picotinho" 
       className={`object-contain ${sizeClasses[size]} ${className}`}
     />
