@@ -104,25 +104,20 @@ function parseDataBrasileira(data: string): string | null {
  * Consulta API InfoSimples
  */
 async function consultarNFCeInfoSimples(chaveNFCe: string): Promise<any> {
-  const tokenName = Deno.env.get('INFOSIMPLES_TOKEN_NAME');
-  const tokenSecret = Deno.env.get('INFOSIMPLES_TOKEN_SECRET');
+  const token = Deno.env.get('INFOSIMPLES_TOKEN');
 
-  if (!tokenName || !tokenSecret) {
-    throw new Error('Credenciais InfoSimples não configuradas');
+  if (!token) {
+    throw new Error('Token InfoSimples não configurado');
   }
 
-  const apiUrl = `https://api.infosimples.com/api/v2/consultas/sefaz/rj/nfce-completa?nfce=${chaveNFCe}`;
+  const apiUrl = `https://api.infosimples.com/api/v2/consultas/sefaz/rj/nfce-completa?token=${token}&timeout=600&ignore_site_receipt=0&nfce=${chaveNFCe}`;
   
   console.log('🌐 [INFOSIMPLES] Consultando API...');
-  console.log(`   URL: ${apiUrl}`);
-  console.log(`   Token Name: ${tokenName}`);
-  
-  const auth = btoa(`${tokenName}:${tokenSecret}`);
+  console.log(`   URL: ${apiUrl.replace(token, 'TOKEN_HIDDEN')}`);
   
   const response = await fetch(apiUrl, {
     method: 'GET',
     headers: {
-      'Authorization': `Basic ${auth}`,
       'Content-Type': 'application/json'
     }
   });
