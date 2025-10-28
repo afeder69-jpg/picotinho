@@ -2,6 +2,16 @@
 Write-Host "🔥 REBUILD FORÇADO - Limpeza Agressiva" -ForegroundColor Red
 Write-Host ""
 
+# ⬆️ FASE 0: INCREMENTAR VERSÃO AUTOMATICAMENTE
+Write-Host "⬆️  FASE 0: Incrementando versão..." -ForegroundColor Cyan
+node bump-version.js
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ❌ Erro ao incrementar versão!" -ForegroundColor Red
+    exit 1
+}
+Write-Host "  ✓ Versão incrementada" -ForegroundColor Green
+Write-Host ""
+
 # FASE 1: Deletar TUDO manualmente
 Write-Host "🗑️  FASE 1: Deletando caches..." -ForegroundColor Yellow
 

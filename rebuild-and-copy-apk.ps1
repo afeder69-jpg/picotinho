@@ -1,4 +1,15 @@
-# Ler versão do version.json
+# ⬆️ INCREMENTAR VERSÃO AUTOMATICAMENTE
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "INCREMENTANDO VERSAO..." -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Cyan
+node bump-version.js
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Erro ao incrementar versao!" -ForegroundColor Red
+    exit 1
+}
+Write-Host ""
+
+# Ler versão atualizada do version.json
 $versionData = Get-Content version.json | ConvertFrom-Json
 $version = $versionData.version
 $versionCode = $versionData.versionCode

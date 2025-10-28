@@ -2,6 +2,15 @@
 Write-Host "🚀 Iniciando limpeza profunda do projeto Android..." -ForegroundColor Cyan
 Write-Host ""
 
+# Incrementar versão automaticamente
+Write-Host "Incrementando versao..." -ForegroundColor Yellow
+node bump-version.js
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Erro ao incrementar versao!" -ForegroundColor Red
+    exit 1
+}
+Write-Host ""
+
 # Configurar JAVA_HOME
 $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot"
 Write-Host "✅ JAVA_HOME configurado: $env:JAVA_HOME" -ForegroundColor Green
