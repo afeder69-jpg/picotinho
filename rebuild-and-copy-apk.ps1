@@ -1,6 +1,12 @@
+# Ler versão do version.json
+$versionData = Get-Content version.json | ConvertFrom-Json
+$version = $versionData.version
+$versionCode = $versionData.versionCode
+
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "PICOTINHO - BUILD COMPLETO v1.3" -ForegroundColor Cyan
+Write-Host "PICOTINHO - BUILD COMPLETO v$version" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Version Code: $versionCode" -ForegroundColor Gray
 Write-Host ""
 
 # Configurar JAVA_HOME
@@ -100,7 +106,7 @@ Write-Host "=== FASE 5: COPIAR APK ===" -ForegroundColor Yellow
 
 $desktopPath = "C:\Users\Alexandre\Desktop\Picotinho_APK"
 $apkSource = "android\app\build\outputs\apk\debug\app-debug.apk"
-$apkDestination = "$desktopPath\picotinho-v1.3-debug.apk"
+$apkDestination = "$desktopPath\picotinho-v$version-debug.apk"
 
 # Criar pasta se nao existir
 New-Item -ItemType Directory -Force -Path $desktopPath | Out-Null
@@ -125,5 +131,5 @@ Write-Host "1. Desinstale a versao antiga do Picotinho no celular" -ForegroundCo
 Write-Host "2. Limpe cache do WebView (Configuracoes > Apps > Android System WebView > Armazenamento > Limpar cache)" -ForegroundColor White
 Write-Host "3. Limpe cache do Chrome (Configuracoes > Apps > Chrome > Armazenamento > Limpar cache)" -ForegroundColor White
 Write-Host "4. Envie o APK via WhatsApp e instale" -ForegroundColor White
-Write-Host "5. Abra o app e verifique no console: Picotinho versionCode: 4, versionName: 1.3" -ForegroundColor White
+Write-Host "5. Abra o app e verifique no console: Picotinho versionName: $version, versionCode: $versionCode" -ForegroundColor White
 Write-Host ""
