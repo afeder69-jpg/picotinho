@@ -1,13 +1,17 @@
-const fs = require('fs');
-const path = require('path');
+import { readFileSync, writeFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const versionFile = path.join(__dirname, 'version.json');
-const packageFile = path.join(__dirname, 'package.json');
-const constantsFile = path.join(__dirname, 'src/lib/constants.ts');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const versionFile = join(__dirname, 'version.json');
+const packageFile = join(__dirname, 'package.json');
+const constantsFile = join(__dirname, 'src/lib/constants.ts');
 
 // Ler versão atual
-const versionData = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-const packageData = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
+const versionData = JSON.parse(readFileSync(versionFile, 'utf8'));
+const packageData = JSON.parse(readFileSync(packageFile, 'utf8'));
 
 // Incrementar versionCode
 versionData.versionCode += 1;
@@ -21,9 +25,9 @@ versionData.version = `${major}.${newMinor}`;
 packageData.version = `${versionData.version}.0`;
 
 // Salvar arquivos
-fs.writeFileSync(versionFile, JSON.stringify(versionData, null, 2) + '\n');
-fs.writeFileSync(packageFile, JSON.stringify(packageData, null, 2) + '\n');
-fs.writeFileSync(
+writeFileSync(versionFile, JSON.stringify(versionData, null, 2) + '\n');
+writeFileSync(packageFile, JSON.stringify(packageData, null, 2) + '\n');
+writeFileSync(
   constantsFile,
   `export const APP_VERSION = "${versionData.version}";\n`
 );
