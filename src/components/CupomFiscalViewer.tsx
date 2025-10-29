@@ -55,6 +55,7 @@ const CupomFiscalViewer = ({
           body: {
             notaImagemId: notaId,
             userId: userId,
+            fromInfoSimples: true,
           },
         }
       );

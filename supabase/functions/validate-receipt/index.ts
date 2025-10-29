@@ -10,6 +10,7 @@ interface ValidationRequest {
   imageUrl?: string;
   pdfUrl?: string;
   userId: string;
+  fromInfoSimples?: boolean;
 }
 
 interface ValidationResult {
@@ -66,7 +67,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { notaImagemId, imageUrl, pdfUrl, userId }: ValidationRequest = await req.json();
+    const { notaImagemId, imageUrl, pdfUrl, userId, fromInfoSimples }: ValidationRequest = await req.json();
 
     console.log('=== IA-1 VALIDAÇÃO INICIADA ===', {
       notaImagemId,
@@ -98,7 +99,42 @@ Responda APENAS o JSON:
 
     let analysisText = '';
     
-    if (pdfUrl) {
+    // Processar notas já validadas pelo InfoSimples
+    if (fromInfoSimples) {
+      console.log('📱 Nota do InfoSimples - buscando dados já extraídos');
+      
+      // Buscar dados_extraidos salvos pelo process-nfce-infosimples
+      const { data: notaData, error: notaError } = await supabase
+        .from('notas_imagens')
+        .select('dados_extraidos')
+        .eq('id', notaImagemId)
+        .single();
+      
+      if (notaError || !notaData?.dados_extraidos) {
+        throw new Error('Dados extraídos não encontrados para nota InfoSimples');
+      }
+      
+      // Extrair informações dos dados já processados
+      const dadosExtraidos = notaData.dados_extraidos;
+      const chaveAcesso = dadosExtraidos.chave_acesso || 
+                          dadosExtraidos.compra?.chave_acesso;
+      
+      // Simular resposta positiva (InfoSimples já validou a nota)
+      analysisText = JSON.stringify({
+        approved: true,
+        reason: 'infosimples_validado',
+        chave_encontrada: chaveAcesso,
+        setor_inferido: dadosExtraidos.setor_inferido || 'supermercado',
+        tem_sinais_compra: true,
+        eh_nfse: false
+      });
+      
+      console.log('✅ Dados InfoSimples recuperados:', {
+        chave: chaveAcesso?.slice(-6),
+        produtos: dadosExtraidos.produtos?.length
+      });
+      
+    } else if (pdfUrl) {
       // Para PDF, usar extração de texto igual à IA-2
       console.log('Processando PDF como na IA-2:', pdfUrl);
       
