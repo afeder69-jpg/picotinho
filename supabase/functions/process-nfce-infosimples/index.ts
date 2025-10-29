@@ -376,22 +376,7 @@ serve(async (req) => {
     // 4. Processar e salvar dados
     if (notaImagemId) {
       await processarNFCe(supabase, userId, notaImagemId, dadosNFCe, '');
-      
-      // 5. Invocar process-structured-receipt para processar estoque direto (sem OpenAI)
-      console.log('🔄 [ESTOQUE] Invocando processamento de estoque estruturado...');
-      const { error: extractError } = await supabase.functions.invoke('process-structured-receipt', {
-        body: { 
-          notaImagemId,
-          userId 
-        }
-      });
-
-      if (extractError) {
-        console.error('⚠️ [ESTOQUE] Erro ao processar estoque:', extractError);
-        // Não falhar a requisição por causa disso
-      } else {
-        console.log('✅ [ESTOQUE] Estoque atualizado com sucesso');
-      }
+      console.log('✅ [PROCESSAR] Dados salvos. Aguardando confirmação do usuário para processar estoque.');
     }
 
     return new Response(

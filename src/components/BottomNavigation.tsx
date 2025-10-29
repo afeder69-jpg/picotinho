@@ -5,7 +5,7 @@ import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import InternalWebViewer from "./InternalWebViewer";
-import { SimplifiedInAppBrowser } from "./SimplifiedInAppBrowser";
+import CupomFiscalViewer from "./CupomFiscalViewer";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
@@ -19,7 +19,7 @@ import { Loader2 } from "lucide-react";
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [showSimplifiedBrowser, setShowSimplifiedBrowser] = useState(false);
+  const [showCupomViewer, setShowCupomViewer] = useState(false);
   const [showInternalWebViewer, setShowInternalWebViewer] = useState(false);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
   const [pendingDocType, setPendingDocType] = useState<TipoDocumento>(null);
@@ -39,7 +39,7 @@ const BottomNavigation = () => {
   const handleNoteClose = () => {
     console.log('❌ [VIEWER] Viewer fechado');
     setShowInternalWebViewer(false);
-    setShowSimplifiedBrowser(false);
+    setShowCupomViewer(false);
     setPendingQrUrl(null);
     setPendingDocType(null);
   };
@@ -127,11 +127,11 @@ const BottomNavigation = () => {
           throw new Error('Nota ainda está sendo processada. Tente novamente em alguns segundos.');
         }
         
-        // Abrir SimplifiedInAppBrowser com os DADOS
+        // Abrir CupomFiscalViewer com os DADOS
         setPendingQrUrl(data);
         setPendingDocType(tipoDocumento);
         setPendingNotaData(notaData);
-        setShowSimplifiedBrowser(true);
+        setShowCupomViewer(true);
         setIsProcessingQRCode(false);
         
         toast({
@@ -280,14 +280,13 @@ const BottomNavigation = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Simplified In-App Browser (Nativo - NFe/NFCe) */}
-      {showSimplifiedBrowser && pendingNotaData && user?.id && (
-        <SimplifiedInAppBrowser
+      {/* Cupom Fiscal Viewer (Nativo - NFe/NFCe) */}
+      {showCupomViewer && pendingNotaData && user?.id && (
+        <CupomFiscalViewer
           notaId={pendingNotaData.id}
           dadosExtraidos={pendingNotaData.dados_extraidos}
           userId={user.id}
-          tipoDocumento={pendingDocType}
-          isOpen={showSimplifiedBrowser}
+          isOpen={showCupomViewer}
           onClose={handleNoteClose}
           onConfirm={handleNoteConfirm}
         />
