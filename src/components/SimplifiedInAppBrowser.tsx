@@ -76,6 +76,7 @@ export const SimplifiedInAppBrowser = ({
           notaImagemId: notaId,
           imageUrl: notaData?.imagem_url,
           userId,
+          fromInfoSimples: true,
         },
       });
 
