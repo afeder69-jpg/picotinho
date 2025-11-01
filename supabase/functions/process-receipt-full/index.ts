@@ -519,17 +519,18 @@ serve(async (req) => {
                                  dadosExtraidos.emitente?.nome || 
                                  dadosExtraidos.nome_estabelecimento || '';
     
-    const dataCompra = dadosExtraidos.data_emissao || 
-                      dadosExtraidos.data || 
-                      dadosExtraidos.emissao || 
-                      new Date().toISOString().split('T')[0];
+    // Reatribuir dataCompra se necessário para este contexto
+    const dataCompraAtual = dadosExtraidos.data_emissao || 
+                            dadosExtraidos.data || 
+                            dadosExtraidos.emissao || 
+                            new Date().toISOString().split('T')[0];
     
     const horaCompra = dadosExtraidos.hora_emissao || 
                       dadosExtraidos.hora || 
                       '00:00:00';
 
     console.log(`📍 Estabelecimento: ${estabelecimentoNome} (${estabelecimentoCnpj})`);
-    console.log(`📅 Data/Hora: ${dataCompra} ${horaCompra}`);
+    console.log(`📅 Data/Hora: ${dataCompraAtual} ${horaCompra}`);
 
     // Atualizar preços para cada item do estoque
     let precosAtualizados = 0;
@@ -545,7 +546,7 @@ serve(async (req) => {
               precoUnitario: item.preco_unitario_ultimo,
               estabelecimentoCnpj,
               estabelecimentoNome,
-              dataCompra,
+              dataCompra: dataCompraAtual,
               horaCompra,
               userId
             }
