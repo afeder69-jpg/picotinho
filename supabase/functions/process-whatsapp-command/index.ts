@@ -1813,6 +1813,15 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
     const validacao = validacaoResponse.data;
     console.log('✅ Validação concluída:', validacao);
     
+    // CRÍTICO: Verificar shouldDelete ANTES de verificar approved
+    // Isso evita processar notas duplicadas mesmo que approved=true
+    if (validacao.shouldDelete) {
+      console.log('🛑 Nota marcada para exclusão (shouldDelete=true):', validacao.reason);
+      // A mensagem de rejeição já foi enviada pelo validate-receipt
+      // NÃO continuar processamento
+      return `❌ ${validacao.message || 'Esta nota fiscal já foi processada anteriormente.'}`;
+    }
+    
     if (!validacao.approved) {
       console.log('❌ Nota rejeitada na validação:', validacao.reason);
       return `❌ ${validacao.message}`;
@@ -1869,16 +1878,52 @@ async function processarNotaEmBackground(
         throw new Error(`Erro na extração: ${extractResult.error.message}`);
       }
       
-      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2  
+      // ✅ FLUXO AUTOMÁTICO: IA-1 → IA-2 (com retry para erro 503)
       console.log('🚀 PDF processado, disparando IA-2 automaticamente...');
       
       EdgeRuntime.waitUntil(
-        supabase.functions.invoke('process-receipt-full', {
-          body: { imagemId: notaImagem.id }
-        }).then((result) => {
-          console.log("✅ IA-2 executada automaticamente:", result);
-        }).catch((error) => {
-          console.error('❌ Falha na IA-2 automática:', error);
+        (async () => {
+          let tentativa = 0;
+          const maxTentativas = 3;
+          
+          while (tentativa < maxTentativas) {
+            try {
+              tentativa++;
+              console.log(`🔄 Tentativa ${tentativa}/${maxTentativas} de executar IA-2...`);
+              
+              const result = await supabase.functions.invoke('process-receipt-full', {
+                body: { imagemId: notaImagem.id }
+              });
+              
+              // Se retornou 503, lançar erro para retry
+              if (result.error && (result.error.message?.includes('503') || result.error.message?.includes('Service Unavailable'))) {
+                console.error(`⚠️ Erro 503 na tentativa ${tentativa}, aguardando retry...`);
+                if (tentativa < maxTentativas) {
+                  await new Promise(resolve => setTimeout(resolve, 2000)); // Aguardar 2s antes de retry
+                  continue; // Tentar novamente
+                } else {
+                  throw new Error('Serviço indisponível após 3 tentativas (503)');
+                }
+              }
+              
+              // Qualquer outro erro que não seja 503, lançar imediatamente
+              if (result.error) {
+                throw new Error(result.error.message || 'Erro desconhecido na IA-2');
+              }
+              
+              console.log("✅ IA-2 executada com sucesso:", result);
+              return result; // Sucesso, sair do loop
+              
+            } catch (error) {
+              console.error(`❌ Erro na tentativa ${tentativa}:`, error);
+              if (tentativa >= maxTentativas) {
+                throw error; // Esgotar tentativas, lançar erro final
+              }
+            }
+          }
+        })().catch((error) => {
+          console.error('❌ Falha na IA-2 após todas as tentativas:', error);
+          throw error; // Re-lançar para ser capturado pelo catch externo
         })
       );
       
