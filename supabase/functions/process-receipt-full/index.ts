@@ -286,13 +286,15 @@ serve(async (req) => {
       console.log(`🔄 REPROCESSAMENTO FORÇADO - Reprocessando nota ${finalNotaId} por solicitação manual`);
     }
 
-    // Buscar produtos de dados_extraidos (InfoSimples)
+    // Buscar produtos dos 2 formatos possíveis
     let itens: any[] = [];
-    
+    const dataCompra = nota.dados_extraidos?.data_emissao || 
+                       nota.dados_extraidos?.compra?.data_emissao ||
+                       new Date().toISOString().split('T')[0];
+
+    // FORMATO 1: InfoSimples (QR Code) - dados_extraidos.produtos
     if (nota.dados_extraidos?.produtos && Array.isArray(nota.dados_extraidos.produtos)) {
-      const dataCompra = nota.dados_extraidos?.data_emissao || 
-                        new Date().toISOString().split('T')[0];
-      
+      console.log("✅ Usando formato InfoSimples (produtos)");
       itens = nota.dados_extraidos.produtos.map((item: any) => {
         const quantidade = parseFloat(item.quantidade_comercial || item.quantidade) || 0;
         const valorUnitario = parseFloat(item.valor_unitario_comercial || item.valor_unitario) || 
@@ -308,8 +310,28 @@ serve(async (req) => {
         };
       });
       console.log(`📦 ${itens.length} produtos carregados do InfoSimples`);
-    } else {
+    }
+    // FORMATO 2: WhatsApp/Upload (PDF/Imagem) - dados_extraidos.itens
+    else if (nota.dados_extraidos?.itens && Array.isArray(nota.dados_extraidos.itens)) {
+      console.log("✅ Usando formato WhatsApp/Upload (itens)");
+      itens = nota.dados_extraidos.itens.map((item: any) => {
+        const quantidade = parseFloat(item.quantidade) || 0;
+        const valorUnitario = parseFloat(item.valor_unitario) || 0;
+        
+        return {
+          descricao: item.descricao || item.nome,
+          categoria: item.categoria || 'outros',
+          quantidade,
+          valor_unitario: valorUnitario,
+          unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
+          data_compra: dataCompra
+        };
+      });
+      console.log(`📦 ${itens.length} produtos carregados do WhatsApp/Upload`);
+    }
+    else {
       console.error("❌ Nenhum produto encontrado em dados_extraidos");
+      console.error("📦 dados_extraidos completo:", JSON.stringify(nota.dados_extraidos, null, 2));
     }
 
     if (!itens || itens.length === 0) {
