@@ -320,7 +320,7 @@ async function processarNFCe(
   const { error: updateError } = await supabase
     .from('notas_imagens')
     .update({
-      processada: true,
+      processada: false,
       dados_extraidos: dadosExtraidos,
       imagem_url: nfceData.site_receipt, // HTML da nota fiscal
       updated_at: new Date().toISOString()
