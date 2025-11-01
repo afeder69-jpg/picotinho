@@ -1537,13 +1537,33 @@ const EstoqueAtual = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PageHeader title="Estoque Atual">
-        <Button onClick={abrirModalInserir}>
-          <Plus className="h-4 w-4 mr-2" />
-          Inserir
-        </Button>
-        <Button onClick={() => setMostrarItensZerados(!mostrarItensZerados)} variant="outline">
-          {mostrarItensZerados ? 'Ocultar' : 'Mostrar'} Zerados
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 bg-card z-50">
+            <DropdownMenuItem onClick={() => setMostrarItensZerados(!mostrarItensZerados)}>
+              {mostrarItensZerados ? 'Ocultar' : 'Mostrar'} Zerados
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={abrirModalInserir}>
+              <Plus className="h-4 w-4 mr-2" />
+              Inserir no Estoque
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setModoEdicao(!modoEdicao)}>
+              <Edit3 className="h-4 w-4 mr-2" />
+              {modoEdicao ? 'Desativar' : 'Ativar'} Ajuste de Estoque
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => document.getElementById('trigger-limpar-estoque')?.click()}
+              className="text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Limpar Estoque
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
       
       <div className="container mx-auto p-6">
