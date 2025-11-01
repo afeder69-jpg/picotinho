@@ -60,21 +60,13 @@ export const SimplifiedInAppBrowser = ({
     try {
       console.log('✅ [CONFIRM] Iniciando validação e processamento:', notaId);
 
-      // PASSO 1: Buscar dados da nota para obter imageUrl
-      const { data: notaData, error: notaError } = await supabase
-        .from('notas_imagens')
-        .select('imagem_url')
-        .eq('id', notaId)
-        .single();
+      console.log('✅ [CUPOM] Confirmando nota e processando estoque...');
 
-      if (notaError) throw notaError;
-
-      // PASSO 2: Validar a nota (verificar duplicidade, chave de acesso)
-      console.log('🔍 Validando nota...');
+      // PASSO 1: Validar a nota InfoSimples (verificar duplicidade, chave de acesso)
+      // ⚠️ CORREÇÃO: Notas InfoSimples não têm imageUrl, apenas dados_extraidos
       const { data: validationResult, error: validationError } = await supabase.functions.invoke('validate-receipt', {
         body: {
           notaImagemId: notaId,
-          imageUrl: notaData?.imagem_url,
           userId,
           fromInfoSimples: true,
         },

@@ -61,22 +61,51 @@ Write-Host "FASE 3: Sincronizando assets com Capacitor..." -ForegroundColor Yell
 npx cap sync android
 Write-Host "  Capacitor sync concluido" -ForegroundColor Gray
 
-# FASE 4: Build Android
+# FASE 4: Limpar cache do Gradle
 Write-Host ""
-Write-Host "FASE 4: Compilando APK Android..." -ForegroundColor Yellow
+Write-Host "FASE 4: Limpando cache do Gradle..." -ForegroundColor Yellow
+if (Test-Path "$env:USERPROFILE\.gradle\caches") {
+    Remove-Item -Recurse -Force "$env:USERPROFILE\.gradle\caches\modules-2\files-2.1\*" -ErrorAction SilentlyContinue
+    Write-Host "  Cache do Gradle limpo" -ForegroundColor Gray
+}
+
+# FASE 5: Build Android
+Write-Host ""
+Write-Host "FASE 5: Compilando APK Android..." -ForegroundColor Yellow
 Set-Location android
-.\gradlew assembleDebug
+.\gradlew assembleDebug --no-daemon
 Set-Location ..
 Write-Host "  APK compilado com sucesso" -ForegroundColor Gray
 
-# FASE 5: Instrucoes finais
+# FASE 6: Copiar APK
+Write-Host ""
+Write-Host "FASE 6: Copiando APK para Desktop..." -ForegroundColor Yellow
+$versionData = Get-Content "version.json" | ConvertFrom-Json
+$versionName = $versionData.versionName
+$apkSource = "android\app\build\outputs\apk\debug\app-debug.apk"
+$apkDest = "$env:USERPROFILE\Desktop\picotinho-v$versionName-COMPLETO.apk"
+
+if (Test-Path $apkSource) {
+    Copy-Item $apkSource $apkDest -Force
+    Write-Host "  APK copiado: picotinho-v$versionName-COMPLETO.apk" -ForegroundColor Green
+} else {
+    Write-Host "  AVISO: APK nao encontrado em $apkSource" -ForegroundColor Yellow
+}
+
+# FASE 7: Instrucoes finais
 Write-Host ""
 Write-Host "BUILD COMPLETO!" -ForegroundColor Green
+Write-Host "APK: $apkDest" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "PROXIMOS PASSOS:" -ForegroundColor Cyan
-Write-Host "1. DESINSTALE o Picotinho do celular manualmente" -ForegroundColor White
-Write-Host "2. Execute: npx cap run android" -ForegroundColor White
-Write-Host "3. Teste:" -ForegroundColor White
-Write-Host "   - Icone deve ser o mascote Picotinho" -ForegroundColor Gray
-Write-Host "   - QR code deve mostrar dialog antes de abrir browser" -ForegroundColor Gray
-Write-Host "   - Ao voltar do browser, deve processar automaticamente" -ForegroundColor Gray
+Write-Host "PROXIMOS PASSOS OBRIGATORIOS:" -ForegroundColor Cyan
+Write-Host "1. DESINSTALE o Picotinho do celular" -ForegroundColor White
+Write-Host "2. Va em Configuracoes > Apps > One UI Home > Armazenamento > Limpar cache" -ForegroundColor White
+Write-Host "3. Va em Configuracoes > Apps > Android System WebView > Armazenamento > Limpar cache" -ForegroundColor White
+Write-Host "4. Va em Configuracoes > Apps > Chrome > Armazenamento > Limpar cache" -ForegroundColor White
+Write-Host "5. REINICIE O CELULAR" -ForegroundColor Yellow
+Write-Host "6. Transfira o APK do Desktop para o celular" -ForegroundColor White
+Write-Host "7. Instale o APK" -ForegroundColor White
+Write-Host ""
+Write-Host "Teste final:" -ForegroundColor Cyan
+Write-Host "   - Icone: mascote Picotinho pequeno e centralizado" -ForegroundColor Gray
+Write-Host "   - QR code do RJ: deve abrir HTML e confirmar sem erro" -ForegroundColor Gray

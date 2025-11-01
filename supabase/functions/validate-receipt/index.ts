@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
       notaImagemId,
       userId,
       hasImage: !!imageUrl,
-      hasPdf: !!pdfUrl
+      hasPdf: !!pdfUrl,
+      fromInfoSimples: fromInfoSimples || false
     });
 
     const validationPrompt = `Analise este documento e responda APENAS com um JSON no formato especificado.
