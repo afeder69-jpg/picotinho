@@ -286,34 +286,30 @@ serve(async (req) => {
       console.log(`🔄 REPROCESSAMENTO FORÇADO - Reprocessando nota ${finalNotaId} por solicitação manual`);
     }
 
-    // Buscar itens - primeiro tenta itens_nota, depois dados_extraidos
+    // Buscar produtos de dados_extraidos (InfoSimples)
     let itens: any[] = [];
     
-    const { data: itensNota, error: itensError } = await supabase
-      .from("itens_nota")
-      .select("descricao, categoria, quantidade, valor_unitario, unidade, data_compra")
-      .eq("nota_id", finalNotaId);
-
-    if (itensNota && itensNota.length > 0) {
-      itens = itensNota;
-      console.log(`📦 Itens carregados de itens_nota: ${itens.length}`);
-    } else {
-      // Se não há itens em itens_nota, buscar de dados_extraidos
-      if (nota.dados_extraidos?.itens && Array.isArray(nota.dados_extraidos.itens)) {
-        const dataCompra = nota.dados_extraidos?.compra?.data_emissao || 
-                          nota.dados_extraidos?.data_emissao ||
-                          new Date().toISOString().split('T')[0];
+    if (nota.dados_extraidos?.produtos && Array.isArray(nota.dados_extraidos.produtos)) {
+      const dataCompra = nota.dados_extraidos?.data_emissao || 
+                        new Date().toISOString().split('T')[0];
+      
+      itens = nota.dados_extraidos.produtos.map((item: any) => {
+        const quantidade = parseFloat(item.quantidade_comercial || item.quantidade) || 0;
+        const valorUnitario = parseFloat(item.valor_unitario_comercial || item.valor_unitario) || 
+                             (parseFloat(item.normalizado_valor || item.valor) / quantidade) || 0;
         
-        itens = nota.dados_extraidos.itens.map((item: any) => ({
-          descricao: item.descricao,
+        return {
+          descricao: item.descricao || item.nome,
           categoria: item.categoria || 'outros',
-          quantidade: parseFloat(item.quantidade) || 0,
-          valor_unitario: parseFloat(item.valor_unitario) || 0,
-          unidade: normalizarUnidadeMedida(item.unidade || 'unidade'),
+          quantidade,
+          valor_unitario: valorUnitario,
+          unidade: normalizarUnidadeMedida(item.unidade_comercial || item.unidade || 'UN'),
           data_compra: dataCompra
-        }));
-        console.log(`📦 Itens carregados de dados_extraidos: ${itens.length}`);
-      }
+        };
+      });
+      console.log(`📦 ${itens.length} produtos carregados do InfoSimples`);
+    } else {
+      console.error("❌ Nenhum produto encontrado em dados_extraidos");
     }
 
     if (!itens || itens.length === 0) {
