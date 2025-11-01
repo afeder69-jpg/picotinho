@@ -249,42 +249,76 @@ serve(async (req) => {
       });
     }
 
-    // 🛡️ VERIFICAÇÃO ANTI-DUPLICAÇÃO INTELIGENTE
-    if (nota.processada && !force) {
-      // Verificar se já existem itens no estoque para esta nota
-      const { data: estoqueExistente } = await supabase
-        .from("estoque_app")
-        .select("*")
-        .eq("nota_id", finalNotaId)
-        .eq("user_id", nota.usuario_id);
-      
-      // SÓ bloquear se realmente há itens no estoque (duplicação real)
-      if (estoqueExistente && estoqueExistente.length > 0) {
-        console.log(`⚠️ NOTA JÁ PROCESSADA COM ESTOQUE - Bloqueando re-processamento para nota ${finalNotaId} (${estoqueExistente.length} itens no estoque)`);
-        
-        const totalFinanceiro = estoqueExistente.reduce((acc: number, it: any) => 
-          acc + (it.quantidade * it.preco_unitario_ultimo), 0);
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Nota já foi processada anteriormente",
-            nota_id: finalNotaId,
-            itens_inseridos: estoqueExistente.length,
-            total_financeiro: totalFinanceiro.toFixed(2),
-            already_processed: true
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } else {
-        // Nota marcada como processada MAS sem itens no estoque = processamento incompleto
-        console.log(`🔧 CORREÇÃO DE PROCESSAMENTO INCOMPLETO - Nota ${finalNotaId} estava marcada como processada mas sem itens no estoque. Processando...`);
-      }
+    // 🔒 LOCK ATÔMICO: Marcar nota como "em processamento"
+    const agora = nowIso();
+    const { data: lockData, error: lockError } = await supabase
+      .from('notas_imagens')
+      .update({ 
+        processing_started_at: agora,
+        updated_at: agora
+      })
+      .eq('id', finalNotaId)
+      .is('processing_started_at', null) // ✅ Só atualiza se não estiver sendo processada
+      .select()
+      .single();
+
+    if (lockError || !lockData) {
+      console.log(`🔒 Nota ${finalNotaId} já está sendo processada por outra execução. Abortando...`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: "Nota já está sendo processada",
+          already_processing: true 
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    if (force) {
-      console.log(`🔄 REPROCESSAMENTO FORÇADO - Reprocessando nota ${finalNotaId} por solicitação manual`);
-    }
+    console.log(`✅ Lock de processamento adquirido para nota ${finalNotaId}`);
+
+    try {
+      // 🛡️ VERIFICAÇÃO ANTI-DUPLICAÇÃO INTELIGENTE
+      if (nota.processada && !force) {
+        // Verificar se já existem itens no estoque para esta nota
+        const { data: estoqueExistente } = await supabase
+          .from("estoque_app")
+          .select("*")
+          .eq("nota_id", finalNotaId)
+          .eq("user_id", nota.usuario_id);
+        
+        // SÓ bloquear se realmente há itens no estoque (duplicação real)
+        if (estoqueExistente && estoqueExistente.length > 0) {
+          console.log(`⚠️ NOTA JÁ PROCESSADA COM ESTOQUE - Bloqueando re-processamento para nota ${finalNotaId} (${estoqueExistente.length} itens no estoque)`);
+          
+          const totalFinanceiro = estoqueExistente.reduce((acc: number, it: any) => 
+            acc + (it.quantidade * it.preco_unitario_ultimo), 0);
+          
+          // Liberar lock antes de retornar
+          await supabase
+            .from("notas_imagens")
+            .update({ processing_started_at: null })
+            .eq("id", finalNotaId);
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Nota já foi processada anteriormente",
+              nota_id: finalNotaId,
+              itens_inseridos: estoqueExistente.length,
+              total_financeiro: totalFinanceiro.toFixed(2),
+              already_processed: true
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          // Nota marcada como processada MAS sem itens no estoque = processamento incompleto
+          console.log(`🔧 CORREÇÃO DE PROCESSAMENTO INCOMPLETO - Nota ${finalNotaId} estava marcada como processada mas sem itens no estoque. Processando...`);
+        }
+      }
+
+      if (force) {
+        console.log(`🔄 REPROCESSAMENTO FORÇADO - Reprocessando nota ${finalNotaId} por solicitação manual`);
+      }
 
     // Buscar produtos dos 2 formatos possíveis
     let itens: any[] = [];
@@ -568,16 +602,22 @@ serve(async (req) => {
     
     console.log(`✅ Atualização de preços concluída: ${precosAtualizados} atualizados, ${errosAtualizacao} erros`);
 
-    // Marcar nota como processada com retry em caso de falha
+    // Marcar nota como processada e liberar lock
     const { error: updateError } = await supabase
       .from("notas_imagens")
-      .update({ processada: true, updated_at: nowIso() })
+      .update({ 
+        processada: true, 
+        processing_started_at: null, // ✅ Liberar lock
+        updated_at: nowIso() 
+      })
       .eq("id", finalNotaId);
     
     if (updateError) {
       console.error("⚠️ Erro ao marcar nota como processada:", updateError);
       // Não falhar por isso, pois o estoque já foi inserido
     }
+    
+    console.log(`🔓 Lock de processamento liberado para nota ${finalNotaId}`);
 
     const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
@@ -590,8 +630,22 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+    } catch (error: any) {
+      console.error("❌ Erro geral:", error?.message || error);
+      
+      // 🔓 Liberar lock em caso de erro
+      await supabase
+        .from("notas_imagens")
+        .update({ processing_started_at: null })
+        .eq("id", finalNotaId);
+      
+      return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   } catch (error: any) {
-    console.error("❌ Erro geral:", error?.message || error);
+    console.error("❌ Erro crítico:", error?.message || error);
     return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
