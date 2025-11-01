@@ -350,16 +350,20 @@ Responda APENAS o JSON:
         const { data: existingInImages, error: imgErr } = await supabase
           .from('notas_imagens')
           .select('id, created_at, usuario_id')
-          .neq('id', notaImagemId) // Excluir apenas a nota atual
           .or(orConditions);
 
         if (imgErr) console.error('Erro buscando duplicidade em notas_imagens:', imgErr);
 
-        isDuplicate = !!(existingInImages && existingInImages.length > 0);
+        // ✅ Filtrar MANUALMENTE a nota atual após busca (evita falso positivo)
+        const existingInImagesFiltered = existingInImages?.filter(
+          nota => nota.id !== notaImagemId
+        ) || [];
+
+        isDuplicate = existingInImagesFiltered.length > 0;
 
         if (isDuplicate) {
           console.log('⚠️ DUPLICATA DETECTADA! Chave já existe no Picotinho:', normalizedKey.slice(-6));
-          console.log('📋 Encontrada em notas_imagens de usuário(s):', existingInImages.map(n => n.usuario_id));
+          console.log('📋 Encontrada em notas_imagens de usuário(s):', existingInImagesFiltered.map(n => n.usuario_id));
         } else {
           console.log('✅ Chave única no Picotinho - não há duplicatas:', normalizedKey.slice(-6));
         }
