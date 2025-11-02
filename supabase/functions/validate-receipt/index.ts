@@ -142,23 +142,26 @@ Responda APENAS o JSON:
       const chaveValida = chaveAcesso && 
                           chaveAcesso.replace(/\D/g, '').length === 44;
       
-      // Validar produtos (deve ter pelo menos 1)
-      const temProdutos = dadosExtraidos.produtos && 
-                          dadosExtraidos.produtos.length > 0;
+      // Validar produtos (deve ter pelo menos 1 item)
+      const temProdutos = (dadosExtraidos.itens && dadosExtraidos.itens.length > 0) ||
+                          (dadosExtraidos.produtos && dadosExtraidos.produtos.length > 0);
       
       // Validar estabelecimento
       const temEstabelecimento = dadosExtraidos.estabelecimento?.nome || 
                                   dadosExtraidos.emitente?.nome;
       
-      // Validar valor total
-      const temValorTotal = dadosExtraidos.valor_total > 0;
+      // Validar valor total (buscar em múltiplos lugares)
+      const valorTotal = dadosExtraidos.compra?.valor_total || 
+                         dadosExtraidos.valor_total || 
+                         0;
+      const temValorTotal = valorTotal > 0;
       
       console.log('🔍 Validação InfoSimples:', {
         chaveValida,
         temProdutos,
         temEstabelecimento,
         temValorTotal,
-        numProdutos: dadosExtraidos.produtos?.length
+        numProdutos: dadosExtraidos.itens?.length || dadosExtraidos.produtos?.length
       });
       
       if (!chaveValida || !temProdutos || !temEstabelecimento || !temValorTotal) {

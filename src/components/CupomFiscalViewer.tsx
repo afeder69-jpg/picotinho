@@ -33,8 +33,27 @@ const CupomFiscalViewer = ({
   const formatarData = (dataStr: string | null | undefined) => {
     if (!dataStr) return "Data não disponível";
     try {
-      const data = new Date(dataStr);
-      return format(data, "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR });
+      // Limpar formato corrompido do InfoSimples
+      let dataLimpa = dataStr;
+      
+      // Se vier com formato "2025 09:43:14-03:00-10-04T00:00:00.000Z"
+      // Extrair apenas a parte relevante
+      if (dataStr.includes('-03:00-')) {
+        const match = dataStr.match(/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})-03:00-(\d{2})-(\d{2})/);
+        if (match) {
+          // match[1]=ano, match[5]=mes, match[6]=dia, match[2]:match[3]=hora:min
+          dataLimpa = `${match[1]}-${match[5]}-${match[6]}T${match[2]}:${match[3]}:00`;
+        }
+      }
+      
+      const data = new Date(dataLimpa);
+      
+      // Verificar se é uma data válida
+      if (isNaN(data.getTime())) {
+        return dataStr; // Retorna original se não conseguir parsear
+      }
+      
+      return format(data, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
     } catch {
       return dataStr;
     }
