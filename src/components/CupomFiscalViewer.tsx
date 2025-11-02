@@ -36,27 +36,22 @@ const CupomFiscalViewer = ({
     try {
       let data: Date;
       
-      // Caso 1: Data já em formato ISO limpo (2025-10-04T09:43:14.000Z)
-      if (dataStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-        data = new Date(dataStr);
-      }
-      // Caso 2: Formato corrompido do InfoSimples (2025 09:43:14-03:00-10-04T...)
-      else if (dataStr.includes('-03:00-') || (dataStr.includes(' ') && dataStr.includes('T'))) {
-        const match = dataStr.match(/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})-03:00-(\d{2})-(\d{2})/);
-        if (match) {
-          data = new Date(`${match[1]}-${match[5]}-${match[6]}T${match[2]}:${match[3]}:${match[4]}`);
+      // Caso 1: Formato brasileiro DD/MM/YYYY HH:mm:ss
+      if (dataStr.includes('/')) {
+        const partes = dataStr.split(' ');
+        const dataParte = partes[0]; // "26/10/2025"
+        const horaParte = partes[1]?.split('-')[0] || '00:00:00'; // "12:35:25" (remove timezone)
+        
+        const [dia, mes, ano] = dataParte.split('/');
+        
+        // Validar que temos todos os componentes
+        if (dia && mes && ano) {
+          data = new Date(`${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${horaParte}`);
         } else {
           return "Data inválida";
         }
       }
-      // Caso 3: Formato brasileiro DD/MM/YYYY HH:mm:ss
-      else if (dataStr.includes('/')) {
-        const [datePart, timePart] = dataStr.split(' ');
-        const [dia, mes, ano] = datePart.split('/');
-        const horaCompleta = timePart || '00:00:00';
-        data = new Date(`${ano}-${mes}-${dia}T${horaCompleta}`);
-      }
-      // Caso 4: Tentar parseamento direto
+      // Caso 2: Formato ISO (2025-10-04T09:43:14 ou 2025-10-04T09:43:14.000Z)
       else {
         data = new Date(dataStr);
       }
