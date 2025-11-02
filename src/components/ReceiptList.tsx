@@ -1202,7 +1202,10 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                         <span>Série: {selectedReceipt.dados_extraidos.compra?.serie || selectedReceipt.dados_extraidos.serie || 'N/A'}</span>
                       </div>
                       <p className="text-xs">
-                        Data: {selectedReceipt.purchase_date || selectedReceipt.dados_extraidos.compra?.data_emissao || selectedReceipt.dados_extraidos.dataCompra || 'N/A'}
+                        Data: {(() => {
+                          const dataFinal = selectedReceipt.purchase_date || selectedReceipt.dados_extraidos.compra?.data_emissao || selectedReceipt.dados_extraidos.dataCompra || 'N/A';
+                          return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
+                        })()}
                       </p>
                     </div>
 
