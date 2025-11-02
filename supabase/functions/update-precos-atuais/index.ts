@@ -29,11 +29,15 @@ serve(async (req) => {
       userId 
     } = await req.json();
 
+    // ✅ Normalizar CNPJ imediatamente (remover formatação)
+    const cnpjNormalizado = estabelecimentoCnpj ? estabelecimentoCnpj.replace(/\D/g, '') : '';
+
     console.log('Atualizando preços atuais:', { 
       compraId, 
       produtoNome, 
       precoUnitario, 
-      estabelecimentoCnpj, 
+      estabelecimentoCnpj,
+      cnpjNormalizado,
       dataCompra,
       userId 
     });
@@ -53,7 +57,7 @@ serve(async (req) => {
       .from('precos_atuais')
       .select('*')
       .eq('produto_nome', produtoNome)
-      .eq('estabelecimento_cnpj', estabelecimentoCnpj)
+      .eq('estabelecimento_cnpj', cnpjNormalizado)
       .single();
 
     console.log('Preço existente:', precoExistente);
@@ -122,7 +126,7 @@ serve(async (req) => {
         .from('precos_atuais')
         .upsert({
           produto_nome: produtoNome,
-          estabelecimento_cnpj: estabelecimentoCnpj,
+          estabelecimento_cnpj: cnpjNormalizado,
           estabelecimento_nome: estabelecimentoNome,
           valor_unitario: precoUnitario,
           data_atualizacao: dataNovaCompra.toISOString() // ✅ Data real da nota fiscal
