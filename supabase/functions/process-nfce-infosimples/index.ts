@@ -321,6 +321,7 @@ async function processarNFCe(
     .from('notas_imagens')
     .update({
       processada: false,
+      pdf_gerado: false, // 🔥 Novo: flag para controlar geração de PDF
       dados_extraidos: dadosExtraidos,
       imagem_url: nfceData.site_receipt, // HTML da nota fiscal
       updated_at: new Date().toISOString()

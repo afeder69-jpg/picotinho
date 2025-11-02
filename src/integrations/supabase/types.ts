@@ -1001,6 +1001,7 @@ export type Database = {
           normalizada: boolean | null
           normalizada_em: string | null
           origem: string | null
+          pdf_url: string | null
           processada: boolean | null
           processing_started_at: string | null
           produtos_normalizados: number | null
@@ -1022,6 +1023,7 @@ export type Database = {
           normalizada?: boolean | null
           normalizada_em?: string | null
           origem?: string | null
+          pdf_url?: string | null
           processada?: boolean | null
           processing_started_at?: string | null
           produtos_normalizados?: number | null
@@ -1043,6 +1045,7 @@ export type Database = {
           normalizada?: boolean | null
           normalizada_em?: string | null
           origem?: string | null
+          pdf_url?: string | null
           processada?: boolean | null
           processing_started_at?: string | null
           produtos_normalizados?: number | null

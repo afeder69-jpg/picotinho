@@ -7,6 +7,8 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Receipt, Store, Calendar, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 interface CupomFiscalViewerProps {
   notaId: string;
@@ -43,18 +45,99 @@ const CupomFiscalViewer = ({
     return `R$ ${valor.toFixed(2).replace(".", ",")}`;
   };
 
+  // 🔥 Função para gerar PDF a partir do cupom HTML e fazer upload
+  const gerarEUploadPDF = async (): Promise<string | null> => {
+    try {
+      console.log("📄 [PDF] Iniciando geração de PDF...");
+
+      // 1. Capturar o DOM do cupom
+      const cupomElement = document.querySelector('[data-cupom-fiscal]') as HTMLElement;
+      if (!cupomElement) {
+        throw new Error("Elemento do cupom não encontrado");
+      }
+
+      // 2. Converter para canvas
+      const canvas = await html2canvas(cupomElement, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      // 3. Criar PDF com jsPDF
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+
+      // 4. Converter PDF para Blob
+      const pdfBlob = pdf.output("blob");
+
+      // 5. Upload para Storage (bucket 'receipts')
+      const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("receipts")
+        .upload(fileName, pdfBlob, {
+          contentType: "application/pdf",
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 6. Obter URL pública
+      const { data: urlData } = supabase.storage
+        .from("receipts")
+        .getPublicUrl(fileName);
+
+      const pdfUrl = urlData.publicUrl;
+
+      // 7. Atualizar notas_imagens com a URL do PDF
+      const { error: updateError } = await supabase
+        .from("notas_imagens")
+        .update({ pdf_url: pdfUrl, pdf_gerado: true })
+        .eq("id", notaId);
+
+      if (updateError) throw updateError;
+
+      console.log("✅ [PDF] PDF gerado e salvo:", pdfUrl);
+      return pdfUrl;
+    } catch (error: any) {
+      console.error("❌ [PDF] Erro ao gerar PDF:", error);
+      toast({
+        title: "Erro ao gerar PDF",
+        description: error.message,
+        variant: "destructive",
+      });
+      return null;
+    }
+  };
+
   const handleConfirmar = async () => {
     setIsConfirming(true);
     try {
       console.log("✅ [CUPOM] Confirmando nota e processando estoque...");
 
-      // 1. Validar nota via validate-receipt
+      // 1. Gerar PDF temporário
+      const pdfUrl = await gerarEUploadPDF();
+      if (!pdfUrl) {
+        throw new Error("Falha ao gerar PDF");
+      }
+
+      // 2. Validar nota via validate-receipt (passando pdfUrl)
       const { data: validationData, error: validationError } = await supabase.functions.invoke(
         "validate-receipt",
         {
           body: {
             notaImagemId: notaId,
             userId: userId,
+            pdfUrl: pdfUrl,
             fromInfoSimples: true,
           },
         }
@@ -73,7 +156,7 @@ const CupomFiscalViewer = ({
         return;
       }
 
-      // 2. Processar estoque via process-receipt-full
+      // 3. Processar estoque via process-receipt-full
       const { data: processData, error: processError } = await supabase.functions.invoke(
         "process-receipt-full",
         {
@@ -87,6 +170,26 @@ const CupomFiscalViewer = ({
       if (processError) throw processError;
 
       console.log("✅ Estoque processado:", processData);
+
+      // 4. 🗑️ Deletar PDF temporário do Storage
+      if (pdfUrl) {
+        const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
+        const { error: deleteError } = await supabase.storage
+          .from("receipts")
+          .remove([fileName]);
+
+        if (deleteError) {
+          console.warn("⚠️ Erro ao deletar PDF temporário:", deleteError);
+        } else {
+          console.log("✅ PDF temporário deletado com sucesso");
+        }
+
+        // Limpar pdf_url do banco
+        await supabase
+          .from("notas_imagens")
+          .update({ pdf_url: null })
+          .eq("id", notaId);
+      }
 
       toast({
         title: "✅ Nota processada com sucesso!",
@@ -142,7 +245,10 @@ const CupomFiscalViewer = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent 
+        className="max-w-md max-h-[90vh] overflow-y-auto p-0"
+        data-cupom-fiscal
+      >
         {/* Cabeçalho - Logo Picotinho */}
         <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 p-6 text-center border-b-2 border-dashed border-green-300 dark:border-green-700">
           <img

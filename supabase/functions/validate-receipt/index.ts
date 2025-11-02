@@ -133,25 +133,66 @@ Responda APENAS o JSON:
         throw new Error('Dados extraídos não encontrados para nota InfoSimples');
       }
       
-      // Extrair informações dos dados já processados
+      // ✅ VALIDAÇÃO RIGOROSA: Verificar completude dos dados
       const dadosExtraidos = notaData.dados_extraidos;
       const chaveAcesso = dadosExtraidos.chave_acesso || 
                           dadosExtraidos.compra?.chave_acesso;
       
-      // Simular resposta positiva (InfoSimples já validou a nota)
-      analysisText = JSON.stringify({
-        approved: true,
-        reason: 'infosimples_validado',
-        chave_encontrada: chaveAcesso,
-        setor_inferido: dadosExtraidos.setor_inferido || 'supermercado',
-        tem_sinais_compra: true,
-        eh_nfse: false
+      // Validar chave de acesso (44 dígitos)
+      const chaveValida = chaveAcesso && 
+                          chaveAcesso.replace(/\D/g, '').length === 44;
+      
+      // Validar produtos (deve ter pelo menos 1)
+      const temProdutos = dadosExtraidos.produtos && 
+                          dadosExtraidos.produtos.length > 0;
+      
+      // Validar estabelecimento
+      const temEstabelecimento = dadosExtraidos.estabelecimento?.nome || 
+                                  dadosExtraidos.emitente?.nome;
+      
+      // Validar valor total
+      const temValorTotal = dadosExtraidos.valor_total > 0;
+      
+      console.log('🔍 Validação InfoSimples:', {
+        chaveValida,
+        temProdutos,
+        temEstabelecimento,
+        temValorTotal,
+        numProdutos: dadosExtraidos.produtos?.length
       });
       
-      console.log('✅ Dados InfoSimples recuperados:', {
-        chave: chaveAcesso?.slice(-6),
-        produtos: dadosExtraidos.produtos?.length
-      });
+      if (!chaveValida || !temProdutos || !temEstabelecimento || !temValorTotal) {
+        console.error('❌ Dados InfoSimples incompletos!', {
+          chave: chaveAcesso,
+          produtos: dadosExtraidos.produtos?.length,
+          estabelecimento: temEstabelecimento,
+          valor: dadosExtraidos.valor_total
+        });
+        
+        analysisText = JSON.stringify({
+          approved: false,
+          reason: 'dados_incompletos',
+          chave_encontrada: chaveAcesso || null,
+          setor_inferido: 'desconhecido',
+          tem_sinais_compra: temProdutos,
+          eh_nfse: false
+        });
+      } else {
+        // Simular resposta positiva (InfoSimples já validou a nota)
+        analysisText = JSON.stringify({
+          approved: true,
+          reason: 'infosimples_validado',
+          chave_encontrada: chaveAcesso,
+          setor_inferido: dadosExtraidos.setor_inferido || 'supermercado',
+          tem_sinais_compra: true,
+          eh_nfse: false
+        });
+        
+        console.log('✅ Dados InfoSimples validados:', {
+          chave: chaveAcesso?.slice(-6),
+          produtos: dadosExtraidos.produtos?.length
+        });
+      }
       
     } else if (pdfUrl) {
       // Para PDF, usar extração de texto igual à IA-2
