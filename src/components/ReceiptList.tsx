@@ -308,12 +308,34 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             const estabelecimento = dadosExtraidos.estabelecimento || {};
             const compra = dadosExtraidos.compra || {};
             
+            // ✅ Calcular total com múltiplos fallbacks
+            const calcularTotal = () => {
+              // 1. Tentar compra.valor_total
+              if (compra.valor_total) return compra.valor_total;
+              
+              // 2. Tentar valor_total no root
+              if (dadosExtraidos.valor_total) return dadosExtraidos.valor_total;
+              
+              // 3. Tentar valorTotal (formato antigo)
+              if (dadosExtraidos.valorTotal) return dadosExtraidos.valorTotal;
+              
+              // 4. Calcular somando produtos
+              const itens = dadosExtraidos.itens || dadosExtraidos.produtos || [];
+              if (itens.length > 0) {
+                return itens.reduce((sum: number, item: any) => 
+                  sum + (item.valor_total || 0), 0
+                );
+              }
+              
+              return null;
+            };
+            
             return {
               id: nota.id,
               store_name: estabelecimento.nome || 'Estabelecimento não identificado',
               store_address: estabelecimento.endereco || '',
               store_cnpj: estabelecimento.cnpj || null,
-              total_amount: compra.valor_total || dadosExtraidos.valorTotal || null,
+              total_amount: calcularTotal(),
               purchase_date: compra.data_emissao || dadosExtraidos.dataCompra || compra.data_compra || nota.data_criacao,
               purchase_time: null,
               qr_url: dadosExtraidos?.url_original || '',
@@ -1045,9 +1067,12 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                               <span className="font-medium text-foreground">
                                 Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
                               </span>
-                              {receipt.dados_extraidos.itens && (
-                                <span className="text-muted-foreground">{receipt.dados_extraidos.itens.length} itens</span>
-                              )}
+                              {(() => {
+                                const itens = receipt.dados_extraidos.itens || receipt.dados_extraidos.produtos || [];
+                                return itens.length > 0 ? (
+                                  <span className="text-muted-foreground">{itens.length} itens</span>
+                                ) : null;
+                              })()}
                             </div>
                         </>
                       ) : (
@@ -1077,9 +1102,12 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                               <span className="font-medium text-foreground">
                                 Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
                               </span>
-                              {receipt.dados_extraidos.itens && (
-                                <span className="text-muted-foreground">{receipt.dados_extraidos.itens.length} itens</span>
-                              )}
+                              {(() => {
+                                const itens = receipt.dados_extraidos.itens || receipt.dados_extraidos.produtos || [];
+                                return itens.length > 0 ? (
+                                  <span className="text-muted-foreground">{itens.length} itens</span>
+                                ) : null;
+                              })()}
                             </div>
                         </>
                       )}
@@ -1182,25 +1210,32 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                     <div className="space-y-2">
                       <p className="font-bold text-center">ITENS</p>
                       <div className="border-b">
-                        {selectedReceipt.dados_extraidos.itens?.map((item: any, index: number) => (
-                          <div key={index} className="py-2 border-b border-dashed last:border-0">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1 pr-2">
-                                <p className="font-medium text-xs uppercase leading-tight">
-                                  {item.descricao || item.nome}
-                                </p>
-                                {item.codigo && (
-                                  <p className="text-xs text-gray-600">Cód: {item.codigo}</p>
-                                )}
+                        {(() => {
+                          // ✅ Buscar produtos em múltiplas estruturas
+                          const itens = selectedReceipt.dados_extraidos.itens || 
+                                       selectedReceipt.dados_extraidos.produtos || 
+                                       [];
+                          
+                          return itens.map((item: any, index: number) => (
+                            <div key={index} className="py-2 border-b border-dashed last:border-0">
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1 pr-2">
+                                  <p className="font-medium text-xs uppercase leading-tight">
+                                    {item.descricao || item.nome}
+                                  </p>
+                                  {item.codigo && (
+                                    <p className="text-xs text-gray-600">Cód: {item.codigo}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex justify-between text-xs mt-1">
+                                <span>Qtd: {item.quantidade} {item.unidade}</span>
+                                <span>Unit: {formatCurrency(item.valor_unitario || item.preco)}</span>
+                                <span className="font-bold">Total: {formatCurrency(item.valor_total || item.preco)}</span>
                               </div>
                             </div>
-                            <div className="flex justify-between text-xs mt-1">
-                              <span>Qtd: {item.quantidade} {item.unidade}</span>
-                              <span>Unit: {formatCurrency(item.valor_unitario || item.preco)}</span>
-                              <span className="font-bold">Total: {formatCurrency(item.valor_total || item.preco)}</span>
-                            </div>
-                          </div>
-                        ))}
+                          ));
+                        })()}
                       </div>
                     </div>
 
@@ -1208,7 +1243,28 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                     <div className="border-t pt-4 space-y-2">
                       <div className="flex justify-between text-lg font-bold">
                         <span>TOTAL:</span>
-                        <span>{formatCurrency(selectedReceipt.dados_extraidos.compra?.valor_total || selectedReceipt.dados_extraidos.valorTotal || selectedReceipt.total_amount)}</span>
+                        <span>{(() => {
+                          // ✅ Buscar total com múltiplos fallbacks
+                          const total = selectedReceipt.dados_extraidos.compra?.valor_total || 
+                                       selectedReceipt.dados_extraidos.valor_total ||
+                                       selectedReceipt.dados_extraidos.valorTotal || 
+                                       selectedReceipt.total_amount;
+                          
+                          // Se ainda não achou, calcular somando produtos
+                          if (!total) {
+                            const itens = selectedReceipt.dados_extraidos.itens || 
+                                         selectedReceipt.dados_extraidos.produtos || 
+                                         [];
+                            if (itens.length > 0) {
+                              const soma = itens.reduce((sum: number, item: any) => 
+                                sum + (item.valor_total || 0), 0
+                              );
+                              return formatCurrency(soma);
+                            }
+                          }
+                          
+                          return formatCurrency(total);
+                        })()}</span>
                       </div>
                       <div className="text-center text-xs">
                         <p>Forma de Pagamento: {selectedReceipt.dados_extraidos.compra?.forma_pagamento || selectedReceipt.dados_extraidos.formaPagamento || 'N/A'}</p>

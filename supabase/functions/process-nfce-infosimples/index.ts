@@ -257,33 +257,27 @@ async function processarNFCe(
   const dataEmissaoRaw = nfceData.nfe?.data_emissao || infoNota?.data_emissao || nfceData.data_emissao;
   const dataEmissaoISO = dataEmissaoRaw ? parseDataBrasileira(dataEmissaoRaw) : null;
   
+  // ✅ Calcular valor total correto
+  const valorTotal = parseFloat(
+    nfceData.totais?.normalizado_valor_nfe || 
+    nfceData.nfe?.normalizado_valor_total ||
+    nfceData.valor_total || 
+    '0'
+  );
+  
   const dadosExtraidos = {
     chave_acesso: (infoNota?.chave_acesso || nfceData.chave)?.replace(/\s/g, ''),
     numero_nota: infoNota?.numero || nfceData.numero,
     serie: infoNota?.serie || nfceData.serie,
     
-    // ✅ Data em formato ISO para o frontend
-    data_emissao: dataEmissaoISO,
-    hora_emissao: infoNota?.hora_emissao || nfceData.hora_emissao,
-    
     // ✅ CRÍTICO: Salvar HTML da nota para fallback
     html_capturado: nfceData.site_receipt || null,
     
-    // ✅ Valores numéricos (não strings) - buscar em totais primeiro
-    valor_total: parseFloat(
-      nfceData.totais?.normalizado_valor_nfe || 
-      nfceData.nfe?.normalizado_valor_total ||
-      nfceData.valor_total || 
-      '0'
-    ),
+    // ✅ Valores numéricos no root para compatibilidade
+    valor_total: valorTotal,
     valor_desconto_total: parseFloat(
       nfceData.normalizado_valor_desconto || 
       nfceData.valor_desconto || 
-      '0'
-    ),
-    valor_a_pagar: parseFloat(
-      nfceData.normalizado_valor_a_pagar || 
-      nfceData.valor_a_pagar || 
       '0'
     ),
     quantidade_itens: parseInt(
@@ -291,7 +285,19 @@ async function processarNFCe(
       nfceData.quantidade_itens || 
       produtos.length.toString()
     ),
-    produtos,
+    
+    // ✅ ESTRUTURA CORRETA: Produtos em "itens" (não "produtos")
+    itens: produtos,
+    
+    // ✅ ESTRUTURA CORRETA: Dados da compra agrupados
+    compra: {
+      valor_total: valorTotal,
+      data_emissao: dataEmissaoISO,
+      hora_emissao: infoNota?.hora_emissao || nfceData.hora_emissao,
+      numero: infoNota?.numero || nfceData.numero,
+      serie: infoNota?.serie || nfceData.serie,
+      forma_pagamento: nfceData.formas_pagamento?.[0]?.forma || nfceData.pagamento?.[0]?.forma || 'N/A'
+    },
     
     // ✅ Formato esperado pelo SimplifiedInAppBrowser
     estabelecimento,
