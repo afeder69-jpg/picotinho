@@ -1765,68 +1765,13 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
     
     console.log('🔗 URL pública gerada:', publicUrl);
     
-    // ETAPA 1: Extrair chave de acesso ANTES de inserir no banco
-    let chaveAcesso = null;
-    
-    if (mimetype === 'application/pdf') {
-      try {
-        console.log('🔑 Tentando extrair chave de acesso do PDF...');
-        
-        // Converter Uint8Array para string para buscar chave
-        const decoder = new TextDecoder('utf-8');
-        let pdfText = decoder.decode(fileData);
-        
-        // Buscar chave de 44 dígitos (pode ter espaços entre os grupos)
-        const chaveMatch = pdfText.match(/\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}/);
-        
-        if (chaveMatch) {
-          chaveAcesso = chaveMatch[0].replace(/\s/g, '');
-          console.log('✅ Chave de acesso extraída:', chaveAcesso);
-        } else {
-          console.log('⚠️ Chave de acesso não encontrada no PDF');
-        }
-      } catch (error) {
-        console.error('❌ Erro ao extrair chave de acesso:', error);
-      }
-    }
-    
-    // ETAPA 2: Validar se a chave já existe no banco ANTES de inserir
-    if (chaveAcesso) {
-      console.log('🔍 Verificando se chave já existe no banco:', chaveAcesso);
-      
-      const { data: notasExistentes, error: erroConsulta } = await supabase
-        .from('notas_imagens')
-        .select('id, usuario_id, created_at')
-        .eq('chave_acesso', chaveAcesso)
-        .limit(1);
-      
-      if (erroConsulta) {
-        console.error('❌ Erro ao verificar duplicata:', erroConsulta);
-      }
-      
-      if (notasExistentes && notasExistentes.length > 0) {
-        console.log('⚠️ DUPLICATA DETECTADA antes de inserir! Chave já existe:', chaveAcesso);
-        
-        // Deletar o arquivo que foi feito upload
-        console.log('🗑️ Removendo arquivo duplicado do storage:', filePath);
-        await supabase.storage
-          .from('receipts')
-          .remove([filePath]);
-        
-        return "❌ Esta nota fiscal já foi lançada anteriormente no Picotinho. Cada nota só pode ser lançada uma vez no sistema.";
-      }
-      
-      console.log('✅ Chave validada - nota não é duplicata');
-    }
-    
-    // ETAPA 3: Inserir nota no banco (SÓ DEPOIS de validar duplicata)
+    // Criar registro na tabela notas_imagens
     const { data: notaImagem, error: dbError } = await supabase
       .from('notas_imagens')
       .insert({
         usuario_id: mensagem.usuario_id,
         imagem_url: publicUrl,
         imagem_path: filePath,
-        chave_acesso: chaveAcesso, // ← INCLUIR CHAVE AQUI
         processada: false,
         origem: 'whatsapp',
         dados_extraidos: {
