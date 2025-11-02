@@ -3,14 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { format } from "date-fns";
 
@@ -32,6 +34,15 @@ const NormalizacoesEstabelecimentos = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Normalizacao | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Estado para normalização retroativa
+  const [isRetroativaDialogOpen, setIsRetroativaDialogOpen] = useState(false);
+  const [isAnaliseDialogOpen, setIsAnaliseDialogOpen] = useState(false);
+  const [processandoRetroativa, setProcessandoRetroativa] = useState(false);
+  const [progressoRetroativa, setProgressoRetroativa] = useState(0);
+  const [analiseImpacto, setAnaliseImpacto] = useState<any>(null);
+  const [relatorioRetroativa, setRelatorioRetroativa] = useState<any>(null);
+  const [isRelatorioDialogOpen, setIsRelatorioDialogOpen] = useState(false);
 
   // Formulário
   const [formData, setFormData] = useState({
@@ -223,6 +234,64 @@ const NormalizacoesEstabelecimentos = () => {
     resetForm();
   };
 
+  const analisarImpacto = async () => {
+    try {
+      setAnaliseImpacto(null);
+      const { data, error } = await supabase.functions.invoke(
+        'analisar-impacto-normalizacao'
+      );
+
+      if (error) throw error;
+
+      setAnaliseImpacto(data);
+      setIsAnaliseDialogOpen(true);
+    } catch (error) {
+      console.error('Erro ao analisar impacto:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível analisar o impacto das normalizações.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const aplicarNormalizacaoRetroativa = async () => {
+    try {
+      setProcessandoRetroativa(true);
+      setProgressoRetroativa(10);
+      setIsAnaliseDialogOpen(false);
+      setIsRetroativaDialogOpen(true);
+
+      const { data, error } = await supabase.functions.invoke(
+        'aplicar-normalizacao-retroativa'
+      );
+
+      setProgressoRetroativa(100);
+
+      if (error) throw error;
+
+      setRelatorioRetroativa(data.estatisticas);
+      setIsRetroativaDialogOpen(false);
+      setIsRelatorioDialogOpen(true);
+
+      toast({
+        title: "Sucesso!",
+        description: `${data.estatisticas.notas_atualizadas} notas foram atualizadas.`,
+      });
+
+    } catch (error) {
+      console.error('Erro ao aplicar normalizações:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível aplicar as normalizações retroativas.",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessandoRetroativa(false);
+      setProgressoRetroativa(0);
+    }
+  };
+
   const normalizacoesFiltradas = normalizacoes.filter((norm) => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -247,7 +316,17 @@ const NormalizacoesEstabelecimentos = () => {
             Voltar
           </Button>
 
-          <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={analisarImpacto}
+              className="gap-2"
+            >
+              <History className="w-4 h-4" />
+              Aplicar a Notas Antigas
+            </Button>
+
+            <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -318,7 +397,173 @@ const NormalizacoesEstabelecimentos = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        {/* Dialog de Análise de Impacto */}
+        <Dialog open={isAnaliseDialogOpen} onOpenChange={setIsAnaliseDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Aplicar Normalizações a Notas Antigas
+              </DialogTitle>
+              <DialogDescription>
+                Esta ação irá atualizar todas as notas fiscais já processadas para aplicar as novas regras de normalização de estabelecimentos.
+              </DialogDescription>
+            </DialogHeader>
+
+            {analiseImpacto ? (
+              <div className="space-y-4 my-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total de Notas</p>
+                        <p className="text-3xl font-bold">{analiseImpacto.total_notas_processadas}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Notas a Atualizar</p>
+                        <p className="text-3xl font-bold text-primary">{analiseImpacto.total_notas_afetadas}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {analiseImpacto.impacto && analiseImpacto.impacto.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-3">Normalizações que serão aplicadas:</h4>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {analiseImpacto.impacto.map((norm: any) => (
+                        <div key={norm.id} className="flex items-center gap-2 text-sm p-2 bg-muted/50 rounded">
+                          <ArrowRight className="w-3 h-3 flex-shrink-0" />
+                          <span className="text-muted-foreground truncate flex-1">{norm.nome_original}</span>
+                          <span>→</span>
+                          <span className="font-medium truncate flex-1">{norm.nome_normalizado}</span>
+                          <Badge variant="secondary">{norm.notas_afetadas} notas</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {analiseImpacto.total_notas_afetadas === 0 && (
+                  <Card>
+                    <CardContent className="py-6 text-center">
+                      <p className="text-muted-foreground">
+                        Nenhuma nota será afetada pelas normalizações ativas.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAnaliseDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={aplicarNormalizacaoRetroativa}
+                disabled={!analiseImpacto || analiseImpacto.total_notas_afetadas === 0}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Aplicar Normalizações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de Processamento */}
+        <Dialog open={isRetroativaDialogOpen} onOpenChange={() => {}}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Processando Normalizações</DialogTitle>
+              <DialogDescription>
+                Aguarde enquanto atualizamos as notas fiscais...
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Progress value={progressoRetroativa} />
+              <p className="text-sm text-center text-muted-foreground">
+                {progressoRetroativa < 100 ? 'Processando notas...' : 'Finalizando...'}
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de Relatório */}
+        <Dialog open={isRelatorioDialogOpen} onOpenChange={setIsRelatorioDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                Normalização Concluída com Sucesso!
+              </DialogTitle>
+            </DialogHeader>
+
+            {relatorioRetroativa && (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span>Notas analisadas:</span>
+                      <span className="font-bold">{relatorioRetroativa.total_notas_analisadas}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Notas atualizadas:</span>
+                      <span className="font-bold text-primary">{relatorioRetroativa.notas_atualizadas}</span>
+                    </div>
+
+                    {relatorioRetroativa.normalizacoes_aplicadas && relatorioRetroativa.normalizacoes_aplicadas.length > 0 && (
+                      <>
+                        <Separator />
+                        <div>
+                          <h5 className="font-semibold mb-2">Normalizações Aplicadas:</h5>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {relatorioRetroativa.normalizacoes_aplicadas.map((norm: any, idx: number) => (
+                              <div key={idx} className="text-sm p-2 bg-muted/50 rounded">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-muted-foreground truncate flex-1">{norm.nome_original}</span>
+                                  <span>→</span>
+                                  <span className="font-medium truncate flex-1">{norm.nome_normalizado}</span>
+                                </div>
+                                <Badge variant="secondary" className="mt-1">{norm.quantidade_notas} notas</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {relatorioRetroativa.notas_atualizadas === 0 && (
+                      <>
+                        <Separator />
+                        <p className="text-sm text-muted-foreground text-center py-2">
+                          Nenhuma nota precisou ser atualizada.
+                        </p>
+                      </>
+                    )}
+
+                    <Separator />
+                    <div className="text-xs text-muted-foreground text-center">
+                      Tempo de processamento: {relatorioRetroativa.tempo_processamento_segundos}s
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="justify-end">
+                  <Button onClick={() => setIsRelatorioDialogOpen(false)}>
+                    Fechar
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Busca */}
         <div className="relative">

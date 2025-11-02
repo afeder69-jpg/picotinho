@@ -1,6 +1,6 @@
 project_id = "mjsbwrtegorjxcepvrik" # validação setor implementada
 
-# Build forçado para deploy de deduplicação WhatsApp - 2025-11-02
+# Build forçado para deploy de normalização retroativa - 2025-11-02
 
 [functions.process-nfe-serpro]
 verify_jwt = false
@@ -66,6 +66,12 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.processar-normalizacao-global]
+verify_jwt = false
+
+[functions.aplicar-normalizacao-retroativa]
+verify_jwt = false
+
+[functions.analisar-impacto-normalizacao]
 verify_jwt = false
 
 [functions.reconciliar-estoque-master]
