@@ -277,6 +277,86 @@ serve(async (req) => {
     console.log(`✅ Lock de processamento adquirido para nota ${finalNotaId}`);
 
     try {
+      // 💰 ATUALIZAÇÃO PREVENTIVA DE PREÇOS (ANTES DE QUALQUER CHECK)
+      // Isso garante que preços sejam atualizados mesmo em re-validações
+      console.log('💰 Iniciando atualização preventiva de preços atuais...');
+      
+      const dadosExtraidos = nota.dados_extraidos || {};
+      
+      // Extrair dados do estabelecimento
+      const estabelecimentoCnpj = dadosExtraidos.cnpj || 
+                                   dadosExtraidos.estabelecimento?.cnpj || 
+                                   dadosExtraidos.supermercado?.cnpj || 
+                                   dadosExtraidos.emitente?.cnpj || '';
+      
+      const estabelecimentoNome = dadosExtraidos.estabelecimento?.nome || 
+                                   dadosExtraidos.supermercado?.nome || 
+                                   dadosExtraidos.emitente?.nome || 
+                                   dadosExtraidos.nome_estabelecimento || '';
+      
+      // ✅ CORREÇÃO: Buscar data/hora no formato novo primeiro
+      let dataCompraAtual = dadosExtraidos.compra?.data_emissao || 
+                            dadosExtraidos.data_emissao || 
+                            dadosExtraidos.data ||
+                            dadosExtraidos.emissao ||
+                            new Date().toISOString().split('T')[0];
+      
+      let horaCompra = '00:00:00';
+      
+      // Parsear data e hora corretamente (formatos: "DD/MM/YYYY" ou "DD/MM/YYYY HH:MM:SS")
+      if (dataCompraAtual && typeof dataCompraAtual === 'string') {
+        const partes = dataCompraAtual.split(' ');
+        const dataStr = partes[0];
+        const horaStr = partes[1] || '00:00:00';
+        
+        // Converter DD/MM/YYYY para YYYY-MM-DD
+        if (dataStr.includes('/')) {
+          const [dia, mes, ano] = dataStr.split('/');
+          dataCompraAtual = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+          horaCompra = horaStr;
+        }
+      }
+      
+      console.log(`📍 Estabelecimento: ${estabelecimentoNome} (${estabelecimentoCnpj})`);
+      console.log(`📅 Data/Hora parseada: ${dataCompraAtual} ${horaCompra}`);
+      
+      // Buscar itens (ambos os formatos)
+      const itensDaNota = dadosExtraidos.produtos || dadosExtraidos.itens || [];
+      
+      if (itensDaNota && itensDaNota.length > 0) {
+        let precosAtualizados = 0;
+        
+        for (const item of itensDaNota) {
+          const produtoNome = item.descricao || item.nome;
+          const valorUnitario = parseFloat(item.valor_unitario_comercial || item.valor_unitario) || 0;
+          
+          if (produtoNome && valorUnitario > 0) {
+            try {
+              const { error: erroPrecosAtuais } = await supabase.functions.invoke('update-precos-atuais', {
+                body: {
+                  compraId: finalNotaId,
+                  produtoNome,
+                  precoUnitario: valorUnitario,
+                  estabelecimentoCnpj,
+                  estabelecimentoNome,
+                  dataCompra: dataCompraAtual,
+                  horaCompra,
+                  userId: nota.usuario_id
+                }
+              });
+
+              if (!erroPrecosAtuais) {
+                precosAtualizados++;
+              }
+            } catch (error) {
+              console.error(`⚠️ Erro ao atualizar preço para ${produtoNome}:`, error);
+            }
+          }
+        }
+        
+        console.log(`✅ Atualização preventiva concluída: ${precosAtualizados}/${itensDaNota.length} preços atualizados`);
+      }
+      
       // 🛡️ VERIFICAÇÃO ANTI-DUPLICAÇÃO INTELIGENTE
       if (nota.processada && !force) {
         // Verificar se já existem itens no estoque para esta nota
@@ -322,8 +402,11 @@ serve(async (req) => {
 
     // Buscar produtos dos 2 formatos possíveis
     let itens: any[] = [];
-    const dataCompra = nota.dados_extraidos?.data_emissao || 
-                       nota.dados_extraidos?.compra?.data_emissao ||
+    
+    // ✅ CORREÇÃO: Buscar data no formato novo primeiro (compra.data_emissao)
+    const dataCompra = nota.dados_extraidos?.compra?.data_emissao || 
+                       nota.dados_extraidos?.data_emissao ||
+                       nota.dados_extraidos?.data ||
                        new Date().toISOString().split('T')[0];
 
     // FORMATO 1: InfoSimples (QR Code) - dados_extraidos.produtos
@@ -538,69 +621,6 @@ serve(async (req) => {
     } else {
       console.log('✅ Validação OK: Todos os itens foram inseridos corretamente');
     }
-
-    // 💰 ATUALIZAÇÃO AUTOMÁTICA DE PREÇOS
-    console.log('💰 Iniciando atualização automática de preços atuais...');
-    
-    // Extrair dados do estabelecimento
-    const estabelecimentoCnpj = dadosExtraidos.cnpj || 
-                                 dadosExtraidos.estabelecimento?.cnpj || 
-                                 dadosExtraidos.supermercado?.cnpj || 
-                                 dadosExtraidos.emitente?.cnpj || '';
-    
-    const estabelecimentoNome = dadosExtraidos.estabelecimento?.nome || 
-                                 dadosExtraidos.supermercado?.nome || 
-                                 dadosExtraidos.emitente?.nome || 
-                                 dadosExtraidos.nome_estabelecimento || '';
-    
-    // Reatribuir dataCompra se necessário para este contexto
-    const dataCompraAtual = dadosExtraidos.data_emissao || 
-                            dadosExtraidos.data || 
-                            dadosExtraidos.emissao || 
-                            new Date().toISOString().split('T')[0];
-    
-    const horaCompra = dadosExtraidos.hora_emissao || 
-                      dadosExtraidos.hora || 
-                      '00:00:00';
-
-    console.log(`📍 Estabelecimento: ${estabelecimentoNome} (${estabelecimentoCnpj})`);
-    console.log(`📅 Data/Hora: ${dataCompraAtual} ${horaCompra}`);
-
-    // Atualizar preços para cada item do estoque
-    let precosAtualizados = 0;
-    let errosAtualizacao = 0;
-    
-    for (const item of produtosEstoque) {
-      if (item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
-        try {
-          const { error: erroPrecosAtuais } = await supabase.functions.invoke('update-precos-atuais', {
-            body: {
-              compraId: finalNotaId,
-              produtoNome: item.produto_nome,
-              precoUnitario: item.preco_unitario_ultimo,
-              estabelecimentoCnpj,
-              estabelecimentoNome,
-              dataCompra: dataCompraAtual,
-              horaCompra,
-              userId
-            }
-          });
-
-          if (erroPrecosAtuais) {
-            console.error(`⚠️ Erro ao atualizar preço para ${item.produto_nome}:`, erroPrecosAtuais);
-            errosAtualizacao++;
-          } else {
-            console.log(`💾 Preço atualizado: ${item.produto_nome} = R$ ${item.preco_unitario_ultimo}`);
-            precosAtualizados++;
-          }
-        } catch (error) {
-          console.error(`⚠️ Erro ao chamar update-precos-atuais para ${item.produto_nome}:`, error);
-          errosAtualizacao++;
-        }
-      }
-    }
-    
-    console.log(`✅ Atualização de preços concluída: ${precosAtualizados} atualizados, ${errosAtualizacao} erros`);
 
     // Marcar nota como processada e liberar lock
     const { error: updateError } = await supabase
