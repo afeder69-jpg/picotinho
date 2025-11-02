@@ -238,7 +238,7 @@ serve(async (req) => {
     // Buscar nota com verificação de status processada
     const { data: nota, error: notaError } = await supabase
       .from("notas_imagens")
-      .select("id, usuario_id, compra_id, dados_extraidos, processada")
+      .select("id, usuario_id, compra_id, dados_extraidos, processada, processing_started_at")
       .eq("id", finalNotaId)
       .single();
 
@@ -247,6 +247,31 @@ serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // 🔒 CORREÇÃO #1: Verificar se há lock expirado (timeout de 5 minutos)
+    const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
+    if (nota.processing_started_at) {
+      const lockAge = Date.now() - new Date(nota.processing_started_at).getTime();
+      
+      if (lockAge > LOCK_TIMEOUT_MS) {
+        console.log(`⚠️ Lock expirado (${(lockAge/1000/60).toFixed(1)} min). Liberando...`);
+        await supabase
+          .from('notas_imagens')
+          .update({ processing_started_at: null })
+          .eq('id', finalNotaId);
+      } else if (!force) {
+        // Lock ainda válido, não processar
+        console.log(`🔒 Nota em processamento há ${(lockAge/1000).toFixed(0)}s. Aguardando...`);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: "Nota já está sendo processada",
+            already_processing: true 
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // 🔒 LOCK ATÔMICO: Marcar nota como "em processamento"
@@ -511,6 +536,32 @@ serve(async (req) => {
     
     console.log(`📦 Itens únicos para inserir no estoque: ${produtosEstoque.length} (de ${itens.length} itens originais)`);
     
+    // 🔒 CORREÇÃO #2: Salvar dados_extraidos ANTES de inserir no estoque (segurança contra perda de dados)
+    console.log('💾 Salvando dados extraídos antes de processar estoque...');
+    const { error: saveError } = await supabase
+      .from('notas_imagens')
+      .update({
+        dados_extraidos: {
+          ...nota.dados_extraidos,
+          produtos_consolidados: produtosEstoque.map(p => ({
+            nome: p.produto_nome,
+            categoria: p.categoria,
+            quantidade: p.quantidade,
+            preco_unitario: p.preco_unitario_ultimo,
+            unidade: p.unidade_medida
+          })),
+          total_itens: produtosEstoque.length
+        }
+      })
+      .eq('id', finalNotaId);
+
+    if (saveError) {
+      console.error('⚠️ Erro ao salvar dados extraídos:', saveError);
+      // Não falhar, apenas logar (dado é uma precaução)
+    } else {
+      console.log('✅ Dados extraídos salvos com sucesso');
+    }
+    
     // 🔍 FASE 2: BUSCAR PRODUTO MASTER PARA CADA ITEM
     console.log('🔍 Iniciando busca de produtos master...');
     let masterEncontrados = 0;
@@ -610,7 +661,7 @@ serve(async (req) => {
 
     console.log(`✅ ${totalInserted} itens inseridos no estoque (${Math.ceil(produtosEstoque.length/BATCH_SIZE)} lotes processados)`);
     
-    // 🚨 VALIDAÇÃO CRÍTICA: Verificar se todos os itens foram inseridos corretamente
+    // 🚨 CORREÇÃO #3: VALIDAÇÃO CRÍTICA com auto-correção - NÃO marcar como processada se houver discrepância
     const itensEsperados = produtosEstoque.length;
     const itensInseridos = totalInserted;
     
@@ -618,6 +669,27 @@ serve(async (req) => {
       console.error(`🚨 INCONSISTÊNCIA CRÍTICA: Esperado ${itensEsperados} itens, inserido ${itensInseridos}`);
       console.error('🚨 Produtos que deveriam ser inseridos:', produtosEstoque.map(p => p.produto_nome));
       console.error('🚨 Produtos efetivamente inseridos:', inserted.map(p => p.produto_nome));
+      
+      // ✅ NÃO MARCAR COMO PROCESSADA - Permitir reprocessamento automático
+      await supabase
+        .from('notas_imagens')
+        .update({ 
+          processing_started_at: null, // Liberar lock
+          debug_texto: `Inserção parcial: ${itensInseridos}/${itensEsperados} itens. Reprocessamento necessário.`
+        })
+        .eq('id', finalNotaId);
+      
+      console.log('🔓 Lock liberado devido a inserção parcial. Nota disponível para reprocessamento.');
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Inserção incompleta: ${itensInseridos}/${itensEsperados} itens`,
+          nota_id: finalNotaId,
+          requires_reprocessing: true
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     } else {
       console.log('✅ Validação OK: Todos os itens foram inseridos corretamente');
     }
