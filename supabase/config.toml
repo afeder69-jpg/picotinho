@@ -1,6 +1,6 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
-# Build forçado para deploy de consolidar-masters-duplicados - 2025-10-04
+# Build forçado para deploy de deduplicação WhatsApp - 2025-11-02
 
 [functions.process-nfe-serpro]
 verify_jwt = false

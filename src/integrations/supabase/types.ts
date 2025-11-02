@@ -2648,6 +2648,30 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_mensagens_processadas: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          processada_em: string
+          remetente: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          processada_em?: string
+          remetente: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          processada_em?: string
+          remetente?: string
+        }
+        Relationships: []
+      }
       whatsapp_sessions: {
         Row: {
           contexto: Json | null
@@ -3146,6 +3170,7 @@ export type Database = {
         Args: { usuario_uuid: string }
         Returns: undefined
       }
+      limpar_mensagens_whatsapp_antigas: { Args: never; Returns: undefined }
       limpar_produtos_fantasmas_e_corrigir_precos: {
         Args: never
         Returns: {

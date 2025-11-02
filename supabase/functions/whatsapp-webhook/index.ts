@@ -62,6 +62,66 @@ const handler = async (req: Request): Promise<Response> => {
       
       console.log('🔍 PAYLOAD COMPLETO RECEBIDO:');
       console.log(JSON.stringify(webhookData, null, 2));
+      
+      // ========== DEDUPLICAÇÃO DE MENSAGEM ==========
+      // Extrair ID único da mensagem do webhook
+      const messageId = webhookData.key?.id || 
+                        webhookData.messageId || 
+                        webhookData.id || 
+                        webhookData.message?.id;
+      
+      if (!messageId) {
+        console.warn('⚠️ Mensagem sem ID - gerando fallback baseado em timestamp');
+      }
+      
+      const timestamp = Date.now();
+      const phone = webhookData.phone?.replace(/\D/g, '') || 'unknown';
+      const finalMessageId = messageId || `${phone}_${timestamp}`;
+      
+      console.log('🔑 Message ID extraído:', finalMessageId);
+      console.log('🔍 Verificando se mensagem já foi processada...');
+      
+      // Tentar inserir na tabela de controle (UNIQUE constraint bloqueia duplicatas)
+      const { data: inserted, error: dedupeError } = await supabase
+        .from('whatsapp_mensagens_processadas')
+        .insert({
+          message_id: finalMessageId,
+          remetente: phone
+        })
+        .select()
+        .maybeSingle();
+      
+      // Se deu erro UNIQUE CONSTRAINT (23505) = mensagem já foi processada antes
+      if (dedupeError?.code === '23505') {
+        console.log('⚠️ ========================================');
+        console.log('⚠️ MENSAGEM DUPLICADA BLOQUEADA!');
+        console.log('⚠️ Message ID:', finalMessageId);
+        console.log('⚠️ Este é um RETRY do provedor WhatsApp');
+        console.log('⚠️ Processamento bloqueado com sucesso');
+        console.log('⚠️ ========================================');
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Mensagem já processada anteriormente',
+            messageId: finalMessageId,
+            action: 'deduplicated'
+          }),
+          { 
+            status: 200, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+      
+      // Se deu outro erro (não duplicação), logar mas continuar (fail-safe)
+      if (dedupeError) {
+        console.error('❌ Erro ao verificar duplicação (fail-safe):', dedupeError);
+        console.log('⚠️ Continuando processamento por segurança');
+      } else {
+        console.log('✅ Mensagem NOVA registrada - prosseguindo com processamento');
+      }
+      // ========== FIM DA DEDUPLICAÇÃO ==========
       console.log('🔍 TIPO DE EVENTO:', webhookData.type);
       console.log('🔍 ESTRUTURA DO TEXTO:', webhookData.text ? JSON.stringify(webhookData.text, null, 2) : 'NÃO ENCONTRADO');
       console.log('🔍 CAMPO PHONE:', webhookData.phone);
