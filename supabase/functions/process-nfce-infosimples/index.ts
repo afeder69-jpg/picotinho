@@ -277,10 +277,19 @@ async function processarNFCe(
   let dataEmissaoISO = null;
   if (dataEmissaoRaw) {
     try {
-      // Se vier em formato brasileiro DD/MM/YYYY
+      // Se vier em formato brasileiro DD/MM/YYYY HH:mm:ss
       if (dataEmissaoRaw.includes('/')) {
-        const [dia, mes, ano] = dataEmissaoRaw.split(/[\s\/]/)[0].split('/');
-        dataEmissaoISO = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${dataEmissaoRaw.split(' ')[1] || '00:00:00'}`;
+        // Separar data e hora corretamente
+        const partes = dataEmissaoRaw.split(' ');
+        const dataParte = partes[0]; // "26/10/2025"
+        const horaParte = partes[1]?.split('-')[0] || '00:00:00'; // "12:35:25" (remove timezone)
+        
+        const [dia, mes, ano] = dataParte.split('/');
+        
+        // Validar que temos todos os componentes
+        if (dia && mes && ano) {
+          dataEmissaoISO = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${horaParte}`;
+        }
       } else {
         // Se vier em formato ISO (2025-10-04T09:43:14-03:00)
         dataEmissaoISO = new Date(dataEmissaoRaw).toISOString();
