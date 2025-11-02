@@ -38,7 +38,8 @@ import {
   BarChart3,
   Zap,
   Check,
-  Trash2
+  Trash2,
+  Building2
 } from "lucide-react";
 import {
   Pagination,
@@ -1850,6 +1851,15 @@ export default function NormalizacaoGlobal() {
                   {duplicatasEncontradas}
                 </Badge>
               )}
+            </Button>
+
+            <Button 
+              onClick={() => navigate("/admin/normalizacoes-estabelecimentos")}
+              variant="outline"
+              className="gap-2 shadow-lg hover:shadow-xl transition-all"
+            >
+              <Building2 className="w-4 h-4" />
+              Gerenciar Estabelecimentos
             </Button>
           </div>
         </CardContent>
