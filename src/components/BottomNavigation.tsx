@@ -150,22 +150,70 @@ const BottomNavigation = () => {
         });
       }
     } else {
-      // Em plataforma web: usar InternalWebViewer (NFe/Serpro)
-      setPendingQrUrl(data);
-      setPendingDocType(tipoDocumento);
+      // Em plataforma web: processar via InfoSimples (igual ao nativo)
+      console.log('🌐 [WEB] Processando nota via InfoSimples...');
+      setIsProcessingQRCode(true);
       
-      if (tipoDocumento === 'NFe') {
-        console.log('📄 [WEB/NFE] Abrindo InternalWebViewer (Serpro)...');
-        setShowInternalWebViewer(true);
-        toast({
-          title: "📄 Nota Fiscal Eletrônica",
-          description: "A nota será processada via API Serpro",
+      try {
+        const chaveAcesso = extrairChaveNFe(data);
+        
+        if (!chaveAcesso) {
+          throw new Error('Não foi possível extrair a chave de acesso da URL');
+        }
+        
+        console.log('🔑 Chave extraída:', chaveAcesso);
+        
+        // Chamar process-url-nota
+        const { data: processData, error: processError } = await supabase.functions.invoke('process-url-nota', {
+          body: {
+            url: data,
+            userId: user.id,
+            chaveAcesso,
+            tipoDocumento,
+          },
         });
-      } else {
-        // NFCe na web: mostrar aviso
+        
+        if (processError) throw processError;
+        
+        console.log('✅ Processamento iniciado:', processData);
+        
+        // Aguardar processamento do InfoSimples
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        
+        // Buscar os dados processados
+        const { data: notaData, error: notaError } = await supabase
+          .from('notas_imagens')
+          .select('id, dados_extraidos, nome_original')
+          .eq('id', processData.notaId)
+          .single();
+        
+        if (notaError) throw notaError;
+        
+        console.log('📄 Dados da nota buscados:', notaData);
+        
+        if (!notaData.dados_extraidos) {
+          throw new Error('Nota ainda está sendo processada. Tente novamente em alguns segundos.');
+        }
+        
+        // Abrir CupomFiscalViewer com os DADOS
+        setPendingQrUrl(data);
+        setPendingDocType(tipoDocumento);
+        setPendingNotaData(notaData);
+        setShowCupomViewer(true);
+        setIsProcessingQRCode(false);
+        
         toast({
-          title: "⚠️ NFCe detectada",
-          description: "Use o app Android/iOS para processar NFCe",
+          title: "✅ Nota carregada",
+          description: "Confira os dados e confirme para gerar o PDF",
+        });
+        
+      } catch (error: any) {
+        console.error('❌ Erro ao processar nota:', error);
+        setIsProcessingQRCode(false);
+        
+        toast({
+          title: "Erro ao processar nota",
+          description: error.message || "Tente novamente",
           variant: "destructive",
         });
       }
