@@ -84,7 +84,7 @@ REGRAS CRÍTICAS DE CATEGORIZAÇÃO:
    - hortifruti: frutas, verduras, legumes, temperos verdes, ervas frescas
    - mercearia: arroz, feijão, massas, sal, açúcar, óleo, azeite, ovos, milho (enlatado), aveia, conservas, molhos
    - bebidas: refrigerantes, sucos, água, cervejas, vinhos, energéticos (exceto leite)
-   - laticínios/frios: leite, queijos, iogurtes, manteiga, requeijão, embutidos, presunto, mortadela
+   - laticínios/frios: LEITE (qualquer tipo - integral, desnatado, condensado, em pó), queijos, iogurtes, manteiga, requeijão, creme de leite, embutidos, presunto, mortadela
    - limpeza: detergentes, sabões, desinfetantes, esponja de aço, bombril, amaciantes
    - higiene/farmácia: sabonetes, shampoos, pasta de dente, papel higiênico, medicamentos
    - açougue: carnes frescas, frango, peixes, linguiças
@@ -94,6 +94,12 @@ REGRAS CRÍTICAS DE CATEGORIZAÇÃO:
    - outros: apenas quando não se encaixa em nenhuma categoria acima
 
 2. CATEGORIZAÇÃO ESPECÍFICA (OBRIGATÓRIA):
+   - ⚠️ CRÍTICO: QUALQUER produto com "LEITE" no nome → "laticínios/frios" (exceto "leite de coco")
+   - "Queijo" de qualquer tipo → "laticínios/frios"
+   - "Iogurte" → "laticínios/frios"
+   - "Manteiga" ou "Margarina" → "laticínios/frios"
+   - "Creme de leite" ou "Leite condensado" → "laticínios/frios"
+   - "Requeijão" → "laticínios/frios"
    - "Tempero Verde" ou similar → "hortifruti"
    - "Milho Verde" (lata/conserva) → "mercearia"
    - "Esponja de Aço" ou "Bombril" → "limpeza"
@@ -229,11 +235,33 @@ Retorne APENAS o JSON estruturado conforme especificado, sem explicações.`
       throw new Error('Estrutura de dados inválida - itens não encontrados');
     }
 
-    // Garantir que todos os itens tenham categoria
-    dadosExtraidos.itens = dadosExtraidos.itens.map((item: any) => ({
-      ...item,
-      categoria: item.categoria || 'outros'
-    }));
+        // Garantir que todos os itens tenham categoria e aplicar regras de recategorização
+        dadosExtraidos.itens = dadosExtraidos.itens.map((item: any) => {
+          let categoria = item.categoria || 'outros';
+          const descricaoLower = (item.descricao || '').toLowerCase();
+          
+          // 🥛 REGRA CRÍTICA: Leite e derivados → SEMPRE laticínios/frios
+          if (descricaoLower.includes('leite') && !descricaoLower.includes('leite de coco')) {
+            categoria = 'laticínios/frios';
+          }
+          if (descricaoLower.includes('queijo')) {
+            categoria = 'laticínios/frios';
+          }
+          if (descricaoLower.includes('iogurte')) {
+            categoria = 'laticínios/frios';
+          }
+          if (descricaoLower.includes('manteiga') || descricaoLower.includes('margarina')) {
+            categoria = 'laticínios/frios';
+          }
+          if (descricaoLower.includes('creme de leite') || descricaoLower.includes('leite condensado')) {
+            categoria = 'laticínios/frios';
+          }
+          if (descricaoLower.includes('requeijão') || descricaoLower.includes('requeijao')) {
+            categoria = 'laticínios/frios';
+          }
+          
+          return { ...item, categoria };
+        });
 
     console.log(`✅ Extraídos ${dadosExtraidos.itens.length} itens com categorização`);
 
