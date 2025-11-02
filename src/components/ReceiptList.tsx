@@ -243,8 +243,8 @@ function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; 
   }
 
   return { 
-    neighborhood: neighborhood || 'Centro', // Fallback para Centro se não encontrar
-    uf: uf || 'BR' 
+    neighborhood: neighborhood || '',
+    uf: uf || '' 
   };
 }
 
