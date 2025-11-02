@@ -187,47 +187,40 @@ const CupomFiscalViewer = ({
         return;
       }
 
-      // 3. Processar estoque via process-receipt-full
-      const { data: processData, error: processError } = await supabase.functions.invoke(
-        "process-receipt-full",
-        {
-          body: {
-            notaId: notaId,
-            userId: userId,
-          },
-        }
-      );
-
-      if (processError) throw processError;
-
-      console.log("✅ Estoque processado:", processData);
-
-      // 4. 🗑️ Deletar PDF temporário do Storage
-      if (pdfUrl) {
-        const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
-        const { error: deleteError } = await supabase.storage
-          .from("receipts")
-          .remove([fileName]);
-
-        if (deleteError) {
-          console.warn("⚠️ Erro ao deletar PDF temporário:", deleteError);
-        } else {
-          console.log("✅ PDF temporário deletado com sucesso");
-        }
-
-        // Limpar pdf_url do banco
-        await supabase
-          .from("notas_imagens")
-          .update({ pdf_url: null })
-          .eq("id", notaId);
-      }
-
+      // 3. ✅ FECHAR MODAL E REDIRECIONAR IMEDIATAMENTE
       toast({
-        title: "✅ Nota processada com sucesso!",
-        description: `${processData?.itens_inseridos || 0} itens adicionados ao estoque`,
+        title: "✅ Nota aceita!",
+        description: "Processando estoque em segundo plano...",
+      });
+      
+      onConfirm(); // ← Chamado ANTES do processamento completo
+      
+      // 4. Processar estoque em background (não bloqueante)
+      supabase.functions.invoke("process-receipt-full", {
+        body: { notaId, userId }
+      }).then(({ data: processData, error: processError }) => {
+        if (processError) {
+          console.error("❌ Erro ao processar estoque:", processError);
+          return;
+        }
+        
+        console.log("✅ Estoque processado:", processData);
+        
+        // 5. Deletar PDF temporário em background
+        if (pdfUrl) {
+          const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
+          supabase.storage.from("receipts").remove([fileName])
+            .then(() => console.log("✅ PDF temporário deletado"))
+            .catch((err) => console.warn("⚠️ Erro ao deletar PDF:", err));
+          
+          supabase
+            .from("notas_imagens")
+            .update({ pdf_url: null })
+            .eq("id", notaId)
+            .then(() => console.log("✅ pdf_url limpo do banco"));
+        }
       });
 
-      onConfirm();
     } catch (error: any) {
       console.error("❌ Erro ao confirmar nota:", error);
       toast({
