@@ -81,12 +81,30 @@ Deno.serve(async (req) => {
 
 CRITÉRIOS DE VALIDAÇÃO:
 1. CHAVE DE ACESSO: Procure por sequência de 44 dígitos (pode ter espaços, pontos, quebras). Normalize: O→0, I/l→1, B→8.
-2. ESTABELECIMENTO: Identifique o nome/tipo do emissor.
+2. ESTABELECIMENTO: Identifique o tipo/setor do emissor.
 3. SINAIS DE COMPRA: Verifique se há itens com descrição+quantidade+valor, valor total, ou forma de pagamento.
 
-REGRA SIMPLES:
-- APROVAR se: Há chave de 44 dígitos OU (é nota de compra de produtos com itens e valores)
-- REPROVAR apenas se: Claramente não é uma nota fiscal de compra (ex: recibo de serviços sem produtos)
+SETORES ACEITOS NO PICOTINHO:
+- Supermercados, mercados, mercearias, hipermercados
+- Padarias, açougues, lanchonetes
+- Farmácias e drogarias (produtos de higiene/limpeza/medicamentos)
+- Pet shops, agropecuárias (produtos para pets/animais)
+- Atacadões, lojas de conveniência
+
+SETORES QUE DEVEM SER REJEITADOS:
+- Indústrias, fábricas, biorrefinarias, refinarias
+- Postos de gasolina (exceto conveniência)
+- Restaurantes, bares, serviços de alimentação
+- Lojas de roupas, eletrônicos, móveis, decoração
+- Serviços gerais (oficinas, salões, consultórios)
+- E-commerce não alimentar
+- Distribuidoras industriais, atacados não alimentares
+
+REGRAS DE APROVAÇÃO:
+- APROVAR se: Há chave de 44 dígitos E o estabelecimento é de um dos setores aceitos
+- REPROVAR se: Não tem chave de 44 dígitos OU é de setor não relacionado a produtos de consumo diário
+
+No campo "setor_inferido", classifique o tipo de estabelecimento (ex: "supermercado", "farmacia", "industria", "posto_gasolina").
 
 Responda APENAS o JSON:
 {
@@ -370,10 +388,45 @@ Responda APENAS o JSON:
       }
     }
 
+    // ========== VALIDAÇÃO DE SETOR ==========
+    const SETORES_VALIDOS = [
+      'supermercado', 'mercado', 'padaria', 'acougue', 
+      'mercearia', 'hipermercado', 'minimercado', 'atacadao',
+      'varejo_alimentar', 'loja_conveniencia',
+      'farmacia', 'drogaria',
+      'pet_shop', 'agropecuaria', 'petshop'
+    ];
+
+    const setorNormalizado = (analysis.setor_inferido || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .replace(/[^a-z0-9]/g, '_') // normaliza
+      .replace(/_+/g, '_'); // remove underscores duplicados
+
+    const setorValido = SETORES_VALIDOS.some(setor => 
+      setorNormalizado.includes(setor.replace(/_/g, ''))
+    );
+
+    console.log('🏪 Validação de setor:', {
+      setorOriginal: analysis.setor_inferido,
+      setorNormalizado,
+      setorValido,
+      approved: analysis.approved
+    });
+
     // Determinar resultado final
     let result: ValidationResult;
 
-    if (isDuplicate) {
+    if (!setorValido && analysis.approved && analysis.setor_inferido) {
+      console.log('❌ SETOR INVÁLIDO DETECTADO:', analysis.setor_inferido);
+      result = {
+        approved: false,
+        reason: 'setor_invalido',
+        shouldDelete: true,
+        message: `❌ Esta nota fiscal não é de um supermercado, mercado, padaria, açougue ou farmácia.\n\nO Picotinho aceita apenas notas de estabelecimentos do varejo alimentar e farmacêutico.\n\nTipo identificado: ${analysis.setor_inferido}`
+      };
+    } else if (isDuplicate) {
       result = {
         approved: false,
         reason: 'duplicada',
