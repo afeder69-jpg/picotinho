@@ -30,9 +30,11 @@ const BottomNavigation = () => {
   const { user } = useAuth();
 
   const handleNoteConfirm = async () => {
-    console.log('✅ [INTERNAL VIEWER] Nota confirmada, navegando para screenshots');
+    console.log('✅ [VIEWER] Nota confirmada, navegando para screenshots');
     setShowInternalWebViewer(false);
+    setShowCupomViewer(false);
     setPendingQrUrl(null);
+    setPendingNotaData(null);
     navigate('/screenshots');
   };
 
