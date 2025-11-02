@@ -229,9 +229,11 @@ const NormalizacoesEstabelecimentos = () => {
     setEditingItem(null);
   };
 
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-    resetForm();
+  const handleDialogChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      resetForm();
+    }
   };
 
   const analisarImpacto = async () => {
@@ -326,7 +328,7 @@ const NormalizacoesEstabelecimentos = () => {
               Aplicar a Notas Antigas
             </Button>
 
-            <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
+            <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -387,7 +389,7 @@ const NormalizacoesEstabelecimentos = () => {
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={handleCloseDialog}>
+                <Button variant="outline" onClick={() => handleDialogChange(false)}>
                   Cancelar
                 </Button>
                 <Button onClick={handleSubmit} disabled={submitting}>
