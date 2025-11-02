@@ -329,81 +329,67 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
               description: "Extraindo dados da nota fiscal...",
             });
 
-            let processResponse;
+            // 🎯 CORREÇÃO: Fluxo sequencial correto para PDFs e imagens
+            console.log('📄 Iniciando extração de dados...');
             
-            if (isPdf) {
-              // Para PDFs, usar process-danfe-pdf
-              processResponse = await supabase.functions.invoke('process-danfe-pdf', {
-                body: {
-                  notaImagemId: notaData.id,
-                  pdfUrl: urlData.publicUrl,
-                  userId: currentUser.id
-                }
-              });
-            } else {
-              // Para imagens, usar apenas extração (sem processamento de estoque aqui)
-              processResponse = await supabase.functions.invoke('validate-receipt', {
-                body: {
-                  notaImagemId: notaData.id,
-                  imageUrl: urlData.publicUrl,
-                  qrUrl: null
-                }
-              });
-            }
+            // ETAPA 1: Extrair dados da nota (funciona para PDFs e imagens)
+            const extractResponse = await supabase.functions.invoke('extract-receipt-image', {
+              body: {
+                notaImagemId: notaData.id,
+                imagemId: null,
+                userId: currentUser.id
+              }
+            });
 
-            if (processResponse.error) {
-              console.log('❌ Erro no processamento: ' + (processResponse.error.message || 'Erro desconhecido'));
+            console.log('📄 Extração concluída:', extractResponse);
+
+            if (extractResponse.error) {
+              console.error('❌ Erro na extração:', extractResponse.error);
               toast({
-                title: "❌ Erro no processamento",
-                description: processResponse.error.message || 'Erro desconhecido no processamento',
+                title: "⚠️ Erro na extração",
+                description: `Falha ao extrair dados: ${extractResponse.error.message}`,
                 variant: "destructive",
               });
-            } else {
-              console.log('✅ Extração concluída - chamando IA-2 diretamente para normalização e inserção');
-              
-              // 🎯 CORREÇÃO CRÍTICA: Chamar IA-2 diretamente após extração
-              try {
-                console.log('🎯 Chamando IA-2 para processar nota:', notaData.id);
-                
-                const ia2Response = await supabase.functions.invoke('normalizar-produto-ia2', {
-                  body: { 
-                    notaId: notaData.id,
-                    usuarioId: currentUser.id,
-                    debug: true
-                  }
-                });
-                
-                console.log('=== RESPOSTA DA IA-2 ===', ia2Response);
-                
-                if (ia2Response.error) {
-                  console.error('❌ Erro na IA-2:', ia2Response.error);
-                  toast({
-                    title: "⚠️ Nota extraída",
-                    description: `${file.name} extraído, mas erro na normalização: ${ia2Response.error.message}`,
-                    variant: "destructive",
-                  });
-                } else if (ia2Response.data?.success) {
-                  console.log(`✅ IA-2 processou ${ia2Response.data.itens_processados} produtos no estoque`);
-                  toast({
-                    title: "✅ Processamento concluído",
-                    description: `${file.name}: ${ia2Response.data.itens_processados} produtos adicionados ao estoque!`,
-                  });
-                } else {
-                  console.error('❌ IA-2 falhou:', ia2Response.data);
-                  toast({
-                    title: "⚠️ Erro na IA-2",
-                    description: `Falha na normalização: ${ia2Response.data?.error || 'Erro desconhecido'}`,
-                    variant: "destructive",
-                  });
-                }
-              } catch (ia2Error) {
-                console.error('❌ Erro ao chamar IA-2:', ia2Error);
-                toast({
-                  title: "⚠️ Nota extraída",
-                  description: `${file.name} extraído, mas erro na IA-2: ${ia2Error.message}`,
-                  variant: "destructive",
-                });
+              continue;
+            }
+
+            // ETAPA 2: Processar e inserir produtos no estoque
+            console.log('💾 Processando produtos no estoque...');
+            
+            const processResponse = await supabase.functions.invoke('process-receipt-full', {
+              body: {
+                notaId: notaData.id,
+                force: false
               }
+            });
+
+            console.log('✅ Processamento concluído:', processResponse);
+
+            if (processResponse.error) {
+              console.error('❌ Erro no processamento:', processResponse.error);
+              toast({
+                title: "⚠️ Erro no processamento",
+                description: `Falha ao processar: ${processResponse.error.message}`,
+                variant: "destructive",
+              });
+              continue;
+            }
+
+            // Verificar sucesso
+            if (processResponse.data?.success) {
+              const itensInseridos = processResponse.data.inserted || 0;
+              console.log(`✅ Processamento completo: ${itensInseridos} produtos inseridos`);
+              toast({
+                title: "✅ Nota processada!",
+                description: `${itensInseridos} produtos adicionados ao estoque`,
+              });
+            } else {
+              console.error('⚠️ Processamento parcial:', processResponse.data);
+              toast({
+                title: "⚠️ Processamento parcial",
+                description: processResponse.data?.error || 'Erro desconhecido',
+                variant: "destructive",
+              });
             }
           } catch (processError) {
             console.log('❌ Erro no processamento: ' + (processError.message || 'Erro de conexão'));
