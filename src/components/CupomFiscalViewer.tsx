@@ -241,7 +241,7 @@ const CupomFiscalViewer = ({
   };
 
   const estabelecimento = dadosExtraidos?.estabelecimento || dadosExtraidos?.emitente;
-  const produtos = dadosExtraidos?.produtos || [];
+  const produtos = dadosExtraidos?.itens || dadosExtraidos?.produtos || [];
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -282,7 +282,7 @@ const CupomFiscalViewer = ({
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Calendar className="w-3.5 h-3.5" />
-            <span>{formatarData(dadosExtraidos?.data_emissao)}</span>
+            <span>{formatarData(dadosExtraidos?.compra?.data_emissao || dadosExtraidos?.data_emissao)}</span>
           </div>
 
           {dadosExtraidos?.chave_acesso && (
@@ -340,7 +340,7 @@ const CupomFiscalViewer = ({
                 <span className="font-bold text-sm">VALOR TOTAL</span>
               </div>
               <span className="font-bold text-lg text-primary">
-                {formatarValor(dadosExtraidos?.valor_total)}
+                {formatarValor(dadosExtraidos?.compra?.valor_total || dadosExtraidos?.valor_total)}
               </span>
             </div>
           </div>
