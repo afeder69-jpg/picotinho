@@ -98,10 +98,16 @@ serve(async (req) => {
         }
       });
       
-      // ✅ REGRA CORRIGIDA: Se a nova compra for mais recente, SEMPRE atualiza (independente do preço)
+      // ✅ REGRA DO MANUAL: Mais recente + menor valor
       if (dataNovaCompra > dataExistente) {
-        console.log('✅ Nova compra é mais recente - atualizando preço');
-        deveAtualizar = true;
+        // Nova compra é mais recente - verificar se também é mais barata
+        if (precoNovoValor < precoExistenteValor) {
+          console.log(`✅ Nova compra é MAIS RECENTE e MAIS BARATA - atualizando (${precoNovoValor} < ${precoExistenteValor})`);
+          deveAtualizar = true;
+        } else {
+          console.log(`⚠️ Nova compra é mais recente MAS MAIS CARA - mantendo preço anterior (${precoExistenteValor} < ${precoNovoValor})`);
+          deveAtualizar = false;
+        }
       } else {
         deveAtualizar = false;
         console.log('❌ Nova compra não é mais recente, mantendo preço existente');

@@ -330,38 +330,65 @@ serve(async (req) => {
       });
 
       if (!candidatosProduto.length) {
-        console.log(`  ❌ Nenhum candidato encontrado para: ${item.produto_nome}`);
+        console.log(`  ⚠️ Nenhum candidato na área para: ${item.produto_nome}`);
+        
+        // ✅ FALLBACK DO MANUAL: Usar Preço Pago se não há preço na área
+        if (item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
+          console.log(`  💰 Aplicando fallback: Preço Atual = Preço Pago (R$ ${item.preco_unitario_ultimo})`);
+          resultados.push({
+            produto_nome: item.produto_nome,
+            valor_unitario: item.preco_unitario_ultimo,
+            data_atualizacao: new Date().toISOString(),
+            estabelecimento_cnpj: 'FALLBACK_USER',
+            estabelecimento_nome: 'Seu último preço pago',
+          });
+        }
         continue;
       }
 
       console.log(`  📊 ${candidatosProduto.length} candidatos encontrados para ${item.produto_nome}`);
 
-      // Ordenar por data decrescente primeiro (mais recente primeiro)
-      candidatosProduto.sort((a, b) => new Date(b.data_atualizacao).getTime() - new Date(a.data_atualizacao).getTime());
-      
-      // Encontrar a data mais recente
-      const dataMaisRecente = candidatosProduto[0].data_atualizacao;
-      const dataMaisRecenteStr = new Date(dataMaisRecente).toISOString().slice(0,10);
-      
-      console.log(`  📅 Data mais recente encontrada: ${dataMaisRecenteStr}`);
+      // ✅ NOVA LÓGICA: Consolidar por estabelecimento (não descartar notas antigas)
+      const porEstabelecimento = new Map<string, typeof candidatosProduto[0]>();
 
-      // Selecionar apenas os da data mais recente (considerando o dia)
-      const doDiaMaisRecente = candidatosProduto.filter(c => {
-        const dataCandidata = new Date(c.data_atualizacao).toISOString().slice(0,10);
-        return dataCandidata === dataMaisRecenteStr;
+      for (const candidato of candidatosProduto) {
+        const cnpj = candidato.estabelecimento_cnpj;
+        const atual = porEstabelecimento.get(cnpj);
+        
+        if (!atual) {
+          // Primeiro candidato deste estabelecimento
+          porEstabelecimento.set(cnpj, candidato);
+          console.log(`    ➕ Novo: ${cnpj.slice(0,8)}... @ R$ ${candidato.valor_unitario} (${new Date(candidato.data_atualizacao).toLocaleDateString()})`);
+        } else {
+          const dataAtual = new Date(atual.data_atualizacao).getTime();
+          const dataCandidato = new Date(candidato.data_atualizacao).getTime();
+          const precoAtual = Number(atual.valor_unitario);
+          const precoCandidato = Number(candidato.valor_unitario);
+          
+          // ✅ REGRA DO MANUAL: Só substitui se for mais recente E mais barato
+          if (dataCandidato > dataAtual && precoCandidato < precoAtual) {
+            porEstabelecimento.set(cnpj, candidato);
+            console.log(`    🔄 Atualiza: ${cnpj.slice(0,8)}... R$ ${precoAtual} → R$ ${precoCandidato} (mais recente e menor)`);
+          } else if (dataCandidato > dataAtual && precoCandidato >= precoAtual) {
+            console.log(`    ⏭️  Ignora: ${cnpj.slice(0,8)}... novo preço R$ ${precoCandidato} é mais caro que R$ ${precoAtual}`);
+          } else {
+            console.log(`    ⏭️  Mantém: ${cnpj.slice(0,8)}... data anterior (${new Date(dataAtual).toLocaleDateString()})`);
+          }
+        }
+      }
+
+      console.log(`  🏪 Estabelecimentos únicos após consolidação: ${porEstabelecimento.size}`);
+
+      // Entre todos os estabelecimentos, escolher o menor preço
+      const todosPrecos = Array.from(porEstabelecimento.values());
+      const melhor = todosPrecos.reduce((best, cur) => {
+        const precoAtual = Number(best.valor_unitario);
+        const precoCandidato = Number(cur.valor_unitario);
+        console.log(`    💰 Comparando: R$ ${precoCandidato} (${cur.estabelecimento_nome}) vs R$ ${precoAtual} (${best.estabelecimento_nome})`);
+        return precoCandidato < precoAtual ? cur : best;
       });
 
-      console.log(`  🎯 ${doDiaMaisRecente.length} candidatos da data mais recente (${dataMaisRecenteStr})`);
-
-      // Dentre eles, pegar o menor valor
-      const melhor = doDiaMaisRecente.reduce((best, cur) => {
-        const valorCur = Number(cur.valor_unitario);
-        const valorBest = Number(best.valor_unitario);
-        console.log(`    💰 Comparando: ${cur.valor_unitario} vs ${best.valor_unitario}`);
-        return valorCur < valorBest ? cur : best;
-      });
-
-      console.log(`  🏆 Melhor preço selecionado: ${melhor.produto_nome} = R$ ${melhor.valor_unitario} (${melhor.estabelecimento_nome})`);
+      console.log(`  🏆 Melhor preço final: ${melhor.produto_nome} = R$ ${melhor.valor_unitario} (${melhor.estabelecimento_nome} - ${new Date(melhor.data_atualizacao).toLocaleDateString()})`);
 
       const cnpjLimpo = (melhor.estabelecimento_cnpj || "").replace(/[^\d]/g, "");
       resultados.push({
