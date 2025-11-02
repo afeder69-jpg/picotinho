@@ -69,7 +69,7 @@ async function saveToCache(supabase: any, chaveNFCe: string, dadosNFCe: any): Pr
         chave_nfce: chaveNFCe,
         cnpj_emitente: emitente?.cnpj?.replace(/\D/g, ''),
         nome_emitente: emitente?.nome_razao_social,
-        data_emissao: info?.data_emissao ? parseDataBrasileira(info.data_emissao) : null,
+        data_emissao: info?.data_emissao || null,
         valor_total: dadosNFCe.data?.[0]?.normalizado_valor_total || 0,
         tipo_consulta: 'completa',
         dados_completos: dadosNFCe
@@ -87,18 +87,6 @@ async function saveToCache(supabase: any, chaveNFCe: string, dadosNFCe: any): Pr
   }
 }
 
-/**
- * Converte data brasileira (DD/MM/YYYY) para ISO
- */
-function parseDataBrasileira(data: string): string | null {
-  try {
-    const [dia, mes, ano] = data.split('/');
-    return `${ano}-${mes}-${dia}T00:00:00.000Z`;
-  } catch (error) {
-    console.error('⚠️ Erro ao parsear data:', data, error);
-    return null;
-  }
-}
 
 /**
  * Consulta API InfoSimples
@@ -236,26 +224,74 @@ async function processarNFCe(
     };
   }) || [];
 
-  // Extrair emitente
+  // ✅ Priorizar nome_razao_social (nome real) sobre nome_fantasia (pode ser código)
+  const nomeOriginalEmitente = nfceData.emitente?.nome_razao_social || 
+                                nfceData.emitente?.nome_fantasia || 
+                                nfceData.emitente?.nome ||
+                                'Estabelecimento não identificado';
+
+  console.log(`🏪 Nome original do emitente: "${nomeOriginalEmitente}"`);
+
+  // ✅ Aplicar normalização usando a função do banco
+  let nomeNormalizadoEmitente = nomeOriginalEmitente;
+  try {
+    const { data: nomeNorm, error: normError } = await supabase.rpc('normalizar_nome_estabelecimento', {
+      nome_input: nomeOriginalEmitente
+    });
+    
+    if (normError) {
+      console.error('⚠️ Erro ao normalizar estabelecimento:', normError);
+    } else if (nomeNorm) {
+      nomeNormalizadoEmitente = nomeNorm;
+      console.log(`   ✅ Normalizado para: "${nomeNormalizadoEmitente}"`);
+    }
+  } catch (error) {
+    console.error('⚠️ Exceção ao normalizar:', error);
+  }
+
   const emitente = {
     cnpj: nfceData.emitente?.cnpj?.replace(/\D/g, ''),
-    nome: nfceData.emitente?.nome_razao_social || nfceData.emitente?.nome_fantasia,
+    nome: nomeNormalizadoEmitente,
+    nome_original: nomeOriginalEmitente,
     endereco: nfceData.emitente?.endereco
   };
 
   // ✅ Criar estabelecimento no formato esperado pelo frontend
   const estabelecimento = {
     cnpj: nfceData.emitente?.cnpj?.replace(/\D/g, ''),
-    nome: nfceData.emitente?.nome_fantasia || nfceData.emitente?.nome_razao_social,
+    nome: nomeNormalizadoEmitente,
+    nome_original: nomeOriginalEmitente,
     endereco: nfceData.emitente?.endereco
   };
 
   // Extrair informações da nota
   const infoNota = nfceData.informacoes_nota || nfceData;
   
-  // ✅ Converter data brasileira para ISO - buscar no objeto nfe primeiro
-  const dataEmissaoRaw = nfceData.nfe?.data_emissao || infoNota?.data_emissao || nfceData.data_emissao;
-  const dataEmissaoISO = dataEmissaoRaw ? parseDataBrasileira(dataEmissaoRaw) : null;
+  // ✅ Buscar data no local correto da estrutura InfoSimples
+  const dataEmissaoRaw = nfceData.nfe?.dhEmi || 
+                         nfceData.nfe?.data_emissao || 
+                         infoNota?.data_emissao || 
+                         nfceData.data_emissao;
+
+  // ✅ Converter para ISO (a API já retorna em formato parseável)
+  let dataEmissaoISO = null;
+  if (dataEmissaoRaw) {
+    try {
+      // Se vier em formato brasileiro DD/MM/YYYY
+      if (dataEmissaoRaw.includes('/')) {
+        const [dia, mes, ano] = dataEmissaoRaw.split(/[\s\/]/)[0].split('/');
+        dataEmissaoISO = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${dataEmissaoRaw.split(' ')[1] || '00:00:00'}`;
+      } else {
+        // Se vier em formato ISO (2025-10-04T09:43:14-03:00)
+        dataEmissaoISO = new Date(dataEmissaoRaw).toISOString();
+      }
+    } catch (error) {
+      console.error('⚠️ Erro ao parsear data:', dataEmissaoRaw, error);
+      dataEmissaoISO = null;
+    }
+  }
+
+  console.log(`📅 Data emissão extraída: ${dataEmissaoRaw} → ${dataEmissaoISO}`);
   
   // ✅ Calcular valor total correto
   const valorTotal = parseFloat(

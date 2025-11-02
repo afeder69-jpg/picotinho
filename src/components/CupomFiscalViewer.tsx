@@ -32,30 +32,47 @@ const CupomFiscalViewer = ({
 
   const formatarData = (dataStr: string | null | undefined) => {
     if (!dataStr) return "Data não disponível";
+    
     try {
-      // Limpar formato corrompido do InfoSimples
-      let dataLimpa = dataStr;
+      let data: Date;
       
-      // Se vier com formato "2025 09:43:14-03:00-10-04T00:00:00.000Z"
-      // Extrair apenas a parte relevante
-      if (dataStr.includes('-03:00-')) {
+      // Caso 1: Data já em formato ISO limpo (2025-10-04T09:43:14.000Z)
+      if (dataStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+        data = new Date(dataStr);
+      }
+      // Caso 2: Formato corrompido do InfoSimples (2025 09:43:14-03:00-10-04T...)
+      else if (dataStr.includes('-03:00-') || (dataStr.includes(' ') && dataStr.includes('T'))) {
         const match = dataStr.match(/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})-03:00-(\d{2})-(\d{2})/);
         if (match) {
-          // match[1]=ano, match[5]=mes, match[6]=dia, match[2]:match[3]=hora:min
-          dataLimpa = `${match[1]}-${match[5]}-${match[6]}T${match[2]}:${match[3]}:00`;
+          data = new Date(`${match[1]}-${match[5]}-${match[6]}T${match[2]}:${match[3]}:${match[4]}`);
+        } else {
+          return "Data inválida";
         }
       }
-      
-      const data = new Date(dataLimpa);
-      
-      // Verificar se é uma data válida
-      if (isNaN(data.getTime())) {
-        return dataStr; // Retorna original se não conseguir parsear
+      // Caso 3: Formato brasileiro DD/MM/YYYY HH:mm:ss
+      else if (dataStr.includes('/')) {
+        const [datePart, timePart] = dataStr.split(' ');
+        const [dia, mes, ano] = datePart.split('/');
+        const horaCompleta = timePart || '00:00:00';
+        data = new Date(`${ano}-${mes}-${dia}T${horaCompleta}`);
+      }
+      // Caso 4: Tentar parseamento direto
+      else {
+        data = new Date(dataStr);
       }
       
+      // Validar data
+      if (isNaN(data.getTime())) {
+        console.warn('⚠️ Data inválida:', dataStr);
+        return "Data inválida";
+      }
+      
+      // Formatar: 04/10/2025 às 09:43
       return format(data, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-    } catch {
-      return dataStr;
+      
+    } catch (error) {
+      console.error('❌ Erro ao formatar data:', dataStr, error);
+      return "Erro na data";
     }
   };
 
