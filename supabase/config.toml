@@ -86,5 +86,8 @@ verify_jwt = false
 [functions.normalizar-estabelecimentos-existentes]
 verify_jwt = false
 
+[functions.limpar-duplicatas-estabelecimentos]
+verify_jwt = false
+
 [functions.process-html-capturado]
 verify_jwt = false

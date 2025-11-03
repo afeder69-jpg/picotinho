@@ -35,6 +35,7 @@ const NormalizacoesEstabelecimentos = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Normalizacao | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [limpandoDuplicatas, setLimpandoDuplicatas] = useState(false);
   
   // Estado para normalização retroativa
   const [isRetroativaDialogOpen, setIsRetroativaDialogOpen] = useState(false);
@@ -136,6 +137,36 @@ const NormalizacoesEstabelecimentos = () => {
       const nomeOriginalUpper = formData.nome_original.trim() ? formData.nome_original.trim().toUpperCase() : null;
       const nomeNormalizadoUpper = formData.nome_normalizado.trim().toUpperCase();
       const cnpjLimpo = formData.cnpj_original.trim() ? formData.cnpj_original.trim().replace(/\D/g, '') : null;
+
+      // Validar duplicatas antes de inserir (exceto ao editar)
+      if (!editingItem) {
+        let query = supabase
+          .from("normalizacoes_estabelecimentos")
+          .select("id, nome_original, cnpj_original")
+          .eq("ativo", true)
+          .eq("nome_normalizado", nomeNormalizadoUpper);
+
+        // Priorizar busca por CNPJ se disponível
+        if (cnpjLimpo) {
+          query = query.eq("cnpj_original", cnpjLimpo);
+        } else if (nomeOriginalUpper) {
+          query = query.eq("nome_original", nomeOriginalUpper);
+        }
+
+        const { data: duplicata } = await query.maybeSingle();
+
+        if (duplicata) {
+          toast({
+            title: "Normalização já existe",
+            description: cnpjLimpo 
+              ? `Já existe uma normalização ativa para o CNPJ ${cnpjLimpo} com este nome normalizado.`
+              : `Já existe uma normalização ativa para "${nomeOriginalUpper}" com este nome normalizado.`,
+            variant: "destructive",
+          });
+          setSubmitting(false);
+          return;
+        }
+      }
 
       if (editingItem) {
         // Atualizar
@@ -310,6 +341,37 @@ const NormalizacoesEstabelecimentos = () => {
     }
   };
 
+  const limparDuplicatas = async () => {
+    try {
+      setLimpandoDuplicatas(true);
+      
+      const { data, error } = await supabase.functions.invoke(
+        'limpar-duplicatas-estabelecimentos'
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: data.duplicatasRemovidas > 0 ? "Sucesso!" : "Tudo limpo!",
+        description: data.message,
+      });
+
+      if (data.duplicatasRemovidas > 0) {
+        carregarNormalizacoes();
+      }
+
+    } catch (error) {
+      console.error('Erro ao limpar duplicatas:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível limpar as duplicatas.",
+        variant: "destructive",
+      });
+    } finally {
+      setLimpandoDuplicatas(false);
+    }
+  };
+
   const normalizacoesFiltradas = normalizacoes.filter((norm) => {
     const searchLower = searchTerm.toLowerCase();
     const cnpjSearch = searchTerm.replace(/\D/g, ''); // Apenas números para busca de CNPJ
@@ -337,6 +399,20 @@ const NormalizacoesEstabelecimentos = () => {
           </Button>
 
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={limparDuplicatas}
+              disabled={limpandoDuplicatas}
+              className="gap-2"
+            >
+              {limpandoDuplicatas ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Limpar Duplicatas
+            </Button>
+            
             <Button
               variant="outline"
               onClick={analisarImpacto}
