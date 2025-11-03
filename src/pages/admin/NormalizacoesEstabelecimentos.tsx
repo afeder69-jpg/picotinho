@@ -95,6 +95,7 @@ const NormalizacoesEstabelecimentos = () => {
       const { data, error } = await supabase
         .from("normalizacoes_estabelecimentos")
         .select("*")
+        .eq("ativo", true)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
