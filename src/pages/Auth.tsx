@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -173,10 +174,14 @@ const AuthPage = () => {
     setIsLoading(true);
     
     try {
+      const isNative = Capacitor.isNativePlatform();
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`
+          redirectTo: isNative 
+            ? 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback'
+            : `${window.location.origin}/`
         }
       });
 

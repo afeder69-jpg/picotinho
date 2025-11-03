@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { App } from '@capacitor/app';
 
 interface AuthContextType {
   user: User | null;
@@ -51,7 +52,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Listener para deep links (OAuth callback)
+    const setupDeepLinkListener = async () => {
+      const deepLinkListener = await App.addListener('appUrlOpen', async (event) => {
+        if (event.url.includes('/auth/v1/callback')) {
+          const url = new URL(event.url);
+          const fragment = url.hash.substring(1);
+          const params = new URLSearchParams(fragment);
+          
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            try {
+              const { data, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken
+              });
+              
+              if (!error && data.session) {
+                setSession(data.session);
+                setUser(data.session.user);
+                
+                // Criar perfil se necessário (Google OAuth)
+                setTimeout(() => {
+                  handleGoogleProfileCreation(data.session.user);
+                }, 0);
+              }
+            } catch (error) {
+              console.error('Erro ao processar deep link:', error);
+            }
+          }
+        }
+      });
+      
+      return deepLinkListener;
+    };
+
+    let deepLinkListenerPromise = setupDeepLinkListener();
+
+    return () => {
+      subscription.unsubscribe();
+      deepLinkListenerPromise.then(listener => listener.remove());
+    };
   }, []);
 
   const handleGoogleProfileCreation = async (user: User) => {
