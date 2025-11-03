@@ -55,13 +55,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listener para deep links (OAuth callback)
     const setupDeepLinkListener = async () => {
       const deepLinkListener = await App.addListener('appUrlOpen', async (event) => {
-        if (event.url.includes('/auth/v1/callback')) {
+        console.log('🔗 Deep link recebido:', event.url);
+        
+        // Detectar o deep link correto do nosso app
+        if (event.url.startsWith('app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback')) {
+          console.log('✅ Deep link de login detectado!');
+          
           const url = new URL(event.url);
           const fragment = url.hash.substring(1);
           const params = new URLSearchParams(fragment);
           
           const accessToken = params.get('access_token');
           const refreshToken = params.get('refresh_token');
+          
+          console.log('🔑 Tokens encontrados:', { 
+            hasAccessToken: !!accessToken, 
+            hasRefreshToken: !!refreshToken 
+          });
           
           if (accessToken && refreshToken) {
             try {
@@ -71,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
               
               if (!error && data.session) {
+                console.log('✅ Sessão criada com sucesso!', data.session.user.email);
                 setSession(data.session);
                 setUser(data.session.user);
                 
@@ -78,11 +89,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setTimeout(() => {
                   handleGoogleProfileCreation(data.session.user);
                 }, 0);
+                
+                // Navegar para a home após login bem-sucedido
+                setTimeout(() => {
+                  window.location.href = '/';
+                }, 500);
+              } else {
+                console.error('❌ Erro ao criar sessão:', error);
               }
             } catch (error) {
-              console.error('Erro ao processar deep link:', error);
+              console.error('❌ Erro ao processar deep link:', error);
             }
+          } else {
+            console.error('❌ Tokens não encontrados na URL');
           }
+        } else {
+          console.log('ℹ️ Deep link ignorado (não é callback de login)');
         }
       });
       
