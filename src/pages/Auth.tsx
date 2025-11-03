@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+import { InAppBrowser } from '@capgo/inappbrowser';
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -23,50 +24,6 @@ const AuthPage = () => {
   });
   const { toast } = useToast();
   const navigate = useNavigate();
-
-  // Listener para capturar quando o browser é fechado
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    console.log('📱 Registrando listener de fechamento do browser');
-    
-    let listenerHandle: any = null;
-    
-    const setupListener = async () => {
-      listenerHandle = await Browser.addListener('browserFinished', () => {
-        console.log('🔔 Browser fechado - verificando autenticação pendente');
-        
-        // Quando o browser fechar, verificar se há sessão pendente
-        setTimeout(async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            if (session) {
-              console.log('✅ Sessão encontrada após fechamento do browser!');
-              toast({
-                title: "Login realizado!",
-                description: "Bem-vindo ao Picotinho!",
-              });
-              navigate('/');
-            } else {
-              console.log('⚠️ Nenhuma sessão encontrada após fechamento do browser');
-            }
-          } catch (error) {
-            console.error('❌ Erro ao verificar sessão após fechamento:', error);
-          }
-        }, 1000); // Aguarda 1 segundo para o deep link ser processado
-      });
-    };
-    
-    setupListener();
-
-    return () => {
-      if (listenerHandle) {
-        console.log('🧹 Removendo listener de fechamento do browser');
-        listenerHandle.remove();
-      }
-    };
-  }, [navigate, toast]);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -246,19 +203,65 @@ const AuthPage = () => {
 
         if (data?.url) {
           console.log('✅ [AUTH] URL do Google obtida:', data.url);
-          console.log('🌐 [AUTH] Abrindo navegador in-app...');
+          console.log('🌐 [AUTH] Abrindo InAppBrowser...');
           
-          // Abrir a URL de autenticação em um navegador in-app
-          await Browser.open({ 
+          // Iniciar polling para verificar autenticação
+          let pollAttempts = 0;
+          const maxPollAttempts = 60; // 60 segundos máximo
+          const pollInterval = setInterval(async () => {
+            pollAttempts++;
+            console.log(`🔄 [AUTH] Polling tentativa ${pollAttempts}/${maxPollAttempts}`);
+            
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              
+              if (session) {
+                console.log('✅ [AUTH] Sessão encontrada via polling!');
+                clearInterval(pollInterval);
+                
+                // Fechar browser
+                try {
+                  await InAppBrowser.close();
+                  console.log('🔒 [AUTH] InAppBrowser fechado');
+                } catch (e) {
+                  console.log('⚠️ [AUTH] Erro ao fechar InAppBrowser (pode já estar fechado):', e);
+                }
+                
+                toast({
+                  title: "Login realizado!",
+                  description: "Bem-vindo ao Picotinho!",
+                });
+                navigate('/');
+                setIsLoading(false);
+              } else if (pollAttempts >= maxPollAttempts) {
+                console.log('⏱️ [AUTH] Timeout do polling');
+                clearInterval(pollInterval);
+                setIsLoading(false);
+                
+                toast({
+                  title: "Tempo esgotado",
+                  description: "A autenticação demorou muito. Tente novamente.",
+                  variant: "destructive",
+                });
+              }
+            } catch (pollError) {
+              console.error('❌ [AUTH] Erro no polling:', pollError);
+            }
+          }, 1000);
+          
+          // Abrir InAppBrowser
+          await InAppBrowser.openWebView({
             url: data.url,
-            presentationStyle: 'popover'
+            title: 'Login com Google',
+            isPresentAfterPageLoad: true,
+            preventDeeplink: false, // Permitir deep links
           });
           
-          console.log('📖 [AUTH] Browser aberto. Aguardando usuário autenticar...');
+          console.log('📖 [AUTH] InAppBrowser aberto. Aguardando usuário autenticar...');
           
           toast({
             title: "Autenticando...",
-            description: "Complete o login no Google e aguarde o redirecionamento.",
+            description: "Complete o login no Google.",
             variant: "default",
           });
         }
