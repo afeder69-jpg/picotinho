@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -176,24 +177,58 @@ const AuthPage = () => {
     try {
       const isNative = Capacitor.isNativePlatform();
       
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: isNative 
-            ? 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback'
-            : `${window.location.origin}/`
-        }
-      });
-
-      if (error) {
-        toast({
-          title: "Erro no login com Google",
-          description: "Não foi possível conectar com o Google. Tente novamente.",
-          variant: "destructive",
+      if (isNative) {
+        console.log('🚀 Iniciando login do Google em plataforma nativa');
+        
+        // Em plataformas nativas, precisamos obter a URL e abrir em um navegador in-app
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback',
+            skipBrowserRedirect: true // Não redirecionar automaticamente
+          }
         });
+
+        if (error) {
+          console.error('❌ Erro ao obter URL do Google:', error);
+          toast({
+            title: "Erro no login com Google",
+            description: "Não foi possível conectar com o Google. Tente novamente.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (data?.url) {
+          console.log('✅ URL do Google obtida, abrindo navegador in-app');
+          
+          // Abrir a URL de autenticação em um navegador in-app
+          await Browser.open({ 
+            url: data.url,
+            presentationStyle: 'popover'
+          });
+        }
+      } else {
+        // Na web, usar o fluxo normal
+        console.log('🚀 Iniciando login do Google na web');
+        
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/`
+          }
+        });
+
+        if (error) {
+          toast({
+            title: "Erro no login com Google",
+            description: "Não foi possível conectar com o Google. Tente novamente.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
-      console.error('Erro no login com Google:', error);
+      console.error('❌ Erro no login com Google:', error);
       toast({
         title: "Erro no login",
         description: "Ocorreu um erro inesperado. Tente novamente.",
