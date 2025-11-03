@@ -786,6 +786,7 @@ export type Database = {
       normalizacoes_estabelecimentos: {
         Row: {
           ativo: boolean
+          cnpj_original: string | null
           created_at: string
           id: string
           nome_normalizado: string
@@ -794,6 +795,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          cnpj_original?: string | null
           created_at?: string
           id?: string
           nome_normalizado: string
@@ -802,6 +804,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          cnpj_original?: string | null
           created_at?: string
           id?: string
           nome_normalizado?: string
@@ -3228,10 +3231,9 @@ export type Database = {
         }
         Returns: Json
       }
-      normalizar_nome_estabelecimento: {
-        Args: { nome_input: string }
-        Returns: string
-      }
+      normalizar_nome_estabelecimento:
+        | { Args: { nome_input: string }; Returns: string }
+        | { Args: { cnpj_input?: string; nome_input: string }; Returns: string }
       normalizar_produto_completo: { Args: { nome: string }; Returns: string }
       normalizar_produto_v1: { Args: { nome_original: string }; Returns: Json }
       normalizar_texto: { Args: { texto: string }; Returns: string }

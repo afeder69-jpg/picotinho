@@ -37,7 +37,7 @@ serve(async (req) => {
         const dados = nota.dados_extraidos as any;
         let foiAtualizado = false;
 
-        // Buscar nome original do estabelecimento em todas as possíveis localizações
+        // Buscar nome e CNPJ do estabelecimento em todas as possíveis localizações
         const nomeOriginal = 
           dados?.supermercado?.nome || 
           dados?.estabelecimento?.nome || 
@@ -45,20 +45,29 @@ serve(async (req) => {
           dados?.mercado?.nome ||
           dados?.loja?.nome;
         
-        if (nomeOriginal && typeof nomeOriginal === 'string') {
-          console.log(`🔍 Processando estabelecimento: "${nomeOriginal}"`);
+        const cnpjOriginal = 
+          dados?.supermercado?.cnpj ||
+          dados?.estabelecimento?.cnpj ||
+          dados?.emitente?.cnpj ||
+          dados?.mercado?.cnpj ||
+          dados?.loja?.cnpj ||
+          dados?.cnpj;
+        
+        if ((nomeOriginal && typeof nomeOriginal === 'string') || (cnpjOriginal && typeof cnpjOriginal === 'string')) {
+          console.log(`🔍 Processando estabelecimento: Nome="${nomeOriginal || 'N/A'}", CNPJ="${cnpjOriginal || 'N/A'}"`);
           
-          // Normalizar nome do estabelecimento
+          // Normalizar nome do estabelecimento (priorizando CNPJ)
           const { data: nomeNormalizado, error: normalizeError } = await supabase.rpc('normalizar_nome_estabelecimento', {
-            nome_input: nomeOriginal
+            nome_input: nomeOriginal || '',
+            cnpj_input: cnpjOriginal || null
           });
           
           if (normalizeError) {
-            console.error(`❌ Erro ao normalizar nome "${nomeOriginal}":`, normalizeError);
+            console.error(`❌ Erro ao normalizar: Nome="${nomeOriginal}", CNPJ="${cnpjOriginal}":`, normalizeError);
             continue;
           }
           
-          const estabelecimentoNormalizado = nomeNormalizado || nomeOriginal.toUpperCase();
+          const estabelecimentoNormalizado = nomeNormalizado || (nomeOriginal ? nomeOriginal.toUpperCase() : '');
           
           // Verificar se o nome mudou (comparar com original, não com já normalizado)
           if (estabelecimentoNormalizado !== nomeOriginal && estabelecimentoNormalizado !== nomeOriginal.toUpperCase()) {
@@ -118,7 +127,7 @@ serve(async (req) => {
     
     const { data: precos, error: precosError } = await supabase
       .from('precos_atuais')
-      .select('id, estabelecimento_nome');
+      .select('id, estabelecimento_nome, estabelecimento_cnpj');
 
     if (precosError) {
       console.error('❌ Erro ao buscar preços:', precosError);
@@ -126,11 +135,13 @@ serve(async (req) => {
       let contadorPrecosAtualizados = 0;
       
       for (const preco of precos || []) {
-        if (preco.estabelecimento_nome && preco.estabelecimento_nome.trim()) {
-          console.log(`🏪 Processando preço: "${preco.estabelecimento_nome}"`);
+        if ((preco.estabelecimento_nome && preco.estabelecimento_nome.trim()) || 
+            (preco.estabelecimento_cnpj && preco.estabelecimento_cnpj.trim())) {
+          console.log(`🏪 Processando preço: Nome="${preco.estabelecimento_nome || 'N/A'}", CNPJ="${preco.estabelecimento_cnpj || 'N/A'}"`);
           
           const { data: nomeNormalizado, error: normalizeError } = await supabase.rpc('normalizar_nome_estabelecimento', {
-            nome_input: preco.estabelecimento_nome
+            nome_input: preco.estabelecimento_nome || '',
+            cnpj_input: preco.estabelecimento_cnpj || null
           });
           
           if (normalizeError) {
@@ -138,7 +149,7 @@ serve(async (req) => {
             continue;
           }
           
-          const estabelecimentoNormalizado = nomeNormalizado || preco.estabelecimento_nome.toUpperCase();
+          const estabelecimentoNormalizado = nomeNormalizado || (preco.estabelecimento_nome ? preco.estabelecimento_nome.toUpperCase() : '');
           
           if (estabelecimentoNormalizado !== preco.estabelecimento_nome && 
               estabelecimentoNormalizado !== preco.estabelecimento_nome.toUpperCase()) {

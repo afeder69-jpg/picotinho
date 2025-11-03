@@ -20,6 +20,7 @@ interface Normalizacao {
   id: string;
   nome_original: string;
   nome_normalizado: string;
+  cnpj_original?: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -48,6 +49,7 @@ const NormalizacoesEstabelecimentos = () => {
   const [formData, setFormData] = useState({
     nome_original: "",
     nome_normalizado: "",
+    cnpj_original: "",
     ativo: true,
   });
 
@@ -110,10 +112,19 @@ const NormalizacoesEstabelecimentos = () => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.nome_original.trim() || !formData.nome_normalizado.trim()) {
+    if (!formData.nome_original.trim() && !formData.cnpj_original.trim()) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha o nome original e o nome normalizado.",
+        description: "Preencha pelo menos o nome original ou o CNPJ.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.nome_normalizado.trim()) {
+      toast({
+        title: "Campo obrigatório",
+        description: "Preencha o nome normalizado.",
         variant: "destructive",
       });
       return;
@@ -122,8 +133,9 @@ const NormalizacoesEstabelecimentos = () => {
     try {
       setSubmitting(true);
 
-      const nomeOriginalUpper = formData.nome_original.trim().toUpperCase();
+      const nomeOriginalUpper = formData.nome_original.trim() ? formData.nome_original.trim().toUpperCase() : null;
       const nomeNormalizadoUpper = formData.nome_normalizado.trim().toUpperCase();
+      const cnpjLimpo = formData.cnpj_original.trim() ? formData.cnpj_original.trim().replace(/\D/g, '') : null;
 
       if (editingItem) {
         // Atualizar
@@ -132,6 +144,7 @@ const NormalizacoesEstabelecimentos = () => {
           .update({
             nome_original: nomeOriginalUpper,
             nome_normalizado: nomeNormalizadoUpper,
+            cnpj_original: cnpjLimpo,
             ativo: formData.ativo,
           })
           .eq("id", editingItem.id);
@@ -149,6 +162,7 @@ const NormalizacoesEstabelecimentos = () => {
           .insert({
             nome_original: nomeOriginalUpper,
             nome_normalizado: nomeNormalizadoUpper,
+            cnpj_original: cnpjLimpo,
             ativo: formData.ativo,
           });
 
@@ -169,7 +183,7 @@ const NormalizacoesEstabelecimentos = () => {
       if (error.code === "23505") {
         toast({
           title: "Erro",
-          description: "Já existe uma normalização com este nome original.",
+          description: "Já existe uma normalização com estes dados.",
           variant: "destructive",
         });
       } else {
@@ -189,6 +203,7 @@ const NormalizacoesEstabelecimentos = () => {
     setFormData({
       nome_original: item.nome_original,
       nome_normalizado: item.nome_normalizado,
+      cnpj_original: item.cnpj_original || "",
       ativo: item.ativo,
     });
     setIsDialogOpen(true);
@@ -224,6 +239,7 @@ const NormalizacoesEstabelecimentos = () => {
     setFormData({
       nome_original: "",
       nome_normalizado: "",
+      cnpj_original: "",
       ativo: true,
     });
     setEditingItem(null);
@@ -296,9 +312,11 @@ const NormalizacoesEstabelecimentos = () => {
 
   const normalizacoesFiltradas = normalizacoes.filter((norm) => {
     const searchLower = searchTerm.toLowerCase();
+    const cnpjSearch = searchTerm.replace(/\D/g, ''); // Apenas números para busca de CNPJ
     return (
       norm.nome_original.toLowerCase().includes(searchLower) ||
-      norm.nome_normalizado.toLowerCase().includes(searchLower)
+      norm.nome_normalizado.toLowerCase().includes(searchLower) ||
+      (norm.cnpj_original && norm.cnpj_original.includes(cnpjSearch))
     );
   });
 
@@ -347,7 +365,7 @@ const NormalizacoesEstabelecimentos = () => {
 
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="nome_original">Nome Original *</Label>
+                  <Label htmlFor="nome_original">Nome Original</Label>
                   <Input
                     id="nome_original"
                     placeholder="Ex: SUPERMERCADO BARRA OESTE LIMITADA"
@@ -358,6 +376,21 @@ const NormalizacoesEstabelecimentos = () => {
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Nome como aparece nas notas fiscais
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="cnpj_original">CNPJ Original</Label>
+                  <Input
+                    id="cnpj_original"
+                    placeholder="Ex: 12.345.678/0001-90 ou 12345678000190"
+                    value={formData.cnpj_original}
+                    onChange={(e) =>
+                      setFormData({ ...formData, cnpj_original: e.target.value })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    CNPJ do estabelecimento (prioridade na normalização)
                   </p>
                 </div>
 
@@ -571,7 +604,7 @@ const NormalizacoesEstabelecimentos = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar estabelecimentos..."
+            placeholder="Buscar por nome, supermercado ou CNPJ..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -622,12 +655,17 @@ const NormalizacoesEstabelecimentos = () => {
                       <div className="flex items-center gap-2 mb-2">
                         <Building2 className="w-5 h-5 text-primary flex-shrink-0" />
                         <CardTitle className="text-lg truncate">
-                          {norm.nome_original}
+                          {norm.nome_original || "Sem nome"}
                         </CardTitle>
                         <Badge variant={norm.ativo ? "default" : "secondary"}>
                           {norm.ativo ? "Ativo" : "Inativo"}
                         </Badge>
                       </div>
+                      {norm.cnpj_original && (
+                        <div className="text-xs font-mono text-muted-foreground mb-1">
+                          CNPJ: {norm.cnpj_original.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>→</span>
                         <span className="font-medium text-foreground">
