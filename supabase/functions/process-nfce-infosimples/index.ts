@@ -230,13 +230,17 @@ async function processarNFCe(
                                 nfceData.emitente?.nome ||
                                 'Estabelecimento não identificado';
 
+  const cnpjEmitente = nfceData.emitente?.cnpj?.replace(/\D/g, '');
+  
   console.log(`🏪 Nome original do emitente: "${nomeOriginalEmitente}"`);
+  console.log(`🔑 CNPJ do emitente: "${cnpjEmitente}"`);
 
-  // ✅ Aplicar normalização usando a função do banco
+  // ✅ Aplicar normalização usando a função do banco (COM CNPJ!)
   let nomeNormalizadoEmitente = nomeOriginalEmitente;
   try {
     const { data: nomeNorm, error: normError } = await supabase.rpc('normalizar_nome_estabelecimento', {
-      nome_input: nomeOriginalEmitente
+      nome_input: nomeOriginalEmitente,
+      cnpj_input: cnpjEmitente || null
     });
     
     if (normError) {
@@ -250,7 +254,7 @@ async function processarNFCe(
   }
 
   const emitente = {
-    cnpj: nfceData.emitente?.cnpj?.replace(/\D/g, ''),
+    cnpj: cnpjEmitente,
     nome: nomeNormalizadoEmitente,
     nome_original: nomeOriginalEmitente,
     endereco: nfceData.emitente?.endereco
@@ -258,7 +262,7 @@ async function processarNFCe(
 
   // ✅ Criar estabelecimento no formato esperado pelo frontend
   const estabelecimento = {
-    cnpj: nfceData.emitente?.cnpj?.replace(/\D/g, ''),
+    cnpj: cnpjEmitente,
     nome: nomeNormalizadoEmitente,
     nome_original: nomeOriginalEmitente,
     endereco: nfceData.emitente?.endereco

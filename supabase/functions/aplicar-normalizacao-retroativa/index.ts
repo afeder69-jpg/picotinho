@@ -69,15 +69,29 @@ serve(async (req) => {
           continue;
         }
 
-        // 2.2. Aplicar normalização usando a função do banco
+        // 2.1.1. Extrair CNPJ (tentar múltiplos campos)
+        const cnpjOriginal = 
+          dadosExtraidos?.estabelecimento?.cnpj ||
+          dadosExtraidos?.emitente?.cnpj ||
+          dadosExtraidos?.supermercado?.cnpj;
+
+        // 2.2. Aplicar normalização usando a função do banco (COM CNPJ!)
         const { data: nomeNormalizado, error: normError } = await supabase.rpc(
           'normalizar_nome_estabelecimento',
-          { nome_input: nomeOriginal }
+          { 
+            nome_input: nomeOriginal,
+            cnpj_input: cnpjOriginal || null
+          }
         );
 
         if (normError) {
           console.error(`❌ Erro ao normalizar nota ${nota.id}:`, normError);
           continue;
+        }
+
+        // Log se o match foi por CNPJ ou por nome
+        if (cnpjOriginal && nomeNormalizado && nomeNormalizado !== nomeOriginal) {
+          console.log(`🔑 Nota ${nota.id}: Match por CNPJ ${cnpjOriginal}`);
         }
 
         // 2.3. Se o nome mudou, atualizar

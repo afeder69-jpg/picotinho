@@ -285,9 +285,31 @@ async function processarNFe(
   }));
   
   // Dados do estabelecimento
+  const nomeOriginalEstabelecimento = dadosNFe.emit?.xNome || 'Estabelecimento desconhecido';
+  const cnpjEstabelecimento = dadosNFe.emit?.CNPJ || null;
+
+  // ✅ Aplicar normalização usando a função do banco (COM CNPJ!)
+  let nomeNormalizadoEstabelecimento = nomeOriginalEstabelecimento;
+  try {
+    const { data: nomeNorm, error: normError } = await supabase.rpc('normalizar_nome_estabelecimento', {
+      nome_input: nomeOriginalEstabelecimento,
+      cnpj_input: cnpjEstabelecimento
+    });
+    
+    if (normError) {
+      console.error('⚠️ Erro ao normalizar estabelecimento:', normError);
+    } else if (nomeNorm) {
+      nomeNormalizadoEstabelecimento = nomeNorm;
+      console.log(`   ✅ Estabelecimento normalizado: "${nomeOriginalEstabelecimento}" → "${nomeNormalizadoEstabelecimento}"`);
+    }
+  } catch (error) {
+    console.error('⚠️ Exceção ao normalizar:', error);
+  }
+
   const estabelecimento = {
-    nome: dadosNFe.emit?.xNome || 'Estabelecimento desconhecido',
-    cnpj: dadosNFe.emit?.CNPJ || null,
+    nome: nomeNormalizadoEstabelecimento,
+    nome_original: nomeOriginalEstabelecimento,
+    cnpj: cnpjEstabelecimento,
     endereco: dadosNFe.emit?.enderEmit ? 
       `${dadosNFe.emit.enderEmit.xLgr || ''}, ${dadosNFe.emit.enderEmit.nro || ''} - ${dadosNFe.emit.enderEmit.xBairro || ''}, ${dadosNFe.emit.enderEmit.xMun || ''} - ${dadosNFe.emit.enderEmit.UF || ''}`.trim() 
       : null,

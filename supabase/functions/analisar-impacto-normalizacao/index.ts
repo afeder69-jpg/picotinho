@@ -86,16 +86,29 @@ serve(async (req) => {
               dados?.estabelecimento?.nome ||
               dados?.emitente?.nome;
 
-            // Verificar se o nome contém ou começa com o padrão original (case-insensitive)
+            const cnpjNota = 
+              dados?.estabelecimento?.cnpj ||
+              dados?.emitente?.cnpj ||
+              dados?.supermercado?.cnpj;
+
+            // Testar normalização usando a função do banco (COM CNPJ!)
             if (nomeNota && typeof nomeNota === 'string') {
-              const nomeNotaUpper = nomeNota.toUpperCase();
-              const nomeOriginalUpper = norm.nome_original.toUpperCase();
-              
-              if (
-                nomeNotaUpper.includes(nomeOriginalUpper) ||
-                nomeNotaUpper.startsWith(nomeOriginalUpper)
-              ) {
-                notasAfetadas++;
+              try {
+                const { data: nomeNormalizado, error: testError } = await supabase.rpc(
+                  'normalizar_nome_estabelecimento',
+                  { 
+                    nome_input: nomeNota,
+                    cnpj_input: cnpjNota || null
+                  }
+                );
+
+                // Se o nome mudou, é porque a normalização se aplica
+                if (!testError && nomeNormalizado && nomeNormalizado !== nomeNota) {
+                  notasAfetadas++;
+                  console.log(`   ✅ Nota ${nota.id}: ${nomeNota} → ${nomeNormalizado} (CNPJ: ${cnpjNota || 'não informado'})`);
+                }
+              } catch (testError) {
+                console.error(`   ⚠️ Erro ao testar normalização da nota ${nota.id}:`, testError);
               }
             }
           }
