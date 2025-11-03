@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,50 @@ const AuthPage = () => {
   });
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Listener para capturar quando o browser é fechado
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    console.log('📱 Registrando listener de fechamento do browser');
+    
+    let listenerHandle: any = null;
+    
+    const setupListener = async () => {
+      listenerHandle = await Browser.addListener('browserFinished', () => {
+        console.log('🔔 Browser fechado - verificando autenticação pendente');
+        
+        // Quando o browser fechar, verificar se há sessão pendente
+        setTimeout(async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session) {
+              console.log('✅ Sessão encontrada após fechamento do browser!');
+              toast({
+                title: "Login realizado!",
+                description: "Bem-vindo ao Picotinho!",
+              });
+              navigate('/');
+            } else {
+              console.log('⚠️ Nenhuma sessão encontrada após fechamento do browser');
+            }
+          } catch (error) {
+            console.error('❌ Erro ao verificar sessão após fechamento:', error);
+          }
+        }, 1000); // Aguarda 1 segundo para o deep link ser processado
+      });
+    };
+    
+    setupListener();
+
+    return () => {
+      if (listenerHandle) {
+        console.log('🧹 Removendo listener de fechamento do browser');
+        listenerHandle.remove();
+      }
+    };
+  }, [navigate, toast]);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -178,7 +222,8 @@ const AuthPage = () => {
       const isNative = Capacitor.isNativePlatform();
       
       if (isNative) {
-        console.log('🚀 Iniciando login do Google em plataforma nativa');
+        console.log('🚀 [AUTH] Iniciando login do Google em plataforma nativa');
+        console.log('📱 [AUTH] Platform:', Capacitor.getPlatform());
         
         // Em plataformas nativas, precisamos obter a URL e abrir em um navegador in-app
         const { data, error } = await supabase.auth.signInWithOAuth({
@@ -190,7 +235,7 @@ const AuthPage = () => {
         });
 
         if (error) {
-          console.error('❌ Erro ao obter URL do Google:', error);
+          console.error('❌ [AUTH] Erro ao obter URL do Google:', error);
           toast({
             title: "Erro no login com Google",
             description: "Não foi possível conectar com o Google. Tente novamente.",
@@ -200,17 +245,26 @@ const AuthPage = () => {
         }
 
         if (data?.url) {
-          console.log('✅ URL do Google obtida, abrindo navegador in-app');
+          console.log('✅ [AUTH] URL do Google obtida:', data.url);
+          console.log('🌐 [AUTH] Abrindo navegador in-app...');
           
           // Abrir a URL de autenticação em um navegador in-app
           await Browser.open({ 
             url: data.url,
             presentationStyle: 'popover'
           });
+          
+          console.log('📖 [AUTH] Browser aberto. Aguardando usuário autenticar...');
+          
+          toast({
+            title: "Autenticando...",
+            description: "Complete o login no Google e aguarde o redirecionamento.",
+            variant: "default",
+          });
         }
       } else {
         // Na web, usar o fluxo normal
-        console.log('🚀 Iniciando login do Google na web');
+        console.log('🚀 [AUTH] Iniciando login do Google na web');
         
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -228,7 +282,7 @@ const AuthPage = () => {
         }
       }
     } catch (error) {
-      console.error('❌ Erro no login com Google:', error);
+      console.error('❌ [AUTH] Erro no login com Google:', error);
       toast({
         title: "Erro no login",
         description: "Ocorreu um erro inesperado. Tente novamente.",
