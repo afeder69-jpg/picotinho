@@ -286,15 +286,12 @@ const AuthPage = () => {
         console.log('🌐 URL completa:', data.url);
         
         // Apenas abrir o browser - o listener já está ativo
-        await InAppBrowser.openWebView({
-          url: data.url,
-          title: 'Login com Google',
-          isPresentAfterPageLoad: true,
-          isInspectable: true,
-          isAnimated: true
+        console.log('📱 Abrindo InAppBrowser com open()...');
+        await InAppBrowser.open({
+          url: data.url
         });
         
-        console.log('✅ InAppBrowser aberto');
+        console.log('✅ InAppBrowser.open() executado com sucesso');
         
       } else {
         // Web - fluxo normal
