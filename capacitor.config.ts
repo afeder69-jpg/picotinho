@@ -16,6 +16,9 @@ const config: CapacitorConfig = {
     },
     BarcodeScanner: {
       enabled: true
+    },
+    Browser: {
+      presentationStyle: 'popover'
     }
   },
   android: {

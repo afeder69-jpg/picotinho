@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 
 interface AuthContextType {
   user: User | null;
@@ -53,6 +56,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       subscription.unsubscribe();
+    };
+  }, []);
+
+  // Deep Link Listener for Google OAuth on Native
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    console.log('🔧 Configurando listener de Deep Link para OAuth...');
+    
+    let listenerHandle: any;
+    
+    App.addListener('appUrlOpen', async (event) => {
+      console.log('🔗 Deep Link recebido:', event.url);
+      
+      if (event.url.includes('auth/callback')) {
+        console.log('✅ Deep Link de autenticação detectado!');
+        
+        try {
+          // Extrair tokens do URL
+          const url = new URL(event.url);
+          const fragment = url.hash.substring(1);
+          const params = new URLSearchParams(fragment || url.search);
+          
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+          
+          console.log('🎫 Access token encontrado:', access_token ? 'SIM' : 'NÃO');
+          console.log('🔄 Refresh token encontrado:', refresh_token ? 'SIM' : 'NÃO');
+          
+          if (access_token && refresh_token) {
+            console.log('💾 Criando sessão no Supabase...');
+            
+            const { error } = await supabase.auth.setSession({
+              access_token,
+              refresh_token
+            });
+            
+            if (error) {
+              console.error('❌ Erro ao criar sessão:', error);
+            } else {
+              console.log('✅ Sessão criada com sucesso!');
+            }
+            
+            // Fechar o browser
+            console.log('🚪 Fechando browser...');
+            await Browser.close();
+          } else {
+            console.warn('⚠️ Tokens não encontrados no URL');
+          }
+        } catch (error) {
+          console.error('❌ Erro ao processar Deep Link:', error);
+        }
+      }
+    }).then(handle => {
+      listenerHandle = handle;
+    });
+
+    return () => {
+      console.log('🧹 Removendo listener de Deep Link');
+      if (listenerHandle) {
+        listenerHandle.remove();
+      }
     };
   }, []);
 

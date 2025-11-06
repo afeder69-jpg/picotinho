@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
-import { InAppBrowser } from '@capgo/inappbrowser';
+import { Browser } from '@capacitor/browser';
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -57,92 +57,6 @@ const AuthPage = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Configurar listener do InAppBrowser UMA VEZ quando o componente monta
-  useEffect(() => {
-    if (!isNative) return;
-    
-    console.log('🔧 Configurando listener do InAppBrowser...');
-    
-    let listenerHandle: any;
-    
-    const setupListener = async () => {
-      listenerHandle = await InAppBrowser.addListener('urlChangeEvent', async (event) => {
-        console.log('🔗 URL mudou no InAppBrowser:', event.url);
-        
-        // Detectar callback do Google
-        if (event.url.includes('/auth/v1/callback')) {
-          console.log('✅ Detectado callback do Google!');
-          
-          try {
-            // Extrair tokens
-            const urlObj = new URL(event.url);
-            const hashParams = new URLSearchParams(urlObj.hash.substring(1));
-            const accessToken = hashParams.get('access_token');
-            const refreshToken = hashParams.get('refresh_token');
-            
-            console.log('🔑 Access token:', accessToken ? 'PRESENTE' : 'AUSENTE');
-            console.log('🔑 Refresh token:', refreshToken ? 'PRESENTE' : 'AUSENTE');
-            
-            if (accessToken && refreshToken) {
-              console.log('🔐 Criando sessão com os tokens...');
-              
-              // Criar sessão
-              const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken
-              });
-              
-              if (sessionError) {
-                console.error('❌ Erro ao criar sessão:', sessionError);
-                throw sessionError;
-              }
-              
-              if (sessionData.session) {
-                console.log('✅ Sessão criada com sucesso!');
-                console.log('👤 Usuário:', sessionData.session.user.email);
-                
-                // Fechar browser
-                console.log('🚪 Fechando InAppBrowser...');
-                await InAppBrowser.close();
-                
-                toast({
-                  title: "Login realizado!",
-                  description: "Bem-vindo ao Picotinho!",
-                });
-                
-                console.log('🏠 Navegando para home...');
-                navigate('/');
-              }
-            } else {
-              console.error('❌ Tokens não encontrados na URL');
-              console.error('URL completa:', event.url);
-              console.error('Hash:', urlObj.hash);
-            }
-          } catch (err) {
-            console.error('❌ Erro ao processar callback:', err);
-            await InAppBrowser.close();
-            toast({
-              title: "Erro no login",
-              description: "Não foi possível processar o login. Tente novamente.",
-              variant: "destructive",
-            });
-          }
-        }
-      });
-      
-      console.log('✅ Listener do InAppBrowser configurado');
-    };
-    
-    setupListener();
-    
-    // Remover listener quando componente desmontar
-    return () => {
-      console.log('🧹 Removendo listener do InAppBrowser');
-      if (listenerHandle) {
-        listenerHandle.remove();
-      }
-    };
-  }, [isNative, navigate, toast]);
 
   const handleSignUp = async () => {
     if (!validateEmail(formData.email)) {
@@ -260,14 +174,14 @@ const AuthPage = () => {
   };
 
   const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    console.log('🚀 Iniciando login com Google...');
-    console.log('📱 Plataforma:', isNative ? 'Native (APK)' : 'Web');
-    
     try {
+      setIsLoading(true);
+      console.log('🚀 Iniciando login com Google (Deep Link)...');
+      console.log('📱 Plataforma:', isNative ? 'Native (APK)' : 'Web');
+
       if (isNative) {
-        const redirectTo = 'https://mjsbwrtegorjxcepvrik.supabase.co/auth/v1/callback';
-        console.log('🔗 Redirect URL:', redirectTo);
+        const redirectTo = 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://auth/callback';
+        console.log('🔗 Deep Link configurado:', redirectTo);
         
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -276,38 +190,35 @@ const AuthPage = () => {
             skipBrowserRedirect: true
           }
         });
-        
+
         if (error) {
-          console.error('❌ Erro ao obter URL OAuth:', error);
+          console.error('❌ Erro ao iniciar OAuth:', error);
           throw error;
         }
+
+        console.log('🌐 URL de autenticação gerada:', data.url);
+        console.log('📱 Abrindo Browser nativo...');
         
-        console.log('✅ URL OAuth obtida, abrindo InAppBrowser...');
-        console.log('🌐 URL completa:', data.url);
-        
-        // Apenas abrir o browser - o listener já está ativo
-        console.log('📱 Abrindo InAppBrowser com open()...');
-        await InAppBrowser.open({
-          url: data.url
-        });
-        
-        console.log('✅ InAppBrowser.open() executado com sucesso');
+        await Browser.open({ url: data.url });
+        console.log('✅ Browser aberto com sucesso');
         
       } else {
         // Web - fluxo normal
-        console.log('🌐 Fluxo web - usando OAuth padrão');
-        await supabase.auth.signInWithOAuth({
+        const redirectUrl = `${window.location.origin}/`;
+        const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: window.location.origin
+            redirectTo: redirectUrl
           }
         });
+
+        if (error) throw error;
       }
-    } catch (error) {
-      console.error('❌ Erro no login:', error);
+    } catch (error: any) {
+      console.error('❌ Erro no login com Google:', error);
       toast({
         title: "Erro no login com Google",
-        description: "Tente novamente.",
+        description: error.message || "Tente novamente.",
         variant: "destructive",
       });
     } finally {
