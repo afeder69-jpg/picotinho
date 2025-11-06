@@ -445,16 +445,19 @@ const AuthPage = () => {
                   Entrar com Google
                 </Button>
 
-                {isNative && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleTestDeepLink}
-                    className="w-full mt-2"
-                  >
-                    🔧 Testar Deep Link (Debug)
-                  </Button>
-                )}
+                {/* BOTÃO DE DEBUG - TEMPORÁRIO - Sempre visível para testes */}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleTestDeepLink}
+                  className="w-full mt-2"
+                >
+                  🔧 TESTAR DEEP LINK (DEBUG)
+                </Button>
+                
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Plataforma detectada: {Capacitor.isNativePlatform() ? 'Native (APK)' : 'Web'}
+                </p>
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4">
