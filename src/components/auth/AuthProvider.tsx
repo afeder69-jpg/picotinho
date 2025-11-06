@@ -57,53 +57,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🎯 [PROVIDER] Configurando listener de deep links');
       
       const deepLinkListener = await App.addListener('appUrlOpen', async (event) => {
-        console.log('🔗 [PROVIDER] Deep link recebido:', event.url);
-        console.log('🔍 [PROVIDER] URL completa:', JSON.stringify(event));
+        console.log('[PROVIDER] 🔗 ========================================');
+        console.log('[PROVIDER] 🔗 DEEP LINK RECEBIDO!');
+        console.log('[PROVIDER] 🔗 URL completa:', event.url);
+        console.log('[PROVIDER] 🔗 ========================================');
         
         // Detectar o deep link correto do nosso app
         if (event.url.startsWith('app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback')) {
-          console.log('✅ [PROVIDER] Deep link de login detectado!');
+          console.log('[PROVIDER] ✅ Deep link de login detectado!');
           
           try {
             const url = new URL(event.url);
-            console.log('🔍 [PROVIDER] URL parsed:', {
+            console.log('[PROVIDER] 📊 URL parseada:', {
               protocol: url.protocol,
               host: url.host,
               pathname: url.pathname,
-              hash: url.hash,
-              search: url.search
+              search: url.search,
+              hash: url.hash
             });
             
-            // Tokens podem vir no hash (#) ou na query (?)
-            let params: URLSearchParams;
+            // Extrair tokens do hash
+            const hashParams = new URLSearchParams(url.hash.substring(1));
+            const hashAccessToken = hashParams.get('access_token');
+            const hashRefreshToken = hashParams.get('refresh_token');
             
-            if (url.hash) {
-              const fragment = url.hash.substring(1);
-              params = new URLSearchParams(fragment);
-              console.log('🔍 [PROVIDER] Tentando extrair tokens do hash');
-            } else if (url.search) {
-              params = new URLSearchParams(url.search);
-              console.log('🔍 [PROVIDER] Tentando extrair tokens da query');
-            } else {
-              console.error('❌ [PROVIDER] Nem hash nem query encontrados na URL');
-              return;
-            }
+            console.log('[PROVIDER] 🔑 Tokens do hash:', {
+              accessToken: hashAccessToken ? '✅ Presente' : '❌ Ausente',
+              refreshToken: hashRefreshToken ? '✅ Presente' : '❌ Ausente'
+            });
             
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-            const tokenType = params.get('token_type');
-            const expiresIn = params.get('expires_in');
+            // Extrair tokens da query
+            const queryParams = new URLSearchParams(url.search);
+            const queryAccessToken = queryParams.get('access_token');
+            const queryRefreshToken = queryParams.get('refresh_token');
             
-            console.log('🔑 [PROVIDER] Tokens encontrados:', { 
-              hasAccessToken: !!accessToken, 
-              hasRefreshToken: !!refreshToken,
-              tokenType,
-              expiresIn,
-              accessTokenPreview: accessToken ? `${accessToken.substring(0, 20)}...` : 'none'
+            console.log('[PROVIDER] 🔑 Tokens da query:', {
+              accessToken: queryAccessToken ? '✅ Presente' : '❌ Ausente',
+              refreshToken: queryRefreshToken ? '✅ Presente' : '❌ Ausente'
+            });
+            
+            const accessToken = hashAccessToken || queryAccessToken;
+            const refreshToken = hashRefreshToken || queryRefreshToken;
+            
+            console.log('[PROVIDER] 🔑 Tokens finais:', {
+              accessToken: accessToken ? `${accessToken.substring(0, 20)}...` : '❌ NENHUM',
+              refreshToken: refreshToken ? `${refreshToken.substring(0, 20)}...` : '❌ NENHUM'
             });
             
             if (accessToken && refreshToken) {
-              console.log('💾 [PROVIDER] Criando sessão com tokens...');
+              console.log('[PROVIDER] ✅ Tokens encontrados! Criando sessão...');
               
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
@@ -111,39 +113,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
               
               if (!error && data.session) {
-                console.log('✅ [PROVIDER] Sessão criada com sucesso!');
-                console.log('👤 [PROVIDER] Usuário:', data.session.user.email);
-                console.log('🆔 [PROVIDER] User ID:', data.session.user.id);
+                console.log('[PROVIDER] ✅ Sessão criada com sucesso!');
+                console.log('[PROVIDER] 👤 Usuário:', data.session.user.email);
+                console.log('[PROVIDER] 🆔 User ID:', data.session.user.id);
                 
                 setSession(data.session);
                 setUser(data.session.user);
                 
                 // Criar perfil se necessário (Google OAuth)
                 setTimeout(() => {
-                  console.log('👤 [PROVIDER] Verificando/criando perfil...');
+                  console.log('[PROVIDER] 👤 Verificando/criando perfil...');
                   handleGoogleProfileCreation(data.session.user);
                 }, 0);
                 
                 // Navegar para a home após login bem-sucedido
                 setTimeout(() => {
-                  console.log('🏠 [PROVIDER] Redirecionando para home...');
+                  console.log('[PROVIDER] 🏠 Redirecionando para home...');
                   window.location.href = '/';
                 }, 500);
               } else {
-                console.error('❌ [PROVIDER] Erro ao criar sessão:', error);
-                console.error('🔍 [PROVIDER] Detalhes do erro:', JSON.stringify(error));
+                console.error('[PROVIDER] ❌ Erro ao criar sessão:', error);
               }
             } else {
-              console.error('❌ [PROVIDER] Tokens não encontrados na URL');
-              console.error('🔍 [PROVIDER] Parâmetros disponíveis:', Array.from(params.entries()));
+              console.warn('[PROVIDER] ⚠️ Tokens não encontrados no deep link');
             }
           } catch (error) {
-            console.error('❌ [PROVIDER] Erro ao processar deep link:', error);
-            console.error('🔍 [PROVIDER] Stack trace:', error instanceof Error ? error.stack : 'N/A');
+            console.error('[PROVIDER] ❌ Erro ao processar deep link:', error);
           }
         } else {
-          console.log('ℹ️ [PROVIDER] Deep link ignorado (não é callback de login)');
-          console.log('🔍 [PROVIDER] URL recebida:', event.url);
+          console.log('[PROVIDER] ℹ️ Deep link ignorado (não é callback de login)');
         }
       });
       

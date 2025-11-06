@@ -12,11 +12,12 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
-import { InAppBrowser } from '@capgo/inappbrowser';
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAuthStatus, setShowAuthStatus] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -24,6 +25,7 @@ const AuthPage = () => {
   });
   const { toast } = useToast();
   const navigate = useNavigate();
+  const isNative = Capacitor.isNativePlatform();
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -173,127 +175,100 @@ const AuthPage = () => {
   };
 
   const handleGoogleSignIn = async () => {
+    console.log('[AUTH] 🚀 Iniciando login Google');
+    console.log('[AUTH] 📱 Plataforma:', isNative ? 'Native' : 'Web');
+    
     setIsLoading(true);
     
     try {
-      const isNative = Capacitor.isNativePlatform();
-      
       if (isNative) {
-        console.log('🚀 [AUTH] Iniciando login do Google em plataforma nativa');
-        console.log('📱 [AUTH] Platform:', Capacitor.getPlatform());
+        // FORÇAR o redirectTo para o deep link
+        const redirectTo = 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback';
+        console.log('[AUTH] 🔗 Redirect URL:', redirectTo);
         
-        // Em plataformas nativas, precisamos obter a URL e abrir em um navegador in-app
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback',
-            skipBrowserRedirect: true // Não redirecionar automaticamente
+            redirectTo,
+            skipBrowserRedirect: true
           }
         });
-
-        if (error) {
-          console.error('❌ [AUTH] Erro ao obter URL do Google:', error);
-          toast({
-            title: "Erro no login com Google",
-            description: "Não foi possível conectar com o Google. Tente novamente.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (data?.url) {
-          console.log('✅ [AUTH] URL do Google obtida:', data.url);
-          console.log('🌐 [AUTH] Abrindo InAppBrowser...');
-          
-          // Iniciar polling para verificar autenticação
-          let pollAttempts = 0;
-          const maxPollAttempts = 60; // 60 segundos máximo
-          const pollInterval = setInterval(async () => {
-            pollAttempts++;
-            console.log(`🔄 [AUTH] Polling tentativa ${pollAttempts}/${maxPollAttempts}`);
-            
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              
-              if (session) {
-                console.log('✅ [AUTH] Sessão encontrada via polling!');
-                clearInterval(pollInterval);
-                
-                // Fechar browser
-                try {
-                  await InAppBrowser.close();
-                  console.log('🔒 [AUTH] InAppBrowser fechado');
-                } catch (e) {
-                  console.log('⚠️ [AUTH] Erro ao fechar InAppBrowser (pode já estar fechado):', e);
-                }
-                
-                toast({
-                  title: "Login realizado!",
-                  description: "Bem-vindo ao Picotinho!",
-                });
-                navigate('/');
-                setIsLoading(false);
-              } else if (pollAttempts >= maxPollAttempts) {
-                console.log('⏱️ [AUTH] Timeout do polling');
-                clearInterval(pollInterval);
-                setIsLoading(false);
-                
-                toast({
-                  title: "Tempo esgotado",
-                  description: "A autenticação demorou muito. Tente novamente.",
-                  variant: "destructive",
-                });
-              }
-            } catch (pollError) {
-              console.error('❌ [AUTH] Erro no polling:', pollError);
-            }
-          }, 1000);
-          
-          // Abrir InAppBrowser
-          await InAppBrowser.openWebView({
-            url: data.url,
-            title: 'Login com Google',
-            isPresentAfterPageLoad: true,
-            preventDeeplink: false, // Permitir deep links
-          });
-          
-          console.log('📖 [AUTH] InAppBrowser aberto. Aguardando usuário autenticar...');
-          
-          toast({
-            title: "Autenticando...",
-            description: "Complete o login no Google.",
-            variant: "default",
-          });
-        }
-      } else {
-        // Na web, usar o fluxo normal
-        console.log('🚀 [AUTH] Iniciando login do Google na web');
         
-        const { error } = await supabase.auth.signInWithOAuth({
+        if (error) {
+          console.error('[AUTH] ❌ Erro ao obter URL OAuth:', error);
+          throw error;
+        }
+        
+        console.log('[AUTH] ✅ URL OAuth obtida');
+        console.log('[AUTH] 🌐 Abrindo browser:', data.url);
+        
+        // Abrir com Browser.open
+        await Browser.open({ url: data.url });
+        
+        // Mostrar dialog de status
+        setShowAuthStatus(true);
+        
+        // Polling SUPER agressivo
+        let attempts = 0;
+        const maxAttempts = 240; // 2 minutos (500ms * 240)
+        
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          console.log(`[AUTH] 🔄 Verificando sessão... (${attempts}/${maxAttempts})`);
+          
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session) {
+            console.log('[AUTH] ✅ SESSÃO ENCONTRADA!');
+            console.log('[AUTH] 👤 Usuário:', session.user.email);
+            clearInterval(pollInterval);
+            await Browser.close();
+            setShowAuthStatus(false);
+            toast({
+              title: "Login realizado!",
+              description: "Bem-vindo ao Picotinho!",
+            });
+            navigate('/');
+            setIsLoading(false);
+          } else if (attempts >= maxAttempts) {
+            console.log('[AUTH] ⏱️ Timeout atingido');
+            clearInterval(pollInterval);
+            await Browser.close();
+            setShowAuthStatus(false);
+            toast({
+              title: "Tempo esgotado",
+              description: "Tente novamente.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+          }
+        }, 500); // A cada 500ms
+        
+      } else {
+        // Web - fluxo normal
+        console.log('[AUTH] 🌐 Fluxo web');
+        await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: `${window.location.origin}/`
+            redirectTo: window.location.origin
           }
         });
-
-        if (error) {
-          toast({
-            title: "Erro no login com Google",
-            description: "Não foi possível conectar com o Google. Tente novamente.",
-            variant: "destructive",
-          });
-        }
       }
     } catch (error) {
-      console.error('❌ [AUTH] Erro no login com Google:', error);
+      console.error('[AUTH] ❌ Erro:', error);
       toast({
-        title: "Erro no login",
-        description: "Ocorreu um erro inesperado. Tente novamente.",
+        title: "Erro no login com Google",
+        description: "Tente novamente.",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleTestDeepLink = async () => {
+    const testUrl = 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://login-callback?test=true';
+    console.log('[TEST] 🔧 Testando deep link:', testUrl);
+    await Browser.open({ url: testUrl });
   };
 
   const handleSignIn = async () => {
@@ -469,6 +444,17 @@ const AuthPage = () => {
                   </svg>
                   Entrar com Google
                 </Button>
+
+                {isNative && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestDeepLink}
+                    className="w-full mt-2"
+                  >
+                    🔧 Testar Deep Link (Debug)
+                  </Button>
+                )}
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4">
@@ -571,6 +557,34 @@ const AuthPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog de status de autenticação */}
+      <AlertDialog open={showAuthStatus}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Autenticando com Google</AlertDialogTitle>
+            <AlertDialogDescription>
+              Aguardando confirmação...
+              <div className="mt-4 space-y-2 text-xs">
+                <p>✅ Browser aberto</p>
+                <p>⏱️ Verificando autenticação...</p>
+                <p className="text-muted-foreground">
+                  Se você já selecionou sua conta, aguarde alguns segundos.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={async () => {
+              await Browser.close();
+              setShowAuthStatus(false);
+              setIsLoading(false);
+            }}>
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
