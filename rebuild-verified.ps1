@@ -185,17 +185,17 @@ Write-Host ""
 Write-Host "🔍 CHECKLIST DE VERIFICAÇÃO NO CELULAR:" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "✅ NO TOPO DA TELA deve aparecer banner amarelo:" -ForegroundColor White
-Write-Host "   '📱 v$version | 🚨 InAppBrowser ATIVO | ⏰ Build: [timestamp]'" -ForegroundColor Gray
+Write-Host "   📱 v$version | 🚨 InAppBrowser ATIVO | ⏰ Build: [timestamp]" -ForegroundColor Gray
 Write-Host ""
 Write-Host "✅ NO CONSOLE (chrome://inspect) deve aparecer:" -ForegroundColor White
 Write-Host "   🚨🚨🚨 AUTHPROVIDER: INAPPBROWSER VERSÃO ATIVA 🚨🚨🚨" -ForegroundColor Gray
 Write-Host "   🚨🚨🚨 AUTH.TSX: USANDO INAPPBROWSER.OPEN() 🚨🚨🚨" -ForegroundColor Gray
 Write-Host "   📱 Biblioteca: @capgo/inappbrowser v7.29.0" -ForegroundColor Gray
 Write-Host ""
-Write-Host "✅ AO CLICAR 'Entrar com Google':" -ForegroundColor White
+Write-Host "✅ AO CLICAR Entrar com Google:" -ForegroundColor White
 Write-Host "   Deve abrir janela DIFERENTE do Chrome Custom Tab" -ForegroundColor Gray
-Write-Host "   Deve ter título 'Picotinho' ou genérico (sem barra do Chrome)" -ForegroundColor Gray
-Write-Host "   Deve interceptar deep link 'picotinho://auth/callback'" -ForegroundColor Gray
+Write-Host "   Deve ter título Picotinho ou genérico (sem barra do Chrome)" -ForegroundColor Gray
+Write-Host "   Deve interceptar deep link picotinho://auth/callback" -ForegroundColor Gray
 Write-Host ""
 Write-Host "=====================================================================" -ForegroundColor Gray
 Write-Host ""
