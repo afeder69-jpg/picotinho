@@ -77,10 +77,6 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
-            {/* Banner de Diagnóstico Visível */}
-            <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center py-1 text-xs font-mono">
-              📱 v{APP_VERSION} | 🚨 InAppBrowser ATIVO | ⏰ Build: {new Date().toISOString().slice(0,19)}
-            </div>
             <Toaster />
             <Sonner />
             <BrowserRouter>
