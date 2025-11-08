@@ -176,6 +176,10 @@ const AuthPage = () => {
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
+      console.log('🚨🚨🚨 AUTH.TSX: USANDO INAPPBROWSER.OPEN() 🚨🚨🚨');
+      console.log('❌ NÃO É MAIS Browser.open()');
+      console.log('📱 Biblioteca: @capgo/inappbrowser v7.29.0');
+      console.log('⏰ Timestamp:', new Date().toISOString());
       console.log('🚀 Iniciando login com Google (Deep Link)...');
       console.log('📱 Plataforma:', isNative ? 'Native (APK)' : 'Web');
 

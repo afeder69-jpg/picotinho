@@ -31,6 +31,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isTestMode, setIsTestMode] = useState(false);
 
   useEffect(() => {
+    console.log('🚨🚨🚨 AUTHPROVIDER: INAPPBROWSER VERSÃO ATIVA 🚨🚨🚨');
+    console.log('📱 Biblioteca: @capgo/inappbrowser v7.29.0');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    console.log('❌ NÃO USANDO MAIS @capacitor/browser');
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {

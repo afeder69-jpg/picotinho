@@ -32,6 +32,7 @@ import { APP_VERSION } from "./lib/constants";
 
 console.log("App.tsx carregando...");
 console.log(`🚀 Picotinho versionName: ${APP_VERSION}`);
+console.log(`⏰ Build Timestamp: ${new Date().toISOString()}`);
 
 // Limpeza agressiva de cache
 const STORED_VERSION = localStorage.getItem("app_version");
@@ -76,6 +77,10 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
+            {/* Banner de Diagnóstico Visível */}
+            <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center py-1 text-xs font-mono">
+              📱 v{APP_VERSION} | 🚨 InAppBrowser ATIVO | ⏰ Build: {new Date().toISOString().slice(0,19)}
+            </div>
             <Toaster />
             <Sonner />
             <BrowserRouter>
