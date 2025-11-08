@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
@@ -234,6 +234,7 @@ const CupomFiscalViewer = ({
   };
 
   const handleCancelar = async () => {
+    console.log("🔴 [CUPOM] handleCancelar INICIADO");
     setIsCanceling(true);
     try {
       console.log("❌ [CUPOM] Cancelando nota...");
@@ -246,11 +247,14 @@ const CupomFiscalViewer = ({
 
       if (error) throw error;
 
+      console.log("✅ [CUPOM] Nota deletada com sucesso");
+
       toast({
         title: "Nota cancelada",
         description: "A nota foi removida",
       });
 
+      console.log("🔴 [CUPOM] Chamando onClose()");
       onClose();
     } catch (error: any) {
       console.error("❌ Erro ao cancelar:", error);
@@ -260,6 +264,7 @@ const CupomFiscalViewer = ({
         variant: "destructive",
       });
     } finally {
+      console.log("🔴 [CUPOM] handleCancelar FINALIZADO");
       setIsCanceling(false);
     }
   };
@@ -268,10 +273,24 @@ const CupomFiscalViewer = ({
   const produtos = dadosExtraidos?.itens || dadosExtraidos?.produtos || [];
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      console.log('🔄 [CUPOM] Dialog onOpenChange:', open);
+      if (!open) {
+        console.log('🔴 [CUPOM] Fechando dialog via onOpenChange');
+        onClose();
+      }
+    }}>
       <DialogContent 
         className="max-w-md max-h-[90vh] overflow-y-auto p-0"
         data-cupom-fiscal
+        onPointerDownOutside={(e) => {
+          console.log('🔴 [CUPOM] Clique fora do dialog bloqueado');
+          e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          console.log('🔴 [CUPOM] Interação externa bloqueada');
+          e.preventDefault();
+        }}
       >
         {/* Cabeçalho - Logo Picotinho */}
         <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 p-6 text-center border-b-2 border-dashed border-green-300 dark:border-green-700">
@@ -396,7 +415,7 @@ const CupomFiscalViewer = ({
             onClick={handleCancelar}
             disabled={isConfirming || isCanceling}
             variant="outline"
-            className="w-full"
+            className="w-full active:scale-95 transition-transform"
             size="sm"
           >
             {isCanceling ? (
@@ -408,6 +427,18 @@ const CupomFiscalViewer = ({
               "✕ Cancelar"
             )}
           </Button>
+
+          <DialogClose asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-xs active:scale-95 transition-transform"
+              size="sm"
+              disabled={isConfirming || isCanceling}
+            >
+              Fechar (sem deletar)
+            </Button>
+          </DialogClose>
         </div>
       </DialogContent>
     </Dialog>
