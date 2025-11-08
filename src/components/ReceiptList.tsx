@@ -1142,29 +1142,30 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="pt-12 pb-0 px-0 m-0 w-full h-full max-w-full rounded-none overflow-hidden text-xs md:relative md:max-w-md md:rounded-lg md:p-6 md:text-base">
+        {/* Botão de fechar flutuante FORA do DialogContent */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="fixed right-4 top-4 z-[9999] h-12 w-12 rounded-full bg-red-500 text-white hover:bg-red-600 shadow-lg"
+          onClick={() => {
+            console.log('🔴 Botão vermelho clicado - forçando fechamento');
+            setIsDialogOpen(false);
+            setSelectedReceipt(null);
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            console.log('🔴 Botão vermelho tocado (mobile) - forçando fechamento');
+            setIsDialogOpen(false);
+            setSelectedReceipt(null);
+          }}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        
+        <DialogContent className="p-0 m-0 w-full h-full max-w-full rounded-none overflow-hidden text-xs md:relative md:max-w-md md:rounded-lg md:p-6 md:text-base">
           <DialogTitle className="sr-only">
             {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
           </DialogTitle>
-          {/* Botão de fechar explícito para garantir funcionamento no APK */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-4 top-4 z-[9999] h-12 w-12 rounded-full bg-red-500 text-white hover:bg-red-600 shadow-lg"
-            onClick={() => {
-              console.log('🔴 Botão vermelho clicado - forçando fechamento');
-              setIsDialogOpen(false);
-              setSelectedReceipt(null);
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              console.log('🔴 Botão vermelho tocado (mobile) - forçando fechamento');
-              setIsDialogOpen(false);
-              setSelectedReceipt(null);
-            }}
-          >
-            <X className="h-4 w-4" />
-          </Button>
           <div className="w-full h-full overflow-y-auto px-2 py-2 md:px-6 md:py-4">
             {selectedReceipt && (
               <>
