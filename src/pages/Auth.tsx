@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
-import { Browser } from '@capacitor/browser';
+import { InAppBrowser } from '@capgo/inappbrowser';
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -199,7 +199,7 @@ const AuthPage = () => {
         console.log('🌐 URL de autenticação gerada:', data.url);
         console.log('📱 Abrindo Browser nativo...');
         
-        await Browser.open({ url: data.url });
+        await InAppBrowser.open({ url: data.url });
         console.log('✅ Browser aberto com sucesso');
         
       } else {

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { App } from '@capacitor/app';
-import { Browser } from '@capacitor/browser';
+import { InAppBrowser } from '@capgo/inappbrowser';
 import { Capacitor } from '@capacitor/core';
 
 interface AuthContextType {
@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             // Fechar o browser
             console.log('🚪 Fechando browser...');
-            await Browser.close();
+            await InAppBrowser.close();
           } else {
             console.warn('⚠️ Código de autorização não encontrado no URL');
             console.log('📋 URL completo:', event.url);
