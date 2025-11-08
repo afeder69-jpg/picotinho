@@ -29,6 +29,7 @@ const Menu = () => {
   const { user, signOut } = useAuth();
   const [isMaster, setIsMaster] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userNickname, setUserNickname] = useState<string>('');
 
   useEffect(() => {
     async function checkRoles() {
@@ -47,6 +48,47 @@ const Menu = () => {
     }
     
     checkRoles();
+  }, [user]);
+
+  const carregarApelido = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('apelido')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Erro ao carregar apelido:', error);
+        toast.error('Complete seu cadastro para continuar');
+        setUserNickname('Visitante');
+        navigate('/cadastro-usuario');
+        return;
+      }
+
+      if (!profileData?.apelido || profileData.apelido.trim() === '') {
+        toast.error('Complete seu cadastro para continuar');
+        setUserNickname('Visitante');
+        navigate('/cadastro-usuario');
+        return;
+      }
+
+      setUserNickname(profileData.apelido);
+      
+    } catch (error) {
+      console.error('Erro ao carregar apelido:', error);
+      toast.error('Erro ao carregar dados do usuário');
+      setUserNickname('Visitante');
+      navigate('/cadastro-usuario');
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      carregarApelido();
+    }
   }, [user]);
 
   const handleSignOut = async () => {
@@ -125,7 +167,7 @@ const Menu = () => {
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
-              {user.email}
+              {userNickname || 'Carregando...'}
             </span>
             <Button 
               variant="outline" 
