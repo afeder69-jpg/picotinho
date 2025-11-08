@@ -171,13 +171,13 @@ Write-Host "📋 PRÓXIMOS PASSOS OBRIGATÓRIOS:" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "1️⃣  DESINSTALAR completamente o app do celular" -ForegroundColor White
 Write-Host "   Via ADB:" -ForegroundColor Gray
-Write-Host "   > adb uninstall app.lovable.b5ea6089d5bc4939b83e6c590c392e34" -ForegroundColor Cyan
+Write-Host "   adb uninstall app.lovable.b5ea6089d5bc4939b83e6c590c392e34" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "2️⃣  LIMPAR dados residuais:" -ForegroundColor White
-Write-Host "   > adb shell pm clear app.lovable.b5ea6089d5bc4939b83e6c590c392e34" -ForegroundColor Cyan
+Write-Host "   adb shell pm clear app.lovable.b5ea6089d5bc4939b83e6c590c392e34" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "3️⃣  INSTALAR o novo APK:" -ForegroundColor White
-Write-Host "   > npx cap run android" -ForegroundColor Cyan
+Write-Host "   npx cap run android" -ForegroundColor Cyan
 Write-Host "   OU copiar o APK manualmente do Desktop" -ForegroundColor Gray
 Write-Host ""
 Write-Host "=====================================================================" -ForegroundColor Gray
@@ -188,9 +188,9 @@ Write-Host "✅ NO TOPO DA TELA deve aparecer banner amarelo:" -ForegroundColor 
 Write-Host "   📱 v$version | 🚨 InAppBrowser ATIVO | ⏰ Build: [timestamp]" -ForegroundColor Gray
 Write-Host ""
 Write-Host "✅ NO CONSOLE (chrome://inspect) deve aparecer:" -ForegroundColor White
-Write-Host "   🚨🚨🚨 AUTHPROVIDER: INAPPBROWSER VERSÃO ATIVA 🚨🚨🚨" -ForegroundColor Gray
-Write-Host "   🚨🚨🚨 AUTH.TSX: USANDO INAPPBROWSER.OPEN() 🚨🚨🚨" -ForegroundColor Gray
-Write-Host "   📱 Biblioteca: @capgo/inappbrowser v7.29.0" -ForegroundColor Gray
+Write-Host "   AUTHPROVIDER: INAPPBROWSER VERSÃO ATIVA" -ForegroundColor Gray
+Write-Host "   AUTH.TSX: USANDO INAPPBROWSER" -ForegroundColor Gray
+Write-Host "   Biblioteca: @capgo/inappbrowser v7.29.0" -ForegroundColor Gray
 Write-Host ""
 Write-Host "✅ AO CLICAR Entrar com Google:" -ForegroundColor White
 Write-Host "   Deve abrir janela DIFERENTE do Chrome Custom Tab" -ForegroundColor Gray
@@ -200,14 +200,14 @@ Write-Host ""
 Write-Host "=====================================================================" -ForegroundColor Gray
 Write-Host ""
 Write-Host "🚨 SE O BANNER AMARELO NÃO APARECER:" -ForegroundColor Red
-Write-Host "   ➡️  O código não está sendo atualizado no APK" -ForegroundColor White
-Write-Host "   ➡️  Verifique se o APK foi realmente reinstalado" -ForegroundColor White
-Write-Host "   ➡️  Confirme a versão em chrome://inspect" -ForegroundColor White
+Write-Host "   O código não está sendo atualizado no APK" -ForegroundColor White
+Write-Host "   Verifique se o APK foi realmente reinstalado" -ForegroundColor White
+Write-Host "   Confirme a versão em chrome://inspect" -ForegroundColor White
 Write-Host ""
 Write-Host "🚨 SE OS LOGS NÃO APARECEREM NO CONSOLE:" -ForegroundColor Red
-Write-Host "   ➡️  O código TypeScript não foi compilado corretamente" -ForegroundColor White
-Write-Host "   ➡️  Execute: npm list @capgo/inappbrowser" -ForegroundColor White
-Write-Host "   ➡️  Deve mostrar: @capgo/inappbrowser@7.29.0" -ForegroundColor White
+Write-Host "   O código TypeScript não foi compilado corretamente" -ForegroundColor White
+Write-Host "   Execute: npm list @capgo/inappbrowser" -ForegroundColor White
+Write-Host "   Deve mostrar: @capgo/inappbrowser@7.29.0" -ForegroundColor White
 Write-Host ""
 Write-Host "=====================================================================" -ForegroundColor Gray
 Write-Host ""
