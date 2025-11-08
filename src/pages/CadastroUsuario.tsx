@@ -17,6 +17,7 @@ import PicotinhoLogo from "@/components/PicotinhoLogo";
 
 interface UserProfile {
   nome_completo: string;
+  apelido: string;
   telefone: string;
   bairro: string;
   cidade: string;
@@ -33,6 +34,7 @@ const CadastroUsuario = () => {
   const [cepLoading, setCepLoading] = useState(false);
   const [profile, setProfile] = useState<UserProfile>({
     nome_completo: '',
+    apelido: '',
     telefone: '',
     bairro: '',
     cidade: '',
@@ -72,6 +74,7 @@ const CadastroUsuario = () => {
       if (profileData) {
         setProfile({
           nome_completo: profileData.nome_completo || '',
+          apelido: profileData.apelido || '',
           telefone: profileData.telefone || '',
           bairro: profileData.bairro || '',
           cidade: profileData.cidade || '',
@@ -175,6 +178,34 @@ const CadastroUsuario = () => {
   };
 
   const salvarPerfil = async () => {
+    // Validação do apelido (obrigatório)
+    if (!profile.apelido || profile.apelido.trim() === '') {
+      toast({
+        variant: "destructive",
+        title: "Apelido obrigatório",
+        description: "Por favor, informe um apelido (máx. 12 caracteres).",
+      });
+      return;
+    }
+    
+    if (profile.apelido.length > 12) {
+      toast({
+        variant: "destructive",
+        title: "Apelido muito longo",
+        description: "O apelido deve ter no máximo 12 caracteres.",
+      });
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9]+$/.test(profile.apelido)) {
+      toast({
+        variant: "destructive",
+        title: "Apelido inválido",
+        description: "O apelido deve conter apenas letras e números.",
+      });
+      return;
+    }
+
     if (!profile.cep) {
       toast({
         variant: "destructive",
@@ -245,6 +276,7 @@ const CadastroUsuario = () => {
       const profileData = {
         user_id: user.id,
         nome_completo: profile.nome_completo,
+        apelido: profile.apelido,
         telefone: profile.telefone,
         bairro: profile.bairro,
         cidade: profile.cidade,
@@ -372,6 +404,33 @@ const CadastroUsuario = () => {
                 />
               </div>
 
+              {/* Apelido - OBRIGATÓRIO */}
+              <div className="space-y-2">
+                <Label htmlFor="apelido">
+                  Apelido *
+                </Label>
+                <Input
+                  id="apelido"
+                  value={profile.apelido}
+                  onChange={(e) => {
+                    // Filtrar apenas alfanuméricos e limitar a 12 caracteres
+                    const filtered = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+                    handleInputChange('apelido', filtered);
+                  }}
+                  placeholder="Seu apelido"
+                  maxLength={12}
+                  className={profile.apelido.length === 0 ? "border-red-300" : ""}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Como você quer ser chamado? (máx. 12 caracteres, apenas letras e números)
+                </p>
+                {profile.apelido.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {profile.apelido.length}/12 caracteres
+                  </p>
+                )}
+              </div>
+
               {/* E-mail (informativo apenas) */}
               <div className="space-y-2">
                 <Label htmlFor="email">E-mail</Label>
@@ -464,7 +523,7 @@ const CadastroUsuario = () => {
           <div className="mt-6">
             <Button 
               onClick={salvarPerfil}
-              disabled={loading || !profile.cep}
+              disabled={loading || !profile.cep || !profile.apelido || profile.apelido.length === 0}
               className="w-full"
               size="lg"
             >

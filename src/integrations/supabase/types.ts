@@ -1745,6 +1745,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          apelido: string
           avatar_url: string | null
           bairro: string | null
           cep: string | null
@@ -1763,6 +1764,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          apelido?: string
           avatar_url?: string | null
           bairro?: string | null
           cep?: string | null
@@ -1781,6 +1783,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          apelido?: string
           avatar_url?: string | null
           bairro?: string | null
           cep?: string | null

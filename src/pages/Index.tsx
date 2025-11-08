@@ -1,4 +1,6 @@
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,52 @@ import { APP_VERSION } from "@/lib/constants";
 const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [userNickname, setUserNickname] = useState<string>('');
+
+  // Carregar apelido quando usuário faz login
+  useEffect(() => {
+    if (user) {
+      carregarApelido();
+    }
+  }, [user]);
+
+  const carregarApelido = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('apelido')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Erro ao carregar apelido:', error);
+        // Se não encontrou o perfil, redirecionar para cadastro
+        toast.error('Complete seu cadastro para continuar');
+        setUserNickname('Visitante');
+        navigate('/cadastro-usuario');
+        return;
+      }
+
+      if (!profileData?.apelido || profileData.apelido.trim() === '') {
+        // Usuário sem apelido - redirecionar para cadastro
+        toast.error('Complete seu cadastro para continuar');
+        setUserNickname('Visitante');
+        navigate('/cadastro-usuario');
+        return;
+      }
+
+      // Usuário com apelido válido
+      setUserNickname(profileData.apelido);
+      
+    } catch (error) {
+      console.error('Erro ao carregar apelido:', error);
+      toast.error('Erro ao carregar dados do usuário');
+      setUserNickname('Visitante');
+      navigate('/cadastro-usuario');
+    }
+  };
 
   const handleSignOut = async () => {
     try {
@@ -33,7 +81,7 @@ const Index = () => {
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
-              {user.email}
+              {userNickname || 'Carregando...'}
             </span>
             <Button 
               variant="outline" 
