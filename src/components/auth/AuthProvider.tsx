@@ -74,36 +74,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('✅ Deep Link de autenticação detectado!');
         
         try {
-          // Extrair tokens do URL
+          // PKCE Flow: Extrair CODE (não tokens!)
           const url = new URL(event.url);
-          const fragment = url.hash.substring(1);
-          const params = new URLSearchParams(fragment || url.search);
+          const params = new URLSearchParams(url.search || url.hash.substring(1));
           
-          const access_token = params.get('access_token');
-          const refresh_token = params.get('refresh_token');
+          const code = params.get('code');
           
-          console.log('🎫 Access token encontrado:', access_token ? 'SIM' : 'NÃO');
-          console.log('🔄 Refresh token encontrado:', refresh_token ? 'SIM' : 'NÃO');
+          console.log('🎫 Código de autorização encontrado:', code ? 'SIM' : 'NÃO');
           
-          if (access_token && refresh_token) {
-            console.log('💾 Criando sessão no Supabase...');
+          if (code) {
+            console.log('💾 Trocando código por sessão (PKCE)...');
             
-            const { error } = await supabase.auth.setSession({
-              access_token,
-              refresh_token
-            });
+            // PKCE: Trocar code por tokens de sessão
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
             
             if (error) {
-              console.error('❌ Erro ao criar sessão:', error);
+              console.error('❌ Erro ao trocar código por sessão:', error);
             } else {
-              console.log('✅ Sessão criada com sucesso!');
+              console.log('✅ Sessão criada com sucesso via PKCE!');
+              console.log('👤 Usuário:', data.session?.user?.email);
             }
             
             // Fechar o browser
             console.log('🚪 Fechando browser...');
             await Browser.close();
           } else {
-            console.warn('⚠️ Tokens não encontrados no URL');
+            console.warn('⚠️ Código de autorização não encontrado no URL');
+            console.log('📋 URL completo:', event.url);
           }
         } catch (error) {
           console.error('❌ Erro ao processar Deep Link:', error);

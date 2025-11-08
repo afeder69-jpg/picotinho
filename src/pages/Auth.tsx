@@ -180,7 +180,7 @@ const AuthPage = () => {
       console.log('📱 Plataforma:', isNative ? 'Native (APK)' : 'Web');
 
       if (isNative) {
-        const redirectTo = 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34://auth/callback';
+        const redirectTo = 'picotinho://auth/callback';
         console.log('🔗 Deep Link configurado:', redirectTo);
         
         const { data, error } = await supabase.auth.signInWithOAuth({
