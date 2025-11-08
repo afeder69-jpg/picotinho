@@ -25,6 +25,31 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const isNative = Capacitor.isNativePlatform();
 
+  // Auto-redirect após login com Google
+  useEffect(() => {
+    // Verificar se já está logado ao carregar a página
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        console.log('✅ Usuário já logado, redirecionando...');
+        navigate('/');
+      }
+    });
+
+    // Monitorar mudanças no estado de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('🔄 Auth state changed:', event);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('✅ Login detectado! Redirecionando para home...');
+          navigate('/');
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
