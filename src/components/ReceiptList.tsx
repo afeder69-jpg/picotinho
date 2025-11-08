@@ -638,37 +638,6 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
               color: black;
               line-height: 1.4;
             }
-            .close-btn {
-              position: fixed;
-              top: 10px;
-              right: 10px;
-              background: #f44336;
-              color: white;
-              border: none;
-              border-radius: 50%;
-              width: 50px;
-              height: 50px;
-              font-size: 24px;
-              font-weight: bold;
-              cursor: pointer;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-              z-index: 1000;
-              touch-action: manipulation;
-            }
-            .close-btn:hover, .close-btn:active {
-              background: #d32f2f;
-              transform: scale(1.1);
-            }
-            
-            @media (max-width: 768px) {
-              .close-btn {
-                width: 60px;
-                height: 60px;
-                font-size: 28px;
-                top: 20px;
-                right: 20px;
-              }
-            }
             .center { text-align: center; }
             .bold { font-weight: bold; }
             .border-bottom { border-bottom: 1px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
@@ -680,8 +649,6 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
           </style>
         </head>
         <body>
-          <button class="close-btn" onclick="window.close()" title="Fechar">×</button>
-          
           <div class="center border-bottom">
             <h2 class="bold">${receipt.dados_extraidos.estabelecimento?.nome || receipt.dados_extraidos.loja?.nome || 'ESTABELECIMENTO'}</h2>
             <p>CNPJ: ${receipt.dados_extraidos.estabelecimento?.cnpj || receipt.dados_extraidos.loja?.cnpj || 'N/A'}</p>
