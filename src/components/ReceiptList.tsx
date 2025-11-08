@@ -1179,6 +1179,19 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
           <DialogTitle className="sr-only">
             {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
           </DialogTitle>
+          {/* Botão de fechar explícito para garantir funcionamento no APK */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-2 z-50 h-8 w-8 rounded-full bg-red-500 text-white hover:bg-red-600"
+            onClick={() => {
+              console.log('🔴 Botão vermelho clicado - forçando fechamento');
+              setIsDialogOpen(false);
+              setSelectedReceipt(null);
+            }}
+          >
+            <X className="h-4 w-4" />
+          </Button>
           <div className="w-full h-full overflow-y-auto px-2 py-2 md:px-6 md:py-4">
             {selectedReceipt && (
               <>
