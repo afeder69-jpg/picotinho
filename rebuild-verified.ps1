@@ -6,7 +6,7 @@
 
 Write-Host ""
 Write-Host "🔧 INICIANDO BUILD VERIFICADO - DIAGNÓSTICO COMPLETO" -ForegroundColor Cyan
-Write-Host "=====================================================================" -ForegroundColor Gray
+Write-Host "====================================================================" -ForegroundColor Gray
 Write-Host ""
 
 # PASSO 1: Incrementar versão
@@ -162,7 +162,7 @@ Write-Host ""
 
 Write-Host ""
 Write-Host "🎉 BUILD COMPLETO E VERIFICADO!" -ForegroundColor Green
-Write-Host "=====================================================================" -ForegroundColor Gray
+Write-Host "====================================================================" -ForegroundColor Gray
 Write-Host ""
 Write-Host "📦 VERSÃO GERADA: $version (code: $versionCode)" -ForegroundColor Cyan
 Write-Host "📁 LOCAL DO APK: $targetApk" -ForegroundColor Cyan
@@ -180,7 +180,7 @@ Write-Host "3️⃣  INSTALAR o novo APK:" -ForegroundColor White
 Write-Host "   npx cap run android" -ForegroundColor Cyan
 Write-Host "   OU copiar o APK manualmente do Desktop" -ForegroundColor Gray
 Write-Host ""
-Write-Host "=====================================================================" -ForegroundColor Gray
+Write-Host "====================================================================" -ForegroundColor Gray
 Write-Host ""
 Write-Host "🔍 CHECKLIST DE VERIFICAÇÃO NO CELULAR:" -ForegroundColor Yellow
 Write-Host ""
@@ -197,7 +197,7 @@ Write-Host "   Deve abrir janela DIFERENTE do Chrome Custom Tab" -ForegroundColo
 Write-Host "   Deve ter título Picotinho ou genérico (sem barra do Chrome)" -ForegroundColor Gray
 Write-Host "   Deve interceptar deep link picotinho://auth/callback" -ForegroundColor Gray
 Write-Host ""
-Write-Host "=====================================================================" -ForegroundColor Gray
+Write-Host "====================================================================" -ForegroundColor Gray
 Write-Host ""
 Write-Host "🚨 SE O BANNER AMARELO NÃO APARECER:" -ForegroundColor Red
 Write-Host "   O código não está sendo atualizado no APK" -ForegroundColor White
@@ -209,5 +209,5 @@ Write-Host "   O código TypeScript não foi compilado corretamente" -Foreground
 Write-Host "   Execute: npm list @capgo/inappbrowser" -ForegroundColor White
 Write-Host "   Deve mostrar: @capgo/inappbrowser@7.29.0" -ForegroundColor White
 Write-Host ""
-Write-Host "=====================================================================" -ForegroundColor Gray
+Write-Host "====================================================================" -ForegroundColor Gray
 Write-Host ""
