@@ -281,7 +281,7 @@ const CupomFiscalViewer = ({
       }
     }}>
       <DialogContent 
-        className="!w-full !h-full overflow-y-auto !p-0"
+        className="!w-full !h-full mobile-dialog-fix overflow-y-auto !p-0"
         style={{
           position: 'fixed',
           left: 0,
