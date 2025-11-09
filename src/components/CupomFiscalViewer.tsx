@@ -32,12 +32,29 @@ const CupomFiscalViewer = ({
 
   useLayoutEffect(() => {
     if (isOpen && dialogRef.current) {
-      const element = dialogRef.current;
-      element.style.width = '100vw';
-      element.style.height = '100vh';
-      element.style.height = '100dvh';
-      element.style.maxWidth = '100vw';
-      element.style.maxHeight = '100dvh';
+      const applyStyles = () => {
+        if (dialogRef.current) {
+          const element = dialogRef.current;
+          element.style.width = '100vw';
+          element.style.height = '100dvh';
+          element.style.maxWidth = '100vw';
+          element.style.maxHeight = '100dvh';
+        }
+      };
+
+      // Double requestAnimationFrame para garantir que Radix UI terminou suas animações
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          applyStyles();
+        });
+      });
+
+      // Fallback de 50ms caso os requestAnimationFrame falhem
+      const timeoutId = setTimeout(() => {
+        applyStyles();
+      }, 50);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [isOpen]);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -300,11 +317,12 @@ const CupomFiscalViewer = ({
           left: 0,
           top: 0,
           width: '100vw',
-          height: '100vh',
+          height: '100dvh',
           maxWidth: '100vw',
-          transform: 'none',
-          padding: 0,
-          borderRadius: 0
+          maxHeight: '100dvh',
+          margin: 0,
+          borderRadius: 0,
+          transform: 'none'
         }}
         data-cupom-fiscal
         onPointerDownOutside={(e) => {
