@@ -209,10 +209,14 @@ const CupomFiscalViewer = ({
 
       if (!validationData?.approved) {
         toast({
-          title: "❌ Nota inválida",
+          title: validationData?.reason === 'duplicada' 
+            ? "⚠️ Nota Duplicada" 
+            : "❌ Nota inválida",
           description: validationData?.message || "A nota não passou na validação",
           variant: "destructive",
+          duration: 5000,
         });
+        setIsConfirming(false);
         return;
       }
 
