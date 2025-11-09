@@ -281,7 +281,18 @@ const CupomFiscalViewer = ({
       }
     }}>
       <DialogContent 
-        className="w-full h-full overflow-y-auto p-0"
+        className="!w-full !h-full overflow-y-auto !p-0"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          width: '100vw',
+          height: '100vh',
+          maxWidth: '100vw',
+          transform: 'none',
+          padding: 0,
+          borderRadius: 0
+        }}
         data-cupom-fiscal
         onPointerDownOutside={(e) => {
           console.log('🔴 [CUPOM] Clique fora do dialog bloqueado');
