@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useState } from "react";
+import { useState, useLayoutEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Receipt, Store, Calendar, DollarSign } from "lucide-react";
@@ -28,6 +28,18 @@ const CupomFiscalViewer = ({
   onConfirm,
 }: CupomFiscalViewerProps) => {
   const [isConfirming, setIsConfirming] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (isOpen && dialogRef.current) {
+      const element = dialogRef.current;
+      element.style.width = '100vw';
+      element.style.height = '100vh';
+      element.style.height = '100dvh';
+      element.style.maxWidth = '100vw';
+      element.style.maxHeight = '100dvh';
+    }
+  }, [isOpen]);
   const [isCanceling, setIsCanceling] = useState(false);
 
   const formatarData = (dataStr: string | null | undefined) => {
@@ -281,6 +293,7 @@ const CupomFiscalViewer = ({
       }
     }}>
       <DialogContent 
+        ref={dialogRef}
         className="!w-full !h-full mobile-dialog-fix overflow-y-auto !p-0"
         style={{
           position: 'fixed',
