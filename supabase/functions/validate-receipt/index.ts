@@ -474,7 +474,7 @@ Responda APENAS o JSON:
       result = {
         approved: false,
         reason: 'duplicada',
-        shouldDelete: true,
+        shouldDelete: false,
         message: '📋 Esta nota fiscal já foi lançada no PICOTINHO por outro usuário! Cada nota só pode ser processada uma vez no sistema.'
       };
     } else if (analysis.eh_nfse) {

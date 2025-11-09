@@ -77,11 +77,13 @@ export const SimplifiedInAppBrowser = ({
       if (!validationResult.approved) {
         console.warn('❌ Nota reprovada na validação:', validationResult.reason);
         toast({
-          title: "Nota não aprovada",
+          title: validationResult.reason === 'duplicada' 
+            ? "⚠️ Nota Duplicada" 
+            : "❌ Nota não aprovada",
           description: validationResult.message,
           variant: "destructive",
+          duration: 5000,
         });
-        onClose();
         return;
       }
 
