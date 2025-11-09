@@ -155,8 +155,12 @@ export const SimplifiedInAppBrowser = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-full w-full h-full p-0 gap-0">
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) return; }}>
+      <DialogContent 
+        className="max-w-full w-full h-full p-0 gap-0"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogTitle className="sr-only">Nota Fiscal</DialogTitle>
         <DialogDescription className="sr-only">
           Visualize os dados da nota fiscal e confirme para adicionar ao estoque
