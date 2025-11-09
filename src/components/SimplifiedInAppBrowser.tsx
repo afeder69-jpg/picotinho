@@ -84,6 +84,7 @@ export const SimplifiedInAppBrowser = ({
           variant: "destructive",
           duration: 5000,
         });
+        setIsProcessing(false);
         return;
       }
 
