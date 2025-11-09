@@ -1142,7 +1142,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="relative p-0 m-0 w-full h-full max-w-full rounded-none text-xs md:max-w-md md:rounded-lg md:p-6 md:text-base">
+        <DialogContent className="fixed left-0 top-0 translate-x-0 translate-y-0 p-0 m-0 w-full h-full max-w-full rounded-none text-xs md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] md:max-w-md md:h-auto md:rounded-lg md:p-6 md:text-base">
           <DialogTitle className="sr-only">
             {selectedReceipt?.dados_extraidos && selectedReceipt?.processada ? 'Cupom Fiscal Digital' : 'Detalhes da Nota Fiscal'}
           </DialogTitle>
