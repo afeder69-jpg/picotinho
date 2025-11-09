@@ -302,13 +302,7 @@ const CupomFiscalViewer = ({
   const produtos = dadosExtraidos?.itens || dadosExtraidos?.produtos || [];
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      console.log('🔄 [CUPOM] Dialog onOpenChange:', open);
-      if (!open) {
-        console.log('🔴 [CUPOM] Fechando dialog via onOpenChange');
-        onClose();
-      }
-    }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) return; }}>
       <DialogContent 
         ref={dialogRef}
         className="!w-full !h-full mobile-dialog-fix overflow-y-auto !p-0"
@@ -325,14 +319,9 @@ const CupomFiscalViewer = ({
           transform: 'none'
         }}
         data-cupom-fiscal
-        onPointerDownOutside={(e) => {
-          console.log('🔴 [CUPOM] Clique fora do dialog bloqueado');
-          e.preventDefault();
-        }}
-        onInteractOutside={(e) => {
-          console.log('🔴 [CUPOM] Interação externa bloqueada');
-          e.preventDefault();
-        }}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         {/* Cabeçalho - Logo Picotinho */}
         <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 p-6 text-center border-b-2 border-dashed border-green-300 dark:border-green-700">
@@ -469,18 +458,6 @@ const CupomFiscalViewer = ({
               "✕ Cancelar"
             )}
           </Button>
-
-          <DialogClose asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full text-xs active:scale-95 transition-transform"
-              size="sm"
-              disabled={isConfirming || isCanceling}
-            >
-              Fechar (sem deletar)
-            </Button>
-          </DialogClose>
         </div>
       </DialogContent>
     </Dialog>
