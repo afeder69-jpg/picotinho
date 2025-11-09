@@ -592,21 +592,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   };
 
   const viewReceipt = (receipt: Receipt) => {
-    // Se for cupom fiscal processado
-    if (receipt.dados_extraidos && receipt.processada) {
-      if (Capacitor.isNativePlatform()) {
-        // APK: abrir em nova janela (funciona perfeitamente)
-        openReceiptInNewWindow(receipt);
-      } else {
-        // WEB: abrir no dialog interno
-        setSelectedReceipt(receipt);
-        setIsDialogOpen(true);
-      }
-    } else {
-      // Nota não processada: sempre abrir em dialog
-      setSelectedReceipt(receipt);
-      setIsDialogOpen(true);
-    }
+    // Sempre abrir no dialog interno (Web e APK)
+    setSelectedReceipt(receipt);
+    setIsDialogOpen(true);
   };
 
   const openReceiptInNewWindow = (receipt: Receipt) => {
