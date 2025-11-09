@@ -203,22 +203,44 @@ const CupomFiscalViewer = ({
         }
       );
 
-      if (validationError) throw validationError;
-      
-      console.log("📋 Resultado da validação:", validationData);
+      if (validationError) {
+        console.error("❌ [DEBUG] Erro na validação:", validationError);
+        throw validationError;
+      }
+
+      console.log("📋 [DEBUG] Resultado completo validationData:", JSON.stringify(validationData, null, 2));
+      console.log("🔍 [DEBUG] validationData.approved:", validationData?.approved);
+      console.log("🔍 [DEBUG] validationData.reason:", validationData?.reason);
+      console.log("🔍 [DEBUG] validationData.message:", validationData?.message);
 
       if (!validationData?.approved) {
-        toast({
-          title: validationData?.reason === 'duplicada' 
-            ? "⚠️ Nota Duplicada" 
-            : "❌ Nota inválida",
-          description: validationData?.message || "A nota não passou na validação",
+        console.log("🚨 [DEBUG] Entrando no IF - Nota NÃO aprovada!");
+        
+        const toastTitle = validationData?.reason === 'duplicada' 
+          ? "⚠️ Nota Duplicada" 
+          : "❌ Nota inválida";
+        
+        const toastDescription = validationData?.message || "A nota não passou na validação";
+        
+        console.log("📢 [DEBUG] Chamando toast com:", { toastTitle, toastDescription });
+        
+        const toastResult = toast({
+          title: toastTitle,
+          description: toastDescription,
           variant: "destructive",
           duration: 5000,
         });
+        
+        console.log("✅ [DEBUG] Toast chamado! ID:", toastResult?.id);
+        console.log("🔄 [DEBUG] Resetando isConfirming...");
+        
         setIsConfirming(false);
+        
+        console.log("⛔ [DEBUG] Retornando (nota rejeitada)");
         return;
       }
+
+      console.log("✅ [DEBUG] Nota APROVADA - continuando processamento...");
 
       // 3. ✅ FECHAR MODAL E REDIRECIONAR IMEDIATAMENTE
       toast({
