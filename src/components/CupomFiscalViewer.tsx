@@ -281,7 +281,7 @@ const CupomFiscalViewer = ({
       }
     }}>
       <DialogContent 
-        className="max-w-md max-h-[90vh] overflow-y-auto p-0"
+        className="w-full h-full overflow-y-auto p-0"
         data-cupom-fiscal
         onPointerDownOutside={(e) => {
           console.log('🔴 [CUPOM] Clique fora do dialog bloqueado');
