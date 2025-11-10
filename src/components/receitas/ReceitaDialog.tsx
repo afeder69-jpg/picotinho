@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -56,6 +57,7 @@ interface Ingrediente {
 
 export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: ReceitaDialogProps) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [imagemFile, setImagemFile] = useState<File | null>(null);
   const [imagemPreview, setImagemPreview] = useState<string | null>(receita?.imagem_url || null);
@@ -291,6 +293,11 @@ export function ReceitaDialog({ open, onOpenChange, onSuccess, receita }: Receit
         .insert(ingredientesData);
 
       if (ingredientesError) throw ingredientesError;
+
+      // Invalidar queries para forçar recálculo do custo
+      queryClient.invalidateQueries({ queryKey: ['receita-custo', receitaCriada!.id] });
+      queryClient.invalidateQueries({ queryKey: ['receita-ingredientes', receitaCriada!.id] });
+      queryClient.invalidateQueries({ queryKey: ['receita', receitaCriada!.id] });
 
       toast({ title: receita?.id ? "Receita atualizada!" : "Receita criada!" });
       onSuccess();
