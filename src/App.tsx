@@ -29,6 +29,8 @@ import ListaComprasComprar from "./pages/ListaComprasComprar";
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
 import { APP_VERSION } from "./lib/constants";
+import { useNotasPendentesAprovacao } from "./hooks/useNotasPendentesAprovacao";
+import NotaPendenteModal from "./components/NotaPendenteModal";
 
 console.log("App.tsx carregando...");
 console.log(`🚀 Picotinho versionName: ${APP_VERSION}`);
@@ -72,6 +74,9 @@ console.log("QueryClient criado");
 const App = () => {
   console.log("App renderizando...");
   
+  const { data: notasPendentes } = useNotasPendentesAprovacao();
+  const notaPendente = notasPendentes?.[0]; // Primeira nota pendente
+  
   try {
     return (
       <QueryClientProvider client={queryClient}>
@@ -106,6 +111,17 @@ const App = () => {
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <BottomNavigation />
+              
+              {/* Modal forçado de aprovação - aparece automaticamente */}
+              {notaPendente && (
+                <NotaPendenteModal
+                  nota={notaPendente}
+                  onClose={() => {
+                    // Após fechar, invalidar queries para buscar próxima nota pendente
+                    queryClient.invalidateQueries({ queryKey: ['notas-pendentes-aprovacao'] });
+                  }}
+                />
+              )}
             </BrowserRouter>
           </TooltipProvider>
         </AuthProvider>

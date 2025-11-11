@@ -1,50 +1,22 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Home, Menu, QrCode } from "lucide-react";
 import ScreenCaptureComponent from "./ScreenCaptureComponent";
 import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
-import InternalWebViewer from "./InternalWebViewer";
-import CupomFiscalViewer from "./CupomFiscalViewer";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { detectarTipoDocumento, TipoDocumento, extrairChaveNFe } from "@/lib/documentDetection";
+import { detectarTipoDocumento, extrairChaveNFe } from "@/lib/documentDetection";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [showCupomViewer, setShowCupomViewer] = useState(false);
-  const [showInternalWebViewer, setShowInternalWebViewer] = useState(false);
-  const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null);
-  const [pendingDocType, setPendingDocType] = useState<TipoDocumento>(null);
-  const [pendingNotaData, setPendingNotaData] = useState<any>(null);
-  const [isProcessingQRCode, setIsProcessingQRCode] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-
-  const handleNoteConfirm = async () => {
-    console.log('✅ [VIEWER] Nota confirmada, navegando para screenshots');
-    setShowInternalWebViewer(false);
-    setShowCupomViewer(false);
-    setPendingQrUrl(null);
-    setPendingNotaData(null);
-    navigate('/screenshots');
-  };
-
-  const handleNoteClose = () => {
-    console.log('❌ [VIEWER] Viewer fechado');
-    setShowInternalWebViewer(false);
-    setShowCupomViewer(false);
-    setPendingQrUrl(null);
-    setPendingDocType(null);
-  };
 
 
   const handleQRScanSuccess = async (data: string) => {
@@ -78,147 +50,53 @@ const BottomNavigation = () => {
     
     // Detectar tipo de documento (NFe vs NFCe)
     const tipoDocumento = detectarTipoDocumento(data);
-    console.log(`🔍 Tipo de documento: ${tipoDocumento || 'DESCONHECIDO'}`);
+    const chaveAcesso = extrairChaveNFe(data);
+    
+    if (!chaveAcesso) {
+      toast({
+        title: "Erro ao ler QR Code",
+        description: "Não foi possível extrair a chave de acesso",
+        variant: "destructive",
+      });
+      setShowQRScanner(false);
+      return;
+    }
+    
+    console.log(`🔍 Tipo: ${tipoDocumento || 'DESCONHECIDO'}, Chave: ${chaveAcesso}`);
     
     setShowQRScanner(false);
     
-    // Verificar se é plataforma nativa (Android/iOS)
-    if (Capacitor.isNativePlatform()) {
-      // NOVO FLUXO: Processar ANTES de abrir o visualizador
-      console.log('📱 [NATIVO] Processando nota via InfoSimples...');
-      setIsProcessingQRCode(true);
+    try {
+      // ✅ Iniciar processamento em background (NÃO aguardar conclusão)
+      const { data: processData, error: processError } = await supabase.functions.invoke('process-url-nota', {
+        body: {
+          url: data,
+          userId: user.id,
+          chaveAcesso,
+          tipoDocumento,
+        },
+      });
       
-      try {
-        const chaveAcesso = extrairChaveNFe(data);
-        
-        if (!chaveAcesso) {
-          throw new Error('Não foi possível extrair a chave de acesso da URL');
-        }
-        
-        console.log('🔑 Chave extraída:', chaveAcesso);
-        
-        // Chamar process-url-nota IMEDIATAMENTE
-        const { data: processData, error: processError } = await supabase.functions.invoke('process-url-nota', {
-          body: {
-            url: data,
-            userId: user.id,
-            chaveAcesso,
-            tipoDocumento,
-          },
-        });
-        
-        if (processError) throw processError;
-        
-        console.log('✅ Processamento iniciado:', processData);
-        
-        // Aguardar alguns segundos para o InfoSimples processar
-        await new Promise(resolve => setTimeout(resolve, 8000));
-        
-        // Buscar os dados processados
-        const { data: notaData, error: notaError } = await supabase
-          .from('notas_imagens')
-          .select('id, dados_extraidos, nome_original')
-          .eq('id', processData.notaId)
-          .single();
-        
-        if (notaError) throw notaError;
-        
-        console.log('📄 Dados da nota buscados:', notaData);
-        
-        if (!notaData.dados_extraidos) {
-          throw new Error('Nota ainda está sendo processada. Tente novamente em alguns segundos.');
-        }
-        
-        // Abrir CupomFiscalViewer com os DADOS
-        setPendingQrUrl(data);
-        setPendingDocType(tipoDocumento);
-        setPendingNotaData(notaData);
-        setShowCupomViewer(true);
-        setIsProcessingQRCode(false);
-        
-        toast({
-          title: "✅ Nota carregada",
-          description: "Confira os dados e confirme",
-        });
-        
-      } catch (error: any) {
-        console.error('❌ Erro ao processar nota:', error);
-        setIsProcessingQRCode(false);
-        
-        toast({
-          title: "Erro ao processar nota",
-          description: error.message || "Tente novamente",
-          variant: "destructive",
-        });
-      }
-    } else {
-      // Em plataforma web: processar via InfoSimples (igual ao nativo)
-      console.log('🌐 [WEB] Processando nota via InfoSimples...');
-      setIsProcessingQRCode(true);
+      if (processError) throw processError;
       
-      try {
-        const chaveAcesso = extrairChaveNFe(data);
-        
-        if (!chaveAcesso) {
-          throw new Error('Não foi possível extrair a chave de acesso da URL');
-        }
-        
-        console.log('🔑 Chave extraída:', chaveAcesso);
-        
-        // Chamar process-url-nota
-        const { data: processData, error: processError } = await supabase.functions.invoke('process-url-nota', {
-          body: {
-            url: data,
-            userId: user.id,
-            chaveAcesso,
-            tipoDocumento,
-          },
-        });
-        
-        if (processError) throw processError;
-        
-        console.log('✅ Processamento iniciado:', processData);
-        
-        // Aguardar processamento do InfoSimples
-        await new Promise(resolve => setTimeout(resolve, 8000));
-        
-        // Buscar os dados processados
-        const { data: notaData, error: notaError } = await supabase
-          .from('notas_imagens')
-          .select('id, dados_extraidos, nome_original')
-          .eq('id', processData.notaId)
-          .single();
-        
-        if (notaError) throw notaError;
-        
-        console.log('📄 Dados da nota buscados:', notaData);
-        
-        if (!notaData.dados_extraidos) {
-          throw new Error('Nota ainda está sendo processada. Tente novamente em alguns segundos.');
-        }
-        
-        // Abrir CupomFiscalViewer com os DADOS
-        setPendingQrUrl(data);
-        setPendingDocType(tipoDocumento);
-        setPendingNotaData(notaData);
-        setShowCupomViewer(true);
-        setIsProcessingQRCode(false);
-        
-        toast({
-          title: "✅ Nota carregada",
-          description: "Confira os dados e confirme para gerar o PDF",
-        });
-        
-      } catch (error: any) {
-        console.error('❌ Erro ao processar nota:', error);
-        setIsProcessingQRCode(false);
-        
-        toast({
-          title: "Erro ao processar nota",
-          description: error.message || "Tente novamente",
-          variant: "destructive",
-        });
-      }
+      // ✅ LIBERAR USUÁRIO IMEDIATAMENTE
+      toast({
+        title: "📝 Nota em processamento",
+        description: "Continue usando o app. Você será notificado quando estiver pronta!",
+        duration: 5000,
+      });
+      
+      console.log('✅ Processamento iniciado em background:', processData.notaId);
+      
+      // ← Usuário livre para navegar, não aguardamos mais nada
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao iniciar processamento:', error);
+      toast({
+        title: "Erro ao processar nota",
+        description: error.message || "Tente novamente",
+        variant: "destructive",
+      });
     }
   };
 
@@ -302,56 +180,6 @@ const BottomNavigation = () => {
         )
       )}
 
-      {/* Fallback: Se não estiver autenticado, mostrar modal de login */}
-      {showInternalWebViewer && pendingQrUrl && !user?.id && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <Card className="max-w-md">
-            <CardHeader>
-              <CardTitle>Login Necessário</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Você precisa estar logado para processar notas fiscais.</p>
-              <Button onClick={() => navigate('/auth')} className="mt-4 w-full">
-                Fazer Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Loading Dialog - Processando QR Code */}
-      <Dialog open={isProcessingQRCode}>
-        <DialogContent className="max-w-sm">
-          <div className="text-center py-8">
-            <Loader2 className="w-16 h-16 animate-spin text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Processando nota fiscal...</h3>
-            <p className="text-sm text-muted-foreground">Aguarde enquanto buscamos os dados da nota</p>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Cupom Fiscal Viewer (Nativo - NFe/NFCe) */}
-      {showCupomViewer && pendingNotaData && user?.id && (
-        <CupomFiscalViewer
-          notaId={pendingNotaData.id}
-          dadosExtraidos={pendingNotaData.dados_extraidos}
-          userId={user.id}
-          isOpen={showCupomViewer}
-          onClose={handleNoteClose}
-          onConfirm={handleNoteConfirm}
-        />
-      )}
-
-      {/* Internal Web Viewer com API Serpro (NFe - Web only) */}
-      {showInternalWebViewer && pendingQrUrl && user?.id && (
-        <InternalWebViewer
-          url={pendingQrUrl}
-          isOpen={showInternalWebViewer}
-          onClose={handleNoteClose}
-          onConfirm={handleNoteConfirm}
-          userId={user.id}
-        />
-      )}
     </>
   );
 };
