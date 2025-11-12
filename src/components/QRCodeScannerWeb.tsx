@@ -11,6 +11,7 @@ interface QRCodeScannerWebProps {
 
 const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => {
   const [isScanning, setIsScanning] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [scanAttempts, setScanAttempts] = useState(0);
 
@@ -19,13 +20,48 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     if (navigator.vibrate) {
       navigator.vibrate(50);
     }
+
+    // Verificar permissões de câmera
+    const checkCameraPermissions = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        console.log('✅ [CAMERA] Permissões concedidas');
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error) {
+        console.error('❌ [CAMERA] Erro ao acessar câmera:', error);
+        toast({
+          title: "Erro de permissão",
+          description: "Permita o acesso à câmera para escanear QR Codes",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    checkCameraPermissions();
   }, []);
 
   const handleScan = (result: any) => {
-    if (!result || !result[0]?.rawValue) return;
+    console.log('🔍 [SCANNER DEBUG] handleScan chamado');
+    console.log('📦 [SCANNER DEBUG] result completo:', JSON.stringify(result, null, 2));
+    console.log('📦 [SCANNER DEBUG] result type:', typeof result);
+    console.log('📦 [SCANNER DEBUG] result[0]:', result?.[0]);
+    console.log('📦 [SCANNER DEBUG] rawValue:', result?.[0]?.rawValue);
+
+    if (isProcessing) {
+      console.log('⏸️ [SCANNER] Já processando, ignorando nova detecção');
+      return;
+    }
+
+    if (!result || !result[0]?.rawValue) {
+      console.warn('⚠️ [SCANNER] Resultado vazio ou inválido - retornando sem processar');
+      return;
+    }
+
+    setIsProcessing(true);
+    setIsScanning(false);
 
     const qrData = result[0].rawValue;
-    console.log('🔍 [WEB SCANNER OPTIMIZED] QR detectado:', qrData);
+    console.log('✅ [SCANNER] QR detectado com sucesso:', qrData);
 
     // Feedback háptico de sucesso
     if (navigator.vibrate) {
@@ -37,8 +73,10 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       description: "Processando nota fiscal...",
     });
 
-    setIsScanning(false);
-    onScanSuccess(qrData);
+    // Chamar callback após pequeno delay para garantir processamento
+    setTimeout(() => {
+      onScanSuccess(qrData);
+    }, 100);
   };
 
   const handleError = (error: Error) => {
@@ -96,9 +134,12 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               <Scanner
                 onScan={handleScan}
                 onError={handleError}
+                paused={!isScanning}
                 constraints={{
                   facingMode: 'environment',
                   aspectRatio: 1,
+                  width: { ideal: 1920 },
+                  height: { ideal: 1920 },
                 }}
                 formats={[
                   'qr_code',
