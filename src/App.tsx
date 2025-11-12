@@ -71,59 +71,67 @@ const queryClient = new QueryClient({
 
 console.log("QueryClient criado");
 
-const App = () => {
-  console.log("App renderizando...");
-  
+// Componente interno que usa hooks que dependem de AuthProvider
+const AppContent = () => {
   const { data: notasPendentes } = useNotasPendentesAprovacao();
   const notaPendente = notasPendentes?.[0]; // Primeira nota pendente
+  
+  return (
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/menu" element={<Menu />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/screenshots" element={<Screenshots />} />
+          <Route path="/estoque" element={<EstoqueAtual />} />
+          <Route path="/area-atuacao" element={<AreaAtuacao />} />
+          <Route path="/configuracoes" element={<ConfiguracoesUsuario />} />
+          <Route path="/cadastro-usuario" element={<CadastroUsuario />} />
+          <Route path="/whatsapp" element={<WhatsAppConfig />} />
+          <Route path="/cleanup" element={<CleanupUserData />} />
+          <Route path="/relatorios" element={<Relatorios />} />
+          <Route path="/admin/normalizacao" element={<NormalizacaoGlobal />} />
+          <Route path="/admin/gerenciar-masters" element={<GerenciarMasters />} />
+          <Route path="/admin/normalizacoes-estabelecimentos" element={<NormalizacoesEstabelecimentos />} />
+          <Route path="/receitas" element={<Receitas />} />
+          <Route path="/receita/:id" element={<ReceitaDetalhes />} />
+          <Route path="/cardapios" element={<Cardapios />} />
+          <Route path="/cardapio/:id" element={<CardapioDetalhes />} />
+          <Route path="/listas-compras" element={<ListasComprasIndex />} />
+          <Route path="/lista-compras/:id" element={<ListaCompras />} />
+          <Route path="/lista-compras/:id/comprar" element={<ListaComprasComprar />} />
+          
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        <BottomNavigation />
+        
+        {/* Modal forçado de aprovação - aparece automaticamente */}
+        {notaPendente && (
+          <NotaPendenteModal
+            nota={notaPendente}
+            onClose={() => {
+              // Após fechar, invalidar queries para buscar próxima nota pendente
+              queryClient.invalidateQueries({ queryKey: ['notas-pendentes-aprovacao'] });
+            }}
+          />
+        )}
+      </BrowserRouter>
+    </TooltipProvider>
+  );
+};
+
+// Componente principal - monta a hierarquia de contextos
+const App = () => {
+  console.log("App renderizando...");
   
   try {
     return (
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/menu" element={<Menu />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/screenshots" element={<Screenshots />} />
-                <Route path="/estoque" element={<EstoqueAtual />} />
-                <Route path="/area-atuacao" element={<AreaAtuacao />} />
-                <Route path="/configuracoes" element={<ConfiguracoesUsuario />} />
-                <Route path="/cadastro-usuario" element={<CadastroUsuario />} />
-                <Route path="/whatsapp" element={<WhatsAppConfig />} />
-                <Route path="/cleanup" element={<CleanupUserData />} />
-                <Route path="/relatorios" element={<Relatorios />} />
-                <Route path="/admin/normalizacao" element={<NormalizacaoGlobal />} />
-                <Route path="/admin/gerenciar-masters" element={<GerenciarMasters />} />
-                <Route path="/admin/normalizacoes-estabelecimentos" element={<NormalizacoesEstabelecimentos />} />
-                <Route path="/receitas" element={<Receitas />} />
-                <Route path="/receita/:id" element={<ReceitaDetalhes />} />
-                <Route path="/cardapios" element={<Cardapios />} />
-                <Route path="/cardapio/:id" element={<CardapioDetalhes />} />
-                <Route path="/listas-compras" element={<ListasComprasIndex />} />
-                <Route path="/lista-compras/:id" element={<ListaCompras />} />
-                <Route path="/lista-compras/:id/comprar" element={<ListaComprasComprar />} />
-                
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              <BottomNavigation />
-              
-              {/* Modal forçado de aprovação - aparece automaticamente */}
-              {notaPendente && (
-                <NotaPendenteModal
-                  nota={notaPendente}
-                  onClose={() => {
-                    // Após fechar, invalidar queries para buscar próxima nota pendente
-                    queryClient.invalidateQueries({ queryKey: ['notas-pendentes-aprovacao'] });
-                  }}
-                />
-              )}
-            </BrowserRouter>
-          </TooltipProvider>
+          <AppContent />
         </AuthProvider>
       </QueryClientProvider>
     );
