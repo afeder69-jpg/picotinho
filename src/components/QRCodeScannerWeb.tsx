@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X, Flashlight, FlashlightOff } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface QRCodeScannerWebProps {
   onScanSuccess: (data: string) => void;
@@ -12,10 +12,13 @@ interface QRCodeScannerWebProps {
 const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => {
   const [isScanning, setIsScanning] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [torchEnabled, setTorchEnabled] = useState(false);
   const [scanAttempts, setScanAttempts] = useState(0);
+  const [scannerKey, setScannerKey] = useState(Date.now());
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
   useEffect(() => {
+    console.log('🎥 [SCANNER] Scanner montado, key:', scannerKey);
+    
     // Feedback háptico ao montar
     if (navigator.vibrate) {
       navigator.vibrate(50);
@@ -38,7 +41,22 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     };
     
     checkCameraPermissions();
-  }, []);
+
+    // Verificar se o vídeo carregou
+    const checkVideo = setInterval(() => {
+      const video = document.querySelector('video');
+      if (video && video.readyState >= 2) {
+        setVideoLoaded(true);
+        console.log('✅ [VIDEO] Feed carregado, readyState:', video.readyState);
+        clearInterval(checkVideo);
+      }
+    }, 500);
+    
+    return () => {
+      console.log('🎥 [SCANNER] Scanner desmontado');
+      clearInterval(checkVideo);
+    };
+  }, [scannerKey]);
 
   const handleScan = (result: any) => {
     console.log('🔍 [SCANNER DEBUG] handleScan chamado');
@@ -93,27 +111,11 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     }
   };
 
-  const toggleTorch = () => {
-    setTorchEnabled(!torchEnabled);
-  };
 
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-black">
       {/* Header com controles */}
-      <div className="relative z-10 w-full flex justify-between items-center p-4 bg-black/80 backdrop-blur-sm">
-        <Button
-          variant="outline"
-          size="lg"
-          className="rounded-full"
-          onClick={toggleTorch}
-        >
-          {torchEnabled ? (
-            <FlashlightOff className="w-5 h-5" />
-          ) : (
-            <Flashlight className="w-5 h-5" />
-          )}
-        </Button>
-
+      <div className="relative z-10 w-full flex justify-end items-center p-4 bg-black/80 backdrop-blur-sm">
         <Button
           variant="destructive"
           size="lg"
@@ -126,78 +128,56 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       </div>
 
       {/* Scanner Container */}
-      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="flex-1 relative">
         {isScanning && (
-          <>
-            {/* Scanner Component */}
-            <div className="w-full h-full relative">
-              <Scanner
-                onScan={handleScan}
-                onError={handleError}
-                constraints={{
-                  facingMode: 'environment',
-                  aspectRatio: 1,
-                }}
-                formats={[
-                  'qr_code',
-                  'data_matrix',
-                ]}
-                components={{
-                  finder: true,
-                  zoom: true,
-                  torch: torchEnabled,
-                }}
-                styles={{
-                  container: {
-                    width: '100%',
-                    height: '100%',
-                    position: 'relative',
-                  },
-                  video: {
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  },
-                }}
-                allowMultiple={false}
-                scanDelay={300}
-              />
-            </div>
+          <Scanner
+            key={scannerKey}
+            onScan={handleScan}
+            onError={handleError}
+            constraints={{
+              facingMode: 'environment'
+            }}
+          />
+        )}
 
-            {/* Aiming Square Animation */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative w-72 h-72 md:w-80 md:h-80">
-                {/* Cantos do quadrado */}
-                <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-xl animate-pulse" />
-                <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-xl animate-pulse" />
-                <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-xl animate-pulse" />
-                <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-xl animate-pulse" />
-                
-                {/* Linha de scan animada */}
-                <div className="absolute inset-0 overflow-hidden">
-                  <div className="w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent animate-scan-line" />
-                </div>
-              </div>
+        {/* Aiming Square Animation */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="relative w-72 h-72 md:w-80 md:h-80">
+            {/* Cantos do quadrado */}
+            <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-xl animate-pulse" />
+            <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-xl animate-pulse" />
+            <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-xl animate-pulse" />
+            <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-xl animate-pulse" />
+            
+            {/* Linha de scan animada */}
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent animate-scan-line" />
             </div>
+          </div>
+        </div>
 
-            {/* Instruções */}
-            <div className="absolute bottom-24 left-0 right-0 px-6">
-              <div className="bg-background/95 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-primary/20">
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <div className="w-3 h-3 bg-primary rounded-full animate-pulse" />
-                  <p className="text-lg font-bold text-center">
-                    Escaneando QR Code
-                  </p>
-                </div>
-                <p className="text-sm text-muted-foreground text-center leading-relaxed">
+        {/* Instruções */}
+        <div className="absolute bottom-24 left-0 right-0 px-6">
+          <div className="bg-background/95 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-primary/20">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <div className="w-3 h-3 bg-primary rounded-full animate-pulse" />
+              <p className="text-lg font-bold text-center">
+                {videoLoaded ? 'Escaneando QR Code' : 'Carregando câmera...'}
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground text-center leading-relaxed">
+              {videoLoaded ? (
+                <>
                   Aponte a câmera para o QR Code da nota fiscal
                   <br />
                   <span className="text-xs">O scanner detectará automaticamente</span>
-                </p>
-              </div>
-            </div>
-          </>
-        )}
+                </>
+              ) : (
+                <span className="text-xs">Aguarde enquanto iniciamos a câmera...</span>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* CSS para animação customizada */}
