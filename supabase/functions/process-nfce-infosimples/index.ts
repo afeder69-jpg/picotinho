@@ -379,7 +379,6 @@ async function processarNFCe(
       pdf_gerado: false, // 🔥 Novo: flag para controlar geração de PDF
       dados_extraidos: dadosExtraidos,
       imagem_url: nfceData.site_receipt, // HTML da nota fiscal
-      status_aprovacao: 'pendente_aprovacao', // Marcar como pronta para aprovação
       updated_at: new Date().toISOString()
     })
     .eq('id', notaImagemId);
@@ -389,7 +388,7 @@ async function processarNFCe(
     throw updateError;
   }
 
-  console.log('✅ [PROCESSAR] NFCe pronta para aprovação do usuário');
+  console.log('✅ [PROCESSAR] Nota atualizada com sucesso');
 }
 
 serve(async (req) => {

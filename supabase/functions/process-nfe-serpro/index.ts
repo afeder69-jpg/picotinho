@@ -346,14 +346,6 @@ async function processarNFe(
   
   console.log('✅ [DB] Nota salva em notas_imagens:', notaInserida.id);
   
-  // Marcar como pendente de aprovação
-  await supabase
-    .from('notas_imagens')
-    .update({ status_aprovacao: 'pendente_aprovacao' })
-    .eq('id', notaInserida.id);
-  
-  console.log('✅ [DB] NFe pronta para aprovação do usuário');
-  
   return notaInserida.id;
 }
 

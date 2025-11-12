@@ -90,25 +90,98 @@ serve(async (req) => {
 
     console.log('✅ Nota criada com sucesso:', notaId);
 
-    // ROTEAMENTO INTELIGENTE EM BACKGROUND: Iniciar processamento sem aguardar
-    console.log('🚀 Iniciando processamento em background...');
-    
-    // @ts-ignore - EdgeRuntime global
-    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-      // @ts-ignore
-      EdgeRuntime.waitUntil(
-        processarNotaEmBackground(notaId, userId, chave, modelo, uf)
-      );
+    // ROTEAMENTO INTELIGENTE: Escolher API apropriada
+    if (modelo === '55') {
+      // NFe (modelo 55): Usar Serpro (qualquer UF)
+      console.log('📄 [NFE] Processando via Serpro...');
+      
+      const { data: nfeData, error: nfeError } = await supabase.functions.invoke('process-nfe-serpro', {
+        body: { 
+          chaveAcesso: chave,
+          userId: userId,
+          notaImagemId: notaId
+        }
+      });
+
+      if (nfeError) {
+        console.error('⚠️ Erro ao processar NFe via Serpro:', nfeError);
+        throw nfeError;
+      }
+
+      console.log('✅ NFe processada via Serpro:', nfeData);
+      
+    } else if (modelo === '65' && uf === '33') {
+      // NFCe (modelo 65) do RJ (UF 33): Usar InfoSimples
+      console.log('🎫 [NFCE-RJ] Processando via InfoSimples...');
+      
+      const { data: nfceData, error: nfceError } = await supabase.functions.invoke('process-nfce-infosimples', {
+        body: { 
+          chaveAcesso: chave,
+          userId: userId,
+          notaImagemId: notaId
+        }
+      });
+
+      if (nfceError) {
+        console.error('⚠️ Erro ao processar NFCe via InfoSimples:', nfceError);
+        console.log('🔄 Tentando fallback via extração HTML...');
+        
+        // Fallback: Extração genérica
+        const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
+          body: { 
+            notaImagemId: notaId,
+            userId: userId
+          }
+        });
+
+        if (extractError) {
+          console.error('⚠️ Erro no fallback HTML:', extractError);
+        } else {
+          console.log('✅ Fallback concluído:', extractData);
+        }
+      } else {
+        console.log('✅ NFCe-RJ processada via InfoSimples:', nfceData);
+      }
+      
+    } else if (modelo === '65') {
+      // NFCe de outras UFs: Extrair via HTML
+      console.log(`🎫 [NFCE-${uf}] Processando via extração HTML (UF não suportada pelo InfoSimples)...`);
+      
+      const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
+        body: { 
+          notaImagemId: notaId,
+          userId: userId
+        }
+      });
+
+      if (extractError) {
+        console.error('⚠️ Erro ao extrair NFCe:', extractError);
+      } else {
+        console.log('✅ NFCe extraída:', extractData);
+      }
     } else {
-      // Fallback: processar sem aguardar (sem bloqueio)
-      processarNotaEmBackground(notaId, userId, chave, modelo, uf);
+      // Modelo desconhecido: Fallback genérico
+      console.warn('⚠️ Modelo desconhecido, tentando extração genérica...');
+      
+      const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
+        body: { 
+          notaImagemId: notaId,
+          userId: userId
+        }
+      });
+
+      if (extractError) {
+        console.error('⚠️ Erro na extração genérica:', extractError);
+      } else {
+        console.log('✅ Extração genérica concluída:', extractData);
+      }
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         notaId,
-        message: 'Processamento iniciado em background. Você será notificado quando estiver pronto.'
+        message: 'URL processada e extração iniciada'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -131,104 +204,3 @@ serve(async (req) => {
     );
   }
 });
-
-// ============================================================================
-// FUNÇÃO DE PROCESSAMENTO EM BACKGROUND
-// ============================================================================
-async function processarNotaEmBackground(
-  notaId: string, 
-  userId: string, 
-  chaveAcesso: string, 
-  modelo: string, 
-  uf: string
-) {
-  console.log(`🔄 [BACKGROUND] Iniciando processamento para nota ${notaId}`);
-  
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    if (modelo === '55') {
-      // NFe via Serpro
-      console.log('📄 [BACKGROUND-NFE] Processando via Serpro...');
-      const { error: nfeError } = await supabase.functions.invoke('process-nfe-serpro', {
-        body: { chaveAcesso, userId, notaImagemId: notaId }
-      });
-      
-      if (nfeError) {
-        console.error('❌ [BACKGROUND-NFE] Erro:', nfeError);
-        throw nfeError;
-      }
-      console.log('✅ [BACKGROUND-NFE] Processada com sucesso');
-      
-    } else if (modelo === '65' && uf === '33') {
-      // NFCe-RJ via InfoSimples
-      console.log('🎫 [BACKGROUND-NFCE-RJ] Processando via InfoSimples...');
-      const { error: nfceError } = await supabase.functions.invoke('process-nfce-infosimples', {
-        body: { chaveAcesso, userId, notaImagemId: notaId }
-      });
-      
-      if (nfceError) {
-        console.error('⚠️ [BACKGROUND-NFCE-RJ] Erro no InfoSimples, tentando fallback HTML...');
-        
-        // Fallback para extração HTML
-        await supabase.functions.invoke('extract-receipt-image', {
-          body: { notaImagemId: notaId, userId }
-        });
-      } else {
-        console.log('✅ [BACKGROUND-NFCE-RJ] Processada com sucesso');
-      }
-      
-    } else if (modelo === '65') {
-      // NFCe outras UFs via extração HTML
-      console.log(`🎫 [BACKGROUND-NFCE-${uf}] Processando via extração HTML...`);
-      await supabase.functions.invoke('extract-receipt-image', {
-        body: { notaImagemId: notaId, userId }
-      });
-      console.log('✅ [BACKGROUND-NFCE] Extraída com sucesso');
-      
-    } else {
-      // Modelo desconhecido
-      console.warn('⚠️ [BACKGROUND] Modelo desconhecido, tentando extração genérica...');
-      await supabase.functions.invoke('extract-receipt-image', {
-        body: { notaImagemId: notaId, userId }
-      });
-    }
-    
-    // Marcar como pendente de aprovação
-    const { error: updateError } = await supabase
-      .from('notas_imagens')
-      .update({ status_aprovacao: 'pendente_aprovacao' })
-      .eq('id', notaId);
-    
-    if (updateError) {
-      console.error('❌ [BACKGROUND] Erro ao atualizar status:', updateError);
-    } else {
-      console.log(`✅ [BACKGROUND] Nota ${notaId} pronta - aguardando aprovação do usuário`);
-    }
-    
-  } catch (error) {
-    console.error(`❌ [BACKGROUND] Erro ao processar nota ${notaId}:`, error);
-    
-    // Marcar nota com erro no banco
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      await supabase
-        .from('notas_imagens')
-        .update({ 
-          processada: false,
-          dados_extraidos: { 
-            erro: error.message,
-            timestamp_erro: new Date().toISOString() 
-          }
-        })
-        .eq('id', notaId);
-    } catch (dbError) {
-      console.error('❌ [BACKGROUND] Erro ao registrar falha no banco:', dbError);
-    }
-  }
-}
