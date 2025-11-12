@@ -134,12 +134,9 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               <Scanner
                 onScan={handleScan}
                 onError={handleError}
-                paused={!isScanning}
                 constraints={{
                   facingMode: 'environment',
                   aspectRatio: 1,
-                  width: { ideal: 1920 },
-                  height: { ideal: 1920 },
                 }}
                 formats={[
                   'qr_code',
