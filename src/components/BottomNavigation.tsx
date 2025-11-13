@@ -163,6 +163,7 @@ const BottomNavigation = () => {
     if (!user?.id) return;
 
     console.log('🔔 [REALTIME] Configurando listener para notas processadas');
+    console.log('👤 [REALTIME] User ID:', user.id);
 
     const channel = supabase
       .channel('notas-processadas')
@@ -175,9 +176,21 @@ const BottomNavigation = () => {
           filter: `usuario_id=eq.${user.id}`,
         },
         async (payload) => {
-          console.log('🔔 [REALTIME] Nota atualizada:', payload);
+          console.log('📨 [REALTIME] EVENTO RECEBIDO!', {
+            event: payload.eventType,
+            old: payload.old,
+            new: payload.new,
+            timestamp: new Date().toISOString()
+          });
           
           const notaAtualizada = payload.new as any;
+          
+          console.log('🔍 [REALTIME] Verificando condições:', {
+            id: notaAtualizada.id,
+            processada: notaAtualizada.processada,
+            tem_dados: !!notaAtualizada.dados_extraidos,
+            usuario_id: notaAtualizada.usuario_id
+          });
           
           // Verificar se a nota foi processada
           if (notaAtualizada.processada && notaAtualizada.dados_extraidos) {
@@ -265,13 +278,84 @@ const BottomNavigation = () => {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 [REALTIME] Status da subscrição:', status);
+      });
 
     return () => {
-      console.log('🔕 [REALTIME] Removendo listener de notas');
+      console.log('🔌 [REALTIME] Desconectando listener');
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote]);
+
+  // useEffect para polling de fallback (verifica a cada 3 segundos)
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const processingNotesArray = Array.from(processingNotesData.keys());
+    if (processingNotesArray.length === 0) return;
+
+    const checkProcessedNotes = async () => {
+      console.log('🔄 [POLLING] Verificando notas processadas...', processingNotesArray);
+      
+      for (const noteId of processingNotesArray) {
+        const { data, error } = await supabase
+          .from('notas_imagens')
+          .select('id, processada, dados_extraidos, nome_original')
+          .eq('id', noteId)
+          .eq('usuario_id', user.id)
+          .single();
+
+        if (error) {
+          console.error('❌ [POLLING] Erro ao verificar nota:', noteId, error);
+          continue;
+        }
+
+        if (data?.processada && data?.dados_extraidos) {
+          console.log('✅ [POLLING] Nota processada detectada via polling!', noteId);
+          
+          toast({
+            title: "✅ Nota pronta!",
+            description: "Confira os dados e confirme para adicionar ao estoque",
+          });
+          
+          if ('vibrate' in navigator) {
+            navigator.vibrate([100, 50, 100]);
+          }
+          
+          setPendingNotaData(data);
+          setShowCupomViewer(true);
+          removeProcessingNote(noteId);
+          
+          // Cancelar timeout
+          const timerId = processingTimers.get(noteId);
+          if (timerId) {
+            clearTimeout(timerId);
+            setProcessingTimers(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(noteId);
+              return newMap;
+            });
+          }
+
+          // Limpar do mapa local
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(noteId);
+            return newMap;
+          });
+        }
+      }
+    };
+
+    // Verificar imediatamente
+    checkProcessedNotes();
+    
+    // Verificar a cada 3 segundos
+    const interval = setInterval(checkProcessedNotes, 3000);
+
+    return () => clearInterval(interval);
+  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote]);
 
   const handleQRButtonClick = () => {
     console.log('🔘 Botão QR Code clicado');

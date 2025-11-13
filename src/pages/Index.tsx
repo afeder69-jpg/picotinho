@@ -112,6 +112,9 @@ const Index = () => {
           <span className="text-sm font-medium">
             🔄 Processando {processingCount} {processingCount === 1 ? 'nota' : 'notas'}...
           </span>
+          <span className="text-xs opacity-75">
+            (verificando a cada 3s)
+          </span>
         </div>
       )}
 
