@@ -26,6 +26,7 @@ const BottomNavigation = () => {
   const [pendingNotaData, setPendingNotaData] = useState<any>(null);
   const [isProcessingQRCode, setIsProcessingQRCode] = useState(false);
   const [processingNotes, setProcessingNotes] = useState<Set<string>>(new Set());
+  const [processingNotesData, setProcessingNotesData] = useState<Map<string, { url: string, tipoDocumento: TipoDocumento }>>(new Map());
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -118,6 +119,7 @@ const BottomNavigation = () => {
         if (processData?.notaId) {
           console.log('✅ Processamento iniciado em background:', processData.notaId);
           setProcessingNotes(prev => new Set(prev).add(processData.notaId));
+          setProcessingNotesData(prev => new Map(prev).set(processData.notaId, { url: data, tipoDocumento }));
         }
       });
 
@@ -172,12 +174,20 @@ const BottomNavigation = () => {
             // Buscar dados completos da nota
             const { data: notaData, error: notaError } = await supabase
               .from('notas_imagens')
-              .select('id, dados_extraidos, nome_original, url_qrcode')
+              .select('id, dados_extraidos, nome_original')
               .eq('id', notaAtualizada.id)
               .single();
 
             if (notaError) {
               console.error('❌ Erro ao buscar dados da nota:', notaError);
+              return;
+            }
+
+            // Recuperar URL e tipo de documento do mapa local
+            const notaInfo = processingNotesData.get(notaAtualizada.id);
+            
+            if (!notaInfo) {
+              console.error('❌ Informações da nota não encontradas no cache local');
               return;
             }
 
@@ -188,10 +198,17 @@ const BottomNavigation = () => {
             });
 
             // Abrir CupomFiscalViewer automaticamente
-            setPendingQrUrl(notaData.url_qrcode || '');
-            setPendingDocType(detectarTipoDocumento(notaData.url_qrcode || ''));
+            setPendingQrUrl(notaInfo.url);
+            setPendingDocType(notaInfo.tipoDocumento);
             setPendingNotaData(notaData);
             setShowCupomViewer(true);
+
+            // Limpar do mapa local
+            setProcessingNotesData(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(notaAtualizada.id);
+              return newMap;
+            });
           }
         }
       )
