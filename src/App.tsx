@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { ProcessingNotesProvider } from "@/contexts/ProcessingNotesContext";
 import Index from "./pages/Index";
 import Screenshots from "./pages/Screenshots";
 import Menu from "./pages/Menu";
@@ -76,12 +77,13 @@ const App = () => {
     return (
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index />} />
+          <ProcessingNotesProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
                 <Route path="/menu" element={<Menu />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/screenshots" element={<Screenshots />} />
@@ -108,8 +110,9 @@ const App = () => {
               <BottomNavigation />
             </BrowserRouter>
           </TooltipProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+        </ProcessingNotesProvider>
+      </AuthProvider>
+    </QueryClientProvider>
     );
   } catch (error) {
     console.error("Erro no App:", error);

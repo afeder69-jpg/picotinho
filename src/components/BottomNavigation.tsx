@@ -15,6 +15,7 @@ import { detectarTipoDocumento, TipoDocumento, extrairChaveNFe } from "@/lib/doc
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
+import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
@@ -25,7 +26,7 @@ const BottomNavigation = () => {
   const [pendingDocType, setPendingDocType] = useState<TipoDocumento>(null);
   const [pendingNotaData, setPendingNotaData] = useState<any>(null);
   const [isProcessingQRCode, setIsProcessingQRCode] = useState(false);
-  const [processingNotes, setProcessingNotes] = useState<Set<string>>(new Set());
+  const { addProcessingNote, removeProcessingNote } = useProcessingNotes();
   const [processingNotesData, setProcessingNotesData] = useState<Map<string, { url: string, tipoDocumento: TipoDocumento }>>(new Map());
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const navigate = useNavigate();
@@ -119,7 +120,7 @@ const BottomNavigation = () => {
         
         if (processData?.notaId) {
           console.log('✅ Processamento iniciado em background:', processData.notaId);
-          setProcessingNotes(prev => new Set(prev).add(processData.notaId));
+          addProcessingNote(processData.notaId);
           setProcessingNotesData(prev => new Map(prev).set(processData.notaId, { url: data, tipoDocumento }));
           
           // Timeout de 2 minutos
@@ -129,11 +130,7 @@ const BottomNavigation = () => {
               description: "A nota está demorando mais que o esperado. Verifique em 'Minhas Notas'.",
               variant: "default",
             });
-            setProcessingNotes(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(processData.notaId);
-              return newSet;
-            });
+            removeProcessingNote(processData.notaId);
             setProcessingTimers(prev => {
               const newMap = new Map(prev);
               newMap.delete(processData.notaId);
@@ -186,12 +183,8 @@ const BottomNavigation = () => {
           if (notaAtualizada.processada && notaAtualizada.dados_extraidos) {
             console.log('✅ [REALTIME] Nota pronta:', notaAtualizada.id);
             
-            // Remover do set de processamento
-            setProcessingNotes(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(notaAtualizada.id);
-              return newSet;
-            });
+            // Remover do processamento
+            removeProcessingNote(notaAtualizada.id);
 
             // Buscar dados completos da nota
             const { data: notaData, error: notaError } = await supabase
@@ -208,23 +201,46 @@ const BottomNavigation = () => {
             // Recuperar URL e tipo de documento do mapa local
             const notaInfo = processingNotesData.get(notaAtualizada.id);
             
+            // ✅ FALLBACK INTELIGENTE
             if (!notaInfo) {
-              console.error('❌ Informações da nota não encontradas no cache local');
+              console.warn('⚠️ Cache local não encontrado, abrindo viewer com fallback');
+              
+              toast({
+                title: "✅ Nota pronta!",
+                description: "Confira os dados e confirme para adicionar ao estoque",
+              });
+              
+              if ('vibrate' in navigator) {
+                navigator.vibrate([100, 50, 100]);
+              }
+              
+              setPendingNotaData(notaData);
+              setShowCupomViewer(true);
+              
+              // Cancelar timeout
+              const timerId = processingTimers.get(notaAtualizada.id);
+              if (timerId) {
+                clearTimeout(timerId);
+                setProcessingTimers(prev => {
+                  const newMap = new Map(prev);
+                  newMap.delete(notaAtualizada.id);
+                  return newMap;
+                });
+              }
+              
               return;
             }
 
-            // Mostrar toast de sucesso
+            // Lógica normal com cache
             toast({
               title: "✅ Nota pronta!",
               description: "Confira os dados e confirme para adicionar ao estoque",
             });
 
-            // Haptic feedback (2 vibrações curtas)
             if ('vibrate' in navigator) {
               navigator.vibrate([100, 50, 100]);
             }
 
-            // Abrir CupomFiscalViewer automaticamente
             setPendingQrUrl(notaInfo.url);
             setPendingDocType(notaInfo.tipoDocumento);
             setPendingNotaData(notaData);

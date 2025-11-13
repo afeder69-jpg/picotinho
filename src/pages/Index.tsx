@@ -5,14 +5,16 @@ import { supabase } from "@/integrations/supabase/client";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { LogIn, LogOut } from "lucide-react";
+import { LogIn, LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { APP_VERSION } from "@/lib/constants";
+import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
 
 const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [userNickname, setUserNickname] = useState<string>('');
+  const { processingCount } = useProcessingNotes();
 
   // Carregar apelido quando usuário faz login
   useEffect(() => {
@@ -102,6 +104,16 @@ const Index = () => {
           </Button>
         )}
       </div>
+
+      {/* Barra de status de processamento */}
+      {processingCount > 0 && (
+        <div className="bg-blue-500 text-white px-4 py-2 flex items-center justify-center gap-2 animate-pulse shadow-lg">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm font-medium">
+            🔄 Processando {processingCount} {processingCount === 1 ? 'nota' : 'notas'}...
+          </span>
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="flex-1 flex items-center justify-center px-6">
