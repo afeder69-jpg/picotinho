@@ -27,6 +27,7 @@ const BottomNavigation = () => {
   const [isProcessingQRCode, setIsProcessingQRCode] = useState(false);
   const [processingNotes, setProcessingNotes] = useState<Set<string>>(new Set());
   const [processingNotesData, setProcessingNotesData] = useState<Map<string, { url: string, tipoDocumento: TipoDocumento }>>(new Map());
+  const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -120,6 +121,27 @@ const BottomNavigation = () => {
           console.log('✅ Processamento iniciado em background:', processData.notaId);
           setProcessingNotes(prev => new Set(prev).add(processData.notaId));
           setProcessingNotesData(prev => new Map(prev).set(processData.notaId, { url: data, tipoDocumento }));
+          
+          // Timeout de 2 minutos
+          const timeoutId = setTimeout(() => {
+            toast({
+              title: "⏱️ Processamento demorado",
+              description: "A nota está demorando mais que o esperado. Verifique em 'Minhas Notas'.",
+              variant: "default",
+            });
+            setProcessingNotes(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(processData.notaId);
+              return newSet;
+            });
+            setProcessingTimers(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(processData.notaId);
+              return newMap;
+            });
+          }, 120000); // 2 minutos
+          
+          setProcessingTimers(prev => new Map(prev).set(processData.notaId, timeoutId));
         }
       });
 
@@ -197,18 +219,33 @@ const BottomNavigation = () => {
               description: "Confira os dados e confirme para adicionar ao estoque",
             });
 
+            // Haptic feedback (2 vibrações curtas)
+            if ('vibrate' in navigator) {
+              navigator.vibrate([100, 50, 100]);
+            }
+
             // Abrir CupomFiscalViewer automaticamente
             setPendingQrUrl(notaInfo.url);
             setPendingDocType(notaInfo.tipoDocumento);
             setPendingNotaData(notaData);
             setShowCupomViewer(true);
 
-            // Limpar do mapa local
+            // Limpar do mapa local e cancelar timeout
             setProcessingNotesData(prev => {
               const newMap = new Map(prev);
               newMap.delete(notaAtualizada.id);
               return newMap;
             });
+            
+            const timerId = processingTimers.get(notaAtualizada.id);
+            if (timerId) {
+              clearTimeout(timerId);
+              setProcessingTimers(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(notaAtualizada.id);
+                return newMap;
+              });
+            }
           }
         }
       )
