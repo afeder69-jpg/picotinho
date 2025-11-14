@@ -104,6 +104,12 @@ const BottomNavigation = () => {
       
       console.log('🔑 Chave extraída:', chaveAcesso);
       
+      // 🆕 GERAR ID TEMPORÁRIO IMEDIATAMENTE
+      const tempId = `temp-${Date.now()}`;
+      console.log('🔵 [BADGE] Adicionando nota temporária:', tempId);
+      addProcessingNote(tempId);
+      setProcessingNotesData(prev => new Map(prev).set(tempId, { url: data, tipoDocumento }));
+      
       // Chamar process-url-nota SEM AGUARDAR (processamento em background)
       const functionCall = supabase.functions.invoke('process-url-nota', {
         body: {
@@ -114,12 +120,19 @@ const BottomNavigation = () => {
         },
       });
 
-      // Não aguardar o resultado, apenas registrar o ID temporário
+      // Quando resposta chegar, substituir ID temporário pelo real
       functionCall.then(({ data: processData, error: processError }) => {
         console.log('🔍 [DEBUG] Resposta da edge function:', processData);
         
         if (processError) {
           console.error('❌ Erro ao iniciar processamento:', processError);
+          // Remover ID temporário em caso de erro
+          removeProcessingNote(tempId);
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(tempId);
+            return newMap;
+          });
           toast({
             title: "❌ Erro ao processar nota",
             description: processError.message || "Tente novamente",
@@ -132,7 +145,17 @@ const BottomNavigation = () => {
         const noteId = processData?.notaId || processData?.nota_id || processData?.id;
         
         if (noteId) {
-          console.log('✅ [DEBUG] Adicionando nota ao processamento:', noteId);
+          console.log('✅ [DEBUG] Substituindo tempId por notaId real:', tempId, '->', noteId);
+          
+          // Remover ID temporário
+          removeProcessingNote(tempId);
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(tempId);
+            return newMap;
+          });
+          
+          // Adicionar ID real
           addProcessingNote(noteId);
           setProcessingNotesData(prev => new Map(prev).set(noteId, { url: data, tipoDocumento }));
           
@@ -154,6 +177,13 @@ const BottomNavigation = () => {
           setProcessingTimers(prev => new Map(prev).set(noteId, timeoutId));
         } else {
           console.error('❌ [DEBUG] notaId não encontrado na resposta:', processData);
+          // Remover ID temporário se não houver noteId
+          removeProcessingNote(tempId);
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(tempId);
+            return newMap;
+          });
         }
       });
 
