@@ -2,6 +2,7 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 
 interface ProcessingNotesContextType {
   processingNotes: Set<string>;
+  processingStartTimes: Map<string, number>;
   addProcessingNote: (noteId: string) => void;
   removeProcessingNote: (noteId: string) => void;
   processingCount: number;
@@ -11,9 +12,18 @@ const ProcessingNotesContext = createContext<ProcessingNotesContextType | undefi
 
 export const ProcessingNotesProvider = ({ children }: { children: ReactNode }) => {
   const [processingNotes, setProcessingNotes] = useState<Set<string>>(new Set());
+  const [processingStartTimes, setProcessingStartTimes] = useState<Map<string, number>>(new Map());
 
   const addProcessingNote = (noteId: string) => {
     setProcessingNotes(prev => new Set(prev).add(noteId));
+    
+    setProcessingStartTimes(prev => {
+      const newMap = new Map(prev);
+      if (!newMap.has(noteId)) {
+        newMap.set(noteId, Date.now());
+      }
+      return newMap;
+    });
   };
 
   const removeProcessingNote = (noteId: string) => {
@@ -22,11 +32,18 @@ export const ProcessingNotesProvider = ({ children }: { children: ReactNode }) =
       newSet.delete(noteId);
       return newSet;
     });
+    
+    setProcessingStartTimes(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(noteId);
+      return newMap;
+    });
   };
 
   return (
     <ProcessingNotesContext.Provider value={{
       processingNotes,
+      processingStartTimes,
       addProcessingNote,
       removeProcessingNote,
       processingCount: processingNotes.size
