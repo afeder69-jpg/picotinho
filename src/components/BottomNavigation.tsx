@@ -29,12 +29,20 @@ const BottomNavigation = () => {
   const { addProcessingNote, removeProcessingNote } = useProcessingNotes();
   const [processingNotesData, setProcessingNotesData] = useState<Map<string, { url: string, tipoDocumento: TipoDocumento }>>(new Map());
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
+  const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
 
   const handleNoteConfirm = async () => {
     console.log('✅ [VIEWER] Nota confirmada, navegando para screenshots');
+    
+    // Marcar nota como confirmada para evitar reaberturas
+    if (pendingNotaData?.id) {
+      console.log('✅ [VIEWER] Adicionando nota às confirmadas:', pendingNotaData.id);
+      setConfirmedNotes(prev => new Set(prev).add(pendingNotaData.id));
+    }
+    
     setShowInternalWebViewer(false);
     setShowCupomViewer(false);
     setPendingQrUrl(null);
@@ -108,6 +116,8 @@ const BottomNavigation = () => {
 
       // Não aguardar o resultado, apenas registrar o ID temporário
       functionCall.then(({ data: processData, error: processError }) => {
+        console.log('🔍 [DEBUG] Resposta da edge function:', processData);
+        
         if (processError) {
           console.error('❌ Erro ao iniciar processamento:', processError);
           toast({
@@ -118,10 +128,13 @@ const BottomNavigation = () => {
           return;
         }
         
-        if (processData?.notaId) {
-          console.log('✅ Processamento iniciado em background:', processData.notaId);
-          addProcessingNote(processData.notaId);
-          setProcessingNotesData(prev => new Map(prev).set(processData.notaId, { url: data, tipoDocumento }));
+        // Verificar possíveis nomes do campo
+        const noteId = processData?.notaId || processData?.nota_id || processData?.id;
+        
+        if (noteId) {
+          console.log('✅ [DEBUG] Adicionando nota ao processamento:', noteId);
+          addProcessingNote(noteId);
+          setProcessingNotesData(prev => new Map(prev).set(noteId, { url: data, tipoDocumento }));
           
           // Timeout de 2 minutos
           const timeoutId = setTimeout(() => {
@@ -130,15 +143,17 @@ const BottomNavigation = () => {
               description: "A nota está demorando mais que o esperado. Verifique em 'Minhas Notas'.",
               variant: "default",
             });
-            removeProcessingNote(processData.notaId);
+            removeProcessingNote(noteId);
             setProcessingTimers(prev => {
               const newMap = new Map(prev);
-              newMap.delete(processData.notaId);
+              newMap.delete(noteId);
               return newMap;
             });
           }, 120000); // 2 minutos
           
-          setProcessingTimers(prev => new Map(prev).set(processData.notaId, timeoutId));
+          setProcessingTimers(prev => new Map(prev).set(noteId, timeoutId));
+        } else {
+          console.error('❌ [DEBUG] notaId não encontrado na resposta:', processData);
         }
       });
 
@@ -191,6 +206,24 @@ const BottomNavigation = () => {
             tem_dados: !!notaAtualizada.dados_extraidos,
             usuario_id: notaAtualizada.usuario_id
           });
+          
+          // ✅ VALIDAÇÃO 1: Se o viewer já está aberto, ignorar
+          if (showCupomViewer || showInternalWebViewer) {
+            console.log('⚠️ [REALTIME] Viewer já está aberto, ignorando evento');
+            return;
+          }
+          
+          // ✅ VALIDAÇÃO 2: Se a nota já foi confirmada, ignorar
+          if (confirmedNotes.has(notaAtualizada.id)) {
+            console.log('⚠️ [REALTIME] Nota já foi confirmada, ignorando');
+            return;
+          }
+          
+          // ✅ VALIDAÇÃO 3: Se a nota não está mais sendo processada, ignorar
+          if (!processingNotesData.has(notaAtualizada.id)) {
+            console.log('⚠️ [REALTIME] Nota não está mais sendo processada, ignorando evento');
+            return;
+          }
           
           // Verificar se a nota foi processada
           if (notaAtualizada.processada && notaAtualizada.dados_extraidos) {
@@ -286,7 +319,7 @@ const BottomNavigation = () => {
       console.log('🔌 [REALTIME] Desconectando listener');
       supabase.removeChannel(channel);
     };
-  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote]);
+  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes]);
 
   // useEffect para polling de fallback (verifica a cada 3 segundos)
   useEffect(() => {
@@ -297,6 +330,12 @@ const BottomNavigation = () => {
 
     const checkProcessedNotes = async () => {
       console.log('🔄 [POLLING] Verificando notas processadas...', processingNotesArray);
+      
+      // ✅ Se o viewer já está aberto, não verificar
+      if (showCupomViewer || showInternalWebViewer) {
+        console.log('⚠️ [POLLING] Viewer já está aberto, aguardando...');
+        return;
+      }
       
       for (const noteId of processingNotesArray) {
         const { data, error } = await supabase
@@ -313,6 +352,13 @@ const BottomNavigation = () => {
 
         if (data?.processada && data?.dados_extraidos) {
           console.log('✅ [POLLING] Nota processada detectada via polling!', noteId);
+          
+          // ✅ Verificar se já foi confirmada
+          if (confirmedNotes.has(noteId)) {
+            console.log('⚠️ [POLLING] Nota já foi confirmada, ignorando');
+            removeProcessingNote(noteId);
+            continue;
+          }
           
           toast({
             title: "✅ Nota pronta!",
@@ -355,7 +401,7 @@ const BottomNavigation = () => {
     const interval = setInterval(checkProcessedNotes, 3000);
 
     return () => clearInterval(interval);
-  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote]);
+  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes]);
 
   const handleQRButtonClick = () => {
     console.log('🔘 Botão QR Code clicado');
