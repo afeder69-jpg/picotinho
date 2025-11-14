@@ -1009,6 +1009,7 @@ export type Database = {
           processada: boolean | null
           processing_started_at: string | null
           produtos_normalizados: number | null
+          status_aprovacao: string | null
           tentativas_normalizacao: number | null
           updated_at: string | null
           usuario_id: string
@@ -1032,6 +1033,7 @@ export type Database = {
           processada?: boolean | null
           processing_started_at?: string | null
           produtos_normalizados?: number | null
+          status_aprovacao?: string | null
           tentativas_normalizacao?: number | null
           updated_at?: string | null
           usuario_id: string
@@ -1055,6 +1057,7 @@ export type Database = {
           processada?: boolean | null
           processing_started_at?: string | null
           produtos_normalizados?: number | null
+          status_aprovacao?: string | null
           tentativas_normalizacao?: number | null
           updated_at?: string | null
           usuario_id?: string
