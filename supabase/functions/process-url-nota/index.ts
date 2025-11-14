@@ -89,6 +89,7 @@ serve(async (req) => {
     }
 
     console.log('✅ Nota criada com sucesso:', notaId);
+    console.log('🔍 [DEBUG] notaId que será retornado:', notaId);
 
     // ROTEAMENTO INTELIGENTE: Escolher API apropriada
     if (modelo === '55') {
@@ -177,6 +178,8 @@ serve(async (req) => {
       }
     }
 
+    console.log('✅ [DEBUG] Retornando notaId:', notaId);
+    
     return new Response(
       JSON.stringify({ 
         success: true, 
