@@ -6,6 +6,166 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * Categoriza produto usando as MESMAS regras do fluxo WhatsApp (extract-receipt-image)
+ * ⚠️ CRÍTICO: Esta função replica EXATAMENTE a lógica do prompt da OpenAI + post-processing
+ */
+function categorizarProduto(descricao: string): string {
+  const desc = descricao.toLowerCase();
+  
+  // 🥛 REGRA CRÍTICA: LEITE e derivados → laticínios/frios
+  if (desc.includes('leite') && !desc.includes('leite de coco')) {
+    return 'laticínios/frios';
+  }
+  if (desc.includes('queijo')) {
+    return 'laticínios/frios';
+  }
+  if (desc.includes('iogurte')) {
+    return 'laticínios/frios';
+  }
+  if (desc.includes('manteiga') || desc.includes('margarina')) {
+    return 'laticínios/frios';
+  }
+  if (desc.includes('creme de leite') || desc.includes('leite condensado')) {
+    return 'laticínios/frios';
+  }
+  if (desc.includes('requeijão') || desc.includes('requeijao')) {
+    return 'laticínios/frios';
+  }
+  if (desc.includes('embutido') || desc.includes('presunto') || desc.includes('mortadela')) {
+    return 'laticínios/frios';
+  }
+  
+  // 🧹 LIMPEZA
+  if (desc.includes('detergente') || desc.includes('sabao') || desc.includes('sabão')) {
+    return 'limpeza';
+  }
+  if (desc.includes('desinfetante') || desc.includes('amaciante')) {
+    return 'limpeza';
+  }
+  if (desc.includes('esponja') || desc.includes('bombril')) {
+    return 'limpeza';
+  }
+  
+  // 🍎 HORTIFRUTI
+  if (desc.includes('tempero verde') || desc.includes('ervas frescas')) {
+    return 'hortifruti';
+  }
+  if (desc.includes('fruta') || desc.includes('verdura') || desc.includes('legume')) {
+    return 'hortifruti';
+  }
+  if (desc.includes('banana') || desc.includes('maçã') || desc.includes('maca') || desc.includes('laranja')) {
+    return 'hortifruti';
+  }
+  if (desc.includes('tomate') || desc.includes('alface') || desc.includes('cebola') || desc.includes('batata')) {
+    return 'hortifruti';
+  }
+  if (desc.includes('cenoura') || desc.includes('beterraba') || desc.includes('pepino')) {
+    return 'hortifruti';
+  }
+  
+  // 🛒 MERCEARIA
+  if (desc.includes('arroz')) {
+    return 'mercearia';
+  }
+  if (desc.includes('feijão') || desc.includes('feijao')) {
+    return 'mercearia';
+  }
+  if (desc.includes('massa') || desc.includes('macarrão') || desc.includes('macarrao')) {
+    return 'mercearia';
+  }
+  if (desc.includes('sal')) {
+    return 'mercearia';
+  }
+  if (desc.includes('açúcar') || desc.includes('acucar')) {
+    return 'mercearia';
+  }
+  if (desc.includes('óleo') || desc.includes('oleo') || desc.includes('azeite')) {
+    return 'mercearia';
+  }
+  if (desc.includes('ovos')) {
+    return 'mercearia';
+  }
+  if (desc.includes('milho') && (desc.includes('lata') || desc.includes('conserva') || desc.includes('verde'))) {
+    return 'mercearia';
+  }
+  if (desc.includes('aveia')) {
+    return 'mercearia';
+  }
+  if (desc.includes('conserva') || desc.includes('molho')) {
+    return 'mercearia';
+  }
+  
+  // 🥤 BEBIDAS (exceto leite, que já foi tratado)
+  if (desc.includes('refrigerante') || desc.includes('suco')) {
+    return 'bebidas';
+  }
+  if (desc.includes('água') || desc.includes('agua')) {
+    return 'bebidas';
+  }
+  if (desc.includes('cerveja') || desc.includes('vinho')) {
+    return 'bebidas';
+  }
+  if (desc.includes('energético') || desc.includes('energetico')) {
+    return 'bebidas';
+  }
+  
+  // 🧴 HIGIENE/FARMÁCIA
+  if (desc.includes('sabonete') || desc.includes('shampoo') || desc.includes('condicionador')) {
+    return 'higiene/farmácia';
+  }
+  if (desc.includes('pasta de dente') || desc.includes('escova de dente')) {
+    return 'higiene/farmácia';
+  }
+  if (desc.includes('papel higiênico') || desc.includes('papel higienico')) {
+    return 'higiene/farmácia';
+  }
+  if (desc.includes('medicamento') || desc.includes('remédio') || desc.includes('remedio')) {
+    return 'higiene/farmácia';
+  }
+  if (desc.includes('desodorante') || desc.includes('perfume')) {
+    return 'higiene/farmácia';
+  }
+  
+  // 🥩 AÇOUGUE
+  if (desc.includes('carne') || desc.includes('bife') || desc.includes('picanha')) {
+    return 'açougue';
+  }
+  if (desc.includes('frango') || desc.includes('peito') || desc.includes('coxa')) {
+    return 'açougue';
+  }
+  if (desc.includes('peixe') || desc.includes('salmão') || desc.includes('salmao') || desc.includes('tilápia') || desc.includes('tilapia')) {
+    return 'açougue';
+  }
+  if (desc.includes('linguiça') || desc.includes('linguica')) {
+    return 'açougue';
+  }
+  
+  // 🍞 PADARIA
+  if (desc.includes('pão') || desc.includes('pao')) {
+    return 'padaria';
+  }
+  if (desc.includes('bolo') || desc.includes('biscoito') || desc.includes('torrada')) {
+    return 'padaria';
+  }
+  
+  // ❄️ CONGELADOS
+  if (desc.includes('sorvete') || desc.includes('congelado')) {
+    return 'congelados';
+  }
+  if (desc.includes('pizza') && desc.includes('congelad')) {
+    return 'congelados';
+  }
+  
+  // 🐾 PET
+  if (desc.includes('ração') || desc.includes('racao') || desc.includes('pet')) {
+    return 'pet';
+  }
+  
+  // ⚠️ OUTROS (apenas quando não se encaixa em nenhuma categoria)
+  return 'outros';
+}
+
 interface CacheEntry {
   id: string;
   chave_nfce: string;
@@ -218,6 +378,7 @@ async function processarNFCe(
       unidade: p.unidade || 'UN',
       valor_unitario: valorUnitarioFinal,
       valor_total: valorTotalFinal,
+      categoria: categorizarProduto(p.nome || p.descricao), // ✅ CATEGORIZAÇÃO IDÊNTICA AO WHATSAPP
       tem_desconto: temDesconto,
       _valor_desconto_aplicado: temDesconto ? valorDesconto : undefined,
       _valor_original: temDesconto ? valorOriginal : undefined
