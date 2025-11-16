@@ -16,6 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
@@ -203,6 +205,239 @@ const BottomNavigation = () => {
     }
   };
 
+  /**
+   * 🤖 Processa nota fiscal automaticamente (sem confirmação manual)
+   * Replica a lógica de CupomFiscalViewer.handleConfirmar()
+   */
+  const processarNotaAutomaticamente = async (
+    notaId: string, 
+    userId: string, 
+    notaData: any
+  ) => {
+    try {
+      console.log('🤖 [AUTO] Iniciando processamento automático da nota:', notaId);
+      
+      // 1. Gerar PDF temporário (necessário para validação)
+      console.log('📄 [AUTO] Gerando PDF temporário...');
+      const pdfUrl = await gerarPDFBackground(notaId, userId, notaData.dados_extraidos);
+      
+      if (!pdfUrl) {
+        throw new Error('Falha ao gerar PDF temporário');
+      }
+      
+      console.log('✅ [AUTO] PDF gerado:', pdfUrl);
+      
+      // 2. Validar nota
+      console.log('🔍 [AUTO] Validando nota...');
+      const { data: validationData, error: validationError } = await supabase.functions.invoke(
+        'validate-receipt',
+        {
+          body: {
+            userId: userId,
+            pdfUrl: pdfUrl,
+            fromInfoSimples: true,
+          },
+        }
+      );
+      
+      if (validationError) {
+        console.error('❌ [AUTO] Erro na validação:', validationError);
+        throw validationError;
+      }
+      
+      console.log('📋 [AUTO] Resultado da validação:', validationData);
+      
+      // 3. Verificar se foi aprovada
+      if (!validationData?.approved) {
+        console.warn('⚠️ [AUTO] Nota REJEITADA:', validationData?.reason);
+        
+        const toastTitle = validationData?.reason === 'duplicada' 
+          ? '⚠️ Nota Duplicada' 
+          : '❌ Nota inválida';
+        
+        const toastDescription = validationData?.message || 'A nota não passou na validação';
+        
+        toast({
+          title: toastTitle,
+          description: toastDescription,
+          variant: 'destructive',
+          duration: 5000,
+        });
+        
+        // 🗑️ Deletar nota rejeitada
+        console.log('🗑️ [AUTO] Deletando nota rejeitada...');
+        await supabase.from('notas_imagens').delete().eq('id', notaId);
+        
+        // Limpar PDF temporário
+        const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
+        await supabase.storage.from('receipts').remove([fileName]);
+        
+        console.log('✅ [AUTO] Nota rejeitada deletada');
+        return;
+      }
+      
+      // 4. ✅ Nota APROVADA - Processar estoque
+      console.log('✅ [AUTO] Nota APROVADA - processando estoque...');
+      
+      toast({
+        title: '✅ Nota aceita!',
+        description: 'Processando estoque em segundo plano...',
+      });
+      
+      // Navegar para "Minhas Notas" imediatamente
+      navigate('/screenshots');
+      
+      // 5. Processar estoque em background
+      const { data: processData, error: processError } = await supabase.functions.invoke(
+        'process-receipt-full',
+        { body: { notaId, userId } }
+      );
+      
+      if (processError) {
+        console.error('❌ [AUTO] Erro ao processar estoque:', processError);
+        toast({
+          title: 'Erro ao processar estoque',
+          description: processError.message || 'Tente novamente',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      console.log('✅ [AUTO] Estoque processado:', processData);
+      
+      // 6. Limpar PDF temporário
+      const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
+      await supabase.storage.from('receipts').remove([fileName]);
+      await supabase.from('notas_imagens').update({ pdf_url: null }).eq('id', notaId);
+      
+      console.log('🎉 [AUTO] Processamento automático concluído!');
+      
+    } catch (error: any) {
+      console.error('❌ [AUTO] Erro no processamento automático:', error);
+      toast({
+        title: 'Erro ao processar nota',
+        description: error.message || 'Tente novamente',
+        variant: 'destructive',
+      });
+      
+      // Tentar deletar nota com erro
+      try {
+        await supabase.from('notas_imagens').delete().eq('id', notaId);
+      } catch (deleteError) {
+        console.error('❌ [AUTO] Erro ao deletar nota com erro:', deleteError);
+      }
+    }
+  };
+
+  /**
+   * 📄 Gera PDF em background (adaptado de CupomFiscalViewer)
+   * IMPORTANTE: Esta função gera o PDF sem renderizar na UI
+   */
+  const gerarPDFBackground = async (
+    notaId: string, 
+    userId: string, 
+    dadosExtraidos: any
+  ): Promise<string | null> => {
+    try {
+      console.log('📄 [PDF-BG] Gerando PDF em background...');
+      
+      // ABORDAGEM: Criar elemento temporário oculto para captura
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'fixed';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '-9999px';
+      tempContainer.style.width = '350px';
+      tempContainer.style.backgroundColor = 'white';
+      tempContainer.setAttribute('data-cupom-fiscal', 'true');
+      
+      // Renderizar HTML do cupom (estrutura simplificada)
+      tempContainer.innerHTML = `
+        <div style="font-family: 'Courier New', monospace; padding: 20px; font-size: 12px; line-height: 1.4;">
+          <div style="text-align: center; margin-bottom: 16px;">
+            <div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">CUPOM FISCAL</div>
+            <div>${dadosExtraidos?.estabelecimento?.nome || 'Estabelecimento'}</div>
+            <div style="font-size: 11px; color: #666; margin-top: 4px;">
+              CNPJ: ${dadosExtraidos?.estabelecimento?.cnpj || 'Não informado'}
+            </div>
+          </div>
+          
+          <div style="border-top: 2px dashed #333; border-bottom: 2px dashed #333; padding: 12px 0; margin: 16px 0;">
+            <div style="font-weight: bold; margin-bottom: 8px;">ITENS DA COMPRA</div>
+            ${(dadosExtraidos?.produtos || []).map((p: any, idx: number) => `
+              <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
+                <div style="font-weight: bold;">${idx + 1}. ${p.nome || p.descricao}</div>
+                <div style="display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px;">
+                  <span>${p.quantidade} ${p.unidade} x R$ ${(p.valor_unitario || 0).toFixed(2)}</span>
+                  <span style="font-weight: bold;">R$ ${(p.valor_total || 0).toFixed(2)}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div style="text-align: right; margin-top: 16px;">
+            <div style="font-size: 14px; font-weight: bold;">
+              TOTAL: R$ ${(dadosExtraidos?.total || 0).toFixed(2)}
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 16px; font-size: 10px; color: #666;">
+            ${dadosExtraidos?.data_emissao || 'Data não disponível'}
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(tempContainer);
+      
+      // Capturar com html2canvas
+      const canvas = await html2canvas(tempContainer, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      
+      // Remover elemento temporário
+      document.body.removeChild(tempContainer);
+      
+      // Converter para PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      const imgWidth = 190;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+      
+      // Gerar blob e fazer upload
+      const pdfBlob = pdf.output('blob');
+      const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(fileName, pdfBlob, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+      
+      if (uploadError) {
+        throw new Error(`Erro no upload: ${uploadError.message}`);
+      }
+      
+      const { data: urlData } = supabase.storage
+        .from('receipts')
+        .getPublicUrl(fileName);
+      
+      console.log('✅ [PDF-BG] PDF gerado e enviado:', urlData.publicUrl);
+      return urlData.publicUrl;
+      
+    } catch (error: any) {
+      console.error('❌ [PDF-BG] Erro ao gerar PDF:', error);
+      return null;
+    }
+  };
+
   // useEffect para escutar atualizações em tempo real das notas processadas
   useEffect(() => {
     if (!user?.id) return;
@@ -277,50 +512,20 @@ const BottomNavigation = () => {
             // Recuperar URL e tipo de documento do mapa local
             const notaInfo = processingNotesData.get(notaAtualizada.id);
             
-            // ✅ FALLBACK INTELIGENTE
-            if (!notaInfo) {
-              console.warn('⚠️ Cache local não encontrado, abrindo viewer com fallback');
-              
-              toast({
-                title: "✅ Nota pronta!",
-                description: "Confira os dados e confirme para adicionar ao estoque",
-              });
-              
-              if ('vibrate' in navigator) {
-                navigator.vibrate([100, 50, 100]);
-              }
-              
-              setPendingNotaData(notaData);
-              setShowCupomViewer(true);
-              
-              // Cancelar timeout
-              const timerId = processingTimers.get(notaAtualizada.id);
-              if (timerId) {
-                clearTimeout(timerId);
-                setProcessingTimers(prev => {
-                  const newMap = new Map(prev);
-                  newMap.delete(notaAtualizada.id);
-                  return newMap;
-                });
-              }
-              
-              return;
-            }
-
-            // Lógica normal com cache
+            // ✅ PROCESSAMENTO AUTOMÁTICO
+            console.log('🤖 [REALTIME] Iniciando processamento automático');
+            
             toast({
-              title: "✅ Nota pronta!",
-              description: "Confira os dados e confirme para adicionar ao estoque",
+              title: "📋 Processando nota...",
+              description: "Validando e adicionando ao estoque automaticamente",
             });
 
             if ('vibrate' in navigator) {
               navigator.vibrate([100, 50, 100]);
             }
 
-            setPendingQrUrl(notaInfo.url);
-            setPendingDocType(notaInfo.tipoDocumento);
-            setPendingNotaData(notaData);
-            setShowCupomViewer(true);
+            // Processar automaticamente
+            await processarNotaAutomaticamente(notaAtualizada.id, user.id, notaData);
 
             // Limpar do mapa local e cancelar timeout
             setProcessingNotesData(prev => {
@@ -391,16 +596,16 @@ const BottomNavigation = () => {
           }
           
           toast({
-            title: "✅ Nota pronta!",
-            description: "Confira os dados e confirme para adicionar ao estoque",
+            title: "📋 Processando nota...",
+            description: "Validando e adicionando ao estoque automaticamente",
           });
           
           if ('vibrate' in navigator) {
             navigator.vibrate([100, 50, 100]);
           }
           
-          setPendingNotaData(data);
-          setShowCupomViewer(true);
+          // Processar automaticamente via polling
+          await processarNotaAutomaticamente(noteId, user.id, data);
           removeProcessingNote(noteId);
           
           // Cancelar timeout
