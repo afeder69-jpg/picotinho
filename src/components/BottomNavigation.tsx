@@ -620,23 +620,39 @@ const BottomNavigation = () => {
             continue;
           }
           
-          // ✅ VERIFICAR se já está processando
-          if (!activelyProcessingRef.current.has(noteId)) {
-            toast({
-              title: "📋 Processando nota...",
-              description: "Validando e adicionando ao estoque automaticamente",
-            });
-            
-            if ('vibrate' in navigator) {
-              navigator.vibrate([100, 50, 100]);
-            }
-            
-            // Processar automaticamente via polling
-            await processarNotaAutomaticamente(noteId, user.id, data);
+          // ✅ VERIFICAÇÃO 1: Antes de aguardar
+          if (activelyProcessingRef.current.has(noteId)) {
+            console.log('⚠️ [POLLING] Real-time já está processando, ignorando imediatamente');
             removeProcessingNote(noteId);
-          } else {
-            console.log('⚠️ [POLLING] Nota já em processamento, ignorando');
+            continue;
           }
+          
+          // ⏳ AGUARDAR 1s para dar prioridade ao Real-time
+          console.log('⏳ [POLLING] Aguardando 1s para dar prioridade ao Real-time...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // ✅ VERIFICAÇÃO 2: Depois de aguardar
+          if (activelyProcessingRef.current.has(noteId)) {
+            console.log('⚠️ [POLLING] Real-time já processou, ignorando');
+            removeProcessingNote(noteId);
+            continue;
+          }
+          
+          // Se chegou aqui, Real-time não processou, polling assume
+          console.log('🟢 [POLLING] Real-time não processou, polling assumindo responsabilidade');
+          
+          toast({
+            title: "📋 Processando nota...",
+            description: "Validando e adicionando ao estoque automaticamente",
+          });
+          
+          if ('vibrate' in navigator) {
+            navigator.vibrate([100, 50, 100]);
+          }
+          
+          // Processar automaticamente via polling
+          await processarNotaAutomaticamente(noteId, user.id, data);
+          removeProcessingNote(noteId);
           
           // Cancelar timeout
           const timerId = processingTimers.get(noteId);
