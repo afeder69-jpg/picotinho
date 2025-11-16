@@ -4,6 +4,11 @@ const config: CapacitorConfig = {
   appId: 'app.lovable.b5ea6089d5bc4939b83e6c590c392e34',
   appName: 'Picotinho',
   webDir: 'dist',
+  server: {
+    url: 'https://b5ea6089-d5bc-4939-b83e-6c590c392e34.lovableproject.com?forceHideBadge=true',
+    cleartext: true,
+    androidScheme: 'https'
+  },
   plugins: {
     Camera: {
       permissions: ['camera']
