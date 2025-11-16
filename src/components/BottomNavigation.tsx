@@ -227,18 +227,19 @@ const BottomNavigation = () => {
       
       console.log('✅ [AUTO] PDF gerado:', pdfUrl);
       
-      // 2. Validar nota
-      console.log('🔍 [AUTO] Validando nota...');
-      const { data: validationData, error: validationError } = await supabase.functions.invoke(
-        'validate-receipt',
-        {
-          body: {
-            userId: userId,
-            pdfUrl: pdfUrl,
-            fromInfoSimples: true,
-          },
-        }
-      );
+    // 2. Validar nota
+    console.log('🔍 [AUTO] Validando nota...');
+    const { data: validationData, error: validationError } = await supabase.functions.invoke(
+      'validate-receipt',
+      {
+        body: {
+          notaImagemId: notaId,
+          userId: userId,
+          pdfUrl: pdfUrl,
+          fromInfoSimples: true,
+        },
+      }
+    );
       
       if (validationError) {
         console.error('❌ [AUTO] Erro na validação:', validationError);
@@ -264,16 +265,19 @@ const BottomNavigation = () => {
           duration: 5000,
         });
         
-        // 🗑️ Deletar nota rejeitada
-        console.log('🗑️ [AUTO] Deletando nota rejeitada...');
-        await supabase.from('notas_imagens').delete().eq('id', notaId);
-        
-        // Limpar PDF temporário
-        const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
-        await supabase.storage.from('receipts').remove([fileName]);
-        
-        console.log('✅ [AUTO] Nota rejeitada deletada');
-        return;
+      // 🗑️ Deletar nota rejeitada
+      console.log('🗑️ [AUTO] Deletando nota rejeitada...');
+      await supabase.from('notas_imagens').delete().eq('id', notaId);
+      
+      // Remover do array de processamento para evitar loop
+      removeProcessingNote(notaId);
+      
+      // Limpar PDF temporário
+      const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
+      await supabase.storage.from('receipts').remove([fileName]);
+      
+      console.log('✅ [AUTO] Nota rejeitada deletada');
+      return;
       }
       
       // 4. ✅ Nota APROVADA - Processar estoque
@@ -320,12 +324,13 @@ const BottomNavigation = () => {
         variant: 'destructive',
       });
       
-      // Tentar deletar nota com erro
-      try {
-        await supabase.from('notas_imagens').delete().eq('id', notaId);
-      } catch (deleteError) {
-        console.error('❌ [AUTO] Erro ao deletar nota com erro:', deleteError);
-      }
+    // Tentar deletar nota com erro
+    try {
+      await supabase.from('notas_imagens').delete().eq('id', notaId);
+      removeProcessingNote(notaId);
+    } catch (deleteError) {
+      console.error('❌ [AUTO] Erro ao deletar nota com erro:', deleteError);
+    }
     }
   };
 
