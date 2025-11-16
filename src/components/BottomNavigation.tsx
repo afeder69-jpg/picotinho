@@ -32,6 +32,7 @@ const BottomNavigation = () => {
   const [processingNotesData, setProcessingNotesData] = useState<Map<string, { url: string, tipoDocumento: TipoDocumento }>>(new Map());
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
+  const [activelyProcessing, setActivelyProcessing] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -214,6 +215,15 @@ const BottomNavigation = () => {
     userId: string, 
     notaData: any
   ) => {
+    // ✅ GUARD: Evitar processamento duplicado
+    if (activelyProcessing.has(notaId)) {
+      console.log(`⚠️ [AUTO] Nota ${notaId} já está sendo processada, ignorando...`);
+      return;
+    }
+    
+    // Marcar como em processamento
+    setActivelyProcessing(prev => new Set(prev).add(notaId));
+    
     try {
       console.log('🤖 [AUTO] Iniciando processamento automático da nota:', notaId);
       
@@ -324,13 +334,20 @@ const BottomNavigation = () => {
         variant: 'destructive',
       });
       
-    // Tentar deletar nota com erro
-    try {
-      await supabase.from('notas_imagens').delete().eq('id', notaId);
-      removeProcessingNote(notaId);
-    } catch (deleteError) {
-      console.error('❌ [AUTO] Erro ao deletar nota com erro:', deleteError);
-    }
+      // Tentar deletar nota com erro
+      try {
+        await supabase.from('notas_imagens').delete().eq('id', notaId);
+        removeProcessingNote(notaId);
+      } catch (deleteError) {
+        console.error('❌ [AUTO] Erro ao deletar nota com erro:', deleteError);
+      }
+    } finally {
+      // ✅ SEMPRE remover do Set ao finalizar
+      setActivelyProcessing(prev => {
+        const updated = new Set(prev);
+        updated.delete(notaId);
+        return updated;
+      });
     }
   };
 
@@ -520,17 +537,22 @@ const BottomNavigation = () => {
             // ✅ PROCESSAMENTO AUTOMÁTICO
             console.log('🤖 [REALTIME] Iniciando processamento automático');
             
-            toast({
-              title: "📋 Processando nota...",
-              description: "Validando e adicionando ao estoque automaticamente",
-            });
+            // ✅ VERIFICAR se já está processando antes de disparar
+            if (!activelyProcessing.has(notaAtualizada.id)) {
+              toast({
+                title: "📋 Processando nota...",
+                description: "Validando e adicionando ao estoque automaticamente",
+              });
 
-            if ('vibrate' in navigator) {
-              navigator.vibrate([100, 50, 100]);
+              if ('vibrate' in navigator) {
+                navigator.vibrate([100, 50, 100]);
+              }
+
+              // Processar automaticamente
+              await processarNotaAutomaticamente(notaAtualizada.id, user.id, notaData);
+            } else {
+              console.log('⚠️ [REALTIME] Nota já em processamento, ignorando');
             }
-
-            // Processar automaticamente
-            await processarNotaAutomaticamente(notaAtualizada.id, user.id, notaData);
 
             // Limpar do mapa local e cancelar timeout
             setProcessingNotesData(prev => {
@@ -600,18 +622,23 @@ const BottomNavigation = () => {
             continue;
           }
           
-          toast({
-            title: "📋 Processando nota...",
-            description: "Validando e adicionando ao estoque automaticamente",
-          });
-          
-          if ('vibrate' in navigator) {
-            navigator.vibrate([100, 50, 100]);
+          // ✅ VERIFICAR se já está processando
+          if (!activelyProcessing.has(noteId)) {
+            toast({
+              title: "📋 Processando nota...",
+              description: "Validando e adicionando ao estoque automaticamente",
+            });
+            
+            if ('vibrate' in navigator) {
+              navigator.vibrate([100, 50, 100]);
+            }
+            
+            // Processar automaticamente via polling
+            await processarNotaAutomaticamente(noteId, user.id, data);
+            removeProcessingNote(noteId);
+          } else {
+            console.log('⚠️ [POLLING] Nota já em processamento, ignorando');
           }
-          
-          // Processar automaticamente via polling
-          await processarNotaAutomaticamente(noteId, user.id, data);
-          removeProcessingNote(noteId);
           
           // Cancelar timeout
           const timerId = processingTimers.get(noteId);
