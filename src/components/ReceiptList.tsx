@@ -171,6 +171,19 @@ function getNeighborhoodAndUF(receipt: Receipt): { neighborhood: string | null; 
     // Normalizar espaços
     s = s.replace(/\s{2,}/g, ' ').trim();
 
+    // Lista de prefixos de logradouro que devem ser ignorados se aparecerem isoladamente
+    const logradourosPrefixes = [
+      'AV', 'AVENIDA', 'R', 'RUA', 'ESTRADA', 'EST', 'ESTR',
+      'TRAV', 'TRAVESSA', 'PRACA', 'PRAÇA', 'PC', 'AL', 'ALAMEDA',
+      'ROD', 'RODOVIA', 'VIA', 'LARGO', 'LG'
+    ];
+    
+    // Verificar se o resultado é apenas um prefixo de logradouro (ignorar)
+    const upperValue = s.toUpperCase().replace(/\.$/, ''); // Remove ponto final se existir
+    if (logradourosPrefixes.includes(upperValue)) {
+      return null;
+    }
+
     // Verificar se é um bairro válido (pelo menos 2 caracteres, não só números)
     if (s && s.length >= 2 && !/^\d+$/.test(s)) {
       return s;
