@@ -6,7 +6,7 @@ import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import InternalWebViewer from "./InternalWebViewer";
 import CupomFiscalViewer from "./CupomFiscalViewer";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
@@ -32,7 +32,7 @@ const BottomNavigation = () => {
   const [processingNotesData, setProcessingNotesData] = useState<Map<string, { url: string, tipoDocumento: TipoDocumento }>>(new Map());
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
-  const [activelyProcessing, setActivelyProcessing] = useState<Set<string>>(new Set());
+  const activelyProcessingRef = useRef<Set<string>>(new Set());
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -215,14 +215,15 @@ const BottomNavigation = () => {
     userId: string, 
     notaData: any
   ) => {
-    // ✅ GUARD: Evitar processamento duplicado
-    if (activelyProcessing.has(notaId)) {
+    // ✅ GUARD: Evitar processamento duplicado usando ref síncrona
+    if (activelyProcessingRef.current.has(notaId)) {
       console.log(`⚠️ [AUTO] Nota ${notaId} já está sendo processada, ignorando...`);
       return;
     }
     
-    // Marcar como em processamento
-    setActivelyProcessing(prev => new Set(prev).add(notaId));
+    // Marcar como em processamento INSTANTANEAMENTE
+    activelyProcessingRef.current.add(notaId);
+    console.log(`🔒 [AUTO] Nota ${notaId} BLOQUEADA para processamento`);
     
     try {
       console.log('🤖 [AUTO] Iniciando processamento automático da nota:', notaId);
@@ -343,11 +344,8 @@ const BottomNavigation = () => {
       }
     } finally {
       // ✅ SEMPRE remover do Set ao finalizar
-      setActivelyProcessing(prev => {
-        const updated = new Set(prev);
-        updated.delete(notaId);
-        return updated;
-      });
+      activelyProcessingRef.current.delete(notaId);
+      console.log(`🔓 [AUTO] Nota ${notaId} DESBLOQUEADA`);
     }
   };
 
@@ -538,7 +536,7 @@ const BottomNavigation = () => {
             console.log('🤖 [REALTIME] Iniciando processamento automático');
             
             // ✅ VERIFICAR se já está processando antes de disparar
-            if (!activelyProcessing.has(notaAtualizada.id)) {
+            if (!activelyProcessingRef.current.has(notaAtualizada.id)) {
               toast({
                 title: "📋 Processando nota...",
                 description: "Validando e adicionando ao estoque automaticamente",
@@ -623,7 +621,7 @@ const BottomNavigation = () => {
           }
           
           // ✅ VERIFICAR se já está processando
-          if (!activelyProcessing.has(noteId)) {
+          if (!activelyProcessingRef.current.has(noteId)) {
             toast({
               title: "📋 Processando nota...",
               description: "Validando e adicionando ao estoque automaticamente",
