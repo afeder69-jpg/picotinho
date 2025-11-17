@@ -26,6 +26,9 @@ import CardapioDetalhes from "./pages/CardapioDetalhes";
 import ListaCompras from "./pages/ListaCompras";
 import ListasComprasIndex from "./pages/ListasComprasIndex";
 import ListaComprasComprar from "./pages/ListaComprasComprar";
+import DataDeletion from "./pages/DataDeletion";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
@@ -104,6 +107,9 @@ const App = () => {
                 <Route path="/listas-compras" element={<ListasComprasIndex />} />
                 <Route path="/lista-compras/:id" element={<ListaCompras />} />
                 <Route path="/lista-compras/:id/comprar" element={<ListaComprasComprar />} />
+                <Route path="/data-deletion" element={<DataDeletion />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>
