@@ -1023,18 +1023,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                       {receipt.dados_extraidos.estabelecimento ? (
                         <>
                            {/* Nome do mercado, bairro, UF */}
-{(() => {
-  const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
-  const nome = receipt.dados_extraidos.estabelecimento.nome;
-  let texto = nome;
-  if (nb) texto += `, ${nb}`;
-  if (uf) texto += `, ${uf}`;
-  return (
-                    <h3 className="nome-mercado">
-                      {texto}
-                    </h3>
-  );
-})()}
+                          <h3 className="nome-mercado">
+                            {receipt.dados_extraidos.estabelecimento.nome}
+                          </h3>
                            
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
@@ -1058,18 +1049,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                         /* Fallback para formato antigo */
                         <>
                            {/* Nome do mercado, bairro, UF */}
-{(() => {
-  const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
-  const nome = receipt.dados_extraidos.loja?.nome || 'Mercado N/A';
-  let texto = nome;
-  if (nb) texto += `, ${nb}`;
-  if (uf) texto += `, ${uf}`;
-  return (
-                    <h3 className="nome-mercado">
-                      {texto}
-                    </h3>
-  );
-})()}
+                          <h3 className="nome-mercado">
+                            {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
+                          </h3>
                            
                             {/* Dados da compra em linha compacta */}
                             <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
