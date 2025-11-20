@@ -52,6 +52,62 @@ serve(async (req) => {
     const raioBusca = configuracaoUsuario?.raio_busca_km || 5.0; // 5km default
     console.log(`Raio de busca do usuário: ${raioBusca}km`);
 
+    // ✅ VERIFICAÇÃO DE ÁREA - Conforme Manual de Operações
+    // Buscar coordenadas do usuário e estabelecimento para verificar se está na área
+    const { data: perfilUsuario } = await supabase
+      .from('profiles')
+      .select('latitude, longitude')
+      .eq('user_id', userId)
+      .single();
+
+    if (perfilUsuario?.latitude && perfilUsuario?.longitude && cnpjNormalizado) {
+      // Buscar estabelecimento por CNPJ
+      const { data: estabelecimentos } = await supabase
+        .from('supermercados')
+        .select('latitude, longitude, nome')
+        .eq('cnpj', cnpjNormalizado);
+
+      if (estabelecimentos && estabelecimentos.length > 0) {
+        const estabelecimento = estabelecimentos[0];
+        
+        if (estabelecimento.latitude && estabelecimento.longitude) {
+          // Calcular distância usando fórmula de Haversine
+          const lat1 = perfilUsuario.latitude;
+          const lon1 = perfilUsuario.longitude;
+          const lat2 = estabelecimento.latitude;
+          const lon2 = estabelecimento.longitude;
+          
+          const R = 6371; // Raio da Terra em km
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLon = (lon2 - lon1) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const distancia = R * c;
+          
+          console.log(`📍 Distância calculada: ${distancia.toFixed(2)}km (limite: ${raioBusca}km)`);
+          
+          // ✅ Se estabelecimento está FORA da área, não atualizar precos_atuais (mas registra a compra)
+          if (distancia > raioBusca) {
+            console.log('⚠️ Estabelecimento FORA da área do usuário - Preço registrado mas não vira "Preço Atual"');
+            return new Response(JSON.stringify({ 
+              success: true, 
+              message: 'Preço Pago registrado (estabelecimento fora da área)',
+              fora_area: true,
+              distancia: distancia.toFixed(2),
+              compraId
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+          console.log('✅ Estabelecimento DENTRO da área - pode atualizar Preço Atual');
+        }
+      }
+    }
+
     // 2. Verificar se já existe um preço atual para este produto neste estabelecimento
     const { data: precoExistente } = await supabase
       .from('precos_atuais')
@@ -142,45 +198,10 @@ serve(async (req) => {
 
       console.log('✅ Preço atual atualizado:', precoAtualizado);
 
-      // 5. Aplicar preço atual para usuários na área de atuação
-      // Buscar todos os usuários que têm este produto no estoque
-      const { data: usuariosComProduto } = await supabase
-        .from('estoque_app')
-        .select(`
-          user_id,
-          produto_nome,
-          id,
-          preco_unitario_ultimo
-        `)
-        .ilike('produto_nome', `%${produtoNome}%`);
-
-      console.log(`Encontrados ${usuariosComProduto?.length || 0} usuários com produto similar`);
-
-      if (usuariosComProduto) {
-        let usuariosAtualizados = 0;
-        
-        for (const itemEstoque of usuariosComProduto) {
-          // Verificar se o produto é similar (usando lógica de normalização)
-          const produtoSimilar = verificarSimilaridadeProduto(itemEstoque.produto_nome, produtoNome);
-          
-          if (produtoSimilar && itemEstoque.preco_unitario_ultimo === null || itemEstoque.preco_unitario_ultimo === 0) {
-            // CORREÇÃO CRÍTICA: Aplicar preço atual se não existe ou está zerado
-            const { error: updateError } = await supabase
-              .from('estoque_app')
-              .update({
-                preco_unitario_ultimo: precoUnitario
-              })
-              .eq('id', itemEstoque.id);
-            
-            if (!updateError) {
-              console.log(`📍 Preço atual aplicado: ${itemEstoque.produto_nome} = R$ ${precoUnitario} (usuário ${itemEstoque.user_id})`);
-              usuariosAtualizados++;
-            }
-          }
-        }
-        
-        console.log(`✅ Preço atual aplicado para ${usuariosAtualizados} usuários`);
-      }
+      // ✅ CONFORME MANUAL DE OPERAÇÕES: Preço Atual é calculado dinamicamente por área
+      // Cada usuário terá seu "Preço Atual" baseado nos precos_atuais filtrados por SUA área
+      // Não aplicamos preços globalmente - cada usuário consulta sua área individualmente
+      console.log('✅ Preço atualizado em precos_atuais - será exibido dinamicamente por área');
 
       return new Response(JSON.stringify({
         success: true,
