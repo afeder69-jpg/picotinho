@@ -1078,28 +1078,8 @@ const EstoqueAtual = () => {
          }
          console.log('✅ Produto inserido no estoque com sucesso');
 
-        // Inserir o preço atual para o produto manual
-        console.log('💰 Inserindo preço atual:', {
-          user_id: user.id,
-          produto_nome: nomeParaSalvar.toUpperCase(),
-          valor_unitario: valor,
-          origem: 'manual'
-        });
-        
-        const { error: erroPreco } = await supabase
-          .from('precos_atuais_usuario')
-          .insert({
-            user_id: user.id,
-            produto_nome: nomeParaSalvar.toUpperCase(),
-            valor_unitario: valor,
-            origem: 'manual'
-          });
-
-        if (erroPreco) {
-          console.error('❌ Erro ao inserir preço:', erroPreco);
-          throw erroPreco;
-        }
-        console.log('✅ Preço inserido com sucesso');
+        // ✅ CONFORME MANUAL DE OPERAÇÕES: Produtos manuais NÃO alimentam banco global de preços
+        console.log('✅ Produto manual inserido - preço não alimenta banco global (Manual de Operações)');
 
         toast({
           title: "Sucesso",
