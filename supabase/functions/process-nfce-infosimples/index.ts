@@ -370,11 +370,11 @@ async function processarNFCe(
     const valorDesconto = parseBrazilianFloat(p.valor_desconto || p.normalizado_valor_desconto);
     const temDesconto = valorDesconto > 0;
     
-    // ✅ Valor extraído (pode ser total ou unitário dependendo do produto)
-    const valorExtraido = parseBrazilianFloat(
-      p.normalizado_valor ||          // ← Prioridade 1: número correto
-      p.valor ||                      // ← Prioridade 2: fallback
-      p.valor_unitario_comercial      // ← Prioridade 3: último recurso
+    // ✅ CORREÇÃO: Priorizar valor UNITÁRIO (não o total da linha!)
+    const valorUnitario = parseBrazilianFloat(
+      p.valor_unitario_comercial ||   // ← Prioridade 1: Valor UNITÁRIO comercial
+      p.valor_unitario_tributavel ||  // ← Prioridade 2: Valor UNITÁRIO tributável
+      p.valor                          // ← Prioridade 3: Fallback genérico
     );
     
     // ✅ Quantidade do produto
@@ -384,39 +384,36 @@ async function processarNFCe(
       p.quantidade
     ) || 1; // Fallback para 1 se zero/undefined
     
-    // Para produtos pesáveis (kg), normalizado_valor É o valor total da linha
-    // Precisamos dividir pela quantidade para obter o preço unitário (R$/kg)
+    // ✅ Unidade de medida
     const unidade = (p.unidade || 'UN').toUpperCase();
-    const ehProdutoPesavel = unidade === 'KG' || unidade === 'G' || unidade === 'L' || unidade === 'ML';
+    
+    // ✅ CORREÇÃO: valorUnitario JÁ é unitário, não precisa dividir!
+    const valorUnitarioReal = valorUnitario;
 
-    const valorUnitarioReal = ehProdutoPesavel && quantidade > 0
-      ? valorExtraido / quantidade  // Dividir pelo peso/volume para obter R$/kg
-      : valorExtraido;              // Usar direto para unidades
-
-    console.log(`   💰 [${p.descricao}] Valor extraído: R$ ${valorExtraido.toFixed(2)} | Qtd: ${quantidade} ${unidade} | Preço unitário: R$ ${valorUnitarioReal.toFixed(2)}${ehProdutoPesavel ? '/kg' : ''}`);
+    // 🔍 Logs melhorados para debug
+    console.log(`   💰 [${p.descricao}]`);
+    console.log(`      - valor_unitario_comercial (RAW): "${p.valor_unitario_comercial}"`);
+    console.log(`      - Valor unitário (parsed): R$ ${valorUnitario.toFixed(2)}`);
+    console.log(`      - Quantidade: ${quantidade} ${unidade}`);
+    console.log(`      - Valor total linha: R$ ${(valorUnitario * quantidade).toFixed(2)}`);
 
     // 🔍 INVESTIGAÇÃO: Como InfoSimples envia os descontos?
     if (temDesconto) {
       console.log(`   🏷️ [DESCONTO] ${p.descricao}:`);
-      console.log(`      - normalizado_valor (RAW): "${p.normalizado_valor}" → Parsed: R$ ${valorExtraido.toFixed(2)}`);
       console.log(`      - valor_desconto (RAW): "${p.valor_desconto}" → Parsed: R$ ${valorDesconto.toFixed(2)}`);
       console.log(`      - Quantidade: ${quantidade} ${unidade}`);
-      console.log(`      - Preço unitário calculado: R$ ${valorUnitarioReal.toFixed(2)}`);
-      console.log(`      - É pesável?: ${ehProdutoPesavel}`);
-      
-      // Verificar se normalizado_valor já inclui desconto
-      const valorSemDesconto = valorUnitarioReal + valorDesconto;
-      console.log(`      - Se JÁ incluir desconto: preço original seria R$ ${valorSemDesconto.toFixed(2)}`);
-      console.log(`      - Se NÃO incluir desconto: preço final seria R$ ${(valorUnitarioReal - valorDesconto).toFixed(2)}`);
+      console.log(`      - Preço unitário SEM desconto: R$ ${valorUnitarioReal.toFixed(2)}`);
+      console.log(`      - Preço unitário COM desconto: R$ ${(valorUnitarioReal - valorDesconto).toFixed(2)}`);
     }
 
-    // 🆕 TESTAR: Não aplicar desconto em produtos pesáveis (pode já estar aplicado no valor total)
-    const aplicarDesconto = temDesconto && !ehProdutoPesavel;
+    // ✅ Aplicar desconto se houver
+    const aplicarDesconto = temDesconto;
 
-    // Preço FINAL = preço unitário - desconto (apenas se aplicável)
+    // Preço FINAL = preço unitário - desconto
     const valorUnitarioFinal = aplicarDesconto
       ? valorUnitarioReal - valorDesconto
       : valorUnitarioReal;
+
 
     if (temDesconto) {
       console.log(`      - ✅ Decisão: ${aplicarDesconto ? 'APLICAR' : 'NÃO APLICAR'} desconto | Valor final: R$ ${valorUnitarioFinal.toFixed(2)}`);
