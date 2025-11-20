@@ -1,3 +1,22 @@
+/**
+ * 🤖 EXTRAÇÃO DE DADOS DE NOTA FISCAL VIA OPENAI (FALLBACK)
+ * 
+ * Este edge function é chamado por process-url-nota quando:
+ * - Não consegue identificar tipo de documento
+ * - É uma NFCe de estado não suportado por InfoSimples
+ * - Falha nas APIs especializadas (Serpro/InfoSimples)
+ * 
+ * FLUXO AUTOMÁTICO:
+ * 1. Recebe notaImagemId de process-url-nota
+ * 2. Baixa imagem da nota do Supabase Storage
+ * 3. Envia para OpenAI Vision para extração de dados
+ * 4. Normaliza estabelecimento via RPC
+ * 5. Salva dados_extraidos em notas_imagens
+ * 6. Frontend detecta via realtime → processamento automático
+ * 
+ * ⚠️ NÃO CHAMA process-receipt-full diretamente
+ * O processamento do estoque é feito automaticamente pelo frontend.
+ */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';

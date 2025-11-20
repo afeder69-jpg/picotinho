@@ -1,3 +1,21 @@
+/**
+ * 🎫 PROCESSAMENTO DE NFCe VIA INFOSIMPLES (RIO DE JANEIRO)
+ * 
+ * Este edge function é chamado automaticamente por process-url-nota
+ * quando detecta uma NFCe (modelo 65) do estado do Rio de Janeiro (UF 33).
+ * 
+ * FLUXO AUTOMÁTICO:
+ * 1. Recebe chaveNFCe de process-url-nota
+ * 2. Verifica cache (nfce_cache_infosimples)
+ * 3. Se não cached → consulta API InfoSimples (R$ 0,24)
+ * 4. Categoriza produtos automaticamente
+ * 5. Salva dados_extraidos em notas_imagens
+ * 6. Frontend detecta via realtime → processamento automático
+ * 
+ * ⚠️ NÃO CHAMA process-receipt-full diretamente
+ * O processamento do estoque é feito automaticamente pelo frontend
+ * via realtime listener em BottomNavigation.tsx
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -591,9 +609,12 @@ serve(async (req) => {
     }
 
     // 4. Processar e salvar dados
+    // ⚠️ IMPORTANTE: O processamento do estoque é AUTOMÁTICO via realtime listener no frontend
+    // O BottomNavigation.tsx detecta quando dados_extraidos é preenchido e chama automaticamente
+    // a função processarNotaAutomaticamente() → validate-receipt → process-receipt-full
     if (notaImagemId) {
       await processarNFCe(supabase, userId, notaImagemId, dadosNFCe, '');
-      console.log('✅ [PROCESSAR] Dados salvos. Aguardando confirmação do usuário para processar estoque.');
+      console.log('✅ [PROCESSAR] Dados salvos em notas_imagens. Frontend detectará via realtime e processará automaticamente.');
     }
 
     return new Response(
