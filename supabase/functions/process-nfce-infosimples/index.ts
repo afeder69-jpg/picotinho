@@ -431,8 +431,8 @@ async function processarNFCe(
     console.log(`   📦 ${p.descricao || p.nome}:`);
     console.log(`      - normalizado_valor: ${p.normalizado_valor}`);
     console.log(`      - valor: ${p.valor}`);
-    console.log(`      - unidade: ${unidade} (pesável: ${ehProdutoPesavel})`);
-    console.log(`      - valor extraído: ${valorExtraido}`);
+    console.log(`      - unidade: ${unidade}`);
+    console.log(`      - valor unitário: ${valorUnitario.toFixed(2)}`);
     console.log(`      - 💰 Valor unitário real: ${valorUnitarioReal}`);
     console.log(`      - 📊 Qtd: ${quantidade} | Total: ${valorTotalFinal}`);
     
@@ -446,7 +446,7 @@ async function processarNFCe(
       categoria: categorizarProduto(p.nome || p.descricao), // ✅ CATEGORIZAÇÃO IDÊNTICA AO WHATSAPP
       tem_desconto: temDesconto,
       _valor_desconto_aplicado: temDesconto ? valorDesconto : undefined,
-      _valor_original: temDesconto ? valorExtraido : undefined
+      _valor_original: temDesconto ? valorUnitario : undefined
     };
   }) || [];
 
