@@ -345,8 +345,8 @@ serve(async (req) => {
       console.log(`📍 Estabelecimento: ${estabelecimentoNome} (${estabelecimentoCnpj})`);
       console.log(`📅 Data/Hora parseada: ${dataCompraAtual} ${horaCompra}`);
       
-      // Buscar itens (ambos os formatos)
-      const itensDaNota = dadosExtraidos.produtos || dadosExtraidos.itens || [];
+      // Buscar itens (priorizar produtos_consolidados do InfoSimples)
+      const itensDaNota = dadosExtraidos.produtos || dadosExtraidos.produtos_consolidados || dadosExtraidos.itens || [];
       
       if (itensDaNota && itensDaNota.length > 0) {
         let precosAtualizados = 0;
@@ -453,7 +453,25 @@ serve(async (req) => {
       });
       console.log(`📦 ${itens.length} produtos carregados do InfoSimples`);
     }
-    // FORMATO 2: WhatsApp/Upload (PDF/Imagem) - dados_extraidos.itens
+    // FORMATO 2: WhatsApp/Upload (PDF/Imagem) - dados_extraidos.produtos_consolidados ou itens
+    else if (nota.dados_extraidos?.produtos_consolidados && Array.isArray(nota.dados_extraidos.produtos_consolidados)) {
+      console.log("✅ Usando formato InfoSimples (produtos_consolidados)");
+      itens = nota.dados_extraidos.produtos_consolidados.map((item: any) => {
+        const quantidade = parseFloat(item.quantidade) || 0;
+        const valorUnitario = parseFloat(item.valor_unitario) || 0;
+        
+        return {
+          descricao: item.descricao || item.nome,
+          categoria: item.categoria || 'outros',
+          quantidade,
+          valor_unitario: valorUnitario,
+          unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
+          data_compra: dataCompra
+        };
+      });
+      console.log(`📦 ${itens.length} produtos carregados (consolidados)`);
+    }
+    // FORMATO 3: WhatsApp/Upload (PDF/Imagem) - dados_extraidos.itens
     else if (nota.dados_extraidos?.itens && Array.isArray(nota.dados_extraidos.itens)) {
       console.log("✅ Usando formato WhatsApp/Upload (itens)");
       itens = nota.dados_extraidos.itens.map((item: any) => {
@@ -656,7 +674,7 @@ serve(async (req) => {
             .from('produtos_candidatos_normalizacao')
             .insert({
               texto_original: produto.produto_nome,
-              usuario_id: userId,
+              usuario_id: nota.usuario_id,
               nota_imagem_id: finalNotaId,
               nota_item_hash: `${finalNotaId}_${produto.produto_nome}`,
               status: 'pendente',
