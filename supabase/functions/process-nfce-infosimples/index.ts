@@ -409,7 +409,7 @@ async function processarNFCe(
       categoria: categorizarProduto(p.nome || p.descricao), // ✅ CATEGORIZAÇÃO IDÊNTICA AO WHATSAPP
       tem_desconto: temDesconto,
       _valor_desconto_aplicado: temDesconto ? valorDesconto : undefined,
-      _valor_original: temDesconto ? valorOriginal : undefined
+      _valor_original: temDesconto ? valorExtraido : undefined
     };
   }) || [];
 
