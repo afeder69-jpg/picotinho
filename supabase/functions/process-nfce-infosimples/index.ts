@@ -369,19 +369,49 @@ async function processarNFCe(
       '1'
     );
     
-    // 🆕 CORREÇÃO CRÍTICA: Para produtos pesáveis (kg), normalizado_valor É o valor total!
-    // Precisamos dividir pela quantidade para obter o preço unitário real
+    // 🆕 CORREÇÃO #3: Detecção inteligente de valor unitário vs total
     const unidade = (p.unidade || 'UN').toUpperCase();
     const ehProdutoPesavel = unidade === 'KG' || unidade === 'G' || unidade === 'L' || unidade === 'ML';
-    
-    const valorUnitarioReal = ehProdutoPesavel && quantidade > 0
-      ? valorExtraido / quantidade  // Dividir pelo peso/volume
-      : valorExtraido;              // Usar direto para unidades
-    
+
+    let valorUnitarioReal = valorExtraido;
+
+    if (ehProdutoPesavel && quantidade > 0) {
+      // Calcular ambas as possibilidades
+      const opcaoA_valorTotal = valorExtraido / quantidade;     // Assume valor total
+      const opcaoB_valorUnitario = valorExtraido;               // Assume valor unitário
+
+      // ✅ Heurística: Preço por kg/litro razoável está entre R$ 0.50 e R$ 150
+      const opcaoA_valida = opcaoA_valorTotal >= 0.50 && opcaoA_valorTotal <= 150;
+      const opcaoB_valida = opcaoB_valorUnitario >= 0.50 && opcaoB_valorUnitario <= 150;
+
+      if (opcaoA_valida && !opcaoB_valida) {
+        // Caso 1: valorExtraido é VALOR TOTAL (precisa dividir)
+        valorUnitarioReal = opcaoA_valorTotal;
+        console.log(`   📊 [KG] ${p.descricao}: VALOR TOTAL detectado (${valorExtraido.toFixed(2)} ÷ ${quantidade} = R$ ${valorUnitarioReal.toFixed(2)}/kg)`);
+        
+      } else if (opcaoB_valida && !opcaoA_valida) {
+        // Caso 2: valorExtraido JÁ é VALOR UNITÁRIO (usar direto)
+        valorUnitarioReal = opcaoB_valorUnitario;
+        console.log(`   📊 [KG] ${p.descricao}: VALOR UNITÁRIO detectado (R$ ${valorUnitarioReal.toFixed(2)}/kg × ${quantidade}kg = R$ ${(valorUnitarioReal * quantidade).toFixed(2)})`);
+        
+      } else if (opcaoA_valida && opcaoB_valida) {
+        // Caso 3: Ambos válidos → priorizar valor TOTAL (mais comum na API)
+        valorUnitarioReal = opcaoA_valorTotal;
+        console.log(`   ⚠️ [KG] ${p.descricao}: Caso ambíguo (ambos válidos), assumindo VALOR TOTAL: R$ ${valorUnitarioReal.toFixed(2)}/kg`);
+        
+      } else {
+        // Caso 4: Nenhum válido → usar valor total e logar erro
+        valorUnitarioReal = opcaoA_valorTotal;
+        console.log(`   ❌ [KG] ${p.descricao}: Valores fora da faixa esperada! Extraído: ${valorExtraido} | Qtd: ${quantidade} | Usando: R$ ${valorUnitarioReal.toFixed(2)}/kg`);
+      }
+    } else {
+      // Produtos não pesáveis: usar valor direto
+      valorUnitarioReal = valorExtraido;
+    }
+
     // 🆕 NÃO aplicar desconto em produtos pesáveis (já aplicado no valor total)
-    // Para produtos por kg, o desconto geralmente já está aplicado no valor extraído
     const aplicarDesconto = temDesconto && !ehProdutoPesavel;
-    
+
     // Preço FINAL = preço unitário - desconto (apenas se aplicável)
     const valorUnitarioFinal = aplicarDesconto
       ? valorUnitarioReal - valorDesconto
