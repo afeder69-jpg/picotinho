@@ -1754,9 +1754,9 @@ const EstoqueAtual = () => {
                 <CardContent className="py-3">
                   <div className="space-y-1">
                      {itens.map((item) => {
-                        const precoAtual = encontrarPrecoAtual(item.produto_nome_normalizado || item.produto_nome);
-                       const precoParaExibir = precoAtual?.valor_unitario || item.preco_unitario_ultimo;
-                       const quantidade = parseFloat(item.quantidade.toString());
+                        const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                        const historicoProduto = historicoPrecos[nomeExibicao];
+                        const quantidade = parseFloat(item.quantidade.toString());
                        
                           return (
                             <div 
@@ -1827,17 +1827,6 @@ const EstoqueAtual = () => {
                                      const historicoProduto = historicoPrecos[nomeExibicao];
                                      const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
 
-                                     // Debug para produtos manuais
-                                     if (item.origem === 'manual') {
-                                       console.log('PRODUTO MANUAL DEBUG:', {
-                                         nome: nomeExibicao,
-                                         origem: item.origem,
-                                         created_at: item.created_at,
-                                         preco_unitario_ultimo: item.preco_unitario_ultimo,
-                                         historicoPrecos: historicoProduto,
-                                         precoAtual: encontrarPrecoAtual(nomeExibicao)
-                                       });
-                                     }
 
                                      return (
                                       <>
@@ -1866,7 +1855,6 @@ const EstoqueAtual = () => {
                                               'Sem data'
                                              } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
                                              {(() => {
-                                               const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
                                                const precoOriginal = item.preco_unitario_ultimo || 0;
                                                const precoAreaAtual = historicoProduto.menorPrecoArea.preco || 0;
                                                
@@ -1886,42 +1874,11 @@ const EstoqueAtual = () => {
                                                }
                                              })()}
                                           </div>
-                                        ) : precoAtual && precoAtual.valor_unitario ? (
-                                          <div className="text-muted-foreground">
-                                            {precoAtual.data_atualizacao ? 
-                                              formatDateSafe(precoAtual.data_atualizacao) : 
-                                              'Sem data'
-                                             } - R$ {(precoAtual.valor_unitario || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((precoAtual.valor_unitario || 0) * quantidade).toFixed(2)}
-                                             {(() => {
-                                               const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                                               const precoOriginal = item.preco_unitario_ultimo || 0;
-                                               const precoAreaAtual = precoAtual.valor_unitario || 0;
-                                               
-                                               if (precoAreaAtual === 0 || precoOriginal === 0) {
-                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
-                                               }
-                                               
-                                               const atual = normalizeValue(precoAreaAtual);
-                                               const original = normalizeValue(precoOriginal);
-                                               
-                                               if (atual > original) {
-                                                 return <ArrowUp className="w-3 h-3 text-red-600 ml-1 inline" />;
-                                               } else if (atual < original) {
-                                                 return <ArrowDown className="w-3 h-3 text-green-600 ml-1 inline" />;
-                                               } else {
-                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
-                                               }
-                                             })()}
+                                        ) : (
+                                          <div className="text-muted-foreground italic">
+                                            Sem dados de preço atual na área
                                           </div>
-                                        ) : item.origem === 'manual' ? (
-                                          <div className="text-muted-foreground">
-                                            {item.created_at ? 
-                                              formatDateSafe(item.created_at) : 
-                                              'Sem data'
-                                             } - R$ {(item.preco_unitario_ultimo || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((item.preco_unitario_ultimo || 0) * quantidade).toFixed(2)}
-                                             <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />
-                                          </div>
-                                        ) : null}
+                                        )}
 
                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
                                       </>
