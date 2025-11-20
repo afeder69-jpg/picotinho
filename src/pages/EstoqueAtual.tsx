@@ -1494,13 +1494,20 @@ const EstoqueAtual = () => {
     
     // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
     const subtotalAtual = itens.reduce((sum, item) => {
-      const precoAtual = encontrarPrecoAtual(item.produto_nome_normalizado || item.produto_nome);
-      // REGRA: Para manuais usar preço inserido, para notas usar preço atual da área
-      const preco = item.origem === 'manual' 
-        ? (item.preco_unitario_ultimo || 0)  // Para manuais: usar preço inserido
-        : (precoAtual?.valor_unitario || 0); // Para notas: usar preço atual da área
+      const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+      const historicoProduto = historicoPrecos[nomeExibicao];
+      
+      // REGRA: Produtos manuais sempre usam preço inserido
+      if (item.origem === 'manual') {
+        const preco = item.preco_unitario_ultimo || 0;
+        const quantidade = parseFloat(item.quantidade.toString());
+        return sum + Math.round((preco * quantidade) * 100) / 100;
+      }
+      
+      // Para produtos de notas: usar menor preço da área (histórico)
+      const precoAtual = historicoProduto?.menorPrecoArea?.preco || item.preco_unitario_ultimo || 0;
       const quantidade = parseFloat(item.quantidade.toString());
-      const subtotalItem = Math.round((preco * quantidade) * 100) / 100;
+      const subtotalItem = Math.round((precoAtual * quantidade) * 100) / 100;
       return sum + subtotalItem;
     }, 0);
     
