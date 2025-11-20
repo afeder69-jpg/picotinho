@@ -640,6 +640,59 @@ serve(async (req) => {
       console.log(`🔗 ${candidatosVinculados} produtos vinculados a candidatos existentes`);
     }
     
+    // 🆕 FASE 2.6: CRIAR CANDIDATOS PARA PRODUTOS SEM MASTER E SEM CANDIDATO
+    // Para produtos sem master e sem candidato existente, criar novo candidato
+    console.log('🤖 Criando candidatos de normalização para produtos sem master...');
+    let candidatosCriados = 0;
+    
+    for (const produto of produtosEstoque) {
+      // Só processar produtos sem master E sem candidato vinculado
+      if (!produto.produto_master_id && !produto.produto_candidato_id) {
+        try {
+          console.log(`📝 Criando candidato para: ${produto.produto_nome}`);
+          
+          // Criar candidato de normalização
+          const { data: candidato, error: candidatoError } = await supabase
+            .from('produtos_candidatos_normalizacao')
+            .insert({
+              texto_original: produto.produto_nome,
+              usuario_id: userId,
+              nota_imagem_id: finalNotaId,
+              nota_item_hash: `${finalNotaId}_${produto.produto_nome}`,
+              status: 'pendente',
+              confianca_ia: 0, // Será preenchido por processar-normalizacao-global
+              categoria_sugerida: produto.categoria,
+              marca_sugerida: produto.marca || null,
+              nome_base_sugerido: produto.nome_base || produto.produto_nome
+            })
+            .select()
+            .single();
+          
+          if (candidatoError) {
+            console.error(`⚠️ Erro ao criar candidato para "${produto.produto_nome}":`, candidatoError.message);
+            // Continuar processamento mesmo com erro (produto fica sem candidato temporariamente)
+          } else if (candidato) {
+            // Vincular o candidato ao produto
+            produto.produto_candidato_id = candidato.id;
+            candidatosCriados++;
+            console.log(`✅ Candidato criado: ${candidato.id} para "${produto.produto_nome}"`);
+          }
+        } catch (err: any) {
+          console.error(`❌ Exceção ao criar candidato para "${produto.produto_nome}":`, err.message);
+          // Continuar processamento
+        }
+      }
+    }
+    
+    console.log(`📊 Criação de candidatos concluída: ${candidatosCriados} novos candidatos`);
+    
+    if (candidatosCriados > 0) {
+      console.log(`🎯 Total de produtos sem master: ${masterNaoEncontrados}`);
+      console.log(`   - ${candidatosVinculados} vinculados a candidatos existentes`);
+      console.log(`   - ${candidatosCriados} novos candidatos criados`);
+      console.log(`   - ${masterNaoEncontrados - candidatosVinculados - candidatosCriados} sem candidato (erros)`);
+    }
+    
     // 🚨 DEBUG CRÍTICO: Verificar se os produtos problemáticos estão na lista
     const produtosProblematicos = ['Queijo Parmesão President', 'Filé de Peito de Frango', 'Creme de Leite Italac', 'Requeijão Cremoso Tirolez'];
     
