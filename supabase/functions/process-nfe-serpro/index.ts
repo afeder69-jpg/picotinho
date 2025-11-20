@@ -1,3 +1,20 @@
+/**
+ * 📄 PROCESSAMENTO DE NFe VIA SERPRO (API OFICIAL)
+ * 
+ * Este edge function é chamado automaticamente por process-url-nota
+ * quando detecta uma NFe (modelo 55).
+ * 
+ * FLUXO AUTOMÁTICO:
+ * 1. Recebe chaveNFe de process-url-nota
+ * 2. Verifica cache (nfe_cache_serpro)
+ * 3. Se não cached → consulta API Serpro (OAuth automático)
+ * 4. Salva dados_extraidos em notas_imagens
+ * 5. Frontend detecta via realtime → processamento automático
+ * 
+ * ⚠️ NÃO CHAMA process-receipt-full diretamente
+ * O processamento do estoque é feito automaticamente pelo frontend
+ * via realtime listener em BottomNavigation.tsx
+ */
 // Edge Function: Processa NFe via API Serpro com OAuth + Cache Persistente
 // ============================================================================
 // Este edge function integra com a API oficial da Serpro para buscar dados de NFe.

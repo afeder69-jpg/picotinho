@@ -1,3 +1,21 @@
+/**
+ * 🔄 FLUXO AUTOMÁTICO DE PROCESSAMENTO DE NOTAS FISCAIS
+ * 
+ * Este edge function é o PONTO DE ENTRADA do processamento automático de notas.
+ * 
+ * FLUXO COMPLETO (100% AUTOMÁTICO):
+ * 1. QR Code escaneado → handleQRScanSuccess (BottomNavigation.tsx)
+ * 2. → process-url-nota (ESTE ARQUIVO) - extrai dados e roteia
+ * 3. → process-nfe-serpro OU process-nfce-infosimples OU extract-receipt-image
+ * 4. → Salva dados_extraidos em notas_imagens
+ * 5. → Frontend detecta via realtime (BottomNavigation.tsx)
+ * 6. → processarNotaAutomaticamente() gera PDF e valida
+ * 7. → validate-receipt verifica duplicatas
+ * 8. → process-receipt-full processa estoque com normalização
+ * 
+ * ⚠️ NÃO HÁ CONFIRMAÇÃO MANUAL DO USUÁRIO
+ * Todo o processo é automático após o scan do QR Code.
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 

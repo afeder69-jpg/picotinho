@@ -1,3 +1,23 @@
+/**
+ * 🧭 COMPONENTE DE NAVEGAÇÃO INFERIOR
+ * 
+ * Este componente gerencia:
+ * 1. Navegação principal (Home, QR Code, Menu)
+ * 2. Scanner de QR Code (nativo ou web)
+ * 3. FLUXO AUTOMÁTICO de processamento de notas fiscais
+ * 
+ * 🔄 FLUXO AUTOMÁTICO DE PROCESSAMENTO (REALTIME):
+ * 
+ * 1. Usuário escaneia QR Code → handleQRScanSuccess()
+ * 2. → Chama process-url-nota (edge function)
+ * 3. → Extração automática via InfoSimples/Serpro
+ * 4. → Realtime listener detecta dados_extraidos preenchido
+ * 5. → processarNotaAutomaticamente() AUTOMÁTICO
+ * 6. → Gera PDF → valida → processa estoque
+ * 
+ * ⚠️ NÃO HÁ CONFIRMAÇÃO MANUAL
+ * Todo o pipeline é 100% automático após scan do QR Code.
+ */
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Home, Menu, QrCode } from "lucide-react";
@@ -207,8 +227,19 @@ const BottomNavigation = () => {
   };
 
   /**
-   * 🤖 Processa nota fiscal automaticamente (sem confirmação manual)
-   * Replica a lógica de CupomFiscalViewer.handleConfirmar()
+   * 🤖 PROCESSAMENTO AUTOMÁTICO DE NOTAS FISCAIS (SEM CONFIRMAÇÃO MANUAL)
+   * 
+   * Esta função é chamada automaticamente quando o realtime detecta que
+   * dados_extraidos foi preenchido em notas_imagens.
+   * 
+   * FLUXO:
+   * 1. Gera PDF temporário (necessário para validate-receipt)
+   * 2. Chama validate-receipt para verificar duplicatas
+   * 3. Se aprovada → chama process-receipt-full (normalização + estoque)
+   * 4. Se rejeitada → deleta a nota e notifica usuário
+   * 
+   * ⚠️ NÃO REQUER CONFIRMAÇÃO DO USUÁRIO
+   * Todo o processo é automático após extração dos dados.
    */
   const processarNotaAutomaticamente = async (
     notaId: string, 
