@@ -25,6 +25,23 @@ const corsHeaders = {
 };
 
 /**
+ * 🇧🇷 Converte valores brasileiros (vírgula) para JavaScript (ponto)
+ * Exemplo: "2,71" → 2.71 | "10,29" → 10.29
+ * 
+ * ⚠️ CRÍTICO: InfoSimples retorna valores com vírgula ("2,71")
+ * parseFloat("2,71") = 2.00 ❌ (trunca centavos!)
+ * parseBrazilianFloat("2,71") = 2.71 ✅
+ */
+function parseBrazilianFloat(valor: string | number | undefined): number {
+  if (!valor) return 0;
+  if (typeof valor === 'number') return valor;
+  
+  // Substituir vírgula por ponto antes do parseFloat
+  const valorLimpo = String(valor).replace(',', '.');
+  return parseFloat(valorLimpo) || 0;
+}
+
+/**
  * Categoriza produto usando as MESMAS regras do fluxo WhatsApp (extract-receipt-image)
  * ⚠️ CRÍTICO: Esta função replica EXATAMENTE a lógica do prompt da OpenAI + post-processing
  */
@@ -350,24 +367,22 @@ async function processarNFCe(
   
   const produtos = nfceData.produtos?.map((p: any) => {
     // ✅ Extrair valores dos campos corretos da API InfoSimples
-    const valorDesconto = parseFloat(p.valor_desconto || p.normalizado_valor_desconto || '0');
+    const valorDesconto = parseBrazilianFloat(p.valor_desconto || p.normalizado_valor_desconto);
     const temDesconto = valorDesconto > 0;
     
     // ✅ Valor extraído (pode ser total ou unitário dependendo do produto)
-    const valorExtraido = parseFloat(
+    const valorExtraido = parseBrazilianFloat(
       p.normalizado_valor ||          // ← Prioridade 1: número correto
       p.valor ||                      // ← Prioridade 2: fallback
-      p.valor_unitario_comercial ||   // ← Prioridade 3: último recurso
-      '0'
+      p.valor_unitario_comercial      // ← Prioridade 3: último recurso
     );
     
     // ✅ Quantidade do produto
-    const quantidade = parseFloat(
+    const quantidade = parseBrazilianFloat(
       p.qtd || 
       p.quantidade_comercial || 
-      p.quantidade || 
-      '1'
-    );
+      p.quantidade
+    ) || 1; // Fallback para 1 se zero/undefined
     
     // Para produtos pesáveis (kg), normalizado_valor É o valor total da linha
     // Precisamos dividir pela quantidade para obter o preço unitário (R$/kg)
@@ -383,8 +398,8 @@ async function processarNFCe(
     // 🔍 INVESTIGAÇÃO: Como InfoSimples envia os descontos?
     if (temDesconto) {
       console.log(`   🏷️ [DESCONTO] ${p.descricao}:`);
-      console.log(`      - normalizado_valor (API): R$ ${valorExtraido.toFixed(2)}`);
-      console.log(`      - valor_desconto (API): R$ ${valorDesconto.toFixed(2)}`);
+      console.log(`      - normalizado_valor (RAW): "${p.normalizado_valor}" → Parsed: R$ ${valorExtraido.toFixed(2)}`);
+      console.log(`      - valor_desconto (RAW): "${p.valor_desconto}" → Parsed: R$ ${valorDesconto.toFixed(2)}`);
       console.log(`      - Quantidade: ${quantidade} ${unidade}`);
       console.log(`      - Preço unitário calculado: R$ ${valorUnitarioReal.toFixed(2)}`);
       console.log(`      - É pesável?: ${ehProdutoPesavel}`);
@@ -521,11 +536,10 @@ async function processarNFCe(
   console.log(`📅 Data emissão extraída: ${dataEmissaoRaw} → ${dataEmissaoISO}`);
   
   // ✅ Calcular valor total correto
-  const valorTotal = parseFloat(
+  const valorTotal = parseBrazilianFloat(
     nfceData.totais?.normalizado_valor_nfe || 
     nfceData.nfe?.normalizado_valor_total ||
-    nfceData.valor_total || 
-    '0'
+    nfceData.valor_total
   );
   
   const dadosExtraidos = {
@@ -538,10 +552,9 @@ async function processarNFCe(
     
     // ✅ Valores numéricos no root para compatibilidade
     valor_total: valorTotal,
-    valor_desconto_total: parseFloat(
+    valor_desconto_total: parseBrazilianFloat(
       nfceData.normalizado_valor_desconto || 
-      nfceData.valor_desconto || 
-      '0'
+      nfceData.valor_desconto
     ),
     quantidade_itens: parseInt(
       nfceData.normalizado_quantidade_total_items || 
