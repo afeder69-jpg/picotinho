@@ -351,6 +351,7 @@ async function processarNFCe(
   const produtos = nfceData.produtos?.map((p: any) => {
     // ✅ Extrair valores dos campos corretos da API InfoSimples
     const valorDesconto = parseFloat(p.valor_desconto || p.normalizado_valor_desconto || '0');
+    const temDesconto = valorDesconto > 0;
     
     // ✅ Valor extraído (pode ser total ou unitário dependendo do produto)
     const valorExtraido = parseFloat(
@@ -392,8 +393,6 @@ async function processarNFCe(
     
     // ✅ Calcular valor total (valor unitário × quantidade)
     const valorTotalFinal = valorUnitarioFinal * quantidade;
-    
-    const temDesconto = valorDesconto > 0;
     
     if (temDesconto) {
       produtosComDesconto++;
