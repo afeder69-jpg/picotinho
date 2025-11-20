@@ -1055,6 +1055,38 @@ export default function NormalizacaoGlobal() {
         .eq('id', candidatoAtual.id);
 
       if (errorCandidato) throw errorCandidato;
+      
+      // 🔥 NOVO: Atualizar estoques vinculados a este candidato
+      console.log(`🔗 Atualizando estoques vinculados ao candidato ${candidatoAtual.id}...`);
+      const { data: estoquesAtualizados, error: errorEstoque } = await supabase
+        .from('estoque_app')
+        .update({
+          produto_master_id: produtoMaster.id,
+          produto_nome_normalizado: produtoMaster.nome_padrao,
+          sku_global: produtoMaster.sku_global,
+          nome_base: produtoMaster.nome_base,
+          marca: produtoMaster.marca,
+          tipo_embalagem: produtoMaster.tipo_embalagem,
+          qtd_valor: produtoMaster.qtd_valor,
+          qtd_unidade: produtoMaster.qtd_unidade,
+          categoria: produtoMaster.categoria,
+          produto_candidato_id: null  // Limpar link provisório
+        })
+        .eq('produto_candidato_id', candidatoAtual.id)
+        .select();
+
+      if (errorEstoque) {
+        console.error('⚠️ Erro ao atualizar estoques vinculados:', errorEstoque);
+      } else {
+        const count = estoquesAtualizados?.length || 0;
+        console.log(`✅ ${count} registros de estoque atualizados com normalização`);
+        if (count > 0) {
+          toast({
+            title: "✅ Estoques atualizados",
+            description: `${count} ${count === 1 ? 'produto' : 'produtos'} no estoque ${count === 1 ? 'foi atualizado' : 'foram atualizados'} automaticamente`,
+          });
+        }
+      }
 
       // Salvar no log de decisões para aprendizado da IA
       const { error: errorLog } = await supabase
@@ -1232,6 +1264,38 @@ export default function NormalizacaoGlobal() {
         .eq('id', candidatoId);
 
       if (errorCandidato) throw errorCandidato;
+      
+      // 🔥 NOVO: Atualizar estoques vinculados a este candidato
+      console.log(`🔗 Atualizando estoques vinculados ao candidato ${candidatoId}...`);
+      const { data: estoquesAtualizados, error: errorEstoque } = await supabase
+        .from('estoque_app')
+        .update({
+          produto_master_id: produtoMaster.id,
+          produto_nome_normalizado: produtoMaster.nome_padrao,
+          sku_global: produtoMaster.sku_global,
+          nome_base: produtoMaster.nome_base,
+          marca: produtoMaster.marca,
+          tipo_embalagem: produtoMaster.tipo_embalagem,
+          qtd_valor: produtoMaster.qtd_valor,
+          qtd_unidade: produtoMaster.qtd_unidade,
+          categoria: produtoMaster.categoria,
+          produto_candidato_id: null  // Limpar link provisório
+        })
+        .eq('produto_candidato_id', candidatoId)
+        .select();
+
+      if (errorEstoque) {
+        console.error('⚠️ Erro ao atualizar estoques vinculados:', errorEstoque);
+      } else {
+        const count = estoquesAtualizados?.length || 0;
+        console.log(`✅ ${count} registros de estoque atualizados com normalização`);
+        if (count > 0) {
+          toast({
+            title: "✅ Estoques atualizados",
+            description: `${count} ${count === 1 ? 'produto' : 'produtos'} no estoque ${count === 1 ? 'foi atualizado' : 'foram atualizados'} automaticamente`,
+          });
+        }
+      }
 
       // Salvar no log - aprovação sem modificações
       const { error: errorLog } = await supabase

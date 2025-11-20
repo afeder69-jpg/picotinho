@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -46,6 +47,8 @@ interface EstoqueItem {
   granel?: boolean | null;
   qtd_unidade?: string | null;
   imagem_url?: string | null;
+  produto_candidato_id?: string | null; // 🔥 NOVO: Link para produto aguardando normalização
+  produto_master_id?: string | null; // Para identificar produtos normalizados
 }
 
 interface ProdutoSugestao {
@@ -1761,6 +1764,18 @@ const EstoqueAtual = () => {
                                       {formatarNomeParaExibicao(item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome)}
                                     {item.origem === 'manual' && (
                                       <span className="text-red-500 text-xs ml-1">(manual)</span>
+                                    )}
+                                    {item.produto_candidato_id && !item.produto_master_id && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="text-amber-500 text-xs ml-1 cursor-help">⏳</span>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-xs">
+                                            <p className="text-xs">Aguardando normalização manual. O produto está funcional e será atualizado automaticamente quando aprovado.</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
                                     )}
                                  {/* Botão de ajuste sobreposto ao título do produto */}
                                  {modoEdicao && (

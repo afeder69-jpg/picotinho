@@ -198,6 +198,7 @@ export type Database = {
           origem: string | null
           preco_por_unidade_base: number | null
           preco_unitario_ultimo: number | null
+          produto_candidato_id: string | null
           produto_hash_normalizado: string | null
           produto_master_id: string | null
           produto_nome: string
@@ -226,6 +227,7 @@ export type Database = {
           origem?: string | null
           preco_por_unidade_base?: number | null
           preco_unitario_ultimo?: number | null
+          produto_candidato_id?: string | null
           produto_hash_normalizado?: string | null
           produto_master_id?: string | null
           produto_nome: string
@@ -254,6 +256,7 @@ export type Database = {
           origem?: string | null
           preco_por_unidade_base?: number | null
           preco_unitario_ultimo?: number | null
+          produto_candidato_id?: string | null
           produto_hash_normalizado?: string | null
           produto_master_id?: string | null
           produto_nome?: string
@@ -270,6 +273,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "estoque_app_produto_candidato_id_fkey"
+            columns: ["produto_candidato_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_candidatos_normalizacao"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "estoque_app_produto_master_id_fkey"
             columns: ["produto_master_id"]
