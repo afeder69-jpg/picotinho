@@ -377,8 +377,18 @@ async function processarNFCe(
       ? valorExtraido / quantidade  // Dividir pelo peso/volume
       : valorExtraido;              // Usar direto para unidades
     
-    // Preço FINAL = preço unitário - desconto
-    const valorUnitarioFinal = valorUnitarioReal - valorDesconto;
+    // 🆕 NÃO aplicar desconto em produtos pesáveis (já aplicado no valor total)
+    // Para produtos por kg, o desconto geralmente já está aplicado no valor extraído
+    const aplicarDesconto = temDesconto && !ehProdutoPesavel;
+    
+    // Preço FINAL = preço unitário - desconto (apenas se aplicável)
+    const valorUnitarioFinal = aplicarDesconto
+      ? valorUnitarioReal - valorDesconto
+      : valorUnitarioReal;
+    
+    if (temDesconto) {
+      console.log(`   🔍 [${p.descricao || p.nome}] Pesável: ${ehProdutoPesavel} | Desconto: R$ ${valorDesconto.toFixed(2)} | Aplicar: ${aplicarDesconto} | Valor final: R$ ${valorUnitarioFinal.toFixed(2)}`);
+    }
     
     // ✅ Calcular valor total (valor unitário × quantidade)
     const valorTotalFinal = valorUnitarioFinal * quantidade;
