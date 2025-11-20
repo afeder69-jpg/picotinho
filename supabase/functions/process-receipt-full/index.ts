@@ -528,11 +528,22 @@ serve(async (req) => {
       const precoUnitarioFinal = embalagemInfo.isMultiUnit ? embalagemInfo.unitPrice : item.valor_unitario;
       
       if (produtosConsolidados.has(key)) {
-        // Item já existe, somar quantidades
+        // Item já existe, consolidar com preço médio ponderado
         const itemExistente = produtosConsolidados.get(key);
+        
+        // ✅ Calcular valor total ANTES de adicionar novo item
+        const valorTotalAnterior = itemExistente.quantidade * itemExistente.preco_unitario_ultimo;
+        
+        // ✅ Calcular valor total do NOVO item
+        const valorTotalNovo = quantidadeFinal * precoUnitarioFinal;
+        
+        // ✅ Somar quantidades
         itemExistente.quantidade += quantidadeFinal;
-        // Manter o preço unitário mais recente (último item)
-        itemExistente.preco_unitario_ultimo = precoUnitarioFinal;
+        
+        // ✅ Calcular preço médio ponderado
+        itemExistente.preco_unitario_ultimo = (valorTotalAnterior + valorTotalNovo) / itemExistente.quantidade;
+        
+        console.log(`📦 Consolidado: ${key} | Qtd: ${itemExistente.quantidade} | Preço médio: R$ ${itemExistente.preco_unitario_ultimo.toFixed(2)}`);
       } else {
         // Novo item
         produtosConsolidados.set(key, {
