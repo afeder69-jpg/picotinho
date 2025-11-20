@@ -157,7 +157,7 @@ async function buscarProdutoMaster(
     const searchPromise = supabase
       .from('produtos_master_global')
       .select('*')
-      .eq('categoria', categoria)
+      .ilike('categoria', categoria)
       .eq('status', 'ativo')
       .limit(10);
     

@@ -352,8 +352,8 @@ async function processarNFCe(
     // ✅ Extrair valores dos campos corretos da API InfoSimples
     const valorDesconto = parseFloat(p.valor_desconto || p.normalizado_valor_desconto || '0');
     
-    // ✅ Priorizar normalizado_valor (já vem correto com centavos)
-    const valorOriginal = parseFloat(
+    // ✅ Valor extraído (pode ser total ou unitário dependendo do produto)
+    const valorExtraido = parseFloat(
       p.normalizado_valor ||          // ← Prioridade 1: número correto
       p.valor ||                      // ← Prioridade 2: fallback
       p.valor_unitario_comercial ||   // ← Prioridade 3: último recurso
@@ -368,8 +368,17 @@ async function processarNFCe(
       '1'
     );
     
+    // 🆕 CORREÇÃO CRÍTICA: Para produtos pesáveis (kg), normalizado_valor É o valor total!
+    // Precisamos dividir pela quantidade para obter o preço unitário real
+    const unidade = (p.unidade || 'UN').toUpperCase();
+    const ehProdutoPesavel = unidade === 'KG' || unidade === 'G' || unidade === 'L' || unidade === 'ML';
+    
+    const valorUnitarioReal = ehProdutoPesavel && quantidade > 0
+      ? valorExtraido / quantidade  // Dividir pelo peso/volume
+      : valorExtraido;              // Usar direto para unidades
+    
     // Preço FINAL = preço unitário - desconto
-    const valorUnitarioFinal = valorOriginal - valorDesconto;
+    const valorUnitarioFinal = valorUnitarioReal - valorDesconto;
     
     // ✅ Calcular valor total (valor unitário × quantidade)
     const valorTotalFinal = valorUnitarioFinal * quantidade;
@@ -385,8 +394,9 @@ async function processarNFCe(
     console.log(`   📦 ${p.descricao || p.nome}:`);
     console.log(`      - normalizado_valor: ${p.normalizado_valor}`);
     console.log(`      - valor: ${p.valor}`);
-    console.log(`      - valor_unitario_comercial: ${p.valor_unitario_comercial}`);
-    console.log(`      - 💰 Valor usado: ${valorOriginal}`);
+    console.log(`      - unidade: ${unidade} (pesável: ${ehProdutoPesavel})`);
+    console.log(`      - valor extraído: ${valorExtraido}`);
+    console.log(`      - 💰 Valor unitário real: ${valorUnitarioReal}`);
     console.log(`      - 📊 Qtd: ${quantidade} | Total: ${valorTotalFinal}`);
     
     return {
