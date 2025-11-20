@@ -65,6 +65,7 @@ const EstoqueAtual = () => {
   const [historicoPrecos, setHistoricoPrecos] = useState<{[key: string]: any}>({});
   const [loading, setLoading] = useState(true);
   const [loadingPrecosAtuais, setLoadingPrecosAtuais] = useState(false);
+  const [loadingHistoricoPrecos, setLoadingHistoricoPrecos] = useState(false);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>('');
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
@@ -236,6 +237,7 @@ const EstoqueAtual = () => {
   };
 
   const loadHistoricoPrecos = async () => {
+    setLoadingHistoricoPrecos(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || estoque.length === 0) return;
@@ -330,6 +332,8 @@ const EstoqueAtual = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar histórico de preços:', error);
+    } finally {
+      setLoadingHistoricoPrecos(false);
     }
   };
 
@@ -1560,7 +1564,7 @@ const EstoqueAtual = () => {
         <div className="space-y-4">
 
           {/* Mensagem de carregamento de preços atuais */}
-          {loadingPrecosAtuais && (
+          {(loadingPrecosAtuais || loadingHistoricoPrecos) && (
             <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2 animate-fade-in">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
               <p className="text-sm text-blue-700 dark:text-blue-300">
