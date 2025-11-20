@@ -605,6 +605,41 @@ serve(async (req) => {
       console.log(`🎉 Taxa de normalização automática: ${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%`);
     }
     
+    // 🔗 FASE 2.5: VINCULAR PRODUTOS SEM MASTER A CANDIDATOS EXISTENTES
+    // Para produtos que não encontraram master, buscar se já existe candidato de normalização
+    console.log('🔗 Buscando candidatos de normalização existentes para produtos sem master...');
+    let candidatosVinculados = 0;
+    
+    for (const produto of produtosEstoque) {
+      // Só processar produtos sem master
+      if (!produto.produto_master_id) {
+        try {
+          // Buscar candidato existente para esta nota + produto
+          const { data: candidatos, error } = await supabase
+            .from('produtos_candidatos_normalizacao')
+            .select('id, status')
+            .eq('nota_imagem_id', finalNotaId)
+            .eq('texto_original', produto.produto_nome)
+            .limit(1);
+          
+          if (!error && candidatos && candidatos.length > 0) {
+            const candidato = candidatos[0];
+            // Vincular ao candidato (será usado na inserção)
+            produto.produto_candidato_id = candidato.id;
+            candidatosVinculados++;
+            console.log(`✅ Produto "${produto.produto_nome}" vinculado ao candidato ${candidato.id} (status: ${candidato.status})`);
+          }
+        } catch (err) {
+          console.error(`⚠️ Erro ao buscar candidato para "${produto.produto_nome}":`, err);
+          // Não falhar, apenas logar
+        }
+      }
+    }
+    
+    if (candidatosVinculados > 0) {
+      console.log(`🔗 ${candidatosVinculados} produtos vinculados a candidatos existentes`);
+    }
+    
     // 🚨 DEBUG CRÍTICO: Verificar se os produtos problemáticos estão na lista
     const produtosProblematicos = ['Queijo Parmesão President', 'Filé de Peito de Frango', 'Creme de Leite Italac', 'Requeijão Cremoso Tirolez'];
     
