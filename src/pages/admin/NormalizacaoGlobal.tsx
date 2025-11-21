@@ -1894,7 +1894,7 @@ export default function NormalizacaoGlobal() {
           <div className="border-t border-border"></div>
 
           {/* Botões de Ação */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Button 
               onClick={processarNormalizacao}
               disabled={processando || consolidando}
