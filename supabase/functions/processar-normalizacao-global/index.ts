@@ -959,33 +959,105 @@ async function criarCandidato(
   status: string,
   obsEmbalagem?: string | null
 ) {
-  const { error } = await supabase
+  // ✅ CORREÇÃO 1: Buscar candidato pendente existente ANTES de criar
+  const { data: candidatoExistente } = await supabase
     .from('produtos_candidatos_normalizacao')
-    .insert({
-      texto_original: produto.texto_original,
-      usuario_id: produto.usuario_id || null,
-      nota_imagem_id: produto.nota_imagem_id || null,
-      nota_item_hash: produto.nota_item_hash || null,
-      sugestao_sku_global: normalizacao.sku_global,
-      sugestao_produto_master: normalizacao.produto_master_id,
-      confianca_ia: normalizacao.confianca,
-      nome_padrao_sugerido: normalizacao.nome_padrao,
-      categoria_sugerida: normalizacao.categoria,
-      nome_base_sugerido: normalizacao.nome_base,
-      marca_sugerida: normalizacao.marca,
-      tipo_embalagem_sugerido: normalizacao.tipo_embalagem,
-      qtd_valor_sugerido: normalizacao.qtd_valor,
-      qtd_unidade_sugerido: normalizacao.qtd_unidade,
-      qtd_base_sugerida: normalizacao.qtd_base,
-      unidade_base_sugerida: normalizacao.unidade_base,
-      categoria_unidade_sugerida: normalizacao.categoria_unidade,
-      granel_sugerido: normalizacao.granel,
-      razao_ia: normalizacao.razao,
-      status: status,
-      observacoes_revisor: obsEmbalagem || null
-    });
+    .select('id')
+    .eq('nota_imagem_id', produto.nota_imagem_id)
+    .eq('texto_original', produto.texto_original)
+    .eq('status', 'pendente')
+    .maybeSingle();
 
-  if (error) {
-    throw new Error(`Erro ao criar candidato: ${error.message}`);
+  if (candidatoExistente) {
+    // ✏️ ATUALIZAR candidato existente ao invés de criar novo
+    console.log(`🔄 Atualizando candidato existente: ${produto.texto_original}`);
+    
+    const { error } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .update({
+        sugestao_sku_global: normalizacao.sku_global,
+        sugestao_produto_master: normalizacao.produto_master_id,
+        confianca_ia: normalizacao.confianca,
+        nome_padrao_sugerido: normalizacao.nome_padrao,
+        categoria_sugerida: normalizacao.categoria,
+        nome_base_sugerido: normalizacao.nome_base,
+        marca_sugerida: normalizacao.marca,
+        tipo_embalagem_sugerido: normalizacao.tipo_embalagem,
+        qtd_valor_sugerido: normalizacao.qtd_valor,
+        qtd_unidade_sugerido: normalizacao.qtd_unidade,
+        qtd_base_sugerida: normalizacao.qtd_base,
+        unidade_base_sugerida: normalizacao.unidade_base,
+        categoria_unidade_sugerida: normalizacao.categoria_unidade,
+        granel_sugerido: normalizacao.granel,
+        razao_ia: normalizacao.razao,
+        status: status, // Mudar de 'pendente' para 'auto_aprovado'
+        observacoes_revisor: obsEmbalagem || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', candidatoExistente.id);
+
+    if (error) {
+      throw new Error(`Erro ao atualizar candidato: ${error.message}`);
+    }
+    
+    console.log(`✅ Candidato atualizado: ${candidatoExistente.id} → status: ${status}`);
+    
+  } else {
+    // 📝 Criar novo candidato (lógica original)
+    console.log(`📝 Criando novo candidato: ${produto.texto_original}`);
+    
+    const { error } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .insert({
+        texto_original: produto.texto_original,
+        usuario_id: produto.usuario_id || null,
+        nota_imagem_id: produto.nota_imagem_id || null,
+        nota_item_hash: produto.nota_item_hash || null,
+        sugestao_sku_global: normalizacao.sku_global,
+        sugestao_produto_master: normalizacao.produto_master_id,
+        confianca_ia: normalizacao.confianca,
+        nome_padrao_sugerido: normalizacao.nome_padrao,
+        categoria_sugerida: normalizacao.categoria,
+        nome_base_sugerido: normalizacao.nome_base,
+        marca_sugerida: normalizacao.marca,
+        tipo_embalagem_sugerido: normalizacao.tipo_embalagem,
+        qtd_valor_sugerido: normalizacao.qtd_valor,
+        qtd_unidade_sugerido: normalizacao.qtd_unidade,
+        qtd_base_sugerida: normalizacao.qtd_base,
+        unidade_base_sugerida: normalizacao.unidade_base,
+        categoria_unidade_sugerida: normalizacao.categoria_unidade,
+        granel_sugerido: normalizacao.granel,
+        razao_ia: normalizacao.razao,
+        status: status,
+        observacoes_revisor: obsEmbalagem || null
+      });
+
+    if (error) {
+      throw new Error(`Erro ao criar candidato: ${error.message}`);
+    }
+    
+    console.log(`✅ Candidato criado com status: ${status}`);
+  }
+
+  // ✅ CORREÇÃO 2: Atualizar estoque_app automaticamente se candidato foi auto-aprovado
+  if (status === 'auto_aprovado' && normalizacao.produto_master_id && produto.nota_imagem_id) {
+    console.log(`🔗 Vinculando produto ao master no estoque_app: ${produto.texto_original}`);
+    
+    const { error: estoqueError, count } = await supabase
+      .from('estoque_app')
+      .update({
+        produto_master_id: normalizacao.produto_master_id,
+        sku_global: normalizacao.sku_global,
+        updated_at: new Date().toISOString()
+      })
+      .eq('nota_id', produto.nota_imagem_id)
+      .eq('produto_nome', produto.texto_original)
+      .is('produto_master_id', null); // Só atualizar quem ainda não tem master
+    
+    if (estoqueError) {
+      console.error(`⚠️ Erro ao atualizar estoque_app: ${estoqueError.message}`);
+    } else {
+      console.log(`✅ Estoque atualizado: ${produto.texto_original} → ${normalizacao.sku_global}`);
+    }
   }
 }

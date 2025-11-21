@@ -680,6 +680,9 @@ serve(async (req) => {
         try {
           console.log(`📝 Criando candidato para: ${produto.produto_nome}`);
           
+          // ✅ CORREÇÃO 3: Padronizar hash para garantir match com processar-normalizacao-global
+          const hashPadronizado = `${finalNotaId}_${produto.produto_nome.trim().toUpperCase()}`;
+          
           // Criar candidato de normalização
           const { data: candidato, error: candidatoError } = await supabase
             .from('produtos_candidatos_normalizacao')
@@ -687,7 +690,7 @@ serve(async (req) => {
               texto_original: produto.produto_nome,
               usuario_id: nota.usuario_id,
               nota_imagem_id: finalNotaId,
-              nota_item_hash: `${finalNotaId}_${produto.produto_nome}`,
+              nota_item_hash: hashPadronizado, // ✅ Hash padronizado
               status: 'pendente',
               confianca_ia: 0, // Será preenchido por processar-normalizacao-global
               categoria_sugerida: produto.categoria,
