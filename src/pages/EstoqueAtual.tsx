@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical, Image, ImageOff } from 'lucide-react';
+import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical, Image, ImageOff, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,6 +66,7 @@ const EstoqueAtual = () => {
   const [loading, setLoading] = useState(true);
   const [loadingPrecosAtuais, setLoadingPrecosAtuais] = useState(false);
   const [loadingHistoricoPrecos, setLoadingHistoricoPrecos] = useState(false);
+  const [normalizacaoEmAndamento, setNormalizacaoEmAndamento] = useState(false);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>('');
   const [modoEdicao, setModoEdicao] = useState(false);
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
@@ -173,6 +174,13 @@ const EstoqueAtual = () => {
     }
   }, [estoque]);
 
+  // Verificar normalização em andamento a cada 30 segundos
+  useEffect(() => {
+    verificarNormalizacaoAndamento();
+    const interval = setInterval(verificarNormalizacaoAndamento, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Função removida - estava causando problemas na marcação de produtos manuais
 
   const loadPrecosAtuais = async () => {
@@ -233,6 +241,20 @@ const EstoqueAtual = () => {
       await loadPrecosAtuaisLegacy();
     } finally {
       setLoadingPrecosAtuais(false);
+    }
+  };
+
+  const verificarNormalizacaoAndamento = async () => {
+    try {
+      const { data } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('id')
+        .in('status', ['pendente', 'processando'])
+        .limit(1);
+      
+      setNormalizacaoEmAndamento((data?.length || 0) > 0);
+    } catch (error) {
+      console.error('Erro ao verificar normalização:', error);
     }
   };
 
@@ -1562,6 +1584,16 @@ const EstoqueAtual = () => {
       
       <div className="container mx-auto p-6">
         <div className="space-y-4">
+
+          {/* Badge de normalização em andamento */}
+          {normalizacaoEmAndamento && (
+            <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3 flex items-center gap-2 animate-fade-in">
+              <Sparkles className="h-4 w-4 text-purple-600 animate-pulse" />
+              <p className="text-sm text-purple-700 dark:text-purple-300">
+                🤖 Normalizando produtos em background... Alguns itens ainda podem estar sendo processados pela IA.
+              </p>
+            </div>
+          )}
 
           {/* Mensagem de carregamento de preços atuais */}
           {(loadingPrecosAtuais || loadingHistoricoPrecos) && (
