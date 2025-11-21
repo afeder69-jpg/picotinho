@@ -2270,6 +2270,39 @@ export type Database = {
         }
         Relationships: []
       }
+      regras_recategorizacao: {
+        Row: {
+          ativa: boolean | null
+          categoria_destino: string
+          categorias_origem: string[] | null
+          created_at: string | null
+          descricao: string
+          id: string
+          keywords: string[]
+          updated_at: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          categoria_destino: string
+          categorias_origem?: string[] | null
+          created_at?: string | null
+          descricao: string
+          id?: string
+          keywords: string[]
+          updated_at?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          categoria_destino?: string
+          categorias_origem?: string[] | null
+          created_at?: string | null
+          descricao?: string
+          id?: string
+          keywords?: string[]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       sinonimos_produtos: {
         Row: {
           aprovado_por: string | null

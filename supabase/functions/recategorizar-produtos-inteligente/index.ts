@@ -8,94 +8,11 @@ const corsHeaders = {
 
 interface RecategorizationRule {
   keywords: string[];
-  targetCategory: string;
-  sourceCategories?: string[]; // Se especificado, só recategoriza desses
-  description: string;
+  categorias_origem?: string[];
+  categoria_destino: string;
+  descricao: string;
+  ativa: boolean;
 }
-
-const regrasRecategorizacao: RecategorizationRule[] = [
-  // LATICÍNIOS/FRIOS → MERCEARIA
-  {
-    keywords: ['leite condensado', 'condensado'],
-    targetCategory: 'MERCEARIA',
-    sourceCategories: ['LATICÍNIOS', 'LATICÍNIOS/FRIOS', 'FRIOS E LATICÍNIOS'],
-    description: 'Leite condensado deve ser mercearia'
-  },
-  {
-    keywords: ['chocolate garoto', 'chocolate'],
-    targetCategory: 'MERCEARIA',
-    sourceCategories: ['LATICÍNIOS', 'LATICÍNIOS/FRIOS', 'FRIOS E LATICÍNIOS', 'OUTROS'],
-    description: 'Chocolate deve ser mercearia'
-  },
-  {
-    keywords: ['creme de leite', 'creme leite'],
-    targetCategory: 'MERCEARIA',
-    sourceCategories: ['LATICÍNIOS', 'LATICÍNIOS/FRIOS', 'FRIOS E LATICÍNIOS'],
-    description: 'Creme de leite deve ser mercearia'
-  },
-  
-  // → PADARIA
-  {
-    keywords: ['manteiga'],
-    targetCategory: 'PADARIA',
-    sourceCategories: ['LATICÍNIOS', 'LATICÍNIOS/FRIOS', 'FRIOS E LATICÍNIOS', 'OUTROS'],
-    description: 'Manteiga deve ser padaria'
-  },
-  
-  // OUTROS → MERCEARIA
-  {
-    keywords: ['geleia'],
-    targetCategory: 'MERCEARIA',
-    sourceCategories: ['OUTROS'],
-    description: 'Geleia deve ser mercearia'
-  },
-  {
-    keywords: ['gelatina'],
-    targetCategory: 'MERCEARIA',
-    sourceCategories: ['OUTROS'],
-    description: 'Gelatina deve ser mercearia'
-  },
-  {
-    keywords: ['goiabada'],
-    targetCategory: 'MERCEARIA',
-    sourceCategories: ['OUTROS'],
-    description: 'Goiabada deve ser mercearia'
-  },
-  {
-    keywords: ['flocão', 'granfino'],
-    targetCategory: 'MERCEARIA',
-    sourceCategories: ['OUTROS'],
-    description: 'Flocão deve ser mercearia'
-  },
-  
-  // OUTROS → HORTIFRUTI
-  {
-    keywords: ['abacate'],
-    targetCategory: 'HORTIFRUTI',
-    sourceCategories: ['OUTROS'],
-    description: 'Abacate deve ser hortifruti'
-  },
-  {
-    keywords: ['mamão formosa', 'mamão'],
-    targetCategory: 'HORTIFRUTI',
-    sourceCategories: ['OUTROS'],
-    description: 'Mamão deve ser hortifruti'
-  },
-  {
-    keywords: ['rúcula', 'rucula'],
-    targetCategory: 'HORTIFRUTI',
-    sourceCategories: ['OUTROS'],
-    description: 'Rúcula deve ser hortifruti'
-  },
-  
-  // OUTROS → BEBIDAS
-  {
-    keywords: ['chá pronto', 'mate leão', 'chá mate', 'cha pronto', 'cha mate'],
-    targetCategory: 'BEBIDAS',
-    sourceCategories: ['OUTROS'],
-    description: 'Chá pronto deve ser bebidas'
-  }
-];
 
 interface Mudanca {
   produto_nome: string;
@@ -116,6 +33,33 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log('🔍 Iniciando recategorização inteligente de produtos...');
+
+    // Buscar regras ativas da tabela
+    const { data: regras, error: regrasError } = await supabase
+      .from('regras_recategorizacao')
+      .select('keywords, categorias_origem, categoria_destino, descricao, ativa')
+      .eq('ativa', true);
+
+    if (regrasError) {
+      throw new Error(`Erro ao buscar regras: ${regrasError.message}`);
+    }
+
+    if (!regras || regras.length === 0) {
+      return new Response(JSON.stringify({
+        sucesso: true,
+        produtos_analisados: 0,
+        produtos_recategorizados: 0,
+        produtos_mantidos: 0,
+        mudancas: [],
+        timestamp: new Date().toISOString(),
+        aviso: 'Nenhuma regra ativa encontrada'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
+
+    console.log(`📋 Total de regras ativas: ${regras.length}`);
 
     // Buscar todos os produtos do estoque
     const { data: produtos, error: produtosError } = await supabase
@@ -138,7 +82,7 @@ serve(async (req) => {
       const categoriaAtual = produto.categoria.toUpperCase();
 
       // Verificar cada regra
-      for (const regra of regrasRecategorizacao) {
+      for (const regra of regras) {
         // Verificar se alguma keyword match
         const matchKeyword = regra.keywords.some(keyword => 
           nomeLower.includes(keyword.toLowerCase())
@@ -147,7 +91,7 @@ serve(async (req) => {
         if (!matchKeyword) continue;
 
         // Verificar se precisa recategorizar
-        const categoriaAlvo = regra.targetCategory.toUpperCase();
+        const categoriaAlvo = regra.categoria_destino.toUpperCase();
         
         // Se já está na categoria correta, pular
         if (categoriaAtual === categoriaAlvo) {
@@ -156,13 +100,13 @@ serve(async (req) => {
         }
 
         // Se há restrição de categoria origem, verificar
-        if (regra.sourceCategories && regra.sourceCategories.length > 0) {
-          const categoriaOrigemMatch = regra.sourceCategories.some(cat => 
+        if (regra.categorias_origem && regra.categorias_origem.length > 0) {
+          const categoriaOrigemMatch = regra.categorias_origem.some(cat => 
             categoriaAtual.includes(cat.toUpperCase()) || cat.toUpperCase().includes(categoriaAtual)
           );
           
           if (!categoriaOrigemMatch) {
-            console.log(`⏭️ ${produto.produto_nome} está em ${categoriaAtual}, mas regra só aplica para ${regra.sourceCategories.join(', ')}`);
+            console.log(`⏭️ ${produto.produto_nome} está em ${categoriaAtual}, mas regra só aplica para ${regra.categorias_origem.join(', ')}`);
             continue;
           }
         }
@@ -185,7 +129,7 @@ serve(async (req) => {
             produto_nome: produto.produto_nome,
             categoria_anterior: categoriaAtual,
             categoria_nova: categoriaAlvo,
-            razao: regra.description,
+            razao: regra.descricao,
             status: 'erro'
           });
         } else {
@@ -195,7 +139,7 @@ serve(async (req) => {
             produto_nome: produto.produto_nome,
             categoria_anterior: categoriaAtual,
             categoria_nova: categoriaAlvo,
-            razao: regra.description,
+            razao: regra.descricao,
             status: 'sucesso'
           });
         }
