@@ -828,6 +828,23 @@ serve(async (req) => {
     
     console.log(`🔓 Lock de processamento liberado para nota ${finalNotaId}`);
 
+    // 🤖 DISPARAR NORMALIZAÇÃO AUTOMÁTICA EM BACKGROUND
+    console.log('🤖 Disparando normalização automática em background...');
+    supabase.functions.invoke('processar-normalizacao-global', {
+      body: { 
+        nota_id: finalNotaId,
+        auto_trigger: true 
+      }
+    }).then(({ data, error }) => {
+      if (error) {
+        console.error('⚠️ Erro ao disparar normalização automática:', error);
+      } else {
+        console.log('✅ Normalização automática disparada com sucesso:', data);
+      }
+    }).catch(err => {
+      console.error('⚠️ Falha ao invocar normalização:', err);
+    });
+
     const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
     return new Response(
