@@ -19,6 +19,7 @@ import Relatorios from "./pages/Relatorios";
 import NormalizacaoGlobal from "./pages/admin/NormalizacaoGlobal";
 import GerenciarMasters from "./pages/admin/GerenciarMasters";
 import NormalizacoesEstabelecimentos from "./pages/admin/NormalizacoesEstabelecimentos";
+import RecategorizarProdutosInteligente from "./pages/RecategorizarProdutosInteligente";
 import Receitas from "./pages/Receitas";
 import ReceitaDetalhes from "./pages/ReceitaDetalhes";
 import Cardapios from "./pages/Cardapios";
@@ -100,6 +101,7 @@ const App = () => {
                 <Route path="/admin/normalizacao" element={<NormalizacaoGlobal />} />
                 <Route path="/admin/gerenciar-masters" element={<GerenciarMasters />} />
                 <Route path="/admin/normalizacoes-estabelecimentos" element={<NormalizacoesEstabelecimentos />} />
+                <Route path="/recategorizar-inteligente" element={<RecategorizarProdutosInteligente />} />
                 <Route path="/receitas" element={<Receitas />} />
                 <Route path="/receita/:id" element={<ReceitaDetalhes />} />
                 <Route path="/cardapios" element={<Cardapios />} />
