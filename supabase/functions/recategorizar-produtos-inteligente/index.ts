@@ -118,7 +118,7 @@ serve(async (req) => {
         const { error: updateError } = await supabase
           .from('estoque_app')
           .update({ 
-            categoria: categoriaAlvo,
+            categoria: categoriaAlvo.toLowerCase(),
             updated_at: new Date().toISOString()
           })
           .eq('id', produto.id);
