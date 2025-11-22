@@ -623,6 +623,7 @@ serve(async (req) => {
           produto.categoria = resultado.master.categoria.toLowerCase();
           produto.produto_nome_normalizado = resultado.master.nome_padrao;
           produto.nome_base = resultado.master.nome_base;
+          produto.imagem_url = resultado.master.imagem_url;
           masterEncontrados++;
           
           console.log(`✅ Normalizado: ${produto.produto_nome} (SKU: ${produto.sku_global})`);
