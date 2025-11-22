@@ -86,6 +86,14 @@ function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): {
   return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
 }
 
+// 🧹 Limpar unidades de medida do nome do produto para melhor matching
+function limparUnidadesMedida(nome: string): string {
+  return nome
+    .replace(/\s+(kg|un|lt|ml|g|l)\s+/gi, ' ')  // Remove kg, un, lt, ml, g, l
+    .replace(/\s+/g, ' ')                         // Remove espaços duplos
+    .trim();
+}
+
 // ================== NORMALIZAÇÃO MASTER - FASE 2 ==================
 
 // 🔥 Cache em memória para produtos master já buscados
@@ -157,7 +165,7 @@ async function buscarProdutoMaster(
     const searchPromise = supabase
       .from('produtos_master_global')
       .select('*')
-      .ilike('categoria', categoria)
+      .eq('categoria', categoria.toUpperCase())
       .eq('status', 'ativo')
       .limit(10);
     
@@ -180,8 +188,8 @@ async function buscarProdutoMaster(
         master.nome_padrao.toUpperCase()
       );
       
-      // Threshold: 85% de similaridade mínima
-      if (score > melhorScore && score >= 0.85) {
+      // Threshold: 75% de similaridade mínima (reduzido para maior tolerância)
+      if (score > melhorScore && score >= 0.75) {
         melhorScore = score;
         melhorMatch = master;
       }
@@ -598,8 +606,10 @@ serve(async (req) => {
     
     for (const produto of produtosEstoque) {
       try {
+        // Limpar unidades de medida do nome para melhor matching
+        const nomeLimpo = limparUnidadesMedida(produto.produto_nome);
         const resultado = await buscarProdutoMaster(
-          produto.produto_nome,
+          nomeLimpo,
           produto.categoria,
           supabase
         );
