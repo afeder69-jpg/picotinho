@@ -313,8 +313,8 @@ const EstoqueAtual = () => {
           const historicoMap: {[key: string]: any} = {};
           
           historicoData.resultados.forEach((item: any) => {
-            if (item.produto) {
-              historicoMap[item.produto] = {
+            if (item.id) {
+              historicoMap[item.id] = {
                 ultimaCompraUsuario: item.ultimaCompraUsuario,
                 menorPrecoArea: item.menorPrecoArea
               };
@@ -1820,8 +1820,7 @@ const EstoqueAtual = () => {
                 <CardContent className="py-3">
                   <div className="space-y-1">
                      {itens.map((item) => {
-                        const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                        const historicoProduto = historicoPrecos[nomeExibicao];
+                        const historicoProduto = historicoPrecos[item.id];
                         const quantidade = parseFloat(item.quantidade.toString());
                        
                           return (
