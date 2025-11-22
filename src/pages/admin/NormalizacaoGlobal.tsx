@@ -100,9 +100,6 @@ export default function NormalizacaoGlobal() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [candidatoAtual, setCandidatoAtual] = useState<any>(null);
   
-  // Estados para correção retroativa
-  const [corrigindoRetroativo, setCorrigindoRetroativo] = useState(false);
-  
   // Estados para formulário de edição
   const [editForm, setEditForm] = useState({
     nome_padrao: '',
@@ -812,52 +809,6 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function corrigirNormalizacaoRetroativa() {
-    setCorrigindoRetroativo(true);
-    
-    try {
-      toast({
-        title: "🔧 Iniciando correção retroativa...",
-        description: "Corrigindo produtos normalizados automaticamente",
-      });
-
-      const { data, error } = await supabase.functions.invoke('corrigir-normalizacao-retroativa', {
-        body: {},
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.produtosCorrigidos === 0) {
-        toast({
-          title: "✅ Nenhuma inconsistência encontrada",
-          description: "Todos os produtos estão corretamente normalizados!",
-        });
-      } else {
-        toast({
-          title: "✅ Correção concluída!",
-          description: `${data.produtosCorrigidos} produto(s) atualizado(s) com dados do master`,
-        });
-
-        // Recarregar dados para refletir as mudanças
-        await carregarDados();
-      }
-
-      console.log('📊 Resultado da correção:', data);
-
-    } catch (error: any) {
-      console.error('❌ Erro na correção retroativa:', error);
-      toast({
-        title: "❌ Erro na correção",
-        description: error.message || "Erro ao executar correção retroativa",
-        variant: "destructive"
-      });
-    } finally {
-      setCorrigindoRetroativo(false);
-    }
-  }
 
   async function executarConsolidacaoManual() {
     setConsolidando(true);
@@ -1945,7 +1896,7 @@ export default function NormalizacaoGlobal() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Button 
               onClick={processarNormalizacao}
-              disabled={processando || consolidando || corrigindoRetroativo}
+              disabled={processando || consolidando}
               className="flex-1 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all"
             >
               <Zap className="w-4 h-4" />
@@ -1954,7 +1905,7 @@ export default function NormalizacaoGlobal() {
 
             <Button 
               onClick={() => setConfirmarConsolidacaoOpen(true)}
-              disabled={processando || consolidando || corrigindoRetroativo}
+              disabled={processando || consolidando}
               variant="destructive"
               className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
             >
@@ -1971,20 +1922,10 @@ export default function NormalizacaoGlobal() {
             </Button>
 
             <Button 
-              onClick={corrigirNormalizacaoRetroativa}
-              disabled={processando || consolidando || corrigindoRetroativo}
-              variant="outline"
-              className="gap-2 shadow-lg hover:shadow-xl transition-all border-blue-300 hover:border-blue-500 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:hover:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950/30"
-            >
-              <RotateCcw className="w-4 h-4" />
-              {corrigindoRetroativo ? 'Corrigindo...' : 'Corrigir Inconsistências'}
-            </Button>
-
-            <Button 
               onClick={() => navigate("/admin/normalizacoes-estabelecimentos")}
               variant="outline"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando || corrigindoRetroativo}
+              disabled={processando || consolidando}
             >
               <Building2 className="w-4 h-4" />
               Gerenciar Estabelecimentos
@@ -1994,7 +1935,7 @@ export default function NormalizacaoGlobal() {
               onClick={() => navigate("/recategorizar-inteligente")}
               variant="secondary"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando || recategorizando || corrigindoRetroativo}
+              disabled={processando || consolidando || recategorizando}
             >
               <RotateCcw className="w-4 h-4" />
               Recategorizar Produtos
