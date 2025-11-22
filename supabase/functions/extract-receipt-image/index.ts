@@ -254,33 +254,11 @@ Retorne APENAS o JSON estruturado conforme especificado, sem explicações.`
       throw new Error('Estrutura de dados inválida - itens não encontrados');
     }
 
-        // Garantir que todos os itens tenham categoria e aplicar regras de recategorização
-        dadosExtraidos.itens = dadosExtraidos.itens.map((item: any) => {
-          let categoria = item.categoria || 'outros';
-          const descricaoLower = (item.descricao || '').toLowerCase();
-          
-          // 🥛 REGRA CRÍTICA: Leite e derivados → SEMPRE laticínios/frios
-          if (descricaoLower.includes('leite') && !descricaoLower.includes('leite de coco')) {
-            categoria = 'laticínios/frios';
-          }
-          if (descricaoLower.includes('queijo')) {
-            categoria = 'laticínios/frios';
-          }
-          if (descricaoLower.includes('iogurte')) {
-            categoria = 'laticínios/frios';
-          }
-          if (descricaoLower.includes('manteiga') || descricaoLower.includes('margarina')) {
-            categoria = 'laticínios/frios';
-          }
-          if (descricaoLower.includes('creme de leite') || descricaoLower.includes('leite condensado')) {
-            categoria = 'laticínios/frios';
-          }
-          if (descricaoLower.includes('requeijão') || descricaoLower.includes('requeijao')) {
-            categoria = 'laticínios/frios';
-          }
-          
-          return { ...item, categoria };
-        });
+        // Garantir que todos os itens tenham categoria
+        dadosExtraidos.itens = dadosExtraidos.itens.map((item: any) => ({
+          ...item,
+          categoria: item.categoria || 'outros'
+        }));
 
     console.log(`✅ Extraídos ${dadosExtraidos.itens.length} itens com categorização`);
 
