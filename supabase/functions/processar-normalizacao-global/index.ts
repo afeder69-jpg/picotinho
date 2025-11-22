@@ -350,7 +350,9 @@ Deno.serve(async (req) => {
               // Produto novo com alta confiança - criar master e auto-aprovar
               while (tentativas < MAX_TENTATIVAS) {
                 try {
-                  await criarProdutoMaster(supabase, normalizacao);
+                  const masterCriado = await criarProdutoMaster(supabase, normalizacao);
+                  normalizacao.produto_master_id = masterCriado.id; // ✅ Preencher o ID do master criado
+                  console.log(`🔗 Master criado e vinculado: ${masterCriado.id}`);
                   await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
                   break;
                 } catch (erro: any) {
@@ -915,7 +917,7 @@ RESPONDA APENAS COM JSON (sem markdown):
 async function criarProdutoMaster(
   supabase: any,
   normalizacao: NormalizacaoSugerida
-) {
+): Promise<{ id: string, nome_padrao: string }> {
   // 🔥 Chamada SQL usando INSERT direto para evitar conflito de ordem de parâmetros
   const { data, error } = await supabase
     .from('produtos_master_global')
@@ -949,7 +951,8 @@ async function criarProdutoMaster(
     throw new Error(`Erro ao criar/atualizar produto master: ${error.message}`);
   }
   
-  console.log(`✅ Produto salvo: ${data.nome_padrao}`);
+  console.log(`✅ Produto master salvo: ${data.nome_padrao} (ID: ${data.id})`);
+  return { id: data.id, nome_padrao: data.nome_padrao };
 }
 
 async function criarCandidato(
