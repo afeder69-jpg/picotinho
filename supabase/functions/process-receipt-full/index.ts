@@ -620,7 +620,7 @@ serve(async (req) => {
           produto.produto_master_id = resultado.master.id;
           produto.produto_nome = resultado.master.nome_padrao; // Nome normalizado
           produto.marca = resultado.master.marca;
-          produto.categoria = resultado.master.categoria;
+          produto.categoria = resultado.master.categoria.toLowerCase();
           produto.produto_nome_normalizado = resultado.master.nome_padrao;
           produto.nome_base = resultado.master.nome_base;
           masterEncontrados++;
