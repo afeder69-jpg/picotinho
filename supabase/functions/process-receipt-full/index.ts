@@ -452,7 +452,7 @@ serve(async (req) => {
         
         return {
           descricao: item.descricao || item.nome,
-          categoria: item.categoria || 'outros',
+          categoria: (item.categoria || 'outros').toLowerCase(),
           quantidade,
           valor_unitario: valorUnitario,
           unidade: normalizarUnidadeMedida(item.unidade_comercial || item.unidade || 'UN'),
@@ -470,7 +470,7 @@ serve(async (req) => {
         
         return {
           descricao: item.descricao || item.nome,
-          categoria: item.categoria || 'outros',
+          categoria: (item.categoria || 'outros').toLowerCase(),
           quantidade,
           valor_unitario: valorUnitario,
           unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
@@ -488,7 +488,7 @@ serve(async (req) => {
         
         return {
           descricao: item.descricao || item.nome,
-          categoria: item.categoria || 'outros',
+          categoria: (item.categoria || 'outros').toLowerCase(),
           quantidade,
           valor_unitario: valorUnitario,
           unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
@@ -558,7 +558,7 @@ serve(async (req) => {
           user_id: nota.usuario_id,
           nota_id: nota.id,
           produto_nome: item.descricao,
-          categoria: item.categoria || 'outros',
+          categoria: (item.categoria || 'outros').toLowerCase(),
           quantidade: quantidadeFinal,
           unidade_medida: normalizarUnidadeMedida(item.unidade || 'unidade'),
           preco_unitario_ultimo: precoUnitarioFinal,
@@ -582,7 +582,7 @@ serve(async (req) => {
           ...nota.dados_extraidos,
           produtos_consolidados: produtosEstoque.map(p => ({
             nome: p.produto_nome,
-            categoria: p.categoria,
+            categoria: p.categoria.toLowerCase(),
             quantidade: p.quantidade,
             preco_unitario: p.preco_unitario_ultimo,
             unidade: p.unidade_medida
