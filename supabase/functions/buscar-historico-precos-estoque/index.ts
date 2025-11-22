@@ -98,11 +98,17 @@ serve(async (req) => {
           
           if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
             if (!ultimaCompraDoUsuario || new Date(dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
-              ultimaCompraDoUsuario = {
-                data: dataCompra,
-                preco: parseFloat(item.valor_unitario || 0),
-                quantidade: parseFloat(item.quantidade || 0)
-              };
+              const preco = parseFloat(item.valor_unitario || 0);
+              const quantidade = parseFloat(item.quantidade || 0);
+              
+              // Só criar objeto se tiver dados válidos
+              if (preco > 0 && quantidade > 0) {
+                ultimaCompraDoUsuario = {
+                  data: dataCompra,
+                  preco: preco,
+                  quantidade: quantidade
+                };
+              }
             }
             break;
           }
