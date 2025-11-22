@@ -89,7 +89,18 @@ serve(async (req) => {
     const resultado = [];
 
     for (const produto of produtos) {
-      const produtoNormalizado = normalizarNomeProduto(produto);
+      // 🔍 BUSCAR PRODUTO NO ESTOQUE PARA OBTER produto_nome_normalizado
+      const { data: produtoEstoque } = await supabase
+        .from('estoque_app')
+        .select('produto_nome_normalizado, produto_master_id')
+        .eq('user_id', userId)
+        .or(`produto_nome.ilike.%${produto}%,produto_nome_exibicao.ilike.%${produto}%`)
+        .limit(1)
+        .maybeSingle();
+
+      // Usar produto_nome_normalizado do banco se disponível, caso contrário normalizar
+      const produtoNormalizado = produtoEstoque?.produto_nome_normalizado || normalizarNomeProduto(produto);
+      console.log(`✅ Produto: "${produto}" → normalizado: "${produtoNormalizado}" (master: ${produtoEstoque?.produto_master_id || 'não'})`);
       
       // 1. Buscar última compra do próprio usuário
       const { data: ultimaCompraUsuario, error: errorUsuario } = await supabase

@@ -266,12 +266,19 @@ const EstoqueAtual = () => {
 
       console.log('🕒 Carregando histórico de preços para estoque...');
 
-      // Extrair nomes únicos dos produtos do estoque
-      const nomesProdutos = estoque.map(item => 
+      // 🔥 FILTRAR: Apenas produtos COM produto_master_id (normalizados)
+      const produtosNormalizados = estoque.filter(item => item.produto_master_id !== null);
+      console.log(`📊 Total: ${estoque.length} | Normalizados: ${produtosNormalizados.length} | Pendentes: ${estoque.length - produtosNormalizados.length}`);
+
+      // Extrair nomes únicos dos produtos normalizados
+      const nomesProdutos = produtosNormalizados.map(item => 
         item.produto_nome_exibicao || item.produto_nome || ''
       ).filter(nome => nome.trim() !== '');
 
-      if (nomesProdutos.length === 0) return;
+      if (nomesProdutos.length === 0) {
+        console.log('⚠️ Nenhum produto normalizado para buscar histórico');
+        return;
+      }
 
       // Buscar configuração de área de atuação do usuário
       const { data: config } = await supabase
@@ -1902,8 +1909,19 @@ const EstoqueAtual = () => {
                                           })()}
                                         </div>
 
-                                        {/* Linha 2: Menor preço na área com fallbacks */}
+                                         {/* Linha 2: Menor preço na área com fallbacks */}
                                         {(() => {
+                                          // 🔥 VERIFICAÇÃO ESPECIAL: Produto sem normalização (sem master)
+                                          if (!item.produto_master_id) {
+                                            const precoEstoque = item.preco_unitario_ultimo;
+                                            return (
+                                              <div className="text-amber-600 italic text-sm flex items-center gap-1">
+                                                <Sparkles className="w-3 h-3" />
+                                                ⏳ Aguardando normalização - preço pago: R$ {(precoEstoque || 0).toFixed(2)}/{unidadeFormatada}
+                                              </div>
+                                            );
+                                          }
+
                                           // PRIORIDADE 1: Menor preço na área
                                           if (historicoProduto?.menorPrecoArea) {
                                             return (
