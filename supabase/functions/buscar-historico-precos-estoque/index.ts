@@ -77,9 +77,12 @@ serve(async (req) => {
 
     const { produtos, userId, latitude, longitude, raioKm } = await req.json();
 
-    if (!produtos || !Array.isArray(produtos) || !userId) {
+    if (!produtos || !Array.isArray(produtos) || produtos.length === 0 || !userId) {
       return new Response(
-        JSON.stringify({ error: 'Parâmetros inválidos. Necessário: produtos (array), userId' }),
+        JSON.stringify({ 
+          success: false,
+          error: 'Parâmetros inválidos. Necessário: produtos (array não-vazio), userId' 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -88,19 +91,80 @@ serve(async (req) => {
 
     const resultado = [];
 
-    for (const produto of produtos) {
-      // 🔍 BUSCAR PRODUTO NO ESTOQUE PARA OBTER produto_nome_normalizado
-      const { data: produtoEstoque } = await supabase
-        .from('estoque_app')
-        .select('produto_nome_normalizado, produto_master_id')
-        .eq('user_id', userId)
-        .or(`produto_nome.ilike.%${produto}%,produto_nome_exibicao.ilike.%${produto}%`)
-        .limit(1)
-        .maybeSingle();
+    for (const produtoData of produtos) {
+      // Suportar tanto string quanto objeto
+      const produtoNome = typeof produtoData === 'string' 
+        ? produtoData 
+        : produtoData.produto_nome;
+      
+      const produtoId = typeof produtoData === 'object' 
+        ? produtoData.id 
+        : null;
 
-      // Usar produto_nome_normalizado do banco se disponível, caso contrário normalizar
-      const produtoNormalizado = produtoEstoque?.produto_nome_normalizado || normalizarNomeProduto(produto);
-      console.log(`✅ Produto: "${produto}" → normalizado: "${produtoNormalizado}" (master: ${produtoEstoque?.produto_master_id || 'não'})`);
+      const produtoMasterId = typeof produtoData === 'object'
+        ? produtoData.produto_master_id
+        : null;
+
+      console.log(`📦 Processando: ${produtoNome} | ID: ${produtoId} | Master: ${produtoMasterId}`);
+
+      // 🔍 BUSCAR PRODUTO NO ESTOQUE (BUSCA EXATA POR ID OU NOME)
+      let produtoEstoque = null;
+      
+      // Buscar primeiro por ID (mais preciso)
+      if (produtoId) {
+        console.log(`🔍 Buscando por ID: ${produtoId}`);
+        const { data } = await supabase
+          .from('estoque_app')
+          .select('produto_nome_normalizado, produto_master_id, produto_nome')
+          .eq('user_id', userId)
+          .eq('id', produtoId)
+          .maybeSingle();
+        produtoEstoque = data;
+        if (produtoEstoque) {
+          console.log(`✅ Encontrado por ID: ${produtoEstoque.produto_nome}`);
+        }
+      }
+
+      // Fallback: buscar por nome exato
+      if (!produtoEstoque && produtoNome) {
+        console.log(`🔍 Fallback: Buscando por nome exato: ${produtoNome}`);
+        const { data } = await supabase
+          .from('estoque_app')
+          .select('produto_nome_normalizado, produto_master_id, produto_nome')
+          .eq('user_id', userId)
+          .eq('produto_nome', produtoNome)
+          .maybeSingle();
+        produtoEstoque = data;
+        if (produtoEstoque) {
+          console.log(`✅ Encontrado por nome: ${produtoEstoque.produto_nome}`);
+        }
+      }
+
+      if (!produtoEstoque) {
+        console.log(`❌ Produto não encontrado: ${produtoNome}`);
+        resultado.push({
+          produto: produtoNome,
+          ultimaCompraUsuario: null,
+          menorPrecoArea: null,
+          erro: 'Produto não encontrado no estoque'
+        });
+        continue;
+      }
+
+      if (!produtoEstoque.produto_master_id) {
+        console.log(`⏳ Produto sem master_id: ${produtoNome}`);
+        resultado.push({
+          produto: produtoNome,
+          ultimaCompraUsuario: null,
+          menorPrecoArea: null,
+          erro: 'Produto não normalizado'
+        });
+        continue;
+      }
+
+      // Usar produto_nome_normalizado do banco
+      const produtoNormalizado = produtoEstoque.produto_nome_normalizado || normalizarNomeProduto(produtoNome);
+      console.log(`✅ Normalizado: "${produtoNormalizado}" (master: ${produtoEstoque.produto_master_id})`);
       
       // 1. Buscar última compra do próprio usuário
       const { data: ultimaCompraUsuario, error: errorUsuario } = await supabase
@@ -305,7 +369,7 @@ serve(async (req) => {
       }
 
       resultado.push({
-        produto,
+        produto: produtoNome,
         ultimaCompraUsuario,
         menorPrecoArea
       });

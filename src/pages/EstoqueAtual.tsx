@@ -270,15 +270,19 @@ const EstoqueAtual = () => {
       const produtosNormalizados = estoque.filter(item => item.produto_master_id !== null);
       console.log(`📊 Total: ${estoque.length} | Normalizados: ${produtosNormalizados.length} | Pendentes: ${estoque.length - produtosNormalizados.length}`);
 
-      // Extrair nomes únicos dos produtos normalizados
-      const nomesProdutos = produtosNormalizados.map(item => 
-        item.produto_nome_exibicao || item.produto_nome || ''
-      ).filter(nome => nome.trim() !== '');
+      // ✅ ENVIAR OBJETOS COMPLETOS (id, produto_nome, produto_master_id)
+      const produtosParaBuscar = produtosNormalizados.map(item => ({
+        id: item.id,
+        produto_nome: item.produto_nome,
+        produto_master_id: item.produto_master_id
+      }));
 
-      if (nomesProdutos.length === 0) {
+      if (produtosParaBuscar.length === 0) {
         console.log('⚠️ Nenhum produto normalizado para buscar histórico');
         return;
       }
+
+      console.log('📤 Enviando produtos para busca:', produtosParaBuscar.slice(0, 3));
 
       // Buscar configuração de área de atuação do usuário
       const { data: config } = await supabase
@@ -296,7 +300,7 @@ const EstoqueAtual = () => {
       try {
         const { data: historicoData, error: historicoError } = await supabase.functions.invoke('buscar-historico-precos-estoque', {
           body: {
-            produtos: nomesProdutos,
+            produtos: produtosParaBuscar, // ✅ Enviando objetos completos
             userId: user.id,
             latitude: coordenadas.latitude,
             longitude: coordenadas.longitude,
