@@ -218,6 +218,55 @@ async function buscarProdutoMaster(
   }
 }
 
+// ================== RECATEGORIZAÇÃO DINÂMICA ==================
+
+// 🔄 Aplicar regras de recategorização automaticamente
+async function aplicarRegrasRecategorizacao(
+  produtoNome: string,
+  categoriaAtual: string,
+  regrasCache: any[] | null,
+  contador?: { value: number }
+): Promise<string> {
+  try {
+    // Se não há regras em cache, retornar categoria atual
+    if (!regrasCache || regrasCache.length === 0) {
+      return categoriaAtual;
+    }
+
+    const nomeLower = produtoNome.toLowerCase();
+    const categoriaUpper = categoriaAtual.toUpperCase();
+
+    // Verificar cada regra
+    for (const regra of regrasCache) {
+      // Verificar se alguma keyword faz match
+      const matchKeyword = regra.keywords.some((kw: string) => 
+        nomeLower.includes(kw.toLowerCase())
+      );
+
+      if (!matchKeyword) continue;
+
+      // Verificar restrição de categoria origem (se existir)
+      if (regra.categorias_origem && regra.categorias_origem.length > 0) {
+        const origemMatch = regra.categorias_origem.some((cat: string) => 
+          categoriaUpper.includes(cat.toUpperCase())
+        );
+        if (!origemMatch) continue;
+      }
+
+      // ✅ Regra aplicável! Incrementar contador e retornar nova categoria
+      if (contador) contador.value++;
+      console.log(`🔄 Recategorizado: "${produtoNome}" | ${categoriaAtual} → ${regra.categoria_destino} | ${regra.descricao}`);
+      
+      return regra.categoria_destino.toLowerCase();
+    }
+
+    return categoriaAtual; // Nenhuma regra aplicável
+  } catch (error: any) {
+    console.error(`⚠️ Erro ao aplicar regras: ${error.message}`);
+    return categoriaAtual; // Fallback: manter categoria original
+  }
+}
+
 // ================== EDGE FUNCTION ==================
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -241,6 +290,15 @@ serve(async (req) => {
     }
 
     console.log(`🏁 process-receipt-full START - nota_id=${finalNotaId}, force=${force || false}`);
+
+    // 🔄 CARREGAR REGRAS DE RECATEGORIZAÇÃO (cache para performance)
+    console.log('📋 Carregando regras de recategorização...');
+    const { data: regrasRecategorizacao } = await supabase
+      .from('regras_recategorizacao')
+      .select('*')
+      .eq('ativa', true);
+    
+    console.log(`✅ ${regrasRecategorizacao?.length || 0} regras ativas carregadas`);
 
     // 🛡️ PROTEÇÃO CONTRA RE-PROCESSAMENTO
     // Buscar nota com verificação de status processada
@@ -523,6 +581,7 @@ serve(async (req) => {
 
     // Consolidar itens duplicados antes de inserir no estoque
     const produtosConsolidados = new Map<string, any>();
+    let produtosRecategorizados = 0; // Contador de recategorizações
     
     for (const item of itens) {
       const key = item.descricao; // usar descrição como chave para consolidar
@@ -554,11 +613,20 @@ serve(async (req) => {
         console.log(`📦 Consolidado: ${key} | Qtd: ${itemExistente.quantidade} | Preço médio: R$ ${itemExistente.preco_unitario_ultimo.toFixed(2)}`);
       } else {
         // Novo item
+        const contadorRecategorizacao = { value: produtosRecategorizados };
+        const categoriaFinal = await aplicarRegrasRecategorizacao(
+          item.descricao,
+          (item.categoria || 'outros'),
+          regrasRecategorizacao,
+          contadorRecategorizacao
+        );
+        produtosRecategorizados = contadorRecategorizacao.value;
+        
         produtosConsolidados.set(key, {
           user_id: nota.usuario_id,
           nota_id: nota.id,
           produto_nome: item.descricao,
-          categoria: (item.categoria || 'outros').toLowerCase(),
+          categoria: categoriaFinal,
           quantidade: quantidadeFinal,
           unidade_medida: normalizarUnidadeMedida(item.unidade || 'unidade'),
           preco_unitario_ultimo: precoUnitarioFinal,
@@ -572,6 +640,7 @@ serve(async (req) => {
     const produtosEstoque = Array.from(produtosConsolidados.values());
     
     console.log(`📦 Itens únicos para inserir no estoque: ${produtosEstoque.length} (de ${itens.length} itens originais)`);
+    console.log(`🔄 Produtos recategorizados automaticamente: ${produtosRecategorizados} (${((produtosRecategorizados/produtosEstoque.length)*100).toFixed(1)}%)`);
     
     // 🔒 CORREÇÃO #2: Salvar dados_extraidos ANTES de inserir no estoque (segurança contra perda de dados)
     console.log('💾 Salvando dados extraídos antes de processar estoque...');
@@ -866,6 +935,7 @@ serve(async (req) => {
         success: true,
         nota_id: finalNotaId,
         itens_inseridos: inserted.length,
+        produtos_recategorizados: produtosRecategorizados,
         total_financeiro: totalFinanceiro.toFixed(2),
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
