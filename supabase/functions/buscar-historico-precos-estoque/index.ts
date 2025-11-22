@@ -9,12 +9,30 @@ const corsHeaders = {
 
 // Função para normalizar nomes de produtos para matching robusto
 function normalizarNomeProduto(nome: string): string {
+  // 1. Lowercase e trim básico
   let normalizado = nome
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' '); // Espaços múltiplos → único
   
-  // Normalizar abreviações comuns
+  // 2. Remover acentos (Unicode normalization)
+  normalizado = normalizado
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  
+  // 3. Remover palavras descritivas comuns
+  const palavrasRemover = [
+    'kg', 'granel', 'unidade', 'un', 'super', 'extra',
+    'tradicional', 'classico', 'trad', 'trad.', 'gra.', 'gra',
+    'quilograma', 'quilogramas'
+  ];
+  
+  for (const palavra of palavrasRemover) {
+    const regex = new RegExp(`\\b${palavra}\\b`, 'gi');
+    normalizado = normalizado.replace(regex, '');
+  }
+  
+  // 4. Normalizar abreviações comuns
   const abreviacoes: { [key: string]: string } = {
     's/lac': 'sem lactose',
     'c/lac': 'com lactose',
@@ -23,13 +41,11 @@ function normalizarNomeProduto(nome: string): string {
     's/sal': 'sem sal',
     'pct': 'pacote',
     'cx': 'caixa',
-    'un': 'unidade',
-    'kg': 'quilograma',
     'lt': 'litro',
     'ml': 'mililitro',
     'gr': 'grama',
-    'pç': 'peça',
-    'pc': 'peça'
+    'pc': 'peca',
+    'peca': 'peca'
   };
   
   // Substituir cada abreviação
@@ -39,10 +55,10 @@ function normalizarNomeProduto(nome: string): string {
     normalizado = normalizado.replace(regex, completo);
   }
   
-  // Remover pontuação exceto ponto entre números
+  // 5. Remover pontuação exceto ponto entre números
   normalizado = normalizado.replace(/[^a-z0-9\s.]/g, ' ');
   
-  // Remover múltiplos espaços novamente
+  // 6. Limpar espaços múltiplos novamente
   normalizado = normalizado.replace(/\s+/g, ' ').trim();
   
   return normalizado;
