@@ -1043,13 +1043,41 @@ async function criarCandidato(
   if (status === 'auto_aprovado' && normalizacao.produto_master_id && produto.nota_imagem_id) {
     console.log(`🔗 Vinculando produto ao master no estoque_app: ${produto.texto_original}`);
     
+    // Buscar detalhes completos do master para atualizar estoque
+    const { data: masterDetails, error: masterError } = await supabase
+      .from('produtos_master_global')
+      .select('imagem_url, nome_padrao, marca, nome_base, categoria')
+      .eq('id', normalizacao.produto_master_id)
+      .single();
+    
+    if (masterError) {
+      console.error(`⚠️ Erro ao buscar master: ${masterError.message}`);
+    }
+    
+    // Preparar dados para atualização completa
+    const updateData: any = {
+      produto_master_id: normalizacao.produto_master_id,
+      sku_global: normalizacao.sku_global,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Adicionar campos do master se disponíveis
+    if (masterDetails) {
+      updateData.produto_nome = masterDetails.nome_padrao;
+      updateData.produto_nome_normalizado = masterDetails.nome_padrao;
+      updateData.nome_base = masterDetails.nome_base;
+      updateData.marca = masterDetails.marca;
+      updateData.categoria = masterDetails.categoria?.toLowerCase() || normalizacao.categoria?.toLowerCase();
+      
+      // Atualizar imagem se master tiver
+      if (masterDetails.imagem_url) {
+        updateData.imagem_url = masterDetails.imagem_url;
+      }
+    }
+    
     const { error: estoqueError, count } = await supabase
       .from('estoque_app')
-      .update({
-        produto_master_id: normalizacao.produto_master_id,
-        sku_global: normalizacao.sku_global,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('nota_id', produto.nota_imagem_id)
       .eq('produto_nome', produto.texto_original)
       .is('produto_master_id', null); // Só atualizar quem ainda não tem master
@@ -1057,7 +1085,10 @@ async function criarCandidato(
     if (estoqueError) {
       console.error(`⚠️ Erro ao atualizar estoque_app: ${estoqueError.message}`);
     } else {
-      console.log(`✅ Estoque atualizado: ${produto.texto_original} → ${normalizacao.sku_global}`);
+      console.log(`✅ Estoque atualizado completamente: ${produto.texto_original} → ${normalizacao.nome_padrao || normalizacao.sku_global}`);
+      if (masterDetails?.imagem_url) {
+        console.log(`📸 Imagem do master vinculada: ${masterDetails.imagem_url}`);
+      }
     }
   }
 }
