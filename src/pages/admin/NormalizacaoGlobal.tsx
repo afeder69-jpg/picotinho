@@ -164,7 +164,6 @@ export default function NormalizacaoGlobal() {
   // Estados para importação Open Food Facts
   const [importando, setImportando] = useState(false);
   const [progressoImportacao, setProgressoImportacao] = useState(0);
-  const [forcandoRenormalizacao, setForcandoRenormalizacao] = useState(false);
   const [statsImportacao, setStatsImportacao] = useState({
     total: 0,
     importados: 0,
@@ -822,57 +821,6 @@ export default function NormalizacaoGlobal() {
   }
 
 
-  async function forcarRenormalizacao() {
-    setForcandoRenormalizacao(true);
-    
-    try {
-      toast({
-        title: "🔄 Forçando renormalização...",
-        description: "Resetando flags e preparando para reprocessamento"
-      });
-
-      // Buscar notas que precisam ser renormalizadas (com produtos aguardando)
-      const { data: notasParaRenormalizar } = await supabase
-        .from('estoque_app')
-        .select('nota_id')
-        .not('produto_candidato_id', 'is', null)
-        .is('produto_master_id', null)
-        .not('nota_id', 'is', null);
-
-      if (!notasParaRenormalizar || notasParaRenormalizar.length === 0) {
-        toast({
-          title: "✅ Nada a fazer",
-          description: "Não há produtos aguardando normalização",
-        });
-        setForcandoRenormalizacao(false);
-        return;
-      }
-
-      // Resetar flag normalizada das notas
-      const notasIds = [...new Set(notasParaRenormalizar.map(n => n.nota_id))];
-      await supabase
-        .from('notas_imagens')
-        .update({ normalizada: false })
-        .in('id', notasIds);
-
-      toast({
-        title: "✅ Renormalização iniciada!",
-        description: `${notasIds.length} nota(s) preparada(s). Execute "Processar Normalizações" para continuar.`
-      });
-
-      await carregarDados();
-
-    } catch (error: any) {
-      console.error('Erro ao forçar renormalização:', error);
-      toast({
-        title: "❌ Erro ao forçar renormalização",
-        description: error.message,
-        variant: "destructive"
-      });
-    } finally {
-      setForcandoRenormalizacao(false);
-    }
-  }
 
   async function executarConsolidacaoManual() {
     setConsolidando(true);
@@ -1960,7 +1908,7 @@ export default function NormalizacaoGlobal() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Button 
               onClick={processarNormalizacao}
-              disabled={processando || consolidando || forcandoRenormalizacao}
+              disabled={processando || consolidando}
               className="flex-1 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all"
             >
               <Zap className="w-4 h-4" />
@@ -1968,18 +1916,8 @@ export default function NormalizacaoGlobal() {
             </Button>
 
             <Button 
-              onClick={forcarRenormalizacao}
-              disabled={processando || consolidando || forcandoRenormalizacao || stats.pendentesTotal === 0}
-              variant="outline"
-              className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all border-blue-300 hover:border-blue-500 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:hover:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950/30"
-            >
-              <RotateCcw className="w-4 h-4" />
-              {forcandoRenormalizacao ? 'Forçando...' : 'Forçar Renormalização'}
-            </Button>
-
-            <Button 
               onClick={() => setConfirmarConsolidacaoOpen(true)}
-              disabled={processando || consolidando || forcandoRenormalizacao}
+              disabled={processando || consolidando}
               variant="destructive"
               className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
             >
@@ -1999,7 +1937,7 @@ export default function NormalizacaoGlobal() {
               onClick={() => navigate("/admin/normalizacoes-estabelecimentos")}
               variant="outline"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando || forcandoRenormalizacao}
+              disabled={processando || consolidando}
             >
               <Building2 className="w-4 h-4" />
               Gerenciar Estabelecimentos
@@ -2009,7 +1947,7 @@ export default function NormalizacaoGlobal() {
               onClick={() => navigate("/recategorizar-inteligente")}
               variant="secondary"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando || recategorizando || forcandoRenormalizacao}
+              disabled={processando || consolidando || recategorizando}
             >
               <RotateCcw className="w-4 h-4" />
               Recategorizar Produtos
