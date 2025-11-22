@@ -7,6 +7,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Função para normalizar nomes de produtos para matching robusto
+function normalizarNomeProduto(nome: string): string {
+  let normalizado = nome
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' '); // Espaços múltiplos → único
+  
+  // Normalizar abreviações comuns
+  const abreviacoes: { [key: string]: string } = {
+    's/lac': 'sem lactose',
+    'c/lac': 'com lactose',
+    's/lactose': 'sem lactose',
+    'c/sal': 'com sal',
+    's/sal': 'sem sal',
+    'pct': 'pacote',
+    'cx': 'caixa',
+    'un': 'unidade',
+    'kg': 'quilograma',
+    'lt': 'litro',
+    'ml': 'mililitro',
+    'gr': 'grama',
+    'pç': 'peça',
+    'pc': 'peça'
+  };
+  
+  // Substituir cada abreviação
+  for (const [abrev, completo] of Object.entries(abreviacoes)) {
+    // Usar regex para match de palavra completa
+    const regex = new RegExp(`\\b${abrev}\\b`, 'gi');
+    normalizado = normalizado.replace(regex, completo);
+  }
+  
+  // Remover pontuação exceto ponto entre números
+  normalizado = normalizado.replace(/[^a-z0-9\s.]/g, ' ');
+  
+  // Remover múltiplos espaços novamente
+  normalizado = normalizado.replace(/\s+/g, ' ').trim();
+  
+  return normalizado;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -32,7 +73,7 @@ serve(async (req) => {
     const resultado = [];
 
     for (const produto of produtos) {
-      const produtoNormalizado = produto.toLowerCase().trim();
+      const produtoNormalizado = normalizarNomeProduto(produto);
       
       // 1. Buscar última compra do próprio usuário
       const { data: ultimaCompraUsuario, error: errorUsuario } = await supabase
@@ -94,7 +135,7 @@ serve(async (req) => {
         if (!dataCompra) continue;
 
         for (const item of dados.itens) {
-          const nomeItem = (item.descricao || item.nome || '').toLowerCase().trim();
+          const nomeItem = normalizarNomeProduto(item.descricao || item.nome || '');
           
           if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
             if (!ultimaCompraDoUsuario || new Date(dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
@@ -191,7 +232,7 @@ serve(async (req) => {
             const dataFormatada = dataCompra.split('T')[0];
 
             for (const item of dados.itens) {
-              const nomeItem = (item.descricao || item.nome || '').toLowerCase().trim();
+              const nomeItem = normalizarNomeProduto(item.descricao || item.nome || '');
               
               if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
                 const preco = parseFloat(item.valor_unitario || 0);
