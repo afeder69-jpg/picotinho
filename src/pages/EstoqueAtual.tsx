@@ -1938,15 +1938,19 @@ const EstoqueAtual = () => {
                                           // PRIORIDADE 2: Última compra do usuário (FALLBACK conforme regra)
                                           if (historicoProduto?.ultimaCompraUsuario) {
                                             const precoUltima = historicoProduto.ultimaCompraUsuario.preco || 0;
-                                            return (
-                                              <div className="text-blue-600 italic text-sm">
-                                                ⚠️ Sem preços na área - usando sua última compra: {' '}
-                                                {historicoProduto.ultimaCompraUsuario.data ? 
-                                                  formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
-                                                  'Sem data'
-                                                } - R$ {precoUltima.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoUltima * quantidade).toFixed(2)}
-                                              </div>
-                                            );
+                                            
+                                            // Validar se é valor válido antes de mostrar
+                                            if (precoUltima > 0) {
+                                              return (
+                                                <div className="text-blue-600 italic text-sm">
+                                                  ⚠️ Sem preços na área - usando sua última compra: {' '}
+                                                  {historicoProduto.ultimaCompraUsuario.data ? 
+                                                    formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
+                                                    'Sem data'
+                                                  } - R$ {precoUltima.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoUltima * quantidade).toFixed(2)}
+                                                </div>
+                                              );
+                                            }
                                           }
                                           
                                           // PRIORIDADE 3: Preço do próprio item no estoque (FALLBACK FINAL)
