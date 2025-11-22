@@ -662,7 +662,13 @@ const EstoqueAtual = () => {
       const LIMITE_BUSCA = 1000; // Limitar para evitar timeouts
       const { data, error } = await supabase
         .from('estoque_app')
-        .select('*')
+        .select(`
+          *,
+          produto_master:produtos_master_global(
+            imagem_url,
+            imagem_path
+          )
+        `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false }) // Mais recentes primeiro
         .limit(LIMITE_BUSCA);
@@ -721,6 +727,12 @@ const EstoqueAtual = () => {
         if (produtosMap.has(chave)) {
           // Produto já existe, somar quantidades e manter o preço mais recente
           const itemExistente = produtosMap.get(chave);
+          
+          // Priorizar imagem do master se produto estiver normalizado
+          const imagemAtualizada = item.produto_master_id && item.produto_master?.[0]?.imagem_url
+            ? item.produto_master[0].imagem_url
+            : (item.imagem_url || itemExistente.imagem_url);
+          
           produtosMap.set(chave, {
             ...itemExistente,
             quantidade_total: itemExistente.quantidade_total + item.quantidade,
@@ -731,10 +743,16 @@ const EstoqueAtual = () => {
             updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at, // Para compatibilidade
             ids_originais: [...itemExistente.ids_originais, item.id],
             nomes_originais: [...itemExistente.nomes_originais, item.produto_nome],
-            itens_originais: itemExistente.itens_originais + 1
+            itens_originais: itemExistente.itens_originais + 1,
+            imagem_url: imagemAtualizada // Atualizar com imagem mais relevante
           });
         } else {
           // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)
+          // Priorizar imagem do master se produto estiver normalizado
+          const imagemFinal = item.produto_master_id && item.produto_master?.[0]?.imagem_url
+            ? item.produto_master[0].imagem_url
+            : item.imagem_url;
+          
           produtosMap.set(chave, {
             ...item,
             produto_nome: chave, // Usar nome normalizado consistente
@@ -745,7 +763,8 @@ const EstoqueAtual = () => {
             ultima_atualizacao: item.updated_at,
             ids_originais: [item.id],
             nomes_originais: [item.produto_nome],
-            itens_originais: 1
+            itens_originais: 1,
+            imagem_url: imagemFinal // Imagem priorizada do master
           });
         }
       });
