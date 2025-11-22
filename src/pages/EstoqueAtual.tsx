@@ -1902,38 +1902,70 @@ const EstoqueAtual = () => {
                                           })()}
                                         </div>
 
-                                        {/* Linha 2: Menor preço na área */}
-                                        {historicoProduto?.menorPrecoArea ? (
-                                          <div className="text-muted-foreground">
-                                            {historicoProduto.menorPrecoArea.data ? 
-                                              formatDateSafe(historicoProduto.menorPrecoArea.data) : 
-                                              'Sem data'
-                                             } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
-                                             {(() => {
-                                               const precoOriginal = item.preco_unitario_ultimo || 0;
-                                               const precoAreaAtual = historicoProduto.menorPrecoArea.preco || 0;
-                                               
-                                               if (precoAreaAtual === 0 || precoOriginal === 0) {
-                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
-                                               }
-                                               
-                                               const atual = normalizeValue(precoAreaAtual);
-                                               const original = normalizeValue(precoOriginal);
-                                               
-                                               if (atual > original) {
-                                                 return <ArrowUp className="w-3 h-3 text-red-600 ml-1 inline" />;
-                                               } else if (atual < original) {
-                                                 return <ArrowDown className="w-3 h-3 text-green-600 ml-1 inline" />;
-                                               } else {
-                                                 return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
-                                               }
-                                             })()}
-                                          </div>
-                                        ) : (
-                                          <div className="text-muted-foreground italic">
-                                            Sem dados de preço atual na área
-                                          </div>
-                                        )}
+                                        {/* Linha 2: Menor preço na área com fallbacks */}
+                                        {(() => {
+                                          // PRIORIDADE 1: Menor preço na área
+                                          if (historicoProduto?.menorPrecoArea) {
+                                            return (
+                                              <div className="text-muted-foreground">
+                                                {historicoProduto.menorPrecoArea.data ? 
+                                                  formatDateSafe(historicoProduto.menorPrecoArea.data) : 
+                                                  'Sem data'
+                                                 } - R$ {(historicoProduto.menorPrecoArea.preco || 0).toFixed(2)}/{unidadeFormatada} - T: R$ {((historicoProduto.menorPrecoArea.preco || 0) * quantidade).toFixed(2)}
+                                                 {(() => {
+                                                   const precoOriginal = item.preco_unitario_ultimo || 0;
+                                                   const precoAreaAtual = historicoProduto.menorPrecoArea.preco || 0;
+                                                   
+                                                   if (precoAreaAtual === 0 || precoOriginal === 0) {
+                                                     return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
+                                                   }
+                                                   
+                                                   const atual = normalizeValue(precoAreaAtual);
+                                                   const original = normalizeValue(precoOriginal);
+                                                   
+                                                   if (atual > original) {
+                                                     return <ArrowUp className="w-3 h-3 text-red-600 ml-1 inline" />;
+                                                   } else if (atual < original) {
+                                                     return <ArrowDown className="w-3 h-3 text-green-600 ml-1 inline" />;
+                                                   } else {
+                                                     return <Minus className="w-3 h-3 text-muted-foreground/60 ml-1 inline" />;
+                                                   }
+                                                 })()}
+                                              </div>
+                                            );
+                                          }
+                                          
+                                          // PRIORIDADE 2: Última compra do usuário (FALLBACK conforme regra)
+                                          if (historicoProduto?.ultimaCompraUsuario) {
+                                            const precoUltima = historicoProduto.ultimaCompraUsuario.preco || 0;
+                                            return (
+                                              <div className="text-blue-600 italic text-sm">
+                                                ⚠️ Sem preços na área - usando sua última compra: {' '}
+                                                {historicoProduto.ultimaCompraUsuario.data ? 
+                                                  formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
+                                                  'Sem data'
+                                                } - R$ {precoUltima.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoUltima * quantidade).toFixed(2)}
+                                              </div>
+                                            );
+                                          }
+                                          
+                                          // PRIORIDADE 3: Preço do próprio item no estoque (FALLBACK FINAL)
+                                          const precoEstoque = item.preco_unitario_ultimo;
+                                          if (precoEstoque && precoEstoque > 0) {
+                                            return (
+                                              <div className="text-amber-600 italic text-sm">
+                                                ⚠️ Sem histórico - usando preço do estoque: R$ {precoEstoque.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoEstoque * quantidade).toFixed(2)}
+                                              </div>
+                                            );
+                                          }
+                                          
+                                          // ÚLTIMA OPÇÃO: Realmente não há dados
+                                          return (
+                                            <div className="text-muted-foreground italic">
+                                              Sem dados de preço disponíveis
+                                            </div>
+                                          );
+                                        })()}
 
                                         {/* Fallback removido - sempre mostrar dados do estoque se disponíveis */}
                                       </>
