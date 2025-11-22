@@ -367,6 +367,14 @@ serve(async (req) => {
 
     console.log(`✅ Lock de processamento adquirido para nota ${finalNotaId}`);
 
+    // 🔄 RESETAR FLAG NORMALIZADA PARA PERMITIR RENORMALIZAÇÃO
+    console.log('🔄 Resetando flag normalizada para permitir reprocessamento completo...');
+    await supabase
+      .from('notas_imagens')
+      .update({ normalizada: false })
+      .eq('id', finalNotaId);
+    console.log('✅ Flag normalizada resetada - produtos serão renormalizados');
+
     try {
       // 💰 ATUALIZAÇÃO PREVENTIVA DE PREÇOS (ANTES DE QUALQUER CHECK)
       // Isso garante que preços sejam atualizados mesmo em re-validações
@@ -712,6 +720,30 @@ serve(async (req) => {
     
     if (masterEncontrados > 0) {
       console.log(`🎉 Taxa de normalização automática: ${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%`);
+    }
+    
+    // 🧹 LIMPEZA DE CANDIDATOS ÓRFÃOS ANTES DE VINCULAR
+    console.log('🧹 Limpando candidatos órfãos da nota anterior...');
+    const { data: candidatosAntigos } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .select('id, texto_original')
+      .eq('nota_imagem_id', finalNotaId);
+    
+    if (candidatosAntigos && candidatosAntigos.length > 0) {
+      // Verificar quais candidatos não têm mais produto correspondente no estoque atual
+      const nomesAtuais = produtosEstoque.map(p => p.produto_nome);
+      const candidatosOrfaos = candidatosAntigos.filter(c => 
+        !nomesAtuais.includes(c.texto_original)
+      );
+      
+      if (candidatosOrfaos.length > 0) {
+        const idsOrfaos = candidatosOrfaos.map(c => c.id);
+        await supabase
+          .from('produtos_candidatos_normalizacao')
+          .delete()
+          .in('id', idsOrfaos);
+        console.log(`🗑️ ${candidatosOrfaos.length} candidatos órfãos removidos`);
+      }
     }
     
     // 🔗 FASE 2.5: VINCULAR PRODUTOS SEM MASTER A CANDIDATOS EXISTENTES

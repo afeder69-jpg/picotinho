@@ -164,6 +164,7 @@ export default function NormalizacaoGlobal() {
   // Estados para importação Open Food Facts
   const [importando, setImportando] = useState(false);
   const [progressoImportacao, setProgressoImportacao] = useState(0);
+  const [forcandoRenormalizacao, setForcandoRenormalizacao] = useState(false);
   const [statsImportacao, setStatsImportacao] = useState({
     total: 0,
     importados: 0,
@@ -314,6 +315,14 @@ export default function NormalizacaoGlobal() {
       const autoAprovados = todosCandidatos?.filter(c => c.status === 'auto_aprovado') || [];
       const pendentes = todosCandidatos?.filter(c => c.status === 'pendente') || [];
 
+      // 🔍 CORREÇÃO: Contar produtos aguardando normalização no ESTOQUE (com ampulheta)
+      // Estes são produtos com candidato mas sem master
+      const { count: aguardandoNoEstoque } = await supabase
+        .from('estoque_app')
+        .select('*', { count: 'exact', head: true })
+        .not('produto_candidato_id', 'is', null)
+        .is('produto_master_id', null);
+
       // Aprovados manualmente
       const { count: aprovadosManualmente } = await supabase
         .from('produtos_candidatos_normalizacao')
@@ -344,8 +353,11 @@ export default function NormalizacaoGlobal() {
         .from('profiles')
         .select('id');
 
-      // Calcular estimativa de novos produtos (30% dos pendentes)
-      const estimativaNovos = Math.round(pendentes.length * 0.3);
+      // Usar o maior valor entre pendentes na tabela e aguardando no estoque
+      const totalAguardando = Math.max(pendentes.length, aguardandoNoEstoque || 0);
+      
+      // Calcular estimativa de novos produtos (30% dos aguardando)
+      const estimativaNovos = Math.round(totalAguardando * 0.3);
 
       setStats({
         // Catálogo Master Global
@@ -363,14 +375,14 @@ export default function NormalizacaoGlobal() {
         // Fila de Processamento - Aprovados Manualmente
         aprovadosManuaisTotal: aprovadosManualmente || 0,
         
-        // Fila de Processamento - Pendentes (APENAS pendentes reais)
-        pendentesTotal: pendentes.length, // ✅ Excluindo auto-aprovados
+        // Fila de Processamento - Aguardando (corrigido)
+        pendentesTotal: totalAguardando,
         pendentesOpenFoodFacts,
         pendentesNotasFiscais,
-        estimativaNovos,
         
         // Outros
-        totalUsuarios: usuarios?.length || 0
+        totalUsuarios: usuarios?.length || 0,
+        estimativaNovos
       });
 
       // ===== PAGINAÇÃO APENAS DE PENDENTES =====
@@ -809,6 +821,58 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+
+  async function forcarRenormalizacao() {
+    setForcandoRenormalizacao(true);
+    
+    try {
+      toast({
+        title: "🔄 Forçando renormalização...",
+        description: "Resetando flags e preparando para reprocessamento"
+      });
+
+      // Buscar notas que precisam ser renormalizadas (com produtos aguardando)
+      const { data: notasParaRenormalizar } = await supabase
+        .from('estoque_app')
+        .select('nota_id')
+        .not('produto_candidato_id', 'is', null)
+        .is('produto_master_id', null)
+        .not('nota_id', 'is', null);
+
+      if (!notasParaRenormalizar || notasParaRenormalizar.length === 0) {
+        toast({
+          title: "✅ Nada a fazer",
+          description: "Não há produtos aguardando normalização",
+        });
+        setForcandoRenormalizacao(false);
+        return;
+      }
+
+      // Resetar flag normalizada das notas
+      const notasIds = [...new Set(notasParaRenormalizar.map(n => n.nota_id))];
+      await supabase
+        .from('notas_imagens')
+        .update({ normalizada: false })
+        .in('id', notasIds);
+
+      toast({
+        title: "✅ Renormalização iniciada!",
+        description: `${notasIds.length} nota(s) preparada(s). Execute "Processar Normalizações" para continuar.`
+      });
+
+      await carregarDados();
+
+    } catch (error: any) {
+      console.error('Erro ao forçar renormalização:', error);
+      toast({
+        title: "❌ Erro ao forçar renormalização",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setForcandoRenormalizacao(false);
+    }
+  }
 
   async function executarConsolidacaoManual() {
     setConsolidando(true);
@@ -1896,7 +1960,7 @@ export default function NormalizacaoGlobal() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Button 
               onClick={processarNormalizacao}
-              disabled={processando || consolidando}
+              disabled={processando || consolidando || forcandoRenormalizacao}
               className="flex-1 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all"
             >
               <Zap className="w-4 h-4" />
@@ -1904,8 +1968,18 @@ export default function NormalizacaoGlobal() {
             </Button>
 
             <Button 
+              onClick={forcarRenormalizacao}
+              disabled={processando || consolidando || forcandoRenormalizacao || stats.pendentesTotal === 0}
+              variant="outline"
+              className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all border-blue-300 hover:border-blue-500 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:hover:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950/30"
+            >
+              <RotateCcw className="w-4 h-4" />
+              {forcandoRenormalizacao ? 'Forçando...' : 'Forçar Renormalização'}
+            </Button>
+
+            <Button 
               onClick={() => setConfirmarConsolidacaoOpen(true)}
-              disabled={processando || consolidando}
+              disabled={processando || consolidando || forcandoRenormalizacao}
               variant="destructive"
               className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
             >
@@ -1925,7 +1999,7 @@ export default function NormalizacaoGlobal() {
               onClick={() => navigate("/admin/normalizacoes-estabelecimentos")}
               variant="outline"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando}
+              disabled={processando || consolidando || forcandoRenormalizacao}
             >
               <Building2 className="w-4 h-4" />
               Gerenciar Estabelecimentos
@@ -1935,7 +2009,7 @@ export default function NormalizacaoGlobal() {
               onClick={() => navigate("/recategorizar-inteligente")}
               variant="secondary"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando || recategorizando}
+              disabled={processando || consolidando || recategorizando || forcandoRenormalizacao}
             >
               <RotateCcw className="w-4 h-4" />
               Recategorizar Produtos
