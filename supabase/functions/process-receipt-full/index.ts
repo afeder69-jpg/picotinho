@@ -94,6 +94,40 @@ function limparUnidadesMedida(nome: string): string {
     .trim();
 }
 
+// 🔧 Normalizar nome do produto para matching consistente (usado em estoque)
+function normalizarNomeProdutoEstoque(nome: string): string {
+  // 1. Lowercase e trim básico
+  let normalizado = nome
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+  
+  // 2. Remover acentos (Unicode normalization)
+  normalizado = normalizado
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  
+  // 3. Remover palavras descritivas comuns
+  const palavrasRemover = [
+    'kg', 'granel', 'unidade', 'un', 'super', 'extra',
+    'tradicional', 'classico', 'trad', 'trad.', 'gra.', 'gra',
+    'quilograma', 'quilogramas'
+  ];
+  
+  for (const palavra of palavrasRemover) {
+    const regex = new RegExp(`\\b${palavra}\\b`, 'gi');
+    normalizado = normalizado.replace(regex, '');
+  }
+  
+  // 4. Remover pontuação exceto ponto entre números
+  normalizado = normalizado.replace(/[^a-z0-9\s.]/g, ' ');
+  
+  // 5. Limpar espaços múltiplos novamente
+  normalizado = normalizado.replace(/\s+/g, ' ').trim();
+  
+  return normalizado;
+}
+
 // ================== NORMALIZAÇÃO MASTER - FASE 2 ==================
 
 // 🔥 Cache em memória para produtos master já buscados
@@ -705,9 +739,10 @@ serve(async (req) => {
           
           console.log(`✅ Normalizado: ${produto.produto_nome} (SKU: ${produto.sku_global})`);
         } else {
-          // ⚠️ Master não encontrado, inserir sem normalizar (sku_global = NULL)
+          // ⚠️ Master não encontrado - CRIAR produto_nome_normalizado mesmo assim
+          produto.produto_nome_normalizado = normalizarNomeProdutoEstoque(produto.produto_nome);
           masterNaoEncontrados++;
-          console.log(`⚠️ Sem master: ${produto.produto_nome} (será enviado para aprovação)`);
+          console.log(`⚠️ Sem master: ${produto.produto_nome} (normalizado: ${produto.produto_nome_normalizado}) - aguardando aprovação`);
         }
       } catch (error: any) {
         // 🛡️ FALLBACK: Erro ao buscar master, continuar sem ele
