@@ -1275,6 +1275,7 @@ export default function NormalizacaoGlobal() {
           qtd_valor: produtoMaster.qtd_valor,
           qtd_unidade: produtoMaster.qtd_unidade,
           categoria: produtoMaster.categoria,
+          imagem_url: produtoMaster.imagem_url || null,
           produto_candidato_id: null
         })
         .eq('produto_candidato_id', candidatoAtual.id)
