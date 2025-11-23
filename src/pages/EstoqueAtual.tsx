@@ -249,7 +249,7 @@ const EstoqueAtual = () => {
       const { data } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('id')
-        .in('status', ['pendente', 'processando'])
+        .eq('status', 'processando')
         .limit(1);
       
       setNormalizacaoEmAndamento((data?.length || 0) > 0);
