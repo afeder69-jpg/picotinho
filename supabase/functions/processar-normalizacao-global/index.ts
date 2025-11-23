@@ -587,6 +587,105 @@ Deno.serve(async (req) => {
 // =====================================================
 
 // ============================================
+// NORMALIZAÇÃO AVANÇADA DE TEXTO PARA MATCHING
+// ============================================
+function normalizarTextoParaMatching(texto: string): string {
+  let normalizado = texto.toUpperCase().trim();
+  
+  // Remover pontuações problemáticas que atrapalham o matching
+  normalizado = normalizado
+    .replace(/\./g, ' ')  // Pontos viram espaços
+    .replace(/,/g, ' ')   // Vírgulas viram espaços
+    .replace(/\(/g, ' ')
+    .replace(/\)/g, ' ')
+    .replace(/\s+/g, ' ') // Normalizar múltiplos espaços
+    .trim();
+  
+  // Remover sufixos comuns que não afetam identidade do produto
+  const sufixosRemover = [
+    'UHT',
+    'TRADICIONAL',
+    'ORIGINAL',
+    'REGULAR',
+    'CLASSICO',
+    'COMUM'
+  ];
+  
+  for (const sufixo of sufixosRemover) {
+    const regex = new RegExp(`\\b${sufixo}\\b`, 'gi');
+    normalizado = normalizado.replace(regex, '').trim();
+  }
+  
+  // Normalizar espaços novamente após remoções
+  normalizado = normalizado.replace(/\s+/g, ' ').trim();
+  
+  return normalizado;
+}
+
+// ============================================
+// EXTRAÇÃO INTELIGENTE DE MARCA DO TEXTO
+// ============================================
+function extrairMarcaDoTexto(texto: string): string | null {
+  const textoUpper = texto.toUpperCase();
+  
+  // Lista de marcas conhecidas que podem aparecer no meio do texto
+  const marcasConhecidas = [
+    'ITALAC', 'ROYAL', 'APTI', 'NESTLE', 'DANONE', 'PARMALAT',
+    'ITAMBE', 'PIRACANJUBA', 'VIGOR', 'PAULISTA', 'CEMIL',
+    'TIROLEZ', 'PRESIDENTE', 'FRIMESA', 'AURORA', 'SADIA',
+    'PERDIGAO', 'SEARA', 'BRF', 'JBS', 'MINERVA', 'MARFRIG',
+    'CREMINAS', 'CLARAVAL', 'BETANIA', 'SCALA', 'QUATROAMB',
+    'UNIAO', 'DA BARRA', 'URBANO', 'CAMIL', 'TIO JOAO',
+    'TAEQ', 'QUALITA', 'SANTA AMALIA', 'GRANFINO'
+  ];
+  
+  for (const marca of marcasConhecidas) {
+    if (textoUpper.includes(marca)) {
+      return marca;
+    }
+  }
+  
+  return null;
+}
+
+// ============================================
+// EXTRAÇÃO DE PESO/VOLUME DO TEXTO
+// ============================================
+function extrairPesoVolume(texto: string): { valor: number; unidade: string } | null {
+  const textoUpper = texto.toUpperCase();
+  
+  // Padrões comuns de peso/volume
+  const padroes = [
+    /(\d+(?:\.\d+)?)\s*(KG|KILOS?|K)\b/i,
+    /(\d+(?:\.\d+)?)\s*(G|GRAMAS?|GR)\b/i,
+    /(\d+(?:\.\d+)?)\s*(L|LITROS?|LT)\b/i,
+    /(\d+(?:\.\d+)?)\s*(ML|MILILITROS?)\b/i,
+    /(\d+)\s*X\s*(\d+(?:\.\d+)?)\s*(G|ML)/i // Formato "6X200ML"
+  ];
+  
+  for (const padrao of padroes) {
+    const match = textoUpper.match(padrao);
+    if (match) {
+      let valor = parseFloat(match[1]);
+      let unidade = match[match.length - 1].toUpperCase();
+      
+      // Normalizar unidades
+      if (unidade === 'KG' || unidade === 'K' || unidade === 'KILOS') {
+        valor = valor * 1000;
+        unidade = 'G';
+      } else if (unidade === 'L' || unidade === 'LT' || unidade === 'LITROS') {
+        valor = valor * 1000;
+        unidade = 'ML';
+      }
+      
+      return { valor, unidade };
+    }
+  }
+  
+  return null;
+}
+
+// ============================================
 // BUSCA MULTI-CAMADA OTIMIZADA (3 LAYERS)
 // ============================================
 async function buscarProdutoSimilar(
@@ -594,13 +693,22 @@ async function buscarProdutoSimilar(
   textoOriginal: string,
   textoNormalizado: string
 ) {
+  // 🔧 NORMALIZAÇÃO AVANÇADA PARA MATCHING MAIS ROBUSTO
+  const textoParaMatching = normalizarTextoParaMatching(textoOriginal);
+  const marcaExtraida = extrairMarcaDoTexto(textoOriginal);
+  const pesoExtraido = extrairPesoVolume(textoOriginal);
+  
+  console.log(`🔧 Texto normalizado para matching: "${textoParaMatching}"`);
+  if (marcaExtraida) console.log(`🏷️  Marca detectada no texto: ${marcaExtraida}`);
+  if (pesoExtraido) console.log(`⚖️  Peso/Volume detectado: ${pesoExtraido.valor}${pesoExtraido.unidade}`);
   // CAMADA 1: Busca Exata em Sinônimos (~10ms - resolve 70-80% dos casos)
   console.log('🔍 Camada 1: Buscando em sinônimos...');
   
+  // Tentar com texto original e texto normalizado para matching
   const { data: sinonimo } = await supabase
     .from('produtos_sinonimos_globais')
     .select('produto_master_id, produtos_master_global(*)')
-    .ilike('texto_variacao', textoNormalizado)
+    .or(`texto_variacao.ilike.${textoNormalizado},texto_variacao.ilike.${textoParaMatching}`)
     .maybeSingle();
   
   if (sinonimo?.produtos_master_global) {
@@ -628,9 +736,9 @@ async function buscarProdutoSimilar(
     categoriaEstimada = 'HIGIENE';
   }
   
-  // Buscar fuzzy por categoria usando RPC
+  // Buscar fuzzy por categoria usando RPC (usar texto normalizado para melhor matching)
   const { data: similares } = await supabase.rpc('buscar_produtos_similares', {
-    texto_busca: textoNormalizado.split(' ').slice(0, 3).join(' '), // Primeiras 3 palavras
+    texto_busca: textoParaMatching.split(' ').slice(0, 3).join(' '), // Primeiras 3 palavras normalizadas
     categoria_filtro: categoriaEstimada,
     limite: 10,
     threshold: 0.3
@@ -639,8 +747,30 @@ async function buscarProdutoSimilar(
   if (similares && similares.length > 0) {
     const melhorMatch = similares[0];
     
-    // Se similaridade > 80%, considera match forte
-    if (melhorMatch.similarity > 0.8) {
+    // 🔧 MATCHING INTELIGENTE: Se marca e peso batem, ser mais tolerante com similaridade
+    let limiarAceitacao = 0.80; // Padrão: 80%
+    
+    if (marcaExtraida && pesoExtraido) {
+      // Verificar se o melhor match tem marca e peso compatíveis
+      const matchMarca = melhorMatch.marca?.toUpperCase() === marcaExtraida;
+      
+      let matchPeso = false;
+      if (melhorMatch.qtd_base && melhorMatch.unidade_base) {
+        const diferencaPeso = Math.abs(melhorMatch.qtd_base - pesoExtraido.valor) / pesoExtraido.valor;
+        matchPeso = diferencaPeso <= 0.10 && melhorMatch.unidade_base.toUpperCase() === pesoExtraido.unidade;
+      }
+      
+      if (matchMarca && matchPeso) {
+        limiarAceitacao = 0.70; // Reduzir para 70% quando marca e peso batem
+        console.log(`🎯 Marca e peso coincidem - reduzindo limiar para ${limiarAceitacao * 100}%`);
+      } else if (matchMarca || matchPeso) {
+        limiarAceitacao = 0.75; // 75% se apenas marca OU peso batem
+        console.log(`🎯 ${matchMarca ? 'Marca' : 'Peso'} coincide - reduzindo limiar para ${limiarAceitacao * 100}%`);
+      }
+    }
+    
+    // Se similaridade > limiar ajustado, considera match forte
+    if (melhorMatch.similarity >= limiarAceitacao) {
       console.log(`✅ Match fuzzy forte: ${melhorMatch.sku_global} (${(melhorMatch.similarity * 100).toFixed(0)}%)`);
       return {
         encontrado: true,
