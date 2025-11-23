@@ -166,21 +166,26 @@ const EstoqueAtual = () => {
   // 🔄 REALTIME: Escutar mudanças em produtos_candidatos_normalizacao
   useEffect(() => {
     console.log('🔔 Configurando subscription realtime para normalização...');
+    let timeoutId: NodeJS.Timeout;
     
     const channel = supabase
       .channel('normalizacao-updates')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
           table: 'produtos_candidatos_normalizacao',
           filter: `status=in.(auto_aprovado,aprovado)`
         },
         (payload) => {
           console.log('🔄 Produto normalizado em tempo real:', payload);
-          // Recarregar estoque quando produto for normalizado
-          loadEstoque();
+          // 🔥 DEBOUNCE: Aguardar 2s antes de recarregar (evita piscadas)
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            console.log('🔄 Recarregando estoque após normalização');
+            loadEstoque();
+          }, 2000);
         }
       )
       .subscribe((status) => {
@@ -188,6 +193,7 @@ const EstoqueAtual = () => {
       });
     
     return () => {
+      clearTimeout(timeoutId);
       console.log('🔕 Removendo subscription realtime');
       supabase.removeChannel(channel);
     };
@@ -279,7 +285,7 @@ const EstoqueAtual = () => {
       const { data } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('id')
-        .in('status', ['processando', 'pendente'])
+        .eq('status', 'processando')
         .limit(1);
       
       const emAndamento = (data?.length || 0) > 0;
