@@ -219,12 +219,51 @@ Deno.serve(async (req) => {
           // Verificar se já foi normalizado usando hash único
           const { data: jaExiste } = await supabase
             .from('produtos_candidatos_normalizacao')
-            .select('id')
+            .select('id, status, sugestao_produto_master, sugestao_sku_global, nome_padrao_sugerido, marca_sugerida, nome_base_sugerido, categoria_sugerida')
             .eq('nota_item_hash', produto.nota_item_hash)
             .maybeSingle();
 
           if (jaExiste) {
-            console.log(`⏭️  Produto já normalizado: ${produto.texto_original}`);
+            console.log(`⏭️  Produto já tem candidato: ${produto.texto_original} (status: ${jaExiste.status})`);
+            
+            // 🔗 CORREÇÃO RAIZ: Se candidato já foi aprovado, vincular novo item do estoque ao master
+            if (jaExiste.status === 'auto_aprovado' && jaExiste.sugestao_produto_master && produto.nota_imagem_id) {
+              console.log(`🔗 Re-vinculando item reprocessado ao master aprovado: ${jaExiste.sugestao_produto_master}`);
+              
+              // Buscar detalhes do master para atualização completa
+              const { data: masterDetails } = await supabase
+                .from('produtos_master_global')
+                .select('imagem_url, nome_padrao, marca, nome_base, categoria')
+                .eq('id', jaExiste.sugestao_produto_master)
+                .single();
+              
+              // Atualizar estoque com vínculo ao master
+              const updateData: any = {
+                produto_master_id: jaExiste.sugestao_produto_master,
+                sku_global: jaExiste.sugestao_sku_global,
+                produto_candidato_id: null, // Limpar candidato pois já aprovado
+                updated_at: new Date().toISOString()
+              };
+              
+              if (masterDetails) {
+                updateData.produto_nome = masterDetails.nome_padrao;
+                updateData.produto_nome_normalizado = masterDetails.nome_padrao;
+                updateData.nome_base = masterDetails.nome_base;
+                updateData.marca = masterDetails.marca;
+                updateData.categoria = masterDetails.categoria?.toLowerCase();
+                if (masterDetails.imagem_url) {
+                  updateData.imagem_url = masterDetails.imagem_url;
+                }
+              }
+              
+              await supabase
+                .from('estoque_app')
+                .update(updateData)
+                .eq('nota_id', produto.nota_imagem_id)
+                .eq('produto_nome', produto.texto_original);
+              
+              console.log(`✅ Item reprocessado vinculado ao master: ${masterDetails?.nome_padrao || jaExiste.sugestao_sku_global}`);
+            }
             
             // ✅ Marcar item como processado no metadata
             if (produto.nota_imagem_id && notasMetadata.has(produto.nota_imagem_id)) {
