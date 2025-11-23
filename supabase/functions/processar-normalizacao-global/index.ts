@@ -777,11 +777,59 @@ async function buscarProdutoSimilar(
   if (similares && similares.length > 0) {
     const melhorMatch = similares[0];
     
-    // 🔧 MATCHING INTELIGENTE: Se marca e peso batem, ser mais tolerante com similaridade
+    // 🔧 PARTE C + D: Aplicar fuzzy matching com Levenshtein + logs de debugging
+    console.log(`\n🔍 ANÁLISE FUZZY DETALHADA:`);
+    console.log(`📝 Candidato original: "${textoOriginal}"`);
+    console.log(`🔧 Texto normalizado p/ matching: "${textoParaMatching}"`);
+    if (marcaExtraida) console.log(`🏷️  Marca detectada: ${marcaExtraida}`);
+    if (pesoExtraido) console.log(`⚖️  Peso/Volume detectado: ${pesoExtraido.valor}${pesoExtraido.unidade}`);
+    
+    // Iterar sobre os candidatos e aplicar Levenshtein
+    for (const candidato of similares.slice(0, 5)) { // Top 5 candidatos
+      const masterNormalizado = normalizarTextoParaMatching(candidato.nome_padrao);
+      const similaridadeLevenshtein = calcularSimilaridadeLevenshtein(textoParaMatching, masterNormalizado);
+      
+      // Verificar se marca bate (se tiver marca)
+      const marcaBate = !marcaExtraida || 
+                       !candidato.marca || 
+                       candidato.marca.toUpperCase().includes(marcaExtraida) ||
+                       marcaExtraida.includes(candidato.marca.toUpperCase());
+      
+      // Verificar se peso/volume bate (se tiver)
+      let pesoBate = true; // Default true se não tiver peso
+      if (pesoExtraido && candidato.qtd_valor) {
+        const diferencaPeso = Math.abs(candidato.qtd_valor - pesoExtraido.valor);
+        pesoBate = diferencaPeso < 10; // Tolerância de 10g/ml
+      }
+      
+      // 🔧 PARTE C: Threshold de 85% quando marca e peso batem (em vez de 90%)
+      const thresholdSimilaridade = marcaBate && pesoBate ? 85 : 75;
+      
+      // 🔍 PARTE D: Logs de debugging detalhados
+      console.log(`\n  📊 Candidato: "${candidato.nome_padrao}" [${candidato.sku_global}]`);
+      console.log(`     Normalizado: "${masterNormalizado}"`);
+      console.log(`     Similaridade Levenshtein: ${similaridadeLevenshtein.toFixed(1)}%`);
+      console.log(`     Threshold: ${thresholdSimilaridade}%`);
+      console.log(`     Marca bate: ${marcaBate}${candidato.marca ? ` (${candidato.marca})` : ''}`);
+      console.log(`     Peso bate: ${pesoBate}${candidato.qtd_valor ? ` (${candidato.qtd_valor}${candidato.qtd_unidade || ''})` : ''}`);
+      
+      if (similaridadeLevenshtein >= thresholdSimilaridade) {
+        console.log(`\n  ✅ MATCH FUZZY ENCONTRADO (${similaridadeLevenshtein.toFixed(1)}% >= ${thresholdSimilaridade}%)`);
+        console.log(`     Produto: ${candidato.nome_padrao}`);
+        console.log(`     SKU: ${candidato.sku_global}\n`);
+        return {
+          encontrado: true,
+          produto: candidato,
+          metodo: 'fuzzy_levenshtein',
+          confianca: similaridadeLevenshtein
+        };
+      }
+    }
+    
+    // Fallback para lógica original (pg_trgm)
     let limiarAceitacao = 0.80; // Padrão: 80%
     
     if (marcaExtraida && pesoExtraido) {
-      // Verificar se o melhor match tem marca e peso compatíveis
       const matchMarca = melhorMatch.marca?.toUpperCase() === marcaExtraida;
       
       let matchPeso = false;
@@ -801,7 +849,7 @@ async function buscarProdutoSimilar(
     
     // Se similaridade > limiar ajustado, considera match forte
     if (melhorMatch.similarity >= limiarAceitacao) {
-      console.log(`✅ Match fuzzy forte: ${melhorMatch.sku_global} (${(melhorMatch.similarity * 100).toFixed(0)}%)`);
+      console.log(`✅ Match fuzzy forte (pg_trgm): ${melhorMatch.sku_global} (${(melhorMatch.similarity * 100).toFixed(0)}%)`);
       return {
         encontrado: true,
         produto: melhorMatch,
