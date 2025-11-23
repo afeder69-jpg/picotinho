@@ -323,11 +323,11 @@ async function buscarProdutoMaster(
                textoUpper.includes('IOGURTE') || textoUpper.includes('REQUEIJAO')) {
       categoriaEstimada = 'LATICÍNIOS/FRIOS';
     }
-    // 🥫 ALIMENTOS
+    // 🥫 MERCEARIA
     else if (textoUpper.includes('CREME DE LEITE') || textoUpper.includes('LEITE CONDENSADO') ||
              textoUpper.includes('AVEIA') || textoUpper.includes('GELATINA') ||
              textoUpper.includes('FARINHA') || textoUpper.includes('ACUCAR')) {
-      categoriaEstimada = 'ALIMENTOS';
+      categoriaEstimada = 'MERCEARIA';
     }
     // 🧼 LIMPEZA
     else if (textoUpper.includes('DETERGENTE') || textoUpper.includes('SABAO')) {
@@ -361,7 +361,7 @@ async function buscarProdutoMaster(
     if (error || !similares || similares.length === 0) {
       console.log(`⚠️ Sem similares em ${categoriaEstimada}, tentando outras categorias...`);
       
-      const categoriasPrincipais = ['ALIMENTOS', 'LATICÍNIOS/FRIOS', 'BEBIDAS', 'LIMPEZA', 'HIGIENE', 'MERCEARIA'];
+      const categoriasPrincipais = ['MERCEARIA', 'LATICÍNIOS/FRIOS', 'BEBIDAS', 'LIMPEZA', 'HIGIENE/FARMÁCIA', 'AÇOUGUE', 'HORTIFRUTI', 'PADARIA', 'CONGELADOS', 'PET'];
       
       for (const catAlternativa of categoriasPrincipais) {
         if (catAlternativa === categoriaEstimada) continue; // Já tentamos
