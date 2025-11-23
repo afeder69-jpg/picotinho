@@ -972,6 +972,7 @@ serve(async (req) => {
           preco_unitario_ultimo: precoUnitarioFinal,
           compra_id: nota.compra_id,
           origem: "nota_fiscal",
+          imagem_url: null, // Será preenchido ao encontrar master
         });
       }
     }
