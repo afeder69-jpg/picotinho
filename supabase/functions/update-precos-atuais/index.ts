@@ -177,15 +177,18 @@ serve(async (req) => {
     }
 
     if (deveAtualizar) {
-      // 4. Atualizar/inserir preço atual
+      // 4. Atualizar/inserir preço atual (com normalização e user_id)
+      const produtoNomeNormalizado = normalizarNomeProduto(produtoNome);
+      
       const { data: precoAtualizado, error: erroUpdate } = await supabase
         .from('precos_atuais')
         .upsert({
-          produto_nome: produtoNome,
+          produto_nome: produtoNomeNormalizado,
           estabelecimento_cnpj: cnpjNormalizado,
           estabelecimento_nome: estabelecimentoNome,
           valor_unitario: precoUnitario,
-          data_atualizacao: dataNovaCompra.toISOString() // ✅ Data real da nota fiscal
+          data_atualizacao: dataNovaCompra.toISOString(),
+          user_id: userId
         }, {
           onConflict: 'produto_nome,estabelecimento_cnpj'
         })
@@ -232,6 +235,20 @@ serve(async (req) => {
     });
   }
 });
+
+// Função para normalizar nomes de produtos (evitar duplicatas semânticas)
+function normalizarNomeProduto(nome: string): string {
+  return nome
+    .toUpperCase()
+    .trim()
+    // Remover acentos
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    // Padronizar espaços múltiplos
+    .replace(/\s+/g, ' ')
+    // Remover pontuação no final
+    .replace(/[.,;!?]+$/, '')
+    .trim();
+}
 
 // Função auxiliar para verificar similaridade entre produtos
 function verificarSimilaridadeProduto(nome1: string, nome2: string): boolean {
