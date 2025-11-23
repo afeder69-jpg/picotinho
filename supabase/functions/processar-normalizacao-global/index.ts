@@ -488,11 +488,12 @@ Deno.serve(async (req) => {
           
           const { totalItens, itensProcessados } = metadata;
           
-          // ✅ VALIDAÇÃO: Contar candidatos criados
+          // ✅ VALIDAÇÃO: Contar candidatos criados (incluindo órfãos reprocessados)
           const { count: candidatosCriados } = await supabase
             .from('produtos_candidatos_normalizacao')
             .select('*', { count: 'exact', head: true })
-            .eq('nota_imagem_id', notaId);
+            .eq('nota_imagem_id', notaId)
+            .in('status', ['pendente', 'processando', 'auto_aprovado', 'aprovado']);
           
           console.log(`📊 Nota ${notaId}: ${candidatosCriados}/${totalItens} candidatos criados`);
           
@@ -1172,9 +1173,55 @@ async function criarCandidato(
     .maybeSingle();
 
   if (candidatoExistente) {
-    // ✅ GUARD CLAUSE: Não reprocessar candidatos já decididos
+    // ✅ REPROCESSAR candidatos órfãos (notas excluídas e reinseridas)
     if (['auto_aprovado', 'rejeitado'].includes(candidatoExistente.status)) {
-      console.log(`⏭️ Candidato já processado (${candidatoExistente.status}), pulando: ${produto.texto_original}`);
+      console.warn(`⚠️ Candidato órfão detectado (${candidatoExistente.status}): ${produto.texto_original}`);
+      console.warn(`⚠️ Nota ${produto.nota_imagem_id} pode ter sido excluída e reinserida`);
+      console.log(`🔄 Reprocessando candidato órfão: ${produto.texto_original}`);
+      
+      // Reprocessar candidato órfão
+      const { error: updateError } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .update({
+          sugestao_sku_global: normalizacao.sku_global,
+          sugestao_produto_master: normalizacao.produto_master_id,
+          confianca_ia: normalizacao.confianca,
+          razao_ia: normalizacao.razao,
+          nome_padrao_sugerido: normalizacao.nome_padrao,
+          categoria_sugerida: normalizacao.categoria,
+          nome_base_sugerido: normalizacao.nome_base,
+          marca_sugerida: normalizacao.marca,
+          tipo_embalagem_sugerido: normalizacao.tipo_embalagem,
+          qtd_valor_sugerido: normalizacao.qtd_valor,
+          qtd_unidade_sugerido: normalizacao.qtd_unidade,
+          qtd_base_sugerida: normalizacao.qtd_base,
+          unidade_base_sugerida: normalizacao.unidade_base,
+          categoria_unidade_sugerida: normalizacao.categoria_unidade,
+          granel_sugerido: normalizacao.granel,
+          obs_embalagem_sugerida: obsEmbalagem,
+          dados_extraidos: normalizacao.dados_extraidos,
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', candidatoExistente.id);
+      
+      if (updateError) {
+        console.error(`❌ Erro ao reprocessar candidato órfão: ${updateError.message}`);
+        throw new Error(`Erro ao reprocessar candidato órfão: ${updateError.message}`);
+      }
+      
+      console.log(`✅ Candidato órfão reprocessado: ${candidatoExistente.id}`);
+      
+      // Se auto-aprovado, atualizar estoque
+      if (status === 'auto_aprovado' && normalizacao.produto_master_id) {
+        await atualizarEstoqueComProdutoMaster(
+          produto.nota_imagem_id,
+          produto.texto_original,
+          normalizacao.produto_master_id,
+          normalizacao.sku_global
+        );
+      }
+      
       return;
     }
     
