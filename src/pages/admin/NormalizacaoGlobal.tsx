@@ -315,13 +315,27 @@ export default function NormalizacaoGlobal() {
       const autoAprovados = todosCandidatos?.filter(c => c.status === 'auto_aprovado') || [];
       const pendentes = todosCandidatos?.filter(c => c.status === 'pendente') || [];
 
-      // 🔍 CORREÇÃO: Contar produtos aguardando normalização no ESTOQUE (com ampulheta)
-      // Estes são produtos com candidato mas sem master
-      const { count: aguardandoNoEstoque } = await supabase
+      // 🔍 CORREÇÃO: Contar produtos aguardando normalização (com candidato PENDENTE ou PROCESSANDO)
+      // Primeiro, buscar IDs dos candidatos que estão realmente pendentes/processando
+      const { data: candidatosPendentesIds } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('id')
+        .in('status', ['pendente', 'processando']);
+
+      const idsCandidatosPendentes = new Set(
+        candidatosPendentesIds?.map(c => c.id) || []
+      );
+
+      // Agora filtrar estoque que tem candidato pendente/processando
+      const { data: estoquePendente } = await supabase
         .from('estoque_app')
-        .select('*', { count: 'exact', head: true })
+        .select('produto_candidato_id')
         .not('produto_candidato_id', 'is', null)
         .is('produto_master_id', null);
+
+      const aguardandoNoEstoque = estoquePendente?.filter(
+        e => e.produto_candidato_id && idsCandidatosPendentes.has(e.produto_candidato_id)
+      ).length || 0;
 
       // Aprovados manualmente
       const { count: aprovadosManualmente } = await supabase
@@ -353,8 +367,8 @@ export default function NormalizacaoGlobal() {
         .from('profiles')
         .select('id');
 
-      // Usar o maior valor entre pendentes na tabela e aguardando no estoque
-      const totalAguardando = Math.max(pendentes.length, aguardandoNoEstoque || 0);
+      // Usar o maior valor entre pendentes na tabela e aguardando no estoque (agora corrigido)
+      const totalAguardando = Math.max(pendentes.length, aguardandoNoEstoque);
       
       // Calcular estimativa de novos produtos (30% dos aguardando)
       const estimativaNovos = Math.round(totalAguardando * 0.3);
@@ -1237,6 +1251,47 @@ export default function NormalizacaoGlobal() {
         .eq('id', candidatoAtual.id);
 
       if (error) throw error;
+
+      // Buscar dados do produto master para sincronização com estoque
+      const { data: produtoMaster, error: errorMaster } = await supabase
+        .from('produtos_master_global')
+        .select('*')
+        .eq('id', produtoMasterId)
+        .single();
+
+      if (errorMaster) throw errorMaster;
+
+      // Atualizar estoques vinculados a este candidato
+      console.log(`🔗 Atualizando estoques vinculados ao candidato ${candidatoAtual.id}...`);
+      const { data: estoquesAtualizados, error: errorEstoque } = await supabase
+        .from('estoque_app')
+        .update({
+          produto_master_id: produtoMaster.id,
+          produto_nome_normalizado: produtoMaster.nome_padrao,
+          sku_global: produtoMaster.sku_global,
+          nome_base: produtoMaster.nome_base,
+          marca: produtoMaster.marca,
+          tipo_embalagem: produtoMaster.tipo_embalagem,
+          qtd_valor: produtoMaster.qtd_valor,
+          qtd_unidade: produtoMaster.qtd_unidade,
+          categoria: produtoMaster.categoria,
+          produto_candidato_id: null
+        })
+        .eq('produto_candidato_id', candidatoAtual.id)
+        .select();
+
+      if (errorEstoque) {
+        console.error('⚠️ Erro ao atualizar estoques vinculados:', errorEstoque);
+      } else {
+        const count = estoquesAtualizados?.length || 0;
+        console.log(`✅ ${count} registros de estoque atualizados`);
+        if (count > 0) {
+          toast({
+            title: "✅ Estoques atualizados",
+            description: `${count} ${count === 1 ? 'produto' : 'produtos'} no estoque ${count === 1 ? 'foi atualizado' : 'foram atualizados'}`,
+          });
+        }
+      }
 
       // Salvar no log de decisões
       const { error: errorLog } = await supabase
