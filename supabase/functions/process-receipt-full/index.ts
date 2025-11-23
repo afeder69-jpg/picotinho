@@ -329,6 +329,48 @@ const masterCache = new Map<string, any>();
 // 🎚️ Feature flag: pode desabilitar busca master via env var
 const ENABLE_MASTER_SEARCH = Deno.env.get('ENABLE_MASTER_SEARCH') !== 'false';
 
+// 🔑 Extrair palavras-chave críticas (sabores, tipos, características)
+function extrairPalavrasChave(texto: string): string[] {
+  const palavrasChave: string[] = [];
+  const textoUpper = texto.toUpperCase();
+  
+  // Sabores
+  const sabores = ['UVA', 'MARACUJA', 'LIMAO', 'MORANGO', 'FRAMBOESA', 'ABACAXI', 
+                   'LARANJA', 'PESSEGO', 'COCO', 'BANANA', 'MANGA', 'GOIABA',
+                   'CHOCOLATE', 'BAUNILHA', 'CAFE', 'AMEIXA', 'CEREJA'];
+  
+  // Tipos de leite/iogurte
+  const tipos = ['INTEGRAL', 'DESNATADO', 'SEMIDESNATADO', 'ZERO', 'LIGHT', 
+                 'GREGO', 'NATURAL', 'TRADICIONAL'];
+  
+  // Características especiais
+  const caracteristicas = ['SEM LACTOSE', 'SLAC', 'COM SAL', 'CSAL', 'SEM SAL', 
+                          'SSAL', 'SEM ACUCAR', 'SACUCAR', 'DIET', 'FIT'];
+  
+  // Verificar sabores
+  for (const sabor of sabores) {
+    if (textoUpper.includes(sabor)) {
+      palavrasChave.push(sabor);
+    }
+  }
+  
+  // Verificar tipos
+  for (const tipo of tipos) {
+    if (textoUpper.includes(tipo)) {
+      palavrasChave.push(tipo);
+    }
+  }
+  
+  // Verificar características
+  for (const carac of caracteristicas) {
+    if (textoUpper.includes(carac)) {
+      palavrasChave.push(carac);
+    }
+  }
+  
+  return palavrasChave;
+}
+
 // 📊 Calcular similaridade entre dois textos (Levenshtein distance simplificada)
 function calcularSimilaridade(s1: string, s2: string): number {
   const len1 = s1.length;
@@ -439,7 +481,7 @@ async function buscarProdutoMaster(
     );
     
     const searchPromise = supabase.rpc('buscar_produtos_similares', {
-      texto_busca: textoParaMatching.split(' ').slice(0, 3).join(' '),
+      texto_busca: textoParaMatching.split(' ').slice(0, 6).join(' '), // ✅ Incluir até 6 tokens (inclui sabores)
       categoria_filtro: categoriaEstimada,
       limite: 10,
       threshold: 0.3
@@ -458,7 +500,7 @@ async function buscarProdutoMaster(
         if (catAlternativa === categoriaEstimada) continue; // Já tentamos
         
         const { data: similaresAlt, error: errorAlt } = await supabase.rpc('buscar_produtos_similares', {
-          texto_busca: textoParaMatching.split(' ').slice(0, 3).join(' '),
+          texto_busca: textoParaMatching.split(' ').slice(0, 6).join(' '), // ✅ Incluir até 6 tokens
           categoria_filtro: catAlternativa,
           limite: 10,
           threshold: 0.3
@@ -498,6 +540,25 @@ async function buscarProdutoMaster(
       
       const similaridade = calcularSimilaridadeLevenshtein(candidatoOrdenado, masterOrdenado);
       
+      // 🔑 CRÍTICO: Verificar se palavras-chave críticas batem
+      const palavrasChaveCandidato = extrairPalavrasChave(textoParaMatching);
+      const palavrasChaveMaster = extrairPalavrasChave(masterNormalizado);
+      
+      // Se candidato tem palavra-chave específica (sabor, tipo), master DEVE ter a MESMA
+      if (palavrasChaveCandidato.length > 0) {
+        const palavrasChaveComuns = palavrasChaveCandidato.filter(p => 
+          palavrasChaveMaster.includes(p)
+        );
+        
+        // Se não há NENHUMA palavra-chave em comum, rejeitar match
+        if (palavrasChaveComuns.length === 0) {
+          console.log(`   ⚠️ Rejeitar: palavras-chave não batem (candidato: [${palavrasChaveCandidato.join(', ')}] vs master: [${palavrasChaveMaster.join(', ')}])`);
+          continue; // Próximo candidato
+        }
+        
+        console.log(`   ✅ Palavras-chave batem: [${palavrasChaveComuns.join(', ')}]`);
+      }
+      
       // Verificar marca
       const marcaBate = !marcaExtraida || 
                        !candidato.marca || 
@@ -511,15 +572,22 @@ async function buscarProdutoMaster(
         pesoBate = diferencaPeso < 10;
       }
       
-      // 🎯 THRESHOLD REDUZIDO PARA MARCAS CONHECIDAS
-      // Para produtos com marca conhecida (ROYAL, ITALAC, etc.), aceitar 70% de similaridade
-      // Para produtos sem marca, manter 80%
-      // Se marca e peso batem, aceitar 75% (intermediário)
+      // 🎯 THRESHOLD DINÂMICO baseado em marca e variante
+      const temVariante = palavrasChaveCandidato.length > 0;
+      
       let threshold = 80; // Padrão
-      if (temMarca) {
-        threshold = 70; // Marca conhecida - mais permissivo para typos
+      if (temMarca && !temVariante) {
+        // Marca conhecida SEM variante específica - mais permissivo para typos
+        threshold = 70;
+        console.log(`   🏷️ Marca conhecida sem variante - threshold: 70%`);
+      } else if (temMarca && temVariante) {
+        // Marca conhecida COM variante (sabor, tipo) - mais rigoroso
+        threshold = 85;
+        console.log(`   🏷️ Marca conhecida COM variante - threshold: 85%`);
       } else if (marcaBate && pesoBate) {
-        threshold = 75; // Marca e peso batem
+        // Marca e peso batem
+        threshold = 75;
+        console.log(`   🏷️ Marca e peso batem - threshold: 75%`);
       }
       
       console.log(`   Original: "${textoOriginal}" vs "${candidato.nome_padrao}"`);
