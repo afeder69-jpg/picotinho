@@ -163,6 +163,36 @@ const EstoqueAtual = () => {
     // corrigirProdutosManuais(); // Removido - correção manual
   }, []);
 
+  // 🔄 REALTIME: Escutar mudanças em produtos_candidatos_normalizacao
+  useEffect(() => {
+    console.log('🔔 Configurando subscription realtime para normalização...');
+    
+    const channel = supabase
+      .channel('normalizacao-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'produtos_candidatos_normalizacao',
+          filter: `status=in.(auto_aprovado,aprovado)`
+        },
+        (payload) => {
+          console.log('🔄 Produto normalizado em tempo real:', payload);
+          // Recarregar estoque quando produto for normalizado
+          loadEstoque();
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Status subscription realtime:', status);
+      });
+    
+    return () => {
+      console.log('🔕 Removendo subscription realtime');
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // Carregar histórico de preços quando o estoque for carregado
   useEffect(() => {
     if (estoque.length > 0) {
@@ -249,10 +279,16 @@ const EstoqueAtual = () => {
       const { data } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('id')
-        .eq('status', 'processando')
+        .in('status', ['processando', 'pendente'])
         .limit(1);
       
-      setNormalizacaoEmAndamento((data?.length || 0) > 0);
+      const emAndamento = (data?.length || 0) > 0;
+      
+      // Só atualizar se mudou (evitar re-renders desnecessários)
+      if (emAndamento !== normalizacaoEmAndamento) {
+        console.log(`🔄 Normalização em andamento: ${emAndamento}`);
+        setNormalizacaoEmAndamento(emAndamento);
+      }
     } catch (error) {
       console.error('Erro ao verificar normalização:', error);
     }
