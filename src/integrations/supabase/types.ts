@@ -1201,7 +1201,7 @@ export type Database = {
           qtd_unidade: string | null
           qtd_valor: number | null
           tipo_embalagem: string | null
-          user_id: string | null
+          user_id: string
           valor_unitario: number
         }
         Insert: {
@@ -1222,7 +1222,7 @@ export type Database = {
           qtd_unidade?: string | null
           qtd_valor?: number | null
           tipo_embalagem?: string | null
-          user_id?: string | null
+          user_id: string
           valor_unitario: number
         }
         Update: {
@@ -1243,7 +1243,7 @@ export type Database = {
           qtd_unidade?: string | null
           qtd_valor?: number | null
           tipo_embalagem?: string | null
-          user_id?: string | null
+          user_id?: string
           valor_unitario?: number
         }
         Relationships: [
