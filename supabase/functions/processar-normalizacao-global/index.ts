@@ -1288,14 +1288,9 @@ async function criarCandidato(
       
       console.log(`✅ Candidato órfão reprocessado: ${candidatoExistente.id}`);
       
-      // Se auto-aprovado, atualizar estoque
+      // O estoque será atualizado automaticamente pelo trigger trg_sync_candidato
       if (status === 'auto_aprovado' && normalizacao.produto_master_id) {
-        await atualizarEstoqueComProdutoMaster(
-          produto.nota_imagem_id,
-          produto.texto_original,
-          normalizacao.produto_master_id,
-          normalizacao.sku_global
-        );
+        console.log(`✅ Candidato órfão auto-aprovado - estoque sincronizado via trigger`);
       }
       
       return;

@@ -128,6 +128,115 @@ function normalizarNomeProdutoEstoque(nome: string): string {
   return normalizado;
 }
 
+// ================== FUNÇÕES AUXILIARES DE NORMALIZAÇÃO ROBUSTA ==================
+
+/**
+ * Normaliza texto para matching robusto
+ * Remove acentos, pontuações, espaços extras
+ */
+function normalizarTextoParaMatching(texto: string): string {
+  if (!texto) return '';
+  
+  let normalizado = texto
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[.,]/g, '') // Remove pontos e vírgulas
+    .replace(/\s+/g, ' ') // Normaliza espaços
+    .trim();
+  
+  // Remover espaços ao redor de /
+  normalizado = normalizado.replace(/\s*\/\s*/g, '/');
+  
+  // Remover pontos entre letras (S/LAC.ITALAC → S/LACITALAC)
+  normalizado = normalizado.replace(/\.(?=[A-Z])/g, '');
+  
+  return normalizado;
+}
+
+/**
+ * Calcula similaridade Levenshtein entre dois textos
+ * Retorna porcentagem (0-100)
+ */
+function calcularSimilaridadeLevenshtein(str1: string, str2: string): number {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  const matrix = Array(len2 + 1).fill(null).map(() => Array(len1 + 1).fill(null));
+  
+  for (let i = 0; i <= len1; i++) matrix[0][i] = i;
+  for (let j = 0; j <= len2; j++) matrix[j][0] = j;
+  
+  for (let j = 1; j <= len2; j++) {
+    for (let i = 1; i <= len1; i++) {
+      const substitutionCost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1,
+        matrix[j - 1][i] + 1,
+        matrix[j - 1][i - 1] + substitutionCost
+      );
+    }
+  }
+  
+  const distance = matrix[len2][len1];
+  const maxLen = Math.max(len1, len2);
+  return ((maxLen - distance) / maxLen) * 100;
+}
+
+/**
+ * Extrai marca do nome do produto
+ */
+function extrairMarca(texto: string): string | null {
+  const textoUpper = texto.toUpperCase();
+  
+  // Lista de marcas comuns
+  const marcasConhecidas = [
+    'ITALAC', 'ROYAL', 'KREMINAS', 'TIROLEZ', 'NESTLE', 'COCA-COLA',
+    'FANTA', 'YPSILON', 'OMO', 'COMFORT', 'SADIA', 'SEARA',
+    'QUALY', 'DANONE', 'PARMALAT', 'PIRACANJUBA', 'VIGOR'
+  ];
+  
+  for (const marca of marcasConhecidas) {
+    if (textoUpper.includes(marca)) {
+      return marca;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Extrai peso/volume do nome do produto
+ */
+function extrairPesoVolume(texto: string): { valor: number; unidade: string } | null {
+  const textoUpper = texto.toUpperCase();
+  
+  // Padrões: 200G, 200 G, 200ML, 500 ML, 1KG, 1 KG, 1L, 1 L
+  const padroes = [
+    /(\d+)\s*(G|GR|GRAMAS?)\b/,
+    /(\d+)\s*(ML|MILILITROS?)\b/,
+    /(\d+)\s*(KG|KILOS?|QUILOS?)\b/,
+    /(\d+)\s*(L|LITROS?)\b/
+  ];
+  
+  for (const padrao of padroes) {
+    const match = textoUpper.match(padrao);
+    if (match) {
+      const valor = parseInt(match[1]);
+      let unidade = match[2];
+      
+      // Normalizar unidade
+      if (unidade.startsWith('G')) unidade = 'G';
+      else if (unidade.startsWith('ML')) unidade = 'ML';
+      else if (unidade.startsWith('K')) unidade = 'KG';
+      else if (unidade.startsWith('L') && !unidade.startsWith('ML')) unidade = 'L';
+      
+      return { valor, unidade };
+    }
+  }
+  
+  return null;
+}
+
 // ================== NORMALIZAÇÃO MASTER - FASE 2 ==================
 
 // 🔥 Cache em memória para produtos master já buscados
@@ -168,7 +277,10 @@ function calcularSimilaridade(s1: string, s2: string): number {
   return 1 - (distance / maxLen);
 }
 
-// 🔍 Buscar produto master correspondente com timeout e fallback
+/**
+ * 🔍 Busca produto master com fuzzy matching robusto
+ * Usa mesma lógica do processar-normalizacao-global para 90%+ de acerto automático
+ */
 async function buscarProdutoMaster(
   produtoNome: string,
   categoria: string,
@@ -191,57 +303,88 @@ async function buscarProdutoMaster(
   }
   
   try {
-    // 3️⃣ Buscar com timeout de 2 segundos
+    // 3️⃣ Normalizar texto para matching
+    const textoOriginal = produtoNome;
+    const textoParaMatching = normalizarTextoParaMatching(produtoNome);
+    
+    // 4️⃣ Extrair metadados
+    const marcaExtraida = extrairMarca(produtoNome);
+    const pesoExtraido = extrairPesoVolume(produtoNome);
+    
+    // 5️⃣ Estimar categoria (fallback se categoria vier errada)
+    let categoriaEstimada = categoria.toUpperCase();
+    const textoUpper = textoParaMatching;
+    
+    if (textoUpper.includes('DETERGENTE') || textoUpper.includes('SABAO')) {
+      categoriaEstimada = 'LIMPEZA';
+    } else if (textoUpper.includes('REFRIGERANTE') || textoUpper.includes('SUCO')) {
+      categoriaEstimada = 'BEBIDAS';
+    } else if (textoUpper.includes('SHAMPOO') || textoUpper.includes('SABONETE')) {
+      categoriaEstimada = 'HIGIENE';
+    }
+    
+    // 6️⃣ Buscar produtos similares usando RPC com timeout
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout')), 2000)
+      setTimeout(() => reject(new Error('Timeout')), 3000)
     );
     
-    const searchPromise = supabase
-      .from('produtos_master_global')
-      .select('*')
-      .eq('categoria', categoria.toUpperCase())
-      .eq('status', 'ativo')
-      .limit(10);
+    const searchPromise = supabase.rpc('buscar_produtos_similares', {
+      texto_busca: textoParaMatching.split(' ').slice(0, 3).join(' '),
+      categoria_filtro: categoriaEstimada,
+      limite: 10,
+      threshold: 0.3
+    });
     
     const result = await Promise.race([searchPromise, timeoutPromise]) as any;
-    const { data, error } = result;
+    const { data: similares, error } = result;
     
-    if (error || !data || data.length === 0) {
+    if (error || !similares || similares.length === 0) {
+      console.log(`⚠️ Sem similares para: ${produtoNome}`);
       masterCache.set(cacheKey, null);
       return { found: false, master: null };
     }
     
-    // 4️⃣ Calcular similaridade e encontrar melhor match
-    const nomeNormalizado = produtoNome.toUpperCase();
-    let melhorMatch = null;
-    let melhorScore = 0;
+    // 7️⃣ Aplicar fuzzy matching Levenshtein
+    console.log(`\n🔍 Buscando master: "${textoOriginal}"`);
+    if (marcaExtraida) console.log(`   Marca: ${marcaExtraida}`);
+    if (pesoExtraido) console.log(`   Peso: ${pesoExtraido.valor}${pesoExtraido.unidade}`);
     
-    for (const master of data) {
-      const score = calcularSimilaridade(
-        nomeNormalizado, 
-        master.nome_padrao.toUpperCase()
-      );
+    for (const candidato of similares.slice(0, 5)) {
+      const masterNormalizado = normalizarTextoParaMatching(candidato.nome_padrao);
+      const similaridade = calcularSimilaridadeLevenshtein(textoParaMatching, masterNormalizado);
       
-      // Threshold: 75% de similaridade mínima (reduzido para maior tolerância)
-      if (score > melhorScore && score >= 0.75) {
-        melhorScore = score;
-        melhorMatch = master;
+      // Verificar marca
+      const marcaBate = !marcaExtraida || 
+                       !candidato.marca || 
+                       candidato.marca.toUpperCase().includes(marcaExtraida) ||
+                       marcaExtraida.includes(candidato.marca.toUpperCase());
+      
+      // Verificar peso
+      let pesoBate = true;
+      if (pesoExtraido && candidato.qtd_valor) {
+        const diferencaPeso = Math.abs(candidato.qtd_valor - pesoExtraido.valor);
+        pesoBate = diferencaPeso < 10;
+      }
+      
+      // Threshold dinâmico: 85% se marca+peso batem, 75% se não
+      const threshold = marcaBate && pesoBate ? 85 : 75;
+      
+      console.log(`   ${candidato.nome_padrao}: ${similaridade.toFixed(1)}% (threshold: ${threshold}%)`);
+      
+      if (similaridade >= threshold) {
+        console.log(`   ✅ MATCH! ${candidato.nome_padrao} [${candidato.sku_global}]`);
+        masterCache.set(cacheKey, candidato);
+        return { found: true, master: candidato };
       }
     }
     
-    if (melhorMatch) {
-      // 5️⃣ Salvar no cache
-      masterCache.set(cacheKey, melhorMatch);
-      console.log(`✅ Master encontrado: ${produtoNome} → ${melhorMatch.nome_padrao} (${(melhorScore * 100).toFixed(0)}%)`);
-      return { found: true, master: melhorMatch };
-    }
-    
-    // Não encontrou match com similaridade suficiente
+    // Não encontrou
+    console.log(`   ❌ Nenhum match acima do threshold`);
     masterCache.set(cacheKey, null);
     return { found: false, master: null };
     
   } catch (error: any) {
-    // 6️⃣ FALLBACK: Em caso de erro/timeout, continuar sem master
+    // 8️⃣ FALLBACK: Em caso de erro/timeout, continuar sem master
     if (error.message === 'Timeout') {
       console.warn(`⏱️ Timeout ao buscar master para "${produtoNome}" - continuando sem normalização`);
     } else {
