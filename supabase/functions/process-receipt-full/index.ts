@@ -315,11 +315,30 @@ async function buscarProdutoMaster(
     let categoriaEstimada = categoria.toUpperCase();
     const textoUpper = textoParaMatching;
     
-    if (textoUpper.includes('DETERGENTE') || textoUpper.includes('SABAO')) {
+    // 🧀 LATICÍNIOS/FRIOS
+    if (textoUpper.includes('MANTEIGA') || textoUpper.includes('MARGARINA')) {
+      categoriaEstimada = 'LATICÍNIOS/FRIOS';
+    } else if (textoUpper.includes('QUEIJO') || textoUpper.includes('PRESUNTO') || 
+               textoUpper.includes('SALAME') || textoUpper.includes('MORTADELA') ||
+               textoUpper.includes('IOGURTE') || textoUpper.includes('REQUEIJAO')) {
+      categoriaEstimada = 'LATICÍNIOS/FRIOS';
+    }
+    // 🥫 ALIMENTOS
+    else if (textoUpper.includes('CREME DE LEITE') || textoUpper.includes('LEITE CONDENSADO') ||
+             textoUpper.includes('AVEIA') || textoUpper.includes('GELATINA') ||
+             textoUpper.includes('FARINHA') || textoUpper.includes('ACUCAR')) {
+      categoriaEstimada = 'ALIMENTOS';
+    }
+    // 🧼 LIMPEZA
+    else if (textoUpper.includes('DETERGENTE') || textoUpper.includes('SABAO')) {
       categoriaEstimada = 'LIMPEZA';
-    } else if (textoUpper.includes('REFRIGERANTE') || textoUpper.includes('SUCO')) {
+    }
+    // 🥤 BEBIDAS
+    else if (textoUpper.includes('REFRIGERANTE') || textoUpper.includes('SUCO')) {
       categoriaEstimada = 'BEBIDAS';
-    } else if (textoUpper.includes('SHAMPOO') || textoUpper.includes('SABONETE')) {
+    }
+    // 🧴 HIGIENE
+    else if (textoUpper.includes('SHAMPOO') || textoUpper.includes('SABONETE')) {
       categoriaEstimada = 'HIGIENE';
     }
     
@@ -336,12 +355,38 @@ async function buscarProdutoMaster(
     });
     
     const result = await Promise.race([searchPromise, timeoutPromise]) as any;
-    const { data: similares, error } = result;
+    let { data: similares, error } = result;
     
+    // 🔄 FALLBACK MULTI-CATEGORIA: Se não encontrou na categoria estimada, tentar outras
     if (error || !similares || similares.length === 0) {
-      console.log(`⚠️ Sem similares para: ${produtoNome}`);
-      masterCache.set(cacheKey, null);
-      return { found: false, master: null };
+      console.log(`⚠️ Sem similares em ${categoriaEstimada}, tentando outras categorias...`);
+      
+      const categoriasPrincipais = ['ALIMENTOS', 'LATICÍNIOS/FRIOS', 'BEBIDAS', 'LIMPEZA', 'HIGIENE', 'MERCEARIA'];
+      
+      for (const catAlternativa of categoriasPrincipais) {
+        if (catAlternativa === categoriaEstimada) continue; // Já tentamos
+        
+        const { data: similaresAlt, error: errorAlt } = await supabase.rpc('buscar_produtos_similares', {
+          texto_busca: textoParaMatching.split(' ').slice(0, 3).join(' '),
+          categoria_filtro: catAlternativa,
+          limite: 10,
+          threshold: 0.3
+        });
+        
+        if (!errorAlt && similaresAlt && similaresAlt.length > 0) {
+          console.log(`✅ Encontrado em categoria alternativa: ${catAlternativa}`);
+          similares = similaresAlt;
+          categoriaEstimada = catAlternativa; // Atualizar categoria para logs
+          break;
+        }
+      }
+      
+      // Se ainda não encontrou, desistir
+      if (!similares || similares.length === 0) {
+        console.log(`❌ Sem similares em nenhuma categoria para: ${produtoNome}`);
+        masterCache.set(cacheKey, null);
+        return { found: false, master: null };
+      }
     }
     
     // 7️⃣ Aplicar fuzzy matching Levenshtein
