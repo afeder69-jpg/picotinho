@@ -128,6 +128,43 @@ function normalizarNomeProdutoEstoque(nome: string): string {
   return normalizado;
 }
 
+// 🧹 NOVA FUNÇÃO: Limpar abreviações comuns antes do matching
+function limparAbreviacoes(texto: string): string {
+  if (!texto) return '';
+  
+  let limpo = texto.toUpperCase();
+  
+  // Lista de abreviações comuns para remover
+  const abreviacoes = [
+    /\bS\/LAC\.?\b/gi,     // S/LAC, S/LAC.
+    /\bS\/ LAC\.?\b/gi,    // S/ LAC
+    /\bSEM LACTOSE\b/gi,
+    /\bUHT\b/gi,
+    /\bTRAD\.?\b/gi,       // TRAD, TRAD.
+    /\bTRADICIONAL\b/gi,
+    /\bINT\.?\b/gi,        // INT, INT.
+    /\bINTEGRAL\b/gi,
+    /\bS\/ACUCAR\b/gi,     // S/ACUCAR
+    /\bS\/ ACUCAR\b/gi,
+    /\bDIET\b/gi,
+    /\bLIGHT\b/gi,
+    /\bZERO\b/gi,
+    /\bS\/SAL\b/gi,        // S/SAL
+    /\bC\/SAL\b/gi,        // C/SAL
+    /\bC\/ SAL\b/gi
+  ];
+  
+  // Remover cada abreviação
+  for (const abrev of abreviacoes) {
+    limpo = limpo.replace(abrev, ' ');
+  }
+  
+  // Normalizar espaços múltiplos
+  limpo = limpo.replace(/\s+/g, ' ').trim();
+  
+  return limpo;
+}
+
 // ================== FUNÇÕES AUXILIARES DE NORMALIZAÇÃO ROBUSTA ==================
 
 /**
@@ -158,15 +195,6 @@ function normalizarOrdemTokens(texto: string): string {
   // Separar em tokens
   const tokens = texto.split(' ').filter(t => t.length > 0);
   
-  // Marcas conhecidas (expansível)
-  const marcasConhecidas = [
-    'ROYAL', 'ITALAC', 'KREMINAS', 'NESTLE', 'DANONE', 'COCA', 'PEPSI',
-    'TIROLEZ', 'ELEGÊ', 'PIRACANJUBA', 'PARMALAT', 'VIGOR', 'SADIA',
-    'PERDIGAO', 'SEARA', 'AURORA', 'BRF', 'JBS', 'FRIBOI', 'SWIFT',
-    'OMO', 'ARIEL', 'TIDE', 'DOWNY', 'COMFORT', 'YPE', 'BRILHANTE',
-    'COLGATE', 'ORAL', 'SORRISO', 'CLOSE', 'SENSODYNE', 'LISTERINE'
-  ];
-  
   // Categorizar tokens
   const numeros: string[] = [];
   const marcas: string[] = [];
@@ -177,8 +205,8 @@ function normalizarOrdemTokens(texto: string): string {
     if (/^\d+[A-Z]*$/.test(token)) {
       numeros.push(token);
     }
-    // Marcas conhecidas
-    else if (marcasConhecidas.includes(token)) {
+    // Marcas conhecidas (verifica se token contém ou é contido por alguma marca)
+    else if (MARCAS_CONHECIDAS.some(m => token.includes(m) || m.includes(token))) {
       marcas.push(token);
     }
     // Palavras gerais
@@ -224,26 +252,39 @@ function calcularSimilaridadeLevenshtein(str1: string, str2: string): number {
   return ((maxLen - distance) / maxLen) * 100;
 }
 
+// 🏷️ LISTA GLOBAL DE MARCAS CONHECIDAS
+const MARCAS_CONHECIDAS = [
+  'ITALAC', 'ROYAL', 'KREMINAS', 'TIROLEZ', 'NESTLE', 'COCA-COLA',
+  'FANTA', 'YPSILON', 'YPE', 'OMO', 'COMFORT', 'SADIA', 'SEARA',
+  'QUALY', 'DANONE', 'PARMALAT', 'PIRACANJUBA', 'VIGOR',
+  'ELEGÊ', 'ELEGE', 'WICKBOLD', 'PULLMAN', 'PLUSVITA',
+  'AURORA', 'PERDIGAO', 'BRF', 'JBS', 'FRIBOI', 'SWIFT',
+  'ARIEL', 'TIDE', 'DOWNY', 'BRILHANTE', 'COLGATE',
+  'ORAL', 'SORRISO', 'CLOSE', 'SENSODYNE', 'LISTERINE',
+  'PREDILECTA', 'IMBIARA', 'CAETES', 'DOFORNO'
+];
+
 /**
  * Extrai marca do nome do produto
  */
 function extrairMarca(texto: string): string | null {
   const textoUpper = texto.toUpperCase();
   
-  // Lista de marcas comuns
-  const marcasConhecidas = [
-    'ITALAC', 'ROYAL', 'KREMINAS', 'TIROLEZ', 'NESTLE', 'COCA-COLA',
-    'FANTA', 'YPSILON', 'OMO', 'COMFORT', 'SADIA', 'SEARA',
-    'QUALY', 'DANONE', 'PARMALAT', 'PIRACANJUBA', 'VIGOR'
-  ];
-  
-  for (const marca of marcasConhecidas) {
+  for (const marca of MARCAS_CONHECIDAS) {
     if (textoUpper.includes(marca)) {
       return marca;
     }
   }
   
   return null;
+}
+
+/**
+ * Verifica se texto contém marca conhecida
+ */
+function temMarcaConhecida(texto: string): boolean {
+  const textoUpper = texto.toUpperCase();
+  return MARCAS_CONHECIDAS.some(marca => textoUpper.includes(marca));
 }
 
 /**
@@ -347,29 +388,36 @@ async function buscarProdutoMaster(
   try {
     // 3️⃣ Normalizar texto para matching
     const textoOriginal = produtoNome;
-    const textoParaMatching = normalizarTextoParaMatching(produtoNome);
+    let textoParaMatching = normalizarTextoParaMatching(produtoNome);
+    
+    // 🧹 CRÍTICO: Limpar abreviações comuns antes do matching
+    textoParaMatching = limparAbreviacoes(textoParaMatching);
     
     // 4️⃣ Extrair metadados
     const marcaExtraida = extrairMarca(produtoNome);
     const pesoExtraido = extrairPesoVolume(produtoNome);
+    const temMarca = temMarcaConhecida(produtoNome);
     
     // 5️⃣ Estimar categoria (fallback se categoria vier errada)
     let categoriaEstimada = categoria.toUpperCase();
     const textoUpper = textoParaMatching;
     
-    // 🧀 LATICÍNIOS/FRIOS
+    // 🧀 LATICÍNIOS/FRIOS - PRIORIDADE ALTA
     if (textoUpper.includes('MANTEIGA') || textoUpper.includes('MARGARINA')) {
       categoriaEstimada = 'LATICÍNIOS/FRIOS';
+      console.log(`📍 Categoria corrigida: ${categoriaEstimada} (MANTEIGA/MARGARINA)`);
     } else if (textoUpper.includes('QUEIJO') || textoUpper.includes('PRESUNTO') || 
                textoUpper.includes('SALAME') || textoUpper.includes('MORTADELA') ||
                textoUpper.includes('IOGURTE') || textoUpper.includes('REQUEIJAO')) {
       categoriaEstimada = 'LATICÍNIOS/FRIOS';
+      console.log(`📍 Categoria corrigida: ${categoriaEstimada} (FRIOS)`);
     }
     // 🥫 MERCEARIA
     else if (textoUpper.includes('CREME DE LEITE') || textoUpper.includes('LEITE CONDENSADO') ||
              textoUpper.includes('AVEIA') || textoUpper.includes('GELATINA') ||
              textoUpper.includes('FARINHA') || textoUpper.includes('ACUCAR')) {
       categoriaEstimada = 'MERCEARIA';
+      console.log(`📍 Categoria corrigida: ${categoriaEstimada} (MERCEARIA)`);
     }
     // 🧼 LIMPEZA
     else if (textoUpper.includes('DETERGENTE') || textoUpper.includes('SABAO')) {
@@ -435,9 +483,13 @@ async function buscarProdutoMaster(
     console.log(`\n🔍 Buscando master: "${textoOriginal}"`);
     if (marcaExtraida) console.log(`   Marca: ${marcaExtraida}`);
     if (pesoExtraido) console.log(`   Peso: ${pesoExtraido.valor}${pesoExtraido.unidade}`);
+    if (temMarca) console.log(`   🏷️ Contém marca conhecida - threshold reduzido para 70%`);
     
     for (const candidato of similares.slice(0, 5)) {
-      const masterNormalizado = normalizarTextoParaMatching(candidato.nome_padrao);
+      let masterNormalizado = normalizarTextoParaMatching(candidato.nome_padrao);
+      
+      // 🧹 CRÍTICO: Limpar abreviações do master também
+      masterNormalizado = limparAbreviacoes(masterNormalizado);
       
       // 🔥 Aplicar normalização de ordem de tokens para evitar falhas por ordem diferente
       const candidatoOrdenado = normalizarOrdemTokens(textoParaMatching);
@@ -458,12 +510,21 @@ async function buscarProdutoMaster(
         pesoBate = diferencaPeso < 10;
       }
       
-      // Threshold dinâmico mais permissivo para tolerar typos
-      const threshold = marcaBate && pesoBate ? 80 : 70;
+      // 🎯 THRESHOLD REDUZIDO PARA MARCAS CONHECIDAS
+      // Para produtos com marca conhecida (ROYAL, ITALAC, etc.), aceitar 70% de similaridade
+      // Para produtos sem marca, manter 80%
+      // Se marca e peso batem, aceitar 75% (intermediário)
+      let threshold = 80; // Padrão
+      if (temMarca) {
+        threshold = 70; // Marca conhecida - mais permissivo para typos
+      } else if (marcaBate && pesoBate) {
+        threshold = 75; // Marca e peso batem
+      }
       
-      console.log(`   Original: "${nomeItem}" vs "${candidato.nome_padrao}"`);
+      console.log(`   Original: "${textoOriginal}" vs "${candidato.nome_padrao}"`);
+      console.log(`   Limpo: "${textoParaMatching}" vs "${masterNormalizado}"`);
       console.log(`   Ordenado: "${candidatoOrdenado}" vs "${masterOrdenado}"`);
-      console.log(`   Similaridade: ${similaridade.toFixed(1)}% (threshold: ${threshold}%, marca: ${marcaBate}, peso: ${pesoBate})`);
+      console.log(`   Similaridade: ${similaridade.toFixed(1)}% (threshold: ${threshold}%, marca: ${marcaBate}, peso: ${pesoBate}, temMarca: ${temMarca})`);
       
       if (similaridade >= threshold) {
         console.log(`   ✅ MATCH! ${candidato.nome_padrao} [${candidato.sku_global}]`);
