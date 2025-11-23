@@ -140,16 +140,13 @@ function normalizarTextoParaMatching(texto: string): string {
   let normalizado = texto
     .toUpperCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-    .replace(/[.,]/g, '') // Remove pontos e vírgulas
-    .replace(/\s+/g, ' ') // Normaliza espaços
-    .trim();
+    .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
   
-  // Remover espaços ao redor de /
-  normalizado = normalizado.replace(/\s*\/\s*/g, '/');
+  // 🔥 Substituir TODAS as pontuações e barras por espaços
+  normalizado = normalizado.replace(/[.,\/-]/g, ' ');
   
-  // Remover pontos entre letras (S/LAC.ITALAC → S/LACITALAC)
-  normalizado = normalizado.replace(/\.(?=[A-Z])/g, '');
+  // Normalizar espaços múltiplos
+  normalizado = normalizado.replace(/\s+/g, ' ').trim();
   
   return normalizado;
 }
@@ -411,8 +408,8 @@ async function buscarProdutoMaster(
         pesoBate = diferencaPeso < 10;
       }
       
-      // Threshold dinâmico: 85% se marca+peso batem, 75% se não
-      const threshold = marcaBate && pesoBate ? 85 : 75;
+      // Threshold dinâmico mais permissivo para tolerar typos
+      const threshold = marcaBate && pesoBate ? 80 : 70;
       
       console.log(`   ${candidato.nome_padrao}: ${similaridade.toFixed(1)}% (threshold: ${threshold}%)`);
       
