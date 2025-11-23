@@ -151,6 +151,51 @@ function normalizarTextoParaMatching(texto: string): string {
   return normalizado;
 }
 
+// 🔥 NOVA FUNÇÃO: Normalizar ordem de tokens para evitar falhas por ordem diferente
+function normalizarOrdemTokens(texto: string): string {
+  if (!texto) return '';
+  
+  // Separar em tokens
+  const tokens = texto.split(' ').filter(t => t.length > 0);
+  
+  // Marcas conhecidas (expansível)
+  const marcasConhecidas = [
+    'ROYAL', 'ITALAC', 'KREMINAS', 'NESTLE', 'DANONE', 'COCA', 'PEPSI',
+    'TIROLEZ', 'ELEGÊ', 'PIRACANJUBA', 'PARMALAT', 'VIGOR', 'SADIA',
+    'PERDIGAO', 'SEARA', 'AURORA', 'BRF', 'JBS', 'FRIBOI', 'SWIFT',
+    'OMO', 'ARIEL', 'TIDE', 'DOWNY', 'COMFORT', 'YPE', 'BRILHANTE',
+    'COLGATE', 'ORAL', 'SORRISO', 'CLOSE', 'SENSODYNE', 'LISTERINE'
+  ];
+  
+  // Categorizar tokens
+  const numeros: string[] = [];
+  const marcas: string[] = [];
+  const palavras: string[] = [];
+  
+  for (const token of tokens) {
+    // Números com unidade (25G, 200ML, 1KG, etc)
+    if (/^\d+[A-Z]*$/.test(token)) {
+      numeros.push(token);
+    }
+    // Marcas conhecidas
+    else if (marcasConhecidas.includes(token)) {
+      marcas.push(token);
+    }
+    // Palavras gerais
+    else {
+      palavras.push(token);
+    }
+  }
+  
+  // Ordenar cada categoria alfabeticamente
+  numeros.sort();
+  marcas.sort();
+  palavras.sort();
+  
+  // Juntar na ordem: palavras + marcas + números
+  return [...palavras, ...marcas, ...numeros].join(' ');
+}
+
 /**
  * Calcula similaridade Levenshtein entre dois textos
  * Retorna porcentagem (0-100)
@@ -393,7 +438,12 @@ async function buscarProdutoMaster(
     
     for (const candidato of similares.slice(0, 5)) {
       const masterNormalizado = normalizarTextoParaMatching(candidato.nome_padrao);
-      const similaridade = calcularSimilaridadeLevenshtein(textoParaMatching, masterNormalizado);
+      
+      // 🔥 Aplicar normalização de ordem de tokens para evitar falhas por ordem diferente
+      const candidatoOrdenado = normalizarOrdemTokens(textoParaMatching);
+      const masterOrdenado = normalizarOrdemTokens(masterNormalizado);
+      
+      const similaridade = calcularSimilaridadeLevenshtein(candidatoOrdenado, masterOrdenado);
       
       // Verificar marca
       const marcaBate = !marcaExtraida || 
@@ -411,7 +461,9 @@ async function buscarProdutoMaster(
       // Threshold dinâmico mais permissivo para tolerar typos
       const threshold = marcaBate && pesoBate ? 80 : 70;
       
-      console.log(`   ${candidato.nome_padrao}: ${similaridade.toFixed(1)}% (threshold: ${threshold}%)`);
+      console.log(`   Original: "${nomeItem}" vs "${candidato.nome_padrao}"`);
+      console.log(`   Ordenado: "${candidatoOrdenado}" vs "${masterOrdenado}"`);
+      console.log(`   Similaridade: ${similaridade.toFixed(1)}% (threshold: ${threshold}%, marca: ${marcaBate}, peso: ${pesoBate})`);
       
       if (similaridade >= threshold) {
         console.log(`   ✅ MATCH! ${candidato.nome_padrao} [${candidato.sku_global}]`);
