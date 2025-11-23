@@ -1033,18 +1033,23 @@ async function criarCandidato(
   status: string,
   obsEmbalagem?: string | null
 ) {
-  // ✅ CORREÇÃO 1: Buscar candidato pendente existente ANTES de criar
+  // ✅ CORREÇÃO 1: Buscar candidato existente ANTES de criar (SEM filtrar por status)
   const { data: candidatoExistente } = await supabase
     .from('produtos_candidatos_normalizacao')
-    .select('id')
+    .select('id, status')
     .eq('nota_imagem_id', produto.nota_imagem_id)
     .eq('texto_original', produto.texto_original)
-    .eq('status', 'pendente')
     .maybeSingle();
 
   if (candidatoExistente) {
-    // ✏️ ATUALIZAR candidato existente ao invés de criar novo
-    console.log(`🔄 Atualizando candidato existente: ${produto.texto_original}`);
+    // ✅ GUARD CLAUSE: Não reprocessar candidatos já decididos
+    if (['auto_aprovado', 'rejeitado'].includes(candidatoExistente.status)) {
+      console.log(`⏭️ Candidato já processado (${candidatoExistente.status}), pulando: ${produto.texto_original}`);
+      return;
+    }
+    
+    // ✏️ ATUALIZAR apenas candidatos pendentes
+    console.log(`🔄 Atualizando candidato pendente: ${produto.texto_original}`);
     
     const { error } = await supabase
       .from('produtos_candidatos_normalizacao')
