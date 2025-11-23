@@ -3212,6 +3212,7 @@ export type Database = {
       }
       is_master: { Args: never; Returns: boolean }
       is_receita_image_owner: { Args: { image_path: string }; Returns: boolean }
+      limpar_candidatos_orfaos: { Args: never; Returns: number }
       limpar_dados_antigos: { Args: never; Returns: undefined }
       limpar_dados_usuario_completo: { Args: never; Returns: undefined }
       limpar_duplicacoes_processamento: {
