@@ -325,14 +325,6 @@ const BottomNavigation = () => {
       // 4. ✅ Nota APROVADA - Processar estoque
       console.log('✅ [AUTO] Nota APROVADA - processando estoque...');
       
-      toast({
-        title: '✅ Nota aceita!',
-        description: 'Processando estoque em segundo plano...',
-      });
-      
-      // Navegar para "Minhas Notas" imediatamente
-      navigate('/screenshots');
-      
       // 5. Processar estoque em background
       const { data: processData, error: processError } = await supabase.functions.invoke(
         'process-receipt-full',
@@ -350,6 +342,15 @@ const BottomNavigation = () => {
       }
       
       console.log('✅ [AUTO] Estoque processado:', processData);
+      
+      // Toast final consolidado
+      toast({
+        title: '✅ Nota processada!',
+        description: `${processData?.itens_inseridos || 0} produtos adicionados ao estoque`,
+      });
+      
+      // Navegar para "Minhas Notas" após processamento
+      navigate('/screenshots');
       
       // 6. Limpar PDF temporário
       const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
@@ -672,16 +673,7 @@ const BottomNavigation = () => {
           // Se chegou aqui, Real-time não processou, polling assume
           console.log('🟢 [POLLING] Real-time não processou, polling assumindo responsabilidade');
           
-          toast({
-            title: "📋 Processando nota...",
-            description: "Validando e adicionando ao estoque automaticamente",
-          });
-          
-          if ('vibrate' in navigator) {
-            navigator.vibrate([100, 50, 100]);
-          }
-          
-          // Processar automaticamente via polling
+          // Processar automaticamente via polling (sem toast duplicado)
           await processarNotaAutomaticamente(noteId, user.id, data);
           removeProcessingNote(noteId);
           
