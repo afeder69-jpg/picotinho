@@ -89,6 +89,7 @@ export default function NormalizacaoGlobal() {
   const [candidatos, setCandidatos] = useState<any[]>([]);
   const [produtosMaster, setProdutosMaster] = useState<any[]>([]);
   const [processando, setProcessando] = useState(false);
+  const [sincronizandoManual, setSincronizandoManual] = useState(false);
   
   // Estados para raspagem de imagens
   const [processandoImagens, setProcessandoImagens] = useState(false);
@@ -553,6 +554,45 @@ export default function NormalizacaoGlobal() {
       });
     } finally {
       setProcessando(false);
+    }
+  }
+
+  async function sincronizarCandidatosAprovados() {
+    setSincronizandoManual(true);
+    try {
+      toast({
+        title: "Sincronização iniciada",
+        description: "Aplicando candidatos aprovados ao estoque...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('aplicar-candidatos-aprovados', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (error) throw error;
+
+      const mensagem = data.sincronizados > 0 
+        ? `${data.sincronizados} candidatos aplicados ao estoque com sucesso!`
+        : 'Todos os candidatos já estavam sincronizados.';
+
+      toast({
+        title: "Sincronização concluída",
+        description: mensagem,
+      });
+
+      await carregarDados();
+
+    } catch (error: any) {
+      console.error('Erro ao sincronizar:', error);
+      toast({
+        title: "Erro na sincronização",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setSincronizandoManual(false);
     }
   }
 
@@ -1908,7 +1948,7 @@ export default function NormalizacaoGlobal() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Button 
               onClick={processarNormalizacao}
-              disabled={processando || consolidando}
+              disabled={processando || consolidando || sincronizandoManual}
               className="flex-1 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all"
             >
               <Zap className="w-4 h-4" />
@@ -1916,8 +1956,26 @@ export default function NormalizacaoGlobal() {
             </Button>
 
             <Button 
+              onClick={sincronizarCandidatosAprovados}
+              disabled={processando || consolidando || sincronizandoManual || stats.autoAprovadosTotal === 0}
+              variant="secondary"
+              className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
+            >
+              <RotateCcw className="w-4 h-4" />
+              {sincronizandoManual ? 'Sincronizando...' : 'Sincronizar Aprovados'}
+              {stats.autoAprovadosTotal > 0 && (
+                <Badge 
+                  variant="default" 
+                  className="ml-2"
+                >
+                  {stats.autoAprovadosTotal}
+                </Badge>
+              )}
+            </Button>
+
+            <Button 
               onClick={() => setConfirmarConsolidacaoOpen(true)}
-              disabled={processando || consolidando}
+              disabled={processando || consolidando || sincronizandoManual}
               variant="destructive"
               className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
             >
@@ -1937,7 +1995,7 @@ export default function NormalizacaoGlobal() {
               onClick={() => navigate("/admin/normalizacoes-estabelecimentos")}
               variant="outline"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando}
+              disabled={processando || consolidando || sincronizandoManual}
             >
               <Building2 className="w-4 h-4" />
               Gerenciar Estabelecimentos
@@ -1947,7 +2005,7 @@ export default function NormalizacaoGlobal() {
               onClick={() => navigate("/recategorizar-inteligente")}
               variant="secondary"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando || recategorizando}
+              disabled={processando || consolidando || recategorizando || sincronizandoManual}
             >
               <RotateCcw className="w-4 h-4" />
               Recategorizar Produtos
