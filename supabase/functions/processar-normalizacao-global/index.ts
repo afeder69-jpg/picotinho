@@ -593,13 +593,15 @@ Deno.serve(async (req) => {
 function normalizarTextoParaMatching(texto: string): string {
   let normalizado = texto.toUpperCase().trim();
   
-  // Remover pontuações problemáticas que atrapalham o matching
+  // 🔧 PARTE C: Normalizar pontuações e espaços inconsistentes
   normalizado = normalizado
-    .replace(/\./g, ' ')  // Pontos viram espaços
-    .replace(/,/g, ' ')   // Vírgulas viram espaços
+    .replace(/\s*\/\s*/g, '/')       // Normalizar espaços ao redor de / (C/SAL → C/SAL, C/ SAL → C/SAL)
+    .replace(/\.(?=[A-Z])/g, '')     // Remover pontos entre letras (S/LAC.ITALAC → S/LACITALAC)
+    .replace(/\./g, ' ')             // Pontos restantes viram espaços
+    .replace(/,/g, ' ')              // Vírgulas viram espaços
     .replace(/\(/g, ' ')
     .replace(/\)/g, ' ')
-    .replace(/\s+/g, ' ') // Normalizar múltiplos espaços
+    .replace(/\s+/g, ' ')            // Normalizar múltiplos espaços
     .trim();
   
   // Remover sufixos comuns que não afetam identidade do produto
@@ -621,6 +623,33 @@ function normalizarTextoParaMatching(texto: string): string {
   normalizado = normalizado.replace(/\s+/g, ' ').trim();
   
   return normalizado;
+}
+
+// ============================================
+// 🔧 PARTE C: FUZZY MATCHING COM LEVENSHTEIN DISTANCE
+// ============================================
+function calcularSimilaridadeLevenshtein(str1: string, str2: string): number {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  const matrix = Array(len2 + 1).fill(null).map(() => Array(len1 + 1).fill(null));
+  
+  for (let i = 0; i <= len1; i++) matrix[0][i] = i;
+  for (let j = 0; j <= len2; j++) matrix[j][0] = j;
+  
+  for (let j = 1; j <= len2; j++) {
+    for (let i = 1; i <= len1; i++) {
+      const substitutionCost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1,         // Inserção
+        matrix[j - 1][i] + 1,         // Deleção
+        matrix[j - 1][i - 1] + substitutionCost  // Substituição
+      );
+    }
+  }
+  
+  const distance = matrix[len2][len1];
+  const maxLen = Math.max(len1, len2);
+  return ((maxLen - distance) / maxLen) * 100;
 }
 
 // ============================================
@@ -1198,8 +1227,7 @@ async function criarCandidato(
           unidade_base_sugerida: normalizacao.unidade_base,
           categoria_unidade_sugerida: normalizacao.categoria_unidade,
           granel_sugerido: normalizacao.granel,
-          obs_embalagem_sugerida: obsEmbalagem,
-          dados_extraidos: normalizacao.dados_extraidos,
+          // ⚡ PARTE A: REMOVIDO colunas que não existem (obs_embalagem_sugerida, dados_extraidos)
           status: status,
           updated_at: new Date().toISOString()
         })
