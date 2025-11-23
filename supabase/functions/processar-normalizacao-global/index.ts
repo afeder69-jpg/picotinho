@@ -259,8 +259,7 @@ Deno.serve(async (req) => {
               await supabase
                 .from('estoque_app')
                 .update(updateData)
-                .eq('nota_id', produto.nota_imagem_id)
-                .eq('produto_nome', produto.texto_original);
+                .eq('produto_candidato_id', jaExiste.id); // ✅ FK direta - mais confiável que match de string
               
               console.log(`✅ Item reprocessado vinculado ao master: ${masterDetails?.nome_padrao || jaExiste.sugestao_sku_global}`);
             }
@@ -714,15 +713,48 @@ ${produtosSimilares.map(p => `- ${p.nome_padrao} | SKU: ${p.sku_global} | ID: ${
 INSTRUÇÕES:
 
 **🔍 PASSO 1 - VERIFICAR SE É VARIAÇÃO DE PRODUTO EXISTENTE:**
-- Compare o produto com os PRODUTOS SIMILARES acima
-- Se for uma VARIAÇÃO/SINÔNIMO de algum produto existente, retorne o ID dele no campo "produto_master_id"
-- Exemplos de variações que SÃO O MESMO PRODUTO:
-  * "TEMPERO VERDE" e "CHEIRO VERDE" são o mesmo produto
-  * "CHEIRO-VERDE" e "CHEIRO VERDE" são o mesmo produto
-  * "AÇÚCAR CRISTAL" e "AÇUCAR CRISTAL" são o mesmo produto
-  * "LEITE NINHO" e "LEITE EM PÓ NINHO" são o mesmo produto
-  * "AGUA SANITARIA" e "ÁGUA SANITÁRIA" são o mesmo produto
-- Se tiver 80%+ de certeza que é o mesmo produto, USE O produto_master_id (ID) do catálogo
+
+⚠️ CRITÉRIOS RIGOROSOS PARA CONSIDERAR COMO MESMO PRODUTO (usar produto_master_id):
+
+Para usar um produto_master_id existente, TODOS os critérios abaixo devem ser atendidos:
+
+1. ✅ MARCA: Deve ser EXATAMENTE a mesma ou sinônimo direto reconhecido
+   - "NINHO" e "LEITE NINHO" ✅ são sinônimos
+   - "ROYAL" e "APTI" ❌ são marcas DIFERENTES
+   - "CREMINAS" e "ITALAC" ❌ são marcas DIFERENTES
+
+2. ✅ NOME BASE: Deve ser o mesmo produto (permitir apenas variações ortográficas)
+   - "CHEIRO VERDE" e "TEMPERO VERDE" ✅ são sinônimos conhecidos
+   - "GELATINA" e "GELATINA" ✅ match exato
+   - "MANTEIGA" e "MANTEIGA" ✅ match exato
+   
+3. ✅ ATRIBUTOS CRÍTICOS (quando aplicável) - DEVEM SER IDÊNTICOS:
+   - SABOR: Deve ser o mesmo (Framboesa ≠ Morango, Chocolate ≠ Baunilha, Limão ≠ Laranja)
+   - COR: Deve ser a mesma (Verde ≠ Azul, Branco ≠ Vermelho)
+   - TIPO: Deve ser o mesmo (Integral ≠ Refinado, Com Sal ≠ Sem Sal, Com Lactose ≠ Sem Lactose)
+   - CARACTERÍSTICA ESPECIAL: Deve ser a mesma (Light ≠ Normal, Zero ≠ Normal, Diet ≠ Normal)
+
+4. ✅ PESO/VOLUME: Diferença máxima de 10%
+   - 1L e 1.05L ✅ (5% de diferença)
+   - 25g e 20g ❌ (20% de diferença - criar produto NOVO)
+   - 500g e 1kg ❌ (100% de diferença - criar produto NOVO)
+   - 200g e 180g ✅ (10% de diferença)
+
+5. ✅ CONFIANÇA MÍNIMA: 95% (NÃO 80% - seja rigoroso!)
+
+🚨 SE QUALQUER UM DESSES CRITÉRIOS FALHAR: Crie um produto NOVO (deixe "produto_master_id": null)
+
+Exemplos de MATCH CORRETO (pode usar produto_master_id):
+- "AÇÚCAR CRISTAL UNIÃO 1KG" ← → "ACUCAR CRISTAL UNIAO 1000G" ✅ (mesma marca, mesmo produto, 10% diferença)
+- "LEITE NINHO 400G" ← → "LEITE EM PÓ NINHO 400G" ✅ (mesma marca, sinônimo conhecido, mesmo peso)
+- "MANTEIGA COM SAL CREMINAS 500G" ← → "MANTEIGA C/ SAL CREMINAS 500G" ✅ (mesma marca, mesmo tipo, mesmo peso)
+
+Exemplos de MATCH INCORRETO (criar produto NOVO - não usar produto_master_id):
+- "GELATINA ROYAL FRAMBOESA 25G" ← → "GELATINA APTI MORANGO 20G" ❌ (marca diferente, sabor diferente, peso diferente)
+- "MANTEIGA COM SAL 500G" ← → "MANTEIGA SEM SAL 500G" ❌ (atributo crítico diferente)
+- "ARROZ INTEGRAL 1KG" ← → "ARROZ BRANCO 1KG" ❌ (tipo diferente)
+- "CREME DE LEITE 200G" ← → "CREME DE LEITE SEM LACTOSE 200G" ❌ (atributo crítico diferente)
+- "OVO BRANCO 30 UN" ← → "OVO VERMELHO 30 UN" ❌ (cor diferente)
 
 **📝 PASSO 2 - SE NÃO FOR VARIAÇÃO, NORMALIZE COMO PRODUTO NOVO:**
 1. Analise o nome do produto e extraia:
@@ -1120,8 +1152,7 @@ async function criarCandidato(
     const { error: estoqueError, count } = await supabase
       .from('estoque_app')
       .update(updateData)
-      .eq('nota_id', produto.nota_imagem_id)
-      .eq('produto_nome', produto.texto_original)
+      .eq('produto_candidato_id', candidatoData.id) // ✅ FK direta - mais confiável que match de string
       .is('produto_master_id', null); // Só atualizar quem ainda não tem master
     
     if (estoqueError) {
