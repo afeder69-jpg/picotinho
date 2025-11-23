@@ -53,6 +53,8 @@ const BottomNavigation = () => {
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
   const activelyProcessingRef = useRef<Set<string>>(new Set());
+  const debounceTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastProcessingTimestamp = useRef<Map<string, number>>(new Map());
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -246,14 +248,23 @@ const BottomNavigation = () => {
     userId: string, 
     notaData: any
   ) => {
-    // ✅ GUARD: Evitar processamento duplicado usando ref síncrona
+    // ✅ GUARD 1: Evitar processamento duplicado usando ref síncrona
     if (activelyProcessingRef.current.has(notaId)) {
       console.log(`⚠️ [AUTO] Nota ${notaId} já está sendo processada, ignorando...`);
       return;
     }
     
+    // ✅ GUARD 2: Verificar timestamp para evitar race conditions (30s de bloqueio)
+    const lastProcessing = lastProcessingTimestamp.current.get(notaId) || 0;
+    const agora = Date.now();
+    if (agora - lastProcessing < 30000) {
+      console.log(`⚠️ [AUTO] Nota ${notaId} processada recentemente (${((agora - lastProcessing) / 1000).toFixed(0)}s atrás), ignorando...`);
+      return;
+    }
+    
     // Marcar como em processamento INSTANTANEAMENTE
     activelyProcessingRef.current.add(notaId);
+    lastProcessingTimestamp.current.set(notaId, agora);
     console.log(`🔒 [AUTO] Nota ${notaId} BLOQUEADA para processamento`);
     
     try {
@@ -510,12 +521,30 @@ const BottomNavigation = () => {
         async (payload) => {
           console.log('📨 [REALTIME] EVENTO RECEBIDO!', {
             event: payload.eventType,
-            old: payload.old,
-            new: payload.new,
+            old_dados: !!payload.old?.dados_extraidos,
+            new_dados: !!payload.new?.dados_extraidos,
+            old_processing: payload.old?.processing_started_at,
+            new_processing: payload.new?.processing_started_at,
             timestamp: new Date().toISOString()
           });
           
           const notaAtualizada = payload.new as any;
+          const notaAnterior = payload.old as any;
+          
+          // 🔥 FILTRO CRÍTICO 1: Ignorar se dados_extraidos não mudou
+          const dadosExtraidosNovo = notaAtualizada.dados_extraidos;
+          const dadosExtraidosAntigo = notaAnterior?.dados_extraidos;
+          
+          if (!dadosExtraidosNovo || JSON.stringify(dadosExtraidosNovo) === JSON.stringify(dadosExtraidosAntigo)) {
+            console.log('⚠️ [REALTIME] Ignorando UPDATE sem mudança em dados_extraidos');
+            return;
+          }
+          
+          // 🔥 FILTRO CRÍTICO 2: Ignorar se ainda está no lock atômico
+          if (notaAtualizada.processing_started_at) {
+            console.log('⚠️ [REALTIME] Nota ainda em processamento atômico (lock ativo), ignorando');
+            return;
+          }
           
           console.log('🔍 [REALTIME] Verificando condições:', {
             id: notaAtualizada.id,
@@ -546,60 +575,78 @@ const BottomNavigation = () => {
           if (notaAtualizada.processada && notaAtualizada.dados_extraidos) {
             console.log('✅ [REALTIME] Nota pronta:', notaAtualizada.id);
             
-            // Remover do processamento
-            removeProcessingNote(notaAtualizada.id);
-
-            // Buscar dados completos da nota
-            const { data: notaData, error: notaError } = await supabase
-              .from('notas_imagens')
-              .select('id, dados_extraidos, nome_original')
-              .eq('id', notaAtualizada.id)
-              .single();
-
-            if (notaError) {
-              console.error('❌ Erro ao buscar dados da nota:', notaError);
-              return;
+            // 🔥 DEBOUNCE: Consolidar múltiplos eventos (300ms)
+            const existingTimer = debounceTimerRef.current.get(notaAtualizada.id);
+            if (existingTimer) {
+              console.log('⏱️ [REALTIME] Cancelando timer anterior (debounce)');
+              clearTimeout(existingTimer);
             }
-
-            // Recuperar URL e tipo de documento do mapa local
-            const notaInfo = processingNotesData.get(notaAtualizada.id);
             
-            // ✅ PROCESSAMENTO AUTOMÁTICO
-            console.log('🤖 [REALTIME] Iniciando processamento automático');
-            
-            // ✅ VERIFICAR se já está processando antes de disparar
-            if (!activelyProcessingRef.current.has(notaAtualizada.id)) {
-              toast({
-                title: "📋 Processando nota...",
-                description: "Validando e adicionando ao estoque automaticamente",
-              });
+            const newTimer = setTimeout(async () => {
+              console.log('🚀 [REALTIME] Debounce concluído, processando nota');
+              
+              // Remover do processamento
+              removeProcessingNote(notaAtualizada.id);
 
-              if ('vibrate' in navigator) {
-                navigator.vibrate([100, 50, 100]);
+              // Buscar dados completos da nota
+              const { data: notaData, error: notaError } = await supabase
+                .from('notas_imagens')
+                .select('id, dados_extraidos, nome_original')
+                .eq('id', notaAtualizada.id)
+                .single();
+
+              if (notaError) {
+                console.error('❌ Erro ao buscar dados da nota:', notaError);
+                return;
               }
 
-              // Processar automaticamente
-              await processarNotaAutomaticamente(notaAtualizada.id, user.id, notaData);
-            } else {
-              console.log('⚠️ [REALTIME] Nota já em processamento, ignorando');
-            }
+              // Recuperar URL e tipo de documento do mapa local
+              const notaInfo = processingNotesData.get(notaAtualizada.id);
+              
+              // ✅ PROCESSAMENTO AUTOMÁTICO
+              console.log('🤖 [REALTIME] Iniciando processamento automático');
+              
+              // ✅ VERIFICAR se já está processando antes de disparar
+              if (!activelyProcessingRef.current.has(notaAtualizada.id)) {
+                toast({
+                  title: "📋 Processando nota...",
+                  description: "Validando e adicionando ao estoque automaticamente",
+                });
 
-            // Limpar do mapa local e cancelar timeout
-            setProcessingNotesData(prev => {
-              const newMap = new Map(prev);
-              newMap.delete(notaAtualizada.id);
-              return newMap;
-            });
-            
-            const timerId = processingTimers.get(notaAtualizada.id);
-            if (timerId) {
-              clearTimeout(timerId);
-              setProcessingTimers(prev => {
+                if ('vibrate' in navigator) {
+                  navigator.vibrate([100, 50, 100]);
+                }
+
+                // Processar automaticamente
+                await processarNotaAutomaticamente(notaAtualizada.id, user.id, notaData);
+              } else {
+                console.log('⚠️ [REALTIME] Nota já em processamento, ignorando');
+              }
+              
+              // Limpar do mapa local e cancelar timeout
+              setProcessingNotesData(prev => {
                 const newMap = new Map(prev);
                 newMap.delete(notaAtualizada.id);
                 return newMap;
               });
-            }
+              
+              const timerId = processingTimers.get(notaAtualizada.id);
+              if (timerId) {
+                clearTimeout(timerId);
+                setProcessingTimers(prev => {
+                  const newMap = new Map(prev);
+                  newMap.delete(notaAtualizada.id);
+                  return newMap;
+                });
+              }
+              
+              // Limpar timer do mapa
+              debounceTimerRef.current.delete(notaAtualizada.id);
+            }, 300); // 300ms de debounce
+            
+            debounceTimerRef.current.set(notaAtualizada.id, newTimer);
+            console.log('⏱️ [REALTIME] Debounce iniciado (300ms)');
+            return; // Não executar o resto até o debounce completar
           }
         }
       )
@@ -611,7 +658,7 @@ const BottomNavigation = () => {
       console.log('🔌 [REALTIME] Desconectando listener');
       supabase.removeChannel(channel);
     };
-  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes]);
+  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes, toast, navigate]);
 
   // useEffect para polling de fallback (verifica a cada 3 segundos)
   useEffect(() => {
