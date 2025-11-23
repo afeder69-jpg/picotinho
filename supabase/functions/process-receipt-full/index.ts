@@ -86,13 +86,14 @@ function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): {
   return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
 }
 
-// 🧹 Limpar unidades de medida do nome do produto para melhor matching
-function limparUnidadesMedida(nome: string): string {
-  return nome
-    .replace(/\s+(kg|un|lt|ml|g|l)\s+/gi, ' ')  // Remove kg, un, lt, ml, g, l
-    .replace(/\s+/g, ' ')                         // Remove espaços duplos
-    .trim();
-}
+  // 🧹 Limpar sufixos de GRANEL do nome antes do matching
+  function limparUnidadesMedida(nome: string): string {
+    return nome
+      .replace(/\s+(kg|g|ml|l)\s+GRANEL$/gi, '') // Remove "kg GRANEL", "g GRANEL", etc
+      .replace(/\s+(kg|un|lt|ml|g|l)\s+/gi, ' ')  // Remove kg, un, lt, ml, g, l
+      .replace(/\s+/g, ' ')                         // Remove espaços duplos
+      .trim();
+  }
 
 // 🔧 Normalizar nome do produto para matching consistente (usado em estoque)
 function normalizarNomeProdutoEstoque(nome: string): string {
@@ -908,15 +909,19 @@ serve(async (req) => {
     }
 
     // Limpar estoque anterior dessa nota com transaction safety
-    const { error: deleteError } = await supabase
+    console.log(`🧹 [DEBUG] Deletando produtos antigos da nota ${finalNotaId}...`);
+    const { data: deletedProducts, error: deleteError } = await supabase
       .from("estoque_app")
       .delete()
       .eq("nota_id", finalNotaId)
-      .eq("user_id", nota.usuario_id);
+      .eq("user_id", nota.usuario_id)
+      .select(); // ✅ Retornar produtos deletados para auditoria
     
     if (deleteError) {
       console.error("❌ Erro ao limpar estoque anterior:", deleteError);
       // Não falhar por isso, apenas logar
+    } else {
+      console.log(`🗑️ [DEBUG] ${deletedProducts?.length || 0} produtos deletados do estoque anterior:`, deletedProducts?.map(p => p.produto_nome));
     }
 
     // Consolidar itens duplicados antes de inserir no estoque
@@ -980,8 +985,11 @@ serve(async (req) => {
     // Converter Map para Array
     const produtosEstoque = Array.from(produtosConsolidados.values());
     
-    console.log(`📦 Itens únicos para inserir no estoque: ${produtosEstoque.length} (de ${itens.length} itens originais)`);
-    console.log(`🔄 Produtos recategorizados automaticamente: ${produtosRecategorizados} (${((produtosRecategorizados/produtosEstoque.length)*100).toFixed(1)}%)`);
+    console.log(`📦 [DEBUG] Consolidação concluída:`);
+    console.log(`   - Itens originais na nota: ${itens.length}`);
+    console.log(`   - Produtos únicos consolidados: ${produtosEstoque.length}`);
+    console.log(`   - Produtos recategorizados: ${produtosRecategorizados} (${((produtosRecategorizados/produtosEstoque.length)*100).toFixed(1)}%)`);
+    console.log(`📋 [DEBUG] Lista de produtos consolidados:`, produtosEstoque.map(p => `${p.produto_nome} (${p.quantidade} ${p.unidade_medida})`));
     
     // 🔒 CORREÇÃO #2: Salvar dados_extraidos ANTES de inserir no estoque (segurança contra perda de dados)
     console.log('💾 Salvando dados extraídos antes de processar estoque...');
@@ -1172,17 +1180,41 @@ serve(async (req) => {
     }
     
     // 🚨 DEBUG CRÍTICO: Verificar se os produtos problemáticos estão na lista
-    const produtosProblematicos = ['Queijo Parmesão President', 'Filé de Peito de Frango', 'Creme de Leite Italac', 'Requeijão Cremoso Tirolez'];
+    const produtosProblematicos = ['GELATINA', 'SUCO', 'BANANA', 'MAMAO', 'MACA'];
     
-    console.log('🔍 AUDITORIA DOS PRODUTOS PROBLEMÁTICOS:');
+    console.log('🔍 [AUDITORIA] Produtos consolidados antes da inserção:');
     produtosProblematicos.forEach(produtoTeste => {
-      const encontrado = produtosEstoque.find(p => p.produto_nome.includes(produtoTeste.split(' ')[0]));
-      if (encontrado) {
-        console.log(`✅ ${produtoTeste}: ENCONTRADO - ${encontrado.produto_nome} | Cat: ${encontrado.categoria} | Qtd: ${encontrado.quantidade}`);
+      const encontrados = produtosEstoque.filter(p => p.produto_nome.toUpperCase().includes(produtoTeste));
+      if (encontrados.length > 0) {
+        console.log(`✅ [AUDITORIA] "${produtoTeste}": ${encontrados.length} ocorrência(s)`);
+        encontrados.forEach((p, idx) => {
+          console.log(`   [${idx + 1}] ${p.produto_nome} | Cat: ${p.categoria} | Qtd: ${p.quantidade} | R$ ${p.preco_unitario_ultimo.toFixed(2)}`);
+        });
       } else {
-        console.log(`❌ ${produtoTeste}: NÃO ENCONTRADO na lista de inserção!`);
+        console.log(`⚠️ [AUDITORIA] "${produtoTeste}": NÃO ENCONTRADO`);
       }
     });
+    
+    // 🔒 CORREÇÃO #2.7: Adicionar índice sequencial único para detectar duplicatas
+    const hashesInseridos = new Set<string>();
+    const produtosDuplicados: string[] = [];
+    
+    produtosEstoque.forEach((produto, index) => {
+      const hashProduto = `${produto.produto_nome}_${produto.quantidade}_${produto.preco_unitario_ultimo.toFixed(2)}`;
+      
+      if (hashesInseridos.has(hashProduto)) {
+        produtosDuplicados.push(`[${index}] ${produto.produto_nome} (hash: ${hashProduto})`);
+      } else {
+        hashesInseridos.add(hashProduto);
+      }
+    });
+    
+    if (produtosDuplicados.length > 0) {
+      console.error(`🚨 [AUDITORIA] DUPLICATAS DETECTADAS ANTES DA INSERÇÃO (${produtosDuplicados.length}):`);
+      produtosDuplicados.forEach(dup => console.error(`   - ${dup}`));
+    } else {
+      console.log(`✅ [AUDITORIA] Nenhuma duplicata detectada antes da inserção`);
+    }
     
     // Mostrar todos os produtos que vão ser inseridos
     console.log('📋 Lista completa para inserção:');
@@ -1203,9 +1235,15 @@ serve(async (req) => {
     let totalInserted = 0;
     const allInserted: any[] = [];
     
+    console.log(`📦 [DEBUG] Iniciando inserção em ${Math.ceil(produtosEstoque.length/BATCH_SIZE)} lotes...`);
+    
     for (let i = 0; i < produtosEstoque.length; i += BATCH_SIZE) {
       const batch = produtosEstoque.slice(i, i + BATCH_SIZE);
-      console.log(`📦 Processando lote ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(produtosEstoque.length/BATCH_SIZE)} (${batch.length} itens)`);
+      const loteNumero = Math.floor(i/BATCH_SIZE) + 1;
+      const totalLotes = Math.ceil(produtosEstoque.length/BATCH_SIZE);
+      
+      console.log(`📦 [LOTE ${loteNumero}/${totalLotes}] Inserindo ${batch.length} itens (${new Date().toISOString().split('T')[1].split('.')[0]})...`);
+      console.log(`   Produtos: ${batch.map(p => p.produto_nome).join(', ')}`);
       
       const { data: batchInserted, error: batchError } = await supabase
         .from("estoque_app")
@@ -1213,19 +1251,39 @@ serve(async (req) => {
         .select();
       
       if (batchError) {
-        console.error(`❌ Erro no lote ${Math.floor(i/BATCH_SIZE) + 1}:`, batchError);
+        console.error(`❌ [LOTE ${loteNumero}/${totalLotes}] Erro:`, batchError);
         throw new Error(`Erro ao inserir lote: ${batchError.message}`);
       }
       
       if (batchInserted) {
         allInserted.push(...batchInserted);
         totalInserted += batchInserted.length;
+        console.log(`✅ [LOTE ${loteNumero}/${totalLotes}] ${batchInserted.length} itens inseridos com sucesso (${new Date().toISOString().split('T')[1].split('.')[0]})`);
       }
     }
     
     const inserted = allInserted;
 
-    console.log(`✅ ${totalInserted} itens inseridos no estoque (${Math.ceil(produtosEstoque.length/BATCH_SIZE)} lotes processados)`);
+    console.log(`✅ [DEBUG] INSERÇÃO COMPLETA: ${totalInserted} itens inseridos em ${Math.ceil(produtosEstoque.length/BATCH_SIZE)} lotes`);
+    console.log(`📋 [DEBUG] Produtos inseridos:`, inserted.map(p => p.produto_nome));
+    
+    // 🚨 [AUDITORIA FINAL] Verificar duplicatas pós-inserção
+    const hashesInseridosPos = new Map<string, number>();
+    inserted.forEach((produto) => {
+      const hashProduto = `${produto.produto_nome}_${produto.quantidade}_${produto.preco_unitario_ultimo.toFixed(2)}`;
+      const count = hashesInseridosPos.get(hashProduto) || 0;
+      hashesInseridosPos.set(hashProduto, count + 1);
+    });
+    
+    const duplicatasPos = Array.from(hashesInseridosPos.entries()).filter(([hash, count]) => count > 1);
+    if (duplicatasPos.length > 0) {
+      console.error(`🚨 [AUDITORIA FINAL] DUPLICATAS DETECTADAS PÓS-INSERÇÃO (${duplicatasPos.length}):`);
+      duplicatasPos.forEach(([hash, count]) => {
+        console.error(`   - ${hash}: ${count}x`);
+      });
+    } else {
+      console.log(`✅ [AUDITORIA FINAL] Nenhuma duplicata detectada pós-inserção`);
+    }
     
     // 🚨 CORREÇÃO #3: VALIDAÇÃO CRÍTICA com auto-correção - NÃO marcar como processada se houver discrepância
     const itensEsperados = produtosEstoque.length;
