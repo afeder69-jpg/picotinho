@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical, Image, ImageOff, Sparkles } from 'lucide-react';
+import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, MoreVertical, Image, ImageOff, Sparkles, DollarSign, Eye, EyeOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -95,6 +95,10 @@ const EstoqueAtual = () => {
   
   // Estado para visualização de imagem
   const [imagemVisivel, setImagemVisivel] = useState<string | null>(null);
+  
+  // Estados para controle de visibilidade
+  const [mostrarResumo, setMostrarResumo] = useState(false);
+  const [mostrarPrecos, setMostrarPrecos] = useState(false);
 
   // Função para obter coordenadas do usuário (prioriza CEP do perfil)
   const obterCoordenadas = async (): Promise<{ latitude: number; longitude: number }> => {
@@ -1555,7 +1559,26 @@ const EstoqueAtual = () => {
     console.log('❌ Tipo do estoque:', typeof estoque, Array.isArray(estoque));
     return (
       <div className="min-h-screen bg-background text-foreground">
-        <PageHeader title="Estoque Atual" />
+        <PageHeader title="Estoque Atual">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMostrarResumo(!mostrarResumo)}
+            className="gap-2"
+          >
+            <DollarSign className="w-4 h-4" />
+            Resumo
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMostrarPrecos(!mostrarPrecos)}
+            className="gap-2"
+          >
+            {mostrarPrecos ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            Preços
+          </Button>
+        </PageHeader>
         
         <div className="container mx-auto p-6">
           <div className="text-center p-8">
@@ -1625,6 +1648,24 @@ const EstoqueAtual = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PageHeader title="Estoque Atual">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setMostrarResumo(!mostrarResumo)}
+          className="gap-2"
+        >
+          <DollarSign className="w-4 h-4" />
+          Resumo
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setMostrarPrecos(!mostrarPrecos)}
+          className="gap-2"
+        >
+          {mostrarPrecos ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          Preços
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon">
@@ -1676,144 +1717,146 @@ const EstoqueAtual = () => {
               </p>
             </div>
           )}
-          {/* Cards de resumo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            <Card className="md:col-span-2 lg:col-span-1">
-              <CardHeader className="pb-2">
-                <div className="text-center mb-3">
-                  <p className="text-sm font-bold text-green-600">Valores em Estoque</p>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1">
-                   {/* Cabeçalho das colunas */}
-                    <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
-                      <span>Categoria</span>
-                      <span>Itens</span>
-                      <span>Valor Pago</span>
-                      <span>Valor Atual</span>
-                      <span className="text-right">%</span>
-                      <span className="text-right"></span>
-                    </div>
-                  
-                  {subtotaisPorCategoria.map(({ categoria, subtotal, subtotalAtual }) => {
-                    // Calcular subtotal com preços atuais para esta categoria (mesmo cálculo do subtotal principal)
-                    const itensCategoria = groupedEstoque[categoria] || [];
+          {/* Cards de resumo - Condicional */}
+          {mostrarResumo && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Card className="md:col-span-2 lg:col-span-1">
+                <CardHeader className="pb-2">
+                  <div className="text-center mb-3">
+                    <p className="text-sm font-bold text-green-600">Valores em Estoque</p>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                     {/* Cabeçalho das colunas */}
+                      <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 pb-1 border-b text-xs text-muted-foreground font-medium">
+                        <span>Categoria</span>
+                        <span>Itens</span>
+                        <span>Valor Pago</span>
+                        <span>Valor Atual</span>
+                        <span className="text-right">%</span>
+                        <span className="text-right"></span>
+                      </div>
                     
-                    // Função para determinar o ícone de tendência com normalização
-                    const getTrendIcon = () => {
-                      const subtotalNormalizado = normalizeValue(subtotal);
-                      const subtotalAtualNormalizado = normalizeValue(subtotalAtual);
+                    {subtotaisPorCategoria.map(({ categoria, subtotal, subtotalAtual }) => {
+                      // Calcular subtotal com preços atuais para esta categoria (mesmo cálculo do subtotal principal)
+                      const itensCategoria = groupedEstoque[categoria] || [];
                       
-                      if (subtotalAtualNormalizado > subtotalNormalizado) {
-                        return <ArrowUp className="w-3 h-3 text-red-600" />;
-                      } else if (subtotalAtualNormalizado < subtotalNormalizado) {
-                        return <ArrowDown className="w-3 h-3 text-green-600" />;
-                      } else {
-                        return <Minus className="w-3 h-3 text-gray-400" />;
-                      }
-                    };
+                      // Função para determinar o ícone de tendência com normalização
+                      const getTrendIcon = () => {
+                        const subtotalNormalizado = normalizeValue(subtotal);
+                        const subtotalAtualNormalizado = normalizeValue(subtotalAtual);
+                        
+                        if (subtotalAtualNormalizado > subtotalNormalizado) {
+                          return <ArrowUp className="w-3 h-3 text-red-600" />;
+                        } else if (subtotalAtualNormalizado < subtotalNormalizado) {
+                          return <ArrowDown className="w-3 h-3 text-green-600" />;
+                        } else {
+                          return <Minus className="w-3 h-3 text-gray-400" />;
+                        }
+                      };
 
-                     const scrollToCategory = () => {
-                       const element = document.getElementById(`categoria-${categoria.toLowerCase()}`);
-                       if (element) {
-                         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                       }
-                     };
+                       const scrollToCategory = () => {
+                         const element = document.getElementById(`categoria-${categoria.toLowerCase()}`);
+                         if (element) {
+                           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                         }
+                       };
 
-                      // Calcular quantidade total de itens na categoria
-                     const quantidadeItens = itensCategoria.length;
+                        // Calcular quantidade total de itens na categoria
+                       const quantidadeItens = itensCategoria.length;
 
-                      // Calcular percentual da categoria
-                      const percentualCategoria = subtotal > 0 
-                        ? ((subtotalAtual - subtotal) / subtotal) * 100 
-                        : 0;
-                      const sinalPercentual = percentualCategoria >= 0 ? '+' : '-';
-                      const corPercentual = percentualCategoria >= 0 ? 'text-red-600' : 'text-green-600';
+                        // Calcular percentual da categoria
+                        const percentualCategoria = subtotal > 0 
+                          ? ((subtotalAtual - subtotal) / subtotal) * 100 
+                          : 0;
+                        const sinalPercentual = percentualCategoria >= 0 ? '+' : '-';
+                        const corPercentual = percentualCategoria >= 0 ? 'text-red-600' : 'text-green-600';
 
-                      return (
-                        <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs items-center py-1">
-                           <button 
-                             onClick={scrollToCategory}
-                             className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium whitespace-nowrap max-w-[140px] truncate"
-                           >
-                             {formatCategoryName(categoria)}
-                           </button>
-                          <span className="font-medium text-muted-foreground text-left">{quantidadeItens}</span>
-                          <span className="font-medium text-foreground text-left">{formatCurrency(subtotal)}</span>
-                           <span className="font-medium text-blue-600 text-left">
-                             {formatCurrency(subtotalAtual)}
-                           </span>
-                          <span className={`font-medium ${corPercentual} text-right text-[10px]`}>
-                            {sinalPercentual}{Math.abs(percentualCategoria).toFixed(1)}%
-                          </span>
-                          <div className="flex justify-end">
-                            {getTrendIcon()}
-                          </div>
-                       </div>
-                     );
-                  })}
-                  
-                      <div className="border-t pt-2 mt-2">
-                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 font-bold text-[11px]">
-                          <span className="text-foreground">Total</span>
-                          <span className="text-muted-foreground text-left">{totalProdutosUnicos}</span>
-                         <span className="text-foreground text-left">{formatCurrency(valorTotalPago)}</span>
-                         <span className="text-blue-600 text-left">
-                           {formatCurrency(valorTotalEstoque)}
-                          </span>
-                          <span className={`text-right text-[11px] ${(() => {
-                            const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
-                            return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
-                          })()}`}>
-                            {(() => {
-                              const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
-                              const sinal = percentualTotal >= 0 ? '+' : '-';
-                              return `${sinal}${Math.abs(percentualTotal).toFixed(1)}%`;
-                            })()}
-                          </span>
-                          <div className="flex justify-end">
-                             {/* Ícone de tendência total com normalização */}
-                            {(() => {
-                              const totalAtualNormalizado = normalizeValue(valorTotalEstoque);
-                              const valorTotalPagoNormalizado = normalizeValue(valorTotalPago);
-                              
-                              if (totalAtualNormalizado > valorTotalPagoNormalizado) {
-                                return <ArrowUp className="w-3 h-3 text-red-600" />;
-                              } else if (totalAtualNormalizado < valorTotalPagoNormalizado) {
-                                return <ArrowDown className="w-3 h-3 text-green-600" />;
-                              } else {
-                                return <Minus className="w-3 h-3 text-gray-400" />;
-                              }
-                            })()}
+                        return (
+                          <div key={categoria} className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs items-center py-1">
+                             <button 
+                               onClick={scrollToCategory}
+                               className="capitalize text-blue-600 hover:text-blue-800 underline underline-offset-2 hover:no-underline cursor-pointer text-left font-medium whitespace-nowrap max-w-[140px] truncate"
+                             >
+                               {formatCategoryName(categoria)}
+                             </button>
+                            <span className="font-medium text-muted-foreground text-left">{quantidadeItens}</span>
+                            <span className="font-medium text-foreground text-left">{formatCurrency(subtotal)}</span>
+                             <span className="font-medium text-blue-600 text-left">
+                               {formatCurrency(subtotalAtual)}
+                             </span>
+                            <span className={`font-medium ${corPercentual} text-right text-[10px]`}>
+                              {sinalPercentual}{Math.abs(percentualCategoria).toFixed(1)}%
+                            </span>
+                            <div className="flex justify-end">
+                              {getTrendIcon()}
+                            </div>
                          </div>
+                       );
+                    })}
+                    
+                        <div className="border-t pt-2 mt-2">
+                          <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 font-bold text-[11px]">
+                            <span className="text-foreground">Total</span>
+                            <span className="text-muted-foreground text-left">{totalProdutosUnicos}</span>
+                           <span className="text-foreground text-left">{formatCurrency(valorTotalPago)}</span>
+                           <span className="text-blue-600 text-left">
+                             {formatCurrency(valorTotalEstoque)}
+                            </span>
+                            <span className={`text-right text-[11px] ${(() => {
+                              const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
+                              return percentualTotal >= 0 ? 'text-red-600' : 'text-green-600';
+                            })()}`}>
+                              {(() => {
+                                const percentualTotal = valorTotalPago > 0 ? ((valorTotalEstoque - valorTotalPago) / valorTotalPago) * 100 : 0;
+                                const sinal = percentualTotal >= 0 ? '+' : '-';
+                                return `${sinal}${Math.abs(percentualTotal).toFixed(1)}%`;
+                              })()}
+                            </span>
+                            <div className="flex justify-end">
+                               {/* Ícone de tendência total com normalização */}
+                              {(() => {
+                                const totalAtualNormalizado = normalizeValue(valorTotalEstoque);
+                                const valorTotalPagoNormalizado = normalizeValue(valorTotalPago);
+                                
+                                if (totalAtualNormalizado > valorTotalPagoNormalizado) {
+                                  return <ArrowUp className="w-3 h-3 text-red-600" />;
+                                } else if (totalAtualNormalizado < valorTotalPagoNormalizado) {
+                                  return <ArrowDown className="w-3 h-3 text-green-600" />;
+                                } else {
+                                  return <Minus className="w-3 h-3 text-gray-400" />;
+                                }
+                              })()}
+                           </div>
+                          </div>
                         </div>
-                      </div>
-                      
-                      {/* Linha de diferença - alinhada com o grid */}
-                      <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
-                        <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs font-medium">
-                          <span className="text-muted-foreground">Diferença</span>
-                          <span></span>
-                          <span></span>
-                          <span className={`text-right ${(() => {
-                            const diferenca = valorTotalEstoque - valorTotalPago;
-                            return diferenca >= 0 ? 'text-red-600' : 'text-green-600';
-                          })()}`}>
-                            {(() => {
+                        
+                        {/* Linha de diferença - alinhada com o grid */}
+                        <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
+                          <div className="grid grid-cols-[1.8fr_0.8fr_1.8fr_1.5fr_0.5fr_0.6fr] gap-1 text-xs font-medium">
+                            <span className="text-muted-foreground">Diferença</span>
+                            <span></span>
+                            <span></span>
+                            <span className={`text-right ${(() => {
                               const diferenca = valorTotalEstoque - valorTotalPago;
-                              const sinal = diferenca >= 0 ? '+' : '';
-                              return `${sinal}${formatCurrency(Math.abs(diferenca))}`;
-                            })()}
-                          </span>
-                          <span></span>
-                          <span></span>
+                              return diferenca >= 0 ? 'text-red-600' : 'text-green-600';
+                            })()}`}>
+                              {(() => {
+                                const diferenca = valorTotalEstoque - valorTotalPago;
+                                const sinal = diferenca >= 0 ? '+' : '';
+                                return `${sinal}${formatCurrency(Math.abs(diferenca))}`;
+                              })()}
+                            </span>
+                            <span></span>
+                            <span></span>
+                          </div>
                         </div>
-                      </div>
-                   </div>
-                 </CardContent>
-               </Card>
-             </div>
+                     </div>
+                   </CardContent>
+                 </Card>
+               </div>
+          )}
 
 
           {/* Modal de confirmação para limpar estoque (invisível, acionado pelo dropdown) */}
@@ -1927,7 +1970,10 @@ const EstoqueAtual = () => {
                                    <ImageOff className="w-4 h-4" />
                                  )}
                                </button>
-                             </div>
+                              </div>
+                              
+                              {/* Preços e Datas - Condicional */}
+                              {mostrarPrecos && (
                                 <div className="space-y-1 text-xs">
                                    {(() => {
                                      const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
@@ -2039,6 +2085,7 @@ const EstoqueAtual = () => {
                                     );
                                   })()}
                                 </div>
+                              )}
                            </div>
                            
                                <div className="text-right flex-shrink-0 ml-2">
