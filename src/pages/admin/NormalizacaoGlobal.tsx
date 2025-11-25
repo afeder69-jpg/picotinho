@@ -312,8 +312,22 @@ export default function NormalizacaoGlobal() {
         .order('created_at', { ascending: false });
 
       // Separar por status
-      const autoAprovados = todosCandidatos?.filter(c => c.status === 'auto_aprovado') || [];
       const pendentes = todosCandidatos?.filter(c => c.status === 'pendente') || [];
+      
+      // 🔍 CONTAR APENAS ÓRFÃOS: candidatos auto_aprovados cujo estoque não foi sincronizado
+      const idsAutoAprovados = todosCandidatos?.filter(c => c.status === 'auto_aprovado').map(c => c.id) || [];
+      
+      let countOrfaos = 0;
+      if (idsAutoAprovados.length > 0) {
+        const { count } = await supabase
+          .from('estoque_app')
+          .select('id', { count: 'exact', head: true })
+          .not('produto_candidato_id', 'is', null)
+          .is('produto_master_id', null)
+          .in('produto_candidato_id', idsAutoAprovados);
+        
+        countOrfaos = count || 0;
+      }
 
       // 🔍 CORREÇÃO: Contar produtos aguardando normalização (com candidato PENDENTE ou PROCESSANDO)
       // Primeiro, buscar IDs dos candidatos que estão realmente pendentes/processando
@@ -344,15 +358,6 @@ export default function NormalizacaoGlobal() {
         .eq('status', 'aprovado')
         .not('revisado_por', 'is', null);
       
-      // Separar auto-aprovados por origem
-      const autoAprovadosOpenFoodFacts = autoAprovados.filter(
-        c => !c.notas_imagens || !c.notas_imagens.origem
-      ).length;
-      
-      const autoAprovadosNotasFiscais = autoAprovados.filter(
-        c => c.notas_imagens?.origem === 'whatsapp'
-      ).length;
-      
       // Separar pendentes por origem
       const pendentesOpenFoodFacts = pendentes.filter(
         c => !c.notas_imagens || !c.notas_imagens.origem
@@ -381,10 +386,10 @@ export default function NormalizacaoGlobal() {
         produtosOpenFoodFacts: mastersComImagem || 0,
         produtosNotasFiscais: mastersSemImagem,
         
-        // Fila de Processamento - Auto-Aprovados (não conta mais na fila principal)
-        autoAprovadosTotal: autoAprovados.length,
-        autoAprovadosOpenFoodFacts,
-        autoAprovadosNotasFiscais,
+        // Fila de Processamento - Órfãos (apenas itens não sincronizados)
+        autoAprovadosTotal: countOrfaos,
+        autoAprovadosOpenFoodFacts: 0, // Removido
+        autoAprovadosNotasFiscais: 0,  // Removido
         
         // Fila de Processamento - Aprovados Manualmente
         aprovadosManuaisTotal: aprovadosManualmente || 0,
@@ -2011,23 +2016,23 @@ export default function NormalizacaoGlobal() {
               {processando ? 'Processando...' : 'Processar Novas Normalizações'}
             </Button>
 
-            <Button 
-              onClick={sincronizarCandidatosAprovados}
-              disabled={processando || consolidando || sincronizandoManual || stats.autoAprovadosTotal === 0}
-              variant="secondary"
-              className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
-            >
-              <RotateCcw className="w-4 h-4" />
-              {sincronizandoManual ? 'Sincronizando...' : 'Sincronizar Aprovados'}
-              {stats.autoAprovadosTotal > 0 && (
+            {stats.autoAprovadosTotal > 0 && (
+              <Button 
+                onClick={sincronizarCandidatosAprovados}
+                disabled={processando || consolidando || sincronizandoManual}
+                variant="secondary"
+                className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
+              >
+                <RotateCcw className="w-4 h-4" />
+                {sincronizandoManual ? 'Corrigindo...' : 'Corrigir Sincronização (Emergência)'}
                 <Badge 
                   variant="default" 
                   className="ml-2"
                 >
                   {stats.autoAprovadosTotal}
                 </Badge>
-              )}
-            </Button>
+              </Button>
+            )}
 
             <Button 
               onClick={() => setConfirmarConsolidacaoOpen(true)}
