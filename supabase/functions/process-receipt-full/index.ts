@@ -91,12 +91,15 @@ function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): {
   return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
 }
 
-  // 🧹 Limpar sufixos de GRANEL do nome antes do matching
+  // 🧹 Limpar sufixos de GRANEL e unidades do nome antes do matching
   function limparUnidadesMedida(nome: string): string {
     return nome
-      .replace(/\s+(kg|g|ml|l)\s+GRANEL$/gi, '') // Remove "kg GRANEL", "g GRANEL", etc
-      .replace(/\s+(kg|un|lt|ml|g|l)\s+/gi, ' ')  // Remove kg, un, lt, ml, g, l
-      .replace(/\s+/g, ' ')                         // Remove espaços duplos
+      .replace(/\s+(kg|g|ml|l)\s+GRANEL$/gi, '') // Remove "kg GRANEL", "g GRANEL" no final
+      .replace(/\s+GRANEL$/gi, '') // Remove "GRANEL" sozinho no final
+      .replace(/\s+\d*UN(IDADE)?S?$/gi, '') // Remove "1UN", "2UN", "UNIDADE" no final
+      .replace(/\s+\d*(kg|un|lt|ml|g|l)$/gi, '') // Remove unidades no final
+      .replace(/\s+(kg|un|lt|ml|g|l)\s+/gi, ' ') // Remove unidades no meio do texto
+      .replace(/\s+/g, ' ') // Remove espaços duplos
       .trim();
   }
 
