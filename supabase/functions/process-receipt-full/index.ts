@@ -9,6 +9,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ================== FEATURE FLAGS ==================
+// 🎚️ Feature flag: Usar IA para normalização (Gemini via Lovable AI Gateway)
+const USE_AI_NORMALIZATION = Deno.env.get('USE_AI_NORMALIZATION') !== 'false'; // ✅ Ativado por padrão
+console.log(`🤖 USE_AI_NORMALIZATION: ${USE_AI_NORMALIZATION}`);
+
 // ================== HELPERS ==================
 function nowIso() {
   return new Date().toISOString();
@@ -322,6 +327,292 @@ function extrairPesoVolume(texto: string): { valor: number; unidade: string } | 
 }
 
 // ================== NORMALIZAÇÃO MASTER - FASE 2 ==================
+
+// 🤖 Interface para resultado de normalização com IA
+interface NormalizacaoSugerida {
+  sku_global: string;
+  nome_padrao: string;
+  categoria: string;
+  nome_base: string;
+  marca: string | null;
+  tipo_embalagem: string | null;
+  qtd_valor: number | null;
+  qtd_unidade: string | null;
+  qtd_base: number | null;
+  unidade_base: string | null;
+  categoria_unidade: string | null;
+  granel: boolean;
+  confianca: number;
+  razao: string;
+  produto_master_id: string | null;
+}
+
+/**
+ * 🤖 NORMALIZAÇÃO COM IA (Gemini via Lovable AI Gateway)
+ * Reutiliza a função de processar-normalizacao-global com melhorias
+ */
+async function normalizarComIA(
+  textoOriginal: string,
+  produtosSimilares: any[],
+  apiKey: string,
+  embalagemInfo?: { isMultiUnit: boolean; quantity: number }
+): Promise<NormalizacaoSugerida> {
+  console.log(`🤖 Analisando com Gemini: "${textoOriginal}"`);
+
+  const promptExtra = embalagemInfo?.isMultiUnit 
+    ? `
+
+⚠️ ATENÇÃO ESPECIAL - PRODUTO MULTI-UNIDADE DETECTADO:
+- Embalagem original continha ${embalagemInfo.quantity} unidades
+- Você DEVE normalizar como PRODUTO UNITÁRIO (1 unidade)
+- qtd_valor: 1
+- qtd_unidade: "UN"
+- qtd_base: 1
+- unidade_base: "un"
+- categoria_unidade: "UNIDADE"
+- granel: false
+- Nome deve ser SINGULAR sem número de embalagem
+  Exemplo: "OVOS BRANCOS" NÃO "OVOS BRANCOS 30 UN"
+`
+    : '';
+
+  const prompt = `Você é um especialista em normalização de produtos de supermercado brasileiros.${promptExtra}
+
+PRODUTO PARA NORMALIZAR: "${textoOriginal}"
+
+PRODUTOS SIMILARES NO CATÁLOGO (para referência):
+${produtosSimilares.map(p => `- ${p.nome_padrao} | SKU: ${p.sku_global} | ID: ${p.id}`).join('\n') || 'Nenhum produto similar encontrado'}
+
+INSTRUÇÕES:
+
+**🔍 PASSO 1 - VERIFICAR SE É VARIAÇÃO DE PRODUTO EXISTENTE:**
+
+⚠️ CRITÉRIOS RIGOROSOS PARA CONSIDERAR COMO MESMO PRODUTO (usar produto_master_id):
+
+Para usar um produto_master_id existente, TODOS os critérios abaixo devem ser atendidos:
+
+1. ✅ MARCA: Deve ser EXATAMENTE a mesma ou sinônimo direto reconhecido
+   - "NINHO" e "LEITE NINHO" ✅ são sinônimos
+   - "ROYAL" e "APTI" ❌ são marcas DIFERENTES
+   - "CREMINAS" e "ITALAC" ❌ são marcas DIFERENTES
+
+2. ✅ NOME BASE: Deve ser o mesmo produto (permitir apenas variações ortográficas)
+   - "CHEIRO VERDE" e "TEMPERO VERDE" ✅ são sinônimos conhecidos
+   - "GELATINA" e "GELATINA" ✅ match exato
+   - "MANTEIGA" e "MANTEIGA" ✅ match exato
+   
+3. ✅ ATRIBUTOS CRÍTICOS (quando aplicável) - DEVEM SER IDÊNTICOS:
+   - SABOR: Deve ser o mesmo (Framboesa ≠ Morango, Chocolate ≠ Baunilha, Limão ≠ Laranja)
+   - COR: Deve ser a mesma (Verde ≠ Azul, Branco ≠ Vermelho)
+   - TIPO: Deve ser o mesmo (Integral ≠ Refinado, Com Sal ≠ Sem Sal, Com Lactose ≠ Sem Lactose)
+   - CARACTERÍSTICA ESPECIAL: Deve ser a mesma (Light ≠ Normal, Zero ≠ Normal, Diet ≠ Normal)
+
+4. ✅ PESO/VOLUME: Diferença máxima de 10%
+   - 1L e 1.05L ✅ (5% de diferença)
+   - 25g e 20g ❌ (20% de diferença - criar produto NOVO)
+   - 500g e 1kg ❌ (100% de diferença - criar produto NOVO)
+   - 200g e 180g ✅ (10% de diferença)
+
+5. ✅ CONFIANÇA MÍNIMA: 95% (NÃO 80% - seja rigoroso!)
+
+🚨 SE QUALQUER UM DESSES CRITÉRIOS FALHAR: Crie um produto NOVO (deixe "produto_master_id": null)
+
+Exemplos de MATCH CORRETO (pode usar produto_master_id):
+- "AÇÚCAR CRISTAL UNIÃO 1KG" ← → "ACUCAR CRISTAL UNIAO 1000G" ✅ (mesma marca, mesmo produto, 10% diferença)
+- "LEITE NINHO 400G" ← → "LEITE EM PÓ NINHO 400G" ✅ (mesma marca, sinônimo conhecido, mesmo peso)
+- "MANTEIGA COM SAL CREMINAS 500G" ← → "MANTEIGA C/ SAL CREMINAS 500G" ✅ (mesma marca, mesmo tipo, mesmo peso)
+
+Exemplos de MATCH INCORRETO (criar produto NOVO - não usar produto_master_id):
+- "GELATINA ROYAL FRAMBOESA 25G" ← → "GELATINA APTI MORANGO 20G" ❌ (marca diferente, sabor diferente, peso diferente)
+- "MANTEIGA COM SAL 500G" ← → "MANTEIGA SEM SAL 500G" ❌ (atributo crítico diferente)
+- "ARROZ INTEGRAL 1KG" ← → "ARROZ BRANCO 1KG" ❌ (tipo diferente)
+- "CREME DE LEITE 200G" ← → "CREME DE LEITE SEM LACTOSE 200G" ❌ (atributo crítico diferente)
+- "OVO BRANCO 30 UN" ← → "OVO VERMELHO 30 UN" ❌ (cor diferente)
+
+**📝 PASSO 2 - SE NÃO FOR VARIAÇÃO, NORMALIZE COMO PRODUTO NOVO:**
+1. Analise o nome do produto e extraia:
+   - Nome base (ex: "Arroz", "Feijão", "Leite")
+   - Marca (se identificável)
+   - Tipo de embalagem (Pacote, Saco, Garrafa, Caixa, etc)
+   - Quantidade (valor + unidade, ex: 5 + "kg")
+   - Se é granel (vendido por peso/medida)
+
+2. **ATENÇÃO ESPECIAL: UNIDADE BASE**
+   - Se a unidade for L (litros): converta para ml (multiplique por 1000)
+     Exemplo: 1.25L → qtd_base: 1250, unidade_base: "ml"
+   - Se a unidade for kg (quilos): converta para g (multiplique por 1000)
+     Exemplo: 0.6kg → qtd_base: 600, unidade_base: "g"
+   - Se a unidade já for ml, g, ou unidade: mantenha como está
+   - **PÃO FRANCÊS E SIMILARES:** Se não houver quantidade explícita mas o produto é tipicamente vendido por peso (pão francês, frutas, verduras), assuma 1kg = 1000g
+
+3. Categorize a unidade:
+   - "VOLUME" para líquidos (ml)
+   - "PESO" para sólidos (g)
+   - "UNIDADE" para itens vendidos por peça
+
+4. Gere um SKU global único no formato: CATEGORIA-NOME_BASE-MARCA-QTDUNIDADE
+
+5. Categorize em uma dessas categorias OFICIAIS do Picotinho (use EXATAMENTE como escrito):
+   AÇOUGUE (com Ç), BEBIDAS, CONGELADOS, HIGIENE/FARMÁCIA, HORTIFRUTI, LATICÍNIOS/FRIOS, LIMPEZA, MERCEARIA, PADARIA, PET, OUTROS
+   
+   Exemplos por categoria:
+   - MERCEARIA: Ketchup, molhos, temperos, massas, arroz, feijão, enlatados, conservas, óleos
+   - LATICÍNIOS/FRIOS: Queijos, leite, iogurte, requeijão, manteiga, embutidos, presunto
+   - HIGIENE/FARMÁCIA: Produtos de higiene pessoal, cosméticos, remédios, fraldas
+   - AÇOUGUE: Carnes, frango, peixe, linguiça (sempre com Ç)
+   - BEBIDAS: Refrigerantes, sucos, águas, energéticos, bebidas alcoólicas
+   - HORTIFRUTI: Frutas, verduras, legumes
+   - LIMPEZA: Produtos de limpeza doméstica
+   - CONGELADOS: Alimentos congelados
+   - PADARIA: Pães, bolos, tortas
+   - PET: Produtos para animais
+   - OUTROS: Quando não se encaixa em nenhuma categoria acima
+
+6. Atribua uma confiança de 0-100 baseado em:
+   - 90-100: Nome muito claro e estruturado (ou produto encontrado no catálogo)
+   - 70-89: Nome razoável mas com alguma ambiguidade
+   - 50-69: Nome confuso ou incompleto
+   - 0-49: Nome muito vago ou problemático
+
+RESPONDA APENAS COM JSON (sem markdown):
+{
+  "sku_global": "string",
+  "nome_padrao": "string (nome normalizado limpo)",
+  "categoria": "string",
+  "nome_base": "string",
+  "marca": "string ou null",
+  "tipo_embalagem": "string ou null",
+  "qtd_valor": number ou null,
+  "qtd_unidade": "string ou null (L, kg, ml, g, un)",
+  "qtd_base": number ou null (sempre em ml/g/unidade),
+  "unidade_base": "string ou null (ml, g, un)",
+  "categoria_unidade": "string ou null (VOLUME, PESO, UNIDADE)",
+  "granel": boolean,
+  "confianca": number (0-100),
+  "razao": "string (explicação breve - mencione se encontrou no catálogo)",
+  "produto_master_id": "string ou null (ID do produto similar encontrado)"
+}`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Você é um especialista em normalização de produtos. Sempre responda com JSON válido, sem markdown.' 
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro na API Lovable AI: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const conteudo = data.choices[0].message.content;
+    
+    const jsonLimpo = conteudo
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+    
+    const resultado = JSON.parse(jsonLimpo);
+    
+    // 🔧 VALIDAR E CORRIGIR CATEGORIA (GARANTIR CATEGORIAS OFICIAIS DO PICOTINHO)
+    const CATEGORIAS_VALIDAS = [
+      'AÇOUGUE', 'BEBIDAS', 'CONGELADOS', 'HIGIENE/FARMÁCIA',
+      'HORTIFRUTI', 'LATICÍNIOS/FRIOS', 'LIMPEZA', 'MERCEARIA',
+      'PADARIA', 'PET', 'OUTROS'
+    ];
+    
+    const CORRECOES_CATEGORIA: Record<string, string> = {
+      'ALIMENTOS': 'MERCEARIA',
+      'HIGIENE': 'HIGIENE/FARMÁCIA',
+      'FARMACIA': 'HIGIENE/FARMÁCIA',
+      'LATICÍNIOS': 'LATICÍNIOS/FRIOS',
+      'LATICINIOS': 'LATICÍNIOS/FRIOS',
+      'FRIOS': 'LATICÍNIOS/FRIOS',
+      'ACOUGUE': 'AÇOUGUE',
+      'ASOUGUE': 'AÇOUGUE',
+      'CARNES': 'AÇOUGUE'
+    };
+    
+    // Aplicar correção de categoria se necessário
+    if (resultado.categoria) {
+      const categoriaOriginal = resultado.categoria.toUpperCase();
+      
+      if (CORRECOES_CATEGORIA[categoriaOriginal]) {
+        console.log(`🔧 Corrigindo categoria: ${categoriaOriginal} → ${CORRECOES_CATEGORIA[categoriaOriginal]}`);
+        resultado.categoria = CORRECOES_CATEGORIA[categoriaOriginal];
+      } else if (!CATEGORIAS_VALIDAS.includes(categoriaOriginal)) {
+        console.log(`⚠️ Categoria inválida detectada: ${categoriaOriginal} → OUTROS`);
+        resultado.categoria = 'OUTROS';
+      } else {
+        resultado.categoria = categoriaOriginal;
+      }
+      
+      // Reconstruir SKU com categoria corrigida
+      resultado.sku_global = `${resultado.categoria}-${resultado.nome_base.replace(/\s+/g, '_')}-${resultado.marca || 'GENERICO'}-${resultado.qtd_valor}${resultado.qtd_unidade}`;
+    }
+    
+    // 🥚 FORÇAR CORREÇÃO PARA PRODUTOS MULTI-UNIDADE
+    if (embalagemInfo?.isMultiUnit) {
+      console.log(`🥚 Aplicando correção de multi-unidade para: ${resultado.nome_padrao}`);
+      
+      resultado.qtd_valor = 1;
+      resultado.qtd_unidade = 'UN';
+      resultado.qtd_base = 1;
+      resultado.unidade_base = 'un';
+      resultado.categoria_unidade = 'UNIDADE';
+      resultado.granel = false;
+      
+      // Remover números e "UN" do nome padrao (ex: "OVOS BRANCOS 30 UN" → "OVOS BRANCOS")
+      resultado.nome_padrao = resultado.nome_padrao
+        .replace(/\bC\/\d+\b/i, '')
+        .replace(/\b\d+\s*UN(IDADES)?\b/i, '')
+        .replace(/\b\d+\s*OVO(S)?\b/i, '')
+        .replace(/\bDZ\d+\b/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      resultado.nome_base = resultado.nome_base
+        .replace(/\bC\/\d+\b/i, '')
+        .replace(/\b\d+\s*UN(IDADES)?\b/i, '')
+        .replace(/\b\d+\s*OVO(S)?\b/i, '')
+        .replace(/\bDZ\d+\b/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Atualizar SKU para refletir produto unitário
+      resultado.sku_global = `${resultado.categoria}-${resultado.nome_base.replace(/\s+/g, '_')}-${resultado.marca || 'GENERICO'}-1UN`;
+      
+      console.log(`🥚 Correção aplicada: "${resultado.nome_padrao}" (1 UN)`);
+    }
+    
+    // 🔥 APLICAR UPPERCASE EM TODOS OS CAMPOS DE TEXTO
+    resultado.nome_padrao = resultado.nome_padrao?.toUpperCase() || '';
+    resultado.nome_base = resultado.nome_base?.toUpperCase() || '';
+    resultado.marca = resultado.marca?.toUpperCase() || null;
+    resultado.tipo_embalagem = resultado.tipo_embalagem?.toUpperCase() || null;
+    
+    console.log(`✅ IA retornou: ${resultado.nome_padrao} | Confiança: ${resultado.confianca}% | Master: ${resultado.produto_master_id ? 'SIM' : 'NÃO'}`);
+    
+    return resultado;
+  } catch (error: any) {
+    console.error(`❌ Erro ao normalizar com IA: ${error.message}`);
+    throw error;
+  }
+}
 
 // 🔥 Cache em memória para produtos master já buscados
 const masterCache = new Map<string, any>();
@@ -1087,21 +1378,86 @@ serve(async (req) => {
     
     // 🔍 FASE 2: BUSCAR PRODUTO MASTER PARA CADA ITEM
     console.log('🔍 Iniciando busca de produtos master...');
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     let masterEncontrados = 0;
     let masterNaoEncontrados = 0;
+    let iaNormalizacoes = 0;
+    let fuzzyNormalizacoes = 0;
     
     for (const produto of produtosEstoque) {
       try {
         // Limpar unidades de medida do nome para melhor matching
         const nomeLimpo = limparUnidadesMedida(produto.produto_nome);
-        const resultado = await buscarProdutoMaster(
-          nomeLimpo,
-          produto.categoria,
-          supabase
-        );
         
-        if (resultado.found && resultado.master) {
-          // ✅ Master encontrado! Atualizar produto com dados normalizados
+        // 🥚 Detectar embalagem multi-unidade
+        const valorTotal = produto.quantidade * produto.preco_unitario_ultimo;
+        const embalagemInfo = detectarQuantidadeEmbalagem(produto.produto_nome, valorTotal);
+        
+        let resultado: { found: boolean; master: any | null } | null = null;
+        
+        // 🤖 ESTRATÉGIA 1: Normalização com IA (se ativado e chave disponível)
+        if (USE_AI_NORMALIZATION && lovableApiKey) {
+          try {
+            console.log(`🤖 Tentando normalização com IA: ${produto.produto_nome}`);
+            
+            // Buscar candidatos similares para enviar à IA
+            const textoParaMatching = normalizarTextoParaMatching(nomeLimpo);
+            const { data: similares } = await supabase.rpc('buscar_produtos_similares', {
+              texto_busca: textoParaMatching.split(' ').slice(0, 6).join(' '),
+              categoria_filtro: produto.categoria.toUpperCase(),
+              limite: 5,
+              threshold: 0.3
+            });
+            
+            const normalizacaoIA = await normalizarComIA(
+              produto.produto_nome,
+              similares || [],
+              lovableApiKey,
+              embalagemInfo
+            );
+            
+            // ✅ IA encontrou match com master existente
+            if (normalizacaoIA.produto_master_id && normalizacaoIA.confianca >= 85) {
+              // Buscar dados completos do master
+              const { data: masterCompleto } = await supabase
+                .from('produtos_master_global')
+                .select('*')
+                .eq('id', normalizacaoIA.produto_master_id)
+                .single();
+              
+              if (masterCompleto) {
+                resultado = { found: true, master: masterCompleto };
+                iaNormalizacoes++;
+                console.log(`✅ IA encontrou master: ${masterCompleto.nome_padrao} (confiança: ${normalizacaoIA.confianca}%)`);
+              }
+            }
+            // ⚠️ IA sugere produto novo (sem master)
+            else {
+              console.log(`⚠️ IA não encontrou master adequado (confiança: ${normalizacaoIA.confianca}%)`);
+              // Deixar resultado null para fallback
+            }
+          } catch (iaError: any) {
+            console.error(`⚠️ Erro na normalização com IA: ${iaError.message}`);
+            // Continuar para fallback fuzzy matching
+          }
+        }
+        
+        // 🔄 ESTRATÉGIA 2: Fallback para Fuzzy Matching (se IA falhou ou desativada)
+        if (!resultado) {
+          console.log(`🔍 Usando fallback fuzzy matching: ${produto.produto_nome}`);
+          resultado = await buscarProdutoMaster(
+            nomeLimpo,
+            produto.categoria,
+            supabase
+          );
+          
+          if (resultado.found) {
+            fuzzyNormalizacoes++;
+          }
+        }
+        
+        // ✅ Atualizar produto com dados normalizados (de IA ou fuzzy)
+        if (resultado?.found && resultado.master) {
           produto.sku_global = resultado.master.sku_global;
           produto.produto_master_id = resultado.master.id;
           produto.produto_nome = resultado.master.nome_padrao; // Nome normalizado
@@ -1130,6 +1486,8 @@ serve(async (req) => {
     
     if (masterEncontrados > 0) {
       console.log(`🎉 Taxa de normalização automática: ${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%`);
+      console.log(`   🤖 Normalizações com IA: ${iaNormalizacoes} (${((iaNormalizacoes/masterEncontrados)*100).toFixed(1)}%)`);
+      console.log(`   🔍 Normalizações com Fuzzy: ${fuzzyNormalizacoes} (${((fuzzyNormalizacoes/masterEncontrados)*100).toFixed(1)}%)`);
     }
     
     // 🧹 LIMPEZA DE CANDIDATOS ÓRFÃOS ANTES DE VINCULAR
