@@ -3005,6 +3005,21 @@ export type Database = {
       }
       buscar_receitas_disponiveis:
         | {
+            Args: never
+            Returns: {
+              categoria: string
+              descricao: string
+              disponibilidade: string
+              imagem_url: string
+              ingredientes_disponiveis: number
+              porcoes: string
+              receita_id: string
+              tempo_preparo: string
+              titulo: string
+              total_ingredientes: number
+            }[]
+          }
+        | {
             Args: { p_user_id: string }
             Returns: {
               descricao: string
@@ -3017,21 +3032,6 @@ export type Database = {
               porcoes: number
               receita_id: string
               tempo_preparo: number
-              titulo: string
-              total_ingredientes: number
-            }[]
-          }
-        | {
-            Args: never
-            Returns: {
-              categoria: string
-              descricao: string
-              disponibilidade: string
-              imagem_url: string
-              ingredientes_disponiveis: number
-              porcoes: string
-              receita_id: string
-              tempo_preparo: string
               titulo: string
               total_ingredientes: number
             }[]
@@ -3057,8 +3057,12 @@ export type Database = {
             Args: {
               m1_marca: string
               m1_nome: string
+              m1_qtd_unidade: string
+              m1_qtd_valor: number
               m2_marca: string
               m2_nome: string
+              m2_qtd_unidade: string
+              m2_qtd_valor: number
             }
             Returns: number
           }
@@ -3066,12 +3070,8 @@ export type Database = {
             Args: {
               m1_marca: string
               m1_nome: string
-              m1_qtd_unidade: string
-              m1_qtd_valor: number
               m2_marca: string
               m2_nome: string
-              m2_qtd_unidade: string
-              m2_qtd_valor: number
             }
             Returns: number
           }
@@ -3103,6 +3103,7 @@ export type Database = {
         }[]
       }
       criar_lista_compras_de_cardapio:
+        | { Args: { cardapio_uuid: string }; Returns: string }
         | {
             Args: {
               p_cardapio_id: string
@@ -3111,7 +3112,6 @@ export type Database = {
             }
             Returns: string
           }
-        | { Args: { cardapio_uuid: string }; Returns: string }
       criar_lista_compras_de_receita:
         | {
             Args: { p_receita_id: string; p_titulo?: string; p_user_id: string }
