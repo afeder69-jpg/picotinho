@@ -1,201 +1,143 @@
 
 
-## 📸 Plano: Captura de Foto para URLs de DANFE (Sem QR Code)
+## 🔧 Plano: Correção da Extração de URL e Chave de Acesso
 
 ### 📋 Problema Identificado
-Alguns supermercados estão imprimindo apenas a **URL de texto** para consulta DANFE em vez do **QR Code**. Isso impede o funcionamento do scanner atual que só lê códigos visuais.
 
-### 🎯 Solução Proposta
-Adicionar uma **opção alternativa** no scanner: quando o usuário não conseguir escanear o QR Code, ele pode tirar uma **foto da URL impressa** e o sistema usará **OCR (OpenAI Vision)** para extrair a URL da imagem.
+Quando o usuário tira foto da URL impressa, o OCR (OpenAI Vision) está extraindo a URL com **caracteres corrompidos**:
+
+**URL extraída com problemas:**
+```
+https://consultadfe.fazenda.rj.gov.br/nfce/consulta?chave=3326%201039%204680%1437%6501%9000%1962%5411%9036%5111
+```
+
+**Problemas encontrados:**
+- Espaços (`%20`) inseridos incorretamente
+- Caracteres de controle (`%14`) corrompendo a chave
+- Parâmetro `chave=` não reconhecido pelo sistema (esperava `p=` ou `chNFe=`)
+- Chave fragmentada impede extração dos 44 dígitos
 
 ---
 
-### 🔧 Componentes a Implementar
+### 🎯 Solução em 3 Partes
 
-#### **1. Nova Edge Function: `extract-url-from-photo`**
-Função dedicada para extrair URLs de imagens usando OpenAI Vision.
+#### Parte 1: Melhorar Limpeza da URL na Edge Function
 
-**Localização:** `supabase/functions/extract-url-from-photo/index.ts`
+Adicionar lógica para limpar URLs com caracteres incorretos antes de retornar.
 
-**Funcionalidade:**
-- Recebe imagem em base64
-- Envia para OpenAI Vision com prompt específico para extrair URLs HTTPS
-- Retorna a URL encontrada (se houver)
+**Arquivo:** `supabase/functions/extract-url-from-photo/index.ts`
+
+**Mudanças:**
+- Remover espaços da URL
+- Remover caracteres de controle (%00-%1F)
+- Normalizar encoding de caracteres
+- Tentar reconstruir chave de 44 dígitos fragmentada
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                   FLUXO DA NOVA FUNÇÃO                       │
-├─────────────────────────────────────────────────────────────┤
-│  1. Usuário tira foto da URL impressa                        │
-│  2. Frontend envia imagem base64 para edge function          │
-│  3. OpenAI Vision analisa e extrai URL                       │
-│  4. Se URL válida → retorna para processamento normal        │
-│  5. Frontend chama handleQRScanSuccess() com a URL           │
-└─────────────────────────────────────────────────────────────┘
+Antes de retornar a URL:
+1. Decodificar URL encoding
+2. Remover todos os caracteres não-URL válidos
+3. Re-codificar se necessário
+4. Verificar se URL ainda é válida
 ```
 
-#### **2. Modificar `QRCodeScannerWeb.tsx`**
-Adicionar botão "📷 Tirar Foto da URL" no componente de scanner web.
+#### Parte 2: Adicionar Suporte ao Parâmetro `chave=`
+
+A função `extrairChaveNFe` atualmente só reconhece os parâmetros `p=` e `chNFe=`, mas a URL do Guanabara usa `chave=`.
+
+**Arquivo:** `src/lib/documentDetection.ts`
 
 **Mudanças:**
-- Novo botão na interface do scanner
-- Handler para capturar foto via câmera
-- Chamada para a nova edge function
-- Loading state durante processamento OCR
+- Adicionar `chave` à lista de parâmetros reconhecidos
+- Adicionar limpeza de caracteres antes da extração
 
-#### **3. Modificar `QRCodeScanner.tsx` (Nativo)**
-Adicionar a mesma funcionalidade no scanner nativo usando `@capacitor/camera`.
+#### Parte 3: Melhorar Mensagens de Erro
 
-**Mudanças:**
-- Botão "📷 Tirar Foto da URL" 
-- Usar `Camera.getPhoto()` (já disponível no projeto)
-- Enviar para edge function e processar resultado
+As mensagens de erro atuais são confusas. Precisamos diferenciar:
+- "URL não encontrada na imagem"
+- "URL encontrada mas chave de acesso inválida"
 
-#### **4. Atualizar `supabase/config.toml`**
-Registrar nova edge function.
+**Arquivos:** 
+- `src/components/QRCodeScannerWeb.tsx`
+- `src/components/QRCodeScanner.tsx`
+- `src/components/BottomNavigation.tsx`
 
 ---
 
-### 🎨 Design da Interface
+### 📁 Arquivos a Modificar
 
-#### Estado Atual do Scanner
-```text
-┌─────────────────────────────────────┐
-│  [🔦]                    [❌ Cancelar]  │
-├─────────────────────────────────────┤
-│                                      │
-│         ┌──────────────┐             │
-│         │              │             │
-│         │   📷 QR      │             │
-│         │   Scanner    │             │
-│         │              │             │
-│         └──────────────┘             │
-│                                      │
-├─────────────────────────────────────┤
-│  📍 Escaneando QR Code              │
-│  Aponte a câmera para o QR Code     │
-└─────────────────────────────────────┘
-```
-
-#### Novo Design com Opção de Foto
-```text
-┌─────────────────────────────────────┐
-│  [🔦]                    [❌ Cancelar]  │
-├─────────────────────────────────────┤
-│                                      │
-│         ┌──────────────┐             │
-│         │              │             │
-│         │   📷 QR      │             │
-│         │   Scanner    │             │
-│         │              │             │
-│         └──────────────┘             │
-│                                      │
-├─────────────────────────────────────┤
-│  📍 Escaneando QR Code              │
-│  Aponte a câmera para o QR Code     │
-│                                      │
-│  ─────────── ou ───────────         │
-│                                      │
-│  ┌─────────────────────────────┐    │
-│  │  📸 Tirar Foto da URL       │    │
-│  │  (Sem QR Code no cupom)     │    │
-│  └─────────────────────────────┘    │
-└─────────────────────────────────────┘
-```
+| Arquivo | Tipo | Mudança |
+|---------|------|---------|
+| `supabase/functions/extract-url-from-photo/index.ts` | Modificar | Adicionar limpeza de URL após extração |
+| `src/lib/documentDetection.ts` | Modificar | Adicionar parâmetro `chave=` e limpeza |
+| `src/components/BottomNavigation.tsx` | Modificar | Melhorar mensagem de erro |
 
 ---
 
 ### 📐 Detalhes Técnicos
 
-#### Prompt para OpenAI Vision (Extração de URL)
+#### Nova Lógica de Limpeza de URL
+
 ```text
-Você é um especialista em extrair URLs de imagens de documentos.
-Analise esta imagem e encontre QUALQUER URL de consulta de nota fiscal.
-
-Procure por:
-- URLs que começam com "https://" ou "http://"
-- Endereços de consulta DANFE/NFe/NFCe
-- Links da Fazenda ou portais de nota fiscal
-
-Se encontrar uma URL válida, retorne APENAS a URL completa.
-Se não encontrar nenhuma URL, retorne "NOT_FOUND".
-
-IMPORTANTE: 
-- Retorne APENAS a URL, sem explicações
-- Se houver múltiplas URLs, retorne a que parece ser de consulta fiscal
+function limparUrlExtraida(url: string): string {
+  1. Decodificar URL completamente
+  2. Remover caracteres de controle (ASCII 0-31)
+  3. Remover espaços extras
+  4. Se contém parâmetro chave/p/chNFe:
+     - Extrair valor
+     - Manter apenas dígitos
+     - Se tiver 44 dígitos, reconstruir URL limpa
+  5. Re-codificar apenas caracteres especiais válidos
+  return urlLimpa;
+}
 ```
 
-#### Fluxo de Dados
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│                         FLUXO COMPLETO                                │
-└──────────────────────────────────────────────────────────────────────┘
+#### Nova Lógica de Extração de Chave
 
-   Usuário                Scanner                Edge Function
-      │                      │                        │
-      │  Clica "Tirar Foto"  │                        │
-      │ ────────────────────>│                        │
-      │                      │                        │
-      │                      │  Abre câmera           │
-      │                      │<────────────           │
-      │                      │                        │
-      │   Captura foto       │                        │
-      │ ────────────────────>│                        │
-      │                      │                        │
-      │                      │  POST base64           │
-      │                      │ ──────────────────────>│
-      │                      │                        │
-      │                      │                   ┌────┴────┐
-      │                      │                   │ OpenAI  │
-      │                      │                   │ Vision  │
-      │                      │                   └────┬────┘
-      │                      │                        │
-      │                      │  { url: "https://..." }│
-      │                      │ <──────────────────────│
-      │                      │                        │
-      │                      │  handleQRScanSuccess(url)
-      │                      │<────────────           │
-      │                      │                        │
-      │  Processamento       │                        │
-      │  automático normal   │                        │
-      │<─────────────────────│                        │
+```text
+function extrairChaveNFe(url: string): string | null {
+  1. Decodificar URL
+  2. Tentar parâmetros: p, chNFe, chave (NOVO!)
+  3. Limpar valor do parâmetro (apenas dígitos)
+  4. Se 44 dígitos → retornar
+  5. Fallback: regex /(\d{44})/ na URL inteira
+  6. Fallback 2: extrair TODOS os dígitos da URL
+     - Se tiver exatamente 44 dígitos totais → retornar
+  return null se nada funcionar
+}
 ```
 
 ---
 
-### 📁 Arquivos a Criar/Modificar
+### ✅ Resultado Esperado
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/extract-url-from-photo/index.ts` | **Criar** | Nova edge function para OCR de URL |
-| `src/components/QRCodeScannerWeb.tsx` | **Modificar** | Adicionar botão "Tirar Foto da URL" |
-| `src/components/QRCodeScanner.tsx` | **Modificar** | Adicionar botão "Tirar Foto da URL" (nativo) |
-| `supabase/config.toml` | **Modificar** | Registrar nova edge function |
+Após as correções:
+
+1. **URL corrompida:** 
+   ```
+   https://...?chave=3326%201039%204680%1437...
+   ```
+
+2. **Após limpeza:**
+   ```
+   https://...?chave=33260139468014376501900019625411903651111
+   ```
+
+3. **Chave extraída com sucesso:** 
+   ```
+   33260139468014376501900019625411903651111 (44 dígitos)
+   ```
+
+4. **Nota processada normalmente**
 
 ---
 
-### ✅ Vantagens da Solução
+### 🔍 Observação Importante
 
-1. **Não quebra o fluxo existente**: O scanner de QR Code continua funcionando normalmente
-2. **Fallback inteligente**: Usuário só usa a foto quando necessário
-3. **Reutiliza infraestrutura**: OpenAI Vision já está configurado no projeto
-4. **Processamento automático**: Após extrair a URL, o fluxo normal continua (100% automático)
-5. **Funciona em ambas plataformas**: Web e nativo (Android/iOS)
+O problema original **não estava na extração da URL** (que funcionou), mas sim na **extração da chave de acesso** da URL malformada. A mensagem de erro que o usuário viu pode ter sido de uma tentativa anterior ou foi uma confusão de mensagens no fluxo.
 
----
-
-### 🚀 Estimativa de Implementação
-
-**Tempo estimado:** 20-30 minutos
-
-**Dependências:**
-- ✅ `@capacitor/camera` - Já instalado
-- ✅ OpenAI API Key - Já configurada
-- ✅ Supabase Edge Functions - Já configuradas
-
-**Testes necessários:**
-- ✅ Tirar foto de URL impressa e verificar extração
-- ✅ URL extraída deve funcionar no fluxo normal (process-url-nota)
-- ✅ Tratamento de erro quando URL não encontrada
-- ✅ Funcionamento em web e app nativo
+Com estas correções, o sistema será muito mais robusto para lidar com:
+- URLs com caracteres corrompidos pelo OCR
+- Diferentes formatos de parâmetros (p, chNFe, chave)
+- Chaves fragmentadas por espaços
 
