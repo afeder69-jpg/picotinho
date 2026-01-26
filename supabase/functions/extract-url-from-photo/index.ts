@@ -97,7 +97,7 @@ IMPORTANTE:
     const openaiResult = await openaiResponse.json();
     const extractedText = openaiResult.choices[0]?.message?.content?.trim() || '';
 
-    console.log('🔍 [EXTRACT-URL] Texto extraído:', extractedText);
+    console.log('🔍 [EXTRACT-URL] Texto extraído (raw):', extractedText);
 
     // Verificar se encontrou uma URL válida
     if (extractedText === 'NOT_FOUND' || !extractedText) {
@@ -122,14 +122,72 @@ IMPORTANTE:
       });
     }
 
-    // Limpar a URL (remover espaços e caracteres inválidos)
-    const cleanUrl = extractedText.replace(/\s+/g, '').trim();
+    // ====== LIMPEZA ROBUSTA DA URL ======
+    let cleanUrl = extractedText;
+    
+    try {
+      // 1. Decodificar URL encoding primeiro
+      cleanUrl = decodeURIComponent(cleanUrl);
+    } catch (e) {
+      // Se falhar a decodificação, continuar com o original
+      console.log('⚠️ [EXTRACT-URL] Falha ao decodificar URL, usando original');
+    }
+    
+    // 2. Remover caracteres de controle (ASCII 0-31) e espaços extras
+    cleanUrl = cleanUrl.replace(/[\x00-\x1F]/g, '').replace(/\s+/g, '');
+    
+    // 3. Tentar extrair e limpar a chave de acesso (44 dígitos)
+    const chaveParams = ['chave', 'p', 'chNFe'];
+    let chaveExtraida: string | null = null;
+    
+    for (const param of chaveParams) {
+      const regex = new RegExp(`[?&]${param}=([^&]+)`, 'i');
+      const match = cleanUrl.match(regex);
+      if (match) {
+        // Extrair apenas os dígitos do valor
+        const digitos = match[1].replace(/\D/g, '');
+        if (digitos.length === 44) {
+          chaveExtraida = digitos;
+          // Reconstruir URL com chave limpa
+          cleanUrl = cleanUrl.replace(match[0], `?${param}=${digitos}`);
+          console.log(`✅ [EXTRACT-URL] Chave de 44 dígitos extraída do parâmetro ${param}`);
+          break;
+        }
+      }
+    }
+    
+    // 4. Fallback: procurar 44 dígitos consecutivos na URL inteira
+    if (!chaveExtraida) {
+      const match44 = cleanUrl.match(/(\d{44})/);
+      if (match44) {
+        chaveExtraida = match44[1];
+        console.log('✅ [EXTRACT-URL] Chave de 44 dígitos encontrada via regex');
+      }
+    }
+    
+    // 5. Fallback 2: extrair todos os dígitos e verificar se somam 44
+    if (!chaveExtraida) {
+      const todosDigitos = cleanUrl.replace(/\D/g, '');
+      if (todosDigitos.length === 44) {
+        chaveExtraida = todosDigitos;
+        console.log('✅ [EXTRACT-URL] Chave de 44 dígitos reconstruída de fragmentos');
+      } else if (todosDigitos.length > 44) {
+        // Pode ter dígitos extras (como números de versão), tentar pegar os últimos 44
+        const ultimos44 = todosDigitos.slice(-44);
+        chaveExtraida = ultimos44;
+        console.log('✅ [EXTRACT-URL] Chave de 44 dígitos extraída dos últimos dígitos');
+      }
+    }
 
-    console.log('✅ [EXTRACT-URL] URL extraída com sucesso:', cleanUrl);
+    console.log('✅ [EXTRACT-URL] URL limpa final:', cleanUrl);
+    if (chaveExtraida) {
+      console.log('✅ [EXTRACT-URL] Chave extraída:', chaveExtraida);
+    }
 
     return new Response(JSON.stringify({
       success: true,
-      url: cleanUrl
+      url: cleanUrl,
+      chave: chaveExtraida // Enviar chave extraída para facilitar processamento
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
