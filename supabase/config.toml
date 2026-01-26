@@ -91,3 +91,6 @@ verify_jwt = false
 
 [functions.process-html-capturado]
 verify_jwt = false
+
+[functions.extract-url-from-photo]
+verify_jwt = false
