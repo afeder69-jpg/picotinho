@@ -565,15 +565,31 @@ const BottomNavigation = () => {
             return;
           }
           
-          // ✅ VALIDAÇÃO 3: Se a nota não está mais sendo processada, ignorar
-          if (!processingNotesData.has(notaAtualizada.id)) {
-            console.log('⚠️ [REALTIME] Nota não está mais sendo processada, ignorando evento');
+          // ✅ VALIDAÇÃO 3: Se a nota já tem itens no estoque, ignorar
+          // (isso significa que process-receipt-full já foi executado)
+          const { count: estoqueCount } = await supabase
+            .from('estoque_app')
+            .select('id', { count: 'exact', head: true })
+            .eq('nota_id', notaAtualizada.id)
+            .eq('user_id', user.id);
+
+          if (estoqueCount && estoqueCount > 0) {
+            console.log('⚠️ [REALTIME] Nota já tem itens no estoque, ignorando:', estoqueCount);
+            // Limpar do mapa de processamento se existir
+            if (processingNotesData.has(notaAtualizada.id)) {
+              removeProcessingNote(notaAtualizada.id);
+              setProcessingNotesData(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(notaAtualizada.id);
+                return newMap;
+              });
+            }
             return;
           }
           
-          // Verificar se a nota foi processada
-          if (notaAtualizada.processada && notaAtualizada.dados_extraidos) {
-            console.log('✅ [REALTIME] Nota pronta:', notaAtualizada.id);
+          // Verificar se a nota tem dados_extraidos (necessário para processamento)
+          if (notaAtualizada.dados_extraidos) {
+            console.log('✅ [REALTIME] Nota pronta para processamento:', notaAtualizada.id);
             
             // 🔥 DEBOUNCE: Consolidar múltiplos eventos (300ms)
             const existingTimer = debounceTimerRef.current.get(notaAtualizada.id);
@@ -584,6 +600,19 @@ const BottomNavigation = () => {
             
             const newTimer = setTimeout(async () => {
               console.log('🚀 [REALTIME] Debounce concluído, processando nota');
+              
+              // Verificar NOVAMENTE se já tem estoque (pode ter sido processado durante debounce)
+              const { count: estoqueCheck } = await supabase
+                .from('estoque_app')
+                .select('id', { count: 'exact', head: true })
+                .eq('nota_id', notaAtualizada.id)
+                .eq('user_id', user.id);
+              
+              if (estoqueCheck && estoqueCheck > 0) {
+                console.log('⚠️ [REALTIME] Nota já processada durante debounce, ignorando');
+                debounceTimerRef.current.delete(notaAtualizada.id);
+                return;
+              }
               
               // Remover do processamento
               removeProcessingNote(notaAtualizada.id);
@@ -751,6 +780,71 @@ const BottomNavigation = () => {
     // Verificar a cada 3 segundos
     const interval = setInterval(checkProcessedNotes, 3000);
 
+    return () => clearInterval(interval);
+  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes]);
+
+  // 🔄 POLLING PARA NOTAS ÓRFÃS (notas processadas mas sem estoque)
+  // Este useEffect detecta notas que ficaram "perdidas" por race condition
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const checkOrphanNotes = async () => {
+      // Buscar notas recentes (últimos 5 min) que foram processadas mas não têm estoque
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      
+      const { data: orphanNotes, error } = await supabase
+        .from('notas_imagens')
+        .select('id, dados_extraidos')
+        .eq('usuario_id', user.id)
+        .eq('processada', true)
+        .eq('normalizada', false)
+        .eq('produtos_normalizados', 0)
+        .is('processing_started_at', null)
+        .gt('created_at', fiveMinutesAgo);
+      
+      if (error) {
+        console.error('❌ [ORPHAN] Erro ao buscar notas órfãs:', error);
+        return;
+      }
+      
+      if (!orphanNotes || orphanNotes.length === 0) return;
+      
+      console.log('🔍 [ORPHAN] Encontradas', orphanNotes.length, 'notas potencialmente órfãs');
+      
+      for (const nota of orphanNotes) {
+        // Verificar se realmente não tem estoque
+        const { count } = await supabase
+          .from('estoque_app')
+          .select('id', { count: 'exact', head: true })
+          .eq('nota_id', nota.id)
+          .eq('user_id', user.id);
+        
+        if (!count || count === 0) {
+          // ✅ Esta é uma nota órfã - processar automaticamente
+          console.log('🔄 [ORPHAN] Processando nota órfã:', nota.id);
+          
+          // Verificar se já não está sendo processada
+          if (activelyProcessingRef.current.has(nota.id)) {
+            console.log('⚠️ [ORPHAN] Nota já em processamento, ignorando');
+            continue;
+          }
+          
+          toast({
+            title: "🔄 Recuperando nota...",
+            description: "Processando nota que ficou pendente",
+          });
+          
+          await processarNotaAutomaticamente(nota.id, user.id, nota);
+        }
+      }
+    };
+    
+    // Verificar a cada 10 segundos
+    const interval = setInterval(checkOrphanNotes, 10000);
+    
+    // Verificar imediatamente ao montar
+    checkOrphanNotes();
+    
     return () => clearInterval(interval);
   }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes]);
 
