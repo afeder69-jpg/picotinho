@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X } from 'lucide-react';
+import { X, Camera as CameraIcon, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface QRCodeScannerProps {
   onScanSuccess: (data: string) => void;
@@ -12,6 +14,7 @@ interface QRCodeScannerProps {
 
 const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
   const [isScanning, setIsScanning] = useState(false);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
 
   useEffect(() => {
     // Verificar se está em plataforma nativa
@@ -129,7 +132,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
       
       await stopScan();
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erro ao escanear:', error);
       
       // Verificar se é erro de módulo não instalado
@@ -164,6 +167,95 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
     }
   };
 
+  const handlePhotoCapture = async () => {
+    try {
+      setIsProcessingPhoto(true);
+
+      // Pausar scanner temporariamente
+      try {
+        await BarcodeScanner.stopScan();
+      } catch (e) {
+        // Ignorar erro se já parou
+      }
+
+      // Capturar foto usando Capacitor Camera
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Camera,
+        promptLabelHeader: 'Foto da URL',
+        promptLabelPhoto: 'Escolher da galeria',
+        promptLabelPicture: 'Tirar foto',
+      });
+
+      if (!photo.base64String) {
+        toast({
+          title: "Erro",
+          description: "Não foi possível capturar a foto",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log('📸 [NATIVE SCANNER] Enviando foto para extração de URL...');
+
+      toast({
+        title: "🔍 Analisando foto...",
+        description: "Procurando URL na imagem...",
+      });
+
+      // Chamar edge function para extrair URL
+      const { data, error } = await supabase.functions.invoke('extract-url-from-photo', {
+        body: { image_base64: `data:image/jpeg;base64,${photo.base64String}` }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data?.success) {
+        toast({
+          title: "❌ URL não encontrada",
+          description: data?.error || "Não foi possível extrair a URL da imagem. Tente tirar uma foto mais nítida.",
+          variant: "destructive"
+        });
+        // Reiniciar scanner
+        startScan();
+        return;
+      }
+
+      console.log('✅ [NATIVE SCANNER] URL extraída:', data.url);
+
+      toast({
+        title: "✅ URL detectada",
+        description: "Processando nota fiscal...",
+      });
+
+      document.body.classList.remove('scanner-active');
+      onScanSuccess(data.url);
+
+    } catch (error: any) {
+      console.error('❌ [NATIVE SCANNER] Erro ao processar foto:', error);
+      
+      // Se usuário cancelou, apenas reiniciar scanner
+      if (error.message?.includes('cancelled') || error.message?.includes('canceled')) {
+        startScan();
+        return;
+      }
+
+      toast({
+        title: "Erro ao processar foto",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive"
+      });
+      // Reiniciar scanner
+      startScan();
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
+
   if (!Capacitor.isNativePlatform()) {
     return null;
   }
@@ -186,12 +278,44 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
         </Button>
       </div>
 
+      {/* Área central */}
+      <div className="relative z-10 flex-1 flex items-center justify-center">
+        {isProcessingPhoto && (
+          <div className="bg-background/90 backdrop-blur-sm p-8 rounded-lg shadow-lg flex flex-col items-center gap-4">
+            <Loader2 className="w-12 h-12 text-primary animate-spin" />
+            <p className="text-lg font-semibold">Analisando foto...</p>
+            <p className="text-sm text-muted-foreground">Procurando URL na imagem</p>
+          </div>
+        )}
+      </div>
+
       {/* Instruções */}
-      {isScanning && (
-        <div className="relative z-10 bg-background/90 backdrop-blur-sm p-6 rounded-lg shadow-lg text-center">
+      {isScanning && !isProcessingPhoto && (
+        <div className="relative z-10 bg-background/90 backdrop-blur-sm p-6 rounded-lg shadow-lg text-center max-w-sm">
           <p className="text-lg font-semibold">Aponte a câmera para o QR Code</p>
           <p className="text-sm text-muted-foreground mt-2">
             O scanner detectará automaticamente o código
+          </p>
+
+          {/* Separador */}
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">ou</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Botão para tirar foto da URL */}
+          <Button
+            variant="outline"
+            className="w-full flex items-center justify-center gap-2"
+            onClick={handlePhotoCapture}
+            disabled={isProcessingPhoto}
+          >
+            <CameraIcon className="w-5 h-5" />
+            <span>Tirar Foto da URL</span>
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2">
+            Sem QR Code? Tire uma foto da URL impressa
           </p>
         </div>
       )}
