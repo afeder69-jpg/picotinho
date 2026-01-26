@@ -9,68 +9,23 @@ export type TipoDocumento = 'NFe' | 'NFCe' | null;
  */
 export function extrairChaveNFe(url: string): string | null {
   try {
-    // Primeiro, limpar a URL de caracteres problemáticos
-    let urlLimpa = url;
+    // Formato: https://consultadfe.fazenda.rj.gov.br/consultaNFCe/QRCode?p=CHAVE|...
+    const urlObj = new URL(url);
+    const params = urlObj.searchParams.get('p') || urlObj.searchParams.get('chNFe');
     
-    try {
-      // Decodificar URL encoding
-      urlLimpa = decodeURIComponent(url);
-    } catch (e) {
-      // Se falhar, continuar com original
-    }
-    
-    // Remover caracteres de controle (ASCII 0-31) e espaços
-    urlLimpa = urlLimpa.replace(/[\x00-\x1F]/g, '').replace(/\s+/g, '');
-    
-    console.log('🔍 [CHAVE] URL limpa para extração:', urlLimpa);
-    
-    const urlObj = new URL(urlLimpa);
-    
-    // Tentar múltiplos parâmetros conhecidos: p, chNFe, chave
-    const paramNames = ['p', 'chNFe', 'chave'];
-    
-    for (const paramName of paramNames) {
-      const paramValue = urlObj.searchParams.get(paramName);
-      if (paramValue) {
-        // Limpar o valor do parâmetro (manter apenas dígitos)
-        const chave = paramValue.split('|')[0].replace(/\D/g, '');
-        if (chave.length === 44) {
-          console.log(`✅ [CHAVE] Chave extraída do parâmetro ${paramName}:`, chave);
-          return chave;
-        }
+    if (params) {
+      const chave = params.split('|')[0];
+      if (chave && chave.length === 44) {
+        return chave;
       }
     }
     
-    // Fallback 1: Tentar extrair 44 dígitos consecutivos da URL inteira
-    const match = urlLimpa.match(/(\d{44})/);
+    // Tentar extrair da própria URL
+    const match = url.match(/(\d{44})/);
     if (match) {
-      console.log('✅ [CHAVE] Chave extraída via regex 44 dígitos:', match[1]);
       return match[1];
     }
     
-    // Fallback 2: Extrair TODOS os dígitos e verificar se somam 44
-    const todosDigitos = urlLimpa.replace(/\D/g, '');
-    if (todosDigitos.length === 44) {
-      console.log('✅ [CHAVE] Chave reconstruída de fragmentos:', todosDigitos);
-      return todosDigitos;
-    }
-    
-    // Fallback 3: Se tiver mais de 44, pegar os primeiros 44 após posição comum
-    if (todosDigitos.length > 44) {
-      // Geralmente a chave começa após alguns dígitos de controle
-      // Tentar diferentes offsets
-      for (let offset = 0; offset <= todosDigitos.length - 44; offset++) {
-        const possibleChave = todosDigitos.substring(offset, offset + 44);
-        // Verificar se parece uma chave válida (começa com código de estado: 11-53)
-        const codEstado = parseInt(possibleChave.substring(0, 2));
-        if (codEstado >= 11 && codEstado <= 53) {
-          console.log(`✅ [CHAVE] Chave encontrada no offset ${offset}:`, possibleChave);
-          return possibleChave;
-        }
-      }
-    }
-    
-    console.warn('⚠️ [CHAVE] Não foi possível extrair chave de 44 dígitos');
     return null;
   } catch (error) {
     console.error('❌ Erro ao extrair chave NFe:', error);
