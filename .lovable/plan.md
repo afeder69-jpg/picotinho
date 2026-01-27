@@ -1,221 +1,240 @@
 
 
-# Adicionar Entrada Manual da Chave de Acesso (44 dígitos)
+# Otimização do Scanner de QR Code Web
 
-## Objetivo
-Permitir que o usuário digite manualmente a chave de acesso de 44 dígitos quando o QR Code do cupom fiscal estiver danificado ou ilegível.
+## Diagnóstico do Problema
 
-## Por que isso é útil
-- Muitos cupons fiscais têm QR Codes danificados por dobras, manchas ou impressão ruim
-- A chave de 44 dígitos está SEMPRE impressa no cupom (geralmente no topo ou rodapé)
-- Permite recuperar notas que seriam impossíveis de escanear
-
-## Estrutura da Chave de 44 Dígitos
-
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  CHAVE DE ACESSO: 44 dígitos numéricos                                       │
-├──────────────────────────────────────────────────────────────────────────────┤
-│  Posições 0-1:   UF (código do estado: 33=RJ, 35=SP, etc.)                   │
-│  Posições 2-5:   AAMM (ano e mês de emissão)                                 │
-│  Posições 6-19:  CNPJ do emitente                                            │
-│  Posições 20-21: Modelo (55=NFe, 65=NFCe)                                    │
-│  Posições 22-24: Série                                                       │
-│  Posições 25-33: Número da nota                                              │
-│  Posições 34-34: Tipo de emissão                                             │
-│  Posições 35-42: Código numérico                                             │
-│  Posições 43-43: Dígito verificador                                          │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Implementação
-
-### 1. Novo Componente: `ManualKeyInput.tsx`
-Criar um componente de entrada manual com:
-- Input para 44 dígitos numéricos
-- Validação em tempo real
-- Formatação visual (grupos de 4 dígitos)
-- Botão de confirmar
-
-### 2. Modificar Scanners
-Adicionar botão "Digitar Chave" nos dois scanners:
-- `QRCodeScannerWeb.tsx` (web/preview)
-- `QRCodeScanner.tsx` (app nativo)
-
-### 3. Reutilizar Fluxo Existente
-O `process-url-nota` já aceita `chaveAcesso` diretamente. Precisamos apenas construir uma URL de consulta baseada na chave.
-
-## Detalhes Técnicos
-
-### Componente ManualKeyInput.tsx
+O scanner web atual (`QRCodeScannerWeb.tsx`) usa `@yudiel/react-qr-scanner` baseado em ZXing com configurações básicas:
 
 ```typescript
-interface ManualKeyInputProps {
-  onSubmit: (chaveAcesso: string) => void;
-  onClose: () => void;
+// Configuração atual - muito básica
+<Scanner
+  constraints={{
+    facingMode: 'environment',
+    aspectRatio: 1,  // ❌ Pode limitar qualidade
+  }}
+  formats={['qr_code', 'data_matrix']}
+  scanDelay={300}  // ❌ 300ms pode ser muito lento
+/>
+```
+
+### Por que a versão nativa é melhor?
+
+| Característica | APK (ML Kit) | Web (ZXing) |
+|---------------|--------------|-------------|
+| Engine | Google ML Kit (Machine Learning) | ZXing (algoritmo tradicional) |
+| Iluminação | Compensação automática por IA | Dependente da câmera |
+| Velocidade | Otimizado por GPU/NPU | Processamento em JavaScript |
+| Resolução | Acesso nativo à câmera | Limitado por APIs do navegador |
+
+## Estratégia de Otimização
+
+### 1. Substituir biblioteca por `html5-qrcode`
+
+O projeto já tem `html5-qrcode` instalado (v2.3.8). Esta biblioteca oferece:
+
+- **`useBarCodeDetectorIfSupported`**: Usa API nativa do navegador quando disponível (Chrome 83+)
+- **Controle granular de câmera**: Exposição, foco, resolução
+- **Flash/torch nativo**: Melhor controle de iluminação
+
+### 2. Configurações avançadas para cupons fiscais
+
+```typescript
+const config = {
+  fps: 15,                          // ⬆️ Aumentar de 2 para 15
+  qrbox: { width: 300, height: 300 }, // Área de detecção maior
+  aspectRatio: 1.0,
+  disableFlip: true,                // Performance: cupons não são espelhados
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true  // API nativa quando disponível
+  },
+  videoConstraints: {
+    facingMode: 'environment',
+    width: { ideal: 1920 },         // Maior resolução
+    height: { ideal: 1080 },
+    advanced: [
+      { focusMode: 'continuous' },  // Foco contínuo
+      { exposureMode: 'continuous' } // Exposição automática
+    ]
+  }
+};
+```
+
+### 3. Fallback de foto estática
+
+Para casos onde o escaneamento em tempo real falha:
+
+- Botão "Tirar Foto do QR Code"
+- Captura imagem estática
+- Processa com mais tempo e precisão
+- Funciona melhor em condições de pouca luz
+
+## Implementação Detalhada
+
+### Novo componente: `QRCodeScannerWebOptimized.tsx`
+
+```typescript
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+
+// Formatos otimizados para cupons fiscais brasileiros
+const formatsToSupport = [
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+];
+
+// Configuração de câmera otimizada
+const cameraConfig = {
+  fps: 15,
+  qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+    // QR box dinâmico - 80% da área visível
+    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+    return { width: minEdge * 0.8, height: minEdge * 0.8 };
+  },
+  aspectRatio: 1.0,
+  disableFlip: true,
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true
+  }
+};
+
+// Após iniciar, aplicar configurações avançadas de câmera
+async function applyAdvancedSettings(scanner: Html5Qrcode) {
+  try {
+    const capabilities = scanner.getRunningTrackCapabilities();
+    
+    // Ativar foco contínuo se disponível
+    if (capabilities.focusMode?.includes('continuous')) {
+      await scanner.applyVideoConstraints({
+        // @ts-ignore - API experimental
+        advanced: [{ focusMode: 'continuous' }]
+      });
+    }
+    
+    // Ativar exposição automática se disponível
+    if (capabilities.exposureMode?.includes('continuous')) {
+      await scanner.applyVideoConstraints({
+        // @ts-ignore - API experimental
+        advanced: [{ exposureMode: 'continuous' }]
+      });
+    }
+  } catch (e) {
+    console.log('Configurações avançadas não suportadas:', e);
+  }
 }
 ```
 
-Funcionalidades:
-- Input com máscara para aceitar apenas dígitos
-- Limite de 44 caracteres
-- Contador visual (ex: "38/44 dígitos")
-- Validação do dígito verificador (posição 43)
-- Validação do modelo (posição 20-21 = 55 ou 65)
-- Feedback visual de progresso
-
-### Validação da Chave
+### Modo de captura de foto (fallback)
 
 ```typescript
-function validarChaveAcesso(chave: string): { valida: boolean; erro?: string } {
-  // Remover espaços e caracteres não numéricos
-  const limpa = chave.replace(/\D/g, '');
+const capturePhoto = async () => {
+  // Pausar scanner de vídeo
+  await scanner.pause(true);
   
-  if (limpa.length !== 44) {
-    return { valida: false, erro: `Chave incompleta: ${limpa.length}/44 dígitos` };
-  }
+  // Capturar frame atual
+  const imageData = scanner.getRunningTrackCameraSettings();
   
-  const uf = limpa.substring(0, 2);
-  const modelo = limpa.substring(20, 22);
+  // Processar imagem estática com mais tempo
+  const result = await Html5Qrcode.scanFile(imageData, {
+    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
+  });
   
-  // Verificar UF válida (11-53)
-  if (parseInt(uf) < 11 || parseInt(uf) > 53) {
-    return { valida: false, erro: 'Código de estado inválido' };
-  }
-  
-  // Verificar modelo (55=NFe ou 65=NFCe)
-  if (modelo !== '55' && modelo !== '65') {
-    return { valida: false, erro: 'Modelo de documento inválido' };
-  }
-  
-  return { valida: true };
-}
+  return result;
+};
 ```
 
-### Construir URL a partir da Chave
-
-Para processar a chave, construímos uma URL de consulta padrão:
+### Controle de lanterna (flash)
 
 ```typescript
-function construirUrlConsulta(chaveAcesso: string): string {
-  const uf = chaveAcesso.substring(0, 2);
-  const modelo = chaveAcesso.substring(20, 22);
-  
-  if (modelo === '65') {
-    // NFCe - URL genérica de consulta
-    return `https://www.nfce.fazenda.gov.br/portal/consultarNFCe.aspx?chNFe=${chaveAcesso}`;
-  } else {
-    // NFe - URL genérica de consulta
-    return `https://www.nfe.fazenda.gov.br/portal/consultarNFe.aspx?chNFe=${chaveAcesso}`;
+const toggleTorch = async () => {
+  try {
+    const capabilities = scanner.getRunningTrackCapabilities();
+    if (capabilities.torch) {
+      const currentSettings = scanner.getRunningTrackSettings();
+      await scanner.applyVideoConstraints({
+        // @ts-ignore - API experimental
+        advanced: [{ torch: !currentSettings.torch }]
+      });
+      setTorchEnabled(!torchEnabled);
+    }
+  } catch (e) {
+    toast({
+      title: "Flash não suportado",
+      description: "Este dispositivo não suporta controle de flash",
+      variant: "destructive"
+    });
   }
-}
+};
 ```
 
-## UI/UX do Componente
+## Interface do usuário melhorada
 
-```text
+```
 ┌─────────────────────────────────────────────┐
-│  ✕                                          │
+│ [🔦 Flash]                    [❌ Cancelar] │
 ├─────────────────────────────────────────────┤
 │                                             │
-│     ⌨️ Digitar Chave de Acesso              │
+│     ┌─────────────────────────────┐         │
+│     │                             │         │
+│     │    ╔═══════════════════╗    │         │
+│     │    ║                   ║    │         │
+│     │    ║   ÁREA DE SCAN    ║    │         │
+│     │    ║                   ║    │         │
+│     │    ╚═══════════════════╝    │         │
+│     │                             │         │
+│     └─────────────────────────────┘         │
 │                                             │
-│  A chave de 44 dígitos está impressa        │
-│  no cupom fiscal, geralmente no topo        │
-│  ou rodapé do documento.                    │
+├─────────────────────────────────────────────┤
+│  📸 Escaneando QR Code...                   │
 │                                             │
-│  ┌───────────────────────────────────────┐  │
-│  │ 3323 0812 3456 7890 1234 5678        │  │
-│  │ 9012 3456 7890 12__                  │  │
-│  └───────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────┐ │
+│  │ 📷 Tirar Foto do QR Code               │ │
+│  └────────────────────────────────────────┘ │
 │                                             │
-│          38/44 dígitos ✓                    │
+│  ┌────────────────────────────────────────┐ │
+│  │ ⌨️ Digitar Chave Manualmente           │ │
+│  └────────────────────────────────────────┘ │
 │                                             │
-│  ┌───────────────────────────────────────┐  │
-│  │          Processar Nota               │  │
-│  └───────────────────────────────────────┘  │
-│                                             │
+│  💡 Se a leitura estiver difícil, tente:   │
+│  • Aumentar a iluminação                    │
+│  • Aproximar a câmera do QR Code            │
+│  • Usar o botão "Tirar Foto"                │
 └─────────────────────────────────────────────┘
 ```
 
-## Modificações nos Scanners
-
-### QRCodeScannerWeb.tsx
-Adicionar botão na área de instruções (linhas 145-159):
-
-```typescript
-<Button
-  variant="outline"
-  className="w-full mt-4"
-  onClick={() => setShowManualInput(true)}
->
-  <Keyboard className="w-4 h-4 mr-2" />
-  Digitar Chave Manualmente
-</Button>
-```
-
-### QRCodeScanner.tsx
-Adicionar botão similar na área de instruções (linhas 189-196).
-
-## Fluxo Completo
-
-```text
-┌─────────────────┐
-│ Usuário clica   │
-│ no botão de     │
-│ escanear        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Abre Scanner    │
-│ (QRCode ou Web) │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-┌─────────┐ ┌─────────────┐
-│ Escanear│ │ Digitar     │
-│ QR Code │ │ Chave       │
-└────┬────┘ └──────┬──────┘
-     │             │
-     └──────┬──────┘
-            │
-            ▼
-┌─────────────────────┐
-│ handleQRScanSuccess │
-│ ou                  │
-│ handleManualKey     │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│ process-url-nota    │
-│ (Edge Function)     │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│ Processamento       │
-│ normal automático   │
-└─────────────────────┘
-```
-
-## Arquivos a Criar/Modificar
+## Arquivos a modificar
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/ManualKeyInput.tsx` | Criar | Novo componente de entrada manual |
-| `src/lib/documentDetection.ts` | Modificar | Adicionar funções de validação e construção de URL |
-| `src/components/QRCodeScannerWeb.tsx` | Modificar | Adicionar botão para entrada manual |
-| `src/components/QRCodeScanner.tsx` | Modificar | Adicionar botão para entrada manual (app nativo) |
-| `src/components/BottomNavigation.tsx` | Modificar | Adicionar handler para chave manual |
+| `src/components/QRCodeScannerWeb.tsx` | Reescrever | Usar `html5-qrcode` com configurações otimizadas |
 
-## Benefícios
+## Comparação: Antes vs Depois
 
-1. **Recuperação de notas** - Cupons com QR Code danificado podem ser processados
-2. **Fallback confiável** - A chave de 44 dígitos nunca falha
-3. **UX amigável** - Formatação visual facilita a digitação
-4. **Validação em tempo real** - Erros detectados antes de enviar
+| Aspecto | Antes | Depois |
+|---------|-------|--------|
+| FPS | 2-3 (padrão) | 15 |
+| Resolução | Padrão do navegador | 1920x1080 (ideal) |
+| Foco | Automático básico | Contínuo |
+| Exposição | Automático básico | Contínua |
+| API de detecção | ZXing (JavaScript) | BarcodeDetector nativo (quando disponível) |
+| QR Box | Fixo 288x288 | Dinâmico 80% da tela |
+| Fallback | Nenhum | Captura de foto |
+| Flash | Simulado | API nativa |
+
+## Benefícios esperados
+
+1. **Velocidade**: Detecção 3-5x mais rápida
+2. **Precisão**: Melhor leitura em condições adversas
+3. **Iluminação**: Flash real + exposição automática
+4. **Fallback**: Se tempo real falhar, tira foto
+5. **Compatibilidade**: Funciona em mais navegadores
+
+## Limitações conhecidas
+
+- A versão web nunca será tão boa quanto ML Kit nativo
+- Alguns navegadores antigos não suportam BarcodeDetector API
+- Flash depende do hardware (nem todos smartphones suportam via web)
+- A entrada manual de 44 dígitos continua sendo o fallback definitivo
 
