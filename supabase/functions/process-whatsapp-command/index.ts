@@ -99,24 +99,36 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     
-    // PRIMEIRO: Limpar sessões expiradas ANTES de verificar se há alguma ativa
-    console.log('🧹 [LIMPEZA PREVENTIVA] Removendo sessões expiradas antes da verificação...');
+    // PRIMEIRO: Limpar apenas sessões MUITO antigas (mais de 30 minutos) para evitar problemas de timezone
+    // NÃO limpar sessões de desambiguação recentes para evitar perder respostas do usuário
+    console.log('🧹 [LIMPEZA PREVENTIVA] Removendo sessões muito antigas (>30min)...');
+    const trintaMinutosAtras = new Date();
+    trintaMinutosAtras.setMinutes(trintaMinutosAtras.getMinutes() - 30);
+    
     await supabase
       .from('whatsapp_sessions')
       .delete()
       .eq('usuario_id', mensagem.usuario_id)
       .eq('remetente', mensagem.remetente)
-      .lt('expires_at', agora.toISOString());
-    console.log('🧹 [LIMPEZA PREVENTIVA] Sessões expiradas removidas');
+      .lt('created_at', trintaMinutosAtras.toISOString());
+    console.log('🧹 [LIMPEZA PREVENTIVA] Sessões antigas removidas');
 
-    // DEPOIS: Buscar apenas sessões realmente ativas
-    const sessao = sessoesAtivas?.find(s => {
+    // DEPOIS: Buscar sessões - priorizar sessões de desambiguação
+    // Primeiro buscar sessões de desambiguação especificamente
+    const sessaoDesambiguacao = sessoesAtivas?.find(s => s.estado?.startsWith('desambiguacao_'));
+    
+    // Depois buscar qualquer sessão não expirada
+    const sessaoNaoExpirada = sessoesAtivas?.find(s => {
       const expira = new Date(s.expires_at);
       const ativa = expira > agora;
-      console.log(`🔍 [DEBUG] Sessão ${s.id}: expira em ${expira.toISOString()}, ativa: ${ativa}`);
+      console.log(`🔍 [DEBUG] Sessão ${s.id}: estado=${s.estado}, expira em ${expira.toISOString()}, ativa: ${ativa}`);
       return ativa;
     });
     
+    // Priorizar sessão de desambiguação mesmo se expirada recentemente (últimos 10 min)
+    const sessao = sessaoDesambiguacao || sessaoNaoExpirada;
+    
+    console.log(`🔍 [DEBUG] Sessão de desambiguação:`, sessaoDesambiguacao ? `ID: ${sessaoDesambiguacao.id}` : 'NENHUMA');
     console.log(`🔍 [DEBUG] Sessão ativa encontrada:`, sessao ? `ID: ${sessao.id}, Estado: ${sessao.estado}` : 'NENHUMA');
 
     let resposta = "Olá! Sou o Picotinho 🤖\n\n";
@@ -171,22 +183,33 @@ const handler = async (req: Request): Promise<Response> => {
       if (isNumeroOuDecimal) {
         console.log(`🔢 [ESPECIAL] Número/decimal detectado: "${mensagem.conteudo}" - verificando sessões não expiradas`);
         
-        // Buscar QUALQUER sessão não expirada para este usuário
+        // Buscar QUALQUER sessão para este usuário (incluindo todas, não só não expiradas)
+        // Isso garante que não perdemos sessões por problemas de timezone
         console.log(`🔍 [DEBUG SESSAO] Buscando sessão ativa para: usuario_id=${mensagem.usuario_id}, remetente=${mensagem.remetente}`);
         console.log(`🔍 [DEBUG SESSAO] Data atual para comparação: ${new Date().toISOString()}`);
         
-        const { data: sessaoAlternativa, error: erroSessaoAlt } = await supabase
+        // IMPORTANTE: Buscar TODAS as sessões recentes (últimos 10 minutos) sem filtro de expires_at
+        // Isso evita problemas de timezone que podem estar causando falsos negativos
+        const dezMinutosAtras = new Date();
+        dezMinutosAtras.setMinutes(dezMinutosAtras.getMinutes() - 10);
+        
+        const { data: todasSessoes, error: erroSessaoAlt } = await supabase
           .from('whatsapp_sessions')
           .select('*')
           .eq('usuario_id', mensagem.usuario_id)
           .eq('remetente', mensagem.remetente)
-          .gte('expires_at', new Date().toISOString())
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .gte('created_at', dezMinutosAtras.toISOString())
+          .order('created_at', { ascending: false });
           
         console.log(`🔍 [DEBUG SESSAO] Erro na busca:`, erroSessaoAlt);
-        console.log(`🔍 [DEBUG SESSAO] Sessão encontrada:`, sessaoAlternativa);
+        console.log(`🔍 [DEBUG SESSAO] Sessões encontradas:`, JSON.stringify(todasSessoes, null, 2));
+        
+        // Filtrar sessões de desambiguação especificamente
+        const sessaoDesambiguacao = todasSessoes?.find(s => s.estado?.startsWith('desambiguacao_'));
+        const sessaoAlternativa = sessaoDesambiguacao || todasSessoes?.[0];
+        
+        console.log(`🔍 [DEBUG SESSAO] Sessão de desambiguação encontrada:`, sessaoDesambiguacao?.estado || 'NENHUMA');
+        console.log(`🔍 [DEBUG SESSAO] Sessão alternativa final:`, sessaoAlternativa?.estado || 'NENHUMA');
           
         if (sessaoAlternativa) {
           console.log(`🔢 [ESPECIAL] Sessão alternativa encontrada: ${sessaoAlternativa.estado} - processando número como resposta`);
@@ -203,6 +226,12 @@ const handler = async (req: Request): Promise<Response> => {
               resposta_enviada: resposta
             })
             .eq('id', mensagem.id);
+        } else {
+          console.log(`⚠️ [ESPECIAL] Número recebido mas nenhuma sessão encontrada - pode ser input inválido`);
+          // Se não há sessão mas é só um número, NÃO processar como comando normal
+          // Isso evita que "1", "2", "3" sejam interpretados e deletem sessões
+          resposta = "❓ Não entendi. Se você estava selecionando uma opção, tente novamente o comando original.\n\nOu escolha uma opção:\n- Estoque\n- Consulta [produto]\n- Baixa [qtd] [produto]";
+          comandoExecutado = true;
         }
       }
 
