@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X, Flashlight, FlashlightOff } from 'lucide-react';
+import { X, Flashlight, FlashlightOff, Keyboard } from 'lucide-react';
+import ManualKeyInput from './ManualKeyInput';
+import { construirUrlConsulta } from '@/lib/documentDetection';
 
 interface QRCodeScannerWebProps {
   onScanSuccess: (data: string) => void;
@@ -13,6 +15,24 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const [isScanning, setIsScanning] = useState(true);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [scanAttempts, setScanAttempts] = useState(0);
+  const [showManualInput, setShowManualInput] = useState(false);
+
+  const handleManualKeySubmit = (chaveAcesso: string) => {
+    console.log('⌨️ [MANUAL KEY] Chave digitada:', chaveAcesso);
+    
+    // Construir URL de consulta a partir da chave
+    const url = construirUrlConsulta(chaveAcesso);
+    console.log('🔗 [MANUAL KEY] URL construída:', url);
+    
+    toast({
+      title: "✅ Chave validada",
+      description: "Processando nota fiscal...",
+    });
+    
+    setShowManualInput(false);
+    setIsScanning(false);
+    onScanSuccess(url);
+  };
 
   useEffect(() => {
     // Feedback háptico ao montar
@@ -156,11 +176,29 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
                   <br />
                   <span className="text-xs">O scanner detectará automaticamente</span>
                 </p>
+                
+                {/* Botão de entrada manual */}
+                <Button
+                  variant="outline"
+                  className="w-full mt-4"
+                  onClick={() => setShowManualInput(true)}
+                >
+                  <Keyboard className="w-4 h-4 mr-2" />
+                  Digitar Chave Manualmente
+                </Button>
               </div>
             </div>
           </>
         )}
       </div>
+      
+      {/* Modal de entrada manual */}
+      {showManualInput && (
+        <ManualKeyInput
+          onSubmit={handleManualKeySubmit}
+          onClose={() => setShowManualInput(false)}
+        />
+      )}
 
       {/* CSS para animação customizada */}
       <style>{`

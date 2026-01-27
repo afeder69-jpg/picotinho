@@ -3,7 +3,9 @@ import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 import { Capacitor } from '@capacitor/core';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X } from 'lucide-react';
+import { X, Keyboard } from 'lucide-react';
+import ManualKeyInput from './ManualKeyInput';
+import { construirUrlConsulta } from '@/lib/documentDetection';
 
 interface QRCodeScannerProps {
   onScanSuccess: (data: string) => void;
@@ -12,6 +14,24 @@ interface QRCodeScannerProps {
 
 const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
   const [isScanning, setIsScanning] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+
+  const handleManualKeySubmit = async (chaveAcesso: string) => {
+    console.log('⌨️ [MANUAL KEY] Chave digitada:', chaveAcesso);
+    
+    // Construir URL de consulta a partir da chave
+    const url = construirUrlConsulta(chaveAcesso);
+    console.log('🔗 [MANUAL KEY] URL construída:', url);
+    
+    toast({
+      title: "✅ Chave validada",
+      description: "Processando nota fiscal...",
+    });
+    
+    setShowManualInput(false);
+    await stopScan();
+    onScanSuccess(url);
+  };
 
   useEffect(() => {
     // Verificar se está em plataforma nativa
@@ -188,12 +208,30 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
 
       {/* Instruções */}
       {isScanning && (
-        <div className="relative z-10 bg-background/90 backdrop-blur-sm p-6 rounded-lg shadow-lg text-center">
+        <div className="relative z-10 bg-background/90 backdrop-blur-sm p-6 rounded-lg shadow-lg text-center max-w-sm mx-4">
           <p className="text-lg font-semibold">Aponte a câmera para o QR Code</p>
           <p className="text-sm text-muted-foreground mt-2">
             O scanner detectará automaticamente o código
           </p>
+          
+          {/* Botão de entrada manual */}
+          <Button
+            variant="outline"
+            className="w-full mt-4"
+            onClick={() => setShowManualInput(true)}
+          >
+            <Keyboard className="w-4 h-4 mr-2" />
+            Digitar Chave Manualmente
+          </Button>
         </div>
+      )}
+      
+      {/* Modal de entrada manual */}
+      {showManualInput && (
+        <ManualKeyInput
+          onSubmit={handleManualKeySubmit}
+          onClose={() => setShowManualInput(false)}
+        />
       )}
     </div>
   );
