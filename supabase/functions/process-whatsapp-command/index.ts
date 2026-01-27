@@ -272,7 +272,11 @@ const handler = async (req: Request): Promise<Response> => {
         const isConsultarCategoria = textoNormalizado.includes('categoria') && textoNormalizado.match(/\b(consulta|consultar)\b/);
         
         // PRIORIDADE: Verificar se webhook já identificou o comando
-        if (mensagem.comando_identificado === 'consultar_categoria') {
+        if (mensagem.comando_identificado === 'processar_audio') {
+          console.log('🎤 Comando ÁUDIO identificado - processando voz...');
+          resposta += await processarAudio(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (mensagem.comando_identificado === 'consultar_categoria') {
           console.log('📂 Comando CONSULTAR CATEGORIA identificado pelo webhook:', mensagem.conteudo);
           resposta += await processarConsultarCategoria(supabase, mensagem);
           comandoExecutado = true;
@@ -290,11 +294,11 @@ const handler = async (req: Request): Promise<Response> => {
           comandoExecutado = true;
         } else if (isBaixar) {
           console.log('📉 Comando BAIXAR identificado:', temSinalMenos ? 'simbolo menos' : textoNormalizado);
-          resposta += await processarBaixarEstoque(supabase, mensagem);
+          resposta += await processarComandoInteligente(supabase, mensagem, 'baixar');
           comandoExecutado = true;
         } else if (isAumentar) {
           console.log('📈 Comando AUMENTAR identificado:', textoNormalizado);
-          resposta += await processarAumentarEstoque(supabase, mensagem);
+          resposta += await processarComandoInteligente(supabase, mensagem, 'aumentar');
           comandoExecutado = true;
         } else if (isAdicionar) {
           console.log('➕ Comando ADICIONAR identificado:', textoNormalizado);
@@ -306,26 +310,45 @@ const handler = async (req: Request): Promise<Response> => {
           comandoExecutado = true;
         } else if (isConsultar) {
           console.log('🔍 Comando CONSULTAR PRODUTO identificado:', textoNormalizado);
-          resposta += await processarConsultarEstoque(supabase, mensagem);
+          resposta += await processarComandoInteligente(supabase, mensagem, 'consultar');
+          comandoExecutado = true;
+        } else if (textoNormalizado.match(/\b(acabando|estoque baixo|baixo estoque|faltando)\b/)) {
+          console.log('📉 Comando ESTOQUE BAIXO identificado');
+          resposta += await processarEstoqueBaixo(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (textoNormalizado.match(/\b(gastei|gastos?|quanto gastei|despesas?)\b/)) {
+          console.log('💰 Comando RELATÓRIO GASTOS identificado');
+          resposta += await processarRelatorioGastos(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (textoNormalizado.match(/\b(preciso comprar|lista de compras|o que comprar)\b/)) {
+          console.log('🛒 Comando LISTA COMPRAS identificado');
+          resposta += await processarListaComprasInteligente(supabase, mensagem);
+          comandoExecutado = true;
+        } else if (textoNormalizado.match(/\b(preco|preço|historico|histórico)\b/) && textoNormalizado.match(/\b(do|da|de)\b/)) {
+          console.log('📊 Comando HISTÓRICO PREÇOS identificado');
+          resposta += await processarHistoricoPrecos(supabase, mensagem);
           comandoExecutado = true;
         } else {
-          // PRIORIDADE 3: Fallback para comandos não reconhecidos
-          console.log('❌ [FALLBACK] Comando não reconhecido:', textoNormalizado);
-          console.log('❌ [FALLBACK] temSinalMenos:', temSinalMenos);
-          console.log('❌ [FALLBACK] isBaixar:', isBaixar);
-          console.log('❌ [FALLBACK] isAumentar:', isAumentar);
-          console.log('❌ [FALLBACK] isAdicionar:', isAdicionar);
-          console.log('❌ [FALLBACK] isConsultar:', isConsultar);
-          // Limpar qualquer sessão ativa antes de enviar mensagem inicial
-          await supabase
-            .from('whatsapp_sessions')
-            .delete()
-            .eq('usuario_id', mensagem.usuario_id)
-            .eq('remetente', mensagem.remetente);
+          // PRIORIDADE 3: Usar interpretação inteligente como fallback
+          console.log('🧠 [FALLBACK] Tentando interpretação inteligente...');
+          const resultadoInteligente = await tentarInterpretacaoInteligente(supabase, mensagem);
           
-          console.log(`🗑️ [RESET] Sessões ativas removidas para ${mensagem.remetente}`);
-          
-          resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
+          if (resultadoInteligente.processado) {
+            resposta = resultadoInteligente.resposta;
+            comandoExecutado = true;
+          } else {
+            // Realmente não reconhecido - enviar menu
+            console.log('❌ [FALLBACK] Comando não reconhecido:', textoNormalizado);
+            await supabase
+              .from('whatsapp_sessions')
+              .delete()
+              .eq('usuario_id', mensagem.usuario_id)
+              .eq('remetente', mensagem.remetente);
+            
+            console.log(`🗑️ [RESET] Sessões ativas removidas para ${mensagem.remetente}`);
+            
+            resposta = "👋 Olá, eu sou o Picotinho, seu assistente de compras!\n\n📋 *Comandos disponíveis:*\n\n📦 *Estoque*\n- Estoque (ver todo)\n- Consulta [produto]\n- Estoque baixo (o que tá acabando)\n\n➕➖ *Movimentações*\n- Baixa [qtd] [produto]\n- Aumenta [qtd] [produto]\n- Incluir [produto]\n\n📂 *Categorias*\n- Categoria [nome]\n\n💰 *Relatórios*\n- Quanto gastei?\n- Preço do [produto]\n- Lista de compras\n\n📎 *Notas*\n- Envie PDF/imagem de nota fiscal\n\n🎤 *Voz*\n- Envie áudio com seu comando!\n\n💡 Dica: Você pode usar comandos por voz!";
+          }
         }
       }
     }
@@ -2173,6 +2196,576 @@ function formatarListaComprasParaWhatsApp(dados: any): string {
   mensagem += `📱 _Lista gerada pelo Picotinho_`;
   
   return mensagem;
+}
+
+/**
+ * 🎤 Processar áudio - transcreve e interpreta comando de voz
+ */
+async function processarAudio(supabase: any, mensagem: any): Promise<string> {
+  try {
+    console.log('🎤 Processando áudio...');
+    
+    const anexoInfo = mensagem.anexo_info;
+    if (!anexoInfo?.url) {
+      return "❌ Não consegui acessar o áudio. Tente enviar novamente.";
+    }
+
+    // 1. Transcrever áudio usando Whisper
+    console.log('🎤 Transcrevendo áudio...');
+    const { data: transcricao, error: erroTranscricao } = await supabase.functions.invoke(
+      'transcribe-audio',
+      {
+        body: { audioUrl: anexoInfo.url }
+      }
+    );
+
+    if (erroTranscricao || !transcricao?.text) {
+      console.error('❌ Erro na transcrição:', erroTranscricao);
+      return "❌ Não consegui entender o áudio. Tente falar mais claramente ou envie um texto.";
+    }
+
+    const textoTranscrito = transcricao.text;
+    console.log('✅ Transcrição:', textoTranscrito);
+
+    // 2. Interpretar o comando transcrito
+    const { data: interpretacao, error: erroInterpretacao } = await supabase.functions.invoke(
+      'interpret-command',
+      {
+        body: {
+          texto: textoTranscrito,
+          usuarioId: mensagem.usuario_id
+        }
+      }
+    );
+
+    if (erroInterpretacao || !interpretacao?.interpretacao) {
+      console.error('❌ Erro na interpretação:', erroInterpretacao);
+      // Fallback: processar como texto normal
+      const mensagemClone = { ...mensagem, conteudo: textoTranscrito };
+      return await processarTextoComoComando(supabase, mensagemClone, textoTranscrito);
+    }
+
+    const cmd = interpretacao.interpretacao;
+    console.log('🧠 Comando interpretado:', cmd.comando, 'Confiança:', cmd.confianca);
+
+    // 3. Se precisa desambiguação, criar sessão e perguntar
+    if (cmd.precisaDesambiguacao) {
+      await criarSessaoDesambiguacao(supabase, mensagem, cmd);
+      return `🎤 _"${textoTranscrito}"_\n\n${cmd.mensagemDesambiguacao}`;
+    }
+
+    // 4. Executar comando interpretado
+    const resultado = await executarComandoInterpretado(supabase, mensagem, cmd);
+    return `🎤 _"${textoTranscrito}"_\n\n${resultado}`;
+
+  } catch (error: any) {
+    console.error('❌ Erro ao processar áudio:', error);
+    return "❌ Erro ao processar áudio. Tente enviar um texto ou áudio mais curto.";
+  }
+}
+
+/**
+ * 🧠 Processar comando com interpretação inteligente
+ */
+async function processarComandoInteligente(supabase: any, mensagem: any, tipoComando: string): Promise<string> {
+  try {
+    console.log(`🧠 Processando comando inteligente: ${tipoComando}`);
+    
+    // Interpretar o comando
+    const { data: interpretacao, error: erroInterpretacao } = await supabase.functions.invoke(
+      'interpret-command',
+      {
+        body: {
+          texto: mensagem.conteudo,
+          usuarioId: mensagem.usuario_id
+        }
+      }
+    );
+
+    if (erroInterpretacao || !interpretacao?.interpretacao) {
+      console.log('⚠️ Interpretação falhou, usando fallback...');
+      // Fallback para processamento original
+      if (tipoComando === 'baixar') {
+        return await processarBaixarEstoque(supabase, mensagem);
+      } else if (tipoComando === 'aumentar') {
+        return await processarAumentarEstoque(supabase, mensagem);
+      } else if (tipoComando === 'consultar') {
+        return await processarConsultarEstoque(supabase, mensagem);
+      }
+      return "❌ Não consegui interpretar o comando.";
+    }
+
+    const cmd = interpretacao.interpretacao;
+    console.log('🧠 Interpretação:', JSON.stringify(cmd, null, 2));
+
+    // Se precisa desambiguação
+    if (cmd.precisaDesambiguacao) {
+      await criarSessaoDesambiguacao(supabase, mensagem, cmd);
+      return cmd.mensagemDesambiguacao || "🤔 Qual produto você quer?";
+    }
+
+    // Executar comando
+    return await executarComandoInterpretado(supabase, mensagem, cmd);
+
+  } catch (error: any) {
+    console.error('❌ Erro no comando inteligente:', error);
+    // Fallback para processamento original
+    if (tipoComando === 'baixar') {
+      return await processarBaixarEstoque(supabase, mensagem);
+    } else if (tipoComando === 'aumentar') {
+      return await processarAumentarEstoque(supabase, mensagem);
+    } else if (tipoComando === 'consultar') {
+      return await processarConsultarEstoque(supabase, mensagem);
+    }
+    return "❌ Erro ao processar comando.";
+  }
+}
+
+/**
+ * Criar sessão de desambiguação
+ */
+async function criarSessaoDesambiguacao(supabase: any, mensagem: any, cmd: any) {
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutos de timeout
+  
+  await supabase.from('whatsapp_sessions').insert({
+    usuario_id: mensagem.usuario_id,
+    remetente: mensagem.remetente,
+    estado: `desambiguacao_${cmd.comando}`,
+    produto_nome: cmd.produto,
+    dados_sessao: {
+      comando: cmd.comando,
+      quantidade: cmd.quantidade,
+      unidade: cmd.unidade,
+      opcoes: cmd.opcoes,
+      produtosEncontrados: cmd.produtosEncontrados
+    },
+    expires_at: expiresAt.toISOString()
+  });
+  
+  console.log('📝 Sessão de desambiguação criada');
+}
+
+/**
+ * Executar comando interpretado pela IA
+ */
+async function executarComandoInterpretado(supabase: any, mensagem: any, cmd: any): Promise<string> {
+  try {
+    switch (cmd.comando) {
+      case 'baixar':
+        if (!cmd.produtosEncontrados?.length) {
+          return `❌ Produto "${cmd.produto}" não encontrado no seu estoque.`;
+        }
+        const produtoBaixar = cmd.produtosEncontrados[0];
+        return await executarBaixarProduto(supabase, mensagem.usuario_id, produtoBaixar, cmd.quantidade, cmd.unidade);
+        
+      case 'aumentar':
+        if (!cmd.produtosEncontrados?.length) {
+          return `❌ Produto "${cmd.produto}" não encontrado no seu estoque.\n\nUse "Incluir ${cmd.produto}" para cadastrar primeiro.`;
+        }
+        const produtoAumentar = cmd.produtosEncontrados[0];
+        return await executarAumentarProduto(supabase, mensagem.usuario_id, produtoAumentar, cmd.quantidade, cmd.unidade);
+        
+      case 'consultar':
+        if (!cmd.produtosEncontrados?.length) {
+          return `❌ Produto "${cmd.produto}" não encontrado no seu estoque.`;
+        }
+        return formatarConsultaProduto(cmd.produtosEncontrados);
+        
+      case 'estoque_baixo':
+        return await processarEstoqueBaixo(supabase, mensagem);
+        
+      case 'relatorio_gastos':
+        return await processarRelatorioGastos(supabase, mensagem);
+        
+      case 'lista_compras':
+        return await processarListaComprasInteligente(supabase, mensagem);
+        
+      case 'historico_precos':
+        return await processarHistoricoPrecos(supabase, mensagem);
+        
+      case 'cancelar':
+        await supabase
+          .from('whatsapp_sessions')
+          .delete()
+          .eq('usuario_id', mensagem.usuario_id)
+          .eq('remetente', mensagem.remetente);
+        return "✅ Operação cancelada!";
+        
+      default:
+        return "🤔 Não entendi o comando. Tente novamente.";
+    }
+  } catch (error: any) {
+    console.error('❌ Erro ao executar comando:', error);
+    return `❌ Erro: ${error.message}`;
+  }
+}
+
+/**
+ * Executar baixa de produto específico
+ */
+async function executarBaixarProduto(supabase: any, userId: string, produto: any, quantidade: number, unidade?: string): Promise<string> {
+  try {
+    // Buscar produto no estoque
+    const { data: estoque, error } = await supabase
+      .from('estoque_app')
+      .select('*')
+      .eq('user_id', userId)
+      .ilike('produto_nome', produto.produto_nome)
+      .limit(1)
+      .maybeSingle();
+    
+    if (error || !estoque) {
+      return `❌ Produto não encontrado no estoque.`;
+    }
+    
+    // Converter unidade se necessário
+    let qtdConvertida = quantidade || 1;
+    if (unidade?.match(/^(g|gr|gramas?)$/i) && estoque.unidade_medida.toLowerCase().includes('kg')) {
+      qtdConvertida = quantidade / 1000;
+    }
+    
+    if (estoque.quantidade < qtdConvertida) {
+      return `❌ Estoque insuficiente!\n\nVocê tem: ${estoque.quantidade.toFixed(3).replace('.', ',')} ${estoque.unidade_medida}\nTentou baixar: ${quantidade} ${unidade || estoque.unidade_medida}`;
+    }
+    
+    const novaQtd = Math.round((estoque.quantidade - qtdConvertida) * 1000) / 1000;
+    
+    await supabase
+      .from('estoque_app')
+      .update({ quantidade: novaQtd, updated_at: new Date().toISOString() })
+      .eq('id', estoque.id);
+    
+    return `✅ Estoque atualizado!\n\n📦 ${estoque.produto_nome}\n🔢 Baixado: ${quantidade} ${unidade || estoque.unidade_medida}\n📊 Estoque atual: ${novaQtd.toFixed(3).replace('.', ',')} ${estoque.unidade_medida}`;
+    
+  } catch (error: any) {
+    console.error('❌ Erro ao baixar produto:', error);
+    return `❌ Erro ao baixar do estoque: ${error.message}`;
+  }
+}
+
+/**
+ * Executar aumento de produto específico
+ */
+async function executarAumentarProduto(supabase: any, userId: string, produto: any, quantidade: number, unidade?: string): Promise<string> {
+  try {
+    const { data: estoque, error } = await supabase
+      .from('estoque_app')
+      .select('*')
+      .eq('user_id', userId)
+      .ilike('produto_nome', produto.produto_nome)
+      .limit(1)
+      .maybeSingle();
+    
+    if (error || !estoque) {
+      return `❌ Produto não encontrado no estoque.`;
+    }
+    
+    let qtdConvertida = quantidade || 1;
+    if (unidade?.match(/^(g|gr|gramas?)$/i) && estoque.unidade_medida.toLowerCase().includes('kg')) {
+      qtdConvertida = quantidade / 1000;
+    }
+    
+    const novaQtd = Math.round((estoque.quantidade + qtdConvertida) * 1000) / 1000;
+    
+    await supabase
+      .from('estoque_app')
+      .update({ quantidade: novaQtd, updated_at: new Date().toISOString() })
+      .eq('id', estoque.id);
+    
+    return `✅ Estoque atualizado!\n\n📦 ${estoque.produto_nome}\n🔢 Adicionado: ${quantidade} ${unidade || estoque.unidade_medida}\n📊 Estoque atual: ${novaQtd.toFixed(3).replace('.', ',')} ${estoque.unidade_medida}`;
+    
+  } catch (error: any) {
+    console.error('❌ Erro ao aumentar produto:', error);
+    return `❌ Erro ao aumentar estoque: ${error.message}`;
+  }
+}
+
+/**
+ * Formatar consulta de produtos
+ */
+function formatarConsultaProduto(produtos: any[]): string {
+  if (!produtos?.length) return "❌ Nenhum produto encontrado.";
+  
+  let resp = "📦 *Produtos encontrados:*\n\n";
+  produtos.forEach((p, i) => {
+    resp += `${i + 1}. ${p.produto_nome}\n`;
+    resp += `   📊 ${p.quantidade?.toFixed(3).replace('.', ',')} ${p.unidade_medida}\n\n`;
+  });
+  return resp;
+}
+
+/**
+ * Processar comando de estoque baixo
+ */
+async function processarEstoqueBaixo(supabase: any, mensagem: any): Promise<string> {
+  try {
+    const { data: produtosBaixos, error } = await supabase
+      .from('estoque_app')
+      .select('produto_nome, quantidade, unidade_medida, categoria')
+      .eq('user_id', mensagem.usuario_id)
+      .lt('quantidade', 0.5) // Produtos com menos de 0.5 unidades
+      .gt('quantidade', 0)   // Mas que não estão zerados
+      .order('quantidade', { ascending: true })
+      .limit(20);
+    
+    if (error) {
+      return "❌ Erro ao consultar estoque.";
+    }
+    
+    if (!produtosBaixos?.length) {
+      return "✅ Todos os produtos estão com estoque adequado! 🎉";
+    }
+    
+    let resp = "⚠️ *Produtos acabando:*\n\n";
+    produtosBaixos.forEach((p: any, i: number) => {
+      resp += `${i + 1}. ${p.produto_nome}\n`;
+      resp += `   📊 ${p.quantidade.toFixed(3).replace('.', ',')} ${p.unidade_medida}\n`;
+      resp += `   📂 ${p.categoria || 'Sem categoria'}\n\n`;
+    });
+    resp += `\n💡 _Total: ${produtosBaixos.length} produto(s) com estoque baixo_`;
+    return resp;
+    
+  } catch (error: any) {
+    return `❌ Erro: ${error.message}`;
+  }
+}
+
+/**
+ * Processar relatório de gastos
+ */
+async function processarRelatorioGastos(supabase: any, mensagem: any): Promise<string> {
+  try {
+    const texto = mensagem.conteudo.toLowerCase();
+    
+    // Determinar período
+    let dataInicio = new Date();
+    let periodo = 'esta semana';
+    
+    if (texto.includes('mes') || texto.includes('mês')) {
+      dataInicio.setDate(1); // Primeiro dia do mês
+      periodo = 'este mês';
+    } else if (texto.includes('hoje')) {
+      dataInicio.setHours(0, 0, 0, 0);
+      periodo = 'hoje';
+    } else {
+      // Padrão: última semana
+      dataInicio.setDate(dataInicio.getDate() - 7);
+    }
+    
+    const { data: notas, error } = await supabase
+      .from('notas_imagens')
+      .select('dados_extraidos, data_criacao')
+      .eq('usuario_id', mensagem.usuario_id)
+      .gte('data_criacao', dataInicio.toISOString())
+      .eq('processada', true);
+    
+    if (error) {
+      return "❌ Erro ao consultar gastos.";
+    }
+    
+    if (!notas?.length) {
+      return `📊 Nenhuma compra registrada ${periodo}.`;
+    }
+    
+    let totalGeral = 0;
+    const categorias: { [key: string]: number } = {};
+    
+    notas.forEach((nota: any) => {
+      const dados = nota.dados_extraidos;
+      const total = dados?.total || 0;
+      totalGeral += total;
+      
+      // Agrupar por estabelecimento
+      const estabelecimento = dados?.estabelecimento?.nome || 'Outros';
+      categorias[estabelecimento] = (categorias[estabelecimento] || 0) + total;
+    });
+    
+    let resp = `💰 *Gastos ${periodo}:*\n\n`;
+    resp += `💵 *Total: R$ ${totalGeral.toFixed(2).replace('.', ',')}*\n\n`;
+    
+    resp += `📊 *Por estabelecimento:*\n`;
+    Object.entries(categorias)
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([nome, valor]) => {
+        resp += `• ${nome}: R$ ${valor.toFixed(2).replace('.', ',')}\n`;
+      });
+    
+    resp += `\n📝 _${notas.length} compra(s) registrada(s)_`;
+    return resp;
+    
+  } catch (error: any) {
+    return `❌ Erro: ${error.message}`;
+  }
+}
+
+/**
+ * Processar lista de compras inteligente
+ */
+async function processarListaComprasInteligente(supabase: any, mensagem: any): Promise<string> {
+  try {
+    // Buscar produtos com estoque baixo ou zerado
+    const { data: produtosBaixos, error } = await supabase
+      .from('estoque_app')
+      .select('produto_nome, quantidade, unidade_medida, categoria, preco_unitario_ultimo')
+      .eq('user_id', mensagem.usuario_id)
+      .lt('quantidade', 1)
+      .order('categoria, produto_nome');
+    
+    if (error) {
+      return "❌ Erro ao gerar lista de compras.";
+    }
+    
+    if (!produtosBaixos?.length) {
+      return "✅ Seu estoque está completo! Nenhum produto para comprar. 🎉";
+    }
+    
+    let resp = "🛒 *Lista de Compras Sugerida:*\n\n";
+    let totalEstimado = 0;
+    let categoriaAtual = '';
+    
+    produtosBaixos.forEach((p: any, i: number) => {
+      if (p.categoria !== categoriaAtual) {
+        if (categoriaAtual) resp += '\n';
+        resp += `📂 *${p.categoria?.toUpperCase() || 'OUTROS'}*\n`;
+        categoriaAtual = p.categoria;
+      }
+      
+      resp += `☐ ${p.produto_nome}`;
+      if (p.preco_unitario_ultimo > 0) {
+        resp += ` (~R$ ${p.preco_unitario_ultimo.toFixed(2).replace('.', ',')})`;
+        totalEstimado += p.preco_unitario_ultimo;
+      }
+      resp += `\n`;
+    });
+    
+    resp += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+    resp += `📝 *Total: ${produtosBaixos.length} item(s)*\n`;
+    if (totalEstimado > 0) {
+      resp += `💰 *Estimativa: R$ ${totalEstimado.toFixed(2).replace('.', ',')}*\n`;
+    }
+    
+    return resp;
+    
+  } catch (error: any) {
+    return `❌ Erro: ${error.message}`;
+  }
+}
+
+/**
+ * Processar histórico de preços
+ */
+async function processarHistoricoPrecos(supabase: any, mensagem: any): Promise<string> {
+  try {
+    const texto = mensagem.conteudo.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\b(preco|preço|historico|histórico|do|da|de)\b/g, '')
+      .trim();
+    
+    if (!texto) {
+      return "❌ Informe o produto. Ex: 'preço do leite'";
+    }
+    
+    // Buscar preços recentes
+    const { data: precos, error } = await supabase
+      .from('precos_atuais')
+      .select('produto_nome, valor_unitario, estabelecimento_nome, data_atualizacao')
+      .eq('user_id', mensagem.usuario_id)
+      .ilike('produto_nome', `%${texto}%`)
+      .order('data_atualizacao', { ascending: false })
+      .limit(10);
+    
+    if (error) {
+      return "❌ Erro ao consultar preços.";
+    }
+    
+    if (!precos?.length) {
+      return `❌ Nenhum histórico de preços encontrado para "${texto}".`;
+    }
+    
+    let resp = `💰 *Preços de ${texto}:*\n\n`;
+    
+    const produtosAgrupados: { [key: string]: any[] } = {};
+    precos.forEach((p: any) => {
+      const chave = p.produto_nome;
+      if (!produtosAgrupados[chave]) produtosAgrupados[chave] = [];
+      produtosAgrupados[chave].push(p);
+    });
+    
+    Object.entries(produtosAgrupados).forEach(([nome, items]) => {
+      resp += `📦 *${nome}*\n`;
+      items.forEach((item: any) => {
+        const data = new Date(item.data_atualizacao).toLocaleDateString('pt-BR');
+        resp += `   🏪 ${item.estabelecimento_nome}\n`;
+        resp += `   💵 R$ ${item.valor_unitario.toFixed(2).replace('.', ',')} (${data})\n\n`;
+      });
+    });
+    
+    return resp;
+    
+  } catch (error: any) {
+    return `❌ Erro: ${error.message}`;
+  }
+}
+
+/**
+ * Tentar interpretação inteligente como fallback
+ */
+async function tentarInterpretacaoInteligente(supabase: any, mensagem: any): Promise<{ processado: boolean, resposta: string }> {
+  try {
+    const { data: interpretacao, error } = await supabase.functions.invoke(
+      'interpret-command',
+      {
+        body: {
+          texto: mensagem.conteudo,
+          usuarioId: mensagem.usuario_id
+        }
+      }
+    );
+    
+    if (error || !interpretacao?.interpretacao) {
+      return { processado: false, resposta: '' };
+    }
+    
+    const cmd = interpretacao.interpretacao;
+    
+    if (cmd.comando === 'desconhecido' || cmd.confianca < 0.5) {
+      return { processado: false, resposta: '' };
+    }
+    
+    if (cmd.precisaDesambiguacao) {
+      await criarSessaoDesambiguacao(supabase, mensagem, cmd);
+      return { processado: true, resposta: cmd.mensagemDesambiguacao || "🤔 Qual produto você quer?" };
+    }
+    
+    const resultado = await executarComandoInterpretado(supabase, mensagem, cmd);
+    return { processado: true, resposta: resultado };
+    
+  } catch (error) {
+    console.error('❌ Erro na interpretação inteligente:', error);
+    return { processado: false, resposta: '' };
+  }
+}
+
+/**
+ * Processar texto como comando (fallback para áudio)
+ */
+async function processarTextoComoComando(supabase: any, mensagem: any, texto: string): Promise<string> {
+  const textoLower = texto.toLowerCase();
+  
+  if (textoLower.match(/\b(baixa|baixar)\b/)) {
+    return await processarBaixarEstoque(supabase, { ...mensagem, conteudo: texto });
+  } else if (textoLower.match(/\b(aumenta|aumentar)\b/)) {
+    return await processarAumentarEstoque(supabase, { ...mensagem, conteudo: texto });
+  } else if (textoLower.match(/\b(consulta|consultar|estoque)\b/)) {
+    return await processarConsultarEstoque(supabase, { ...mensagem, conteudo: texto });
+  } else if (textoLower.match(/\b(acabando|estoque baixo)\b/)) {
+    return await processarEstoqueBaixo(supabase, mensagem);
+  } else if (textoLower.match(/\b(gastei|gastos?)\b/)) {
+    return await processarRelatorioGastos(supabase, mensagem);
+  }
+  
+  return `❌ Não entendi o comando.\n\n_Transcrição: "${texto}"_\n\nTente novamente ou envie um texto.`;
 }
 
 serve(handler);

@@ -142,11 +142,11 @@ const handler = async (req: Request): Promise<Response> => {
       let comando_identificado = null;
       let anexoInfo = null;
       
-      if (webhookData.phone && (webhookData.text || webhookData.document || webhookData.image)) {
+      if (webhookData.phone && (webhookData.text || webhookData.document || webhookData.image || webhookData.audio)) {
         remetente = webhookData.phone.replace(/\D/g, '');
         conteudo = webhookData.text?.message || '';
         
-        // Verificar se há anexo (documento ou imagem)
+        // Verificar se há anexo (documento, imagem ou áudio)
         if (webhookData.document) {
           anexoInfo = {
             tipo: 'document',
@@ -173,6 +173,21 @@ const handler = async (req: Request): Promise<Response> => {
             conteudo = `[IMAGEM] ${anexoInfo.filename}`;
           }
           console.log('🖼️ Imagem detectada:', anexoInfo);
+        } else if (webhookData.audio) {
+          // 🎤 ÁUDIO DETECTADO - Mensagem de voz
+          anexoInfo = {
+            tipo: 'audio',
+            url: webhookData.audio.downloadUrl || webhookData.audio.url || webhookData.audio.audioUrl,
+            filename: webhookData.audio.filename || 'audio.ogg',
+            mimetype: webhookData.audio.mimetype || 'audio/ogg',
+            duration: webhookData.audio.duration || webhookData.audio.seconds
+          };
+          comando_identificado = 'processar_audio';
+          // Se não há texto mas há áudio, definir conteúdo padrão
+          if (!conteudo) {
+            conteudo = `[ÁUDIO] ${anexoInfo.duration ? anexoInfo.duration + 's' : 'mensagem de voz'}`;
+          }
+          console.log('🎤 Áudio detectado:', anexoInfo);
         }
         
         // Normalizar o texto para reconhecimento de comando
