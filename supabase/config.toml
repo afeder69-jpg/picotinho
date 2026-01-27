@@ -91,3 +91,12 @@ verify_jwt = false
 
 [functions.process-html-capturado]
 verify_jwt = false
+
+[functions.transcribe-audio]
+verify_jwt = false
+
+[functions.interpret-command]
+verify_jwt = false
+
+[functions.process-whatsapp-command]
+verify_jwt = false
