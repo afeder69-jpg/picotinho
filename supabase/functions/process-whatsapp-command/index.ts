@@ -1425,6 +1425,77 @@ Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor,
 💰 Preço: ${precoFormatado}`;
     }
     
+    // ETAPA 5: Estados de desambiguação (seleção de produto)
+    else if (sessao.estado.startsWith('desambiguacao_')) {
+      console.log(`🔢 [DESAMBIGUACAO] Processando seleção de produto...`);
+      console.log(`🔢 [DESAMBIGUACAO] Estado: ${sessao.estado}`);
+      console.log(`🔢 [DESAMBIGUACAO] Conteúdo: "${mensagem.conteudo}"`);
+      console.log(`🔢 [DESAMBIGUACAO] Dados da sessão:`, JSON.stringify(sessao.dados_sessao, null, 2));
+      
+      const dadosSessao = sessao.dados_sessao || {};
+      const opcoes = dadosSessao.opcoes || dadosSessao.produtosEncontrados?.map((p: any) => p.produto_nome) || [];
+      const produtosEncontrados = dadosSessao.produtosEncontrados || [];
+      const comandoOriginal = dadosSessao.comando || sessao.estado.replace('desambiguacao_', '');
+      const quantidadeOriginal = dadosSessao.quantidade;
+      const unidadeOriginal = dadosSessao.unidade;
+      
+      console.log(`🔢 [DESAMBIGUACAO] Opções disponíveis: ${opcoes.length}`);
+      console.log(`🔢 [DESAMBIGUACAO] Comando original: ${comandoOriginal}`);
+      
+      // Verificar se é uma seleção numérica
+      const respostaLimpa = mensagem.conteudo.trim();
+      const numeroSelecionado = parseInt(respostaLimpa, 10);
+      
+      if (!isNaN(numeroSelecionado) && numeroSelecionado >= 1 && numeroSelecionado <= opcoes.length) {
+        console.log(`✅ [DESAMBIGUACAO] Seleção válida: ${numeroSelecionado}`);
+        
+        // Obter produto selecionado
+        const produtoSelecionado = produtosEncontrados[numeroSelecionado - 1] || { produto_nome: opcoes[numeroSelecionado - 1] };
+        console.log(`✅ [DESAMBIGUACAO] Produto selecionado:`, produtoSelecionado);
+        
+        // Excluir sessão ANTES de executar o comando
+        await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+        console.log(`🗑️ [DESAMBIGUACAO] Sessão removida`);
+        
+        // Executar o comando original com o produto selecionado
+        const cmdInterpretado = {
+          comando: comandoOriginal,
+          produto: produtoSelecionado.produto_nome,
+          produtosEncontrados: [produtoSelecionado],
+          quantidade: quantidadeOriginal,
+          unidade: unidadeOriginal
+        };
+        
+        const resultado = await executarComandoInterpretado(supabase, mensagem, cmdInterpretado);
+        return resultado;
+        
+      } else if (respostaLimpa.toLowerCase() === 'nao' || respostaLimpa.toLowerCase() === 'não') {
+        // Usuário cancelou
+        await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+        return "✅ Operação cancelada!";
+        
+      } else {
+        // Resposta inválida
+        const novasTentativas = tentativasErro + 1;
+        
+        if (novasTentativas >= 4) {
+          await supabase.from('whatsapp_sessions').delete().eq('id', sessao.id);
+          return "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)";
+        }
+        
+        await supabase
+          .from('whatsapp_sessions')
+          .update({
+            contexto: { ...sessao.contexto, tentativas_erro: novasTentativas },
+            updated_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+          })
+          .eq('id', sessao.id);
+        
+        return `❌ Não entendi. Por favor, responda com o número da opção (1 a ${opcoes.length}) ou "não" para cancelar.`;
+      }
+    }
+    
     return "❌ Estado de sessão inválido.";
     
   } catch (error) {
