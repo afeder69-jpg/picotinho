@@ -2606,6 +2606,19 @@ async function executarComandoInterpretado(supabase: any, mensagem: any, cmd: an
       case 'historico_precos':
         return await processarHistoricoPrecos(supabase, mensagem);
         
+      case 'adicionar':
+        // Comando para adicionar novo produto ao estoque
+        console.log(`➕ [EXECUTAR] Adicionar novo produto: ${cmd.produto}`);
+        if (!cmd.produto) {
+          return "❌ Por favor, especifique o nome do produto. Ex: 'Incluir banana'";
+        }
+        // Criar mensagem sintética com o nome do produto para reutilizar função existente
+        const mensagemAdicionar = {
+          ...mensagem,
+          conteudo: `incluir ${cmd.produto}`
+        };
+        return await processarAdicionarProduto(supabase, mensagemAdicionar);
+        
       case 'cancelar':
         await supabase
           .from('whatsapp_sessions')
