@@ -2425,25 +2425,52 @@ async function processarComandoInteligente(supabase: any, mensagem: any, tipoCom
  * Criar sessão de desambiguação
  */
 async function criarSessaoDesambiguacao(supabase: any, mensagem: any, cmd: any) {
-  const expiresAt = new Date();
-  expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutos de timeout
-  
-  await supabase.from('whatsapp_sessions').insert({
-    usuario_id: mensagem.usuario_id,
-    remetente: mensagem.remetente,
-    estado: `desambiguacao_${cmd.comando}`,
-    produto_nome: cmd.produto,
-    dados_sessao: {
-      comando: cmd.comando,
-      quantidade: cmd.quantidade,
-      unidade: cmd.unidade,
-      opcoes: cmd.opcoes,
-      produtosEncontrados: cmd.produtosEncontrados
-    },
-    expires_at: expiresAt.toISOString()
-  });
-  
-  console.log('📝 Sessão de desambiguação criada');
+  try {
+    // Primeiro limpar sessões antigas do mesmo usuário
+    const { error: deleteError } = await supabase
+      .from('whatsapp_sessions')
+      .delete()
+      .eq('usuario_id', mensagem.usuario_id)
+      .eq('remetente', mensagem.remetente);
+    
+    if (deleteError) {
+      console.error('⚠️ Erro ao limpar sessões antigas:', deleteError);
+    }
+    
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 10); // 10 minutos de timeout (aumentado)
+    
+    console.log('📝 [SESSAO] Criando sessão de desambiguação...');
+    console.log('📝 [SESSAO] usuario_id:', mensagem.usuario_id);
+    console.log('📝 [SESSAO] remetente:', mensagem.remetente);
+    console.log('📝 [SESSAO] estado:', `desambiguacao_${cmd.comando}`);
+    console.log('📝 [SESSAO] expires_at:', expiresAt.toISOString());
+    
+    const { data, error } = await supabase.from('whatsapp_sessions').insert({
+      usuario_id: mensagem.usuario_id,
+      remetente: mensagem.remetente,
+      estado: `desambiguacao_${cmd.comando}`,
+      produto_nome: cmd.produto,
+      dados_sessao: {
+        comando: cmd.comando,
+        quantidade: cmd.quantidade,
+        unidade: cmd.unidade,
+        opcoes: cmd.opcoes,
+        produtosEncontrados: cmd.produtosEncontrados
+      },
+      expires_at: expiresAt.toISOString()
+    }).select();
+    
+    if (error) {
+      console.error('❌ [SESSAO] ERRO ao criar sessão:', error);
+      console.error('❌ [SESSAO] Detalhes do erro:', JSON.stringify(error, null, 2));
+    } else {
+      console.log('✅ [SESSAO] Sessão criada com sucesso:', data);
+    }
+  } catch (err: any) {
+    console.error('❌ [SESSAO] Exceção ao criar sessão:', err);
+    console.error('❌ [SESSAO] Stack:', err.stack);
+  }
 }
 
 /**
