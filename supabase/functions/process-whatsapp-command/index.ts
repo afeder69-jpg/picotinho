@@ -2569,7 +2569,13 @@ async function executarComandoInterpretado(supabase: any, mensagem: any, cmd: an
         // Se não tem produto específico, retornar estoque completo
         if (!cmd.produto || cmd.produto === 'estoque') {
           console.log('📦 [EXECUTAR] Consultar estoque completo');
-          return await processarConsultarEstoque(supabase, mensagem);
+          // Forçar o conteúdo como "estoque" para que a função processe corretamente
+          // Isso resolve o problema de áudios onde mensagem.conteudo é "[ÁUDIO] 2s"
+          const mensagemEstoque = {
+            ...mensagem,
+            conteudo: 'estoque'
+          };
+          return await processarConsultarEstoque(supabase, mensagemEstoque);
         }
         if (!cmd.produtosEncontrados?.length) {
           return `❌ Produto "${cmd.produto}" não encontrado no seu estoque.`;
