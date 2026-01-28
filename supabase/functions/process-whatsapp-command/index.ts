@@ -880,8 +880,8 @@ async function processarConsultarEstoque(supabase: any, mensagem: any): Promise<
     await supabase
       .from('whatsapp_sessions')
       .delete()
-      .eq('usuario_id', usuarioId)
-      .eq('remetente', remetente);
+      .eq('usuario_id', mensagem.usuario_id)
+      .eq('remetente', mensagem.remetente);
     
     console.log(`🗑️ [RESET] Sessões ativas removidas para consulta fallback`);
     
@@ -1459,9 +1459,10 @@ Qual o preço de compra do produto ${produtoNomeLimpo}? (Informe apenas o valor,
       console.log(`🔢 [DESAMBIGUACAO] Processando seleção de produto...`);
       console.log(`🔢 [DESAMBIGUACAO] Estado: ${sessao.estado}`);
       console.log(`🔢 [DESAMBIGUACAO] Conteúdo: "${mensagem.conteudo}"`);
-      console.log(`🔢 [DESAMBIGUACAO] Dados da sessão:`, JSON.stringify(sessao.dados_sessao, null, 2));
+      console.log(`🔢 [DESAMBIGUACAO] Dados da sessão contexto:`, JSON.stringify(sessao.contexto, null, 2));
       
-      const dadosSessao = sessao.dados_sessao || {};
+      // IMPORTANTE: usar 'contexto' que é o campo real da tabela, não 'dados_sessao'
+      const dadosSessao = sessao.contexto || {};
       const opcoes = dadosSessao.opcoes || dadosSessao.produtosEncontrados?.map((p: any) => p.produto_nome) || [];
       const produtosEncontrados = dadosSessao.produtosEncontrados || [];
       const comandoOriginal = dadosSessao.comando || sessao.estado.replace('desambiguacao_', '');
@@ -2467,7 +2468,7 @@ async function criarSessaoDesambiguacao(supabase: any, mensagem: any, cmd: any) 
       remetente: mensagem.remetente,
       estado: `desambiguacao_${cmd.comando}`,
       produto_nome: cmd.produto || 'produto_generico',
-      dados_sessao: {
+      contexto: {
         comando: cmd.comando,
         quantidade: cmd.quantidade,
         unidade: cmd.unidade,
