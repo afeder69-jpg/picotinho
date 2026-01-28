@@ -2422,35 +2422,51 @@ async function processarComandoInteligente(supabase: any, mensagem: any, tipoCom
 }
 
 /**
- * Criar sessão de desambiguação
+ * Criar sessão de desambiguação - VERSÃO ROBUSTA
  */
 async function criarSessaoDesambiguacao(supabase: any, mensagem: any, cmd: any) {
   try {
-    // Primeiro limpar sessões antigas do mesmo usuário
-    const { error: deleteError } = await supabase
+    console.log('📝 [SESSAO] ========================================');
+    console.log('📝 [SESSAO] CRIANDO SESSÃO DE DESAMBIGUAÇÃO');
+    console.log('📝 [SESSAO] ========================================');
+    console.log('📝 [SESSAO] usuario_id:', mensagem.usuario_id);
+    console.log('📝 [SESSAO] remetente:', mensagem.remetente);
+    console.log('📝 [SESSAO] comando:', cmd.comando);
+    console.log('📝 [SESSAO] produto:', cmd.produto);
+    console.log('📝 [SESSAO] opcoes:', JSON.stringify(cmd.opcoes));
+    
+    // Primeiro: verificar se há sessões existentes
+    const { data: sessoesExistentes, error: erroCheck } = await supabase
       .from('whatsapp_sessions')
-      .delete()
+      .select('id, estado, created_at')
       .eq('usuario_id', mensagem.usuario_id)
       .eq('remetente', mensagem.remetente);
     
+    console.log('📝 [SESSAO] Sessões existentes antes:', JSON.stringify(sessoesExistentes));
+    console.log('📝 [SESSAO] Erro ao verificar:', erroCheck);
+    
+    // Limpar sessões antigas do mesmo usuário
+    const { error: deleteError, count: deleteCount } = await supabase
+      .from('whatsapp_sessions')
+      .delete()
+      .eq('usuario_id', mensagem.usuario_id)
+      .eq('remetente', mensagem.remetente)
+      .select('id', { count: 'exact' });
+    
+    console.log('📝 [SESSAO] Sessões deletadas:', deleteCount);
     if (deleteError) {
-      console.error('⚠️ Erro ao limpar sessões antigas:', deleteError);
+      console.error('⚠️ [SESSAO] Erro ao limpar sessões antigas:', deleteError);
     }
     
+    // Criar timestamp com margem de segurança (15 minutos)
     const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10); // 10 minutos de timeout (aumentado)
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
     
-    console.log('📝 [SESSAO] Criando sessão de desambiguação...');
-    console.log('📝 [SESSAO] usuario_id:', mensagem.usuario_id);
-    console.log('📝 [SESSAO] remetente:', mensagem.remetente);
-    console.log('📝 [SESSAO] estado:', `desambiguacao_${cmd.comando}`);
-    console.log('📝 [SESSAO] expires_at:', expiresAt.toISOString());
-    
-    const { data, error } = await supabase.from('whatsapp_sessions').insert({
+    const dadosSessao = {
       usuario_id: mensagem.usuario_id,
       remetente: mensagem.remetente,
       estado: `desambiguacao_${cmd.comando}`,
-      produto_nome: cmd.produto,
+      produto_nome: cmd.produto || 'produto_generico',
       dados_sessao: {
         comando: cmd.comando,
         quantidade: cmd.quantidade,
@@ -2459,16 +2475,66 @@ async function criarSessaoDesambiguacao(supabase: any, mensagem: any, cmd: any) 
         produtosEncontrados: cmd.produtosEncontrados
       },
       expires_at: expiresAt.toISOString()
-    }).select();
+    };
+    
+    console.log('📝 [SESSAO] Dados para inserir:', JSON.stringify(dadosSessao, null, 2));
+    
+    const { data, error } = await supabase
+      .from('whatsapp_sessions')
+      .insert(dadosSessao)
+      .select();
     
     if (error) {
-      console.error('❌ [SESSAO] ERRO ao criar sessão:', error);
-      console.error('❌ [SESSAO] Detalhes do erro:', JSON.stringify(error, null, 2));
+      console.error('❌ [SESSAO] ========================================');
+      console.error('❌ [SESSAO] ERRO AO CRIAR SESSÃO!');
+      console.error('❌ [SESSAO] ========================================');
+      console.error('❌ [SESSAO] Código:', error.code);
+      console.error('❌ [SESSAO] Mensagem:', error.message);
+      console.error('❌ [SESSAO] Detalhes:', error.details);
+      console.error('❌ [SESSAO] Hint:', error.hint);
+      console.error('❌ [SESSAO] JSON completo:', JSON.stringify(error, null, 2));
+      
+      // Tentar inserir sem .select() como fallback
+      console.log('📝 [SESSAO] Tentando inserção simples sem .select()...');
+      const { error: error2 } = await supabase
+        .from('whatsapp_sessions')
+        .insert(dadosSessao);
+        
+      if (error2) {
+        console.error('❌ [SESSAO] Inserção simples também falhou:', JSON.stringify(error2, null, 2));
+      } else {
+        console.log('✅ [SESSAO] Inserção simples funcionou!');
+      }
     } else {
-      console.log('✅ [SESSAO] Sessão criada com sucesso:', data);
+      console.log('✅ [SESSAO] ========================================');
+      console.log('✅ [SESSAO] SESSÃO CRIADA COM SUCESSO!');
+      console.log('✅ [SESSAO] ========================================');
+      console.log('✅ [SESSAO] ID:', data?.[0]?.id);
+      console.log('✅ [SESSAO] Estado:', data?.[0]?.estado);
+      console.log('✅ [SESSAO] Expira em:', data?.[0]?.expires_at);
     }
+    
+    // Verificar se a sessão foi criada
+    const { data: verificacao, error: erroVerif } = await supabase
+      .from('whatsapp_sessions')
+      .select('*')
+      .eq('usuario_id', mensagem.usuario_id)
+      .eq('remetente', mensagem.remetente)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    console.log('📝 [SESSAO] Verificação após criar:', JSON.stringify(verificacao));
+    console.log('📝 [SESSAO] Erro na verificação:', erroVerif);
+    
+    if (!verificacao || verificacao.length === 0) {
+      console.error('❌ [SESSAO] SESSÃO NÃO FOI PERSISTIDA NO BANCO!');
+    }
+    
   } catch (err: any) {
-    console.error('❌ [SESSAO] Exceção ao criar sessão:', err);
+    console.error('❌ [SESSAO] ========================================');
+    console.error('❌ [SESSAO] EXCEÇÃO AO CRIAR SESSÃO');
+    console.error('❌ [SESSAO] ========================================');
+    console.error('❌ [SESSAO] Erro:', err.message);
     console.error('❌ [SESSAO] Stack:', err.stack);
   }
 }
@@ -2478,6 +2544,11 @@ async function criarSessaoDesambiguacao(supabase: any, mensagem: any, cmd: any) 
  */
 async function executarComandoInterpretado(supabase: any, mensagem: any, cmd: any): Promise<string> {
   try {
+    console.log(`🎯 [EXECUTAR] Comando: ${cmd.comando}`);
+    console.log(`🎯 [EXECUTAR] Categoria: ${cmd.categoria}`);
+    console.log(`🎯 [EXECUTAR] Produto: ${cmd.produto}`);
+    console.log(`🎯 [EXECUTAR] Produtos encontrados: ${cmd.produtosEncontrados?.length || 0}`);
+    
     switch (cmd.comando) {
       case 'baixar':
         if (!cmd.produtosEncontrados?.length) {
@@ -2494,10 +2565,27 @@ async function executarComandoInterpretado(supabase: any, mensagem: any, cmd: an
         return await executarAumentarProduto(supabase, mensagem.usuario_id, produtoAumentar, cmd.quantidade, cmd.unidade);
         
       case 'consultar':
+        // Se não tem produto específico, retornar estoque completo
+        if (!cmd.produto || cmd.produto === 'estoque') {
+          console.log('📦 [EXECUTAR] Consultar estoque completo');
+          return await processarConsultarEstoque(supabase, mensagem);
+        }
         if (!cmd.produtosEncontrados?.length) {
           return `❌ Produto "${cmd.produto}" não encontrado no seu estoque.`;
         }
         return formatarConsultaProduto(cmd.produtosEncontrados);
+        
+      case 'consultar_categoria':
+        console.log(`📂 [EXECUTAR] Consultar categoria: ${cmd.categoria}`);
+        if (!cmd.categoria) {
+          return "❌ Categoria não especificada. Use: 'categoria [nome]'";
+        }
+        // Criar mensagem sintética com a categoria para reutilizar função existente
+        const mensagemCategoria = {
+          ...mensagem,
+          conteudo: `consulta categoria ${cmd.categoria}`
+        };
+        return await processarConsultarCategoria(supabase, mensagemCategoria);
         
       case 'estoque_baixo':
         return await processarEstoqueBaixo(supabase, mensagem);
@@ -2520,6 +2608,7 @@ async function executarComandoInterpretado(supabase: any, mensagem: any, cmd: an
         return "✅ Operação cancelada!";
         
       default:
+        console.log(`⚠️ [EXECUTAR] Comando desconhecido: ${cmd.comando}`);
         return "🤔 Não entendi o comando. Tente novamente.";
     }
   } catch (error: any) {
