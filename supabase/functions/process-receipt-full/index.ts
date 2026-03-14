@@ -1401,6 +1401,7 @@ serve(async (req) => {
     let masterNaoEncontrados = 0;
     let iaNormalizacoes = 0;
     let fuzzyNormalizacoes = 0;
+    let eanNormalizacoes = 0; // ✅ Contador de matches por EAN
     
     for (const produto of produtosEstoque) {
       try {
@@ -1412,6 +1413,31 @@ serve(async (req) => {
         const embalagemInfo = detectarQuantidadeEmbalagem(produto.produto_nome, valorTotal);
         
         let resultado: { found: boolean; master: any | null } | null = null;
+        
+        // 🔢 ESTRATÉGIA 0: Busca por EAN_Comercial (PRIORIDADE MÁXIMA - antes da IA)
+        if (produto.ean_comercial) {
+          try {
+            console.log(`🔢 Tentando match por EAN: ${produto.ean_comercial} para "${produto.produto_nome}"`);
+            const { data: masterPorEan, error: eanError } = await supabase
+              .from('produtos_master_global')
+              .select('*')
+              .eq('codigo_barras', produto.ean_comercial);
+            
+            if (!eanError && masterPorEan && masterPorEan.length === 1) {
+              // ✅ Match único por EAN — confiança total
+              resultado = { found: true, master: masterPorEan[0] };
+              eanNormalizacoes++;
+              console.log(`✅ EAN MATCH: "${produto.produto_nome}" → ${masterPorEan[0].nome_padrao} (EAN: ${produto.ean_comercial})`);
+            } else if (masterPorEan && masterPorEan.length > 1) {
+              // ⚠️ Múltiplos masters com mesmo EAN — inconsistência, seguir para IA
+              console.warn(`⚠️ EAN ${produto.ean_comercial} encontrado em ${masterPorEan.length} masters diferentes — seguindo para IA`);
+            } else {
+              console.log(`ℹ️ EAN ${produto.ean_comercial} não encontrado no cadastro master — seguindo para IA/fuzzy`);
+            }
+          } catch (eanErr: any) {
+            console.error(`⚠️ Erro na busca por EAN: ${eanErr.message}`);
+          }
+        }
         
         // 🤖 ESTRATÉGIA 1: Normalização com IA (se ativado e chave disponível)
         if (USE_AI_NORMALIZATION && lovableApiKey) {
