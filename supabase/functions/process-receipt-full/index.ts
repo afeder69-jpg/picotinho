@@ -1556,8 +1556,9 @@ serve(async (req) => {
     
     if (masterEncontrados > 0) {
       console.log(`🎉 Taxa de normalização automática: ${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%`);
-      console.log(`   🤖 Normalizações com IA: ${iaNormalizacoes} (${((iaNormalizacoes/masterEncontrados)*100).toFixed(1)}%)`);
-      console.log(`   🔍 Normalizações com Fuzzy: ${fuzzyNormalizacoes} (${((fuzzyNormalizacoes/masterEncontrados)*100).toFixed(1)}%)`);
+      console.log(`   🔢 Normalizações por EAN: ${eanNormalizacoes}`);
+      console.log(`   🤖 Normalizações com IA: ${iaNormalizacoes}`);
+      console.log(`   🔍 Normalizações com Fuzzy: ${fuzzyNormalizacoes}`);
     }
     
     // 🧹 LIMPEZA DE CANDIDATOS ÓRFÃOS ANTES DE VINCULAR
