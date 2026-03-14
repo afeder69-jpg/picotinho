@@ -444,6 +444,7 @@ async function processarNFCe(
       valor_unitario: valorUnitarioFinal,
       valor_total: valorTotalFinal,
       categoria: categorizarProduto(p.nome || p.descricao), // ✅ CATEGORIZAÇÃO IDÊNTICA AO WHATSAPP
+      codigo_barras: (p.codigo_barras_comercial || p.ean_comercial || p.codigo_barras_tributavel || '').replace(/\D/g, '') || null, // ✅ EAN_Comercial extraído
       tem_desconto: temDesconto,
       _valor_desconto_aplicado: temDesconto ? valorDesconto : undefined,
       _valor_original: temDesconto ? valorUnitario : undefined

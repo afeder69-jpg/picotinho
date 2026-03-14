@@ -91,6 +91,17 @@ function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): {
   return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
 }
 
+  // 🔢 Limpar e validar EAN/GTIN (somente dígitos, rejeitar inválidos)
+  function limparEAN(valor: any): string | null {
+    if (!valor || typeof valor !== 'string') return null;
+    const limpo = valor.trim().replace(/\D/g, '');
+    if (!limpo || limpo.length < 8) return null;
+    // Rejeitar valores inválidos conhecidos
+    const invalidos = ['0', '00000000', '0000000000000', 'SEM GTIN', 'SEM EAN'];
+    if (invalidos.includes(valor.trim().toUpperCase()) || /^0+$/.test(limpo)) return null;
+    return limpo;
+  }
+
   // 🧹 Limpar sufixos de GRANEL e unidades do nome antes do matching
   function limparUnidadesMedida(nome: string): string {
     return nome
@@ -1217,7 +1228,8 @@ serve(async (req) => {
           quantidade,
           valor_unitario: valorUnitario,
           unidade: normalizarUnidadeMedida(item.unidade_comercial || item.unidade || 'UN'),
-          data_compra: dataCompra
+          data_compra: dataCompra,
+          ean_comercial: limparEAN(item.codigo_barras || item.codigo_barras_comercial || item.ean_comercial) // ✅ EAN
         };
       });
       console.log(`📦 ${itens.length} produtos carregados do InfoSimples`);
@@ -1235,7 +1247,8 @@ serve(async (req) => {
           quantidade,
           valor_unitario: valorUnitario,
           unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
-          data_compra: dataCompra
+          data_compra: dataCompra,
+          ean_comercial: limparEAN(item.codigo_barras || item.codigo_barras_comercial || item.ean_comercial) // ✅ EAN
         };
       });
       console.log(`📦 ${itens.length} produtos carregados (consolidados)`);
@@ -1253,7 +1266,8 @@ serve(async (req) => {
           quantidade,
           valor_unitario: valorUnitario,
           unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
-          data_compra: dataCompra
+          data_compra: dataCompra,
+          ean_comercial: limparEAN(item.codigo_barras || item.codigo_barras_comercial || item.ean_comercial) // ✅ EAN
         };
       });
       console.log(`📦 ${itens.length} produtos carregados do WhatsApp/Upload`);
@@ -1340,6 +1354,7 @@ serve(async (req) => {
           compra_id: nota.compra_id,
           origem: "nota_fiscal",
           imagem_url: null, // Será preenchido ao encontrar master
+          ean_comercial: item.ean_comercial || null, // ✅ Propagar EAN do item
         });
       }
     }
@@ -1386,6 +1401,7 @@ serve(async (req) => {
     let masterNaoEncontrados = 0;
     let iaNormalizacoes = 0;
     let fuzzyNormalizacoes = 0;
+    let eanNormalizacoes = 0; // ✅ Contador de matches por EAN
     
     for (const produto of produtosEstoque) {
       try {
@@ -1397,6 +1413,31 @@ serve(async (req) => {
         const embalagemInfo = detectarQuantidadeEmbalagem(produto.produto_nome, valorTotal);
         
         let resultado: { found: boolean; master: any | null } | null = null;
+        
+        // 🔢 ESTRATÉGIA 0: Busca por EAN_Comercial (PRIORIDADE MÁXIMA - antes da IA)
+        if (produto.ean_comercial) {
+          try {
+            console.log(`🔢 Tentando match por EAN: ${produto.ean_comercial} para "${produto.produto_nome}"`);
+            const { data: masterPorEan, error: eanError } = await supabase
+              .from('produtos_master_global')
+              .select('*')
+              .eq('codigo_barras', produto.ean_comercial);
+            
+            if (!eanError && masterPorEan && masterPorEan.length === 1) {
+              // ✅ Match único por EAN — confiança total
+              resultado = { found: true, master: masterPorEan[0] };
+              eanNormalizacoes++;
+              console.log(`✅ EAN MATCH: "${produto.produto_nome}" → ${masterPorEan[0].nome_padrao} (EAN: ${produto.ean_comercial})`);
+            } else if (masterPorEan && masterPorEan.length > 1) {
+              // ⚠️ Múltiplos masters com mesmo EAN — inconsistência, seguir para IA
+              console.warn(`⚠️ EAN ${produto.ean_comercial} encontrado em ${masterPorEan.length} masters diferentes — seguindo para IA`);
+            } else {
+              console.log(`ℹ️ EAN ${produto.ean_comercial} não encontrado no cadastro master — seguindo para IA/fuzzy`);
+            }
+          } catch (eanErr: any) {
+            console.error(`⚠️ Erro na busca por EAN: ${eanErr.message}`);
+          }
+        }
         
         // 🤖 ESTRATÉGIA 1: Normalização com IA (se ativado e chave disponível)
         if (USE_AI_NORMALIZATION && lovableApiKey) {
@@ -1459,7 +1500,7 @@ serve(async (req) => {
           }
         }
         
-        // ✅ Atualizar produto com dados normalizados (de IA ou fuzzy)
+        // ✅ Atualizar produto com dados normalizados (de EAN, IA ou fuzzy)
         if (resultado?.found && resultado.master) {
           produto.sku_global = resultado.master.sku_global;
           produto.produto_master_id = resultado.master.id;
@@ -1470,6 +1511,32 @@ serve(async (req) => {
           produto.nome_base = resultado.master.nome_base;
           produto.imagem_url = resultado.master.imagem_url;
           masterEncontrados++;
+          
+          // ✅ Persistência segura do EAN no master (se o master ainda não tem codigo_barras)
+          if (produto.ean_comercial && !resultado.master.codigo_barras) {
+            try {
+              // Verificar se esse EAN já não está em outro master
+              const { data: eanExistente } = await supabase
+                .from('produtos_master_global')
+                .select('id')
+                .eq('codigo_barras', produto.ean_comercial)
+                .neq('id', resultado.master.id)
+                .limit(1);
+              
+              if (!eanExistente || eanExistente.length === 0) {
+                // Seguro gravar — EAN não existe em outro master
+                await supabase
+                  .from('produtos_master_global')
+                  .update({ codigo_barras: produto.ean_comercial })
+                  .eq('id', resultado.master.id);
+                console.log(`🔢 EAN ${produto.ean_comercial} salvo no master ${resultado.master.id}`);
+              } else {
+                console.warn(`⚠️ EAN ${produto.ean_comercial} já existe em outro master (${eanExistente[0].id}) — não gravado`);
+              }
+            } catch (eanSaveErr: any) {
+              console.error(`⚠️ Erro ao salvar EAN no master: ${eanSaveErr.message}`);
+            }
+          }
           
           console.log(`✅ Normalizado: ${produto.produto_nome} (SKU: ${produto.sku_global})`);
         } else {
@@ -1489,8 +1556,9 @@ serve(async (req) => {
     
     if (masterEncontrados > 0) {
       console.log(`🎉 Taxa de normalização automática: ${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%`);
-      console.log(`   🤖 Normalizações com IA: ${iaNormalizacoes} (${((iaNormalizacoes/masterEncontrados)*100).toFixed(1)}%)`);
-      console.log(`   🔍 Normalizações com Fuzzy: ${fuzzyNormalizacoes} (${((fuzzyNormalizacoes/masterEncontrados)*100).toFixed(1)}%)`);
+      console.log(`   🔢 Normalizações por EAN: ${eanNormalizacoes}`);
+      console.log(`   🤖 Normalizações com IA: ${iaNormalizacoes}`);
+      console.log(`   🔍 Normalizações com Fuzzy: ${fuzzyNormalizacoes}`);
     }
     
     // 🧹 LIMPEZA DE CANDIDATOS ÓRFÃOS ANTES DE VINCULAR

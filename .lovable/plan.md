@@ -1,84 +1,240 @@
 
 
-# Plano: Priorização do EAN na Normalização de Produtos
+# Otimização do Scanner de QR Code Web
 
-## Situação Atual Identificada
+## Diagnóstico do Problema
 
-| Item | Status |
-|---|---|
-| `produtos_master_global.codigo_barras` | Existe (text, nullable) |
-| Índice em `codigo_barras` | Existe (`idx_produtos_master_codigo_barras`) |
-| `estoque_app.ean_comercial` | Não existe |
-| NFe Serpro | Já extrai `item.prod.cEAN` como `codigo_barras` nos itens |
-| NFCe InfoSimples | **Não extrai** EAN — campo disponível na API mas ignorado |
-| OpenAI fallback | **Não extrai** EAN |
-| `process-receipt-full` | **Nunca usa** EAN para matching — vai direto para IA/fuzzy |
+O scanner web atual (`QRCodeScannerWeb.tsx`) usa `@yudiel/react-qr-scanner` baseado em ZXing com configurações básicas:
 
-## Alterações Planejadas
-
-### 1. Migration SQL (mínima)
-
-- Adicionar coluna `ean_comercial` (text, nullable) em `estoque_app`
-- Criar índice parcial em `estoque_app(ean_comercial)` para valores não nulos
-- Índice em `produtos_master_global.codigo_barras` já existe — nada a fazer
-
-### 2. Extração do EAN nas 3 fontes
-
-**A. NFe Serpro** — Já extrai `cEAN`. Nenhuma alteração necessária.
-
-**B. NFCe InfoSimples** (`process-nfce-infosimples/index.ts`)
-- Acrescentar 1 campo no `return` do mapeamento de produtos (~linha 439):
 ```typescript
-codigo_barras: limparEAN(p.codigo_barras_comercial || p.ean_comercial || p.codigo_barras) || null,
+// Configuração atual - muito básica
+<Scanner
+  constraints={{
+    facingMode: 'environment',
+    aspectRatio: 1,  // ❌ Pode limitar qualidade
+  }}
+  formats={['qr_code', 'data_matrix']}
+  scanDelay={300}  // ❌ 300ms pode ser muito lento
+/>
 ```
 
-**C. OpenAI fallback** (`extract-receipt-image/index.ts`)
-- Acrescentar `"codigo_barras"` no JSON de extração do prompt, marcado como complementar/opcional.
+### Por que a versão nativa é melhor?
 
-### 3. Propagação do EAN no `process-receipt-full`
+| Característica | APK (ML Kit) | Web (ZXing) |
+|---------------|--------------|-------------|
+| Engine | Google ML Kit (Machine Learning) | ZXing (algoritmo tradicional) |
+| Iluminação | Compensação automática por IA | Dependente da câmera |
+| Velocidade | Otimizado por GPU/NPU | Processamento em JavaScript |
+| Resolução | Acesso nativo à câmera | Limitado por APIs do navegador |
 
-**A. Carregar EAN dos dados extraídos** (~linhas 1207-1260)
-- Nos 3 formatos de parsing (InfoSimples, consolidados, itens), acrescentar captura de `codigo_barras` / `ean_comercial` do item.
+## Estratégia de Otimização
 
-**B. Propagação na consolidação** (~linha 1332)
-- Incluir `ean_comercial` no objeto do produto consolidado.
+### 1. Substituir biblioteca por `html5-qrcode`
 
-**C. Nova etapa ANTES da IA** (~linha 1390, antes do loop de matching)
-- Função `limparEAN(valor)`: remove espaços, valida somente dígitos, rejeita "SEM GTIN", "SEM EAN", "0", sequências zeradas, códigos < 8 dígitos.
-- Para cada produto com EAN válido:
-  1. Buscar em `produtos_master_global` WHERE `codigo_barras = ean`
-  2. Se encontrou exatamente 1 master → vincular direto (confiança 100%, sem IA)
-  3. Se encontrou múltiplos → log de alerta, seguir para IA (inconsistência)
-  4. Se não encontrou → seguir fluxo normal (IA + fuzzy)
+O projeto já tem `html5-qrcode` instalado (v2.3.8). Esta biblioteca oferece:
 
-**D. Persistência segura do EAN no master** (~linha 1463, quando master é encontrado/criado)
-- Regras de segurança ao gravar `codigo_barras` no master:
-  - Se master novo (criado via candidato): gravar normalmente
-  - Se master existente sem `codigo_barras`: verificar se o EAN não está em outro master; só gravar se não houver conflito
-  - Se master existente com `codigo_barras` diferente: não sobrescrever, logar inconsistência
-  - Se master existente com mesmo `codigo_barras`: nada a fazer
+- **`useBarCodeDetectorIfSupported`**: Usa API nativa do navegador quando disponível (Chrome 83+)
+- **Controle granular de câmera**: Exposição, foco, resolução
+- **Flash/torch nativo**: Melhor controle de iluminação
 
-**E. Inserção no estoque** (~linha 1677)
-- O campo `ean_comercial` já estará no objeto produto e será inserido automaticamente na tabela `estoque_app`.
+### 2. Configurações avançadas para cupons fiscais
 
-### 4. Nenhuma alteração no frontend
+```typescript
+const config = {
+  fps: 15,                          // ⬆️ Aumentar de 2 para 15
+  qrbox: { width: 300, height: 300 }, // Área de detecção maior
+  aspectRatio: 1.0,
+  disableFlip: true,                // Performance: cupons não são espelhados
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true  // API nativa quando disponível
+  },
+  videoConstraints: {
+    facingMode: 'environment',
+    width: { ideal: 1920 },         // Maior resolução
+    height: { ideal: 1080 },
+    advanced: [
+      { focusMode: 'continuous' },  // Foco contínuo
+      { exposureMode: 'continuous' } // Exposição automática
+    ]
+  }
+};
+```
 
-Nenhuma tela, componente ou rota será modificada.
+### 3. Fallback de foto estática
 
-## Arquivos Modificados
+Para casos onde o escaneamento em tempo real falha:
 
-| Arquivo | Alteração |
-|---|---|
-| Migration SQL (nova) | `ADD COLUMN ean_comercial` em `estoque_app` + índice parcial |
-| `process-nfce-infosimples/index.ts` | +1 campo: `codigo_barras` no return do mapeamento |
-| `extract-receipt-image/index.ts` | +1 linha no prompt: pedir `codigo_barras` |
-| `process-receipt-full/index.ts` | +~80 linhas: função `limparEAN`, busca por EAN antes da IA, persistência segura no master, propagação para estoque |
+- Botão "Tirar Foto do QR Code"
+- Captura imagem estática
+- Processa com mais tempo e precisão
+- Funciona melhor em condições de pouca luz
 
-## Garantias
+## Implementação Detalhada
 
-- Nenhuma tabela renomeada ou removida
-- Nenhum campo existente alterado ou deletado
-- Fluxo de IA + fuzzy matching permanece intacto como fallback
-- Nenhuma tela ou componente frontend é alterado
-- Apenas acréscimos pontuais e seguros
+### Novo componente: `QRCodeScannerWebOptimized.tsx`
+
+```typescript
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+
+// Formatos otimizados para cupons fiscais brasileiros
+const formatsToSupport = [
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+];
+
+// Configuração de câmera otimizada
+const cameraConfig = {
+  fps: 15,
+  qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+    // QR box dinâmico - 80% da área visível
+    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+    return { width: minEdge * 0.8, height: minEdge * 0.8 };
+  },
+  aspectRatio: 1.0,
+  disableFlip: true,
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true
+  }
+};
+
+// Após iniciar, aplicar configurações avançadas de câmera
+async function applyAdvancedSettings(scanner: Html5Qrcode) {
+  try {
+    const capabilities = scanner.getRunningTrackCapabilities();
+    
+    // Ativar foco contínuo se disponível
+    if (capabilities.focusMode?.includes('continuous')) {
+      await scanner.applyVideoConstraints({
+        // @ts-ignore - API experimental
+        advanced: [{ focusMode: 'continuous' }]
+      });
+    }
+    
+    // Ativar exposição automática se disponível
+    if (capabilities.exposureMode?.includes('continuous')) {
+      await scanner.applyVideoConstraints({
+        // @ts-ignore - API experimental
+        advanced: [{ exposureMode: 'continuous' }]
+      });
+    }
+  } catch (e) {
+    console.log('Configurações avançadas não suportadas:', e);
+  }
+}
+```
+
+### Modo de captura de foto (fallback)
+
+```typescript
+const capturePhoto = async () => {
+  // Pausar scanner de vídeo
+  await scanner.pause(true);
+  
+  // Capturar frame atual
+  const imageData = scanner.getRunningTrackCameraSettings();
+  
+  // Processar imagem estática com mais tempo
+  const result = await Html5Qrcode.scanFile(imageData, {
+    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
+  });
+  
+  return result;
+};
+```
+
+### Controle de lanterna (flash)
+
+```typescript
+const toggleTorch = async () => {
+  try {
+    const capabilities = scanner.getRunningTrackCapabilities();
+    if (capabilities.torch) {
+      const currentSettings = scanner.getRunningTrackSettings();
+      await scanner.applyVideoConstraints({
+        // @ts-ignore - API experimental
+        advanced: [{ torch: !currentSettings.torch }]
+      });
+      setTorchEnabled(!torchEnabled);
+    }
+  } catch (e) {
+    toast({
+      title: "Flash não suportado",
+      description: "Este dispositivo não suporta controle de flash",
+      variant: "destructive"
+    });
+  }
+};
+```
+
+## Interface do usuário melhorada
+
+```
+┌─────────────────────────────────────────────┐
+│ [🔦 Flash]                    [❌ Cancelar] │
+├─────────────────────────────────────────────┤
+│                                             │
+│     ┌─────────────────────────────┐         │
+│     │                             │         │
+│     │    ╔═══════════════════╗    │         │
+│     │    ║                   ║    │         │
+│     │    ║   ÁREA DE SCAN    ║    │         │
+│     │    ║                   ║    │         │
+│     │    ╚═══════════════════╝    │         │
+│     │                             │         │
+│     └─────────────────────────────┘         │
+│                                             │
+├─────────────────────────────────────────────┤
+│  📸 Escaneando QR Code...                   │
+│                                             │
+│  ┌────────────────────────────────────────┐ │
+│  │ 📷 Tirar Foto do QR Code               │ │
+│  └────────────────────────────────────────┘ │
+│                                             │
+│  ┌────────────────────────────────────────┐ │
+│  │ ⌨️ Digitar Chave Manualmente           │ │
+│  └────────────────────────────────────────┘ │
+│                                             │
+│  💡 Se a leitura estiver difícil, tente:   │
+│  • Aumentar a iluminação                    │
+│  • Aproximar a câmera do QR Code            │
+│  • Usar o botão "Tirar Foto"                │
+└─────────────────────────────────────────────┘
+```
+
+## Arquivos a modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/QRCodeScannerWeb.tsx` | Reescrever | Usar `html5-qrcode` com configurações otimizadas |
+
+## Comparação: Antes vs Depois
+
+| Aspecto | Antes | Depois |
+|---------|-------|--------|
+| FPS | 2-3 (padrão) | 15 |
+| Resolução | Padrão do navegador | 1920x1080 (ideal) |
+| Foco | Automático básico | Contínuo |
+| Exposição | Automático básico | Contínua |
+| API de detecção | ZXing (JavaScript) | BarcodeDetector nativo (quando disponível) |
+| QR Box | Fixo 288x288 | Dinâmico 80% da tela |
+| Fallback | Nenhum | Captura de foto |
+| Flash | Simulado | API nativa |
+
+## Benefícios esperados
+
+1. **Velocidade**: Detecção 3-5x mais rápida
+2. **Precisão**: Melhor leitura em condições adversas
+3. **Iluminação**: Flash real + exposição automática
+4. **Fallback**: Se tempo real falhar, tira foto
+5. **Compatibilidade**: Funciona em mais navegadores
+
+## Limitações conhecidas
+
+- A versão web nunca será tão boa quanto ML Kit nativo
+- Alguns navegadores antigos não suportam BarcodeDetector API
+- Flash depende do hardware (nem todos smartphones suportam via web)
+- A entrada manual de 44 dígitos continua sendo o fallback definitivo
 

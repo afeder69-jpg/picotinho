@@ -189,6 +189,7 @@ export type Database = {
           categoria: string
           compra_id: string | null
           created_at: string
+          ean_comercial: string | null
           granel: boolean | null
           id: string
           imagem_url: string | null
@@ -218,6 +219,7 @@ export type Database = {
           categoria: string
           compra_id?: string | null
           created_at?: string
+          ean_comercial?: string | null
           granel?: boolean | null
           id?: string
           imagem_url?: string | null
@@ -247,6 +249,7 @@ export type Database = {
           categoria?: string
           compra_id?: string | null
           created_at?: string
+          ean_comercial?: string | null
           granel?: boolean | null
           id?: string
           imagem_url?: string | null
