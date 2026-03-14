@@ -1500,7 +1500,7 @@ serve(async (req) => {
           }
         }
         
-        // ✅ Atualizar produto com dados normalizados (de IA ou fuzzy)
+        // ✅ Atualizar produto com dados normalizados (de EAN, IA ou fuzzy)
         if (resultado?.found && resultado.master) {
           produto.sku_global = resultado.master.sku_global;
           produto.produto_master_id = resultado.master.id;
@@ -1511,6 +1511,32 @@ serve(async (req) => {
           produto.nome_base = resultado.master.nome_base;
           produto.imagem_url = resultado.master.imagem_url;
           masterEncontrados++;
+          
+          // ✅ Persistência segura do EAN no master (se o master ainda não tem codigo_barras)
+          if (produto.ean_comercial && !resultado.master.codigo_barras) {
+            try {
+              // Verificar se esse EAN já não está em outro master
+              const { data: eanExistente } = await supabase
+                .from('produtos_master_global')
+                .select('id')
+                .eq('codigo_barras', produto.ean_comercial)
+                .neq('id', resultado.master.id)
+                .limit(1);
+              
+              if (!eanExistente || eanExistente.length === 0) {
+                // Seguro gravar — EAN não existe em outro master
+                await supabase
+                  .from('produtos_master_global')
+                  .update({ codigo_barras: produto.ean_comercial })
+                  .eq('id', resultado.master.id);
+                console.log(`🔢 EAN ${produto.ean_comercial} salvo no master ${resultado.master.id}`);
+              } else {
+                console.warn(`⚠️ EAN ${produto.ean_comercial} já existe em outro master (${eanExistente[0].id}) — não gravado`);
+              }
+            } catch (eanSaveErr: any) {
+              console.error(`⚠️ Erro ao salvar EAN no master: ${eanSaveErr.message}`);
+            }
+          }
           
           console.log(`✅ Normalizado: ${produto.produto_nome} (SKU: ${produto.sku_global})`);
         } else {
