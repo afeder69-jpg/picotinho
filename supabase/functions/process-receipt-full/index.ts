@@ -91,6 +91,17 @@ function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): {
   return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
 }
 
+  // 🔢 Limpar e validar EAN/GTIN (somente dígitos, rejeitar inválidos)
+  function limparEAN(valor: any): string | null {
+    if (!valor || typeof valor !== 'string') return null;
+    const limpo = valor.trim().replace(/\D/g, '');
+    if (!limpo || limpo.length < 8) return null;
+    // Rejeitar valores inválidos conhecidos
+    const invalidos = ['0', '00000000', '0000000000000', 'SEM GTIN', 'SEM EAN'];
+    if (invalidos.includes(valor.trim().toUpperCase()) || /^0+$/.test(limpo)) return null;
+    return limpo;
+  }
+
   // 🧹 Limpar sufixos de GRANEL e unidades do nome antes do matching
   function limparUnidadesMedida(nome: string): string {
     return nome

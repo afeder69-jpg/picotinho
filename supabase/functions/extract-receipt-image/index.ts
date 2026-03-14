@@ -146,6 +146,7 @@ REGRAS CRÍTICAS DE CATEGORIZAÇÃO:
     {
       "descricao": "Nome limpo do produto",
       "codigo": "código se disponível",
+      "codigo_barras": "EAN/GTIN numérico do produto se visível na nota, ou null",
       "quantidade": 1.0,
       "unidade": "UN/KG/L etc",
       "valor_unitario": 0.00,
