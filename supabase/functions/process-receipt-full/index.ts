@@ -1354,6 +1354,7 @@ serve(async (req) => {
           compra_id: nota.compra_id,
           origem: "nota_fiscal",
           imagem_url: null, // Será preenchido ao encontrar master
+          ean_comercial: item.ean_comercial || null, // ✅ Propagar EAN do item
         });
       }
     }
