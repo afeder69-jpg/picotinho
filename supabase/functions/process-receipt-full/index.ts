@@ -1266,7 +1266,8 @@ serve(async (req) => {
           quantidade,
           valor_unitario: valorUnitario,
           unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
-          data_compra: dataCompra
+          data_compra: dataCompra,
+          ean_comercial: limparEAN(item.codigo_barras || item.codigo_barras_comercial || item.ean_comercial) // ✅ EAN
         };
       });
       console.log(`📦 ${itens.length} produtos carregados do WhatsApp/Upload`);
