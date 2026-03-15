@@ -3,7 +3,7 @@ import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 import { Capacitor } from '@capacitor/core';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X, Keyboard } from 'lucide-react';
+import { X, Keyboard, QrCode, ArrowLeft } from 'lucide-react';
 import ManualKeyInput from './ManualKeyInput';
 import { construirUrlConsulta } from '@/lib/documentDetection';
 
@@ -12,14 +12,14 @@ interface QRCodeScannerProps {
   onClose: () => void;
 }
 
+type ScannerMode = 'choose' | 'scanning' | 'manual';
+
 const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
-  const [isScanning, setIsScanning] = useState(false);
-  const [showManualInput, setShowManualInput] = useState(false);
+  const [mode, setMode] = useState<ScannerMode>('choose');
 
   const handleManualKeySubmit = async (chaveAcesso: string) => {
     console.log('⌨️ [MANUAL KEY] Chave digitada:', chaveAcesso);
     
-    // Construir URL de consulta a partir da chave
     const url = construirUrlConsulta(chaveAcesso);
     console.log('🔗 [MANUAL KEY] URL construída:', url);
     
@@ -28,13 +28,10 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
       description: "Processando nota fiscal...",
     });
     
-    setShowManualInput(false);
-    await stopScan();
     onScanSuccess(url);
   };
 
   useEffect(() => {
-    // Verificar se está em plataforma nativa
     if (!Capacitor.isNativePlatform()) {
       toast({
         title: "Scanner não disponível",
@@ -42,20 +39,11 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
         variant: "destructive"
       });
       onClose();
-      return;
     }
-
-    startScan();
-
-    // Cleanup ao desmontar componente
-    return () => {
-      stopScan();
-    };
   }, []);
 
   const startScan = async () => {
     try {
-      // Solicitar permissões de câmera
       const { camera } = await BarcodeScanner.requestPermissions();
       
       if (camera !== 'granted') {
@@ -64,7 +52,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
           description: "É necessário permitir o acesso à câmera para usar o scanner",
           variant: "destructive"
         });
-        onClose();
+        setMode('choose');
         return;
       }
 
@@ -83,7 +71,6 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
             duration: 10000,
           });
           
-          // Listener para progresso de instalação
           const listener = await BarcodeScanner.addListener(
             'googleBarcodeScannerModuleInstallProgress',
             (event) => {
@@ -99,42 +86,18 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
             }
           );
           
-          // Iniciar instalação
           await BarcodeScanner.installGoogleBarcodeScannerModule();
-          
-          // Aguardar alguns segundos para garantir que a instalação foi concluída
           await new Promise(resolve => setTimeout(resolve, 3000));
-          
-          // Remover listener
           await listener.remove();
         } else {
           console.log('✅ Módulo ML Kit já disponível!');
         }
       }
 
-      document.body.classList.add('scanner-active');
-      setIsScanning(true);
+      setMode('scanning');
 
-      toast({
-        title: "Scanner Ativo",
-        description: "Aponte para o QR Code da nota fiscal",
-      });
-
-      // Timeout de segurança de 30 segundos
-      const scanTimeout = setTimeout(async () => {
-        console.error('Scanner timeout - travou após 30s');
-        toast({
-          title: "Scanner travado",
-          description: "O scanner demorou muito para responder. Tente novamente.",
-          variant: "destructive"
-        });
-        await stopScan();
-      }, 30000);
-
-      // Iniciar scanner
+      // Iniciar scanner nativo
       const result = await BarcodeScanner.scan();
-      
-      clearTimeout(scanTimeout);
       
       if (result.barcodes && result.barcodes.length > 0) {
         const scannedData = result.barcodes[0].rawValue;
@@ -145,15 +108,26 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
         });
         
         onScanSuccess(scannedData);
+      } else {
+        // Nenhum código detectado, voltar para escolha
+        setMode('choose');
       }
       
-      await stopScan();
+    } catch (error: any) {
+      console.log('📋 [SCANNER] Scanner finalizado:', error?.message || error);
       
-    } catch (error) {
-      console.error('❌ Erro ao escanear:', error);
+      // Detectar cancelamento do usuário (ML Kit retorna "canceled" ou "cancelled")
+      const msg = (error?.message || '').toLowerCase();
+      const isCancelled = msg.includes('cancel') || msg.includes('closed') || msg.includes('dismissed');
+      
+      if (isCancelled) {
+        console.log('ℹ️ [SCANNER] Usuário cancelou o scanner');
+        setMode('choose');
+        return;
+      }
       
       // Verificar se é erro de módulo não instalado
-      if (error.message?.includes('module') || error.message?.includes('DEPENDENCIES')) {
+      if (msg.includes('module') || msg.includes('dependencies')) {
         toast({
           title: "Erro: Módulo não instalado",
           description: "Reinstale o aplicativo ou verifique sua conexão com internet.",
@@ -168,19 +142,7 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
         });
       }
       
-      await stopScan();
-    }
-  };
-
-  const stopScan = async () => {
-    try {
-      setIsScanning(false);
-      document.body.classList.remove('scanner-active');
-      await BarcodeScanner.stopScan();
-      onClose();
-    } catch (error) {
-      console.error('Erro ao parar scanner:', error);
-      onClose();
+      setMode('choose');
     }
   };
 
@@ -188,51 +150,75 @@ const QRCodeScanner = ({ onScanSuccess, onClose }: QRCodeScannerProps) => {
     return null;
   }
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-between p-6 bg-transparent">
-      {/* Overlay para fechar */}
-      <div className="absolute inset-0 bg-black/50" onClick={stopScan} />
-      
-      {/* Botão de fechar */}
-      <div className="relative z-10 w-full flex justify-end">
-        <Button
-          variant="destructive"
-          size="lg"
-          className="rounded-full shadow-lg"
-          onClick={stopScan}
-        >
-          <X className="w-6 h-6" />
-          <span className="ml-2">Cancelar</span>
-        </Button>
-      </div>
-
-      {/* Instruções */}
-      {isScanning && (
-        <div className="relative z-10 bg-background/90 backdrop-blur-sm p-6 rounded-lg shadow-lg text-center max-w-sm mx-4">
-          <p className="text-lg font-semibold">Aponte a câmera para o QR Code</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            O scanner detectará automaticamente o código
-          </p>
-          
-          {/* Botão de entrada manual */}
-          <Button
-            variant="outline"
-            className="w-full mt-4"
-            onClick={() => setShowManualInput(true)}
-          >
-            <Keyboard className="w-4 h-4 mr-2" />
-            Digitar Chave Manualmente
-          </Button>
-        </div>
-      )}
-      
-      {/* Modal de entrada manual */}
-      {showManualInput && (
+  // Tela de entrada manual
+  if (mode === 'manual') {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70">
         <ManualKeyInput
           onSubmit={handleManualKeySubmit}
-          onClose={() => setShowManualInput(false)}
+          onClose={() => setMode('choose')}
         />
-      )}
+      </div>
+    );
+  }
+
+  // Tela de escolha (modo padrão)
+  if (mode === 'choose') {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background">
+        {/* Header */}
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4">
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={onClose}
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Voltar
+          </Button>
+        </div>
+
+        {/* Conteúdo central */}
+        <div className="flex flex-col items-center gap-8 px-6 max-w-sm w-full">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">Ler Nota Fiscal</h2>
+            <p className="text-muted-foreground">
+              Escolha como deseja informar a nota fiscal
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-4 w-full">
+            <Button
+              size="lg"
+              className="w-full h-20 text-lg flex flex-col items-center gap-1"
+              onClick={startScan}
+            >
+              <QrCode className="w-7 h-7" />
+              Escanear QR Code
+            </Button>
+
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full h-20 text-lg flex flex-col items-center gap-1"
+              onClick={() => setMode('manual')}
+            >
+              <Keyboard className="w-7 h-7" />
+              Digitar Chave Manualmente
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Modo scanning - tela mínima (scanner nativo cobre tudo)
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-white text-lg">Abrindo scanner...</p>
+      </div>
     </div>
   );
 };

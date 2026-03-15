@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X, Flashlight, FlashlightOff, Keyboard, Camera } from 'lucide-react';
+import { X, Flashlight, FlashlightOff, Keyboard } from 'lucide-react';
 import ManualKeyInput from './ManualKeyInput';
 import { construirUrlConsulta } from '@/lib/documentDetection';
 
