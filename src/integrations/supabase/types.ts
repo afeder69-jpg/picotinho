@@ -3259,6 +3259,14 @@ export type Database = {
         }[]
       }
       limpar_sessoes_expiradas: { Args: never; Returns: undefined }
+      listar_estabelecimentos_pendentes: {
+        Args: { p_incluir_normalizados?: boolean; p_termo_busca?: string }
+        Returns: {
+          cnpj_estabelecimento: string
+          nome_estabelecimento: string
+          total_notas: number
+        }[]
+      }
       log_profile_access: {
         Args: { access_type: string; user_uuid: string }
         Returns: undefined

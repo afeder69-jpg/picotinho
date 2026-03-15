@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History } from "lucide-react";
+import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History, FileText } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { format } from "date-fns";
 
@@ -26,6 +26,12 @@ interface Normalizacao {
   updated_at: string;
 }
 
+interface EstabelecimentoPendente {
+  nome_estabelecimento: string;
+  cnpj_estabelecimento: string | null;
+  total_notas: number;
+}
+
 const NormalizacoesEstabelecimentos = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -37,6 +43,11 @@ const NormalizacoesEstabelecimentos = () => {
   const [submitting, setSubmitting] = useState(false);
   const [limpandoDuplicatas, setLimpandoDuplicatas] = useState(false);
   
+  // Estado para estabelecimentos pendentes
+  const [pendentes, setPendentes] = useState<EstabelecimentoPendente[]>([]);
+  const [loadingPendentes, setLoadingPendentes] = useState(true);
+  const [pendentesBusca, setPendentesBusca] = useState<EstabelecimentoPendente[]>([]);
+
   // Estado para normalização retroativa
   const [isRetroativaDialogOpen, setIsRetroativaDialogOpen] = useState(false);
   const [isAnaliseDialogOpen, setIsAnaliseDialogOpen] = useState(false);
@@ -57,7 +68,20 @@ const NormalizacoesEstabelecimentos = () => {
   useEffect(() => {
     verificarAcessoMaster();
     carregarNormalizacoes();
+    carregarPendentes();
   }, []);
+
+  // Busca com debounce nos pendentes
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setPendentesBusca([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      buscarEstabelecimentos(searchTerm.trim());
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const verificarAcessoMaster = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -111,6 +135,48 @@ const NormalizacoesEstabelecimentos = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const carregarPendentes = async () => {
+    try {
+      setLoadingPendentes(true);
+      const { data, error } = await supabase.rpc('listar_estabelecimentos_pendentes', {
+        p_incluir_normalizados: false,
+        p_termo_busca: '',
+      });
+
+      if (error) throw error;
+      setPendentes((data as EstabelecimentoPendente[]) || []);
+    } catch (error) {
+      console.error("Erro ao carregar estabelecimentos pendentes:", error);
+    } finally {
+      setLoadingPendentes(false);
+    }
+  };
+
+  const buscarEstabelecimentos = async (termo: string) => {
+    try {
+      const { data, error } = await supabase.rpc('listar_estabelecimentos_pendentes', {
+        p_incluir_normalizados: true,
+        p_termo_busca: termo,
+      });
+
+      if (error) throw error;
+      setPendentesBusca((data as EstabelecimentoPendente[]) || []);
+    } catch (error) {
+      console.error("Erro ao buscar estabelecimentos:", error);
+    }
+  };
+
+  const handleNormalizarPendente = (item: EstabelecimentoPendente) => {
+    setEditingItem(null);
+    setFormData({
+      nome_original: item.nome_estabelecimento || "",
+      nome_normalizado: "",
+      cnpj_original: item.cnpj_estabelecimento || "",
+      ativo: true,
+    });
+    setIsDialogOpen(true);
   };
 
   const handleSubmit = async () => {
@@ -209,6 +275,7 @@ const NormalizacoesEstabelecimentos = () => {
       setIsDialogOpen(false);
       resetForm();
       carregarNormalizacoes();
+      carregarPendentes();
     } catch (error: any) {
       console.error("Erro ao salvar normalização:", error);
       
@@ -257,6 +324,7 @@ const NormalizacoesEstabelecimentos = () => {
       });
 
       carregarNormalizacoes();
+      carregarPendentes();
     } catch (error) {
       console.error("Erro ao remover normalização:", error);
       toast({
@@ -375,13 +443,22 @@ const NormalizacoesEstabelecimentos = () => {
 
   const normalizacoesFiltradas = normalizacoes.filter((norm) => {
     const searchLower = searchTerm.toLowerCase();
-    const cnpjSearch = searchTerm.replace(/\D/g, ''); // Apenas números para busca de CNPJ
+    const cnpjSearch = searchTerm.replace(/\D/g, '');
     return (
       norm.nome_original.toLowerCase().includes(searchLower) ||
       norm.nome_normalizado.toLowerCase().includes(searchLower) ||
       (norm.cnpj_original && norm.cnpj_original.includes(cnpjSearch))
     );
   });
+
+  const formatCnpj = (cnpj: string) => {
+    return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  };
+
+  // Determinar quais estabelecimentos mostrar na busca (excluir os que já têm regra nas normalizacoesFiltradas)
+  const estabelecimentosBuscaExibir = searchTerm.trim()
+    ? pendentesBusca
+    : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -689,42 +766,177 @@ const NormalizacoesEstabelecimentos = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Total de Normalizações</CardDescription>
+              <CardDescription>Normalizações Ativas</CardDescription>
               <CardTitle className="text-3xl">{normalizacoes.length}</CardTitle>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Normalizações Ativas</CardDescription>
+              <CardDescription>Pendentes de Normalização</CardDescription>
+              <CardTitle className="text-3xl text-orange-500">
+                {loadingPendentes ? "..." : pendentes.length}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>Total Geral</CardDescription>
               <CardTitle className="text-3xl">
-                {normalizacoes.filter((n) => n.ativo).length}
+                {loadingPendentes ? "..." : normalizacoes.length + pendentes.length}
               </CardTitle>
             </CardHeader>
           </Card>
         </div>
 
-        {/* Lista */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        ) : normalizacoesFiltradas.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Building2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                {searchTerm
-                  ? "Nenhuma normalização encontrada com esses termos."
-                  : "Nenhuma normalização cadastrada ainda."}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
+        {/* Resultados de busca global */}
+        {searchTerm.trim() && estabelecimentosBuscaExibir.length > 0 && (
           <div className="space-y-3">
-            {normalizacoesFiltradas.map((norm) => (
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Search className="w-5 h-5" />
+              Resultados da busca em notas fiscais
+            </h3>
+            {estabelecimentosBuscaExibir.map((item, idx) => (
+              <Card key={`busca-${idx}`} className="border-dashed">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Building2 className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                        <CardTitle className="text-lg truncate">
+                          {item.nome_estabelecimento}
+                        </CardTitle>
+                      </div>
+                      {item.cnpj_estabelecimento && (
+                        <div className="text-xs font-mono text-muted-foreground mb-1">
+                          CNPJ: {formatCnpj(item.cnpj_estabelecimento)}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="gap-1">
+                          <FileText className="w-3 h-3" />
+                          {item.total_notas} {item.total_notas === 1 ? 'nota' : 'notas'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleNormalizarPendente(item)}
+                      className="gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Normalizar
+                    </Button>
+                  </div>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Estabelecimentos Pendentes de Normalização */}
+        {!searchTerm.trim() && (
+          <>
+            {loadingPendentes ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : pendentes.length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold flex items-center gap-2 text-orange-600">
+                  <Building2 className="w-5 h-5" />
+                  Estabelecimentos Pendentes de Normalização ({pendentes.length})
+                </h3>
+                {pendentes.map((item, idx) => (
+                  <Card key={`pendente-${idx}`} className="border-l-4 border-l-orange-400 transition-shadow hover:shadow-md">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Building2 className="w-5 h-5 text-orange-500 flex-shrink-0" />
+                            <CardTitle className="text-lg truncate">
+                              {item.nome_estabelecimento}
+                            </CardTitle>
+                          </div>
+                          {item.cnpj_estabelecimento && (
+                            <div className="text-xs font-mono text-muted-foreground mb-1">
+                              CNPJ: {formatCnpj(item.cnpj_estabelecimento)}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="gap-1">
+                              <FileText className="w-3 h-3" />
+                              {item.total_notas} {item.total_notas === 1 ? 'nota' : 'notas'}
+                            </Badge>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleNormalizarPendente(item)}
+                          className="gap-1"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Normalizar
+                        </Button>
+                      </div>
+                    </CardHeader>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <CheckCircle className="w-10 h-10 mx-auto mb-3 text-green-500" />
+                  <p className="text-muted-foreground">
+                    Todos os estabelecimentos já foram normalizados!
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* Separator */}
+        {!searchTerm.trim() && normalizacoes.length > 0 && (
+          <Separator />
+        )}
+
+        {/* Lista de Normalizações Existentes */}
+        <div className="space-y-3">
+          {normalizacoes.length > 0 && (
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              Normalizações Ativas ({normalizacoesFiltradas.length})
+            </h3>
+          )}
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : normalizacoesFiltradas.length === 0 ? (
+            !searchTerm && normalizacoes.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Building2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    Nenhuma normalização cadastrada ainda.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : searchTerm ? (
+              <Card>
+                <CardContent className="py-6 text-center">
+                  <p className="text-muted-foreground text-sm">
+                    Nenhuma normalização ativa encontrada com esses termos.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null
+          ) : (
+            normalizacoesFiltradas.map((norm) => (
               <Card key={norm.id} className="transition-shadow hover:shadow-md">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-4">
@@ -740,7 +952,7 @@ const NormalizacoesEstabelecimentos = () => {
                       </div>
                       {norm.cnpj_original && (
                         <div className="text-xs font-mono text-muted-foreground mb-1">
-                          CNPJ: {norm.cnpj_original.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}
+                          CNPJ: {formatCnpj(norm.cnpj_original)}
                         </div>
                       )}
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -792,9 +1004,9 @@ const NormalizacoesEstabelecimentos = () => {
                   </div>
                 </CardHeader>
               </Card>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
