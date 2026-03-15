@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X, Flashlight, FlashlightOff, Keyboard, Camera } from 'lucide-react';
+import { X, Flashlight, FlashlightOff, Keyboard } from 'lucide-react';
 import ManualKeyInput from './ManualKeyInput';
 import { construirUrlConsulta } from '@/lib/documentDetection';
 
@@ -25,7 +25,7 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
+  
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScannedRef = useRef(false);
@@ -216,45 +216,6 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     }
   }, [torchEnabled, torchSupported]);
 
-  const capturePhoto = useCallback(async () => {
-    if (!scannerRef.current || isCapturing) return;
-
-    setIsCapturing(true);
-    
-    try {
-      // Pausar scanner para captura
-      await scannerRef.current.pause(true);
-      
-      toast({
-        title: "📸 Foto capturada",
-        description: "Analisando imagem...",
-      });
-
-      // Tentar escanear o frame atual
-      // Como não temos acesso direto ao frame, vamos retomar e aguardar
-      await scannerRef.current.resume();
-      
-      // Aguardar um pouco para o próximo scan
-      setTimeout(() => {
-        setIsCapturing(false);
-        if (!hasScannedRef.current) {
-          toast({
-            title: "QR Code não detectado",
-            description: "Tente aproximar a câmera ou use a entrada manual",
-            variant: "destructive"
-          });
-        }
-      }, 2000);
-    } catch (e) {
-      console.error('❌ [CAPTURE] Erro:', e);
-      setIsCapturing(false);
-      
-      // Tentar retomar o scanner
-      try {
-        await scannerRef.current?.resume();
-      } catch {}
-    }
-  }, [isCapturing]);
 
   const handleClose = useCallback(() => {
     stopScanner();
@@ -354,16 +315,6 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               </p>
 
               <div className="flex flex-col gap-2">
-                {/* Botão de captura de foto */}
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={capturePhoto}
-                  disabled={isCapturing}
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  {isCapturing ? 'Analisando...' : 'Tirar Foto do QR Code'}
-                </Button>
 
                 {/* Botão de entrada manual */}
                 <Button
@@ -379,7 +330,7 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               {/* Dicas */}
               <div className="mt-3 pt-3 border-t border-border/50">
                 <p className="text-xs text-muted-foreground text-center">
-                  💡 Dicas: Aumente a iluminação • Aproxime a câmera • Use "Tirar Foto" se difícil
+                  💡 Dicas: Aumente a iluminação • Aproxime a câmera do QR Code
                 </p>
               </div>
             </div>
