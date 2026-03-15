@@ -216,45 +216,6 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     }
   }, [torchEnabled, torchSupported]);
 
-  const capturePhoto = useCallback(async () => {
-    if (!scannerRef.current || isCapturing) return;
-
-    setIsCapturing(true);
-    
-    try {
-      // Pausar scanner para captura
-      await scannerRef.current.pause(true);
-      
-      toast({
-        title: "📸 Foto capturada",
-        description: "Analisando imagem...",
-      });
-
-      // Tentar escanear o frame atual
-      // Como não temos acesso direto ao frame, vamos retomar e aguardar
-      await scannerRef.current.resume();
-      
-      // Aguardar um pouco para o próximo scan
-      setTimeout(() => {
-        setIsCapturing(false);
-        if (!hasScannedRef.current) {
-          toast({
-            title: "QR Code não detectado",
-            description: "Tente aproximar a câmera ou use a entrada manual",
-            variant: "destructive"
-          });
-        }
-      }, 2000);
-    } catch (e) {
-      console.error('❌ [CAPTURE] Erro:', e);
-      setIsCapturing(false);
-      
-      // Tentar retomar o scanner
-      try {
-        await scannerRef.current?.resume();
-      } catch {}
-    }
-  }, [isCapturing]);
 
   const handleClose = useCallback(() => {
     stopScanner();
