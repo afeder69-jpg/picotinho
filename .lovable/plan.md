@@ -1,240 +1,51 @@
 
 
-# Otimização do Scanner de QR Code Web
+# Plano: Listagem Global de Estabelecimentos Pendentes para Masters
 
-## Diagnóstico do Problema
+## Situação Atual
 
-O scanner web atual (`QRCodeScannerWeb.tsx`) usa `@yudiel/react-qr-scanner` baseado em ZXing com configurações básicas:
+A tela `NormalizacoesEstabelecimentos.tsx` lista apenas as **regras de normalização já criadas** da tabela `normalizacoes_estabelecimentos`. Ela **não mostra** os estabelecimentos brutos vindos das notas fiscais que ainda precisam ser normalizados.
 
-```typescript
-// Configuração atual - muito básica
-<Scanner
-  constraints={{
-    facingMode: 'environment',
-    aspectRatio: 1,  // ❌ Pode limitar qualidade
-  }}
-  formats={['qr_code', 'data_matrix']}
-  scanDelay={300}  // ❌ 300ms pode ser muito lento
-/>
-```
+A tabela `notas_imagens` tem RLS restrita a `usuario_id = auth.uid()`, impedindo ver dados de outros usuários mesmo sendo master.
 
-### Por que a versão nativa é melhor?
+## O Que Será Feito
 
-| Característica | APK (ML Kit) | Web (ZXing) |
-|---------------|--------------|-------------|
-| Engine | Google ML Kit (Machine Learning) | ZXing (algoritmo tradicional) |
-| Iluminação | Compensação automática por IA | Dependente da câmera |
-| Velocidade | Otimizado por GPU/NPU | Processamento em JavaScript |
-| Resolução | Acesso nativo à câmera | Limitado por APIs do navegador |
+### 1. Migration: Função SECURITY DEFINER
 
-## Estratégia de Otimização
+Criar `listar_estabelecimentos_pendentes()` que:
+- Extrai estabelecimentos distintos (nome + CNPJ) de `notas_imagens.dados_extraidos` de **todos os usuários** (bypass RLS via SECURITY DEFINER)
+- Por padrão, exclui estabelecimentos que já possuem regra ativa em `normalizacoes_estabelecimentos` (match por CNPJ ou nome)
+- Aceita parâmetro `incluir_normalizados` para busca retornar todos
+- Aceita parâmetro `termo_busca` para filtrar por nome ou CNPJ
+- Retorna: nome, CNPJ, contagem de notas
 
-### 1. Substituir biblioteca por `html5-qrcode`
+### 2. Alteração no frontend (`NormalizacoesEstabelecimentos.tsx`)
 
-O projeto já tem `html5-qrcode` instalado (v2.3.8). Esta biblioteca oferece:
+**Listagem padrão (ao abrir):**
+- Nova seção "Estabelecimentos Pendentes de Normalização" acima da lista de regras existentes
+- Chama a função para obter estabelecimentos pendentes
+- Mostra cada um com nome + CNPJ + quantidade de notas
+- Botão "Normalizar" que abre o formulário existente pré-preenchido com nome_original e cnpj_original
 
-- **`useBarCodeDetectorIfSupported`**: Usa API nativa do navegador quando disponível (Chrome 83+)
-- **Controle granular de câmera**: Exposição, foco, resolução
-- **Flash/torch nativo**: Melhor controle de iluminação
+**Busca:**
+- Quando o campo de busca tem texto, busca também com `incluir_normalizados = true` + `termo_busca`
+- Permite encontrar e criar/editar normalizações para qualquer estabelecimento
 
-### 2. Configurações avançadas para cupons fiscais
+**Regras existentes:**
+- Continuam listadas abaixo dos pendentes
+- CRUD intacto
 
-```typescript
-const config = {
-  fps: 15,                          // ⬆️ Aumentar de 2 para 15
-  qrbox: { width: 300, height: 300 }, // Área de detecção maior
-  aspectRatio: 1.0,
-  disableFlip: true,                // Performance: cupons não são espelhados
-  experimentalFeatures: {
-    useBarCodeDetectorIfSupported: true  // API nativa quando disponível
-  },
-  videoConstraints: {
-    facingMode: 'environment',
-    width: { ideal: 1920 },         // Maior resolução
-    height: { ideal: 1080 },
-    advanced: [
-      { focusMode: 'continuous' },  // Foco contínuo
-      { exposureMode: 'continuous' } // Exposição automática
-    ]
-  }
-};
-```
+### Arquivos Modificados
 
-### 3. Fallback de foto estática
+| Arquivo | Alteração |
+|---|---|
+| Migration SQL (nova) | Função `listar_estabelecimentos_pendentes()` |
+| `NormalizacoesEstabelecimentos.tsx` | Novo estado + chamada à função + seção de pendentes + pré-preenchimento do form |
 
-Para casos onde o escaneamento em tempo real falha:
+### Garantias
 
-- Botão "Tirar Foto do QR Code"
-- Captura imagem estática
-- Processa com mais tempo e precisão
-- Funciona melhor em condições de pouca luz
-
-## Implementação Detalhada
-
-### Novo componente: `QRCodeScannerWebOptimized.tsx`
-
-```typescript
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-
-// Formatos otimizados para cupons fiscais brasileiros
-const formatsToSupport = [
-  Html5QrcodeSupportedFormats.QR_CODE,
-  Html5QrcodeSupportedFormats.DATA_MATRIX,
-];
-
-// Configuração de câmera otimizada
-const cameraConfig = {
-  fps: 15,
-  qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-    // QR box dinâmico - 80% da área visível
-    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-    return { width: minEdge * 0.8, height: minEdge * 0.8 };
-  },
-  aspectRatio: 1.0,
-  disableFlip: true,
-  experimentalFeatures: {
-    useBarCodeDetectorIfSupported: true
-  }
-};
-
-// Após iniciar, aplicar configurações avançadas de câmera
-async function applyAdvancedSettings(scanner: Html5Qrcode) {
-  try {
-    const capabilities = scanner.getRunningTrackCapabilities();
-    
-    // Ativar foco contínuo se disponível
-    if (capabilities.focusMode?.includes('continuous')) {
-      await scanner.applyVideoConstraints({
-        // @ts-ignore - API experimental
-        advanced: [{ focusMode: 'continuous' }]
-      });
-    }
-    
-    // Ativar exposição automática se disponível
-    if (capabilities.exposureMode?.includes('continuous')) {
-      await scanner.applyVideoConstraints({
-        // @ts-ignore - API experimental
-        advanced: [{ exposureMode: 'continuous' }]
-      });
-    }
-  } catch (e) {
-    console.log('Configurações avançadas não suportadas:', e);
-  }
-}
-```
-
-### Modo de captura de foto (fallback)
-
-```typescript
-const capturePhoto = async () => {
-  // Pausar scanner de vídeo
-  await scanner.pause(true);
-  
-  // Capturar frame atual
-  const imageData = scanner.getRunningTrackCameraSettings();
-  
-  // Processar imagem estática com mais tempo
-  const result = await Html5Qrcode.scanFile(imageData, {
-    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-    experimentalFeatures: {
-      useBarCodeDetectorIfSupported: true
-    }
-  });
-  
-  return result;
-};
-```
-
-### Controle de lanterna (flash)
-
-```typescript
-const toggleTorch = async () => {
-  try {
-    const capabilities = scanner.getRunningTrackCapabilities();
-    if (capabilities.torch) {
-      const currentSettings = scanner.getRunningTrackSettings();
-      await scanner.applyVideoConstraints({
-        // @ts-ignore - API experimental
-        advanced: [{ torch: !currentSettings.torch }]
-      });
-      setTorchEnabled(!torchEnabled);
-    }
-  } catch (e) {
-    toast({
-      title: "Flash não suportado",
-      description: "Este dispositivo não suporta controle de flash",
-      variant: "destructive"
-    });
-  }
-};
-```
-
-## Interface do usuário melhorada
-
-```
-┌─────────────────────────────────────────────┐
-│ [🔦 Flash]                    [❌ Cancelar] │
-├─────────────────────────────────────────────┤
-│                                             │
-│     ┌─────────────────────────────┐         │
-│     │                             │         │
-│     │    ╔═══════════════════╗    │         │
-│     │    ║                   ║    │         │
-│     │    ║   ÁREA DE SCAN    ║    │         │
-│     │    ║                   ║    │         │
-│     │    ╚═══════════════════╝    │         │
-│     │                             │         │
-│     └─────────────────────────────┘         │
-│                                             │
-├─────────────────────────────────────────────┤
-│  📸 Escaneando QR Code...                   │
-│                                             │
-│  ┌────────────────────────────────────────┐ │
-│  │ 📷 Tirar Foto do QR Code               │ │
-│  └────────────────────────────────────────┘ │
-│                                             │
-│  ┌────────────────────────────────────────┐ │
-│  │ ⌨️ Digitar Chave Manualmente           │ │
-│  └────────────────────────────────────────┘ │
-│                                             │
-│  💡 Se a leitura estiver difícil, tente:   │
-│  • Aumentar a iluminação                    │
-│  • Aproximar a câmera do QR Code            │
-│  • Usar o botão "Tirar Foto"                │
-└─────────────────────────────────────────────┘
-```
-
-## Arquivos a modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/components/QRCodeScannerWeb.tsx` | Reescrever | Usar `html5-qrcode` com configurações otimizadas |
-
-## Comparação: Antes vs Depois
-
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| FPS | 2-3 (padrão) | 15 |
-| Resolução | Padrão do navegador | 1920x1080 (ideal) |
-| Foco | Automático básico | Contínuo |
-| Exposição | Automático básico | Contínua |
-| API de detecção | ZXing (JavaScript) | BarcodeDetector nativo (quando disponível) |
-| QR Box | Fixo 288x288 | Dinâmico 80% da tela |
-| Fallback | Nenhum | Captura de foto |
-| Flash | Simulado | API nativa |
-
-## Benefícios esperados
-
-1. **Velocidade**: Detecção 3-5x mais rápida
-2. **Precisão**: Melhor leitura em condições adversas
-3. **Iluminação**: Flash real + exposição automática
-4. **Fallback**: Se tempo real falhar, tira foto
-5. **Compatibilidade**: Funciona em mais navegadores
-
-## Limitações conhecidas
-
-- A versão web nunca será tão boa quanto ML Kit nativo
-- Alguns navegadores antigos não suportam BarcodeDetector API
-- Flash depende do hardware (nem todos smartphones suportam via web)
-- A entrada manual de 44 dígitos continua sendo o fallback definitivo
+- Nenhuma tabela alterada
+- RLS de `notas_imagens` inalterada
+- CRUD de normalizações intacto
+- Edge functions inalteradas
 
