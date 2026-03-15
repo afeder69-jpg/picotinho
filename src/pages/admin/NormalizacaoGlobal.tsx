@@ -1529,9 +1529,8 @@ export default function NormalizacaoGlobal() {
         setUploadingImage(false);
       }
 
-      // Atualizar produto master
+      // Atualizar produto master (sku_global não é editável após criação)
       const updateData: any = {
-        sku_global: editForm.sku_global,
         nome_padrao: editForm.nome_padrao,
         categoria: editForm.categoria,
         nome_base: editForm.nome_base,
@@ -3058,10 +3057,13 @@ export default function NormalizacaoGlobal() {
               <Input
                 id="sku_global"
                 value={editForm.sku_global}
-                onChange={(e) => setEditForm({...editForm, sku_global: e.target.value})}
+                disabled={!!produtoMasterEditando}
                 placeholder="Gerado automaticamente"
                 className="font-mono"
               />
+              {produtoMasterEditando && (
+                <p className="text-xs text-muted-foreground">O SKU não pode ser alterado após a criação.</p>
+              )}
             </div>
 
             <div className="flex items-center space-x-2">
