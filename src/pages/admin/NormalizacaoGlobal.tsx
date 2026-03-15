@@ -3057,10 +3057,13 @@ export default function NormalizacaoGlobal() {
               <Input
                 id="sku_global"
                 value={editForm.sku_global}
-                onChange={(e) => setEditForm({...editForm, sku_global: e.target.value})}
+                disabled={!!produtoMasterEditando}
                 placeholder="Gerado automaticamente"
                 className="font-mono"
               />
+              {produtoMasterEditando && (
+                <p className="text-xs text-muted-foreground">O SKU não pode ser alterado após a criação.</p>
+              )}
             </div>
 
             <div className="flex items-center space-x-2">
