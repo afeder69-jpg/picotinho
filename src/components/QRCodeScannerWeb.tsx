@@ -330,7 +330,7 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               {/* Dicas */}
               <div className="mt-3 pt-3 border-t border-border/50">
                 <p className="text-xs text-muted-foreground text-center">
-                  💡 Dicas: Aumente a iluminação • Aproxime a câmera • Use "Tirar Foto" se difícil
+                  💡 Dicas: Aumente a iluminação • Aproxime a câmera do QR Code
                 </p>
               </div>
             </div>
