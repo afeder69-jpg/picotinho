@@ -315,16 +315,6 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               </p>
 
               <div className="flex flex-col gap-2">
-                {/* Botão de captura de foto */}
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={capturePhoto}
-                  disabled={isCapturing}
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  {isCapturing ? 'Analisando...' : 'Tirar Foto do QR Code'}
-                </Button>
 
                 {/* Botão de entrada manual */}
                 <Button
