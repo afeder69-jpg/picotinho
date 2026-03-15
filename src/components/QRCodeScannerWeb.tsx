@@ -25,7 +25,7 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
+  
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScannedRef = useRef(false);
