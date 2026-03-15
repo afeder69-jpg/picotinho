@@ -1529,9 +1529,8 @@ export default function NormalizacaoGlobal() {
         setUploadingImage(false);
       }
 
-      // Atualizar produto master
+      // Atualizar produto master (sku_global não é editável após criação)
       const updateData: any = {
-        sku_global: editForm.sku_global,
         nome_padrao: editForm.nome_padrao,
         categoria: editForm.categoria,
         nome_base: editForm.nome_base,
