@@ -267,8 +267,8 @@ function mapearProdutos(nfeData: any) {
 async function processarNFe(supabase: any, userId: string, notaImagemId: string, chaveAcesso: string, dadosNFe: any): Promise<void> {
   const nfeData = dadosNFe.data?.[0];
 
-  if (!nfeData) {
-    throw new Error('Dados da NF-e não encontrados na resposta do InfoSimples');
+  if (!nfeData || typeof nfeData !== 'object') {
+    throw new Error('Resposta inválida da API de NF-e: dados da nota não encontrados');
   }
 
   const produtos = mapearProdutos(nfeData);

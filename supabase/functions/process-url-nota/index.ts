@@ -95,7 +95,7 @@ serve(async (req) => {
           chave_acesso: chave,
           uf_emitente: uf,
           modelo_documento: modelo,
-          tipo_documento: tipoDocumento || tipoDetectado,
+          tipo_documento: tipoDetectado,
           url_original: url,
           metodo_captura: 'qrcode_url_direct',
           timestamp: new Date().toISOString()
