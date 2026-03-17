@@ -75,7 +75,7 @@ serve(async (req) => {
     const tipoDetectado = modelo === '55' ? 'NFe' : modelo === '65' ? 'NFCe' : null;
 
     if (!tipoDetectado) {
-      throw new Error(`Modelo de documento inválido na chave de acesso: ${modelo}`);
+      throw new Error(`Modelo de documento inválido na chave de acesso: ${modelo}. Use uma chave válida de NF-e (55) ou NFC-e (65)`);
     }
 
     console.log('🔑 Chave de acesso extraída:', `${chave.substring(0, 4)}...${chave.substring(40)}`);
@@ -95,7 +95,7 @@ serve(async (req) => {
           chave_acesso: chave,
           uf_emitente: uf,
           modelo_documento: modelo,
-          tipo_documento: tipoDocumento || tipoDetectado,
+          tipo_documento: tipoDetectado,
           url_original: url,
           metodo_captura: 'qrcode_url_direct',
           timestamp: new Date().toISOString()

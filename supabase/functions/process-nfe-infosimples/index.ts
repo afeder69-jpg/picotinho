@@ -221,7 +221,7 @@ function mapearProdutos(nfeData: any) {
       prod.valor_unitario_comercial,
       prod.vUnCom,
       prod.valor,
-      prod.vProd
+      quantidade > 0 ? parseBrazilianFloat(prod.vProd) / quantidade : null
     ));
 
     const valorTotal = parseBrazilianFloat(firstNonEmpty(
@@ -230,26 +230,35 @@ function mapearProdutos(nfeData: any) {
       quantidade * valorUnitario
     ));
 
+    const codigoBarras = limparDigitos(firstNonEmpty(
+      prod.codigo_barras_comercial,
+      prod.ean_comercial,
+      prod.codigo_barras,
+      prod.cEAN,
+      prod.cEANTrib,
+      prod.codigo_barras_tributavel
+    ));
+
     return {
       codigo: firstNonEmpty(prod.codigo, prod.cProd, prod.codigo_produto),
       nome,
+      descricao: nome,
       quantidade,
+      quantidade_comercial: quantidade,
       unidade,
+      unidade_comercial: unidade,
       valor_unitario: valorUnitario,
+      valor_unitario_comercial: valorUnitario,
       valor_total: valorTotal || quantidade * valorUnitario,
+      normalizado_valor: valorTotal || quantidade * valorUnitario,
       categoria: categorizarProduto(nome),
-      codigo_barras: limparDigitos(firstNonEmpty(
-        prod.codigo_barras_comercial,
-        prod.ean_comercial,
-        prod.codigo_barras,
-        prod.cEAN,
-        prod.cEANTrib,
-        prod.codigo_barras_tributavel
-      )),
+      codigo_barras: codigoBarras,
+      codigo_barras_comercial: codigoBarras,
       ean_comercial: limparDigitos(firstNonEmpty(
         prod.ean_comercial,
         prod.codigo_barras_comercial,
-        prod.cEAN
+        prod.cEAN,
+        codigoBarras
       )),
     };
   });
@@ -258,8 +267,8 @@ function mapearProdutos(nfeData: any) {
 async function processarNFe(supabase: any, userId: string, notaImagemId: string, chaveAcesso: string, dadosNFe: any): Promise<void> {
   const nfeData = dadosNFe.data?.[0];
 
-  if (!nfeData) {
-    throw new Error('Dados da NF-e não encontrados na resposta do InfoSimples');
+  if (!nfeData || typeof nfeData !== 'object') {
+    throw new Error('Resposta inválida da API de NF-e: dados da nota não encontrados');
   }
 
   const produtos = mapearProdutos(nfeData);
@@ -315,23 +324,30 @@ async function processarNFe(supabase: any, userId: string, notaImagemId: string,
     endereco,
   };
 
+  const numeroNota = firstNonEmpty(informacoesNota.numero, informacoesNota.nNF, nfeData.numero);
+  const serie = firstNonEmpty(informacoesNota.serie, nfeData.serie);
+  const formasPagamento = firstNonEmpty(nfeData.formas_pagamento, nfeData.pagamento, []);
+
   const dadosExtraidos = {
     chave_acesso: chaveAcesso,
-    numero_nota: firstNonEmpty(informacoesNota.numero, informacoesNota.nNF, nfeData.numero),
-    serie: firstNonEmpty(informacoesNota.serie, nfeData.serie),
+    numero_nota: numeroNota,
+    serie,
     valor_total: valorTotal,
+    total: valorTotal,
+    data_emissao: dataEmissao,
     quantidade_itens: produtos.length,
+    produtos,
     itens: produtos,
     compra: {
       valor_total: valorTotal,
       data_emissao: dataEmissao,
-      numero: firstNonEmpty(informacoesNota.numero, informacoesNota.nNF, nfeData.numero),
-      serie: firstNonEmpty(informacoesNota.serie, nfeData.serie),
-      forma_pagamento: firstNonEmpty(nfeData.formas_pagamento?.[0]?.forma, nfeData.pagamento?.[0]?.forma, 'N/A'),
+      numero: numeroNota,
+      serie,
+      forma_pagamento: firstNonEmpty(formasPagamento?.[0]?.forma, 'N/A'),
     },
     estabelecimento,
     emitente: estabelecimento,
-    formas_pagamento: firstNonEmpty(nfeData.formas_pagamento, nfeData.pagamento, []),
+    formas_pagamento: formasPagamento,
     origem_api: 'infosimples_nfe',
     dados_api_brutos: dadosNFe,
     timestamp_processamento: new Date().toISOString(),
