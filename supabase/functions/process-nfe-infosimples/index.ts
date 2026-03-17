@@ -132,7 +132,7 @@ async function saveToCache(supabase: any, chaveNFe: string, dadosNFe: any): Prom
 
   const { error } = await supabase
     .from('nfe_cache_serpro')
-    .upsert({
+    .insert({
       chave_nfe: chaveNFe,
       cnpj_emitente: limparDigitos(firstNonEmpty(emitente.cnpj, emitente.CNPJ)),
       nome_emitente: firstNonEmpty(emitente.nome_razao_social, emitente.xNome, emitente.nome_fantasia),
@@ -142,7 +142,7 @@ async function saveToCache(supabase: any, chaveNFe: string, dadosNFe: any): Prom
       consultado_em: new Date().toISOString(),
       ultima_consulta: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'chave_nfe' });
+    });
 
   if (error) {
     console.error('⚠️ [CACHE-NFE] Erro ao salvar cache:', error);
