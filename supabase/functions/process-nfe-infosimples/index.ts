@@ -324,23 +324,30 @@ async function processarNFe(supabase: any, userId: string, notaImagemId: string,
     endereco,
   };
 
+  const numeroNota = firstNonEmpty(informacoesNota.numero, informacoesNota.nNF, nfeData.numero);
+  const serie = firstNonEmpty(informacoesNota.serie, nfeData.serie);
+  const formasPagamento = firstNonEmpty(nfeData.formas_pagamento, nfeData.pagamento, []);
+
   const dadosExtraidos = {
     chave_acesso: chaveAcesso,
-    numero_nota: firstNonEmpty(informacoesNota.numero, informacoesNota.nNF, nfeData.numero),
-    serie: firstNonEmpty(informacoesNota.serie, nfeData.serie),
+    numero_nota: numeroNota,
+    serie,
     valor_total: valorTotal,
+    total: valorTotal,
+    data_emissao: dataEmissao,
     quantidade_itens: produtos.length,
+    produtos,
     itens: produtos,
     compra: {
       valor_total: valorTotal,
       data_emissao: dataEmissao,
-      numero: firstNonEmpty(informacoesNota.numero, informacoesNota.nNF, nfeData.numero),
-      serie: firstNonEmpty(informacoesNota.serie, nfeData.serie),
-      forma_pagamento: firstNonEmpty(nfeData.formas_pagamento?.[0]?.forma, nfeData.pagamento?.[0]?.forma, 'N/A'),
+      numero: numeroNota,
+      serie,
+      forma_pagamento: firstNonEmpty(formasPagamento?.[0]?.forma, 'N/A'),
     },
     estabelecimento,
     emitente: estabelecimento,
-    formas_pagamento: firstNonEmpty(nfeData.formas_pagamento, nfeData.pagamento, []),
+    formas_pagamento: formasPagamento,
     origem_api: 'infosimples_nfe',
     dados_api_brutos: dadosNFe,
     timestamp_processamento: new Date().toISOString(),
