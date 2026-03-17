@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from './ui/button';
 import { toast } from '@/hooks/use-toast';
-import { X, Flashlight, FlashlightOff, Keyboard, ArrowLeft, QrCode } from 'lucide-react';
+import { X, Flashlight, FlashlightOff, Keyboard, ArrowLeft, QrCode, ScanBarcode } from 'lucide-react';
 import ManualKeyInput from './ManualKeyInput';
-import { construirUrlConsulta } from '@/lib/documentDetection';
+import { construirUrlConsulta, limparChaveAcesso, validarChaveAcesso } from '@/lib/documentDetection';
 
 interface QRCodeScannerWebProps {
   onScanSuccess: (data: string) => void;
@@ -13,12 +13,22 @@ interface QRCodeScannerWebProps {
 
 const SCANNER_ID = 'html5-qrcode-scanner';
 
-const FORMATS_TO_SUPPORT = [
+const QR_FORMATS_TO_SUPPORT = [
   Html5QrcodeSupportedFormats.QR_CODE,
   Html5QrcodeSupportedFormats.DATA_MATRIX,
 ];
 
-type ScannerMode = 'choose' | 'scanning' | 'manual';
+const BARCODE_FORMATS_TO_SUPPORT = [
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+];
+
+type ScannerMode = 'choose' | 'scanning' | 'manual' | 'barcode';
 
 const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => {
   const [mode, setMode] = useState<ScannerMode>('choose');
@@ -30,11 +40,28 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScannedRef = useRef(false);
 
-  const handleManualKeySubmit = useCallback((chaveAcesso: string) => {
-    const url = construirUrlConsulta(chaveAcesso);
-    toast({ title: "✅ Chave validada", description: "Processando nota fiscal..." });
+  const processAccessKey = useCallback((chaveAcesso: string, source: 'manual' | 'barcode') => {
+    const chaveLimpa = limparChaveAcesso(chaveAcesso);
+    const validacao = validarChaveAcesso(chaveLimpa);
+
+    if (!validacao.valida) {
+      toast({
+        title: source === 'barcode' ? 'Código de barras inválido' : 'Chave inválida',
+        description: validacao.erro || 'Não foi possível validar a chave de acesso.',
+        variant: 'destructive'
+      });
+      setMode('choose');
+      return;
+    }
+
+    const url = construirUrlConsulta(chaveLimpa);
+    toast({ title: '✅ Chave validada', description: 'Processando nota fiscal...' });
     onScanSuccess(url);
   }, [onScanSuccess]);
+
+  const handleManualKeySubmit = useCallback((chaveAcesso: string) => {
+    processAccessKey(chaveAcesso, 'manual');
+  }, [processAccessKey]);
 
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
@@ -50,17 +77,28 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       scannerRef.current = null;
     }
     setIsScanning(false);
+    setIsInitializing(false);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    hasScannedRef.current = false;
   }, []);
 
   const handleScanSuccess = useCallback((decodedText: string) => {
     if (hasScannedRef.current) return;
     hasScannedRef.current = true;
-    
+
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    toast({ title: "✅ QR Code detectado", description: "Processando nota fiscal..." });
+
+    if (mode === 'barcode') {
+      stopScanner();
+      processAccessKey(decodedText, 'barcode');
+      return;
+    }
+
+    toast({ title: '✅ QR Code detectado', description: 'Processando nota fiscal...' });
     stopScanner();
     onScanSuccess(decodedText);
-  }, [onScanSuccess, stopScanner]);
+  }, [mode, onScanSuccess, processAccessKey, stopScanner]);
 
   const applyAdvancedCameraSettings = useCallback(async (scanner: Html5Qrcode) => {
     try {
@@ -81,8 +119,9 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     if (scannerRef.current || hasScannedRef.current) return;
     try {
       setIsInitializing(true);
+      const formatsToSupport = mode === 'barcode' ? BARCODE_FORMATS_TO_SUPPORT : QR_FORMATS_TO_SUPPORT;
       const scanner = new Html5Qrcode(SCANNER_ID, {
-        formatsToSupport: FORMATS_TO_SUPPORT,
+        formatsToSupport,
         verbose: false,
         experimentalFeatures: { useBarCodeDetectorIfSupported: true }
       });
@@ -92,8 +131,8 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
         fps: 15,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
           const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const qrboxSize = Math.floor(minEdge * 0.75);
-          return { width: qrboxSize, height: qrboxSize };
+          const boxSize = Math.floor(minEdge * 0.75);
+          return { width: boxSize, height: boxSize };
         },
         aspectRatio: 1.0,
         disableFlip: true,
@@ -113,14 +152,20 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     } catch (error) {
       console.error('❌ [SCANNER] Erro ao iniciar:', error);
       setIsInitializing(false);
-      toast({ title: "Erro ao acessar câmera", description: "Verifique as permissões e tente novamente.", variant: "destructive" });
+      toast({
+        title: 'Erro ao acessar câmera',
+        description: mode === 'barcode'
+          ? 'Não foi possível iniciar o leitor do código de barras. Verifique as permissões e tente novamente.'
+          : 'Verifique as permissões e tente novamente.',
+        variant: 'destructive'
+      });
       setMode('choose');
     }
-  }, [handleScanSuccess, applyAdvancedCameraSettings]);
+  }, [applyAdvancedCameraSettings, handleScanSuccess, mode]);
 
   const toggleTorch = useCallback(async () => {
     if (!scannerRef.current || !torchSupported) {
-      toast({ title: "Flash não suportado", description: "Este dispositivo não suporta controle de flash via web", variant: "destructive" });
+      toast({ title: 'Flash não suportado', description: 'Este dispositivo não suporta controle de flash via web', variant: 'destructive' });
       return;
     }
     try {
@@ -129,7 +174,7 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       setTorchEnabled(newTorchState);
       if (navigator.vibrate) navigator.vibrate(30);
     } catch (e) {
-      toast({ title: "Erro ao controlar flash", description: "Não foi possível alternar o flash", variant: "destructive" });
+      toast({ title: 'Erro ao controlar flash', description: 'Não foi possível alternar o flash', variant: 'destructive' });
     }
   }, [torchEnabled, torchSupported]);
 
@@ -138,19 +183,17 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     setMode('choose');
   }, [stopScanner]);
 
-  // Start scanner when mode changes to 'scanning'
   useEffect(() => {
-    if (mode === 'scanning') {
+    if (mode === 'scanning' || mode === 'barcode') {
       startScanner();
     }
     return () => {
-      if (mode === 'scanning') {
+      if (mode === 'scanning' || mode === 'barcode') {
         stopScanner();
       }
     };
-  }, [mode]);
+  }, [mode, startScanner, stopScanner]);
 
-  // Tela de escolha
   if (mode === 'choose') {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background">
@@ -174,13 +217,16 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               <Keyboard className="w-7 h-7" />
               Digitar Chave Manualmente
             </Button>
+            <Button variant="outline" size="lg" className="w-full h-20 text-lg flex flex-col items-center gap-1" onClick={() => setMode('barcode')}>
+              <ScanBarcode className="w-7 h-7" />
+              Ler Código de Barras da Chave
+            </Button>
           </div>
         </div>
       </div>
     );
   }
 
-  // Tela de entrada manual
   if (mode === 'manual') {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70">
@@ -189,14 +235,21 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     );
   }
 
-  // Modo scanning
+  const scannerTitle = mode === 'barcode' ? 'Lendo código de barras da chave' : 'Escaneando QR Code';
+  const scannerDescription = mode === 'barcode'
+    ? 'Aponte para o código de barras da chave de acesso da nota fiscal'
+    : 'Aponte para o QR Code do cupom fiscal';
+  const scannerTips = mode === 'barcode'
+    ? '💡 Dicas: Centralize o código de barras • Mantenha o documento reto e bem iluminado'
+    : '💡 Dicas: Aumente a iluminação • Aproxime a câmera do QR Code';
+
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-black">
       <div className="relative z-10 w-full flex justify-between items-center p-4 bg-black/80 backdrop-blur-sm">
         <Button
           variant="outline"
           size="lg"
-          className={`rounded-full ${torchEnabled ? 'bg-yellow-500 hover:bg-yellow-600' : ''}`}
+          className="rounded-full"
           onClick={toggleTorch}
           disabled={!torchSupported && isScanning}
         >
@@ -215,20 +268,22 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
           <div className="absolute inset-0 flex items-center justify-center bg-black/80">
             <div className="text-center">
               <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-white text-lg">Iniciando câmera...</p>
+              <p className="text-primary-foreground text-lg">
+                {mode === 'barcode' ? 'Iniciando leitor de código de barras...' : 'Iniciando câmera...'}
+              </p>
             </div>
           </div>
         )}
 
         {isScanning && !isInitializing && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="relative w-72 h-72 md:w-80 md:h-80">
+            <div className={`relative ${mode === 'barcode' ? 'w-80 h-40 md:w-96 md:h-44' : 'w-72 h-72 md:w-80 md:h-80'}`}>
               <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-xl animate-pulse" />
               <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-xl animate-pulse" />
               <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-xl animate-pulse" />
               <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-xl animate-pulse" />
               <div className="absolute inset-0 overflow-hidden">
-                <div className="w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent animate-scan-line" />
+                <div className={`bg-gradient-to-r from-transparent via-primary to-transparent animate-scan-line ${mode === 'barcode' ? 'w-full h-1 mt-[calc(50%-2px)]' : 'w-full h-1'}`} />
               </div>
             </div>
           </div>
@@ -239,11 +294,11 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
             <div className="bg-background/95 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-primary/20 max-w-md mx-auto">
               <div className="flex items-center justify-center gap-3 mb-3">
                 <div className="w-3 h-3 bg-primary rounded-full animate-pulse" />
-                <p className="text-base font-bold text-center">Escaneando QR Code</p>
+                <p className="text-base font-bold text-center">{scannerTitle}</p>
               </div>
-              <p className="text-xs text-muted-foreground text-center mb-4">Aponte para o QR Code do cupom fiscal</p>
+              <p className="text-xs text-muted-foreground text-center mb-4">{scannerDescription}</p>
               <div className="mt-3 pt-3 border-t border-border/50">
-                <p className="text-xs text-muted-foreground text-center">💡 Dicas: Aumente a iluminação • Aproxime a câmera do QR Code</p>
+                <p className="text-xs text-muted-foreground text-center">{scannerTips}</p>
               </div>
             </div>
           </div>
