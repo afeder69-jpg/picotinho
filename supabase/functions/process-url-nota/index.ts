@@ -49,37 +49,38 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     });
 
-    // Extrair chave de acesso se não fornecida
-    let chave = chaveAcesso;
-    if (!chave) {
-      // Tentar extrair da URL
-      const urlObj = new URL(url);
-      const params = urlObj.searchParams.get('p') || urlObj.searchParams.get('chNFe');
-      
-      if (params) {
-        chave = params.split('|')[0];
-      } else {
-        // Tentar regex
-        const match = url.match(/(\d{44})/);
-        if (match) {
-          chave = match[1];
+    const extrairChaveDaUrl = (valor: string) => {
+      try {
+        const urlObj = new URL(valor);
+        const params = urlObj.searchParams.get('p') || urlObj.searchParams.get('chNFe') || urlObj.searchParams.get('chave');
+        if (params) {
+          return params.split('|')[0].replace(/\D/g, '');
         }
+      } catch (_) {
+        // Ignorar e seguir para regex
       }
+
+      const match = valor.match(/(\d{44})/);
+      return match?.[1] ?? null;
+    };
+
+    const chave = (chaveAcesso || extrairChaveDaUrl(url) || '').replace(/\D/g, '');
+
+    if (chave.length !== 44) {
+      throw new Error('Não foi possível extrair uma chave de acesso válida com 44 dígitos');
     }
 
-    if (!chave || chave.length !== 44) {
-      throw new Error('Não foi possível extrair a chave de acesso da URL');
+    const uf = chave.substring(0, 2);
+    const modelo = chave.substring(20, 22);
+    const tipoDetectado = modelo === '55' ? 'NFe' : modelo === '65' ? 'NFCe' : null;
+
+    if (!tipoDetectado) {
+      throw new Error(`Modelo de documento inválido na chave de acesso: ${modelo}`);
     }
 
     console.log('🔑 Chave de acesso extraída:', `${chave.substring(0, 4)}...${chave.substring(40)}`);
+    console.log(`📍 UF: ${uf}, Modelo: ${modelo} (${tipoDetectado})`);
 
-    // Detectar UF e modelo pelos dígitos da chave
-    const uf = chave.substring(0, 2);
-    const modelo = chave.substring(20, 22);
-    
-    console.log(`📍 UF: ${uf}, Modelo: ${modelo} (${modelo === '55' ? 'NFe' : modelo === '65' ? 'NFCe' : 'Desconhecido'})`);
-
-    // Criar registro na notas_imagens com status pending
     const notaId = crypto.randomUUID();
 
     const { error: insertError } = await supabase
@@ -94,7 +95,7 @@ serve(async (req) => {
           chave_acesso: chave,
           uf_emitente: uf,
           modelo_documento: modelo,
-          tipo_documento: tipoDocumento || (modelo === '55' ? 'NFe' : 'NFCe'),
+          tipo_documento: tipoDocumento || tipoDetectado,
           url_original: url,
           metodo_captura: 'qrcode_url_direct',
           timestamp: new Date().toISOString()
@@ -109,34 +110,30 @@ serve(async (req) => {
     console.log('✅ Nota criada com sucesso:', notaId);
     console.log('🔍 [DEBUG] notaId que será retornado:', notaId);
 
-    // ROTEAMENTO INTELIGENTE: Escolher API apropriada
     if (modelo === '55') {
-      // NFe (modelo 55): Usar Serpro (qualquer UF)
-      console.log('📄 [NFE] Processando via Serpro...');
-      
-      const { data: nfeData, error: nfeError } = await supabase.functions.invoke('process-nfe-serpro', {
-        body: { 
+      console.log('📄 [NFE] Processando via InfoSimples...');
+
+      const { data: nfeData, error: nfeError } = await supabase.functions.invoke('process-nfe-infosimples', {
+        body: {
           chaveAcesso: chave,
-          userId: userId,
+          userId,
           notaImagemId: notaId
         }
       });
 
       if (nfeError) {
-        console.error('⚠️ Erro ao processar NFe via Serpro:', nfeError);
+        console.error('⚠️ Erro ao processar NFe via InfoSimples:', nfeError);
         throw nfeError;
       }
 
-      console.log('✅ NFe processada via Serpro:', nfeData);
-      
+      console.log('✅ NFe processada via InfoSimples:', nfeData);
     } else if (modelo === '65' && uf === '33') {
-      // NFCe (modelo 65) do RJ (UF 33): Usar InfoSimples
       console.log('🎫 [NFCE-RJ] Processando via InfoSimples...');
-      
+
       const { data: nfceData, error: nfceError } = await supabase.functions.invoke('process-nfce-infosimples', {
-        body: { 
+        body: {
           chaveAcesso: chave,
-          userId: userId,
+          userId,
           notaImagemId: notaId
         }
       });
@@ -144,12 +141,11 @@ serve(async (req) => {
       if (nfceError) {
         console.error('⚠️ Erro ao processar NFCe via InfoSimples:', nfceError);
         console.log('🔄 Tentando fallback via extração HTML...');
-        
-        // Fallback: Extração genérica
+
         const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
-          body: { 
+          body: {
             notaImagemId: notaId,
-            userId: userId
+            userId
           }
         });
 
@@ -161,15 +157,13 @@ serve(async (req) => {
       } else {
         console.log('✅ NFCe-RJ processada via InfoSimples:', nfceData);
       }
-      
     } else if (modelo === '65') {
-      // NFCe de outras UFs: Extrair via HTML
       console.log(`🎫 [NFCE-${uf}] Processando via extração HTML (UF não suportada pelo InfoSimples)...`);
-      
+
       const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
-        body: { 
+        body: {
           notaImagemId: notaId,
-          userId: userId
+          userId
         }
       });
 
@@ -177,22 +171,6 @@ serve(async (req) => {
         console.error('⚠️ Erro ao extrair NFCe:', extractError);
       } else {
         console.log('✅ NFCe extraída:', extractData);
-      }
-    } else {
-      // Modelo desconhecido: Fallback genérico
-      console.warn('⚠️ Modelo desconhecido, tentando extração genérica...');
-      
-      const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
-        body: { 
-          notaImagemId: notaId,
-          userId: userId
-        }
-      });
-
-      if (extractError) {
-        console.error('⚠️ Erro na extração genérica:', extractError);
-      } else {
-        console.log('✅ Extração genérica concluída:', extractData);
       }
     }
 
