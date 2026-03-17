@@ -221,7 +221,7 @@ function mapearProdutos(nfeData: any) {
       prod.valor_unitario_comercial,
       prod.vUnCom,
       prod.valor,
-      prod.vProd
+      quantidade > 0 ? parseBrazilianFloat(prod.vProd) / quantidade : null
     ));
 
     const valorTotal = parseBrazilianFloat(firstNonEmpty(
@@ -230,26 +230,35 @@ function mapearProdutos(nfeData: any) {
       quantidade * valorUnitario
     ));
 
+    const codigoBarras = limparDigitos(firstNonEmpty(
+      prod.codigo_barras_comercial,
+      prod.ean_comercial,
+      prod.codigo_barras,
+      prod.cEAN,
+      prod.cEANTrib,
+      prod.codigo_barras_tributavel
+    ));
+
     return {
       codigo: firstNonEmpty(prod.codigo, prod.cProd, prod.codigo_produto),
       nome,
+      descricao: nome,
       quantidade,
+      quantidade_comercial: quantidade,
       unidade,
+      unidade_comercial: unidade,
       valor_unitario: valorUnitario,
+      valor_unitario_comercial: valorUnitario,
       valor_total: valorTotal || quantidade * valorUnitario,
+      normalizado_valor: valorTotal || quantidade * valorUnitario,
       categoria: categorizarProduto(nome),
-      codigo_barras: limparDigitos(firstNonEmpty(
-        prod.codigo_barras_comercial,
-        prod.ean_comercial,
-        prod.codigo_barras,
-        prod.cEAN,
-        prod.cEANTrib,
-        prod.codigo_barras_tributavel
-      )),
+      codigo_barras: codigoBarras,
+      codigo_barras_comercial: codigoBarras,
       ean_comercial: limparDigitos(firstNonEmpty(
         prod.ean_comercial,
         prod.codigo_barras_comercial,
-        prod.cEAN
+        prod.cEAN,
+        codigoBarras
       )),
     };
   });

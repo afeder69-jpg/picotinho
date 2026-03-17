@@ -75,7 +75,7 @@ serve(async (req) => {
     const tipoDetectado = modelo === '55' ? 'NFe' : modelo === '65' ? 'NFCe' : null;
 
     if (!tipoDetectado) {
-      throw new Error(`Modelo de documento inválido na chave de acesso: ${modelo}`);
+      throw new Error(`Modelo de documento inválido na chave de acesso: ${modelo}. Use uma chave válida de NF-e (55) ou NFC-e (65)`);
     }
 
     console.log('🔑 Chave de acesso extraída:', `${chave.substring(0, 4)}...${chave.substring(40)}`);
