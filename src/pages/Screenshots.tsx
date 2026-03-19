@@ -5,7 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogIn, QrCode } from "lucide-react";
+import { LogIn } from "lucide-react";
 const Screenshots = () => {
   const { user, loading, signInAnonymously } = useAuth();
   const [refreshKey, setRefreshKey] = React.useState(0);
