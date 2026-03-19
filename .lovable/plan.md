@@ -1,240 +1,37 @@
 
 
-# Otimização do Scanner de QR Code Web
+## Plano: Substituir upload por botão de leitura na página "Minhas Notas Fiscais"
 
-## Diagnóstico do Problema
+### Problema
+A página `Screenshots.tsx` usa o componente `UploadNoteButton` (upload de arquivo), que não faz mais parte do fluxo desejado. Precisa ser substituído pelo mesmo fluxo de scanner (QR Code / chave manual / código de barras) que já existe no `BottomNavigation`.
 
-O scanner web atual (`QRCodeScannerWeb.tsx`) usa `@yudiel/react-qr-scanner` baseado em ZXing com configurações básicas:
+### Abordagem
+O fluxo de scan + processamento automático está todo encapsulado no `BottomNavigation` (função `handleQRScanSuccess` + Realtime listeners). Em vez de duplicar essa lógica, a solução mais limpa é:
 
-```typescript
-// Configuração atual - muito básica
-<Scanner
-  constraints={{
-    facingMode: 'environment',
-    aspectRatio: 1,  // ❌ Pode limitar qualidade
-  }}
-  formats={['qr_code', 'data_matrix']}
-  scanDelay={300}  // ❌ 300ms pode ser muito lento
-/>
-```
+1. **Remover `UploadNoteButton`** da página `Screenshots.tsx` (e o import)
+2. **Adicionar um botão que dispara o scanner** — reutilizando o mesmo mecanismo que o botão central do `BottomNavigation` já usa (`setShowQRScanner(true)`)
+3. Como o `BottomNavigation` já está presente em todas as páginas (incluindo `/screenshots`), basta **disparar a abertura do scanner via um estado compartilhado ou evento**
 
-### Por que a versão nativa é melhor?
+### Implementação
 
-| Característica | APK (ML Kit) | Web (ZXing) |
-|---------------|--------------|-------------|
-| Engine | Google ML Kit (Machine Learning) | ZXing (algoritmo tradicional) |
-| Iluminação | Compensação automática por IA | Dependente da câmera |
-| Velocidade | Otimizado por GPU/NPU | Processamento em JavaScript |
-| Resolução | Acesso nativo à câmera | Limitado por APIs do navegador |
+**Opção escolhida**: Usar um custom event para comunicar entre `Screenshots` e `BottomNavigation`, evitando criar contexto adicional.
 
-## Estratégia de Otimização
+#### 1. `src/pages/Screenshots.tsx`
+- Remover import e uso de `UploadNoteButton`
+- Remover `handleUploadSuccess` e estado associado ao upload
+- Adicionar botão "Ler Nota Fiscal" com ícone `QrCode` que dispara `window.dispatchEvent(new Event('open-scanner'))`
+- Manter `refreshKey` — pode ser incrementado via listener de evento de sucesso
 
-### 1. Substituir biblioteca por `html5-qrcode`
+#### 2. `src/components/BottomNavigation.tsx`
+- Adicionar listener para o evento `open-scanner` que chama `setShowQRScanner(true)`
+- Isso reaproveita 100% do fluxo existente sem duplicação
 
-O projeto já tem `html5-qrcode` instalado (v2.3.8). Esta biblioteca oferece:
+#### 3. `src/components/UploadNoteButton.tsx`
+- Manter o arquivo (pode ser usado em outro lugar no futuro), mas remover da página Screenshots
 
-- **`useBarCodeDetectorIfSupported`**: Usa API nativa do navegador quando disponível (Chrome 83+)
-- **Controle granular de câmera**: Exposição, foco, resolução
-- **Flash/torch nativo**: Melhor controle de iluminação
-
-### 2. Configurações avançadas para cupons fiscais
-
-```typescript
-const config = {
-  fps: 15,                          // ⬆️ Aumentar de 2 para 15
-  qrbox: { width: 300, height: 300 }, // Área de detecção maior
-  aspectRatio: 1.0,
-  disableFlip: true,                // Performance: cupons não são espelhados
-  experimentalFeatures: {
-    useBarCodeDetectorIfSupported: true  // API nativa quando disponível
-  },
-  videoConstraints: {
-    facingMode: 'environment',
-    width: { ideal: 1920 },         // Maior resolução
-    height: { ideal: 1080 },
-    advanced: [
-      { focusMode: 'continuous' },  // Foco contínuo
-      { exposureMode: 'continuous' } // Exposição automática
-    ]
-  }
-};
-```
-
-### 3. Fallback de foto estática
-
-Para casos onde o escaneamento em tempo real falha:
-
-- Botão "Tirar Foto do QR Code"
-- Captura imagem estática
-- Processa com mais tempo e precisão
-- Funciona melhor em condições de pouca luz
-
-## Implementação Detalhada
-
-### Novo componente: `QRCodeScannerWebOptimized.tsx`
-
-```typescript
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-
-// Formatos otimizados para cupons fiscais brasileiros
-const formatsToSupport = [
-  Html5QrcodeSupportedFormats.QR_CODE,
-  Html5QrcodeSupportedFormats.DATA_MATRIX,
-];
-
-// Configuração de câmera otimizada
-const cameraConfig = {
-  fps: 15,
-  qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-    // QR box dinâmico - 80% da área visível
-    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-    return { width: minEdge * 0.8, height: minEdge * 0.8 };
-  },
-  aspectRatio: 1.0,
-  disableFlip: true,
-  experimentalFeatures: {
-    useBarCodeDetectorIfSupported: true
-  }
-};
-
-// Após iniciar, aplicar configurações avançadas de câmera
-async function applyAdvancedSettings(scanner: Html5Qrcode) {
-  try {
-    const capabilities = scanner.getRunningTrackCapabilities();
-    
-    // Ativar foco contínuo se disponível
-    if (capabilities.focusMode?.includes('continuous')) {
-      await scanner.applyVideoConstraints({
-        // @ts-ignore - API experimental
-        advanced: [{ focusMode: 'continuous' }]
-      });
-    }
-    
-    // Ativar exposição automática se disponível
-    if (capabilities.exposureMode?.includes('continuous')) {
-      await scanner.applyVideoConstraints({
-        // @ts-ignore - API experimental
-        advanced: [{ exposureMode: 'continuous' }]
-      });
-    }
-  } catch (e) {
-    console.log('Configurações avançadas não suportadas:', e);
-  }
-}
-```
-
-### Modo de captura de foto (fallback)
-
-```typescript
-const capturePhoto = async () => {
-  // Pausar scanner de vídeo
-  await scanner.pause(true);
-  
-  // Capturar frame atual
-  const imageData = scanner.getRunningTrackCameraSettings();
-  
-  // Processar imagem estática com mais tempo
-  const result = await Html5Qrcode.scanFile(imageData, {
-    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-    experimentalFeatures: {
-      useBarCodeDetectorIfSupported: true
-    }
-  });
-  
-  return result;
-};
-```
-
-### Controle de lanterna (flash)
-
-```typescript
-const toggleTorch = async () => {
-  try {
-    const capabilities = scanner.getRunningTrackCapabilities();
-    if (capabilities.torch) {
-      const currentSettings = scanner.getRunningTrackSettings();
-      await scanner.applyVideoConstraints({
-        // @ts-ignore - API experimental
-        advanced: [{ torch: !currentSettings.torch }]
-      });
-      setTorchEnabled(!torchEnabled);
-    }
-  } catch (e) {
-    toast({
-      title: "Flash não suportado",
-      description: "Este dispositivo não suporta controle de flash",
-      variant: "destructive"
-    });
-  }
-};
-```
-
-## Interface do usuário melhorada
-
-```
-┌─────────────────────────────────────────────┐
-│ [🔦 Flash]                    [❌ Cancelar] │
-├─────────────────────────────────────────────┤
-│                                             │
-│     ┌─────────────────────────────┐         │
-│     │                             │         │
-│     │    ╔═══════════════════╗    │         │
-│     │    ║                   ║    │         │
-│     │    ║   ÁREA DE SCAN    ║    │         │
-│     │    ║                   ║    │         │
-│     │    ╚═══════════════════╝    │         │
-│     │                             │         │
-│     └─────────────────────────────┘         │
-│                                             │
-├─────────────────────────────────────────────┤
-│  📸 Escaneando QR Code...                   │
-│                                             │
-│  ┌────────────────────────────────────────┐ │
-│  │ 📷 Tirar Foto do QR Code               │ │
-│  └────────────────────────────────────────┘ │
-│                                             │
-│  ┌────────────────────────────────────────┐ │
-│  │ ⌨️ Digitar Chave Manualmente           │ │
-│  └────────────────────────────────────────┘ │
-│                                             │
-│  💡 Se a leitura estiver difícil, tente:   │
-│  • Aumentar a iluminação                    │
-│  • Aproximar a câmera do QR Code            │
-│  • Usar o botão "Tirar Foto"                │
-└─────────────────────────────────────────────┘
-```
-
-## Arquivos a modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/components/QRCodeScannerWeb.tsx` | Reescrever | Usar `html5-qrcode` com configurações otimizadas |
-
-## Comparação: Antes vs Depois
-
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| FPS | 2-3 (padrão) | 15 |
-| Resolução | Padrão do navegador | 1920x1080 (ideal) |
-| Foco | Automático básico | Contínuo |
-| Exposição | Automático básico | Contínua |
-| API de detecção | ZXing (JavaScript) | BarcodeDetector nativo (quando disponível) |
-| QR Box | Fixo 288x288 | Dinâmico 80% da tela |
-| Fallback | Nenhum | Captura de foto |
-| Flash | Simulado | API nativa |
-
-## Benefícios esperados
-
-1. **Velocidade**: Detecção 3-5x mais rápida
-2. **Precisão**: Melhor leitura em condições adversas
-3. **Iluminação**: Flash real + exposição automática
-4. **Fallback**: Se tempo real falhar, tira foto
-5. **Compatibilidade**: Funciona em mais navegadores
-
-## Limitações conhecidas
-
-- A versão web nunca será tão boa quanto ML Kit nativo
-- Alguns navegadores antigos não suportam BarcodeDetector API
-- Flash depende do hardware (nem todos smartphones suportam via web)
-- A entrada manual de 44 dígitos continua sendo o fallback definitivo
+### Resultado
+- Na página "Minhas Notas Fiscais": botão destacado "Ler Nota Fiscal" com ícone de QR Code
+- Ao clicar: abre o mesmo scanner com as 3 opções (QR Code, chave manual, código de barras)
+- Processamento segue o pipeline existente automaticamente
+- Nenhuma alteração no fluxo de processamento ou em outras telas
 
