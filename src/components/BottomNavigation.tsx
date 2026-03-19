@@ -878,7 +878,7 @@ const BottomNavigation = () => {
           </Button>
           
           {/* Botão Escanear QR - Funcional em todas as plataformas */}
-          {location.pathname === '/' && (
+          {(location.pathname === '/' || location.pathname === '/screenshots') && (
             <Button
               variant="default"
               size="lg"

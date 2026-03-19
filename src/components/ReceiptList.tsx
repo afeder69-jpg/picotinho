@@ -931,9 +931,8 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
       if (!groups.has(key)) {
-        const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-        // Capitalize first letter
-        const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+         const shortMonth = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+         const capitalizedLabel = shortMonth + '/' + date.getFullYear();
         groups.set(key, { label: capitalizedLabel, receipts: [], totalAmount: 0 });
       }
 
