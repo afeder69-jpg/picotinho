@@ -274,6 +274,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(highlightNotaId || null);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   
 
