@@ -1,12 +1,11 @@
 import React from "react";
 
 import ReceiptList from "@/components/ReceiptList";
-import UploadNoteButton from "@/components/UploadNoteButton";
 import PageHeader from "@/components/PageHeader";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogIn } from "lucide-react";
+import { LogIn, QrCode } from "lucide-react";
 const Screenshots = () => {
   const { user, loading, signInAnonymously } = useAuth();
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -15,8 +14,8 @@ const Screenshots = () => {
   const searchParams = new URLSearchParams(window.location.search);
   const highlightNotaId = searchParams.get('highlight');
 
-  const handleUploadSuccess = () => {
-    setRefreshKey(prev => prev + 1);
+  const handleOpenScanner = () => {
+    window.dispatchEvent(new Event('open-scanner'));
   };
 
   if (loading) {
@@ -53,7 +52,10 @@ const Screenshots = () => {
       <PageHeader title="Minhas Notas Fiscais" />
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6">
-          <UploadNoteButton onUploadSuccess={handleUploadSuccess} />
+          <Button onClick={handleOpenScanner} className="w-full" size="lg">
+            <QrCode className="w-5 h-5 mr-2" />
+            Ler Nota Fiscal
+          </Button>
         </div>
         <ReceiptList key={refreshKey} highlightNotaId={highlightNotaId} />
       </div>
