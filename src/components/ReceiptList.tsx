@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Trash2, FileText, X, Bot, Loader2, CheckCircle, Plus } from 'lucide-react';
+import { Eye, Trash2, FileText, X, Bot, Loader2, CheckCircle, Plus, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -274,6 +274,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(highlightNotaId || null);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   
 
@@ -899,6 +900,80 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const formatCurrency = (amount: number | null) =>
     !amount ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
 
+  // Helper: parse data de emissão da nota para um Date válido
+  const parsePurchaseDate = (receipt: Receipt): Date => {
+    const dateStr = receipt.dados_extraidos?.compra?.data_emissao 
+      || receipt.dados_extraidos?.dataCompra 
+      || receipt.purchase_date 
+      || receipt.created_at;
+    
+    if (!dateStr) return new Date(receipt.created_at);
+
+    let date: Date;
+    if (dateStr.includes('T')) {
+      date = new Date(dateStr);
+    } else if (dateStr.includes('/')) {
+      const [day, month, year] = dateStr.split(' ')[0].split('/');
+      date = new Date(`${year}-${month}-${day}`);
+    } else {
+      date = new Date(dateStr);
+    }
+
+    return isNaN(date.getTime()) ? new Date(receipt.created_at) : date;
+  };
+
+  // Agrupar notas por mês/ano
+  const groupedReceipts = useMemo(() => {
+    const groups = new Map<string, { label: string; receipts: Receipt[]; totalAmount: number }>();
+
+    receipts.forEach((receipt) => {
+      const date = parsePurchaseDate(receipt);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!groups.has(key)) {
+        const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        // Capitalize first letter
+        const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+        groups.set(key, { label: capitalizedLabel, receipts: [], totalAmount: 0 });
+      }
+
+      const group = groups.get(key)!;
+      group.receipts.push(receipt);
+      group.totalAmount += receipt.total_amount || 0;
+    });
+
+    // Ordenar por chave descendente (mais recente primeiro)
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => b.localeCompare(a));
+  }, [receipts]);
+
+  // Se highlightNotaId presente, expandir o mês correspondente
+  useEffect(() => {
+    if (highlightNotaId && receipts.length > 0) {
+      const receipt = receipts.find(r => r.id === highlightNotaId);
+      if (receipt) {
+        const date = parsePurchaseDate(receipt);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        setExpandedMonths(prev => new Set(prev).add(key));
+      }
+    }
+  }, [highlightNotaId, receipts]);
+
+  const toggleMonth = (key: string) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const formatCurrencyValue = (amount: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
+
   const launchToStock = async (receipt: Receipt) => {
     if (!receipt.dados_extraidos?.itens) {
       toast({
@@ -1004,131 +1079,151 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   return (
     <>
       <div className="compact-notas">
-        <div>
-          {receipts.map((receipt) => {
-            const isHighlighted = receipt.id === highlightNotaId;
-            const isPending = !receipt.processada && receipt.dados_extraidos;
+        <div className="space-y-3">
+          {groupedReceipts.map(([monthKey, group]) => {
+            const isExpanded = expandedMonths.has(monthKey);
             
             return (
-              <Card 
-                key={receipt.id} 
-                id={`nota-${receipt.id}`}
-                className={`card ${isHighlighted ? 'border-4 border-green-500 shadow-lg animate-pulse' : ''}`}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1" style={{ marginRight: '8px' }}>
-                  {receipt.processada && receipt.dados_extraidos ? (
-                    <>
-                      {/* Para notas processadas com dados estruturados da IA */}
-                      {receipt.dados_extraidos.estabelecimento ? (
-                        <>
-                           {/* Nome do mercado, bairro, UF */}
-                          <h3 className="nome-mercado">
-                            {receipt.dados_extraidos.estabelecimento.nome}
-                          </h3>
-                           
-                            {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
-                              <span className="text-muted-foreground">Data: {(() => {
-                                // Sempre priorizar data_emissao dos dados extraídos
-                                const dataFinal = receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || receipt.purchase_date || 'N/A';
-                                return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
-                              })()}</span>
-                              <span className="font-medium text-foreground">
-                                Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
-                              </span>
-                              {(() => {
-                                const itens = receipt.dados_extraidos.itens || receipt.dados_extraidos.produtos || [];
-                                return itens.length > 0 ? (
-                                  <span className="text-muted-foreground">{itens.length} itens</span>
-                                ) : null;
-                              })()}
-                            </div>
-                        </>
-                      ) : (
-                        /* Fallback para formato antigo */
-                        <>
-                           {/* Nome do mercado, bairro, UF */}
-                          <h3 className="nome-mercado">
-                            {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
-                          </h3>
-                           
-                            {/* Dados da compra em linha compacta */}
-                            <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
-                              <span className="text-muted-foreground">Data: {(() => {
-                                // Sempre priorizar data_emissao dos dados extraídos
-                                const dataFinal = receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || receipt.purchase_date || 'N/A';
-                                return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
-                              })()}</span>
-                              <span className="font-medium text-foreground">
-                                Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
-                              </span>
-                              {(() => {
-                                const itens = receipt.dados_extraidos.itens || receipt.dados_extraidos.produtos || [];
-                                return itens.length > 0 ? (
-                                  <span className="text-muted-foreground">{itens.length} itens</span>
-                                ) : null;
-                              })()}
-                            </div>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Para notas não processadas */}
-                      <div>
-                        {/* Nome, bairro, UF (fallback com store_address) */}
-                         {(() => {
-                           const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
-                           const nome = receipt.store_name || 'Estabelecimento não identificado';
-                           let texto = nome;
-                           if (nb) texto += `, ${nb}`;
-                           if (uf) texto += `, ${uf}`;
-                           return (
-                             <h3 className="nome-mercado">{texto}</h3>
-                           );
-                         })()}
-                        
-                          {/* Dados da compra em linha compacta */}
-                          <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
-                            <span className="text-muted-foreground">Enviado: {formatDate(receipt.created_at)}</span>
-                            <span className="text-orange-600">Processando...</span>
+              <div key={monthKey}>
+                {/* Header do mês - clicável */}
+                <button
+                  onClick={() => toggleMonth(monthKey)}
+                  className="w-full flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    {isExpanded ? (
+                      <ChevronDown className="w-5 h-5 text-primary" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    )}
+                    <span className="font-semibold text-foreground">{group.label}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <ShoppingCart className="w-3.5 h-3.5" />
+                      {group.receipts.length} {group.receipts.length === 1 ? 'nota' : 'notas'}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {formatCurrencyValue(group.totalAmount)}
+                    </span>
+                  </div>
+                </button>
+
+                {/* Notas do mês */}
+                {isExpanded && (
+                  <div className="mt-1">
+                    {group.receipts.map((receipt) => {
+                      const isHighlighted = receipt.id === highlightNotaId;
+                      
+                      return (
+                        <Card 
+                          key={receipt.id} 
+                          id={`nota-${receipt.id}`}
+                          className={`card ${isHighlighted ? 'border-4 border-green-500 shadow-lg animate-pulse' : ''}`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1" style={{ marginRight: '8px' }}>
+                            {receipt.processada && receipt.dados_extraidos ? (
+                              <>
+                                {receipt.dados_extraidos.estabelecimento ? (
+                                  <>
+                                    <h3 className="nome-mercado">
+                                      {receipt.dados_extraidos.estabelecimento.nome}
+                                    </h3>
+                                    <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
+                                      <span className="text-muted-foreground">Data: {(() => {
+                                        const dataFinal = receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || receipt.purchase_date || 'N/A';
+                                        return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
+                                      })()}</span>
+                                      <span className="font-medium text-foreground">
+                                        Total: {receipt.total_amount ? formatCurrency(receipt.total_amount) : 'N/A'}
+                                      </span>
+                                      {(() => {
+                                        const itens = receipt.dados_extraidos.itens || receipt.dados_extraidos.produtos || [];
+                                        return itens.length > 0 ? (
+                                          <span className="text-muted-foreground">{itens.length} itens</span>
+                                        ) : null;
+                                      })()}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <h3 className="nome-mercado">
+                                      {receipt.dados_extraidos.loja?.nome || 'Mercado N/A'}
+                                    </h3>
+                                    <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
+                                      <span className="text-muted-foreground">Data: {(() => {
+                                        const dataFinal = receipt.dados_extraidos.compra?.data_emissao || receipt.dados_extraidos.dataCompra || receipt.purchase_date || 'N/A';
+                                        return dataFinal !== 'N/A' ? formatPurchaseDateTime(dataFinal) : 'N/A';
+                                      })()}</span>
+                                      <span className="font-medium text-foreground">
+                                        Total: {receipt.dados_extraidos.valorTotal ? formatCurrency(receipt.dados_extraidos.valorTotal) : 'N/A'}
+                                      </span>
+                                      {(() => {
+                                        const itens = receipt.dados_extraidos.itens || receipt.dados_extraidos.produtos || [];
+                                        return itens.length > 0 ? (
+                                          <span className="text-muted-foreground">{itens.length} itens</span>
+                                        ) : null;
+                                      })()}
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div>
+                                  {(() => {
+                                    const { neighborhood: nb, uf } = getNeighborhoodAndUF(receipt);
+                                    const nome = receipt.store_name || 'Estabelecimento não identificado';
+                                    let texto = nome;
+                                    if (nb) texto += `, ${nb}`;
+                                    if (uf) texto += `, ${uf}`;
+                                    return (
+                                      <h3 className="nome-mercado">{texto}</h3>
+                                    );
+                                  })()}
+                                  <div className="flex flex-wrap gap-x-2 gap-y-0 dados">
+                                    <span className="text-muted-foreground">Enviado: {formatDate(receipt.created_at)}</span>
+                                    <span className="text-orange-600">Processando...</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-                
-                 {/* Botões compactos no lado direito */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <Badge 
-                    variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
-                    className="badge"
-                  >
-                    {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
-                  </Badge>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => viewReceipt(receipt)} 
-                    className="detalhes"
-                  >
-                    <Eye className="w-3 h-3 mr-1" />
-                    Ver Detalhes
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setDeleteConfirmId(receipt.id)} 
-                    className="text-destructive hover:text-destructive delete-btn"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
+                          
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Badge 
+                              variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
+                              className="badge"
+                            >
+                              {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
+                            </Badge>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => viewReceipt(receipt)} 
+                              className="detalhes"
+                            >
+                              <Eye className="w-3 h-3 mr-1" />
+                              Ver Detalhes
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setDeleteConfirmId(receipt.id)} 
+                              className="text-destructive hover:text-destructive delete-btn"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                    })}
+                  </div>
+                )}
               </div>
-              
-            </Card>
-          );
+            );
           })}
         </div>
       </div>
