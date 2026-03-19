@@ -14,8 +14,8 @@ const Screenshots = () => {
   const searchParams = new URLSearchParams(window.location.search);
   const highlightNotaId = searchParams.get('highlight');
 
-  const handleUploadSuccess = () => {
-    setRefreshKey(prev => prev + 1);
+  const handleOpenScanner = () => {
+    window.dispatchEvent(new Event('open-scanner'));
   };
 
   if (loading) {
