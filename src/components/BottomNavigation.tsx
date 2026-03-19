@@ -53,6 +53,13 @@ const BottomNavigation = () => {
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
   const activelyProcessingRef = useRef<Set<string>>(new Set());
+
+  // Listen for open-scanner event from other pages
+  useEffect(() => {
+    const handleOpenScanner = () => setShowQRScanner(true);
+    window.addEventListener('open-scanner', handleOpenScanner);
+    return () => window.removeEventListener('open-scanner', handleOpenScanner);
+  }, []);
   const debounceTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const lastProcessingTimestamp = useRef<Map<string, number>>(new Map());
   const navigate = useNavigate();
