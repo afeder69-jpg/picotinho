@@ -900,6 +900,80 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const formatCurrency = (amount: number | null) =>
     !amount ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
 
+  // Helper: parse data de emissão da nota para um Date válido
+  const parsePurchaseDate = (receipt: Receipt): Date => {
+    const dateStr = receipt.dados_extraidos?.compra?.data_emissao 
+      || receipt.dados_extraidos?.dataCompra 
+      || receipt.purchase_date 
+      || receipt.created_at;
+    
+    if (!dateStr) return new Date(receipt.created_at);
+
+    let date: Date;
+    if (dateStr.includes('T')) {
+      date = new Date(dateStr);
+    } else if (dateStr.includes('/')) {
+      const [day, month, year] = dateStr.split(' ')[0].split('/');
+      date = new Date(`${year}-${month}-${day}`);
+    } else {
+      date = new Date(dateStr);
+    }
+
+    return isNaN(date.getTime()) ? new Date(receipt.created_at) : date;
+  };
+
+  // Agrupar notas por mês/ano
+  const groupedReceipts = useMemo(() => {
+    const groups = new Map<string, { label: string; receipts: Receipt[]; totalAmount: number }>();
+
+    receipts.forEach((receipt) => {
+      const date = parsePurchaseDate(receipt);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!groups.has(key)) {
+        const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        // Capitalize first letter
+        const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+        groups.set(key, { label: capitalizedLabel, receipts: [], totalAmount: 0 });
+      }
+
+      const group = groups.get(key)!;
+      group.receipts.push(receipt);
+      group.totalAmount += receipt.total_amount || 0;
+    });
+
+    // Ordenar por chave descendente (mais recente primeiro)
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => b.localeCompare(a));
+  }, [receipts]);
+
+  // Se highlightNotaId presente, expandir o mês correspondente
+  useEffect(() => {
+    if (highlightNotaId && receipts.length > 0) {
+      const receipt = receipts.find(r => r.id === highlightNotaId);
+      if (receipt) {
+        const date = parsePurchaseDate(receipt);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        setExpandedMonths(prev => new Set(prev).add(key));
+      }
+    }
+  }, [highlightNotaId, receipts]);
+
+  const toggleMonth = (key: string) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const formatCurrencyValue = (amount: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
+
   const launchToStock = async (receipt: Receipt) => {
     if (!receipt.dados_extraidos?.itens) {
       toast({
