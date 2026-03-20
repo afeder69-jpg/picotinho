@@ -64,21 +64,15 @@ export default function NormalizacaoGlobal() {
     totalProdutosMaster: 0,
     produtosComImagem: 0,
     produtosSemImagem: 0,
-    produtosOpenFoodFacts: 0,
-    produtosNotasFiscais: 0,
     
     // Fila de Processamento - Auto-Aprovados
     autoAprovadosTotal: 0,
-    autoAprovadosOpenFoodFacts: 0,
-    autoAprovadosNotasFiscais: 0,
     
     // Fila de Processamento - Aprovados Manualmente
     aprovadosManuaisTotal: 0,
     
     // Fila de Processamento - Pendentes
     pendentesTotal: 0,
-    pendentesOpenFoodFacts: 0,
-    pendentesNotasFiscais: 0,
     
     // Outros
     totalUsuarios: 0,
