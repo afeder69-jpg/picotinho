@@ -373,6 +373,18 @@ export default function NormalizacaoGlobal() {
         .from('profiles')
         .select('id');
 
+      // Estabelecimentos pendentes de normalização
+      let estabelecimentosPendentes = 0;
+      try {
+        const { data: pendentesEstab } = await supabase.rpc('listar_estabelecimentos_pendentes', {
+          p_incluir_normalizados: false,
+          p_termo_busca: '',
+        });
+        estabelecimentosPendentes = pendentesEstab?.length || 0;
+      } catch (e) {
+        console.error('Erro ao contar estabelecimentos pendentes:', e);
+      }
+
       // Usar o maior valor entre pendentes na tabela e aguardando no estoque (agora corrigido)
       const totalAguardando = Math.max(pendentes.length, aguardandoNoEstoque);
       
