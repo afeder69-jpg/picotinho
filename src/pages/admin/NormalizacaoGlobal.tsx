@@ -2018,10 +2018,6 @@ export default function NormalizacaoGlobal() {
             <Package className="w-4 h-4" />
             Catálogo Master
           </TabsTrigger>
-          <TabsTrigger value="importar" className="gap-2">
-            <Download className="w-4 h-4" />
-            Importar Open Food Facts
-          </TabsTrigger>
           <TabsTrigger value="raspagem-imagens" className="gap-2">
             <ImageOff className="w-4 h-4" />
             Raspagem de Imagens ({stats.produtosSemImagem})
