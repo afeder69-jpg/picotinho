@@ -1,31 +1,38 @@
 
 
-## Plano: Botão circular no /screenshots + abreviar meses
+## Plano: Adicionar campo EAN Comercial na edição de produtos
 
-### Alteração 1: Mostrar botão circular no /screenshots
-**Arquivo: `src/components/BottomNavigation.tsx`** (linha 881)
+### Contexto
+- `produtos_master_global` já tem coluna `codigo_barras` no banco
+- `produtos_candidatos_normalizacao` NÃO tem coluna de EAN — o EAN vem do `estoque_app.ean_comercial` vinculado
+- O formulário de edição (`editForm`) não inclui `codigo_barras` hoje
 
-O botão central circular de scan só aparece quando `location.pathname === '/'`. Basta expandir a condição para incluir `/screenshots`:
+### Alterações em `src/pages/admin/NormalizacaoGlobal.tsx`
 
-```typescript
-{(location.pathname === '/' || location.pathname === '/screenshots') && (
-```
+**1. Adicionar `codigo_barras` ao estado `editForm`** (linha 98-111)
+- Incluir `codigo_barras: ''` no objeto inicial
 
-Isso faz o botão circular de leitura aparecer na página "Minhas Notas Fiscais" com exatamente o mesmo visual e comportamento da home.
+**2. Preencher EAN ao abrir modal de candidato pendente** (`abrirModalEdicao`, linha 855-868)
+- Adicionar `codigo_barras: ''` ao setEditForm
+- Após preencher o form, buscar o EAN do `estoque_app` vinculado ao candidato: `estoque_app.ean_comercial WHERE produto_candidato_id = candidato.id LIMIT 1`
+- Se encontrar, atualizar `editForm.codigo_barras`
 
-### Alteração 2: Abreviar meses nos resumos
-**Arquivo: `src/components/ReceiptList.tsx`** (linhas 934-936)
+**3. Preencher EAN ao abrir modal de produto master** (`editarProdutoMaster`, linha 1297-1310)
+- Incluir `codigo_barras: produto.codigo_barras || ''` no setEditForm
 
-Trocar `{ month: 'long', year: 'numeric' }` por `{ month: 'short', year: 'numeric' }` e converter para maiúsculas com formatação `ABR/2026`:
+**4. Salvar EAN na aprovação de candidato** (`aprovarComModificacoes`, linha 917-934)
+- Adicionar `codigo_barras: editForm.codigo_barras || null` ao `insertData`
 
-```typescript
-const label = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-// Remove ponto do "abr." e formata como "ABR/2026"
-const cleanLabel = label.replace('.', '').split(' de ');
-const capitalizedLabel = cleanLabel[0].toUpperCase() + '/' + date.getFullYear();
-```
+**5. Salvar EAN na edição de produto master** (`salvarEdicaoProdutoMaster`, linha 1363-1376)
+- Adicionar `codigo_barras: editForm.codigo_barras || null` ao `updateData`
 
-### Resultado
-- Botão circular verde de leitura visível na parte inferior da página `/screenshots`, idêntico à home
-- Meses exibidos como `MAR/2026`, `FEV/2026`, `JAN/2026`
+**6. Adicionar campo na UI do modal** (após o campo SKU Global, ~linha 2658)
+- Input editável com label "EAN Comercial (Código de Barras)"
+- Placeholder "Ex: 7891234567890"
+- Sempre editável (diferente do SKU que é bloqueado em edição master)
+
+### O que NÃO muda
+- Nenhuma migração necessária (coluna `codigo_barras` já existe em `produtos_master_global`)
+- Fluxo de aprovação, rejeição, catálogo master — intactos
+- Nenhuma outra página ou componente afetado
 
