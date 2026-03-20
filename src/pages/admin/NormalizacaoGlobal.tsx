@@ -2678,6 +2678,17 @@ export default function NormalizacaoGlobal() {
               )}
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="codigo_barras">EAN Comercial (Código de Barras)</Label>
+              <Input
+                id="codigo_barras"
+                value={editForm.codigo_barras}
+                onChange={(e) => setEditForm({...editForm, codigo_barras: e.target.value})}
+                placeholder="Ex: 7891234567890"
+                className="font-mono"
+              />
+            </div>
+
             <div className="flex items-center space-x-2">
               <Switch
                 id="granel"
