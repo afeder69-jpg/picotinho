@@ -155,22 +155,6 @@ export default function NormalizacaoGlobal() {
   const [buscandoPendentes, setBuscandoPendentes] = useState(false);
   const [resultadosBuscaPendentes, setResultadosBuscaPendentes] = useState<any[]>([]);
 
-  // Estados para importação Open Food Facts
-  const [importando, setImportando] = useState(false);
-  const [progressoImportacao, setProgressoImportacao] = useState(0);
-  const [statsImportacao, setStatsImportacao] = useState({
-    total: 0,
-    importados: 0,
-    duplicados: 0,
-    erros: 0,
-    comImagem: 0,
-    semImagem: 0
-  });
-  const [logsImportacao, setLogsImportacao] = useState<string[]>([]);
-  const [limiteImportar, setLimiteImportar] = useState(50);
-  const [apenasComImagem, setApenasComImagem] = useState(true);
-  const [paginaSelecionada, setPaginaSelecionada] = useState(1);
-  const [paginasImportadas, setPaginasImportadas] = useState<number[]>([]);
 
   // Estados para consolidação de duplicados
   const [consolidando, setConsolidando] = useState(false);
