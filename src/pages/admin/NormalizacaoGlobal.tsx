@@ -1392,6 +1392,7 @@ export default function NormalizacaoGlobal() {
         unidade_base: editForm.unidade_base || null,
         categoria_unidade: editForm.categoria_unidade || null,
         granel: editForm.granel,
+        codigo_barras: editForm.codigo_barras || null,
         updated_at: new Date().toISOString()
       };
 
