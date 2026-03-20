@@ -1325,7 +1325,8 @@ export default function NormalizacaoGlobal() {
         unidade_base: produto.unidade_base || '',
         categoria_unidade: produto.categoria_unidade || '',
         granel: produto.granel || false,
-        sku_global: produto.sku_global || ''
+        sku_global: produto.sku_global || '',
+        codigo_barras: produto.codigo_barras || ''
       });
 
       // Carregar imagem existente se houver
