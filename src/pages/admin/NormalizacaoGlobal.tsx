@@ -945,6 +945,7 @@ export default function NormalizacaoGlobal() {
         unidade_base: editForm.unidade_base || null,
         categoria_unidade: editForm.categoria_unidade || null,
         granel: editForm.granel,
+        codigo_barras: editForm.codigo_barras || null,
         confianca_normalizacao: candidatoAtual.confianca_ia,
         aprovado_por: user.id,
         aprovado_em: new Date().toISOString(),
