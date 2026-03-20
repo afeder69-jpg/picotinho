@@ -175,12 +175,6 @@ export default function NormalizacaoGlobal() {
     verificarAcessoMaster();
   }, []);
 
-  // Carregar páginas importadas ao montar
-  useEffect(() => {
-    if (isMaster) {
-      carregarPaginasImportadas();
-    }
-  }, [isMaster]);
 
   // useEffect para busca dinâmica com debounce
   useEffect(() => {
