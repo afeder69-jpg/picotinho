@@ -364,21 +364,15 @@ export default function NormalizacaoGlobal() {
         totalProdutosMaster: totalMaster || 0,
         produtosComImagem: mastersComImagem || 0,
         produtosSemImagem: mastersSemImagem,
-        produtosOpenFoodFacts: mastersComImagem || 0,
-        produtosNotasFiscais: mastersSemImagem,
         
         // Fila de Processamento - Órfãos (apenas itens não sincronizados)
         autoAprovadosTotal: countOrfaos,
-        autoAprovadosOpenFoodFacts: 0, // Removido
-        autoAprovadosNotasFiscais: 0,  // Removido
         
         // Fila de Processamento - Aprovados Manualmente
         aprovadosManuaisTotal: aprovadosManualmente || 0,
         
         // Fila de Processamento - Aguardando (corrigido)
         pendentesTotal: totalAguardando,
-        pendentesOpenFoodFacts,
-        pendentesNotasFiscais,
         
         // Outros
         totalUsuarios: usuarios?.length || 0,
