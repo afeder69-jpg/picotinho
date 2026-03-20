@@ -107,7 +107,8 @@ export default function NormalizacaoGlobal() {
     unidade_base: '',
     categoria_unidade: '',
     granel: false,
-    sku_global: ''
+    sku_global: '',
+    codigo_barras: ''
   });
   
   // Estado para observações de rejeição
@@ -839,7 +840,7 @@ export default function NormalizacaoGlobal() {
     return { qtd_base, unidade_base, categoria_unidade };
   }
 
-  function abrirModalEdicao(candidato: any) {
+  async function abrirModalEdicao(candidato: any) {
     setCandidatoAtual(candidato);
     setProdutoMasterEditando(null);
     
@@ -864,8 +865,25 @@ export default function NormalizacaoGlobal() {
       unidade_base: unidade_base,
       categoria_unidade: categoria_unidade,
       granel: candidato.granel_sugerido || false,
-      sku_global: candidato.sugestao_sku_global || ''
+      sku_global: candidato.sugestao_sku_global || '',
+      codigo_barras: ''
     });
+
+    // Buscar EAN comercial do estoque vinculado ao candidato
+    try {
+      const { data: estoque } = await supabase
+        .from('estoque_app')
+        .select('ean_comercial')
+        .eq('produto_candidato_id', candidato.id)
+        .not('ean_comercial', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      if (estoque?.ean_comercial) {
+        setEditForm(prev => ({ ...prev, codigo_barras: estoque.ean_comercial }));
+      }
+    } catch (e) {
+      console.log('Erro ao buscar EAN do estoque:', e);
+    }
     
     // Buscar produtos similares antes de abrir o modal
     buscarProdutosSimilares(candidato);
@@ -927,6 +945,7 @@ export default function NormalizacaoGlobal() {
         unidade_base: editForm.unidade_base || null,
         categoria_unidade: editForm.categoria_unidade || null,
         granel: editForm.granel,
+        codigo_barras: editForm.codigo_barras || null,
         confianca_normalizacao: candidatoAtual.confianca_ia,
         aprovado_por: user.id,
         aprovado_em: new Date().toISOString(),
@@ -1306,7 +1325,8 @@ export default function NormalizacaoGlobal() {
         unidade_base: produto.unidade_base || '',
         categoria_unidade: produto.categoria_unidade || '',
         granel: produto.granel || false,
-        sku_global: produto.sku_global || ''
+        sku_global: produto.sku_global || '',
+        codigo_barras: produto.codigo_barras || ''
       });
 
       // Carregar imagem existente se houver
@@ -1372,6 +1392,7 @@ export default function NormalizacaoGlobal() {
         unidade_base: editForm.unidade_base || null,
         categoria_unidade: editForm.categoria_unidade || null,
         granel: editForm.granel,
+        codigo_barras: editForm.codigo_barras || null,
         updated_at: new Date().toISOString()
       };
 
@@ -2655,6 +2676,17 @@ export default function NormalizacaoGlobal() {
               {produtoMasterEditando && (
                 <p className="text-xs text-muted-foreground">O SKU não pode ser alterado após a criação.</p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="codigo_barras">EAN Comercial (Código de Barras)</Label>
+              <Input
+                id="codigo_barras"
+                value={editForm.codigo_barras}
+                onChange={(e) => setEditForm({...editForm, codigo_barras: e.target.value})}
+                placeholder="Ex: 7891234567890"
+                className="font-mono"
+              />
             </div>
 
             <div className="flex items-center space-x-2">
