@@ -869,17 +869,12 @@ export default function NormalizacaoGlobal() {
       codigo_barras: ''
     });
 
-    // Buscar EAN comercial do estoque vinculado ao candidato
+    // Buscar EAN comercial via RPC segura (bypass RLS, restrito a masters)
     try {
-      const { data: estoque } = await supabase
-        .from('estoque_app')
-        .select('ean_comercial')
-        .eq('produto_candidato_id', candidato.id)
-        .not('ean_comercial', 'is', null)
-        .limit(1)
-        .maybeSingle();
-      if (estoque?.ean_comercial) {
-        setEditForm(prev => ({ ...prev, codigo_barras: estoque.ean_comercial }));
+      const { data: ean } = await supabase
+        .rpc('buscar_ean_por_candidato', { p_candidato_id: candidato.id });
+      if (ean) {
+        setEditForm(prev => ({ ...prev, codigo_barras: ean }));
       }
     } catch (e) {
       console.log('Erro ao buscar EAN do estoque:', e);
