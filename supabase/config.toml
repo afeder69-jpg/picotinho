@@ -29,11 +29,6 @@ verify_jwt = false
 [functions.consolidar-masters-duplicados]
 verify_jwt = false
 
-[functions.desmarcar-pagina-open-food-facts]
-verify_jwt = false
-
-[functions.importar-open-food-facts]
-verify_jwt = false
 
 [functions.validate-receipt]
 verify_jwt = false

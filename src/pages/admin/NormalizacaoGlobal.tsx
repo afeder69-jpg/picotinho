@@ -25,9 +25,7 @@ import {
   Sparkles,
   AlertCircle,
   Edit3,
-  Download,
   Database,
-  Image,
   Globe,
   FileText,
   Settings,
@@ -66,21 +64,15 @@ export default function NormalizacaoGlobal() {
     totalProdutosMaster: 0,
     produtosComImagem: 0,
     produtosSemImagem: 0,
-    produtosOpenFoodFacts: 0,
-    produtosNotasFiscais: 0,
     
     // Fila de Processamento - Auto-Aprovados
     autoAprovadosTotal: 0,
-    autoAprovadosOpenFoodFacts: 0,
-    autoAprovadosNotasFiscais: 0,
     
     // Fila de Processamento - Aprovados Manualmente
     aprovadosManuaisTotal: 0,
     
     // Fila de Processamento - Pendentes
     pendentesTotal: 0,
-    pendentesOpenFoodFacts: 0,
-    pendentesNotasFiscais: 0,
     
     // Outros
     totalUsuarios: 0,
@@ -163,22 +155,6 @@ export default function NormalizacaoGlobal() {
   const [buscandoPendentes, setBuscandoPendentes] = useState(false);
   const [resultadosBuscaPendentes, setResultadosBuscaPendentes] = useState<any[]>([]);
 
-  // Estados para importação Open Food Facts
-  const [importando, setImportando] = useState(false);
-  const [progressoImportacao, setProgressoImportacao] = useState(0);
-  const [statsImportacao, setStatsImportacao] = useState({
-    total: 0,
-    importados: 0,
-    duplicados: 0,
-    erros: 0,
-    comImagem: 0,
-    semImagem: 0
-  });
-  const [logsImportacao, setLogsImportacao] = useState<string[]>([]);
-  const [limiteImportar, setLimiteImportar] = useState(50);
-  const [apenasComImagem, setApenasComImagem] = useState(true);
-  const [paginaSelecionada, setPaginaSelecionada] = useState(1);
-  const [paginasImportadas, setPaginasImportadas] = useState<number[]>([]);
 
   // Estados para consolidação de duplicados
   const [consolidando, setConsolidando] = useState(false);
@@ -199,12 +175,6 @@ export default function NormalizacaoGlobal() {
     verificarAcessoMaster();
   }, []);
 
-  // Carregar páginas importadas ao montar
-  useEffect(() => {
-    if (isMaster) {
-      carregarPaginasImportadas();
-    }
-  }, [isMaster]);
 
   // useEffect para busca dinâmica com debounce
   useEffect(() => {
@@ -294,13 +264,13 @@ export default function NormalizacaoGlobal() {
         .from('produtos_master_global')
         .select('*', { count: 'exact', head: true });
 
-      // Masters com imagem (OpenFoodFacts)
+      // Masters com imagem
       const { count: mastersComImagem } = await supabase
         .from('produtos_master_global')
         .select('*', { count: 'exact', head: true })
         .not('imagem_url', 'is', null);
       
-      // Masters sem imagem (Notas Fiscais)
+      // Masters sem imagem
       const mastersSemImagem = (totalMaster || 0) - (mastersComImagem || 0);
 
       // ===== CARREGAR TODOS OS CANDIDATOS =====
@@ -359,14 +329,6 @@ export default function NormalizacaoGlobal() {
         .eq('status', 'aprovado')
         .not('revisado_por', 'is', null);
       
-      // Separar pendentes por origem
-      const pendentesOpenFoodFacts = pendentes.filter(
-        c => !c.notas_imagens || !c.notas_imagens.origem
-      ).length;
-      
-      const pendentesNotasFiscais = pendentes.filter(
-        c => c.notas_imagens?.origem === 'whatsapp'
-      ).length;
 
       // Total de usuários
       const { data: usuarios } = await supabase
@@ -396,21 +358,15 @@ export default function NormalizacaoGlobal() {
         totalProdutosMaster: totalMaster || 0,
         produtosComImagem: mastersComImagem || 0,
         produtosSemImagem: mastersSemImagem,
-        produtosOpenFoodFacts: mastersComImagem || 0,
-        produtosNotasFiscais: mastersSemImagem,
         
         // Fila de Processamento - Órfãos (apenas itens não sincronizados)
         autoAprovadosTotal: countOrfaos,
-        autoAprovadosOpenFoodFacts: 0, // Removido
-        autoAprovadosNotasFiscais: 0,  // Removido
         
         // Fila de Processamento - Aprovados Manualmente
         aprovadosManuaisTotal: aprovadosManualmente || 0,
         
         // Fila de Processamento - Aguardando (corrigido)
         pendentesTotal: totalAguardando,
-        pendentesOpenFoodFacts,
-        pendentesNotasFiscais,
         
         // Outros
         totalUsuarios: usuarios?.length || 0,
@@ -629,146 +585,6 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function carregarPaginasImportadas() {
-    try {
-      const { data, error } = await supabase
-        .from('open_food_facts_controle')
-        .select('pagina')
-        .order('pagina', { ascending: true });
-      
-      if (error) throw error;
-      
-      const paginas = data?.map(item => item.pagina) || [];
-      setPaginasImportadas(paginas);
-    } catch (error: any) {
-      console.error('Erro ao carregar páginas importadas:', error);
-    }
-  }
-
-  async function desmarcarPagina(pagina: number) {
-    try {
-      toast({
-        title: "Desmarcando página...",
-        description: `Removendo página ${pagina} dos registros`,
-      });
-
-      const { error } = await supabase.functions.invoke('desmarcar-pagina-open-food-facts', {
-        body: { pagina }
-      });
-
-      if (error) throw error;
-
-      // Atualizar lista de páginas importadas
-      await carregarPaginasImportadas();
-
-      toast({
-        title: "Página desmarcada! ✅",
-        description: `Página ${pagina} pode ser importada novamente`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Erro ao desmarcar",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  }
-
-  async function iniciarImportacao() {
-    setImportando(true);
-    setLogsImportacao([]);
-    setProgressoImportacao(0);
-    setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
-    
-    // Gerar sessionId único para Realtime
-    const sessionId = crypto.randomUUID();
-    let realtimeChannel: any = null;
-    
-    try {
-      toast({
-        title: "Importação iniciada",
-        description: `Importando página ${paginaSelecionada} do Open Food Facts...`,
-      });
-      
-      // Criar subscription Realtime
-      realtimeChannel = supabase.channel(`import_progress_${sessionId}`);
-      
-      realtimeChannel
-        .on('broadcast', { event: 'progress' }, (payload: any) => {
-          const { percentage, productName, status, message, current, total, hasImage } = payload.payload;
-          
-          setProgressoImportacao(percentage);
-          
-          // Adicionar log em tempo real
-          let emoji = '🔄';
-          if (status === 'success') emoji = '✅';
-          else if (status === 'duplicate') emoji = '⏭️';
-          else if (status === 'error') emoji = '❌';
-          
-          setLogsImportacao(prev => [...prev, `${emoji} [${current}/${total}] ${productName}`]);
-          
-          // Atualizar stats em tempo real
-          setStatsImportacao(prev => ({
-            ...prev,
-            total: total,
-            importados: status === 'success' ? prev.importados + 1 : prev.importados,
-            duplicados: status === 'duplicate' ? prev.duplicados + 1 : prev.duplicados,
-            erros: status === 'error' ? prev.erros + 1 : prev.erros,
-            comImagem: hasImage ? prev.comImagem + 1 : prev.comImagem,
-            semImagem: !hasImage ? prev.semImagem + 1 : prev.semImagem
-          }));
-        })
-        .on('broadcast', { event: 'complete' }, (payload: any) => {
-          console.log('✅ Importação concluída (Realtime):', payload.payload);
-        })
-        .subscribe();
-
-      const { data, error } = await supabase.functions.invoke('importar-open-food-facts', {
-        body: {
-          limite: limiteImportar,
-          pagina: paginaSelecionada,
-          comImagem: apenasComImagem,
-          sessionId
-        }
-      });
-      
-      if (error) throw error;
-      
-      setProgressoImportacao(100);
-      
-      // Atualizar lista de páginas importadas
-      await carregarPaginasImportadas();
-      
-      toast({
-        title: "Importação concluída!",
-        description: `${data?.importados || 0} produtos importados com sucesso`,
-      });
-      
-      await carregarDados();
-      
-    } catch (error: any) {
-      console.error('Erro na importação:', error);
-      toast({
-        title: "Erro na importação",
-        description: error.message,
-        variant: "destructive"
-      });
-      setLogsImportacao(prev => [...prev, `❌ ERRO: ${error.message}`]);
-    } finally {
-      // Cleanup: unsubscribe do canal Realtime
-      if (realtimeChannel) {
-        await realtimeChannel.unsubscribe();
-        console.log('📡 Canal Realtime desconectado');
-      }
-      setImportando(false);
-    }
-  }
-
-  function limparLogsImportacao() {
-    setLogsImportacao([]);
-    setProgressoImportacao(0);
-    setStatsImportacao({ total: 0, importados: 0, duplicados: 0, erros: 0, comImagem: 0, semImagem: 0 });
-  }
 
   async function buscarDuplicatas() {
     try {
@@ -1933,11 +1749,7 @@ export default function NormalizacaoGlobal() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <div className="space-y-1">
-                    <p className="font-semibold">Aprovados automaticamente pela IA</p>
-                    <p className="text-xs">OpenFoodFacts: {stats.autoAprovadosOpenFoodFacts}</p>
-                    <p className="text-xs">Notas Fiscais: {stats.autoAprovadosNotasFiscais}</p>
-                  </div>
+                  <p className="font-semibold">Aprovados automaticamente pela IA (confiança ≥ 90%)</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -2005,11 +1817,7 @@ export default function NormalizacaoGlobal() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <div className="space-y-1">
-                    <p className="font-semibold">Candidatos aguardando revisão</p>
-                    <p className="text-xs">OpenFoodFacts: {stats.pendentesOpenFoodFacts}</p>
-                    <p className="text-xs">Notas Fiscais: {stats.pendentesNotasFiscais}</p>
-                  </div>
+                  <p className="font-semibold">Candidatos aguardando revisão</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -2203,10 +2011,6 @@ export default function NormalizacaoGlobal() {
           <TabsTrigger value="catalogo" className="gap-2">
             <Package className="w-4 h-4" />
             Catálogo Master
-          </TabsTrigger>
-          <TabsTrigger value="importar" className="gap-2">
-            <Download className="w-4 h-4" />
-            Importar Open Food Facts
           </TabsTrigger>
           <TabsTrigger value="raspagem-imagens" className="gap-2">
             <ImageOff className="w-4 h-4" />
@@ -2564,258 +2368,6 @@ export default function NormalizacaoGlobal() {
           )}
         </TabsContent>
 
-        {/* Importar Open Food Facts */}
-        <TabsContent value="importar" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Importar Produtos do Open Food Facts</CardTitle>
-              <CardDescription>
-                Base de dados colaborativa mundial de produtos alimentícios com fotos, ingredientes e informações nutricionais
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Painel de Configuração */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="limite">Limite de produtos</Label>
-                    <select
-                      id="limite"
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                      value={limiteImportar}
-                      onChange={(e) => setLimiteImportar(Number(e.target.value))}
-                    >
-                      <option value={50}>50 produtos</option>
-                      <option value={100}>100 produtos</option>
-                      <option value={500}>500 produtos</option>
-                      <option value={1000}>1000 produtos</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="pagina">Página a importar</Label>
-                    <Input
-                      id="pagina"
-                      type="number"
-                      min={1}
-                      value={paginaSelecionada}
-                      onChange={(e) => setPaginaSelecionada(Number(e.target.value))}
-                      className={paginasImportadas.includes(paginaSelecionada) ? 'border-red-500 bg-red-50' : ''}
-                      placeholder="1"
-                    />
-                    {paginasImportadas.includes(paginaSelecionada) && (
-                      <p className="text-xs text-red-600">⚠️ Página já importada</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="comImagem" className="flex items-center gap-2">
-                      <Switch
-                        id="comImagem"
-                        checked={apenasComImagem}
-                        onCheckedChange={setApenasComImagem}
-                      />
-                      Apenas produtos com imagem
-                    </Label>
-                  </div>
-                </div>
-
-                {/* Lista de páginas importadas */}
-                {paginasImportadas.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">Páginas já importadas ({paginasImportadas.length})</Label>
-                    <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-md max-h-24 overflow-y-auto">
-                      {paginasImportadas.map(pagina => (
-                        <Badge
-                          key={pagina}
-                          variant="secondary"
-                          className="flex items-center gap-1 pr-1 cursor-default hover:bg-secondary/80"
-                        >
-                          <span 
-                            className="cursor-pointer"
-                            onClick={() => setPaginaSelecionada(pagina)}
-                          >
-                            {pagina}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              desmarcarPagina(pagina);
-                            }}
-                            className="ml-1 hover:text-destructive transition-colors"
-                            title="Desmarcar página"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={iniciarImportacao} 
-                    disabled={importando}
-                    className="gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    {importando ? 'Importando...' : 'Iniciar Importação'}
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    onClick={limparLogsImportacao}
-                    disabled={importando}
-                  >
-                    Limpar
-                  </Button>
-                </div>
-              </div>
-
-              {/* Progresso */}
-              {importando && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Progresso da importação</span>
-                    <span>{progressoImportacao}%</span>
-                  </div>
-                  <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-primary h-full transition-all duration-300"
-                      style={{ width: `${progressoImportacao}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Estatísticas */}
-              {(statsImportacao.total > 0 || importando) && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Resultado da Importação</h3>
-                    {!importando && statsImportacao.total > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setStatsImportacao({
-                            total: 0,
-                            importados: 0,
-                            duplicados: 0,
-                            erros: 0,
-                            comImagem: 0,
-                            semImagem: 0
-                          });
-                          setLogsImportacao([]);
-                          setProgressoImportacao(0);
-                        }}
-                      >
-                        Limpar Resultados
-                      </Button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Importados</p>
-                          <p className="text-2xl font-bold text-green-600">{statsImportacao.importados}</p>
-                        </div>
-                        <CheckCircle2 className="w-8 h-8 text-green-500" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Duplicados</p>
-                          <p className="text-2xl font-bold text-yellow-600">{statsImportacao.duplicados}</p>
-                        </div>
-                        <AlertCircle className="w-8 h-8 text-yellow-500" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Erros</p>
-                          <p className="text-2xl font-bold text-red-600">{statsImportacao.erros}</p>
-                        </div>
-                        <XCircle className="w-8 h-8 text-red-500" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Com Imagem</p>
-                          <p className="text-2xl font-bold text-blue-600">{statsImportacao.comImagem}</p>
-                        </div>
-                        <Image className="w-8 h-8 text-blue-500" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Sem Imagem</p>
-                          <p className="text-2xl font-bold text-gray-600">{statsImportacao.semImagem}</p>
-                        </div>
-                        <Database className="w-8 h-8 text-gray-500" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Total</p>
-                          <p className="text-2xl font-bold">{statsImportacao.total}</p>
-                        </div>
-                        <Package className="w-8 h-8 text-muted-foreground" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  </div>
-                </div>
-              )}
-
-              {/* Logs Detalhados */}
-              {logsImportacao.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Logs da Importação</Label>
-                  <div className="max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/50 space-y-1">
-                    {logsImportacao.map((log, index) => (
-                      <p 
-                        key={index} 
-                        className={`text-sm font-mono ${
-                          log.includes('✅') ? 'text-green-600' :
-                          log.includes('⚠️') ? 'text-yellow-600' :
-                          log.includes('❌') ? 'text-red-600' :
-                          'text-muted-foreground'
-                        }`}
-                      >
-                        {log}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Aba de Raspagem de Imagens */}
         <TabsContent value="raspagem-imagens" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-1">
