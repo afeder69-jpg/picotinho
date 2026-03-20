@@ -270,7 +270,7 @@ export default function NormalizacaoGlobal() {
         .from('produtos_master_global')
         .select('*', { count: 'exact', head: true });
 
-      // Masters com imagem (OpenFoodFacts)
+      // Masters com imagem
       const { count: mastersComImagem } = await supabase
         .from('produtos_master_global')
         .select('*', { count: 'exact', head: true })
