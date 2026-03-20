@@ -2013,6 +2013,31 @@ export default function NormalizacaoGlobal() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
+            {/* Estabelecimentos Pendentes */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div 
+                    className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/30 dark:to-pink-950/30 rounded-lg p-4 border-2 border-rose-300 dark:border-rose-700 hover:border-rose-400 dark:hover:border-rose-600 transition-all cursor-pointer"
+                    onClick={() => navigate('/admin/normalizacoes-estabelecimentos')}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Building2 className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Estab. Pendentes</span>
+                    </div>
+                    <div className="text-3xl font-bold text-rose-700 dark:text-rose-300 mb-1">
+                      {stats.estabelecimentosPendentes}
+                    </div>
+                    <div className="text-xs text-muted-foreground">estabelecimentos</div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Estabelecimentos ainda sem regra de normalização</p>
+                  <p className="text-xs mt-1">Clique para gerenciar</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Separador */}
