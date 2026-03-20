@@ -1755,11 +1755,7 @@ export default function NormalizacaoGlobal() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <div className="space-y-1">
-                    <p className="font-semibold">Aprovados automaticamente pela IA</p>
-                    <p className="text-xs">OpenFoodFacts: {stats.autoAprovadosOpenFoodFacts}</p>
-                    <p className="text-xs">Notas Fiscais: {stats.autoAprovadosNotasFiscais}</p>
-                  </div>
+                  <p className="font-semibold">Aprovados automaticamente pela IA (confiança ≥ 90%)</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
