@@ -840,7 +840,7 @@ export default function NormalizacaoGlobal() {
     return { qtd_base, unidade_base, categoria_unidade };
   }
 
-  function abrirModalEdicao(candidato: any) {
+  async function abrirModalEdicao(candidato: any) {
     setCandidatoAtual(candidato);
     setProdutoMasterEditando(null);
     
