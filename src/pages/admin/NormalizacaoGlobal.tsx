@@ -84,7 +84,8 @@ export default function NormalizacaoGlobal() {
     
     // Outros
     totalUsuarios: 0,
-    estimativaNovos: 0
+    estimativaNovos: 0,
+    estabelecimentosPendentes: 0
   });
   const [candidatos, setCandidatos] = useState<any[]>([]);
   const [produtosMaster, setProdutosMaster] = useState<any[]>([]);
