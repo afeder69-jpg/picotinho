@@ -1,38 +1,52 @@
 
 
-## Plano: Adicionar campo EAN Comercial na edição de produtos
+## Plano: Corrigir leitura do EAN via RPC segura
 
-### Contexto
-- `produtos_master_global` já tem coluna `codigo_barras` no banco
-- `produtos_candidatos_normalizacao` NÃO tem coluna de EAN — o EAN vem do `estoque_app.ean_comercial` vinculado
-- O formulário de edição (`editForm`) não inclui `codigo_barras` hoje
+### Diagnóstico confirmado
+- Produto "Multiuso Cremoso Original Cif 250ml" tem EAN `7891150022010` no `estoque_app`, vinculado ao `produto_candidato_id: 98460d69-...`
+- A query direta falha porque o RLS do `estoque_app` restringe SELECT a `auth.uid() = user_id`
+- Função `has_role` existe e já valida `revogado_em IS NULL`
 
-### Alterações em `src/pages/admin/NormalizacaoGlobal.tsx`
+### Alterações
 
-**1. Adicionar `codigo_barras` ao estado `editForm`** (linha 98-111)
-- Incluir `codigo_barras: ''` no objeto inicial
+**1. Migration SQL — criar função `buscar_ean_por_candidato`**
 
-**2. Preencher EAN ao abrir modal de candidato pendente** (`abrirModalEdicao`, linha 855-868)
-- Adicionar `codigo_barras: ''` ao setEditForm
-- Após preencher o form, buscar o EAN do `estoque_app` vinculado ao candidato: `estoque_app.ean_comercial WHERE produto_candidato_id = candidato.id LIMIT 1`
-- Se encontrar, atualizar `editForm.codigo_barras`
+```sql
+CREATE OR REPLACE FUNCTION public.buscar_ean_por_candidato(p_candidato_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.has_role(auth.uid(), 'master') THEN
+    RETURN NULL;
+  END IF;
+  RETURN (
+    SELECT ean_comercial FROM estoque_app
+    WHERE produto_candidato_id = p_candidato_id
+      AND ean_comercial IS NOT NULL
+    LIMIT 1
+  );
+END;
+$$;
+```
 
-**3. Preencher EAN ao abrir modal de produto master** (`editarProdutoMaster`, linha 1297-1310)
-- Incluir `codigo_barras: produto.codigo_barras || ''` no setEditForm
+Segurança: apenas usuários com role `master` (não revogado) conseguem executar. Qualquer outro recebe `NULL`.
 
-**4. Salvar EAN na aprovação de candidato** (`aprovarComModificacoes`, linha 917-934)
-- Adicionar `codigo_barras: editForm.codigo_barras || null` ao `insertData`
+**2. `NormalizacaoGlobal.tsx` (linhas 872-886)** — trocar query direta por RPC
 
-**5. Salvar EAN na edição de produto master** (`salvarEdicaoProdutoMaster`, linha 1363-1376)
-- Adicionar `codigo_barras: editForm.codigo_barras || null` ao `updateData`
-
-**6. Adicionar campo na UI do modal** (após o campo SKU Global, ~linha 2658)
-- Input editável com label "EAN Comercial (Código de Barras)"
-- Placeholder "Ex: 7891234567890"
-- Sempre editável (diferente do SKU que é bloqueado em edição master)
+```typescript
+const { data: ean } = await supabase
+  .rpc('buscar_ean_por_candidato', { p_candidato_id: candidato.id });
+if (ean) {
+  setEditForm(prev => ({ ...prev, codigo_barras: ean }));
+}
+```
 
 ### O que NÃO muda
-- Nenhuma migração necessária (coluna `codigo_barras` já existe em `produtos_master_global`)
-- Fluxo de aprovação, rejeição, catálogo master — intactos
-- Nenhuma outra página ou componente afetado
+- Leitura do EAN para produtos master (já funciona direto)
+- Salvamento do EAN na aprovação e edição
+- Nenhuma outra funcionalidade
 
