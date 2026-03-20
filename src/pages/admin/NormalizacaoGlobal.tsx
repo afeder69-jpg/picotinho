@@ -926,9 +926,23 @@ export default function NormalizacaoGlobal() {
         setUploadingImage(false);
       }
 
+      // Garantir SKU único antes de inserir
+      let skuFinal = editForm.sku_global;
+      const { data: skuExistente } = await supabase
+        .from('produtos_master_global')
+        .select('id')
+        .eq('sku_global', skuFinal)
+        .maybeSingle();
+
+      if (skuExistente) {
+        // SKU já existe, gerar sufixo único
+        const sufixo = Date.now().toString(36).toUpperCase();
+        skuFinal = `${editForm.sku_global}-${sufixo}`;
+      }
+
       // Criar produto master com dados editados
       const insertData: any = {
-        sku_global: editForm.sku_global,
+        sku_global: skuFinal,
         nome_padrao: editForm.nome_padrao,
         categoria: editForm.categoria,
         nome_base: editForm.nome_base,
