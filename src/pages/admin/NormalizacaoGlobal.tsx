@@ -414,7 +414,8 @@ export default function NormalizacaoGlobal() {
         
         // Outros
         totalUsuarios: usuarios?.length || 0,
-        estimativaNovos
+        estimativaNovos,
+        estabelecimentosPendentes
       });
 
       // ===== PAGINAÇÃO APENAS DE PENDENTES =====
