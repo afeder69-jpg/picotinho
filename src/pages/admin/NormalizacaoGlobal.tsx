@@ -107,7 +107,8 @@ export default function NormalizacaoGlobal() {
     unidade_base: '',
     categoria_unidade: '',
     granel: false,
-    sku_global: ''
+    sku_global: '',
+    codigo_barras: ''
   });
   
   // Estado para observações de rejeição
