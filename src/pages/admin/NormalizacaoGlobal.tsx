@@ -3,6 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { categoriasNormalizadas } from "@/lib/categorias";
+
+/**
+ * Normaliza categoria para valor canônico aceito por estoque_app.
+ * Espelha a função SQL normalizar_categoria_estoque() — banco é a proteção definitiva.
+ */
+function normalizarCategoriaParaEstoque(cat: string | null | undefined): string {
+  const map: Record<string, string> = {
+    'açougue': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue',
+    'bebidas': 'bebidas',
+    'congelados': 'congelados',
+    'higiene': 'higiene/farmácia', 'higiene/farmácia': 'higiene/farmácia', 'higiene/farmacia': 'higiene/farmácia', 'farmácia': 'higiene/farmácia', 'farmacia': 'higiene/farmácia',
+    'hortifruti': 'hortifruti', 'frutas': 'hortifruti', 'verduras': 'hortifruti', 'legumes': 'hortifruti',
+    'laticínios/frios': 'laticínios/frios', 'laticínios': 'laticínios/frios', 'laticinios': 'laticínios/frios', 'laticinios/frios': 'laticínios/frios', 'frios': 'laticínios/frios',
+    'limpeza': 'limpeza',
+    'mercearia': 'mercearia', 'alimentos': 'mercearia',
+    'padaria': 'padaria',
+    'pet': 'pet',
+    'outros': 'outros',
+  };
+  const key = (cat || '').toLowerCase().trim();
+  return map[key] || 'outros';
+}
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
