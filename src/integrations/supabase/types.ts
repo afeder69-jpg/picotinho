@@ -2939,6 +2939,10 @@ export type Database = {
           categoria_nome: string
         }[]
       }
+      buscar_ean_por_candidato: {
+        Args: { p_candidato_id: string }
+        Returns: string
+      }
       buscar_produto_por_sku: {
         Args: { sku_busca: string }
         Returns: {
