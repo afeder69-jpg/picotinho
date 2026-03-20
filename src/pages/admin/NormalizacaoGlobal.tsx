@@ -1137,7 +1137,7 @@ export default function NormalizacaoGlobal() {
           tipo_embalagem: produtoMaster.tipo_embalagem,
           qtd_valor: produtoMaster.qtd_valor,
           qtd_unidade: produtoMaster.qtd_unidade,
-          categoria: produtoMaster.categoria,
+          categoria: normalizarCategoriaParaEstoque(produtoMaster.categoria),
           imagem_url: produtoMaster.imagem_url || null,
           produto_candidato_id: null
         })
