@@ -1823,11 +1823,7 @@ export default function NormalizacaoGlobal() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <div className="space-y-1">
-                    <p className="font-semibold">Candidatos aguardando revisão</p>
-                    <p className="text-xs">OpenFoodFacts: {stats.pendentesOpenFoodFacts}</p>
-                    <p className="text-xs">Notas Fiscais: {stats.pendentesNotasFiscais}</p>
-                  </div>
+                  <p className="font-semibold">Candidatos aguardando revisão</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
