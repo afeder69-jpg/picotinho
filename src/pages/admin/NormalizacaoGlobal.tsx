@@ -276,7 +276,7 @@ export default function NormalizacaoGlobal() {
         .select('*', { count: 'exact', head: true })
         .not('imagem_url', 'is', null);
       
-      // Masters sem imagem (Notas Fiscais)
+      // Masters sem imagem
       const mastersSemImagem = (totalMaster || 0) - (mastersComImagem || 0);
 
       // ===== CARREGAR TODOS OS CANDIDATOS =====
