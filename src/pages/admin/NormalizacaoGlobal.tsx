@@ -865,8 +865,25 @@ export default function NormalizacaoGlobal() {
       unidade_base: unidade_base,
       categoria_unidade: categoria_unidade,
       granel: candidato.granel_sugerido || false,
-      sku_global: candidato.sugestao_sku_global || ''
+      sku_global: candidato.sugestao_sku_global || '',
+      codigo_barras: ''
     });
+
+    // Buscar EAN comercial do estoque vinculado ao candidato
+    try {
+      const { data: estoque } = await supabase
+        .from('estoque_app')
+        .select('ean_comercial')
+        .eq('produto_candidato_id', candidato.id)
+        .not('ean_comercial', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      if (estoque?.ean_comercial) {
+        setEditForm(prev => ({ ...prev, codigo_barras: estoque.ean_comercial }));
+      }
+    } catch (e) {
+      console.log('Erro ao buscar EAN do estoque:', e);
+    }
     
     // Buscar produtos similares antes de abrir o modal
     buscarProdutosSimilares(candidato);
