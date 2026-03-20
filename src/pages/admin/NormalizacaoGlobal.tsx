@@ -3,6 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { categoriasNormalizadas } from "@/lib/categorias";
+
+/**
+ * Normaliza categoria para valor canônico aceito por estoque_app.
+ * Espelha a função SQL normalizar_categoria_estoque() — banco é a proteção definitiva.
+ */
+function normalizarCategoriaParaEstoque(cat: string | null | undefined): string {
+  const map: Record<string, string> = {
+    'açougue': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue',
+    'bebidas': 'bebidas',
+    'congelados': 'congelados',
+    'higiene': 'higiene/farmácia', 'higiene/farmácia': 'higiene/farmácia', 'higiene/farmacia': 'higiene/farmácia', 'farmácia': 'higiene/farmácia', 'farmacia': 'higiene/farmácia',
+    'hortifruti': 'hortifruti', 'frutas': 'hortifruti', 'verduras': 'hortifruti', 'legumes': 'hortifruti',
+    'laticínios/frios': 'laticínios/frios', 'laticínios': 'laticínios/frios', 'laticinios': 'laticínios/frios', 'laticinios/frios': 'laticínios/frios', 'frios': 'laticínios/frios',
+    'limpeza': 'limpeza',
+    'mercearia': 'mercearia', 'alimentos': 'mercearia',
+    'padaria': 'padaria',
+    'pet': 'pet',
+    'outros': 'outros',
+  };
+  const key = (cat || '').toLowerCase().trim();
+  return map[key] || 'outros';
+}
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1002,7 +1024,7 @@ export default function NormalizacaoGlobal() {
           tipo_embalagem: produtoMaster.tipo_embalagem,
           qtd_valor: produtoMaster.qtd_valor,
           qtd_unidade: produtoMaster.qtd_unidade,
-          categoria: produtoMaster.categoria?.toLowerCase() || 'outros',
+          categoria: normalizarCategoriaParaEstoque(produtoMaster.categoria),
           produto_candidato_id: null  // Limpar link provisório
         })
         .eq('produto_candidato_id', candidatoAtual.id)
@@ -1137,7 +1159,7 @@ export default function NormalizacaoGlobal() {
           tipo_embalagem: produtoMaster.tipo_embalagem,
           qtd_valor: produtoMaster.qtd_valor,
           qtd_unidade: produtoMaster.qtd_unidade,
-          categoria: produtoMaster.categoria,
+          categoria: normalizarCategoriaParaEstoque(produtoMaster.categoria),
           imagem_url: produtoMaster.imagem_url || null,
           produto_candidato_id: null
         })
@@ -1253,7 +1275,7 @@ export default function NormalizacaoGlobal() {
           tipo_embalagem: produtoMaster.tipo_embalagem,
           qtd_valor: produtoMaster.qtd_valor,
           qtd_unidade: produtoMaster.qtd_unidade,
-          categoria: produtoMaster.categoria,
+          categoria: normalizarCategoriaParaEstoque(produtoMaster.categoria),
           produto_candidato_id: null  // Limpar link provisório
         })
         .eq('produto_candidato_id', candidatoId)

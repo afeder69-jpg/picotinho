@@ -3296,6 +3296,7 @@ export type Database = {
         }
         Returns: Json
       }
+      normalizar_categoria_estoque: { Args: { cat: string }; Returns: string }
       normalizar_nome_estabelecimento:
         | { Args: { nome_input: string }; Returns: string }
         | { Args: { cnpj_input?: string; nome_input: string }; Returns: string }

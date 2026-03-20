@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
             produto_nome_normalizado: master.nome_padrao,
             nome_base: master.nome_base,
             marca: master.marca,
-            categoria: master.categoria?.toLowerCase(),
+            categoria: (master.categoria || 'outros').toLowerCase(),
             imagem_url: master.imagem_url || undefined,
             updated_at: new Date().toISOString()
           })
