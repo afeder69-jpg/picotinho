@@ -335,14 +335,6 @@ export default function NormalizacaoGlobal() {
         .eq('status', 'aprovado')
         .not('revisado_por', 'is', null);
       
-      // Separar pendentes por origem
-      const pendentesOpenFoodFacts = pendentes.filter(
-        c => !c.notas_imagens || !c.notas_imagens.origem
-      ).length;
-      
-      const pendentesNotasFiscais = pendentes.filter(
-        c => c.notas_imagens?.origem === 'whatsapp'
-      ).length;
 
       // Total de usuários
       const { data: usuarios } = await supabase
