@@ -699,7 +699,7 @@ export default function NormalizacaoGlobal() {
       setGruposDuplicatas(grupos);
       setProdutosEscolhidos(escolhas);
       setModalDuplicatasOpen(true);
-      setDuplicatasEncontradas(grupos.reduce((acc: number, g: any) => acc + (g.produtos?.length || 0) - 1, 0));
+      
       
       toast({
         title: "🎯 Duplicatas detectadas!",
