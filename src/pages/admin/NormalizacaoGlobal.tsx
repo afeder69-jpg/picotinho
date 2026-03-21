@@ -182,6 +182,7 @@ export default function NormalizacaoGlobal() {
 
   // Estados para consolidação de duplicados
   const [consolidando, setConsolidando] = useState(false);
+  const [detectandoDuplicatas, setDetectandoDuplicatas] = useState(false);
   const [relatorioConsolidacao, setRelatorioConsolidacao] = useState<any>(null);
   const [confirmarConsolidacaoOpen, setConfirmarConsolidacaoOpen] = useState(false);
   const [duplicatasEncontradas, setDuplicatasEncontradas] = useState(0);
@@ -613,19 +614,20 @@ export default function NormalizacaoGlobal() {
 
   async function buscarDuplicatas() {
     try {
-      // Buscar produtos com nomes similares usando similarity
+      // Usar nome_padrao + total_notas >= 1 para alinhar com a edge function de detecção
       const { data, error } = await supabase
         .from('produtos_master_global')
-        .select('nome_base, marca, sku_global')
-        .eq('status', 'ativo');
+        .select('nome_padrao, marca')
+        .eq('status', 'ativo')
+        .gte('total_notas', 1);
       
       if (error) throw error;
       
-      // Contar grupos com nomes muito similares
+      // Contar grupos com nomes muito similares (mesma chave = mesma marca + nome_padrao)
       const grupos = new Map();
       
       data?.forEach(produto => {
-        const chave = `${produto.nome_base.toUpperCase().trim()}|${(produto.marca || 'SEM_MARCA').toUpperCase().trim()}`;
+        const chave = `${produto.nome_padrao.toUpperCase().trim()}|${(produto.marca || 'SEM_MARCA').toUpperCase().trim()}`;
         grupos.set(chave, (grupos.get(chave) || 0) + 1);
       });
       
@@ -639,7 +641,7 @@ export default function NormalizacaoGlobal() {
   }
 
   async function handleConsolidarDuplicatas() {
-    setConsolidando(true);
+    setDetectandoDuplicatas(true);
     setConfirmarConsolidacaoOpen(false);
     
     try {
@@ -730,7 +732,7 @@ export default function NormalizacaoGlobal() {
         variant: "destructive"
       });
     } finally {
-      setConsolidando(false);
+      setDetectandoDuplicatas(false);
     }
   }
 
@@ -1939,12 +1941,12 @@ export default function NormalizacaoGlobal() {
 
             <Button 
               onClick={() => setConfirmarConsolidacaoOpen(true)}
-              disabled={processando || consolidando || sincronizandoManual}
+              disabled={processando || consolidando || detectandoDuplicatas || sincronizandoManual}
               variant="destructive"
               className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
             >
               <Database className="w-4 h-4" />
-              {consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
+              {detectandoDuplicatas ? 'Detectando...' : consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
               {duplicatasEncontradas > 0 && (
                 <Badge 
                   variant="secondary" 
@@ -1978,6 +1980,26 @@ export default function NormalizacaoGlobal() {
         </CardContent>
       </Card>
 
+
+      {/* Progresso da Detecção de Duplicatas */}
+      {detectandoDuplicatas && (
+        <Card className="border-primary">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5 animate-pulse" />
+              Detectando Duplicatas...
+            </CardTitle>
+            <CardDescription>
+              Analisando produtos master com IA. Isso pode levar alguns minutos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Progresso da Consolidação */}
       {consolidando && (
@@ -2891,7 +2913,7 @@ export default function NormalizacaoGlobal() {
       </Dialog>
 
       {/* Modal de Escolha de Duplicatas */}
-      <Dialog open={modalDuplicatasOpen} onOpenChange={setModalDuplicatasOpen}>
+      <Dialog open={modalDuplicatasOpen} onOpenChange={(open) => { setModalDuplicatasOpen(open); if (!open) setBuscaDuplicatas(""); }}>
         <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
@@ -2900,7 +2922,7 @@ export default function NormalizacaoGlobal() {
               {(() => {
                 const termo = buscaDuplicatas.toLowerCase().trim();
                 const totalFiltrados = termo
-                  ? gruposDuplicatas.filter(g => g.items?.some((item: any) =>
+                  ? gruposDuplicatas.filter(g => g.produtos?.some((item: any) =>
                       [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
                     )).length
                   : gruposDuplicatas.length;
@@ -2927,7 +2949,7 @@ export default function NormalizacaoGlobal() {
               .filter(grupo => {
                 const termo = buscaDuplicatas.toLowerCase().trim();
                 if (!termo) return true;
-                return grupo.items?.some((item: any) =>
+                return grupo.produtos?.some((item: any) =>
                   [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
                 );
               })
