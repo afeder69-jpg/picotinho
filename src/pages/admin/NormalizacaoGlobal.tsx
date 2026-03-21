@@ -732,7 +732,7 @@ export default function NormalizacaoGlobal() {
         variant: "destructive"
       });
     } finally {
-      setConsolidando(false);
+      setDetectandoDuplicatas(false);
     }
   }
 
