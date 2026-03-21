@@ -59,7 +59,8 @@ import {
   Zap,
   Check,
   Trash2,
-  Building2
+  Building2,
+  Search
 } from "lucide-react";
 import {
   Pagination,
