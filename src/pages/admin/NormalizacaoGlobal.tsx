@@ -1929,14 +1929,6 @@ export default function NormalizacaoGlobal() {
             >
               <Database className="w-4 h-4" />
               {detectandoDuplicatas ? 'Detectando...' : consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
-              {duplicatasEncontradas > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="ml-2 bg-yellow-500 text-yellow-950 hover:bg-yellow-600"
-                >
-                  {duplicatasEncontradas}
-                </Badge>
-              )}
             </Button>
 
             <Button 
