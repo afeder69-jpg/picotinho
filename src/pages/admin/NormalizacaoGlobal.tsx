@@ -614,27 +614,9 @@ export default function NormalizacaoGlobal() {
 
   async function buscarDuplicatas() {
     try {
-      // Usar nome_padrao + total_notas >= 1 para alinhar com a edge function de detecção
-      const { data, error } = await supabase
-        .from('produtos_master_global')
-        .select('nome_padrao, marca')
-        .eq('status', 'ativo')
-        .gte('total_notas', 1);
-      
+      const { data, error } = await supabase.functions.invoke('contar-duplicatas-master');
       if (error) throw error;
-      
-      // Contar grupos com nomes muito similares (mesma chave = mesma marca + nome_padrao)
-      const grupos = new Map();
-      
-      data?.forEach(produto => {
-        const chave = `${produto.nome_padrao.toUpperCase().trim()}|${(produto.marca || 'SEM_MARCA').toUpperCase().trim()}`;
-        grupos.set(chave, (grupos.get(chave) || 0) + 1);
-      });
-      
-      const duplicatasCount = Array.from(grupos.values())
-        .filter(count => count > 1).length;
-      
-      setDuplicatasEncontradas(duplicatasCount);
+      setDuplicatasEncontradas(data?.total_grupos || 0);
     } catch (error) {
       console.error('Erro ao buscar duplicatas:', error);
     }

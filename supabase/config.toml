@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.process-whatsapp-command]
 verify_jwt = false
+
+[functions.contar-duplicatas-master]
+verify_jwt = false
