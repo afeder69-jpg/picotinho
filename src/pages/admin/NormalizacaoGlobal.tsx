@@ -413,9 +413,6 @@ export default function NormalizacaoGlobal() {
 
       // Carregar produtos recentes iniciais
       await carregarProdutosRecentes();
-      
-      // Buscar duplicatas
-      await buscarDuplicatas();
 
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
