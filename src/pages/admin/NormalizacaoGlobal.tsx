@@ -2922,7 +2922,7 @@ export default function NormalizacaoGlobal() {
               {(() => {
                 const termo = buscaDuplicatas.toLowerCase().trim();
                 const totalFiltrados = termo
-                  ? gruposDuplicatas.filter(g => g.items?.some((item: any) =>
+                  ? gruposDuplicatas.filter(g => g.produtos?.some((item: any) =>
                       [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
                     )).length
                   : gruposDuplicatas.length;
