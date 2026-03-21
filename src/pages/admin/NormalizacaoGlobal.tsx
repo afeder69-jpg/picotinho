@@ -188,6 +188,7 @@ export default function NormalizacaoGlobal() {
   
   // Estados para consolidação inteligente
   const [gruposDuplicatas, setGruposDuplicatas] = useState<any[]>([]);
+  const [buscaDuplicatas, setBuscaDuplicatas] = useState("");
   const [produtosEscolhidos, setProdutosEscolhidos] = useState<Record<string, string>>({});
   const [gruposIgnorados, setGruposIgnorados] = useState<Set<string>>(new Set());
   const [modalDuplicatasOpen, setModalDuplicatasOpen] = useState(false);
