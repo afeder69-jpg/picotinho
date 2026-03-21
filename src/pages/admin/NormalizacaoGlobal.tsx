@@ -185,7 +185,7 @@ export default function NormalizacaoGlobal() {
   const [detectandoDuplicatas, setDetectandoDuplicatas] = useState(false);
   const [relatorioConsolidacao, setRelatorioConsolidacao] = useState<any>(null);
   const [confirmarConsolidacaoOpen, setConfirmarConsolidacaoOpen] = useState(false);
-  const [duplicatasEncontradas, setDuplicatasEncontradas] = useState(0);
+  
   
   // Estados para consolidação inteligente
   const [gruposDuplicatas, setGruposDuplicatas] = useState<any[]>([]);
