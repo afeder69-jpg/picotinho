@@ -1,19 +1,19 @@
 
 
-## Diagnóstico
+## Entendimento
 
-Linha 276 de `RecategorizarProdutosInteligente.tsx`:
-```tsx
-<PageHeader title="Recategorização Inteligente" />
-```
-Sem prop `backTo`, então `PageHeader` usa o default `backTo="/menu"` (definido na linha 16 do componente). Por isso o botão volta ao menu inicial.
+O badge amarelo no botão "Buscar e Consolidar Duplicatas" exibe um número que não corresponde ao resultado real da análise. A solução é remover o badge e a lógica de contagem associada, mantendo o botão e sua funcionalidade intactos.
 
-## Correção
+## Alterações em `src/pages/admin/NormalizacaoGlobal.tsx`
 
-Alterar linha 276 para:
-```tsx
-<PageHeader title="Recategorização Inteligente" backTo="/admin/normalizacao" />
-```
+1. **Remover o estado `duplicatasEncontradas`** (linha 188) e todas as suas referências:
+   - Remover `useState` na linha 188
+   - Remover a função `buscarDuplicatas` que chama `contar-duplicatas-master` (~linhas 615-622)
+   - Remover o `useEffect` que chama `buscarDuplicatas` ao carregar a tela
+   - Remover o `setDuplicatasEncontradas` na linha 714 (após consolidação)
+   - Remover o bloco do Badge nas linhas 1944-1951
 
-Isso faz o botão voltar para Normalização Global Master. Nenhum outro arquivo é alterado.
+2. **Resultado**: o botão fica apenas com o texto "Buscar e Consolidar Duplicatas", sem contador.
+
+Nenhum outro arquivo é alterado. A Edge Function `contar-duplicatas-master` pode ser mantida para uso futuro ou removida — sem impacto.
 
