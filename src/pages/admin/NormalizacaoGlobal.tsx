@@ -2949,7 +2949,7 @@ export default function NormalizacaoGlobal() {
               .filter(grupo => {
                 const termo = buscaDuplicatas.toLowerCase().trim();
                 if (!termo) return true;
-                return grupo.items?.some((item: any) =>
+                return grupo.produtos?.some((item: any) =>
                   [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
                 );
               })
