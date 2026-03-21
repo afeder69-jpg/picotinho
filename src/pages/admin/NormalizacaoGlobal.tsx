@@ -809,6 +809,7 @@ export default function NormalizacaoGlobal() {
       setGruposDuplicatas([]);
       setProdutosEscolhidos({});
       setGruposIgnorados(new Set());
+      setBuscaDuplicatas("");
       
       // Recarregar dados
       await carregarDados();
