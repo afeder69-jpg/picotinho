@@ -273,7 +273,7 @@ const RecategorizarProdutosInteligente = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <PageHeader title="Recategorização Inteligente" />
+      <PageHeader title="Recategorização Inteligente" backTo="/admin/normalizacao" />
       
       <div className="container mx-auto p-4 space-y-6">
         <Tabs defaultValue="executar" onValueChange={(v) => v === 'gerenciar' && carregarRegras()}>
