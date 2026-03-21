@@ -2913,7 +2913,7 @@ export default function NormalizacaoGlobal() {
       </Dialog>
 
       {/* Modal de Escolha de Duplicatas */}
-      <Dialog open={modalDuplicatasOpen} onOpenChange={setModalDuplicatasOpen}>
+      <Dialog open={modalDuplicatasOpen} onOpenChange={(open) => { setModalDuplicatasOpen(open); if (!open) setBuscaDuplicatas(""); }}>
         <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
