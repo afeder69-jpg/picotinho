@@ -774,6 +774,8 @@ export default function NormalizacaoGlobal() {
         setGruposDuplicatas([]);
         setProdutosEscolhidos({});
         setGruposIgnorados(new Set());
+        setBuscaDuplicatas("");
+        setGruposIgnorados(new Set());
         setConsolidando(false);
         return;
       }
