@@ -2893,15 +2893,42 @@ export default function NormalizacaoGlobal() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
               <Database className="w-6 h-6 text-primary" />
-              Duplicatas Detectadas ({gruposDuplicatas.length} {gruposDuplicatas.length === 1 ? 'grupo' : 'grupos'})
+              Duplicatas Detectadas
+              {(() => {
+                const termo = buscaDuplicatas.toLowerCase().trim();
+                const totalFiltrados = termo
+                  ? gruposDuplicatas.filter(g => g.items?.some((item: any) =>
+                      [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
+                    )).length
+                  : gruposDuplicatas.length;
+                return ` (${termo ? `${totalFiltrados} de ` : ''}${gruposDuplicatas.length} ${gruposDuplicatas.length === 1 ? 'grupo' : 'grupos'})`;
+              })()}
             </DialogTitle>
             <DialogDescription className="text-base">
               Selecione qual produto <strong>MANTER</strong> em cada grupo. Os demais serão consolidados automaticamente.
             </DialogDescription>
           </DialogHeader>
 
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar produto por nome, marca ou SKU..."
+              value={buscaDuplicatas}
+              onChange={(e) => setBuscaDuplicatas(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
           <div className="space-y-6 py-4">
-            {gruposDuplicatas.map((grupo, idx) => (
+            {gruposDuplicatas
+              .filter(grupo => {
+                const termo = buscaDuplicatas.toLowerCase().trim();
+                if (!termo) return true;
+                return grupo.items?.some((item: any) =>
+                  [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
+                );
+              })
+              .map((grupo, idx) => (
               <Card key={grupo.id} className="border-2 border-primary/20 shadow-sm">
                 <CardHeader className="pb-3 bg-muted/30">
                   <CardTitle className="text-base flex items-center justify-between">
