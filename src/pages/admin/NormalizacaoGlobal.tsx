@@ -185,7 +185,7 @@ export default function NormalizacaoGlobal() {
   const [detectandoDuplicatas, setDetectandoDuplicatas] = useState(false);
   const [relatorioConsolidacao, setRelatorioConsolidacao] = useState<any>(null);
   const [confirmarConsolidacaoOpen, setConfirmarConsolidacaoOpen] = useState(false);
-  const [duplicatasEncontradas, setDuplicatasEncontradas] = useState(0);
+  
   
   // Estados para consolidação inteligente
   const [gruposDuplicatas, setGruposDuplicatas] = useState<any[]>([]);
@@ -413,9 +413,6 @@ export default function NormalizacaoGlobal() {
 
       // Carregar produtos recentes iniciais
       await carregarProdutosRecentes();
-      
-      // Buscar duplicatas
-      await buscarDuplicatas();
 
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
@@ -612,15 +609,6 @@ export default function NormalizacaoGlobal() {
   }
 
 
-  async function buscarDuplicatas() {
-    try {
-      const { data, error } = await supabase.functions.invoke('contar-duplicatas-master');
-      if (error) throw error;
-      setDuplicatasEncontradas(data?.total_grupos || 0);
-    } catch (error) {
-      console.error('Erro ao buscar duplicatas:', error);
-    }
-  }
 
   async function handleConsolidarDuplicatas() {
     setDetectandoDuplicatas(true);
@@ -711,7 +699,7 @@ export default function NormalizacaoGlobal() {
       setGruposDuplicatas(grupos);
       setProdutosEscolhidos(escolhas);
       setModalDuplicatasOpen(true);
-      setDuplicatasEncontradas(grupos.reduce((acc: number, g: any) => acc + (g.produtos?.length || 0) - 1, 0));
+      
       
       toast({
         title: "🎯 Duplicatas detectadas!",
@@ -1941,14 +1929,6 @@ export default function NormalizacaoGlobal() {
             >
               <Database className="w-4 h-4" />
               {detectandoDuplicatas ? 'Detectando...' : consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
-              {duplicatasEncontradas > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="ml-2 bg-yellow-500 text-yellow-950 hover:bg-yellow-600"
-                >
-                  {duplicatasEncontradas}
-                </Badge>
-              )}
             </Button>
 
             <Button 
