@@ -641,7 +641,7 @@ export default function NormalizacaoGlobal() {
   }
 
   async function handleConsolidarDuplicatas() {
-    setConsolidando(true);
+    setDetectandoDuplicatas(true);
     setConfirmarConsolidacaoOpen(false);
     
     try {
