@@ -1941,12 +1941,12 @@ export default function NormalizacaoGlobal() {
 
             <Button 
               onClick={() => setConfirmarConsolidacaoOpen(true)}
-              disabled={processando || consolidando || sincronizandoManual}
+              disabled={processando || consolidando || detectandoDuplicatas || sincronizandoManual}
               variant="destructive"
               className="flex-1 gap-2 shadow-lg hover:shadow-xl transition-all"
             >
               <Database className="w-4 h-4" />
-              {consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
+              {detectandoDuplicatas ? 'Detectando...' : consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
               {duplicatasEncontradas > 0 && (
                 <Badge 
                   variant="secondary" 
