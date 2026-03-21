@@ -1981,6 +1981,26 @@ export default function NormalizacaoGlobal() {
       </Card>
 
 
+      {/* Progresso da Detecção de Duplicatas */}
+      {detectandoDuplicatas && (
+        <Card className="border-primary">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5 animate-pulse" />
+              Detectando Duplicatas...
+            </CardTitle>
+            <CardDescription>
+              Analisando produtos master com IA. Isso pode levar alguns minutos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Progresso da Consolidação */}
       {consolidando && (
         <Card className="border-destructive">
