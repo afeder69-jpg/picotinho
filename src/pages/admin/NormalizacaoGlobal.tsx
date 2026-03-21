@@ -609,15 +609,6 @@ export default function NormalizacaoGlobal() {
   }
 
 
-  async function buscarDuplicatas() {
-    try {
-      const { data, error } = await supabase.functions.invoke('contar-duplicatas-master');
-      if (error) throw error;
-      setDuplicatasEncontradas(data?.total_grupos || 0);
-    } catch (error) {
-      console.error('Erro ao buscar duplicatas:', error);
-    }
-  }
 
   async function handleConsolidarDuplicatas() {
     setDetectandoDuplicatas(true);
