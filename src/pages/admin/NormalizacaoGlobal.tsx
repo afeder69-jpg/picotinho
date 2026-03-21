@@ -614,19 +614,20 @@ export default function NormalizacaoGlobal() {
 
   async function buscarDuplicatas() {
     try {
-      // Buscar produtos com nomes similares usando similarity
+      // Usar nome_padrao + total_notas >= 1 para alinhar com a edge function de detecção
       const { data, error } = await supabase
         .from('produtos_master_global')
-        .select('nome_base, marca, sku_global')
-        .eq('status', 'ativo');
+        .select('nome_padrao, marca')
+        .eq('status', 'ativo')
+        .gte('total_notas', 1);
       
       if (error) throw error;
       
-      // Contar grupos com nomes muito similares
+      // Contar grupos com nomes muito similares (mesma chave = mesma marca + nome_padrao)
       const grupos = new Map();
       
       data?.forEach(produto => {
-        const chave = `${produto.nome_base.toUpperCase().trim()}|${(produto.marca || 'SEM_MARCA').toUpperCase().trim()}`;
+        const chave = `${produto.nome_padrao.toUpperCase().trim()}|${(produto.marca || 'SEM_MARCA').toUpperCase().trim()}`;
         grupos.set(chave, (grupos.get(chave) || 0) + 1);
       });
       
