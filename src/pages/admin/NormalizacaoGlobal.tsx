@@ -696,17 +696,29 @@ export default function NormalizacaoGlobal() {
 
       const data = await detectarComTimeout();
       
-      if (!data || data.total_grupos === 0) {
+      // 🔍 Diagnóstico objetivo do retorno
+      const grupos = Array.isArray(data?.grupos) ? data.grupos : [];
+      console.log('📊 [DETECÇÃO] Retorno da edge function:', {
+        typeof_data: typeof data,
+        total_grupos_campo: data?.total_grupos,
+        total_duplicatas_campo: data?.total_duplicatas,
+        grupos_array_length: grupos.length,
+        tempo_decorrido_s: data?.tempo_decorrido_s,
+        comparacoes_realizadas: data?.comparacoes_realizadas,
+        primeiro_grupo: grupos[0] ? { id: grupos[0].id, categoria: grupos[0].categoria, qtd_produtos: grupos[0].produtos?.length } : null,
+      });
+      
+      if (grupos.length === 0) {
         toast({
           title: "✅ Nenhuma duplicata encontrada",
-          description: "Catálogo Master já está consolidado!"
+          description: `Catálogo Master já está consolidado! (${data?.comparacoes_realizadas || 0} comparações em ${data?.tempo_decorrido_s || 0}s)`
         });
         return;
       }
       
       // Preparar escolhas pré-selecionadas (produto com mais notas)
       const escolhas: Record<string, string> = {};
-      data.grupos.forEach((grupo: any) => {
+      grupos.forEach((grupo: any) => {
         // Pré-selecionar o com mais notas
         const maisNotas = [...grupo.produtos].sort((a: any, b: any) => 
           b.total_notas - a.total_notas
@@ -714,14 +726,14 @@ export default function NormalizacaoGlobal() {
         escolhas[grupo.id] = maisNotas.id;
       });
       
-      setGruposDuplicatas(data.grupos);
+      setGruposDuplicatas(grupos);
       setProdutosEscolhidos(escolhas);
       setModalDuplicatasOpen(true);
-      setDuplicatasEncontradas(data.total_duplicatas);
+      setDuplicatasEncontradas(grupos.reduce((acc: number, g: any) => acc + (g.produtos?.length || 0) - 1, 0));
       
       toast({
         title: "🎯 Duplicatas detectadas!",
-        description: `${data.total_grupos} grupo(s) com ${data.total_duplicatas} produto(s) duplicado(s). Tempo: ${data.tempo_decorrido_s}s`
+        description: `${grupos.length} grupo(s) encontrado(s). Tempo: ${data?.tempo_decorrido_s || 0}s`
       });
       
     } catch (error: any) {
