@@ -3330,6 +3330,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_estoque_from_master: {
+        Args: { p_master_id: string }
+        Returns: number
+      }
       sync_historical_access_keys: {
         Args: { target_user_id?: string }
         Returns: {
