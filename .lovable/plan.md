@@ -1,28 +1,20 @@
+## Sincronização centralizada Master → Estoque (IMPLEMENTADO)
 
+### Problema resolvido
+Alterações em `produtos_master_global` (nome, categoria, EAN, SKU, imagem, marca, etc.) não eram propagadas para `estoque_app`, deixando o estoque dos usuários inconsistente.
 
-## Exibir EAN Comercial no modal de consolidação de duplicatas
+### Solução implementada
 
-### Problema
-Os produtos no modal de duplicatas mostram nome e SKU, mas não mostram o EAN (código de barras), que é essencial para decidir consolidações.
+1. **Função centralizada `sync_estoque_from_master(p_master_id)`** — atualiza todos os `estoque_app` vinculados a um master, com mapeamento de categoria para o domínio válido do estoque.
 
-### Correção
+2. **Trigger `trg_sync_master_to_estoque`** — dispara automaticamente `AFTER UPDATE` em `produtos_master_global` quando qualquer campo relevante muda.
 
-**Arquivo:** `src/pages/admin/NormalizacaoGlobal.tsx`
+3. **Edge Function `consolidar-masters-manual`** — agora chama `sync_estoque_from_master` via RPC após consolidar duplicatas.
 
-**Linhas 3117-3119** — Após o SKU, adicionar uma linha para o EAN:
+4. **Backfill** — corrigiu 175 registros divergentes (nomes, categorias, EANs).
 
-```tsx
-<div className="text-xs text-muted-foreground font-mono mt-1 bg-muted px-2 py-1 rounded">
-  SKU: {produto.sku_global}
-</div>
-{produto.codigo_barras && (
-  <div className="text-xs text-muted-foreground font-mono mt-1 bg-amber-50 px-2 py-1 rounded border border-amber-200">
-    EAN: {produto.codigo_barras}
-  </div>
-)}
-```
+### Campos sincronizados (master → estoque)
+`produto_nome`, `produto_nome_normalizado`, `categoria`, `ean_comercial`, `sku_global`, `nome_base`, `marca`, `imagem_url`, `tipo_embalagem`, `qtd_valor`, `qtd_unidade`, `qtd_base`, `unidade_base`, `granel`
 
-O EAN já vem nos dados (a Edge Function faz `select('*')`). Se o produto não tiver EAN, nada será exibido — limpo e sem ruído visual.
-
-O badge do EAN terá fundo âmbar claro para se diferenciar visualmente do SKU e facilitar a leitura rápida durante a análise.
-
+### Campos do usuário preservados
+`user_id`, `quantidade`, `preco_unitario_ultimo`, `preco_por_unidade_base`, `nota_id`, `compra_id`, `origem`, `created_at`, `unidade_medida`
