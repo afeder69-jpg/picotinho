@@ -692,16 +692,23 @@ export default function NormalizacaoGlobal() {
       
       // Preparar escolhas pré-selecionadas (produto com mais notas)
       const escolhas: Record<string, string> = {};
+      const unificar: Record<string, Set<string>> = {};
       grupos.forEach((grupo: any) => {
         // Pré-selecionar o com mais notas
         const maisNotas = [...grupo.produtos].sort((a: any, b: any) => 
           b.total_notas - a.total_notas
         )[0];
         escolhas[grupo.id] = maisNotas.id;
+        // Pré-marcar todos os outros para unificação
+        unificar[grupo.id] = new Set(
+          grupo.produtos.filter((p: any) => p.id !== maisNotas.id).map((p: any) => p.id)
+        );
       });
       
       setGruposDuplicatas(grupos);
       setProdutosEscolhidos(escolhas);
+      setProdutosParaUnificar(unificar);
+      setGruposConsolidados(new Set());
       setModalDuplicatasOpen(true);
       
       
