@@ -73,6 +73,7 @@ import {
 } from "@/components/ui/pagination";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { ScrapingControls } from "@/components/admin/ImageScraping/ScrapingControls";
 import { ImagePreviewCard } from "@/components/admin/ImageScraping/ImagePreviewCard";
