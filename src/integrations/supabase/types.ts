@@ -1198,6 +1198,7 @@ export type Database = {
           preco_por_unidade_base: number | null
           produto_codigo: string | null
           produto_hash_normalizado: string | null
+          produto_master_id: string | null
           produto_nome: string
           produto_nome_normalizado: string | null
           qtd_base: number | null
@@ -1219,6 +1220,7 @@ export type Database = {
           preco_por_unidade_base?: number | null
           produto_codigo?: string | null
           produto_hash_normalizado?: string | null
+          produto_master_id?: string | null
           produto_nome: string
           produto_nome_normalizado?: string | null
           qtd_base?: number | null
@@ -1240,6 +1242,7 @@ export type Database = {
           preco_por_unidade_base?: number | null
           produto_codigo?: string | null
           produto_hash_normalizado?: string | null
+          produto_master_id?: string | null
           produto_nome?: string
           produto_nome_normalizado?: string | null
           qtd_base?: number | null
@@ -1250,6 +1253,13 @@ export type Database = {
           valor_unitario?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "precos_atuais_produto_master_id_fkey"
+            columns: ["produto_master_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_master_global"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "precos_atuais_user_id_fkey"
             columns: ["user_id"]
