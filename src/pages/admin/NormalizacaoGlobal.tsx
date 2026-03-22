@@ -192,7 +192,10 @@ export default function NormalizacaoGlobal() {
   const [gruposDuplicatas, setGruposDuplicatas] = useState<any[]>([]);
   const [buscaDuplicatas, setBuscaDuplicatas] = useState("");
   const [produtosEscolhidos, setProdutosEscolhidos] = useState<Record<string, string>>({});
+  const [produtosParaUnificar, setProdutosParaUnificar] = useState<Record<string, Set<string>>>({});
   const [gruposIgnorados, setGruposIgnorados] = useState<Set<string>>(new Set());
+  const [gruposConsolidados, setGruposConsolidados] = useState<Set<string>>(new Set());
+  const [consolidandoGrupo, setConsolidandoGrupo] = useState<string | null>(null);
   const [modalDuplicatasOpen, setModalDuplicatasOpen] = useState(false);
 
   // Estados para recategorização
