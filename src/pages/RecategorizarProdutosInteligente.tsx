@@ -555,7 +555,7 @@ const RecategorizarProdutosInteligente = () => {
                   <SelectTrigger id="categoria_destino">
                     <SelectValue placeholder="Selecione a categoria" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="z-[9999]">
                     {CATEGORIAS.map((cat) => (
                       <SelectItem key={cat} value={cat}>
                         {cat}
