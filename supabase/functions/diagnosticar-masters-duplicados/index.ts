@@ -18,10 +18,36 @@ interface GrupoDuplicata {
  * vs falsos positivos (produtos legítimos com tamanhos/variantes diferentes)
  */
 function saoRealmenteDuplicatas(m1: any, m2: any): { duplicata: boolean; razao: string } {
-  // 1. Categorias: ALIMENTOS e MERCEARIA são sinônimos (IA às vezes gera uma ou outra)
+  const n1 = m1.nome_padrao?.toUpperCase()?.trim() || '';
+  const n2 = m2.nome_padrao?.toUpperCase()?.trim() || '';
+
+  // 0. Se nome_padrao é idêntico (ignorando case), é duplicata independente de categoria
+  if (n1 && n2 && n1 === n2) {
+    return { duplicata: true, razao: `Nome padrão idêntico: "${n1}"` };
+  }
+
+  // 1. Categorias equivalentes (IA gera variações)
   const categoriasEquivalentes: Record<string, string> = {
     'ALIMENTOS': 'MERCEARIA',
   };
+
+  // Categorias que podem ser confundidas mas são OK para duplicatas
+  // (ex: LEITE pode ir em BEBIDAS ou LATICÍNIOS, OVOS em LATICÍNIOS ou MERCEARIA)
+  const categoriasFleximeis = new Set([
+    'BEBIDAS|LATICÍNIOS/FRIOS',
+    'LATICÍNIOS/FRIOS|BEBIDAS',
+    'LATICÍNIOS/FRIOS|MERCEARIA',
+    'MERCEARIA|LATICÍNIOS/FRIOS',
+    'HORTIFRUTI|MERCEARIA',
+    'MERCEARIA|HORTIFRUTI',
+    'CONGELADOS|MERCEARIA',
+    'MERCEARIA|CONGELADOS',
+    'CONGELADOS|LATICÍNIOS/FRIOS',
+    'LATICÍNIOS/FRIOS|CONGELADOS',
+    'LIMPEZA|MERCEARIA',
+    'MERCEARIA|LIMPEZA',
+  ]);
+
   const normCategoria = (cat: string | null) => {
     if (!cat) return '';
     const u = cat.toUpperCase();
@@ -32,13 +58,13 @@ function saoRealmenteDuplicatas(m1: any, m2: any): { duplicata: boolean; razao: 
     const c1 = normCategoria(m1.categoria);
     const c2 = normCategoria(m2.categoria);
     if (c1 !== c2) {
-      return { duplicata: false, razao: `Categorias diferentes: ${m1.categoria} vs ${m2.categoria}` };
+      const parCat = `${c1}|${c2}`;
+      if (!categoriasFleximeis.has(parCat)) {
+        return { duplicata: false, razao: `Categorias diferentes: ${m1.categoria} vs ${m2.categoria}` };
+      }
+      // Categorias flexíveis — continuar verificação por nome/gramatura
     }
   }
-
-  // 2. Verificar nome_padrao para variantes ANTES da gramatura (mais importante)
-  const n1 = m1.nome_padrao?.toUpperCase() || '';
-  const n2 = m2.nome_padrao?.toUpperCase() || '';
 
   // Palavras exclusivas que indicam variantes diferentes quando um tem e outro não
   const variantesExclusivas = [
