@@ -2976,7 +2976,7 @@ export default function NormalizacaoGlobal() {
               })()}
             </DialogTitle>
             <DialogDescription className="text-base">
-              Selecione qual produto <strong>MANTER</strong> em cada grupo. Os demais serão consolidados automaticamente.
+              Selecione qual produto <strong>MANTER</strong> em cada grupo e marque quais serão <strong>unificados</strong> com ele.
             </DialogDescription>
           </DialogHeader>
 
@@ -2999,13 +2999,22 @@ export default function NormalizacaoGlobal() {
                   [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
                 );
               })
-              .map((grupo, idx) => (
+              .map((grupo, idx) => {
+                const principalId = produtosEscolhidos[grupo.id];
+                const unificarSet = produtosParaUnificar[grupo.id] || new Set();
+                const qtdSelecionados = Array.from(unificarSet).filter(id => id !== principalId).length;
+                const isConsolidandoEste = consolidandoGrupo === grupo.id;
+
+                return (
               <Card key={grupo.id} className="border-2 border-primary/20 shadow-sm">
                 <CardHeader className="pb-3 bg-muted/30">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <Package className="w-4 h-4" />
                       Grupo {idx + 1}: {grupo.categoria}
+                      <Badge variant="secondary" className="text-xs">
+                        {grupo.produtos.length} produtos
+                      </Badge>
                     </span>
                     <Badge variant="outline" className="text-sm">
                       <Sparkles className="w-3 h-3 mr-1" />
@@ -3020,7 +3029,7 @@ export default function NormalizacaoGlobal() {
                         ✅ Marcado como <strong>NÃO-DUPLICATAS</strong>
                       </p>
                       <p className="text-xs text-muted-foreground mb-3">
-                        Ambos os produtos serão mantidos separados
+                        Todos os produtos serão mantidos separados
                       </p>
                       <Button
                         variant="outline"
@@ -3039,33 +3048,65 @@ export default function NormalizacaoGlobal() {
                   ) : (
                     <>
                       <RadioGroup 
-                        value={produtosEscolhidos[grupo.id] || ''}
+                        value={principalId || ''}
                         onValueChange={(value) => {
+                          const oldPrincipal = produtosEscolhidos[grupo.id];
                           setProdutosEscolhidos(prev => ({
                             ...prev,
                             [grupo.id]: value
                           }));
+                          // Ao trocar o principal: remover novo principal dos checkboxes, adicionar antigo
+                          setProdutosParaUnificar(prev => {
+                            const novoSet = new Set(prev[grupo.id] || []);
+                            novoSet.delete(value); // Novo principal nunca é para unificar
+                            if (oldPrincipal && oldPrincipal !== value) {
+                              novoSet.add(oldPrincipal); // Antigo principal volta como candidato
+                            }
+                            return { ...prev, [grupo.id]: novoSet };
+                          });
                         }}
                       >
                         {grupo.produtos.map((produto: any) => {
-                          const isEscolhido = produtosEscolhidos[grupo.id] === produto.id;
+                          const isEscolhido = principalId === produto.id;
+                          const isParaUnificar = !isEscolhido && unificarSet.has(produto.id);
+                          const isPreservado = !isEscolhido && !isParaUnificar;
                           
                           return (
                             <div 
                               key={produto.id}
-                              className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                              className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all ${
                                 isEscolhido
-                                  ? 'border-green-500 bg-green-50 shadow-md'
-                                  : 'border-gray-200 hover:border-gray-400 bg-white'
+                                  ? 'border-green-500 bg-green-50/50 shadow-md'
+                                  : isParaUnificar
+                                    ? 'border-destructive/40 bg-destructive/5'
+                                    : 'border-muted bg-muted/20 opacity-60'
                               }`}
                             >
-                              <RadioGroupItem 
-                                value={produto.id} 
-                                id={produto.id}
-                                className="mt-1"
-                              />
+                              <div className="flex items-center gap-2 mt-1">
+                                <RadioGroupItem 
+                                  value={produto.id} 
+                                  id={`radio-${grupo.id}-${produto.id}`}
+                                />
+                                {!isEscolhido && (
+                                  <Checkbox
+                                    id={`check-${grupo.id}-${produto.id}`}
+                                    checked={isParaUnificar}
+                                    onCheckedChange={(checked) => {
+                                      setProdutosParaUnificar(prev => {
+                                        const novoSet = new Set(prev[grupo.id] || []);
+                                        if (checked) {
+                                          novoSet.add(produto.id);
+                                        } else {
+                                          novoSet.delete(produto.id);
+                                        }
+                                        return { ...prev, [grupo.id]: novoSet };
+                                      });
+                                    }}
+                                  />
+                                )}
+                              </div>
                               <label 
-                                htmlFor={produto.id} 
+                                htmlFor={`radio-${grupo.id}-${produto.id}`}
                                 className="flex-1 cursor-pointer space-y-2"
                               >
                                 <div className="flex items-start justify-between gap-2">
@@ -3073,14 +3114,26 @@ export default function NormalizacaoGlobal() {
                                     <div className="font-semibold text-sm leading-tight">
                                       {produto.nome_padrao}
                                     </div>
-                                    <div className="text-xs text-muted-foreground font-mono mt-1 bg-gray-100 px-2 py-1 rounded">
+                                    <div className="text-xs text-muted-foreground font-mono mt-1 bg-muted px-2 py-1 rounded">
                                       SKU: {produto.sku_global}
                                     </div>
                                   </div>
                                   {isEscolhido && (
                                     <Badge className="bg-green-600 text-white gap-1 shrink-0">
                                       <Check className="w-3 h-3" />
-                                      MANTER
+                                      PRINCIPAL
+                                    </Badge>
+                                  )}
+                                  {isParaUnificar && (
+                                    <Badge variant="destructive" className="gap-1 shrink-0">
+                                      <Trash2 className="w-3 h-3" />
+                                      UNIFICAR
+                                    </Badge>
+                                  )}
+                                  {isPreservado && (
+                                    <Badge variant="outline" className="gap-1 shrink-0 text-muted-foreground">
+                                      <Shield className="w-3 h-3" />
+                                      PRESERVAR
                                     </Badge>
                                   )}
                                 </div>
@@ -3109,16 +3162,33 @@ export default function NormalizacaoGlobal() {
                         })}
                       </RadioGroup>
                       
-                      <div className="mt-3 pt-3 border-t">
+                      {/* Ações do grupo */}
+                      <div className="mt-3 pt-3 border-t flex flex-col gap-2">
+                        <Button
+                          onClick={() => executarConsolidacaoIndividual(grupo.id)}
+                          disabled={isConsolidandoEste || consolidando || qtdSelecionados === 0}
+                          size="sm"
+                          className="w-full gap-2"
+                        >
+                          {isConsolidandoEste ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Consolidando...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4" />
+                              Consolidar este grupo ({qtdSelecionados} {qtdSelecionados === 1 ? 'item' : 'itens'})
+                            </>
+                          )}
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
                   onClick={async () => {
                     try {
-                      // Adicionar ao estado local
                       setGruposIgnorados(prev => new Set(prev).add(grupo.id));
                       
-                      // 🆕 PERSISTIR NO BANCO: Inserir todos os pares deste grupo
                       const pares: any[] = [];
                       for (let i = 0; i < grupo.produtos.length; i++) {
                         for (let j = i + 1; j < grupo.produtos.length; j++) {
@@ -3164,54 +3234,70 @@ export default function NormalizacaoGlobal() {
                           className="w-full"
                         >
                           <X className="w-4 h-4 mr-2" />
-                          Não São Duplicatas - Manter Ambos
+                          Não São Duplicatas - Manter Todos
                         </Button>
                       </div>
                     </>
                   )}
                   
                   {/* Resumo do que será feito */}
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
-                    <p className="font-semibold text-blue-900 mb-1">
-                      ⚙️ O que será feito:
-                    </p>
-                    <ul className="text-blue-800 space-y-0.5 ml-4 list-disc">
-                      <li>Produto escolhido será <strong>mantido</strong></li>
-                      <li>SKUs dos demais viram <strong>sinônimos</strong> automáticos</li>
-                      <li>Todas as referências serão <strong>atualizadas</strong></li>
-                      <li>Produtos duplicados serão <strong>removidos</strong></li>
-                    </ul>
-                  </div>
+                  {!gruposIgnorados.has(grupo.id) && (
+                    <div className="mt-3 p-3 bg-accent/50 border border-accent rounded-lg text-xs">
+                      <p className="font-semibold text-foreground mb-1">
+                        ⚙️ O que será feito neste grupo:
+                      </p>
+                      <ul className="text-muted-foreground space-y-0.5 ml-4 list-disc">
+                        <li>Produto principal será <strong>mantido</strong></li>
+                        {qtdSelecionados > 0 && (
+                          <li>{qtdSelecionados} produto(s) marcado(s) serão <strong>unificados</strong></li>
+                        )}
+                        {grupo.produtos.length - 1 - qtdSelecionados > 0 && (
+                          <li>{grupo.produtos.length - 1 - qtdSelecionados} produto(s) serão <strong>preservados</strong> (não entram na consolidação)</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ))}
+                );
+              })}
           </div>
+
+          {gruposDuplicatas.length === 0 && gruposConsolidados.size > 0 && (
+            <div className="p-6 text-center">
+              <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+              <p className="text-lg font-semibold">Todos os grupos foram processados!</p>
+              <p className="text-sm text-muted-foreground">{gruposConsolidados.size} grupo(s) consolidado(s)</p>
+            </div>
+          )}
 
           <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setModalDuplicatasOpen(false)}
-              disabled={consolidando}
+              disabled={consolidando || !!consolidandoGrupo}
             >
-              Cancelar
+              {gruposDuplicatas.length === 0 ? 'Fechar' : 'Cancelar'}
             </Button>
-            <Button
-              onClick={executarConsolidacaoManual}
-              disabled={consolidando}
-              className="gap-2 min-w-[200px]"
-            >
-              {consolidando ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Consolidando...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Consolidar {gruposDuplicatas.length} {gruposDuplicatas.length === 1 ? 'Grupo' : 'Grupos'}
-                </>
-              )}
-            </Button>
+            {gruposDuplicatas.filter(g => !gruposIgnorados.has(g.id)).length > 1 && (
+              <Button
+                onClick={executarConsolidacaoManual}
+                disabled={consolidando || !!consolidandoGrupo}
+                className="gap-2 min-w-[200px]"
+              >
+                {consolidando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Consolidando todos...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Consolidar Todos ({gruposDuplicatas.filter(g => !gruposIgnorados.has(g.id)).length} grupos)
+                  </>
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
