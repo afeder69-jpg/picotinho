@@ -15,7 +15,8 @@ import {
   Settings,
   Database,
   Shield,
-  Calendar
+  Calendar,
+  Search
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
