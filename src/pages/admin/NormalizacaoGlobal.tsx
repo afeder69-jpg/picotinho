@@ -731,29 +731,87 @@ export default function NormalizacaoGlobal() {
 
 
 
+  async function executarConsolidacaoIndividual(grupoId: string) {
+    const grupo = gruposDuplicatas.find(g => g.id === grupoId);
+    if (!grupo) return;
+
+    const manterID = produtosEscolhidos[grupoId];
+    const unificarSet = produtosParaUnificar[grupoId] || new Set();
+    const removerIDs = Array.from(unificarSet).filter(id => id !== manterID);
+
+    if (removerIDs.length === 0) {
+      toast({
+        title: "⚠️ Nenhum item selecionado",
+        description: "Marque ao menos um produto para unificar com o principal.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setConsolidandoGrupo(grupoId);
+
+    try {
+      toast({
+        title: "⚙️ Consolidando grupo...",
+        description: "Criando sinônimos e atualizando referências"
+      });
+
+      const { data, error } = await supabase.functions.invoke(
+        'consolidar-masters-manual',
+        { body: { grupos: [{ manter_id: manterID, remover_ids: removerIDs }] } }
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Grupo consolidado!",
+        description: `${data.total_masters_removidos} produto(s) unificado(s)`,
+        duration: 5000
+      });
+
+      // Remover grupo da lista sem fechar o modal
+      setGruposConsolidados(prev => new Set(prev).add(grupoId));
+      setGruposDuplicatas(prev => prev.filter(g => g.id !== grupoId));
+
+      // Recarregar dados em background
+      carregarDados();
+      carregarProdutosRecentes();
+
+    } catch (error: any) {
+      console.error('Erro ao consolidar grupo:', error);
+      toast({
+        title: "❌ Erro na consolidação",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setConsolidandoGrupo(null);
+    }
+  }
+
   async function executarConsolidacaoManual() {
     setConsolidando(true);
     
     try {
-      // Filtrar grupos ignorados (usuário clicou "Manter Ambos")
+      // Filtrar grupos ignorados e já consolidados
       const gruposParaConsolidar = gruposDuplicatas
-        .filter(grupo => !gruposIgnorados.has(grupo.id))
+        .filter(grupo => !gruposIgnorados.has(grupo.id) && !gruposConsolidados.has(grupo.id))
         .map(grupo => {
           const manterID = produtosEscolhidos[grupo.id];
-          const removerIDs = grupo.produtos
-            .filter((p: any) => p.id !== manterID)
-            .map((p: any) => p.id);
+          const unificarSet = produtosParaUnificar[grupo.id] || new Set();
+          const removerIDs = Array.from(unificarSet).filter(id => id !== manterID);
           
           return {
             manter_id: manterID,
             remover_ids: removerIDs
           };
-        });
+        })
+        .filter(g => g.remover_ids.length > 0);
 
       if (gruposParaConsolidar.length === 0 && gruposIgnorados.size === 0) {
         toast({
-          title: "❌ Nenhum grupo selecionado",
-          description: "Selecione quais produtos manter ou clique 'Manter Ambos'",
+          title: "❌ Nenhum grupo com itens selecionados",
+          description: "Marque ao menos um produto para unificar em cada grupo.",
           variant: "destructive"
         });
         setConsolidando(false);
@@ -768,9 +826,10 @@ export default function NormalizacaoGlobal() {
         setModalDuplicatasOpen(false);
         setGruposDuplicatas([]);
         setProdutosEscolhidos({});
+        setProdutosParaUnificar({});
         setGruposIgnorados(new Set());
+        setGruposConsolidados(new Set());
         setBuscaDuplicatas("");
-        setGruposIgnorados(new Set());
         setConsolidando(false);
         return;
       }
@@ -803,7 +862,9 @@ export default function NormalizacaoGlobal() {
       setModalDuplicatasOpen(false);
       setGruposDuplicatas([]);
       setProdutosEscolhidos({});
+      setProdutosParaUnificar({});
       setGruposIgnorados(new Set());
+      setGruposConsolidados(new Set());
       setBuscaDuplicatas("");
       
       // Recarregar dados
