@@ -155,6 +155,16 @@ serve(async (req) => {
         console.log(`   ✅ ${remover_ids.length} produto(s) removido(s)`);
       }
 
+      // 6. Sincronizar estoque_app com o master mantido (via função centralizada)
+      const { data: syncResult, error: syncError } = await supabase
+        .rpc('sync_estoque_from_master', { p_master_id: manter_id });
+
+      if (syncError) {
+        console.error('❌ Erro ao sincronizar estoque:', syncError);
+      } else {
+        console.log(`   ✅ ${syncResult || 0} registro(s) de estoque sincronizado(s)`);
+      }
+
       totalSinonimosGerados += sinonimosGrupo;
       totalReferenciasAtualizadas += referenciasGrupo;
 
@@ -163,7 +173,8 @@ serve(async (req) => {
         mantido_sku: produtoMantido.sku_global,
         removidos: produtosRemover.map(p => p.nome_padrao),
         sinonimos_criados: sinonimosGrupo,
-        referencias_atualizadas: referenciasGrupo
+        referencias_atualizadas: referenciasGrupo,
+        estoque_sincronizado: syncResult || 0
       });
     }
 
