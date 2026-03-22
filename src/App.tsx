@@ -110,6 +110,7 @@ const App = () => {
                 <Route path="/listas-compras" element={<ListasComprasIndex />} />
                 <Route path="/lista-compras/:id" element={<ListaCompras />} />
                 <Route path="/lista-compras/:id/comprar" element={<ListaComprasComprar />} />
+                <Route path="/consulta-precos" element={<ConsultaPrecos />} />
                 <Route path="/data-deletion" element={<DataDeletion />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
