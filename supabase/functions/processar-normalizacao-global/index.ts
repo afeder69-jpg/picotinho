@@ -446,7 +446,7 @@ Deno.serve(async (req) => {
               // Produto novo com alta confiança - criar master e auto-aprovar
               while (tentativas < MAX_TENTATIVAS) {
                 try {
-                  const masterCriado = await criarProdutoMaster(supabase, normalizacao);
+                  const masterCriado = await criarProdutoMaster(supabase, normalizacao, produto.codigo_barras);
                   normalizacao.produto_master_id = masterCriado.id; // ✅ Preencher o ID do master criado
                   console.log(`🔗 Master criado e vinculado: ${masterCriado.id}`);
                   await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
