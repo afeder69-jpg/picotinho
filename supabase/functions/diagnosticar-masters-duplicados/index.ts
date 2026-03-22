@@ -18,54 +18,58 @@ interface GrupoDuplicata {
  * vs falsos positivos (produtos legítimos com tamanhos/variantes diferentes)
  */
 function saoRealmenteDuplicatas(m1: any, m2: any): { duplicata: boolean; razao: string } {
-  // 1. Categoria diferente = não duplicata
-  if (m1.categoria && m2.categoria && m1.categoria.toUpperCase() !== m2.categoria.toUpperCase()) {
-    return { duplicata: false, razao: `Categorias diferentes: ${m1.categoria} vs ${m2.categoria}` };
-  }
+  // 1. Categorias: ALIMENTOS e MERCEARIA são sinônimos (IA às vezes gera uma ou outra)
+  const categoriasEquivalentes: Record<string, string> = {
+    'ALIMENTOS': 'MERCEARIA',
+  };
+  const normCategoria = (cat: string | null) => {
+    if (!cat) return '';
+    const u = cat.toUpperCase();
+    return categoriasEquivalentes[u] || u;
+  };
 
-  // 2. Verificar gramatura/volume
-  if (m1.qtd_valor && m2.qtd_valor && m1.qtd_unidade && m2.qtd_unidade) {
-    // Normalizar unidades para comparação
-    const normalizar = (val: number, un: string): { valor: number; unidade: string } => {
-      const u = un.toUpperCase();
-      if (u === 'KG' || u === 'K') return { valor: val * 1000, unidade: 'G' };
-      if (u === 'L' || u === 'LT') return { valor: val * 1000, unidade: 'ML' };
-      return { valor: val, unidade: u };
-    };
-
-    const n1 = normalizar(m1.qtd_valor, m1.qtd_unidade);
-    const n2 = normalizar(m2.qtd_valor, m2.qtd_unidade);
-
-    // Unidades incompatíveis (peso vs volume) = não duplicata
-    if (n1.unidade !== n2.unidade) {
-      return { duplicata: false, razao: `Unidades incompatíveis: ${m1.qtd_valor}${m1.qtd_unidade} vs ${m2.qtd_valor}${m2.qtd_unidade}` };
-    }
-
-    // Diferença > 15% = tamanhos diferentes = não duplicata
-    const diff = Math.abs(n1.valor - n2.valor) / Math.max(n1.valor, n2.valor);
-    if (diff > 0.15) {
-      return { duplicata: false, razao: `Gramaturas diferentes (${(diff * 100).toFixed(0)}%): ${m1.qtd_valor}${m1.qtd_unidade} vs ${m2.qtd_valor}${m2.qtd_unidade}` };
+  if (m1.categoria && m2.categoria) {
+    const c1 = normCategoria(m1.categoria);
+    const c2 = normCategoria(m2.categoria);
+    if (c1 !== c2) {
+      return { duplicata: false, razao: `Categorias diferentes: ${m1.categoria} vs ${m2.categoria}` };
     }
   }
 
-  // 3. Verificar nome_padrao para variantes (sabor, cor, tipo)
+  // 2. Verificar nome_padrao para variantes ANTES da gramatura (mais importante)
   const n1 = m1.nome_padrao?.toUpperCase() || '';
   const n2 = m2.nome_padrao?.toUpperCase() || '';
 
-  // Palavras que indicam variantes diferentes
-  const variantesDiferentes = [
-    // Sabores
-    ['MORANGO', 'FRAMBOESA'], ['MORANGO', 'UVA'], ['LIMAO', 'LARANJA'],
-    ['CHOCOLATE', 'BAUNILHA'], ['NATURAL', 'LIMAO'],
-    // Tipos
-    ['INTEGRAL', 'REFINADO'], ['COM SAL', 'SEM SAL'],
-    ['LIGHT', 'TRADICIONAL'], ['ZERO', 'NORMAL'], ['DIET', 'NORMAL'],
-    ['SEM LACTOSE', 'COM LACTOSE'], ['DESNATADO', 'INTEGRAL'],
-    // Cores
-    ['BRANCO', 'VERMELHO'], ['VERDE', 'AZUL'],
+  // Palavras exclusivas que indicam variantes diferentes quando um tem e outro não
+  const variantesExclusivas = [
+    'DIET', 'LIGHT', 'ZERO', 'ZERO LACTOSE', 'SEM LACTOSE', 'SEM SAL',
+    'INTEGRAL', 'DESNATADO', 'SEMI DESNATADO',
+    'LIMAO', 'MORANGO', 'FRAMBOESA', 'UVA', 'CHOCOLATE', 'BAUNILHA',
+    'LARANJA', 'MANGA', 'PESSEGO', 'ABACAXI',
+    'NATURAL', 'SABOR CEBOLA', 'SABOR ALHO',
+    'EXTRA FINA', 'TRADICIONAL',
+    'CASTANHA', 'QUINOA',
+    'VERMELHO', 'BRANCO',
   ];
 
-  for (const [v1, v2] of variantesDiferentes) {
+  for (const variante of variantesExclusivas) {
+    const m1tem = n1.includes(variante);
+    const m2tem = n2.includes(variante);
+    // Se apenas um dos dois tem a variante, são produtos diferentes
+    if (m1tem !== m2tem) {
+      return { duplicata: false, razao: `Variante exclusiva "${variante}" presente em apenas um produto` };
+    }
+  }
+
+  // Pares de variantes mutuamente exclusivas
+  const paresMutuamenteExclusivos = [
+    ['MORANGO', 'FRAMBOESA'], ['MORANGO', 'UVA'], ['LIMAO', 'LARANJA'],
+    ['CHOCOLATE', 'BAUNILHA'], ['NATURAL', 'LIMAO'],
+    ['COM SAL', 'SEM SAL'], ['LIGHT', 'TRADICIONAL'],
+    ['DESNATADO', 'INTEGRAL'],
+  ];
+
+  for (const [v1, v2] of paresMutuamenteExclusivos) {
     const m1temV1 = n1.includes(v1) && !n2.includes(v1);
     const m2temV2 = n2.includes(v2) && !n1.includes(v2);
     const m1temV2 = n1.includes(v2) && !n2.includes(v2);
@@ -73,6 +77,28 @@ function saoRealmenteDuplicatas(m1: any, m2: any): { duplicata: boolean; razao: 
 
     if ((m1temV1 && m2temV2) || (m1temV2 && m2temV1)) {
       return { duplicata: false, razao: `Variantes diferentes: ${v1} vs ${v2}` };
+    }
+  }
+
+  // 3. Verificar gramatura/volume
+  if (m1.qtd_valor && m2.qtd_valor && m1.qtd_unidade && m2.qtd_unidade) {
+    const normalizar = (val: number, un: string): { valor: number; unidade: string } => {
+      const u = un.toUpperCase();
+      if (u === 'KG' || u === 'K') return { valor: val * 1000, unidade: 'G' };
+      if (u === 'L' || u === 'LT') return { valor: val * 1000, unidade: 'ML' };
+      return { valor: val, unidade: u };
+    };
+
+    const norm1 = normalizar(m1.qtd_valor, m1.qtd_unidade);
+    const norm2 = normalizar(m2.qtd_valor, m2.qtd_unidade);
+
+    if (norm1.unidade !== norm2.unidade) {
+      return { duplicata: false, razao: `Unidades incompatíveis: ${m1.qtd_valor}${m1.qtd_unidade} vs ${m2.qtd_valor}${m2.qtd_unidade}` };
+    }
+
+    const diff = Math.abs(norm1.valor - norm2.valor) / Math.max(norm1.valor, norm2.valor);
+    if (diff > 0.15) {
+      return { duplicata: false, razao: `Gramaturas diferentes (${(diff * 100).toFixed(0)}%): ${m1.qtd_valor}${m1.qtd_unidade} vs ${m2.qtd_valor}${m2.qtd_unidade}` };
     }
   }
 
