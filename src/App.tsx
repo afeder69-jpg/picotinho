@@ -29,6 +29,7 @@ import ListasComprasIndex from "./pages/ListasComprasIndex";
 import ListaComprasComprar from "./pages/ListaComprasComprar";
 import DataDeletion from "./pages/DataDeletion";
 import Privacy from "./pages/Privacy";
+import ConsultaPrecos from "./pages/ConsultaPrecos";
 import Terms from "./pages/Terms";
 
 import BottomNavigation from "./components/BottomNavigation";
