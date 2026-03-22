@@ -282,6 +282,64 @@ Deno.serve(async (req) => {
             continue;
           }
 
+          // 🛡️ ESTRATÉGIA 0: Busca por EAN (codigo_barras) — prioridade máxima
+          if (produto.codigo_barras) {
+            const eanLimpo = produto.codigo_barras.replace(/\D/g, '');
+            if (eanLimpo.length >= 8) {
+              console.log(`🔍 Estratégia 0: Buscando por EAN ${eanLimpo}...`);
+              const { data: mastersPorEan } = await supabase
+                .from('produtos_master_global')
+                .select('*')
+                .eq('codigo_barras', eanLimpo)
+                .eq('status', 'ativo')
+                .limit(2);
+
+              if (mastersPorEan && mastersPorEan.length === 1) {
+                const masterEan = mastersPorEan[0];
+                console.log(`✅ EAN Match único: ${masterEan.nome_padrao} (${masterEan.sku_global})`);
+
+                const normEan: NormalizacaoSugerida = {
+                  sku_global: masterEan.sku_global,
+                  nome_padrao: masterEan.nome_padrao,
+                  categoria: masterEan.categoria,
+                  nome_base: masterEan.nome_base,
+                  marca: masterEan.marca,
+                  tipo_embalagem: masterEan.tipo_embalagem,
+                  qtd_valor: masterEan.qtd_valor,
+                  qtd_unidade: masterEan.qtd_unidade,
+                  qtd_base: masterEan.qtd_base,
+                  unidade_base: masterEan.unidade_base,
+                  categoria_unidade: masterEan.categoria_unidade,
+                  granel: masterEan.granel,
+                  confianca: 100,
+                  razao: `Match EAN exato: ${eanLimpo}`,
+                  produto_master_id: masterEan.id,
+                  imagem_url: produto.imagem_url || null,
+                  imagem_path: produto.imagem_path || null
+                };
+
+                await criarCandidato(supabase, produto, normEan, 'auto_aprovado', obsEmbalagem);
+                await supabase.rpc('criar_sinonimo_global', {
+                  produto_master_id_input: masterEan.id,
+                  texto_variacao_input: produto.texto_original,
+                  confianca_input: 100
+                });
+
+                totalAutoAprovados++;
+                if (produto.origem === 'open_food_facts' && produto.open_food_facts_id) {
+                  await supabase.from('open_food_facts_staging').update({ processada: true }).eq('id', produto.open_food_facts_id);
+                }
+                if (produto.nota_imagem_id && notasMetadata.has(produto.nota_imagem_id)) {
+                  notasMetadata.get(produto.nota_imagem_id)!.itensProcessados++;
+                }
+                totalProcessados++;
+                continue;
+              } else if (mastersPorEan && mastersPorEan.length > 1) {
+                console.log(`⚠️ EAN ${eanLimpo} tem ${mastersPorEan.length} masters — duplicata detectada, prosseguindo com IA`);
+              }
+            }
+          }
+
           // 🔍 BUSCA MULTI-CAMADA INTELIGENTE
           const resultadoBusca = await buscarProdutoSimilar(
             supabase,
@@ -388,7 +446,7 @@ Deno.serve(async (req) => {
               // Produto novo com alta confiança - criar master e auto-aprovar
               while (tentativas < MAX_TENTATIVAS) {
                 try {
-                  const masterCriado = await criarProdutoMaster(supabase, normalizacao);
+                  const masterCriado = await criarProdutoMaster(supabase, normalizacao, produto.codigo_barras);
                   normalizacao.produto_master_id = masterCriado.id; // ✅ Preencher o ID do master criado
                   console.log(`🔗 Master criado e vinculado: ${masterCriado.id}`);
                   await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
@@ -1195,31 +1253,61 @@ RESPONDA APENAS COM JSON (sem markdown):
 
 async function criarProdutoMaster(
   supabase: any,
-  normalizacao: NormalizacaoSugerida
+  normalizacao: NormalizacaoSugerida,
+  codigoBarras?: string
 ): Promise<{ id: string, nome_padrao: string }> {
+  // 🛡️ GUARD: Verificar se já existe master com mesmo EAN antes de criar
+  if (codigoBarras) {
+    const eanLimpo = codigoBarras.replace(/\D/g, '');
+    if (eanLimpo.length >= 8) {
+      const { data: masterPorEan } = await supabase
+        .from('produtos_master_global')
+        .select('id, nome_padrao, sku_global')
+        .eq('codigo_barras', eanLimpo)
+        .eq('status', 'ativo')
+        .limit(1)
+        .maybeSingle();
+
+      if (masterPorEan) {
+        console.log(`🛡️ EAN Guard: master já existe para EAN ${eanLimpo}: ${masterPorEan.nome_padrao} (${masterPorEan.id})`);
+        return { id: masterPorEan.id, nome_padrao: masterPorEan.nome_padrao };
+      }
+    }
+  }
+
   // 🔥 Chamada SQL usando INSERT direto para evitar conflito de ordem de parâmetros
+  const insertData: any = {
+    sku_global: normalizacao.sku_global,
+    nome_padrao: normalizacao.nome_padrao,
+    nome_base: normalizacao.nome_base,
+    categoria: normalizacao.categoria,
+    qtd_valor: normalizacao.qtd_valor,
+    qtd_unidade: normalizacao.qtd_unidade,
+    qtd_base: normalizacao.qtd_base,
+    unidade_base: normalizacao.unidade_base,
+    categoria_unidade: normalizacao.categoria_unidade,
+    granel: normalizacao.granel,
+    marca: normalizacao.marca,
+    tipo_embalagem: normalizacao.tipo_embalagem,
+    imagem_url: normalizacao.imagem_url || null,
+    imagem_path: normalizacao.imagem_path || null,
+    confianca_normalizacao: normalizacao.confianca,
+    total_usuarios: 1,
+    total_notas: 1,
+    status: 'ativo'
+  };
+
+  // Incluir codigo_barras se disponível
+  if (codigoBarras) {
+    const eanLimpo = codigoBarras.replace(/\D/g, '');
+    if (eanLimpo.length >= 8) {
+      insertData.codigo_barras = eanLimpo;
+    }
+  }
+
   const { data, error } = await supabase
     .from('produtos_master_global')
-    .upsert({
-      sku_global: normalizacao.sku_global,
-      nome_padrao: normalizacao.nome_padrao,
-      nome_base: normalizacao.nome_base,
-      categoria: normalizacao.categoria,
-      qtd_valor: normalizacao.qtd_valor,
-      qtd_unidade: normalizacao.qtd_unidade,
-      qtd_base: normalizacao.qtd_base,
-      unidade_base: normalizacao.unidade_base,
-      categoria_unidade: normalizacao.categoria_unidade,
-      granel: normalizacao.granel,
-      marca: normalizacao.marca,
-      tipo_embalagem: normalizacao.tipo_embalagem,
-      imagem_url: normalizacao.imagem_url || null,
-      imagem_path: normalizacao.imagem_path || null,
-      confianca_normalizacao: normalizacao.confianca,
-      total_usuarios: 1,
-      total_notas: 1,
-      status: 'ativo'
-    }, {
+    .upsert(insertData, {
       onConflict: 'sku_global',
       ignoreDuplicates: false
     })

@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.contar-duplicatas-master]
 verify_jwt = false
+
+[functions.diagnosticar-masters-duplicados]
+verify_jwt = false
