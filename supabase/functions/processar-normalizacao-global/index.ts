@@ -1195,31 +1195,61 @@ RESPONDA APENAS COM JSON (sem markdown):
 
 async function criarProdutoMaster(
   supabase: any,
-  normalizacao: NormalizacaoSugerida
+  normalizacao: NormalizacaoSugerida,
+  codigoBarras?: string
 ): Promise<{ id: string, nome_padrao: string }> {
+  // 🛡️ GUARD: Verificar se já existe master com mesmo EAN antes de criar
+  if (codigoBarras) {
+    const eanLimpo = codigoBarras.replace(/\D/g, '');
+    if (eanLimpo.length >= 8) {
+      const { data: masterPorEan } = await supabase
+        .from('produtos_master_global')
+        .select('id, nome_padrao, sku_global')
+        .eq('codigo_barras', eanLimpo)
+        .eq('status', 'ativo')
+        .limit(1)
+        .maybeSingle();
+
+      if (masterPorEan) {
+        console.log(`🛡️ EAN Guard: master já existe para EAN ${eanLimpo}: ${masterPorEan.nome_padrao} (${masterPorEan.id})`);
+        return { id: masterPorEan.id, nome_padrao: masterPorEan.nome_padrao };
+      }
+    }
+  }
+
   // 🔥 Chamada SQL usando INSERT direto para evitar conflito de ordem de parâmetros
+  const insertData: any = {
+    sku_global: normalizacao.sku_global,
+    nome_padrao: normalizacao.nome_padrao,
+    nome_base: normalizacao.nome_base,
+    categoria: normalizacao.categoria,
+    qtd_valor: normalizacao.qtd_valor,
+    qtd_unidade: normalizacao.qtd_unidade,
+    qtd_base: normalizacao.qtd_base,
+    unidade_base: normalizacao.unidade_base,
+    categoria_unidade: normalizacao.categoria_unidade,
+    granel: normalizacao.granel,
+    marca: normalizacao.marca,
+    tipo_embalagem: normalizacao.tipo_embalagem,
+    imagem_url: normalizacao.imagem_url || null,
+    imagem_path: normalizacao.imagem_path || null,
+    confianca_normalizacao: normalizacao.confianca,
+    total_usuarios: 1,
+    total_notas: 1,
+    status: 'ativo'
+  };
+
+  // Incluir codigo_barras se disponível
+  if (codigoBarras) {
+    const eanLimpo = codigoBarras.replace(/\D/g, '');
+    if (eanLimpo.length >= 8) {
+      insertData.codigo_barras = eanLimpo;
+    }
+  }
+
   const { data, error } = await supabase
     .from('produtos_master_global')
-    .upsert({
-      sku_global: normalizacao.sku_global,
-      nome_padrao: normalizacao.nome_padrao,
-      nome_base: normalizacao.nome_base,
-      categoria: normalizacao.categoria,
-      qtd_valor: normalizacao.qtd_valor,
-      qtd_unidade: normalizacao.qtd_unidade,
-      qtd_base: normalizacao.qtd_base,
-      unidade_base: normalizacao.unidade_base,
-      categoria_unidade: normalizacao.categoria_unidade,
-      granel: normalizacao.granel,
-      marca: normalizacao.marca,
-      tipo_embalagem: normalizacao.tipo_embalagem,
-      imagem_url: normalizacao.imagem_url || null,
-      imagem_path: normalizacao.imagem_path || null,
-      confianca_normalizacao: normalizacao.confianca,
-      total_usuarios: 1,
-      total_notas: 1,
-      status: 'ativo'
-    }, {
+    .upsert(insertData, {
       onConflict: 'sku_global',
       ignoreDuplicates: false
     })
