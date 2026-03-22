@@ -199,6 +199,46 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ===== NORMALIZE MARKET NAMES =====
+      const cnpjsResultado = Array.from(porMercado.keys());
+      
+      if (cnpjsResultado.length > 0) {
+        // 1. Try normalizacoes_estabelecimentos (highest priority)
+        const { data: normEstab } = await supabase
+          .from('normalizacoes_estabelecimentos')
+          .select('cnpj_original, nome_normalizado')
+          .eq('ativo', true)
+          .in('cnpj_original', cnpjsResultado);
+
+        const normMap = new Map<string, string>();
+        if (normEstab) {
+          for (const n of normEstab) {
+            if (n.cnpj_original) normMap.set(n.cnpj_original, n.nome_normalizado);
+          }
+        }
+
+        // 2. Fallback: supermercados table
+        const { data: superNomes } = await supabase
+          .from('supermercados')
+          .select('cnpj, nome')
+          .in('cnpj', cnpjsResultado);
+
+        const superMap = new Map<string, string>();
+        if (superNomes) {
+          for (const s of superNomes) {
+            if (s.cnpj && s.nome) superMap.set(s.cnpj, s.nome);
+          }
+        }
+
+        // Apply normalized names
+        for (const [cnpj, preco] of porMercado) {
+          const nomeNorm = normMap.get(cnpj) || superMap.get(cnpj);
+          if (nomeNorm) {
+            preco.estabelecimento_nome = nomeNorm;
+          }
+        }
+      }
+
       const precosFinais = Array.from(porMercado.values())
         .sort((a, b) => a.valor_unitario - b.valor_unitario);
 
