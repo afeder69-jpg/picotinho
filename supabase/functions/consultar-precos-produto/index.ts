@@ -62,18 +62,19 @@ Deno.serve(async (req) => {
     const userLat = profile?.latitude;
     const userLon = profile?.longitude;
 
-    // 2. Find master product(s)
-    let masterProducts: any[] = [];
-
+    // 2. Find master product(s) - for autocomplete
     if (tipo === 'ean') {
       const { data } = await supabase
         .from('produtos_master_global')
         .select('id, nome_padrao, nome_base, marca, categoria, codigo_barras, imagem_url, sku_global, qtd_valor, qtd_unidade, unidade_base')
         .eq('codigo_barras', termo.trim())
         .limit(5);
-      masterProducts = data || [];
-    } else if (tipo === 'nome') {
-      // Search by name - use ilike for basic matching
+      return new Response(JSON.stringify({ produtos: data || [] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (tipo === 'nome') {
       const searchTerm = termo.trim();
       const { data } = await supabase
         .from('produtos_master_global')
@@ -81,11 +82,14 @@ Deno.serve(async (req) => {
         .ilike('nome_padrao', `%${searchTerm}%`)
         .order('total_notas', { ascending: false, nullsFirst: false })
         .limit(20);
-      masterProducts = data || [];
-    } else if (tipo === 'precos') {
-      // Direct price lookup for a specific master product ID
+      return new Response(JSON.stringify({ produtos: data || [] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (tipo === 'precos') {
       const masterId = termo;
-      
+
       const { data: master } = await supabase
         .from('produtos_master_global')
         .select('id, nome_padrao, nome_base, marca, categoria, codigo_barras, imagem_url')
@@ -96,20 +100,6 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ produto: null, precos: [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
-      }
-
-      // Find all product names linked to this master via estoque_app
-      const { data: estoqueNames } = await supabase
-        .from('estoque_app')
-        .select('produto_nome')
-        .eq('produto_master_id', masterId);
-
-      const nomesMaster = new Set<string>();
-      nomesMaster.add(master.nome_padrao.toUpperCase());
-      if (estoqueNames) {
-        for (const e of estoqueNames) {
-          nomesMaster.add(e.produto_nome.toUpperCase());
-        }
       }
 
       // Get nearby supermarket CNPJs
@@ -132,41 +122,74 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Search prices - use all known names for this product
-      const nomesArray = Array.from(nomesMaster);
+      // ===== PRIMARY: Query by produto_master_id (structural link) =====
       let allPrecos: any[] = [];
 
-      // Query in batches of names to avoid too long queries
-      for (const nome of nomesArray) {
-        const query = supabase
-          .from('precos_atuais')
-          .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
-          .ilike('produto_nome', nome);
+      const masterQuery = supabase
+        .from('precos_atuais')
+        .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
+        .eq('produto_master_id', masterId);
 
-        if (cnpjsNaArea.length > 0) {
-          query.in('estabelecimento_cnpj', cnpjsNaArea);
-        }
-
-        const { data: precos } = await query;
-        if (precos) allPrecos.push(...precos);
+      if (cnpjsNaArea.length > 0) {
+        masterQuery.in('estabelecimento_cnpj', cnpjsNaArea);
       }
 
-      // Also try ilike with nome_base if available
-      if (master.nome_base) {
-        const query = supabase
-          .from('precos_atuais')
-          .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
-          .ilike('produto_nome', `%${master.nome_base}%`);
+      const { data: precosMaster } = await masterQuery;
+      if (precosMaster) allPrecos.push(...precosMaster);
 
-        if (cnpjsNaArea.length > 0) {
-          query.in('estabelecimento_cnpj', cnpjsNaArea);
+      console.log(`[consultar-precos] Master ID ${masterId}: ${precosMaster?.length || 0} preços por vínculo direto`);
+
+      // ===== FALLBACK: Query by name if no results from master ID =====
+      if (allPrecos.length === 0) {
+        console.log(`[consultar-precos] Fallback por nome para: ${master.nome_padrao}`);
+
+        // Collect all known names for this product
+        const { data: estoqueNames } = await supabase
+          .from('estoque_app')
+          .select('produto_nome')
+          .eq('produto_master_id', masterId);
+
+        const nomesMaster = new Set<string>();
+        nomesMaster.add(master.nome_padrao.toUpperCase());
+        if (estoqueNames) {
+          for (const e of estoqueNames) {
+            nomesMaster.add(e.produto_nome.toUpperCase());
+          }
         }
 
-        const { data: precos } = await query;
-        if (precos) allPrecos.push(...precos);
+        for (const nome of nomesMaster) {
+          const query = supabase
+            .from('precos_atuais')
+            .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
+            .ilike('produto_nome', nome);
+
+          if (cnpjsNaArea.length > 0) {
+            query.in('estabelecimento_cnpj', cnpjsNaArea);
+          }
+
+          const { data: precos } = await query;
+          if (precos) allPrecos.push(...precos);
+        }
+
+        // Also try nome_base partial match
+        if (allPrecos.length === 0 && master.nome_base) {
+          const query = supabase
+            .from('precos_atuais')
+            .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
+            .ilike('produto_nome', `%${master.nome_base}%`);
+
+          if (cnpjsNaArea.length > 0) {
+            query.in('estabelecimento_cnpj', cnpjsNaArea);
+          }
+
+          const { data: precos } = await query;
+          if (precos) allPrecos.push(...precos);
+        }
+
+        console.log(`[consultar-precos] Fallback encontrou ${allPrecos.length} preços`);
       }
 
-      // Deduplicate: keep best (most recent) price per market CNPJ
+      // Deduplicate: keep most recent price per market CNPJ
       const porMercado = new Map<string, any>();
       for (const p of allPrecos) {
         const key = p.estabelecimento_cnpj;
@@ -184,8 +207,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // For 'nome' and 'ean' types, return matching products (autocomplete)
-    return new Response(JSON.stringify({ produtos: masterProducts }), {
+    return new Response(JSON.stringify({ error: 'Tipo inválido' }), {
+      status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

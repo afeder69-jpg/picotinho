@@ -180,16 +180,55 @@ serve(async (req) => {
       // 4. Atualizar/inserir preço atual (com normalização e user_id)
       const produtoNomeNormalizado = normalizarNomeProduto(produtoNome);
       
+      // Resolve produto_master_id via estoque_app or candidatos
+      let produtoMasterId: string | null = null;
+      
+      // Try via estoque_app first (most reliable)
+      const { data: estoqueMatch } = await supabase
+        .from('estoque_app')
+        .select('produto_master_id')
+        .eq('user_id', userId)
+        .ilike('produto_nome', produtoNomeNormalizado)
+        .not('produto_master_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      
+      if (estoqueMatch?.produto_master_id) {
+        produtoMasterId = estoqueMatch.produto_master_id;
+      } else {
+        // Fallback: try via candidatos normalizacao
+        const { data: candidatoMatch } = await supabase
+          .from('produtos_candidatos_normalizacao')
+          .select('sugestao_produto_master')
+          .ilike('texto_original', produtoNomeNormalizado)
+          .not('sugestao_produto_master', 'is', null)
+          .in('status', ['auto_aprovado', 'aprovado'])
+          .limit(1)
+          .maybeSingle();
+        
+        if (candidatoMatch?.sugestao_produto_master) {
+          produtoMasterId = candidatoMatch.sugestao_produto_master;
+        }
+      }
+      
+      console.log(`🔗 produto_master_id resolvido: ${produtoMasterId || 'null'} para "${produtoNomeNormalizado}"`);
+      
+      const upsertData: any = {
+        produto_nome: produtoNomeNormalizado,
+        estabelecimento_cnpj: cnpjNormalizado,
+        estabelecimento_nome: estabelecimentoNome,
+        valor_unitario: precoUnitario,
+        data_atualizacao: dataNovaCompra.toISOString(),
+        user_id: userId
+      };
+      
+      if (produtoMasterId) {
+        upsertData.produto_master_id = produtoMasterId;
+      }
+      
       const { data: precoAtualizado, error: erroUpdate } = await supabase
         .from('precos_atuais')
-        .upsert({
-          produto_nome: produtoNomeNormalizado,
-          estabelecimento_cnpj: cnpjNormalizado,
-          estabelecimento_nome: estabelecimentoNome,
-          valor_unitario: precoUnitario,
-          data_atualizacao: dataNovaCompra.toISOString(),
-          user_id: userId
-        }, {
+        .upsert(upsertData, {
           onConflict: 'produto_nome,estabelecimento_cnpj'
         })
         .select();
