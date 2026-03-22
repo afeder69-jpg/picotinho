@@ -15,7 +15,8 @@ import {
   Settings,
   Database,
   Shield,
-  Calendar
+  Calendar,
+  Search
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -101,6 +102,14 @@ const Menu = () => {
   };
 
   const menuOptions = [
+    {
+      id: 'consulta-precos',
+      title: 'Consulta de Preços',
+      description: 'Consultar preços de produtos nos mercados da sua área',
+      icon: Search,
+      onClick: () => navigate('/consulta-precos'),
+      isActive: true
+    },
     {
       id: 'saved-pages',
       title: 'Minhas Notas Salvas',
