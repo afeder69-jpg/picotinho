@@ -222,6 +222,7 @@ serve(async (req) => {
               nome_padrao: p.nome_padrao,
               sku_global: p.sku_global,
               marca: p.marca,
+              codigo_barras: p.codigo_barras,
               qtd_valor: p.qtd_valor,
               qtd_unidade: p.qtd_unidade,
               total_notas: p.total_notas,
