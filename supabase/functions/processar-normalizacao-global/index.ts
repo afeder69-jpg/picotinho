@@ -282,6 +282,64 @@ Deno.serve(async (req) => {
             continue;
           }
 
+          // 🛡️ ESTRATÉGIA 0: Busca por EAN (codigo_barras) — prioridade máxima
+          if (produto.codigo_barras) {
+            const eanLimpo = produto.codigo_barras.replace(/\D/g, '');
+            if (eanLimpo.length >= 8) {
+              console.log(`🔍 Estratégia 0: Buscando por EAN ${eanLimpo}...`);
+              const { data: mastersPorEan } = await supabase
+                .from('produtos_master_global')
+                .select('*')
+                .eq('codigo_barras', eanLimpo)
+                .eq('status', 'ativo')
+                .limit(2);
+
+              if (mastersPorEan && mastersPorEan.length === 1) {
+                const masterEan = mastersPorEan[0];
+                console.log(`✅ EAN Match único: ${masterEan.nome_padrao} (${masterEan.sku_global})`);
+
+                const normEan: NormalizacaoSugerida = {
+                  sku_global: masterEan.sku_global,
+                  nome_padrao: masterEan.nome_padrao,
+                  categoria: masterEan.categoria,
+                  nome_base: masterEan.nome_base,
+                  marca: masterEan.marca,
+                  tipo_embalagem: masterEan.tipo_embalagem,
+                  qtd_valor: masterEan.qtd_valor,
+                  qtd_unidade: masterEan.qtd_unidade,
+                  qtd_base: masterEan.qtd_base,
+                  unidade_base: masterEan.unidade_base,
+                  categoria_unidade: masterEan.categoria_unidade,
+                  granel: masterEan.granel,
+                  confianca: 100,
+                  razao: `Match EAN exato: ${eanLimpo}`,
+                  produto_master_id: masterEan.id,
+                  imagem_url: produto.imagem_url || null,
+                  imagem_path: produto.imagem_path || null
+                };
+
+                await criarCandidato(supabase, produto, normEan, 'auto_aprovado', obsEmbalagem);
+                await supabase.rpc('criar_sinonimo_global', {
+                  produto_master_id_input: masterEan.id,
+                  texto_variacao_input: produto.texto_original,
+                  confianca_input: 100
+                });
+
+                totalAutoAprovados++;
+                if (produto.origem === 'open_food_facts' && produto.open_food_facts_id) {
+                  await supabase.from('open_food_facts_staging').update({ processada: true }).eq('id', produto.open_food_facts_id);
+                }
+                if (produto.nota_imagem_id && notasMetadata.has(produto.nota_imagem_id)) {
+                  notasMetadata.get(produto.nota_imagem_id)!.itensProcessados++;
+                }
+                totalProcessados++;
+                continue;
+              } else if (mastersPorEan && mastersPorEan.length > 1) {
+                console.log(`⚠️ EAN ${eanLimpo} tem ${mastersPorEan.length} masters — duplicata detectada, prosseguindo com IA`);
+              }
+            }
+          }
+
           // 🔍 BUSCA MULTI-CAMADA INTELIGENTE
           const resultadoBusca = await buscarProdutoSimilar(
             supabase,
