@@ -3117,6 +3117,11 @@ export default function NormalizacaoGlobal() {
                                     <div className="text-xs text-muted-foreground font-mono mt-1 bg-muted px-2 py-1 rounded">
                                       SKU: {produto.sku_global}
                                     </div>
+                                    {produto.codigo_barras && (
+                                      <div className="text-xs text-muted-foreground font-mono mt-1 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                                        EAN: {produto.codigo_barras}
+                                      </div>
+                                    )}
                                   </div>
                                   {isEscolhido && (
                                     <Badge className="bg-green-600 text-white gap-1 shrink-0">
