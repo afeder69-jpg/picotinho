@@ -429,15 +429,15 @@ serve(async (req) => {
       const label = String.fromCharCode(65 + index); // A, B, C...
 
       precosData.forEach(({ item, precos }) => {
-        const preco = precos.get(mercado.id);
+        const resultado = precos.get(mercado.id);
         
-        if (preco) {
-          const precoTotal = preco * item.quantidade;
+        if (resultado) {
+          const precoTotal = resultado.valor * item.quantidade;
           
           // Verificar se é o melhor preço
           let melhorPreco = Infinity;
-          precos.forEach(p => {
-            if (p < melhorPreco) melhorPreco = p;
+          precos.forEach(r => {
+            if (r.valor < melhorPreco) melhorPreco = r.valor;
           });
 
           produtosMercado.push({
@@ -445,11 +445,12 @@ serve(async (req) => {
             produto_nome: item.produto_nome,
             quantidade: item.quantidade,
             unidade_medida: item.unidade_medida,
-            preco_unitario: preco,
+            preco_unitario: resultado.valor,
             preco_total: precoTotal,
-            melhor_preco: preco === melhorPreco,
-            economia: preco > melhorPreco ? (preco - melhorPreco) * item.quantidade : 0,
-            comprado: item.comprado
+            melhor_preco: resultado.valor === melhorPreco,
+            economia: resultado.valor > melhorPreco ? (resultado.valor - melhorPreco) * item.quantidade : 0,
+            comprado: item.comprado,
+            data_atualizacao: resultado.data_atualizacao
           });
           
           totalMercado += precoTotal;
