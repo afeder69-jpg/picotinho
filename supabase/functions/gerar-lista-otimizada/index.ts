@@ -118,6 +118,24 @@ serve(async (req) => {
       throw new Error('Nenhum produto encontrado para criar lista');
     }
 
+    // Resolver master_id para cada produto
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const produtosComMaster = await Promise.all(
+      produtos.map(async (p) => {
+        const { data: master } = await supabaseAdmin
+          .from('produtos_master_global')
+          .select('id')
+          .ilike('nome_padrao', p.produto_nome.trim())
+          .limit(1)
+          .maybeSingle();
+        return { ...p, produto_id: master?.id || null };
+      })
+    );
+
     // Inserir lista
     const { data: lista, error: listaError } = await supabase
       .from('listas_compras')
