@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Calendar, Filter, Download } from "lucide-react";
+import { normalizarParaBusca } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
