@@ -245,7 +245,7 @@ serve(async (req) => {
           const palavra1 = palavrasChave[0];
           const palavra2 = palavrasChave[1];
           
-          const { data: precosGeralOr } = await supabase
+          const { data: precosGeralOr } = await supabaseAdmin
             .from('precos_atuais')
             .select('valor_unitario, produto_nome, estabelecimento_nome')
             .eq('estabelecimento_cnpj', cnpjMercado)
