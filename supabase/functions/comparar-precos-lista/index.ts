@@ -152,7 +152,7 @@ serve(async (req) => {
       if (produtoMasterId && cnpjMercado) {
         const { data: precoMaster } = await supabaseAdmin
           .from('precos_atuais')
-          .select('valor_unitario, produto_nome')
+          .select('valor_unitario, produto_nome, data_atualizacao')
           .eq('produto_master_id', produtoMasterId)
           .eq('estabelecimento_cnpj', cnpjMercado)
           .order('data_atualizacao', { ascending: false })
@@ -161,7 +161,7 @@ serve(async (req) => {
 
         if (precoMaster?.valor_unitario) {
           console.log(`  ✅ [MASTER-ID+CNPJ] R$ ${precoMaster.valor_unitario} - "${precoMaster.produto_nome}"`);
-          return precoMaster.valor_unitario;
+          return { valor: precoMaster.valor_unitario, data_atualizacao: precoMaster.data_atualizacao };
         }
 
         // Se o master veio do produto_id original (vínculo real) → manter integridade total
