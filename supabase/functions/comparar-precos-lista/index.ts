@@ -132,18 +132,49 @@ serve(async (req) => {
     const buscarPrecoInteligente = async (
       userId: string,
       produtoNome: string,
-      estabelecimentoNome?: string
+      estabelecimentoNome?: string,
+      produtoMasterId?: string,
+      cnpjMercado?: string
     ): Promise<number | null> => {
+      console.log(`  🔍 Buscando preço para: "${produtoNome}" (master_id: ${produtoMasterId || 'N/A'}, cnpj: ${cnpjMercado || 'N/A'})`);
+
+      // ========================================
+      // PASSO 0: Busca estrutural por produto_master_id + CNPJ do mercado
+      // Mesma lógica da Consulta de Preços — garante consistência entre módulos
+      // ========================================
+      if (produtoMasterId && cnpjMercado) {
+        const { data: precoMaster } = await supabase
+          .from('precos_atuais')
+          .select('valor_unitario, produto_nome')
+          .eq('produto_master_id', produtoMasterId)
+          .eq('estabelecimento_cnpj', cnpjMercado)
+          .order('data_atualizacao', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (precoMaster?.valor_unitario) {
+          console.log(`  ✅ [MASTER-ID+CNPJ] R$ ${precoMaster.valor_unitario} - "${precoMaster.produto_nome}"`);
+          return precoMaster.valor_unitario;
+        }
+
+        // Se tem produto_master_id mas não encontrou neste mercado específico,
+        // NÃO buscar em outro mercado — retornar null para manter integridade da coluna
+        console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado})`);
+        return null;
+      }
+
+      // ========================================
+      // FALLBACK: Busca fuzzy para itens SEM produto_id (itens antigos/manuais)
+      // ========================================
       const produtoUpper = produtoNome.toUpperCase().trim();
-      console.log(`  🔍 Buscando preço para: "${produtoNome}"`);
       
       // Extrair palavras-chave relevantes (>2 letras, sem números puros)
       const palavrasChave = produtoUpper
         .split(/\s+/)
         .filter(palavra => palavra.length > 2 && !/^\d+$/.test(palavra))
-        .slice(0, 4); // Pegar até 4 palavras principais
+        .slice(0, 4);
       
-      console.log(`  📝 Palavras-chave extraídas: [${palavrasChave.join(', ')}]`);
+      console.log(`  📝 [FALLBACK] Palavras-chave: [${palavrasChave.join(', ')}]`);
       
       // 1. Busca exata em precos_atuais_usuario
       const { data: precoUsuarioExato } = await supabase
@@ -174,7 +205,6 @@ serve(async (req) => {
           .limit(5);
         
         if (precosUsuarioOr && precosUsuarioOr.length > 0) {
-          // Ordenar por quantidade de matches (priorizar produtos com mais palavras em comum)
           const scored = precosUsuarioOr.map(p => ({
             ...p,
             score: palavrasChave.filter(palavra => 
@@ -189,12 +219,11 @@ serve(async (req) => {
       }
       
       // 3. Busca exata em precos_atuais (com estabelecimento e user_id)
-      if (estabelecimentoNome) {
+      if (estabelecimentoNome && cnpjMercado) {
         const { data: precoGeralExato } = await supabase
           .from('precos_atuais')
           .select('valor_unitario, produto_nome, estabelecimento_nome')
-          .eq('user_id', userId)
-          .ilike('estabelecimento_nome', `%${estabelecimentoNome}%`)
+          .eq('estabelecimento_cnpj', cnpjMercado)
           .ilike('produto_nome', produtoUpper)
           .order('data_atualizacao', { ascending: false })
           .limit(1)
@@ -205,7 +234,7 @@ serve(async (req) => {
           return precoGeralExato.valor_unitario;
         }
         
-        // 4. Busca com 2 palavras principais em precos_atuais (estratégia OR com user_id)
+        // 4. Busca com 2 palavras principais em precos_atuais (estratégia OR filtrada por CNPJ)
         if (palavrasChave.length >= 2) {
           const palavra1 = palavrasChave[0];
           const palavra2 = palavrasChave[1];
@@ -213,14 +242,12 @@ serve(async (req) => {
           const { data: precosGeralOr } = await supabase
             .from('precos_atuais')
             .select('valor_unitario, produto_nome, estabelecimento_nome')
-            .eq('user_id', userId)
-            .ilike('estabelecimento_nome', `%${estabelecimentoNome}%`)
+            .eq('estabelecimento_cnpj', cnpjMercado)
             .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
             .order('data_atualizacao', { ascending: false })
             .limit(5);
           
           if (precosGeralOr && precosGeralOr.length > 0) {
-            // Ordenar por quantidade de matches
             const scored = precosGeralOr.map(p => ({
               ...p,
               score: palavrasChave.filter(palavra => 
@@ -232,34 +259,6 @@ serve(async (req) => {
             console.log(`  ✅ [GERAL-OR] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" @ ${melhor.estabelecimento_nome} (${melhor.score}/${palavrasChave.length} palavras)`);
             return melhor.valor_unitario;
           }
-        }
-      }
-      
-      // 5. Fallback: buscar com 2 palavras em qualquer estabelecimento (mas filtrado por user_id)
-      if (palavrasChave.length >= 2) {
-        const palavra1 = palavrasChave[0];
-        const palavra2 = palavrasChave[1];
-        
-        const { data: precosFallback } = await supabase
-          .from('precos_atuais')
-          .select('valor_unitario, produto_nome, estabelecimento_nome')
-          .eq('user_id', userId)
-          .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
-          .order('data_atualizacao', { ascending: false })
-          .limit(5);
-        
-        if (precosFallback && precosFallback.length > 0) {
-          // Ordenar por quantidade de matches
-          const scored = precosFallback.map(p => ({
-            ...p,
-            score: palavrasChave.filter(palavra => 
-              p.produto_nome.toUpperCase().includes(palavra)
-            ).length
-          })).sort((a, b) => b.score - a.score);
-          
-          const melhor = scored[0];
-          console.log(`  ⚠️ [FALLBACK] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" @ ${melhor.estabelecimento_nome} (${melhor.score}/${palavrasChave.length} palavras)`);
-          return melhor.valor_unitario;
         }
       }
       
@@ -278,7 +277,13 @@ serve(async (req) => {
         const nomeNormalizado = mercado.nome?.toUpperCase().trim() || '';
         console.log(`\n🏪 Mercado: ${nomeNormalizado}`);
         
-        const preco = await buscarPrecoInteligente(userId, item.produto_nome, nomeNormalizado);
+        const preco = await buscarPrecoInteligente(
+          userId,
+          item.produto_nome,
+          nomeNormalizado,
+          item.produto_id || undefined,
+          mercado.cnpj || undefined
+        );
         
         if (preco) {
           precosMap.set(mercado.id, preco);

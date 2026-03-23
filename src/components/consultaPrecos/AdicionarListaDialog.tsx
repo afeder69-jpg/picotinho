@@ -57,6 +57,7 @@ const AdicionarListaDialog = ({ open, onClose, produto }: AdicionarListaDialogPr
       const { error } = await supabase.from('listas_compras_itens').insert({
         lista_id: listaId,
         produto_nome: produto.nome_padrao,
+        produto_id: produto.id,
         quantidade: 1,
         unidade_medida: produto.unidade_base || 'UN',
         comprado: false,

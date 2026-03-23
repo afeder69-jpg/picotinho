@@ -1,33 +1,24 @@
 
 
-## Correção: Renderizar itens sem preço na lista principal
+## Correção aplicada: Consistência entre Consulta de Preços, Lista de Compras e Tabela Comparativa
 
-### O que será feito
+### Problema
 
-**Arquivo: `src/pages/ListaCompras.tsx`**
+Os três módulos usavam fontes e métodos de busca diferentes:
+- Consulta de Preços: busca estrutural por `produto_master_id`
+- Lista/Tabela: busca fuzzy por palavras-chave → encontrava produtos errados com preços diferentes
 
-Após os grupos de mercado (dentro do bloco `tabAtiva === 'otimizado'` e também no bloco `tabAtiva !== 'otimizado'`), adicionar uma seção que renderiza os itens de `produtosSemPreco`:
+### Alterações realizadas
 
-- Título da seção: "Produtos sem preço nos mercados próximos"
-- Cada item renderizado com:
-  - Checkbox para marcar como comprado
-  - Nome do produto
-  - Controles de quantidade (+/-)
-  - Badge discreto: "Sem preço disponível"
-  - **Sem exibir preço zero** — a área de preço simplesmente não aparece
+**1. `src/components/consultaPrecos/AdicionarListaDialog.tsx`**
+- Adicionado `produto_id: produto.id` ao insert, preservando o vínculo com o catálogo master
 
-**Componente: `src/components/listaCompras/ItemProdutoSemPreco.tsx`** (novo)
-
-Componente simplificado baseado no `ItemProduto`, mas sem a seção de preço/economia. Aceita os mesmos handlers `onToggleComprado` e `onQuantidadeChange`.
-
-### O que NÃO muda
-
-- Edge function `comparar-precos-lista` — sem alteração
-- Componentes existentes (`ItemProduto`, `GrupoMercado`, `EditarListaDialog`)
-- Estrutura do banco de dados
-- Lógica de preços dos itens que já funcionam
+**2. `supabase/functions/comparar-precos-lista/index.ts`**
+- Novo **Passo 0**: se item tem `produto_id` + `cnpjMercado`, busca em `precos_atuais` por `produto_master_id` + `estabelecimento_cnpj`
+- Se não encontra naquele mercado específico → retorna `null` (não preenche com preço de outro mercado)
+- Fallback fuzzy mantido apenas para itens sem `produto_id` (antigos/manuais)
+- Fallback fuzzy agora usa `estabelecimento_cnpj` ao invés de `ilike` no nome do estabelecimento
 
 ### Resultado
 
-Todo item da lista será visível na tela principal, com ou sem preço. Quando um item ganhar preço (nova nota fiscal), ele automaticamente migra para os grupos de mercado na próxima atualização.
-
+Itens adicionados via Consulta de Preços usam a mesma busca estrutural em todos os módulos. Cada coluna de mercado mostra apenas preços reais daquele mercado.
