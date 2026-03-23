@@ -149,7 +149,7 @@ serve(async (req) => {
       // Mesma lógica da Consulta de Preços — garante consistência entre módulos
       // ========================================
       if (produtoMasterId && cnpjMercado) {
-        const { data: precoMaster } = await supabase
+        const { data: precoMaster } = await supabaseAdmin
           .from('precos_atuais')
           .select('valor_unitario, produto_nome')
           .eq('produto_master_id', produtoMasterId)
