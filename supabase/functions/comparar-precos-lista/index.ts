@@ -206,7 +206,7 @@ serve(async (req) => {
       // 1. Busca exata em precos_atuais_usuario
       const { data: precoUsuarioExato } = await supabase
         .from('precos_atuais_usuario')
-        .select('valor_unitario, produto_nome')
+        .select('valor_unitario, produto_nome, data_atualizacao')
         .eq('user_id', userId)
         .ilike('produto_nome', produtoUpper)
         .order('data_atualizacao', { ascending: false })
@@ -215,7 +215,7 @@ serve(async (req) => {
       
       if (precoUsuarioExato?.valor_unitario) {
         console.log(`  ✅ [USUÁRIO-EXATO] R$ ${precoUsuarioExato.valor_unitario} - "${precoUsuarioExato.produto_nome}"`);
-        return precoUsuarioExato.valor_unitario;
+        return { valor: precoUsuarioExato.valor_unitario, data_atualizacao: precoUsuarioExato.data_atualizacao };
       }
       
       // 2. Busca com 2 palavras principais em precos_atuais_usuario (estratégia OR)
