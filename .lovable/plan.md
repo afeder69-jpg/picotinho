@@ -1,51 +1,103 @@
 
 
-## Diagnóstico: Inconsistência de nomes de mercados no sistema
+## Correção da comparação de preços — Ajustes 1 e 2
 
-### Dimensão do problema
+### Ajuste 1: Resolução de master priorizando o que tem preços reais
 
-**Todos os 6 mercados ativos** têm divergência entre o nome na tabela `supermercados` (razão social) e o nome normalizado (nome comercial). Em 2 casos isso causa falha visível:
+**Onde:** `comparar-precos-lista/index.ts`, linhas 282-294
 
-| CNPJ | Tabela `supermercados` | Nome normalizado | Match funciona? |
-|---|---|---|---|
-| `06057223041951` | SENDAS DISTRIBUIDORA S/A | ASSAI CESARIO DE MELO CG | **NÃO** |
-| `39346861041437` | CENCOSUD BRASIL COMERCIAL SA | PREZUNIC BARRA | **NÃO** |
-| `17493338000397` | COSTAZUL ALIMENTOS LTDA | COSTAZUL CESÁRIO DE MELO CG | Sim (contém "COSTAZUL") |
-| `45543915025176` | CARREFOUR | CARREFOUR CG | Sim (contém "CARREFOUR") |
-| `35881333000313` | MEGABOX | MEGABOX RECREIO | Sim (contém "MEGABOX") |
-| `07760885001814` | SUPERMARKET | SUPERMARKET A.VASCONCELOS CG | Sim (contém "SUPERMARKET") |
+**Atual:** Busca um único master por nome (`ilike + limit(1)`) sem critério de ordenação — pode pegar um duplicado sem preços.
 
-### Causa raiz
-
-Na função `buscar-supermercados-area` (linha 336), a normalização é chamada **sem passar o CNPJ**:
+**Novo:** Buscar até 5 masters com o mesmo nome, depois verificar qual deles tem registros em `precos_atuais`. Usar o primeiro que tiver preços vinculados. Se nenhum tiver, usar o primeiro como fallback (comportamento atual preservado).
 
 ```typescript
-// Atual — só nome, sem CNPJ
-supabase.rpc('normalizar_nome_estabelecimento', {
-  nome_input: supermercado.nome
-});
+let produtoMasterId = item.produto_id || null;
+let masterResolvidoPorNome = false;
+
+if (!produtoMasterId) {
+  const { data: masters } = await supabaseAdmin
+    .from('produtos_master_global')
+    .select('id')
+    .ilike('nome_padrao', item.produto_nome.trim())
+    .limit(5);
+
+  if (masters && masters.length > 0) {
+    // Preferir master que realmente tem preços
+    for (const m of masters) {
+      const { count } = await supabaseAdmin
+        .from('precos_atuais')
+        .select('id', { count: 'exact', head: true })
+        .eq('produto_master_id', m.id)
+        .limit(1);
+      if (count && count > 0) {
+        produtoMasterId = m.id;
+        break;
+      }
+    }
+    if (!produtoMasterId) produtoMasterId = masters[0].id;
+    masterResolvidoPorNome = true;
+  }
+}
 ```
 
-A função RPC tem uma versão que aceita `cnpj_input` e prioriza busca por CNPJ (mais confiável). Porém, como não recebe o CNPJ, tenta match por nome — e quando a razão social (ex: "SENDAS DISTRIBUIDORA S/A") não contém o nome bruto da nota (ex: "LOJA 202 - CESARIO"), a normalização falha silenciosamente.
+### Ajuste 2: Fallback conservador quando master resolvido por nome não encontra preço
 
-### Correção proposta
+**Onde:** `buscarPrecoInteligente`, linhas 151-170
 
-**Um único ponto de correção** em `buscar-supermercados-area/index.ts`, linha 336:
+**Atual:** Se `produtoMasterId + cnpjMercado` não encontra preço → `return null` (hard stop), mesmo quando o master foi resolvido por nome e pode estar errado (duplicado).
 
-Passar o CNPJ do supermercado (já disponível no contexto como `cnpjSupermercado` ou via `idParaCnpj`) para a chamada RPC:
+**Novo:** Diferenciar dois cenários:
+- **Item com `produto_id` original** (veio da tabela): manter `return null` — integridade total
+- **Master resolvido por nome** (sem vínculo original): permitir fallback para busca **exata por nome** no mesmo CNPJ — não fuzzy, não OR, apenas `ilike` exato do `produto_nome` em `precos_atuais` filtrado pelo CNPJ do mercado
+
+O fallback **não usa** busca por palavras-chave, não usa OR, não faz aproximação. Apenas tenta encontrar o nome exato do produto na tabela de preços daquele mercado específico. Isso garante:
+- Não associa preço de produto parecido mas diferente
+- Não troca item por aproximação indevida
+- Só encontra se o nome exato existir naquele mercado
 
 ```typescript
-const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
-  nome_input: supermercado.nome,
-  cnpj_input: idParaCnpj.get(supermercado.id) || supermercado.cnpj || null
-});
+// Dentro de buscarPrecoInteligente, após a busca por master_id+cnpj falhar:
+if (produtoMasterId && cnpjMercado) {
+  const { data: precoMaster } = await supabaseAdmin
+    .from('precos_atuais')
+    .select('valor_unitario, produto_nome')
+    .eq('produto_master_id', produtoMasterId)
+    .eq('estabelecimento_cnpj', cnpjMercado)
+    .order('data_atualizacao', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (precoMaster?.valor_unitario) {
+    return precoMaster.valor_unitario;
+  }
+
+  // Se o master veio do produto_id original → manter integridade
+  if (!masterResolvidoPorNome) {
+    return null;
+  }
+
+  // Fallback conservador: busca exata por nome neste CNPJ
+  const { data: precoNomeExato } = await supabaseAdmin
+    .from('precos_atuais')
+    .select('valor_unitario, produto_nome')
+    .eq('estabelecimento_cnpj', cnpjMercado)
+    .ilike('produto_nome', produtoNome.trim())
+    .order('data_atualizacao', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (precoNomeExato?.valor_unitario) {
+    return precoNomeExato.valor_unitario;
+  }
+
+  return null;
+}
 ```
 
-Isso resolve **todos os casos** de uma vez — Sendas, Cencosud/Prezunic, e qualquer futuro mercado com razão social diferente do nome comercial — sem alterar mais nada no sistema.
+### Alterações
 
-### Impacto
-
-- Nenhuma alteração em tabelas, regras de normalização ou outras funções
-- Apenas 1 linha alterada em 1 edge function
-- Todos os mercados passam a exibir o nome comercial correto em todas as telas
+- 1 edge function: `comparar-precos-lista/index.ts`
+- A flag `masterResolvidoPorNome` é passada para `buscarPrecoInteligente` como parâmetro adicional
+- Zero alteração em tabelas, frontend ou outras funções
+- Fallback restrito a match exato por nome + CNPJ — sem aproximação
 
