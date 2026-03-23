@@ -164,9 +164,29 @@ serve(async (req) => {
           return precoMaster.valor_unitario;
         }
 
-        // Se tem produto_master_id mas não encontrou neste mercado específico,
-        // NÃO buscar em outro mercado — retornar null para manter integridade da coluna
-        console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado})`);
+        // Se o master veio do produto_id original (vínculo real) → manter integridade total
+        if (!masterResolvidoPorNome) {
+          console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — vínculo original, sem fallback`);
+          return null;
+        }
+
+        // Fallback conservador: master foi resolvido por nome (pode ser duplicado errado)
+        // Busca EXATA por nome no mesmo CNPJ — sem fuzzy, sem OR, sem aproximação
+        const { data: precoNomeExato } = await supabaseAdmin
+          .from('precos_atuais')
+          .select('valor_unitario, produto_nome')
+          .eq('estabelecimento_cnpj', cnpjMercado)
+          .ilike('produto_nome', produtoNome.trim())
+          .order('data_atualizacao', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (precoNomeExato?.valor_unitario) {
+          console.log(`  ✅ [FALLBACK-NOME-EXATO] R$ ${precoNomeExato.valor_unitario} - "${precoNomeExato.produto_nome}" @ CNPJ ${cnpjMercado}`);
+          return precoNomeExato.valor_unitario;
+        }
+
+        console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — fallback por nome também não encontrou`);
         return null;
       }
 
