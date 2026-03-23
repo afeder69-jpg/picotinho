@@ -106,7 +106,7 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
           unidade_medida: unidade,
           lista_id: lista.id,
           comprado: false,
-          produto_id: null
+          produto_id: produto.id || null
         })
         .select()
         .single();

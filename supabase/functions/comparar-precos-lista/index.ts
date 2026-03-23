@@ -277,6 +277,23 @@ serve(async (req) => {
       console.log(`\n🔍 Buscando preços para: ${item.produto_nome}`);
       console.log(`📦 Quantidade: ${item.quantidade} ${item.unidade_medida}`);
       
+      // Resolver produto_master_id se o item não tem vínculo
+      let produtoMasterId = item.produto_id || null;
+      if (!produtoMasterId) {
+        const { data: master } = await supabaseAdmin
+          .from('produtos_master_global')
+          .select('id')
+          .ilike('nome_padrao', item.produto_nome.trim())
+          .limit(1)
+          .maybeSingle();
+        if (master) {
+          produtoMasterId = master.id;
+          console.log(`  🔗 Master resolvido: ${produtoMasterId}`);
+        } else {
+          console.log(`  ⚠️ Sem master_id para: ${item.produto_nome}`);
+        }
+      }
+
       const precosMap = new Map();
 
       for (const mercado of mercados) {
@@ -287,7 +304,7 @@ serve(async (req) => {
           userId,
           item.produto_nome,
           nomeNormalizado,
-          item.produto_id || undefined,
+          produtoMasterId || undefined,
           mercado.cnpj || undefined
         );
         
