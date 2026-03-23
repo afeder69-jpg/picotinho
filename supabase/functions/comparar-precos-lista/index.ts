@@ -376,11 +376,13 @@ serve(async (req) => {
 
       let melhorPreco = Infinity;
       let melhorMercadoId = null;
+      let melhorDataAtualizacao = '';
 
-      precos.forEach((preco, mercadoId) => {
-        if (preco < melhorPreco) {
-          melhorPreco = preco;
+      precos.forEach((resultado, mercadoId) => {
+        if (resultado.valor < melhorPreco) {
+          melhorPreco = resultado.valor;
           melhorMercadoId = mercadoId;
+          melhorDataAtualizacao = resultado.data_atualizacao;
         }
       });
 
@@ -408,7 +410,8 @@ serve(async (req) => {
           preco_unitario: melhorPreco,
           preco_total: precoTotal,
           melhor_preco: true,
-          comprado: item.comprado
+          comprado: item.comprado,
+          data_atualizacao: melhorDataAtualizacao
         });
         
         mercadoData.total += precoTotal;
