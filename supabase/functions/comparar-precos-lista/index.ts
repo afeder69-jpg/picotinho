@@ -27,6 +27,12 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Client admin para consultas em precos_atuais (ignora RLS, mesma visibilidade da consulta individual)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const { userId, listaId } = await req.json();
     
     if (!userId || !listaId) {
