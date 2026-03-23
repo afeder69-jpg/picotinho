@@ -111,7 +111,7 @@ serve(async (req) => {
       );
     }
 
-    const mercados = (resultadoMercados.supermercados || []).slice(0, 3);
+    const mercados = (resultadoMercados.supermercados || []).slice(0, 15);
     console.log(`✅ ${mercados.length} mercados encontrados para comparação`);
 
     // Buscar itens da lista
