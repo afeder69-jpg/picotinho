@@ -11,7 +11,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('🚀 COMPARAR-PRECOS-LISTA V3.0 - user_id implementado + lógica OR ativa');
+  console.log('🚀 COMPARAR-PRECOS-LISTA V4.0 - master priorizado por preços + fallback conservador');
 
   try {
     const authHeader = req.headers.get('Authorization')!;
