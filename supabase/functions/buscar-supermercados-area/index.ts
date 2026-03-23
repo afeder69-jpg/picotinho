@@ -220,8 +220,9 @@ serve(async (req) => {
           console.log(`📍 Geocodificação bem-sucedida para ${estabelecimento.nome}: ${coords.latitude}, ${coords.longitude}`);
           
           supermercadosComNotasAtivas.push({
-            id: `temp_${cnpjLimpo}`, // ID temporário
+            id: `temp_${cnpjLimpo}`,
             nome: estabelecimento.nome,
+            cnpj: cnpjLimpo,
             endereco: estabelecimento.endereco,
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -229,7 +230,6 @@ serve(async (req) => {
             fonte: 'nota_fiscal',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-            // CNPJ removido por segurança
           });
         } else {
           console.log(`❌ Falha na geocodificação para ${estabelecimento.nome}: ${geoError?.message || geocodificacao?.message || 'Coordenadas não encontradas'}`);
