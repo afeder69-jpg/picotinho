@@ -226,7 +226,7 @@ serve(async (req) => {
       
       // 3. Busca exata em precos_atuais (com estabelecimento e user_id)
       if (estabelecimentoNome && cnpjMercado) {
-        const { data: precoGeralExato } = await supabase
+        const { data: precoGeralExato } = await supabaseAdmin
           .from('precos_atuais')
           .select('valor_unitario, produto_nome, estabelecimento_nome')
           .eq('estabelecimento_cnpj', cnpjMercado)
