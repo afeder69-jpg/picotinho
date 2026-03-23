@@ -186,8 +186,8 @@ serve(async (req) => {
           
           console.log(`✅ ${nomeNormalizado} - CNPJ: ${cnpjSupermercado} - ${quantidadeNotas} notas ativas (CADASTRADO)`);
           
-          // Remover dados sensíveis antes de adicionar à resposta
-          const { cnpj, telefone, email, ...supermercadoSeguro } = supermercado;
+          // Remover dados sensíveis (telefone/email) antes de adicionar à resposta
+          const { telefone, email, ...supermercadoSeguro } = supermercado;
           supermercadosComNotasAtivas.push({
             ...supermercadoSeguro,
             nome: nomeNormalizado, // Usar nome normalizado
