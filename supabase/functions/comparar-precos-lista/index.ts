@@ -11,7 +11,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('🚀 COMPARAR-PRECOS-LISTA V3.0 - user_id implementado + lógica OR ativa');
+  console.log('🚀 COMPARAR-PRECOS-LISTA V4.0 - master priorizado por preços + fallback conservador');
 
   try {
     const authHeader = req.headers.get('Authorization')!;
@@ -140,7 +140,8 @@ serve(async (req) => {
       produtoNome: string,
       estabelecimentoNome?: string,
       produtoMasterId?: string,
-      cnpjMercado?: string
+      cnpjMercado?: string,
+      masterResolvidoPorNome?: boolean
     ): Promise<number | null> => {
       console.log(`  🔍 Buscando preço para: "${produtoNome}" (master_id: ${produtoMasterId || 'N/A'}, cnpj: ${cnpjMercado || 'N/A'})`);
 
@@ -163,9 +164,29 @@ serve(async (req) => {
           return precoMaster.valor_unitario;
         }
 
-        // Se tem produto_master_id mas não encontrou neste mercado específico,
-        // NÃO buscar em outro mercado — retornar null para manter integridade da coluna
-        console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado})`);
+        // Se o master veio do produto_id original (vínculo real) → manter integridade total
+        if (!masterResolvidoPorNome) {
+          console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — vínculo original, sem fallback`);
+          return null;
+        }
+
+        // Fallback conservador: master foi resolvido por nome (pode ser duplicado errado)
+        // Busca EXATA por nome no mesmo CNPJ — sem fuzzy, sem OR, sem aproximação
+        const { data: precoNomeExato } = await supabaseAdmin
+          .from('precos_atuais')
+          .select('valor_unitario, produto_nome')
+          .eq('estabelecimento_cnpj', cnpjMercado)
+          .ilike('produto_nome', produtoNome.trim())
+          .order('data_atualizacao', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (precoNomeExato?.valor_unitario) {
+          console.log(`  ✅ [FALLBACK-NOME-EXATO] R$ ${precoNomeExato.valor_unitario} - "${precoNomeExato.produto_nome}" @ CNPJ ${cnpjMercado}`);
+          return precoNomeExato.valor_unitario;
+        }
+
+        console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — fallback por nome também não encontrou`);
         return null;
       }
 
@@ -279,16 +300,32 @@ serve(async (req) => {
       
       // Resolver produto_master_id se o item não tem vínculo
       let produtoMasterId = item.produto_id || null;
+      let masterResolvidoPorNome = false;
       if (!produtoMasterId) {
-        const { data: master } = await supabaseAdmin
+        const { data: masters } = await supabaseAdmin
           .from('produtos_master_global')
           .select('id')
           .ilike('nome_padrao', item.produto_nome.trim())
-          .limit(1)
-          .maybeSingle();
-        if (master) {
-          produtoMasterId = master.id;
-          console.log(`  🔗 Master resolvido: ${produtoMasterId}`);
+          .limit(5);
+        if (masters && masters.length > 0) {
+          // Preferir master que realmente tem preços vinculados
+          for (const m of masters) {
+            const { count } = await supabaseAdmin
+              .from('precos_atuais')
+              .select('id', { count: 'exact', head: true })
+              .eq('produto_master_id', m.id)
+              .limit(1);
+            if (count && count > 0) {
+              produtoMasterId = m.id;
+              console.log(`  🔗 Master resolvido (com preços): ${produtoMasterId}`);
+              break;
+            }
+          }
+          if (!produtoMasterId) {
+            produtoMasterId = masters[0].id;
+            console.log(`  🔗 Master resolvido (sem preços, fallback): ${produtoMasterId}`);
+          }
+          masterResolvidoPorNome = true;
         } else {
           console.log(`  ⚠️ Sem master_id para: ${item.produto_nome}`);
         }
@@ -305,7 +342,8 @@ serve(async (req) => {
           item.produto_nome,
           nomeNormalizado,
           produtoMasterId || undefined,
-          mercado.cnpj || undefined
+          mercado.cnpj || undefined,
+          masterResolvidoPorNome
         );
         
         if (preco) {
