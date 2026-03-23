@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { normalizarParaBusca } from "@/lib/utils";
 import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History, FileText } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { format } from "date-fns";
@@ -442,11 +443,11 @@ const NormalizacoesEstabelecimentos = () => {
   };
 
   const normalizacoesFiltradas = normalizacoes.filter((norm) => {
-    const searchLower = searchTerm.toLowerCase();
+    const termoNorm = normalizarParaBusca(searchTerm);
     const cnpjSearch = searchTerm.replace(/\D/g, '');
     return (
-      norm.nome_original.toLowerCase().includes(searchLower) ||
-      norm.nome_normalizado.toLowerCase().includes(searchLower) ||
+      normalizarParaBusca(norm.nome_original).includes(termoNorm) ||
+      normalizarParaBusca(norm.nome_normalizado).includes(termoNorm) ||
       (norm.cnpj_original && norm.cnpj_original.includes(cnpjSearch))
     );
   });

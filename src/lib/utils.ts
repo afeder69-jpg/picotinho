@@ -6,6 +6,22 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Normaliza texto para busca: insensível a acentos, maiúsculas/minúsculas e espaços extras.
+ * Usar em TODAS as buscas visíveis ao usuário no sistema.
+ * @param texto Texto a normalizar
+ * @returns String normalizada para comparação
+ */
+export function normalizarParaBusca(texto: string): string {
+  if (!texto) return '';
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Formata distância de forma padronizada em toda a aplicação
  * @param distancia Distância em quilômetros
  * @returns String formatada (ex: "700m" ou "3.4km")

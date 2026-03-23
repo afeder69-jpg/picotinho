@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
+import { normalizarParaBusca } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "@/hooks/use-toast";
@@ -85,8 +86,9 @@ export function SelecionarReceitaDialog({
 
   const filtrarReceitas = (receitas: any[]) => {
     if (!busca) return receitas;
+    const termoNorm = normalizarParaBusca(busca);
     return receitas.filter(r => 
-      r.titulo.toLowerCase().includes(busca.toLowerCase())
+      normalizarParaBusca(r.titulo).includes(termoNorm)
     );
   };
 

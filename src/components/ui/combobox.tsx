@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn, normalizarParaBusca } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -65,7 +65,9 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 z-50" align="start">
-        <Command shouldFilter={shouldFilter}>
+        <Command shouldFilter={shouldFilter} filter={(value, search) => {
+            return normalizarParaBusca(value).includes(normalizarParaBusca(search)) ? 1 : 0;
+          }}>
           <CommandInput 
             placeholder={searchPlaceholder} 
             value={searchValue}

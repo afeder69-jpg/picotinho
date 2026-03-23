@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
+import { normalizarParaBusca } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import PageHeader from "@/components/PageHeader";
@@ -57,9 +58,10 @@ export default function Receitas() {
 
   const filtrarReceitas = (receitas: any[]) => {
     if (!busca) return receitas;
+    const termoNorm = normalizarParaBusca(busca);
     return receitas.filter(r => 
-      r.titulo.toLowerCase().includes(busca.toLowerCase()) ||
-      r.instrucoes?.toLowerCase().includes(busca.toLowerCase())
+      normalizarParaBusca(r.titulo).includes(termoNorm) ||
+      normalizarParaBusca(r.instrucoes || '').includes(termoNorm)
     );
   };
 

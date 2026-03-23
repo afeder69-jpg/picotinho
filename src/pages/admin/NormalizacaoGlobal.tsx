@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { normalizarParaBusca } from "@/lib/utils";
 import { categoriasNormalizadas } from "@/lib/categorias";
 
 /**
@@ -505,15 +506,15 @@ export default function NormalizacaoGlobal() {
       let resultados: any[] = [];
       
       for (const t of termos) {
-        const termoUpper = t.toUpperCase();
+        const termoNorm = normalizarParaBusca(t);
         
         const filtrados = (data || []).filter(candidato => 
-          candidato.texto_original?.toUpperCase().includes(termoUpper) ||
-          candidato.nome_padrao_sugerido?.toUpperCase().includes(termoUpper) ||
-          candidato.nome_base_sugerido?.toUpperCase().includes(termoUpper) ||
-          candidato.marca_sugerida?.toUpperCase().includes(termoUpper) ||
-          candidato.categoria_sugerida?.toUpperCase().includes(termoUpper) ||
-          candidato.sugestao_sku_global?.toUpperCase().includes(termoUpper)
+          normalizarParaBusca(candidato.texto_original || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.nome_padrao_sugerido || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.nome_base_sugerido || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.marca_sugerida || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.categoria_sugerida || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.sugestao_sku_global || '').includes(termoNorm)
         );
         
         resultados.push(...filtrados);
@@ -2966,10 +2967,10 @@ export default function NormalizacaoGlobal() {
               <Database className="w-6 h-6 text-primary" />
               Duplicatas Detectadas
               {(() => {
-                const termo = buscaDuplicatas.toLowerCase().trim();
+                const termo = normalizarParaBusca(buscaDuplicatas);
                 const totalFiltrados = termo
                   ? gruposDuplicatas.filter(g => g.produtos?.some((item: any) =>
-                      [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
+                      [item.nome_padrao, item.marca, item.sku_global].some(v => normalizarParaBusca(v || '').includes(termo))
                     )).length
                   : gruposDuplicatas.length;
                 return ` (${termo ? `${totalFiltrados} de ` : ''}${gruposDuplicatas.length} ${gruposDuplicatas.length === 1 ? 'grupo' : 'grupos'})`;
@@ -2993,10 +2994,10 @@ export default function NormalizacaoGlobal() {
           <div className="space-y-6 py-4">
             {gruposDuplicatas
               .filter(grupo => {
-                const termo = buscaDuplicatas.toLowerCase().trim();
+                const termo = normalizarParaBusca(buscaDuplicatas);
                 if (!termo) return true;
                 return grupo.produtos?.some((item: any) =>
-                  [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
+                  [item.nome_padrao, item.marca, item.sku_global].some(v => normalizarParaBusca(v || '').includes(termo))
                 );
               })
               .map((grupo, idx) => {
