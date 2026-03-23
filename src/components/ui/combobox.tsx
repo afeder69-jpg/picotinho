@@ -27,6 +27,7 @@ interface ComboboxProps {
   className?: string
   onSearchChange?: (search: string) => void
   isLoading?: boolean
+  shouldFilter?: boolean
 }
 
 export function Combobox({
