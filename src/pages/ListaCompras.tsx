@@ -318,6 +318,37 @@ export default function ListaCompras() {
                     </div>
                   ))}
                 </div>
+
+                {produtosSemPreco.length > 0 && (
+                  <div className="mb-6 mt-4">
+                    <div className="flex items-center justify-between mb-3 p-3 bg-muted/50 rounded-t border border-border">
+                      <div>
+                        <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                          📋 Produtos sem preço nos mercados próximos
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {produtosSemPreco.length} {produtosSemPreco.length === 1 ? 'produto' : 'produtos'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {produtosSemPreco.map((item: any) => (
+                        <ItemProdutoSemPreco
+                          key={item.id}
+                          item={{
+                            id: item.id,
+                            produto_nome: item.produto_nome,
+                            quantidade: item.quantidade || 1,
+                            unidade_medida: item.unidade_medida || 'un',
+                            comprado: item.comprado || false,
+                          }}
+                          onToggleComprado={handleToggleComprado}
+                          onQuantidadeChange={handleQuantidadeChange}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
