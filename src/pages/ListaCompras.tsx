@@ -14,6 +14,7 @@ import { GrupoMercado } from "@/components/listaCompras/GrupoMercado";
 import { TabelaComparativa } from "@/components/listaCompras/TabelaComparativa";
 import { ExportarListaDialog } from "@/components/listaCompras/ExportarListaDialog";
 import { EditarListaDialog } from "@/components/listaCompras/EditarListaDialog";
+import { ItemProdutoSemPreco } from "@/components/listaCompras/ItemProdutoSemPreco";
 
 export default function ListaCompras() {
   const { id } = useParams<{ id: string }>();
@@ -224,13 +225,13 @@ export default function ListaCompras() {
           loading={loadingLista || loadingComparacao}
         />
 
-        {produtosSemPreco.length > 0 && (
+        {produtosSemPreco.length > 0 && produtosSemPreco.length === totalProdutos && (
           <Alert variant="default">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Alguns produtos sem preço</AlertTitle>
+            <AlertTitle>Nenhum produto com preço</AlertTitle>
             <AlertDescription>
-              {produtosSemPreco.length} produtos não possuem preço cadastrado nos mercados próximos.
-              Adicione notas fiscais para melhorar a comparação.
+              Nenhum dos {produtosSemPreco.length} produtos possui preço cadastrado nos mercados próximos.
+              Adicione notas fiscais para habilitar a comparação.
             </AlertDescription>
           </Alert>
         )}
@@ -261,6 +262,37 @@ export default function ListaCompras() {
                     onQuantidadeChange={handleQuantidadeChange}
                   />
                 ))}
+
+                {produtosSemPreco.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3 p-3 bg-muted/50 rounded-t border border-border">
+                      <div>
+                        <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                          📋 Produtos sem preço nos mercados próximos
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {produtosSemPreco.length} {produtosSemPreco.length === 1 ? 'produto' : 'produtos'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {produtosSemPreco.map((item: any) => (
+                        <ItemProdutoSemPreco
+                          key={item.id}
+                          item={{
+                            id: item.id,
+                            produto_nome: item.produto_nome,
+                            quantidade: item.quantidade || 1,
+                            unidade_medida: item.unidade_medida || 'un',
+                            comprado: item.comprado || false,
+                          }}
+                          onToggleComprado={handleToggleComprado}
+                          onQuantidadeChange={handleQuantidadeChange}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -286,6 +318,37 @@ export default function ListaCompras() {
                     </div>
                   ))}
                 </div>
+
+                {produtosSemPreco.length > 0 && (
+                  <div className="mb-6 mt-4">
+                    <div className="flex items-center justify-between mb-3 p-3 bg-muted/50 rounded-t border border-border">
+                      <div>
+                        <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                          📋 Produtos sem preço nos mercados próximos
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {produtosSemPreco.length} {produtosSemPreco.length === 1 ? 'produto' : 'produtos'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {produtosSemPreco.map((item: any) => (
+                        <ItemProdutoSemPreco
+                          key={item.id}
+                          item={{
+                            id: item.id,
+                            produto_nome: item.produto_nome,
+                            quantidade: item.quantidade || 1,
+                            unidade_medida: item.unidade_medida || 'un',
+                            comprado: item.comprado || false,
+                          }}
+                          onToggleComprado={handleToggleComprado}
+                          onQuantidadeChange={handleQuantidadeChange}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
