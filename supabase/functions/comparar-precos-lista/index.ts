@@ -27,6 +27,12 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Client admin para consultas em precos_atuais (ignora RLS, mesma visibilidade da consulta individual)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const { userId, listaId } = await req.json();
     
     if (!userId || !listaId) {
@@ -143,7 +149,7 @@ serve(async (req) => {
       // Mesma lógica da Consulta de Preços — garante consistência entre módulos
       // ========================================
       if (produtoMasterId && cnpjMercado) {
-        const { data: precoMaster } = await supabase
+        const { data: precoMaster } = await supabaseAdmin
           .from('precos_atuais')
           .select('valor_unitario, produto_nome')
           .eq('produto_master_id', produtoMasterId)
@@ -220,7 +226,7 @@ serve(async (req) => {
       
       // 3. Busca exata em precos_atuais (com estabelecimento e user_id)
       if (estabelecimentoNome && cnpjMercado) {
-        const { data: precoGeralExato } = await supabase
+        const { data: precoGeralExato } = await supabaseAdmin
           .from('precos_atuais')
           .select('valor_unitario, produto_nome, estabelecimento_nome')
           .eq('estabelecimento_cnpj', cnpjMercado)
@@ -239,7 +245,7 @@ serve(async (req) => {
           const palavra1 = palavrasChave[0];
           const palavra2 = palavrasChave[1];
           
-          const { data: precosGeralOr } = await supabase
+          const { data: precosGeralOr } = await supabaseAdmin
             .from('precos_atuais')
             .select('valor_unitario, produto_nome, estabelecimento_nome')
             .eq('estabelecimento_cnpj', cnpjMercado)
