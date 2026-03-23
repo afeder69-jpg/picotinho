@@ -115,7 +115,7 @@ export function SeletorProdutoNormalizado({ onAdicionar }: SeletorProdutoNormali
                   >
                     <div className="flex items-center justify-between w-full">
                       <span>{produto.nome_padrao}</span>
-                      <Badge variant="secondary">{produto.categoria}</Badge>
+                      <Badge variant="secondary">{normalizarCategoria(produto.categoria)}</Badge>
                     </div>
                   </CommandItem>
                 ))}
