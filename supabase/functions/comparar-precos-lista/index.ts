@@ -300,16 +300,32 @@ serve(async (req) => {
       
       // Resolver produto_master_id se o item não tem vínculo
       let produtoMasterId = item.produto_id || null;
+      let masterResolvidoPorNome = false;
       if (!produtoMasterId) {
-        const { data: master } = await supabaseAdmin
+        const { data: masters } = await supabaseAdmin
           .from('produtos_master_global')
           .select('id')
           .ilike('nome_padrao', item.produto_nome.trim())
-          .limit(1)
-          .maybeSingle();
-        if (master) {
-          produtoMasterId = master.id;
-          console.log(`  🔗 Master resolvido: ${produtoMasterId}`);
+          .limit(5);
+        if (masters && masters.length > 0) {
+          // Preferir master que realmente tem preços vinculados
+          for (const m of masters) {
+            const { count } = await supabaseAdmin
+              .from('precos_atuais')
+              .select('id', { count: 'exact', head: true })
+              .eq('produto_master_id', m.id)
+              .limit(1);
+            if (count && count > 0) {
+              produtoMasterId = m.id;
+              console.log(`  🔗 Master resolvido (com preços): ${produtoMasterId}`);
+              break;
+            }
+          }
+          if (!produtoMasterId) {
+            produtoMasterId = masters[0].id;
+            console.log(`  🔗 Master resolvido (sem preços, fallback): ${produtoMasterId}`);
+          }
+          masterResolvidoPorNome = true;
         } else {
           console.log(`  ⚠️ Sem master_id para: ${item.produto_nome}`);
         }
