@@ -126,6 +126,12 @@ serve(async (req) => {
 
     const produtosComMaster = await Promise.all(
       produtos.map(async (p) => {
+        // Se já veio com produto_id (do catálogo ou null para item livre), usar diretamente
+        if (p.produto_id !== undefined) {
+          return p;
+        }
+        
+        // Senão, resolver por nome (comportamento legado)
         const { data: master } = await supabaseAdmin
           .from('produtos_master_global')
           .select('id')

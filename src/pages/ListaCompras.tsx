@@ -209,8 +209,16 @@ export default function ListaCompras() {
     );
   }
 
-  // Se houver produtos sem preço
-  const produtosSemPreco = comparacao?.produtosSemPreco || [];
+  // Separar itens livres (produto_id null e não presentes na comparação) dos produtos sem preço
+  const todosItens = lista.listas_compras_itens || [];
+  const produtosSemPrecoRaw = comparacao?.produtosSemPreco || [];
+  
+  // Itens livres: produto_id é null
+  const itensLivres = todosItens.filter((item: any) => !item.produto_id);
+  const itensLivresIds = new Set(itensLivres.map((i: any) => i.id));
+  
+  // Produtos sem preço: excluir itens livres
+  const produtosSemPreco = produtosSemPrecoRaw.filter((item: any) => !itensLivresIds.has(item.id));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
