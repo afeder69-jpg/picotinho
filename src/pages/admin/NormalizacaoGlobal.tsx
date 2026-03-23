@@ -2967,10 +2967,10 @@ export default function NormalizacaoGlobal() {
               <Database className="w-6 h-6 text-primary" />
               Duplicatas Detectadas
               {(() => {
-                const termo = buscaDuplicatas.toLowerCase().trim();
+                const termo = normalizarParaBusca(buscaDuplicatas);
                 const totalFiltrados = termo
                   ? gruposDuplicatas.filter(g => g.produtos?.some((item: any) =>
-                      [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
+                      [item.nome_padrao, item.marca, item.sku_global].some(v => normalizarParaBusca(v || '').includes(termo))
                     )).length
                   : gruposDuplicatas.length;
                 return ` (${termo ? `${totalFiltrados} de ` : ''}${gruposDuplicatas.length} ${gruposDuplicatas.length === 1 ? 'grupo' : 'grupos'})`;
