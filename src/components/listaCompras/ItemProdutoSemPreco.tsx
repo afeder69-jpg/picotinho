@@ -13,6 +13,7 @@ interface ItemProdutoSemPrecoProps {
     quantidade: number;
     unidade_medida: string;
     comprado: boolean;
+    produto_id?: string | null;
   };
   onToggleComprado: (id: string) => void;
   onQuantidadeChange: (id: string, qtd: number) => void;
@@ -20,6 +21,7 @@ interface ItemProdutoSemPrecoProps {
 
 export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange }: ItemProdutoSemPrecoProps) {
   const [quantidade, setQuantidade] = useState(item.quantidade);
+  const isItemLivre = !item.produto_id;
 
   const handleQuantidadeChange = (novaQtd: number) => {
     if (novaQtd <= 0) return;
@@ -41,9 +43,15 @@ export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange
               <h4 className={`font-medium ${item.comprado ? 'line-through' : ''}`}>
                 {item.produto_nome}
               </h4>
-              <Badge variant="outline" className="text-xs text-muted-foreground">
-                Sem preço disponível
-              </Badge>
+              {isItemLivre ? (
+                <Badge variant="secondary" className="text-xs">
+                  Item livre
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Sem preço disponível
+                </Badge>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
