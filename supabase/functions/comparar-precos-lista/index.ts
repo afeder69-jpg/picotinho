@@ -225,7 +225,7 @@ serve(async (req) => {
         
         const { data: precosUsuarioOr } = await supabase
           .from('precos_atuais_usuario')
-          .select('valor_unitario, produto_nome')
+          .select('valor_unitario, produto_nome, data_atualizacao')
           .eq('user_id', userId)
           .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
           .order('data_atualizacao', { ascending: false })
@@ -241,7 +241,7 @@ serve(async (req) => {
           
           const melhor = scored[0];
           console.log(`  ✅ [USUÁRIO-OR] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" (${melhor.score}/${palavrasChave.length} palavras)`);
-          return melhor.valor_unitario;
+          return { valor: melhor.valor_unitario, data_atualizacao: melhor.data_atualizacao };
         }
       }
       
