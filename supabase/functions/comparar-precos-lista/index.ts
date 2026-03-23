@@ -249,7 +249,7 @@ serve(async (req) => {
       if (estabelecimentoNome && cnpjMercado) {
         const { data: precoGeralExato } = await supabaseAdmin
           .from('precos_atuais')
-          .select('valor_unitario, produto_nome, estabelecimento_nome')
+          .select('valor_unitario, produto_nome, estabelecimento_nome, data_atualizacao')
           .eq('estabelecimento_cnpj', cnpjMercado)
           .ilike('produto_nome', produtoUpper)
           .order('data_atualizacao', { ascending: false })
@@ -258,7 +258,7 @@ serve(async (req) => {
         
         if (precoGeralExato?.valor_unitario) {
           console.log(`  ✅ [GERAL-EXATO] R$ ${precoGeralExato.valor_unitario} - "${precoGeralExato.produto_nome}" @ ${precoGeralExato.estabelecimento_nome}`);
-          return precoGeralExato.valor_unitario;
+          return { valor: precoGeralExato.valor_unitario, data_atualizacao: precoGeralExato.data_atualizacao };
         }
         
         // 4. Busca com 2 palavras principais em precos_atuais (estratégia OR filtrada por CNPJ)
@@ -268,7 +268,7 @@ serve(async (req) => {
           
           const { data: precosGeralOr } = await supabaseAdmin
             .from('precos_atuais')
-            .select('valor_unitario, produto_nome, estabelecimento_nome')
+            .select('valor_unitario, produto_nome, estabelecimento_nome, data_atualizacao')
             .eq('estabelecimento_cnpj', cnpjMercado)
             .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
             .order('data_atualizacao', { ascending: false })
@@ -284,7 +284,7 @@ serve(async (req) => {
             
             const melhor = scored[0];
             console.log(`  ✅ [GERAL-OR] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" @ ${melhor.estabelecimento_nome} (${melhor.score}/${palavrasChave.length} palavras)`);
-            return melhor.valor_unitario;
+            return { valor: melhor.valor_unitario, data_atualizacao: melhor.data_atualizacao };
           }
         }
       }
