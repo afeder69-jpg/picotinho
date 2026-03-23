@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { normalizarCategoria } from "@/lib/categorias";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 
 interface SeletorProdutoNormalizadoProps {
@@ -114,7 +115,7 @@ export function SeletorProdutoNormalizado({ onAdicionar }: SeletorProdutoNormali
                   >
                     <div className="flex items-center justify-between w-full">
                       <span>{produto.nome_padrao}</span>
-                      <Badge variant="secondary">{produto.categoria}</Badge>
+                      <Badge variant="secondary">{normalizarCategoria(produto.categoria)}</Badge>
                     </div>
                   </CommandItem>
                 ))}
