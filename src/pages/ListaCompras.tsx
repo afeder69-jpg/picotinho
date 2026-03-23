@@ -225,13 +225,13 @@ export default function ListaCompras() {
           loading={loadingLista || loadingComparacao}
         />
 
-        {produtosSemPreco.length > 0 && (
+        {produtosSemPreco.length > 0 && produtosSemPreco.length === totalProdutos && (
           <Alert variant="default">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Alguns produtos sem preço</AlertTitle>
+            <AlertTitle>Nenhum produto com preço</AlertTitle>
             <AlertDescription>
-              {produtosSemPreco.length} produtos não possuem preço cadastrado nos mercados próximos.
-              Adicione notas fiscais para melhorar a comparação.
+              Nenhum dos {produtosSemPreco.length} produtos possui preço cadastrado nos mercados próximos.
+              Adicione notas fiscais para habilitar a comparação.
             </AlertDescription>
           </Alert>
         )}
