@@ -1,4 +1,5 @@
 
+
 ## Correção: Usar client admin para consultas em `precos_atuais`
 
 **Arquivo:** `supabase/functions/comparar-precos-lista/index.ts`
@@ -8,7 +9,6 @@
 Adicionar após o fechamento do `createClient` do usuário:
 
 ```typescript
-// Client admin para consultas em precos_atuais (ignora RLS, mesma visibilidade da consulta individual)
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -17,15 +17,15 @@ const supabaseAdmin = createClient(
 
 ### Alteração 2 — Linha 146: PASSO 0
 
-Trocar `await supabase` por `await supabaseAdmin` na query `.from('precos_atuais')`.
+Trocar `await supabase` por `await supabaseAdmin` na query `.from('precos_atuais')` (busca por `produto_master_id` + CNPJ).
 
 ### Alteração 3 — Linha 223: Passo 3
 
-Trocar `await supabase` por `await supabaseAdmin` na query `.from('precos_atuais')`.
+Trocar `await supabase` por `await supabaseAdmin` na query `.from('precos_atuais')` (busca exata por nome + CNPJ).
 
 ### Alteração 4 — Linha 242: Passo 4
 
-Trocar `await supabase` por `await supabaseAdmin` na query `.from('precos_atuais')`.
+Trocar `await supabase` por `await supabaseAdmin` na query `.from('precos_atuais')` (busca OR por palavras-chave + CNPJ).
 
 ### O que NÃO muda
 
@@ -36,5 +36,7 @@ Trocar `await supabase` por `await supabaseAdmin` na query `.from('precos_atuais
 
 ### Resultado
 
-- Comparação enxerga todos os preços em `precos_atuais` (igual à consulta individual)
+- Comparação enxerga todos os preços em `precos_atuais` (igual a consulta individual)
 - Mesmos mercados e valores nas duas telas
+- Dados do usuário continuam protegidos nas demais partes do fluxo
+
