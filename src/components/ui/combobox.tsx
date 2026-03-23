@@ -39,7 +39,8 @@ export function Combobox({
   emptyText = "Nenhum item encontrado.",
   className,
   onSearchChange,
-  isLoading = false
+  isLoading = false,
+  shouldFilter = true
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [searchValue, setSearchValue] = React.useState("")
