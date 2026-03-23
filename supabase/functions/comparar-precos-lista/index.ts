@@ -140,7 +140,8 @@ serve(async (req) => {
       produtoNome: string,
       estabelecimentoNome?: string,
       produtoMasterId?: string,
-      cnpjMercado?: string
+      cnpjMercado?: string,
+      masterResolvidoPorNome?: boolean
     ): Promise<number | null> => {
       console.log(`  🔍 Buscando preço para: "${produtoNome}" (master_id: ${produtoMasterId || 'N/A'}, cnpj: ${cnpjMercado || 'N/A'})`);
 
