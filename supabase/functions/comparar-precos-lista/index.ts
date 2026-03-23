@@ -174,7 +174,7 @@ serve(async (req) => {
         // Busca EXATA por nome no mesmo CNPJ — sem fuzzy, sem OR, sem aproximação
         const { data: precoNomeExato } = await supabaseAdmin
           .from('precos_atuais')
-          .select('valor_unitario, produto_nome')
+          .select('valor_unitario, produto_nome, data_atualizacao')
           .eq('estabelecimento_cnpj', cnpjMercado)
           .ilike('produto_nome', produtoNome.trim())
           .order('data_atualizacao', { ascending: false })
@@ -183,7 +183,7 @@ serve(async (req) => {
 
         if (precoNomeExato?.valor_unitario) {
           console.log(`  ✅ [FALLBACK-NOME-EXATO] R$ ${precoNomeExato.valor_unitario} - "${precoNomeExato.produto_nome}" @ CNPJ ${cnpjMercado}`);
-          return precoNomeExato.valor_unitario;
+          return { valor: precoNomeExato.valor_unitario, data_atualizacao: precoNomeExato.data_atualizacao };
         }
 
         console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — fallback por nome também não encontrou`);
