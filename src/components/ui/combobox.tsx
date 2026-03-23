@@ -27,6 +27,7 @@ interface ComboboxProps {
   className?: string
   onSearchChange?: (search: string) => void
   isLoading?: boolean
+  shouldFilter?: boolean
 }
 
 export function Combobox({
@@ -38,7 +39,8 @@ export function Combobox({
   emptyText = "Nenhum item encontrado.",
   className,
   onSearchChange,
-  isLoading = false
+  isLoading = false,
+  shouldFilter = true
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [searchValue, setSearchValue] = React.useState("")
@@ -63,7 +65,7 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 z-50" align="start">
-        <Command shouldFilter={false}>
+        <Command shouldFilter={shouldFilter}>
           <CommandInput 
             placeholder={searchPlaceholder} 
             value={searchValue}
