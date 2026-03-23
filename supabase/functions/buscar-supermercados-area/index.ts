@@ -334,7 +334,8 @@ serve(async (req) => {
         let nomeNormalizado = supermercado.nome;
         try {
           const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
-            nome_input: supermercado.nome
+            nome_input: supermercado.nome,
+            cnpj_input: idParaCnpj.get(supermercado.id) || supermercado.cnpj || null
           });
           if (nomeNormalizadoResult) {
             nomeNormalizado = nomeNormalizadoResult;
