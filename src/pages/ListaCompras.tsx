@@ -14,6 +14,7 @@ import { GrupoMercado } from "@/components/listaCompras/GrupoMercado";
 import { TabelaComparativa } from "@/components/listaCompras/TabelaComparativa";
 import { ExportarListaDialog } from "@/components/listaCompras/ExportarListaDialog";
 import { EditarListaDialog } from "@/components/listaCompras/EditarListaDialog";
+import { ItemProdutoSemPreco } from "@/components/listaCompras/ItemProdutoSemPreco";
 
 export default function ListaCompras() {
   const { id } = useParams<{ id: string }>();
