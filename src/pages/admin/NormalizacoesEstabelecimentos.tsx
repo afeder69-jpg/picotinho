@@ -443,11 +443,11 @@ const NormalizacoesEstabelecimentos = () => {
   };
 
   const normalizacoesFiltradas = normalizacoes.filter((norm) => {
-    const searchLower = searchTerm.toLowerCase();
+    const termoNorm = normalizarParaBusca(searchTerm);
     const cnpjSearch = searchTerm.replace(/\D/g, '');
     return (
-      norm.nome_original.toLowerCase().includes(searchLower) ||
-      norm.nome_normalizado.toLowerCase().includes(searchLower) ||
+      normalizarParaBusca(norm.nome_original).includes(termoNorm) ||
+      normalizarParaBusca(norm.nome_normalizado).includes(termoNorm) ||
       (norm.cnpj_original && norm.cnpj_original.includes(cnpjSearch))
     );
   });

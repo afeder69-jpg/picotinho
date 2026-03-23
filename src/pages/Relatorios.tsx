@@ -307,8 +307,9 @@ export default function Relatorios() {
       
       // Filtro por produto
       if (produto) {
+        const termoNorm = normalizarParaBusca(produto);
         dadosFiltrados = dadosFiltrados.filter(item => 
-          item.produto.toLowerCase().includes(produto.toLowerCase())
+          normalizarParaBusca(item.produto).includes(termoNorm)
         );
       }
       

@@ -58,9 +58,10 @@ export default function Receitas() {
 
   const filtrarReceitas = (receitas: any[]) => {
     if (!busca) return receitas;
+    const termoNorm = normalizarParaBusca(busca);
     return receitas.filter(r => 
-      r.titulo.toLowerCase().includes(busca.toLowerCase()) ||
-      r.instrucoes?.toLowerCase().includes(busca.toLowerCase())
+      normalizarParaBusca(r.titulo).includes(termoNorm) ||
+      normalizarParaBusca(r.instrucoes || '').includes(termoNorm)
     );
   };
 

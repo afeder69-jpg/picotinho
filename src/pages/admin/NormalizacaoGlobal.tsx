@@ -2994,10 +2994,10 @@ export default function NormalizacaoGlobal() {
           <div className="space-y-6 py-4">
             {gruposDuplicatas
               .filter(grupo => {
-                const termo = buscaDuplicatas.toLowerCase().trim();
+                const termo = normalizarParaBusca(buscaDuplicatas);
                 if (!termo) return true;
                 return grupo.produtos?.some((item: any) =>
-                  [item.nome_padrao, item.marca, item.sku_global].some(v => v?.toLowerCase().includes(termo))
+                  [item.nome_padrao, item.marca, item.sku_global].some(v => normalizarParaBusca(v || '').includes(termo))
                 );
               })
               .map((grupo, idx) => {

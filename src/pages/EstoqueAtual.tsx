@@ -618,16 +618,10 @@ const EstoqueAtual = () => {
     return null;
   };
 
-  // Função para normalizar texto removendo acentos
+  // Usa normalizarParaBusca centralizada de utils.ts
+  // Wrapper local para manter compatibilidade com lógica extra de remoção de caracteres especiais
   const normalizarTexto = (texto: string) => {
-    return texto
-      .toLowerCase()
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[^a-z0-9\s]/g, ' ') // Remove caracteres especiais
-      .replace(/\s+/g, ' ') // Normaliza espaços
-      .trim();
+    return normalizarParaBusca(texto).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   };
 
   // Função para encontrar preço atual de um produto (agora dinamicamente pela área)

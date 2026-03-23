@@ -86,8 +86,9 @@ export function SelecionarReceitaDialog({
 
   const filtrarReceitas = (receitas: any[]) => {
     if (!busca) return receitas;
+    const termoNorm = normalizarParaBusca(busca);
     return receitas.filter(r => 
-      r.titulo.toLowerCase().includes(busca.toLowerCase())
+      normalizarParaBusca(r.titulo).includes(termoNorm)
     );
   };
 
