@@ -1,54 +1,51 @@
 
 
-## Correção: Garantir vínculo master em itens da lista de compras
+## Diagnóstico: Inconsistência de nomes de mercados no sistema
+
+### Dimensão do problema
+
+**Todos os 6 mercados ativos** têm divergência entre o nome na tabela `supermercados` (razão social) e o nome normalizado (nome comercial). Em 2 casos isso causa falha visível:
+
+| CNPJ | Tabela `supermercados` | Nome normalizado | Match funciona? |
+|---|---|---|---|
+| `06057223041951` | SENDAS DISTRIBUIDORA S/A | ASSAI CESARIO DE MELO CG | **NÃO** |
+| `39346861041437` | CENCOSUD BRASIL COMERCIAL SA | PREZUNIC BARRA | **NÃO** |
+| `17493338000397` | COSTAZUL ALIMENTOS LTDA | COSTAZUL CESÁRIO DE MELO CG | Sim (contém "COSTAZUL") |
+| `45543915025176` | CARREFOUR | CARREFOUR CG | Sim (contém "CARREFOUR") |
+| `35881333000313` | MEGABOX | MEGABOX RECREIO | Sim (contém "MEGABOX") |
+| `07760885001814` | SUPERMARKET | SUPERMARKET A.VASCONCELOS CG | Sim (contém "SUPERMARKET") |
 
 ### Causa raiz
 
-Itens inseridos na lista de compras ficam sem `produto_id` (produto_master_id), forçando a comparação a usar busca fuzzy em vez da busca estrutural. A consulta individual usa sempre o master_id, por isso os resultados divergem.
-
-### Correções
-
-**1. `src/components/listaCompras/EditarListaDialog.tsx` — linha 109**
-
-Trocar `produto_id: null` por `produto_id: produto.id || null`. O objeto `produto` já contém o ID master (vem da busca em `produtos_master_global`), basta usá-lo.
-
-**2. `supabase/functions/comparar-precos-lista/index.ts` — resolver master_id antes da busca**
-
-Antes de chamar `buscarPrecoInteligente`, quando `item.produto_id` é null, tentar resolver o master_id consultando `produtos_master_global` pelo nome do produto. Isso corrige itens existentes que já estão sem vínculo.
-
-Adicionar bloco de resolução na seção de busca (antes da linha 286):
+Na função `buscar-supermercados-area` (linha 336), a normalização é chamada **sem passar o CNPJ**:
 
 ```typescript
-// Resolver produto_master_id se o item não tem vínculo
-let produtoMasterId = item.produto_id || null;
-if (!produtoMasterId) {
-  const { data: master } = await supabaseAdmin
-    .from('produtos_master_global')
-    .select('id')
-    .ilike('nome_padrao', item.produto_nome.trim())
-    .limit(1)
-    .maybeSingle();
-  if (master) produtoMasterId = master.id;
-}
+// Atual — só nome, sem CNPJ
+supabase.rpc('normalizar_nome_estabelecimento', {
+  nome_input: supermercado.nome
+});
 ```
 
-Depois usar `produtoMasterId` em vez de `item.produto_id` na chamada a `buscarPrecoInteligente`.
+A função RPC tem uma versão que aceita `cnpj_input` e prioriza busca por CNPJ (mais confiável). Porém, como não recebe o CNPJ, tenta match por nome — e quando a razão social (ex: "SENDAS DISTRIBUIDORA S/A") não contém o nome bruto da nota (ex: "LOJA 202 - CESARIO"), a normalização falha silenciosamente.
 
-**3. `supabase/functions/gerar-lista-otimizada/index.ts` — salvar master_id ao criar lista**
+### Correção proposta
 
-Após montar o array `produtos`, antes de inserir, buscar o master_id para cada produto por nome e incluir `produto_id` no insert.
+**Um único ponto de correção** em `buscar-supermercados-area/index.ts`, linha 336:
 
-### O que NÃO muda
+Passar o CNPJ do supermercado (já disponível no contexto como `cnpjSupermercado` ou via `idParaCnpj`) para a chamada RPC:
 
-- `consultar-precos-produto` — sem alteração
-- `buscar-supermercados-area` — sem alteração
-- Lógica interna de `buscarPrecoInteligente` — preservada
-- Interface da lista de compras — sem alteração
-- Nenhuma outra edge function além das mencionadas
+```typescript
+const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
+  nome_input: supermercado.nome,
+  cnpj_input: idParaCnpj.get(supermercado.id) || supermercado.cnpj || null
+});
+```
 
-### Resultado esperado
+Isso resolve **todos os casos** de uma vez — Sendas, Cencosud/Prezunic, e qualquer futuro mercado com razão social diferente do nome comercial — sem alterar mais nada no sistema.
 
-- Itens da lista passam a ter vínculo com produto master (novos e existentes via resolução)
-- A comparação usa busca estrutural (Passo 0) em vez de fuzzy
-- Mesmos mercados e preços aparecem na consulta individual e na comparação
+### Impacto
+
+- Nenhuma alteração em tabelas, regras de normalização ou outras funções
+- Apenas 1 linha alterada em 1 edge function
+- Todos os mercados passam a exibir o nome comercial correto em todas as telas
 
