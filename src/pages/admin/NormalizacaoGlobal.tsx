@@ -506,15 +506,15 @@ export default function NormalizacaoGlobal() {
       let resultados: any[] = [];
       
       for (const t of termos) {
-        const termoUpper = t.toUpperCase();
+        const termoNorm = normalizarParaBusca(t);
         
         const filtrados = (data || []).filter(candidato => 
-          candidato.texto_original?.toUpperCase().includes(termoUpper) ||
-          candidato.nome_padrao_sugerido?.toUpperCase().includes(termoUpper) ||
-          candidato.nome_base_sugerido?.toUpperCase().includes(termoUpper) ||
-          candidato.marca_sugerida?.toUpperCase().includes(termoUpper) ||
-          candidato.categoria_sugerida?.toUpperCase().includes(termoUpper) ||
-          candidato.sugestao_sku_global?.toUpperCase().includes(termoUpper)
+          normalizarParaBusca(candidato.texto_original || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.nome_padrao_sugerido || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.nome_base_sugerido || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.marca_sugerida || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.categoria_sugerida || '').includes(termoNorm) ||
+          normalizarParaBusca(candidato.sugestao_sku_global || '').includes(termoNorm)
         );
         
         resultados.push(...filtrados);
