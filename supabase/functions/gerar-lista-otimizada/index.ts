@@ -152,11 +152,12 @@ serve(async (req) => {
     if (listaError) throw listaError;
 
     // Inserir itens
-    const itens = produtos.map(p => ({
+    const itens = produtosComMaster.map(p => ({
       lista_id: lista.id,
       produto_nome: p.produto_nome,
       quantidade: p.quantidade,
       unidade_medida: p.unidade_medida,
+      produto_id: p.produto_id,
       comprado: false
     }));
 
