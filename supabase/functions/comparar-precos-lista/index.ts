@@ -342,7 +342,8 @@ serve(async (req) => {
           item.produto_nome,
           nomeNormalizado,
           produtoMasterId || undefined,
-          mercado.cnpj || undefined
+          mercado.cnpj || undefined,
+          masterResolvidoPorNome
         );
         
         if (preco) {
