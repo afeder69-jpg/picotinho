@@ -11,6 +11,19 @@ interface TabelaComparativaProps {
   };
 }
 
+function getRecenciaIndicador(dataAtualizacao?: string): { cor: string; emoji: string; label: string } {
+  if (!dataAtualizacao) return { cor: 'text-muted-foreground', emoji: '⚪', label: 'Data desconhecida' };
+  
+  const agora = new Date();
+  const dataPreco = new Date(dataAtualizacao);
+  const diffMs = agora.getTime() - dataPreco.getTime();
+  const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDias <= 3) return { cor: 'text-green-500', emoji: '🟢', label: `Atualizado há ${diffDias} dia(s)` };
+  if (diffDias <= 10) return { cor: 'text-yellow-500', emoji: '🟡', label: `Atualizado há ${diffDias} dias` };
+  return { cor: 'text-red-500', emoji: '🔴', label: `Atualizado há ${diffDias} dias` };
+}
+
 export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparativaProps) {
   if (!comparacao?.otimizado) return null;
 
@@ -23,6 +36,7 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
         todosProdutos.set(p.produto_nome, {
           nome: p.produto_nome,
           otimizado: p.preco_unitario,
+          otimizadoData: p.data_atualizacao,
           mercadoOtimizado: mercado.nome.substring(0, 1)
         });
       }
@@ -30,18 +44,35 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
   });
 
   // Adicionar preços de mercados individuais
-  const mercadosKeys = Object.keys(comparacao.comparacao || {});
-  mercadosKeys.forEach(key => {
+  const allMercadosKeys = Object.keys(comparacao.comparacao || {});
+  allMercadosKeys.forEach(key => {
     const mercadoData = comparacao.comparacao[key];
     mercadoData.produtos?.forEach((p: any) => {
       const produto = todosProdutos.get(p.produto_nome);
       if (produto) {
         produto[key] = p.preco_unitario;
+        produto[`${key}_data`] = p.data_atualizacao;
+        produto[`${key}_melhor`] = p.melhor_preco;
       }
     });
   });
 
   const produtos = Array.from(todosProdutos.values());
+
+  // Filtrar: manter apenas mercados que tenham pelo menos 1 melhor preço
+  const mercadosKeys = allMercadosKeys.filter(key => {
+    return produtos.some(produto => {
+      const preco = produto[key];
+      if (!preco) return false;
+      // Calcular menor preço entre todos
+      const todosPrecos = [
+        produto.otimizado,
+        ...allMercadosKeys.map(k => produto[k]).filter(Boolean)
+      ];
+      const menorPreco = Math.min(...todosPrecos);
+      return preco === menorPreco;
+    });
+  });
 
   return (
     <TooltipProvider>
@@ -49,9 +80,10 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
         <DialogContent className="max-w-5xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>📊 Comparação de Preços</DialogTitle>
-            <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-              <span className="text-green-500">🟢</span>
-              <span>= Menor preço disponível para este produto</span>
+            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
+              <span className="flex items-center gap-1"><span>🟢</span> Até 3 dias</span>
+              <span className="flex items-center gap-1"><span>🟡</span> 4–10 dias</span>
+              <span className="flex items-center gap-1"><span>🔴</span> +10 dias</span>
             </div>
           </DialogHeader>
           
@@ -61,7 +93,7 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
               <TableRow>
                 <TableHead className="min-w-[200px]">Produto</TableHead>
                 <TableHead className="text-right">Otimizado</TableHead>
-                {mercadosKeys.map((key, i) => (
+                {mercadosKeys.map((key) => (
                   <TableHead key={key} className="text-right">
                     {comparacao.comparacao[key].nome}
                   </TableHead>
@@ -70,10 +102,13 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
             </TableHeader>
             <TableBody>
               {produtos.map((produto, i) => {
-                const menorPreco = Math.min(
+                const todosPrecos = [
                   produto.otimizado,
-                  ...mercadosKeys.map(k => produto[k] || Infinity).filter(p => p !== Infinity)
-                );
+                  ...allMercadosKeys.map(k => produto[k]).filter(Boolean)
+                ];
+                const menorPreco = Math.min(...todosPrecos);
+
+                const recenciaOtimizado = getRecenciaIndicador(produto.otimizadoData);
 
                 return (
                   <TableRow key={i}>
@@ -85,10 +120,10 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
                         {produto.otimizado === menorPreco && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="text-green-500 cursor-help">🟢</span>
+                              <span className={`${recenciaOtimizado.cor} cursor-help`}>{recenciaOtimizado.emoji}</span>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Melhor preço entre todos os mercados</p>
+                              <p>{recenciaOtimizado.label}</p>
                             </TooltipContent>
                           </Tooltip>
                         )}
@@ -96,6 +131,7 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
                     </TableCell>
                     {mercadosKeys.map(key => {
                       const preco = produto[key];
+                      const recencia = getRecenciaIndicador(produto[`${key}_data`]);
                       return (
                         <TableCell key={key} className="text-right">
                           {preco ? (
@@ -104,10 +140,10 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
                               {preco === menorPreco && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="text-green-500 cursor-help">🟢</span>
+                                    <span className={`${recencia.cor} cursor-help`}>{recencia.emoji}</span>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>Melhor preço entre todos os mercados</p>
+                                    <p>{recencia.label}</p>
                                   </TooltipContent>
                                 </Tooltip>
                               )}

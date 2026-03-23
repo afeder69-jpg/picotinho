@@ -142,7 +142,7 @@ serve(async (req) => {
       produtoMasterId?: string,
       cnpjMercado?: string,
       masterResolvidoPorNome?: boolean
-    ): Promise<number | null> => {
+    ): Promise<{ valor: number; data_atualizacao: string } | null> => {
       console.log(`  🔍 Buscando preço para: "${produtoNome}" (master_id: ${produtoMasterId || 'N/A'}, cnpj: ${cnpjMercado || 'N/A'})`);
 
       // ========================================
@@ -152,7 +152,7 @@ serve(async (req) => {
       if (produtoMasterId && cnpjMercado) {
         const { data: precoMaster } = await supabaseAdmin
           .from('precos_atuais')
-          .select('valor_unitario, produto_nome')
+          .select('valor_unitario, produto_nome, data_atualizacao')
           .eq('produto_master_id', produtoMasterId)
           .eq('estabelecimento_cnpj', cnpjMercado)
           .order('data_atualizacao', { ascending: false })
@@ -161,7 +161,7 @@ serve(async (req) => {
 
         if (precoMaster?.valor_unitario) {
           console.log(`  ✅ [MASTER-ID+CNPJ] R$ ${precoMaster.valor_unitario} - "${precoMaster.produto_nome}"`);
-          return precoMaster.valor_unitario;
+          return { valor: precoMaster.valor_unitario, data_atualizacao: precoMaster.data_atualizacao };
         }
 
         // Se o master veio do produto_id original (vínculo real) → manter integridade total
@@ -174,7 +174,7 @@ serve(async (req) => {
         // Busca EXATA por nome no mesmo CNPJ — sem fuzzy, sem OR, sem aproximação
         const { data: precoNomeExato } = await supabaseAdmin
           .from('precos_atuais')
-          .select('valor_unitario, produto_nome')
+          .select('valor_unitario, produto_nome, data_atualizacao')
           .eq('estabelecimento_cnpj', cnpjMercado)
           .ilike('produto_nome', produtoNome.trim())
           .order('data_atualizacao', { ascending: false })
@@ -183,7 +183,7 @@ serve(async (req) => {
 
         if (precoNomeExato?.valor_unitario) {
           console.log(`  ✅ [FALLBACK-NOME-EXATO] R$ ${precoNomeExato.valor_unitario} - "${precoNomeExato.produto_nome}" @ CNPJ ${cnpjMercado}`);
-          return precoNomeExato.valor_unitario;
+          return { valor: precoNomeExato.valor_unitario, data_atualizacao: precoNomeExato.data_atualizacao };
         }
 
         console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — fallback por nome também não encontrou`);
@@ -206,7 +206,7 @@ serve(async (req) => {
       // 1. Busca exata em precos_atuais_usuario
       const { data: precoUsuarioExato } = await supabase
         .from('precos_atuais_usuario')
-        .select('valor_unitario, produto_nome')
+        .select('valor_unitario, produto_nome, data_atualizacao')
         .eq('user_id', userId)
         .ilike('produto_nome', produtoUpper)
         .order('data_atualizacao', { ascending: false })
@@ -215,7 +215,7 @@ serve(async (req) => {
       
       if (precoUsuarioExato?.valor_unitario) {
         console.log(`  ✅ [USUÁRIO-EXATO] R$ ${precoUsuarioExato.valor_unitario} - "${precoUsuarioExato.produto_nome}"`);
-        return precoUsuarioExato.valor_unitario;
+        return { valor: precoUsuarioExato.valor_unitario, data_atualizacao: precoUsuarioExato.data_atualizacao };
       }
       
       // 2. Busca com 2 palavras principais em precos_atuais_usuario (estratégia OR)
@@ -225,7 +225,7 @@ serve(async (req) => {
         
         const { data: precosUsuarioOr } = await supabase
           .from('precos_atuais_usuario')
-          .select('valor_unitario, produto_nome')
+          .select('valor_unitario, produto_nome, data_atualizacao')
           .eq('user_id', userId)
           .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
           .order('data_atualizacao', { ascending: false })
@@ -241,7 +241,7 @@ serve(async (req) => {
           
           const melhor = scored[0];
           console.log(`  ✅ [USUÁRIO-OR] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" (${melhor.score}/${palavrasChave.length} palavras)`);
-          return melhor.valor_unitario;
+          return { valor: melhor.valor_unitario, data_atualizacao: melhor.data_atualizacao };
         }
       }
       
@@ -249,7 +249,7 @@ serve(async (req) => {
       if (estabelecimentoNome && cnpjMercado) {
         const { data: precoGeralExato } = await supabaseAdmin
           .from('precos_atuais')
-          .select('valor_unitario, produto_nome, estabelecimento_nome')
+          .select('valor_unitario, produto_nome, estabelecimento_nome, data_atualizacao')
           .eq('estabelecimento_cnpj', cnpjMercado)
           .ilike('produto_nome', produtoUpper)
           .order('data_atualizacao', { ascending: false })
@@ -258,7 +258,7 @@ serve(async (req) => {
         
         if (precoGeralExato?.valor_unitario) {
           console.log(`  ✅ [GERAL-EXATO] R$ ${precoGeralExato.valor_unitario} - "${precoGeralExato.produto_nome}" @ ${precoGeralExato.estabelecimento_nome}`);
-          return precoGeralExato.valor_unitario;
+          return { valor: precoGeralExato.valor_unitario, data_atualizacao: precoGeralExato.data_atualizacao };
         }
         
         // 4. Busca com 2 palavras principais em precos_atuais (estratégia OR filtrada por CNPJ)
@@ -268,7 +268,7 @@ serve(async (req) => {
           
           const { data: precosGeralOr } = await supabaseAdmin
             .from('precos_atuais')
-            .select('valor_unitario, produto_nome, estabelecimento_nome')
+            .select('valor_unitario, produto_nome, estabelecimento_nome, data_atualizacao')
             .eq('estabelecimento_cnpj', cnpjMercado)
             .or(`produto_nome.ilike.%${palavra1}%,produto_nome.ilike.%${palavra2}%`)
             .order('data_atualizacao', { ascending: false })
@@ -284,7 +284,7 @@ serve(async (req) => {
             
             const melhor = scored[0];
             console.log(`  ✅ [GERAL-OR] R$ ${melhor.valor_unitario} - "${melhor.produto_nome}" @ ${melhor.estabelecimento_nome} (${melhor.score}/${palavrasChave.length} palavras)`);
-            return melhor.valor_unitario;
+            return { valor: melhor.valor_unitario, data_atualizacao: melhor.data_atualizacao };
           }
         }
       }
@@ -337,7 +337,7 @@ serve(async (req) => {
         const nomeNormalizado = mercado.nome?.toUpperCase().trim() || '';
         console.log(`\n🏪 Mercado: ${nomeNormalizado}`);
         
-        const preco = await buscarPrecoInteligente(
+        const resultado = await buscarPrecoInteligente(
           userId,
           item.produto_nome,
           nomeNormalizado,
@@ -346,8 +346,8 @@ serve(async (req) => {
           masterResolvidoPorNome
         );
         
-        if (preco) {
-          precosMap.set(mercado.id, preco);
+        if (resultado) {
+          precosMap.set(mercado.id, resultado);
         } else {
           console.log(`  ❌ Nenhum preço encontrado`);
         }
@@ -376,11 +376,13 @@ serve(async (req) => {
 
       let melhorPreco = Infinity;
       let melhorMercadoId = null;
+      let melhorDataAtualizacao = '';
 
-      precos.forEach((preco, mercadoId) => {
-        if (preco < melhorPreco) {
-          melhorPreco = preco;
+      precos.forEach((resultado, mercadoId) => {
+        if (resultado.valor < melhorPreco) {
+          melhorPreco = resultado.valor;
           melhorMercadoId = mercadoId;
+          melhorDataAtualizacao = resultado.data_atualizacao;
         }
       });
 
@@ -408,7 +410,8 @@ serve(async (req) => {
           preco_unitario: melhorPreco,
           preco_total: precoTotal,
           melhor_preco: true,
-          comprado: item.comprado
+          comprado: item.comprado,
+          data_atualizacao: melhorDataAtualizacao
         });
         
         mercadoData.total += precoTotal;
@@ -426,15 +429,15 @@ serve(async (req) => {
       const label = String.fromCharCode(65 + index); // A, B, C...
 
       precosData.forEach(({ item, precos }) => {
-        const preco = precos.get(mercado.id);
+        const resultado = precos.get(mercado.id);
         
-        if (preco) {
-          const precoTotal = preco * item.quantidade;
+        if (resultado) {
+          const precoTotal = resultado.valor * item.quantidade;
           
           // Verificar se é o melhor preço
           let melhorPreco = Infinity;
-          precos.forEach(p => {
-            if (p < melhorPreco) melhorPreco = p;
+          precos.forEach(r => {
+            if (r.valor < melhorPreco) melhorPreco = r.valor;
           });
 
           produtosMercado.push({
@@ -442,11 +445,12 @@ serve(async (req) => {
             produto_nome: item.produto_nome,
             quantidade: item.quantidade,
             unidade_medida: item.unidade_medida,
-            preco_unitario: preco,
+            preco_unitario: resultado.valor,
             preco_total: precoTotal,
-            melhor_preco: preco === melhorPreco,
-            economia: preco > melhorPreco ? (preco - melhorPreco) * item.quantidade : 0,
-            comprado: item.comprado
+            melhor_preco: resultado.valor === melhorPreco,
+            economia: resultado.valor > melhorPreco ? (resultado.valor - melhorPreco) * item.quantidade : 0,
+            comprado: item.comprado,
+            data_atualizacao: resultado.data_atualizacao
           });
           
           totalMercado += precoTotal;
