@@ -337,7 +337,7 @@ serve(async (req) => {
         const nomeNormalizado = mercado.nome?.toUpperCase().trim() || '';
         console.log(`\n🏪 Mercado: ${nomeNormalizado}`);
         
-        const preco = await buscarPrecoInteligente(
+        const resultado = await buscarPrecoInteligente(
           userId,
           item.produto_nome,
           nomeNormalizado,
@@ -346,8 +346,8 @@ serve(async (req) => {
           masterResolvidoPorNome
         );
         
-        if (preco) {
-          precosMap.set(mercado.id, preco);
+        if (resultado) {
+          precosMap.set(mercado.id, resultado);
         } else {
           console.log(`  ❌ Nenhum preço encontrado`);
         }
