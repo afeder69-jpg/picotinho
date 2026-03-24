@@ -125,6 +125,7 @@ Deno.serve(async (req) => {
       .order('prioridade', { ascending: true });
     const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
 
+    const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error('Autorização necessária');
     }
