@@ -3375,6 +3375,7 @@ export type Database = {
         Args: {
           p_categoria: string
           p_categoria_unidade: string
+          p_codigo_barras?: string
           p_confianca: number
           p_granel: boolean
           p_imagem_path: string
