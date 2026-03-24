@@ -1,0 +1,1 @@
+ALTER TABLE listas_compras_itens ADD COLUMN item_livre boolean NOT NULL DEFAULT false;

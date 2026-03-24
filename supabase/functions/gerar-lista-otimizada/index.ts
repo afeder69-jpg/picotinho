@@ -164,7 +164,8 @@ serve(async (req) => {
       quantidade: p.quantidade,
       unidade_medida: p.unidade_medida,
       produto_id: p.produto_id,
-      comprado: false
+      comprado: false,
+      item_livre: p.item_livre || false
     }));
 
     const { error: itensError } = await supabase

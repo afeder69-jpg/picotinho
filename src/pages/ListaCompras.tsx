@@ -213,8 +213,8 @@ export default function ListaCompras() {
   const todosItens = lista.listas_compras_itens || [];
   const produtosSemPrecoRaw = comparacao?.produtosSemPreco || [];
   
-  // Itens livres: produto_id é null
-  const itensLivres = todosItens.filter((item: any) => !item.produto_id);
+  // Itens livres: flag explícita item_livre
+  const itensLivres = todosItens.filter((item: any) => item.item_livre === true);
   const itensLivresIds = new Set(itensLivres.map((i: any) => i.id));
   
   // Produtos sem preço: excluir itens livres

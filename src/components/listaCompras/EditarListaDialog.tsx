@@ -157,7 +157,8 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
           unidade_medida: 'UN',
           lista_id: lista.id,
           comprado: false,
-          produto_id: null
+          produto_id: null,
+          item_livre: true
         })
         .select()
         .single();
