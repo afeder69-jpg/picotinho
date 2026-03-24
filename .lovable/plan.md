@@ -1,59 +1,26 @@
 
 
-## Problema
+## Correção: itens livres sendo incluídos na comparação de preços
 
-A flag `item_livre` existe no frontend (`CriarListaDialog`) mas **nunca é salva no banco**. A tabela `listas_compras_itens` não tem essa coluna. O filtro em `ListaCompras.tsx` usa `!item.produto_id` para detectar itens livres, mas isso captura também produtos do catálogo que ficaram com `produto_id: null` (bug anterior). Resultado: todos os itens aparecem como "Itens livres".
+### Problema
 
-## Correção
+A edge function `comparar-precos-lista` itera sobre **todos** os itens da lista (linha 297) e tenta buscar preços para cada um. Itens livres como "gelatina de tijolo" entram no fallback fuzzy (linha 196), que extrai palavras-chave ("GELATINA", "TIJOLO") e busca por OR em `precos_atuais`. Como existem gelatinas reais no banco, o sistema encontra preços e os atribui ao item livre — inventando preços que não existem.
 
-### 1. Migração: adicionar coluna `item_livre` na tabela
+### Correção
 
-```sql
-ALTER TABLE listas_compras_itens 
-  ADD COLUMN item_livre boolean NOT NULL DEFAULT false;
-```
+**1 arquivo**: `supabase/functions/comparar-precos-lista/index.ts`
 
-Coluna booleana, default `false`. Itens existentes ficam como `false` (correto — são do catálogo).
-
-### 2. Edge function `gerar-lista-otimizada` — propagar `item_livre`
-
-Receber e salvar o campo `item_livre` vindo do frontend:
+Na linha 297, antes de processar cada item, verificar `item.item_livre === true`. Se for item livre, pular a busca de preços e enviar direto para `produtosSemPreco`.
 
 ```typescript
-// No mapeamento de itens para insert:
-item_livre: p.item_livre || false
+const precosPromises = itens.map(async (item) => {
+  // Itens livres não participam da comparação de preços
+  if (item.item_livre === true) {
+    console.log(`⏭️ Item livre ignorado na comparação: ${item.produto_nome}`);
+    return { item, precos: new Map() };
+  }
+  // ... resto da lógica existente
 ```
 
-### 3. `CriarListaDialog.tsx` — enviar `item_livre` no body
-
-Incluir `item_livre` no array `produtosManuais` enviado à edge function (linha 87-92).
-
-### 4. `EditarListaDialog.tsx` — salvar `item_livre: true` ao inserir item livre
-
-Ao inserir diretamente via `supabase.from('listas_compras_itens').insert(...)`, incluir `item_livre: true`.
-
-### 5. `ListaCompras.tsx` — filtrar por `item_livre` em vez de `!produto_id`
-
-```typescript
-// ANTES:
-const itensLivres = todosItens.filter((item: any) => !item.produto_id);
-
-// DEPOIS:
-const itensLivres = todosItens.filter((item: any) => item.item_livre === true);
-```
-
-Isso resolve o problema: produtos do catálogo com `produto_id: null` (bug antigo) continuam como "Produtos sem preço" e não mais como "Itens livres". Apenas itens explicitamente marcados como livres aparecem na seção de lembretes.
-
-### 6. Atualizar types.ts
-
-Adicionar `item_livre: boolean` nas interfaces Row/Insert/Update de `listas_compras_itens`.
-
-### Arquivos alterados
-
-- Nova migração SQL (coluna `item_livre`)
-- `supabase/functions/gerar-lista-otimizada/index.ts`
-- `src/components/listaCompras/CriarListaDialog.tsx`
-- `src/components/listaCompras/EditarListaDialog.tsx`
-- `src/pages/ListaCompras.tsx`
-- `src/integrations/supabase/types.ts`
+Isso garante que itens livres nunca passem pela busca fuzzy e nunca recebam preços inventados. Eles continuam aparecendo na seção "Lembretes / Itens livres" no frontend normalmente.
 
