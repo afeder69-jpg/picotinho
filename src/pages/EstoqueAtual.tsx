@@ -378,38 +378,27 @@ const EstoqueAtual = () => {
         console.warn('⚠️ Erro na função de histórico, usando fallback:', error);
       }
 
-      // Fallback: usar função de preços atuais
-      const { data: precoAtualData } = await supabase.functions.invoke('preco-atual-usuario', {
-        body: {
-          userId: user.id,
-          latitude: coordenadas.latitude,
-          longitude: coordenadas.longitude,
-          raioKm: raio
-        }
-      });
+      // ✅ CORREÇÃO: Não usar fallback por nome que pode distorcer preço unitário
+      // O fallback anterior usava preco-atual-usuario que busca por similaridade de nome
+      // e pode retornar preço de embalagem (ex: R$14,65 da bandeja) como preço unitário
+      console.warn('⚠️ Histórico indisponível - usando preços do próprio estoque como fallback seguro');
       
-      if (precoAtualData?.success) {
-        // Converter dados do fallback para o formato esperado
-        const historicoMap: {[key: string]: any} = {};
-        
-        precoAtualData.resultados?.forEach((item: any) => {
-          historicoMap[item.produto_nome] = {
+      // Fallback seguro: usar apenas os dados que já estão no estoque (preco_unitario_ultimo)
+      const historicoMap: {[key: string]: any} = {};
+      estoque.forEach((item) => {
+        if (item.id && item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
+          historicoMap[item.id] = {
             ultimaCompraUsuario: {
-              data: item.data_atualizacao,
-              preco: item.valor_unitario,
+              data: item.updated_at,
+              preco: item.preco_unitario_ultimo,
               quantidade: 1
             },
-            menorPrecoArea: {
-              data: item.data_atualizacao,
-              preco: item.valor_unitario,
-              quantidade: 1
-            }
+            menorPrecoArea: null
           };
-        });
-
-        console.log('⚠️ FALLBACK: Histórico carregado via fallback:', historicoMap);
-        setHistoricoPrecos(historicoMap);
-      }
+        }
+      });
+      console.log('✅ Fallback seguro aplicado com preços do estoque:', Object.keys(historicoMap).length, 'produtos');
+      setHistoricoPrecos(historicoMap);
     } catch (error) {
       console.error('Erro ao carregar histórico de preços:', error);
     } finally {
