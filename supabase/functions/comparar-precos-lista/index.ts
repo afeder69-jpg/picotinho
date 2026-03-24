@@ -295,6 +295,12 @@ serve(async (req) => {
 
     // Buscar preços para cada produto em cada mercado
     const precosPromises = itens.map(async (item) => {
+      // Itens livres não participam da comparação de preços
+      if (item.item_livre === true) {
+        console.log(`⏭️ Item livre ignorado na comparação: ${item.produto_nome}`);
+        return { item, precos: new Map() };
+      }
+
       console.log(`\n🔍 Buscando preços para: ${item.produto_nome}`);
       console.log(`📦 Quantidade: ${item.quantidade} ${item.unidade_medida}`);
       
