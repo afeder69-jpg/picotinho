@@ -415,7 +415,7 @@ Deno.serve(async (req) => {
         }
 
         if (precoGeralMatch?.valor_unitario) {
-          const embalagem = detectarQuantidadeEmbalagem(precoGeralMatch.produto_nome, precoGeralMatch.valor_unitario);
+          const embalagem = detectarQuantidadeEmbalagem(precoGeralMatch.produto_nome, precoGeralMatch.valor_unitario, regrasEmbalagem);
           precoUnitario = embalagem.unitPrice;
           console.log(`[calcular-custo-receita] 🌐 Preço geral encontrado: R$ ${precoUnitario.toFixed(3)} (${precoGeralMatch.produto_nome}, ${(melhorSimilaridadeGeral * 100).toFixed(0)}%)`);
         }
