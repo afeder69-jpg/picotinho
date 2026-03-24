@@ -159,7 +159,7 @@ export default function ListaCompras() {
           </Alert>
 
           <EditarListaDialog
-            key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
+            key={`edit-${lista?.listas_compras_itens.length}`}
             open={editDialogOpen}
             onClose={() => {
               setEditDialogOpen(false);
@@ -196,7 +196,7 @@ export default function ListaCompras() {
           </Alert>
 
           <EditarListaDialog
-            key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
+            key={`edit-${lista?.listas_compras_itens.length}`}
             open={editDialogOpen}
             onClose={() => {
               setEditDialogOpen(false);
@@ -441,7 +441,7 @@ export default function ListaCompras() {
             />
 
             <EditarListaDialog
-              key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
+              key={`edit-${lista?.listas_compras_itens.length}`}
               open={editDialogOpen}
               onClose={() => {
                 setEditDialogOpen(false);
