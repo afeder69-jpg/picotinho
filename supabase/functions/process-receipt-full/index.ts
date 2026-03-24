@@ -1372,12 +1372,18 @@ serve(async (req) => {
           produto_nome: item.descricao,
           categoria: categoriaFinal,
           quantidade: quantidadeFinal,
-          unidade_medida: normalizarUnidadeMedida(item.unidade || 'unidade'),
+          unidade_medida: embalagemInfo.isMultiUnit ? 'Un' : normalizarUnidadeMedida(item.unidade || 'unidade'),
           preco_unitario_ultimo: precoUnitarioFinal,
           compra_id: nota.compra_id,
           origem: "nota_fiscal",
-          imagem_url: null, // Será preenchido ao encontrar master
-          ean_comercial: item.ean_comercial || null, // ✅ Propagar EAN do item
+          imagem_url: null,
+          ean_comercial: item.ean_comercial || null,
+          // Campos de rastreabilidade da embalagem
+          tipo_embalagem: embalagemInfo.tipo_embalagem || null,
+          qtd_valor: embalagemInfo.isMultiUnit ? item.quantidade : null,
+          qtd_base: embalagemInfo.isMultiUnit ? embalagemInfo.quantity : null,
+          unidade_base: embalagemInfo.isMultiUnit ? embalagemInfo.unidade_consumo.toLowerCase() : null,
+          preco_por_unidade_base: embalagemInfo.isMultiUnit ? embalagemInfo.unitPrice : null,
         });
       }
     }
