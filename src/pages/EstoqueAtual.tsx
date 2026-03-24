@@ -1936,7 +1936,7 @@ const EstoqueAtual = () => {
                 <CardContent className="py-3">
                   <div className="space-y-1">
                      {itens.map((item) => {
-                        const historicoProduto = historicoPrecos[item.id];
+                        const historicoProduto = obterHistoricoProduto(item);
                         const quantidade = parseFloat(item.quantidade.toString());
                        
                           return (
