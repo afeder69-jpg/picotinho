@@ -137,6 +137,15 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
     );
   }
 
+  if (buscandoEan) {
+    return (
+      <div className="bg-card border rounded-lg p-8 text-center space-y-3">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+        <p className="text-sm text-muted-foreground">Buscando produto pelo código...</p>
+      </div>
+    );
+  }
+
   if (modoScanner) {
     return (
       <div className="space-y-3">
