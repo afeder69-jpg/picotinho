@@ -164,14 +164,7 @@ serve(async (req) => {
           return { valor: precoMaster.valor_unitario, data_atualizacao: precoMaster.data_atualizacao };
         }
 
-        // Se o master veio do produto_id original (vínculo real) → manter integridade total
-        if (!masterResolvidoPorNome) {
-          console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — vínculo original, sem fallback`);
-          return null;
-        }
-
-        // Fallback conservador: master foi resolvido por nome (pode ser duplicado errado)
-        // Busca EXATA por nome no mesmo CNPJ — sem fuzzy, sem OR, sem aproximação
+        // Fallback conservador: busca EXATA por nome no mesmo CNPJ
         const { data: precoNomeExato } = await supabaseAdmin
           .from('precos_atuais')
           .select('valor_unitario, produto_nome, data_atualizacao')
@@ -184,6 +177,12 @@ serve(async (req) => {
         if (precoNomeExato?.valor_unitario) {
           console.log(`  ✅ [FALLBACK-NOME-EXATO] R$ ${precoNomeExato.valor_unitario} - "${precoNomeExato.produto_nome}" @ CNPJ ${cnpjMercado}`);
           return { valor: precoNomeExato.valor_unitario, data_atualizacao: precoNomeExato.data_atualizacao };
+        }
+
+        // Se veio de vínculo original (não resolvido por nome), parar aqui
+        if (!masterResolvidoPorNome) {
+          console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — vínculo original, sem fallback`);
+          return null;
         }
 
         console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — fallback por nome também não encontrou`);
