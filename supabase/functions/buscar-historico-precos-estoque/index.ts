@@ -333,21 +333,27 @@ serve(async (req) => {
         if (!dataCompra) continue;
 
         for (const item of dados.itens) {
-          const nomeItem = normalizarNomeProduto(item.descricao || item.nome || '');
+          const nomeItemOriginal = item.descricao || item.nome || '';
+          const nomeItem = normalizarNomeProduto(nomeItemOriginal);
           
           if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
             if (!ultimaCompraDoUsuario || new Date(dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
-              const preco = parseFloat(item.valor_unitario || 0);
-              const quantidade = parseFloat(item.quantidade || 0);
-              
-              // Só criar objeto se tiver dados válidos
-              if (preco > 0 && quantidade > 0) {
-                ultimaCompraDoUsuario = {
-                  data: dataCompra,
-                  preco: preco,
-                  quantidade: quantidade
-                };
-              }
+              const precoInformado = toNumber(item.valor_unitario || item.preco_unitario || 0);
+              const quantidadeComprada = toNumber(item.quantidade || 1);
+
+              if (precoInformado <= 0 || quantidadeComprada <= 0) continue;
+
+              const valorTotalItem = precoInformado * quantidadeComprada;
+              const eanProduto = item.codigo_barras || item.ean || item.ean_comercial || null;
+              const embalagem = detectarQuantidadeEmbalagem(nomeItemOriginal, precoInformado, regrasEmbalagem, eanProduto);
+              const quantidadeFinal = embalagem.isMultiUnit ? quantidadeComprada * embalagem.quantity : quantidadeComprada;
+              const precoConvertido = quantidadeFinal > 0 ? valorTotalItem / quantidadeFinal : precoInformado;
+
+              ultimaCompraDoUsuario = {
+                data: dataCompra,
+                preco: precoConvertido,
+                quantidade: quantidadeComprada
+              };
             }
             break;
           }
