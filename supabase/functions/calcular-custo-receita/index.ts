@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
                 const distancia = calcularDistancia(userLat, userLon, estabLat, estabLon);
                 
                 if (distancia <= raioBusca && preco.valor_unitario > 0) {
-                  const embalagem = detectarQuantidadeEmbalagem(preco.produto_nome, preco.valor_unitario);
+                  const embalagem = detectarQuantidadeEmbalagem(preco.produto_nome, preco.valor_unitario, regrasEmbalagem);
                   const precoCalculado = embalagem.unitPrice;
                   
                   if (precoUnitario === 0 || precoCalculado < precoUnitario) {
