@@ -33,6 +33,7 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
   const [modoEan, setModoEan] = useState(false);
   const [eanManual, setEanManual] = useState('');
   const [modoScanner, setModoScanner] = useState(false);
+  const [buscandoEan, setBuscandoEan] = useState(false);
 
   // Debounced search
   useEffect(() => {
@@ -94,11 +95,13 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
       toast.error('Erro ao buscar produto');
     } finally {
       setCarregando(false);
+      setBuscandoEan(false);
     }
   }, [onProdutoSelecionado]);
 
   const handleScannerResult = useCallback((ean: string) => {
     setModoScanner(false);
+    setBuscandoEan(true);
     buscarPorEan(ean);
   }, [buscarPorEan]);
 
@@ -134,6 +137,15 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
     );
   }
 
+  if (buscandoEan) {
+    return (
+      <div className="bg-card border rounded-lg p-8 text-center space-y-3">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+        <p className="text-sm text-muted-foreground">Buscando produto pelo código...</p>
+      </div>
+    );
+  }
+
   if (modoScanner) {
     return (
       <div className="space-y-3">
@@ -160,7 +172,6 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
               value={termoBusca}
               onChange={(e) => setTermoBusca(e.target.value)}
               className="pl-10"
-              autoFocus
             />
             {carregando && (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
