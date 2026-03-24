@@ -246,6 +246,17 @@ function EanScannerInline({ onResult }: { onResult: (ean: string) => void }) {
 
   useEffect(() => {
     let scanner: any = null;
+    let stopped = false;
+
+    const stopScanner = async () => {
+      if (stopped || !scanner) return;
+      stopped = true;
+      try {
+        await scanner.stop();
+      } catch {
+        // already stopped or not running
+      }
+    };
 
     const startScanner = async () => {
       try {
@@ -262,8 +273,10 @@ function EanScannerInline({ onResult }: { onResult: (ean: string) => void }) {
         await scanner.start(
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 280, height: 100 } },
-          (decodedText: string) => {
-            scanner?.stop().catch(() => {});
+          async (decodedText: string) => {
+            // CRITICAL: wait for scanner to fully stop and release DOM
+            // before triggering state change that unmounts this component
+            await stopScanner();
             onResult(decodedText);
           },
           () => {}
@@ -277,7 +290,7 @@ function EanScannerInline({ onResult }: { onResult: (ean: string) => void }) {
     startScanner();
 
     return () => {
-      scanner?.stop().catch(() => {});
+      stopScanner();
     };
   }, [onResult]);
 
