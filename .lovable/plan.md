@@ -1,63 +1,59 @@
 
 
-## Itens livres na lista de compras
+## Problema
 
-### Conceito
+A flag `item_livre` existe no frontend (`CriarListaDialog`) mas **nunca é salva no banco**. A tabela `listas_compras_itens` não tem essa coluna. O filtro em `ListaCompras.tsx` usa `!item.produto_id` para detectar itens livres, mas isso captura também produtos do catálogo que ficaram com `produto_id: null` (bug anterior). Resultado: todos os itens aparecem como "Itens livres".
 
-Permitir que o usuário digite texto livre para adicionar itens que nao existem no catalogo master. Esses itens convivem na mesma lista, mas sao visualmente diferenciados.
+## Correção
 
-### Abordagem: usar a tabela existente `listas_compras_itens`
+### 1. Migração: adicionar coluna `item_livre` na tabela
 
-A tabela `listas_compras_itens` ja suporta `produto_id` nullable. A distinção entre item do catalogo e item livre sera:
+```sql
+ALTER TABLE listas_compras_itens 
+  ADD COLUMN item_livre boolean NOT NULL DEFAULT false;
+```
 
-- **Item do catalogo**: `produto_id` preenchido
-- **Item livre**: `produto_id = null` + `produto_nome` contendo o texto digitado pelo usuario
+Coluna booleana, default `false`. Itens existentes ficam como `false` (correto — são do catálogo).
 
-Nao e necessaria nenhuma alteracao de schema. A tabela ja comporta isso.
+### 2. Edge function `gerar-lista-otimizada` — propagar `item_livre`
 
-### Alterações
+Receber e salvar o campo `item_livre` vindo do frontend:
 
-**1. `CriarListaDialog.tsx`** — Adicionar campo de texto livre abaixo do seletor de produtos
+```typescript
+// No mapeamento de itens para insert:
+item_livre: p.item_livre || false
+```
 
-- Input de texto + botao "Adicionar" para itens livres
-- Quantidade padrao 1, unidade "UN"
-- Itens livres aparecem na lista com badge "Item livre" para diferenciar dos produtos do catalogo
-- Validacao: texto nao vazio, maximo 200 caracteres
+### 3. `CriarListaDialog.tsx` — enviar `item_livre` no body
 
-**2. `EditarListaDialog.tsx`** — Mesmo campo de texto livre para adicionar itens ao editar
+Incluir `item_livre` no array `produtosManuais` enviado à edge function (linha 87-92).
 
-- Adicionar input de texto livre abaixo do `SeletorProdutoNormalizado`
-- Inserir diretamente em `listas_compras_itens` com `produto_id: null`
-- Badge visual "Item livre" nos itens sem `produto_id`
+### 4. `EditarListaDialog.tsx` — salvar `item_livre: true` ao inserir item livre
 
-**3. `gerar-lista-otimizada/index.ts`** — Ajustar para aceitar itens sem `produto_id`
+Ao inserir diretamente via `supabase.from('listas_compras_itens').insert(...)`, incluir `item_livre: true`.
 
-- Na secao `origem === 'manual'`, itens que ja vem com `produto_id: null` nao passam pela resolucao de master (skip do `ilike`)
-- Preserva comportamento atual para itens com nome de produto master
+### 5. `ListaCompras.tsx` — filtrar por `item_livre` em vez de `!produto_id`
 
-**4. `ItemProdutoSemPreco.tsx`** — Diferenciar visualmente item livre de produto sem preco
+```typescript
+// ANTES:
+const itensLivres = todosItens.filter((item: any) => !item.produto_id);
 
-- Se `produto_id` for null: badge "Item livre" (azul/neutro) em vez de "Sem preco disponivel"
-- Se `produto_id` existir mas sem preco: manter badge atual "Sem preco disponivel"
+// DEPOIS:
+const itensLivres = todosItens.filter((item: any) => item.item_livre === true);
+```
 
-**5. `ListaCompras.tsx`** — Separar itens livres na exibicao
+Isso resolve o problema: produtos do catálogo com `produto_id: null` (bug antigo) continuam como "Produtos sem preço" e não mais como "Itens livres". Apenas itens explicitamente marcados como livres aparecem na seção de lembretes.
 
-- Itens livres (`produto_id === null` e nao presentes na comparacao) aparecem em secao propria "Lembretes / Itens livres" abaixo dos produtos sem preco
-- Checkbox de comprado funciona normalmente
-- Quantidade editavel normalmente
+### 6. Atualizar types.ts
 
-### Fluxo do usuario
+Adicionar `item_livre: boolean` nas interfaces Row/Insert/Update de `listas_compras_itens`.
 
-1. Ao criar ou editar lista, alem de buscar no catalogo, pode digitar texto livre
-2. Texto livre e salvo como item da lista com `produto_id: null`
-3. Na visualizacao, itens livres aparecem em secao separada com badge distinto
-4. Na comparacao de precos, itens livres sao ignorados (nao tem master para comparar)
-5. No modo comprar, itens livres aparecem como checklist simples
+### Arquivos alterados
 
-### O que NAO muda
-
-- Fluxo de produtos do catalogo master permanece identico
-- Comparacao de precos nao e afetada
-- Tabela comparativa nao inclui itens livres
-- Nenhuma migração de banco necessaria
+- Nova migração SQL (coluna `item_livre`)
+- `supabase/functions/gerar-lista-otimizada/index.ts`
+- `src/components/listaCompras/CriarListaDialog.tsx`
+- `src/components/listaCompras/EditarListaDialog.tsx`
+- `src/pages/ListaCompras.tsx`
+- `src/integrations/supabase/types.ts`
 
