@@ -427,6 +427,7 @@ export type Database = {
           comprado: boolean
           created_at: string
           id: string
+          item_livre: boolean
           lista_id: string
           produto_id: string | null
           produto_nome: string
@@ -437,6 +438,7 @@ export type Database = {
           comprado?: boolean
           created_at?: string
           id?: string
+          item_livre?: boolean
           lista_id: string
           produto_id?: string | null
           produto_nome: string
@@ -447,6 +449,7 @@ export type Database = {
           comprado?: boolean
           created_at?: string
           id?: string
+          item_livre?: boolean
           lista_id?: string
           produto_id?: string | null
           produto_nome?: string

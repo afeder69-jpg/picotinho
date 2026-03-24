@@ -88,7 +88,8 @@ export function CriarListaDialog({ open, onClose }: CriarListaDialogProps) {
             produto_nome: p.produto_nome,
             produto_id: p.produto_id,
             quantidade: p.quantidade,
-            unidade_medida: p.unidade_medida
+            unidade_medida: p.unidade_medida,
+            item_livre: p.item_livre
           }))
         }
       });
