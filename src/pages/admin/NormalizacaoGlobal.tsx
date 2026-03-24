@@ -447,28 +447,22 @@ export default function NormalizacaoGlobal() {
   async function buscarProdutosMaster(termo: string) {
     setBuscandoMaster(true);
     try {
-      // Detectar se tem múltiplos termos separados por ";"
-      const termos = termo.includes(';') 
-        ? termo.split(';').map(t => t.trim()).filter(t => t.length > 0)
-        : [termo.trim()];
+      const normalizado = termo.trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      const palavras = normalizado
+        .split(/[;\s]+/)
+        .filter(p => p.length >= 2);
 
-      // Construir query dinâmica
-      let query = supabase
-        .from('produtos_master_global')
-        .select('*')
-        .eq('status', 'ativo');
+      if (palavras.length === 0) {
+        setResultadosBusca([]);
+        return;
+      }
 
-      // Para cada termo, adicionar condição AND com busca em múltiplos campos
-      termos.forEach(t => {
-        query = query.or(
-          `nome_padrao.ilike.%${t}%,sku_global.ilike.%${t}%,marca.ilike.%${t}%,nome_base.ilike.%${t}%`
-        );
-      });
-
-      // Limitar e ordenar
-      const { data, error } = await query
-        .limit(50)
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.rpc(
+        'buscar_produtos_master_por_palavras' as any,
+        { p_palavras: palavras, p_limite: 50 }
+      );
 
       if (error) throw error;
       setResultadosBusca(data || []);

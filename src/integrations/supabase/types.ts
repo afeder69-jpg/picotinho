@@ -2972,22 +2972,60 @@ export type Database = {
           variante: string
         }[]
       }
-      buscar_produtos_master_por_palavras: {
-        Args: { p_palavras: string[] }
-        Returns: {
-          categoria: string
-          codigo_barras: string
-          id: string
-          imagem_url: string
-          marca: string
-          nome_base: string
-          nome_padrao: string
-          qtd_unidade: string
-          qtd_valor: number
-          sku_global: string
-          unidade_base: string
-        }[]
-      }
+      buscar_produtos_master_por_palavras:
+        | {
+            Args: { p_palavras: string[] }
+            Returns: {
+              categoria: string
+              codigo_barras: string
+              id: string
+              imagem_url: string
+              marca: string
+              nome_base: string
+              nome_padrao: string
+              qtd_unidade: string
+              qtd_valor: number
+              sku_global: string
+              unidade_base: string
+            }[]
+          }
+        | {
+            Args: { p_limite?: number; p_palavras: string[] }
+            Returns: {
+              aprovado_em: string | null
+              aprovado_por: string | null
+              categoria: string
+              categoria_unidade: string | null
+              codigo_barras: string | null
+              confianca_normalizacao: number | null
+              created_at: string | null
+              granel: boolean | null
+              id: string
+              imagem_adicionada_em: string | null
+              imagem_adicionada_por: string | null
+              imagem_path: string | null
+              imagem_url: string | null
+              marca: string | null
+              nome_base: string
+              nome_padrao: string
+              qtd_base: number | null
+              qtd_unidade: string | null
+              qtd_valor: number | null
+              sku_global: string
+              status: string | null
+              tipo_embalagem: string | null
+              total_notas: number | null
+              total_usuarios: number | null
+              unidade_base: string | null
+              updated_at: string | null
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "produtos_master_global"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       buscar_produtos_similares: {
         Args: {
           categoria_filtro: string
