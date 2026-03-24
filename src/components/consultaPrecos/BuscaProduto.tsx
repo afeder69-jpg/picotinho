@@ -95,6 +95,7 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
       toast.error('Erro ao buscar produto');
     } finally {
       setCarregando(false);
+      setBuscandoEan(false);
     }
   }, [onProdutoSelecionado]);
 
