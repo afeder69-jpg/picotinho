@@ -1,54 +1,71 @@
 
+Objetivo: corrigir de forma definitiva o fluxo “Adicionar à lista” na Consulta de Preço, separando claramente as duas etapas (criação da lista e inserção do item) e eliminando o estado parcial (lista criada, porém vazia).
 
-## Criar nova lista direto do dialog de "Adicionar à Lista"
+1) Diagnóstico cirúrgico (causa real)
 
-### Alteração
+- Etapa 1 (criação da lista): está funcionando.
+  - Evidência: as listas novas aparecem no diálogo e na aba “Lista de Compras”.
+  - Evidência técnica: já existem registros recentes em `listas_compras` com `itens = 0`.
 
-**1 arquivo**: `src/components/consultaPrecos/AdicionarListaDialog.tsx`
+- Etapa 2 (inserção do produto): está falhando.
+  - Evidência de log:
+    - `code: 23503`
+    - `insert or update on table "listas_compras_itens" violates foreign key constraint "listas_compras_itens_produto_id_fkey"`
+    - `Key is not present in table "estoque_app"`
 
-Adicionar um mini-formulário inline no topo da lista de listas existentes, com input de nome + botão "Criar e adicionar".
+- Causa raiz:
+  - O fluxo de consulta usa `produto.id` vindo de `produtos_master_global` (edge `consultar-precos-produto`).
+  - Mas `listas_compras_itens.produto_id` está com FK apontando para `estoque_app(id)`.
+  - Resultado: qualquer tentativa de inserir esse `produto.id` em `listas_compras_itens` quebra por FK.
+  - O frontend captura o erro da etapa 2 dentro do mesmo `try/catch` da etapa 1 e exibe “Erro ao criar lista”, mesmo com a lista já criada.
 
-### Lógica
+2) Correção proposta (simples, segura e funcional)
 
-1. Novo estado `novaLista` (string) e `criandoNova` (boolean)
-2. Input de texto para nome da nova lista, sempre visível acima das listas existentes
-3. Botão "Criar e adicionar" ao lado do input
-4. Ao clicar:
-   - Insere em `listas_compras` com `titulo`, `user_id`, `origem: 'manual'`
-   - Pega o `id` retornado
-   - Insere o produto em `listas_compras_itens` com esse `id`
-   - Toast de sucesso e fecha o dialog
-5. Mensagem "Nenhuma lista encontrada" é substituída por: mostrar apenas o formulário de criar nova (sem a mensagem negativa)
+A. Ajuste estrutural no banco (principal)
+- Corrigir a FK de `listas_compras_itens.produto_id` para o domínio correto:
+  - remover FK atual para `estoque_app(id)`
+  - criar FK para `produtos_master_global(id)` com `ON DELETE SET NULL`
+- Isso alinha o schema com a lógica real já usada em:
+  - Consulta de preços
+  - comparação de lista (`comparar-precos-lista`, que trata `produto_id` como master id)
 
-### Fluxo do usuário
+B. Ajuste de fluxo no frontend (`AdicionarListaDialog.tsx`)
+- Separar o fluxo em duas etapas com tratamento independente:
+  1. criar lista
+  2. inserir produto na lista
+- Mensagens específicas por etapa:
+  - falha na etapa 1: “Erro ao criar lista”
+  - falha na etapa 2: “Erro ao adicionar produto à lista”
+- Evitar estado parcial:
+  - se etapa 1 sucesso e etapa 2 falhar, executar rollback compensatório (deletar a lista recém-criada) para não deixar lista vazia “fantasma”.
 
-- Abre o dialog → vê input "Nova lista" no topo + listas existentes abaixo
-- Pode clicar numa lista existente (comportamento atual, intacto)
-- Ou digitar nome e clicar "Criar e adicionar" → lista é criada + produto inserido automaticamente
-- Dialog fecha com toast de sucesso
+C. Fortalecimento de payload e observabilidade
+- Inserção explícita:
+  - `produto_id: produto.id ?? null`
+  - `item_livre: false`
+  - `unidade_medida` com fallback seguro
+- Log técnico com `error.code`, `error.message`, `lista_id`, `produto_id` para diagnóstico futuro sem ambiguidade.
 
-### Detalhes técnicos
+3) Arquivos a alterar
 
-```typescript
-const handleCriarEAdicionar = async () => {
-  // 1. Insert na tabela listas_compras
-  const { data: lista } = await supabase
-    .from('listas_compras')
-    .insert({ titulo: novaLista.trim(), user_id: user.id, origem: 'manual' })
-    .select('id')
-    .single();
+- Nova migration SQL (schema):
+  - alterar FK de `listas_compras_itens.produto_id` (de `estoque_app` para `produtos_master_global`)
+- `src/components/consultaPrecos/AdicionarListaDialog.tsx`:
+  - separar try/catch por etapa
+  - rollback compensatório quando necessário
+  - mensagens de erro por etapa
 
-  // 2. Insert do produto na nova lista
-  await supabase.from('listas_compras_itens').insert({
-    lista_id: lista.id,
-    produto_nome: produto.nome_padrao,
-    produto_id: produto.id,
-    quantidade: 1,
-    unidade_medida: produto.unidade_base || 'UN',
-    comprado: false,
-  });
-};
-```
+4) Validação pós-implementação (E2E)
 
-Nenhuma edge function necessária — inserção direta nas tabelas, que já têm RLS configurado para o usuário autenticado.
+- Cenário A: adicionar em lista existente
+  - esperado: item entra sem erro
+- Cenário B: criar nova lista + adicionar produto no mesmo fluxo
+  - esperado: lista criada e já com item
+- Cenário C: falha forçada na etapa 2
+  - esperado: lista não fica criada vazia (rollback)
+- Conferir:
+  - item aparece em `listas_compras_itens`
+  - lista abre com item
+  - comparação de preços continua funcionando para o item adicionado
 
+Se aprovado, implemento exatamente nesse formato (correção estrutural + correção de fluxo por etapa), atacando a causa raiz e eliminando o comportamento parcial.
