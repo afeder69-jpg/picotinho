@@ -110,6 +110,16 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // 🥚 Carregar regras de conversão de embalagem
+    const { data: regrasConversao } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
+    console.log(`📦 Regras de conversão carregadas: ${regrasEmbalagem.length}`);
+
     // 1. BUSCAR PRODUTOS DE NOTAS NÃO NORMALIZADAS
     console.log('📋 Buscando produtos para normalizar...');
     
