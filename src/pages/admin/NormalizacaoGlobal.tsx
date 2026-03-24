@@ -496,30 +496,28 @@ export default function NormalizacaoGlobal() {
 
       if (error) throw error;
 
-      // Filtrar localmente (mais flexível que SQL OR)
-      let resultados: any[] = [];
-      
-      for (const t of termos) {
-        const termoNorm = normalizarParaBusca(t);
-        
-        const filtrados = (data || []).filter(candidato => 
-          normalizarParaBusca(candidato.texto_original || '').includes(termoNorm) ||
-          normalizarParaBusca(candidato.nome_padrao_sugerido || '').includes(termoNorm) ||
-          normalizarParaBusca(candidato.nome_base_sugerido || '').includes(termoNorm) ||
-          normalizarParaBusca(candidato.marca_sugerida || '').includes(termoNorm) ||
-          normalizarParaBusca(candidato.categoria_sugerida || '').includes(termoNorm) ||
-          normalizarParaBusca(candidato.sugestao_sku_global || '').includes(termoNorm)
-        );
-        
-        resultados.push(...filtrados);
+      // Extrair palavras (split por ; e espaços, mínimo 2 chars)
+      const palavras = normalizarParaBusca(termo)
+        .split(/[;\s]+/)
+        .filter(p => p.length >= 2);
+
+      if (palavras.length === 0) {
+        setResultadosBuscaPendentes([]);
+        return;
       }
+
+      // Concatenar campos relevantes e exigir TODAS as palavras (AND)
+      const filtrados = (data || []).filter(candidato => {
+        const textoCompleto = normalizarParaBusca(
+          [candidato.texto_original, candidato.nome_padrao_sugerido,
+           candidato.nome_base_sugerido, candidato.marca_sugerida,
+           candidato.categoria_sugerida, candidato.sugestao_sku_global]
+          .filter(Boolean).join(' ')
+        );
+        return palavras.every(p => textoCompleto.includes(p));
+      });
       
-      // Remover duplicatas (se buscou múltiplos termos)
-      const unicos = Array.from(
-        new Map(resultados.map(item => [item.id, item])).values()
-      );
-      
-      setResultadosBuscaPendentes(unicos);
+      setResultadosBuscaPendentes(filtrados);
       
     } catch (error: any) {
       console.error('Erro ao buscar candidatos:', error);
