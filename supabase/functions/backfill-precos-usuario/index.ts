@@ -176,7 +176,7 @@ serve(async (req) => {
 
             // 🥚 Aplicar lógica de detecção de ovos
             const nomeOriginal = item?.descricao ?? item?.nome ?? "";
-            const embalagem = detectarQuantidadeEmbalagem(nomeOriginal, valorUnit);
+            const embalagem = detectarQuantidadeEmbalagem(nomeOriginal, valorUnit, regrasEmbalagem);
             if (embalagem.isMultiUnit) {
               valorUnit = embalagem.unitPrice;
               console.log(`🥚 BACKFILL - OVO DETECTADO: ${nomeOriginal} → ${embalagem.quantity} unidades @ R$ ${valorUnit.toFixed(3)}`);

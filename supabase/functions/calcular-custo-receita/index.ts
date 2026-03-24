@@ -116,7 +116,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const authHeader = req.headers.get('Authorization');
+    // 🥚 Carregar regras de conversão de embalagem
+    const { data: regrasConversao } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
+
     if (!authHeader) {
       throw new Error('Autorização necessária');
     }

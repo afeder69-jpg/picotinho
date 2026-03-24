@@ -262,7 +262,7 @@ serve(async (req) => {
         if (!item.descricao || valorUnitario <= 0) continue;
 
         // 🥚 Aplicar lógica de detecção de ovos
-        const embalagem = detectarQuantidadeEmbalagem(item.descricao, valorUnitario);
+        const embalagem = detectarQuantidadeEmbalagem(item.descricao, valorUnitario, regrasEmbalagem);
         if (embalagem.isMultiUnit) {
           valorUnitario = embalagem.unitPrice;
           console.log(`🥚 OVO DETECTADO NA ÁREA: ${item.descricao} → ${embalagem.quantity} unidades @ R$ ${valorUnitario.toFixed(3)}`);
