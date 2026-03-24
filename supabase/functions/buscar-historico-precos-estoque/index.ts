@@ -491,7 +491,7 @@ serve(async (req) => {
       resultado.push({
         id: produtoId,
         produto: produtoNome,
-        ultimaCompraUsuario,
+        ultimaCompraUsuario: ultimaCompraDoUsuario,
         menorPrecoArea
       });
     }
