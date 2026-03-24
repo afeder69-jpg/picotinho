@@ -1393,7 +1393,7 @@ serve(async (req) => {
           qtd_valor: embalagemInfo.isMultiUnit ? item.quantidade : null,
           qtd_base: embalagemInfo.isMultiUnit ? embalagemInfo.quantity : null,
           unidade_base: embalagemInfo.isMultiUnit ? embalagemInfo.unidade_consumo.toLowerCase() : null,
-          preco_por_unidade_base: embalagemInfo.isMultiUnit ? embalagemInfo.unitPrice : null,
+          preco_por_unidade_base: embalagemInfo.isMultiUnit ? precoUnitarioFinal : null,
         });
       }
     }
