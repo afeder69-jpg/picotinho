@@ -624,6 +624,25 @@ const EstoqueAtual = () => {
     return normalizarParaBusca(texto).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   };
 
+  const obterHistoricoProduto = (item: EstoqueItem) => {
+    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+    const chavesBusca = [
+      item.id,
+      nomeExibicao,
+      nomeExibicao ? normalizarTexto(nomeExibicao) : null,
+      item.produto_nome,
+      item.produto_nome ? normalizarTexto(item.produto_nome) : null,
+    ].filter(Boolean) as string[];
+
+    for (const chave of chavesBusca) {
+      if (historicoPrecos[chave]) {
+        return historicoPrecos[chave];
+      }
+    }
+
+    return null;
+  };
+
   // Função para encontrar preço atual de um produto (agora dinamicamente pela área)
   const encontrarPrecoAtual = (nomeProduto: string) => {
     console.log(`🔍 Buscando preço atual dinâmico para: "${nomeProduto}"`);
@@ -1628,8 +1647,7 @@ const EstoqueAtual = () => {
     
     // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
     const subtotalAtual = itens.reduce((sum, item) => {
-      const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-      const historicoProduto = historicoPrecos[nomeExibicao];
+      const historicoProduto = obterHistoricoProduto(item);
       
       // REGRA: Produtos manuais sempre usam preço inserido
       if (item.origem === 'manual') {
@@ -1918,7 +1936,7 @@ const EstoqueAtual = () => {
                 <CardContent className="py-3">
                   <div className="space-y-1">
                      {itens.map((item) => {
-                        const historicoProduto = historicoPrecos[item.id];
+                        const historicoProduto = obterHistoricoProduto(item);
                         const quantidade = parseFloat(item.quantidade.toString());
                        
                           return (
@@ -1989,9 +2007,8 @@ const EstoqueAtual = () => {
                               {mostrarPrecos && (
                                 <div className="space-y-1 text-xs">
                                    {(() => {
-                                     const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                                     const historicoProduto = historicoPrecos[nomeExibicao];
-                                     const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
+                                      const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                      const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
 
 
                                      return (

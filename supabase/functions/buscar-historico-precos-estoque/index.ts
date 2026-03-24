@@ -64,6 +64,100 @@ function normalizarNomeProduto(nome: string): string {
   return normalizado;
 }
 
+interface RegraConversao {
+  produto_pattern: string;
+  produto_exclusao_pattern: string | null;
+  ean_pattern: string | null;
+  tipo_embalagem: string;
+  qtd_por_embalagem: number;
+  unidade_consumo: string;
+  prioridade: number;
+}
+
+interface ResultadoEmbalagem {
+  isMultiUnit: boolean;
+  quantity: number;
+  unitPrice: number;
+  tipo_embalagem: string | null;
+  unidade_consumo: string;
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const sanitized = value
+      .replace(/R\$/gi, '')
+      .replace(/\s+/g, '')
+      .replace(/\.(?=\d{3}(\D|$))/g, '')
+      .replace(',', '.');
+
+    const parsed = Number(sanitized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function detectarQuantidadeEmbalagem(
+  nomeProduto: string,
+  precoTotal: number,
+  regras: RegraConversao[],
+  eanProduto?: string | null
+): ResultadoEmbalagem {
+  const nomeUpper = nomeProduto.toUpperCase();
+  const fallback: ResultadoEmbalagem = {
+    isMultiUnit: false,
+    quantity: 1,
+    unitPrice: precoTotal,
+    tipo_embalagem: null,
+    unidade_consumo: 'UN',
+  };
+
+  if (!regras || regras.length === 0) return fallback;
+
+  if (eanProduto) {
+    for (const regra of regras) {
+      if (!regra.ean_pattern) continue;
+      try {
+        if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
+        if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+        const qty = regra.qtd_por_embalagem;
+        if (qty > 1 && qty <= 100) {
+          return {
+            isMultiUnit: true,
+            quantity: qty,
+            unitPrice: precoTotal / qty,
+            tipo_embalagem: regra.tipo_embalagem,
+            unidade_consumo: regra.unidade_consumo,
+          };
+        }
+      } catch (error) {
+        console.warn('Regex EAN inválido em regras_conversao_embalagem:', regra.ean_pattern, error);
+      }
+    }
+  }
+
+  for (const regra of regras) {
+    try {
+      if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
+      if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+      const qty = regra.qtd_por_embalagem;
+      if (qty > 1 && qty <= 100) {
+        return {
+          isMultiUnit: true,
+          quantity: qty,
+          unitPrice: precoTotal / qty,
+          tipo_embalagem: regra.tipo_embalagem,
+          unidade_consumo: regra.unidade_consumo,
+        };
+      }
+    } catch (error) {
+      console.warn('Regex nome inválido em regras_conversao_embalagem:', regra.produto_pattern, error);
+    }
+  }
+
+  return fallback;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -88,6 +182,19 @@ serve(async (req) => {
     }
 
     console.log(`🔍 Buscando histórico para ${produtos.length} produtos do usuário ${userId}`);
+
+    const { data: regrasConversao, error: regrasErro } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+
+    if (regrasErro) {
+      console.warn('⚠️ Não foi possível carregar regras de conversão de embalagem:', regrasErro.message);
+    }
+
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
 
     const resultado = [];
 
@@ -226,21 +333,27 @@ serve(async (req) => {
         if (!dataCompra) continue;
 
         for (const item of dados.itens) {
-          const nomeItem = normalizarNomeProduto(item.descricao || item.nome || '');
+          const nomeItemOriginal = item.descricao || item.nome || '';
+          const nomeItem = normalizarNomeProduto(nomeItemOriginal);
           
           if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
             if (!ultimaCompraDoUsuario || new Date(dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
-              const preco = parseFloat(item.valor_unitario || 0);
-              const quantidade = parseFloat(item.quantidade || 0);
-              
-              // Só criar objeto se tiver dados válidos
-              if (preco > 0 && quantidade > 0) {
-                ultimaCompraDoUsuario = {
-                  data: dataCompra,
-                  preco: preco,
-                  quantidade: quantidade
-                };
-              }
+              const precoInformado = toNumber(item.valor_unitario || item.preco_unitario || 0);
+              const quantidadeComprada = toNumber(item.quantidade || 1);
+
+              if (precoInformado <= 0 || quantidadeComprada <= 0) continue;
+
+              const valorTotalItem = precoInformado * quantidadeComprada;
+              const eanProduto = item.codigo_barras || item.ean || item.ean_comercial || null;
+              const embalagem = detectarQuantidadeEmbalagem(nomeItemOriginal, precoInformado, regrasEmbalagem, eanProduto);
+              const quantidadeFinal = embalagem.isMultiUnit ? quantidadeComprada * embalagem.quantity : quantidadeComprada;
+              const precoConvertido = quantidadeFinal > 0 ? valorTotalItem / quantidadeFinal : precoInformado;
+
+              ultimaCompraDoUsuario = {
+                data: dataCompra,
+                preco: precoConvertido,
+                quantidade: quantidadeComprada
+              };
             }
             break;
           }
@@ -323,16 +436,23 @@ serve(async (req) => {
             const dataFormatada = dataCompra.split('T')[0];
 
             for (const item of dados.itens) {
-              const nomeItem = normalizarNomeProduto(item.descricao || item.nome || '');
+              const nomeItemOriginal = item.descricao || item.nome || '';
+              const nomeItem = normalizarNomeProduto(nomeItemOriginal);
               
               if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
-                const preco = parseFloat(item.valor_unitario || 0);
-                const quantidade = parseFloat(item.quantidade || 0);
+                const precoInformado = toNumber(item.valor_unitario || item.preco_unitario || 0);
+                const quantidadeComprada = toNumber(item.quantidade || 1);
+
+                if (precoInformado <= 0 || quantidadeComprada <= 0) continue;
+
+                const valorTotalItem = precoInformado * quantidadeComprada;
+                const eanProduto = item.codigo_barras || item.ean || item.ean_comercial || null;
+                const embalagem = detectarQuantidadeEmbalagem(nomeItemOriginal, precoInformado, regrasEmbalagem, eanProduto);
+                const quantidadeFinal = embalagem.isMultiUnit ? quantidadeComprada * embalagem.quantity : quantidadeComprada;
+                const precoConvertido = quantidadeFinal > 0 ? valorTotalItem / quantidadeFinal : precoInformado;
                 
-                if (preco > 0 && quantidade > 0) {
-                  if (!precosPorDia[dataFormatada] || preco < precosPorDia[dataFormatada].preco) {
-                    precosPorDia[dataFormatada] = { preco, quantidade };
-                  }
+                if (!precosPorDia[dataFormatada] || precoConvertido < precosPorDia[dataFormatada].preco) {
+                  precosPorDia[dataFormatada] = { preco: precoConvertido, quantidade: quantidadeComprada };
                 }
               }
             }
@@ -371,7 +491,7 @@ serve(async (req) => {
       resultado.push({
         id: produtoId,
         produto: produtoNome,
-        ultimaCompraUsuario,
+        ultimaCompraUsuario: ultimaCompraDoUsuario,
         menorPrecoArea
       });
     }
