@@ -1933,11 +1933,11 @@ const EstoqueAtual = () => {
                                  {modoEdicao && (
                                    <Button
                                      onClick={() => abrirModalEdicao(item)}
-                                     className="absolute -top-1 -right-2 h-6 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md border border-blue-300 shadow-sm transform hover:scale-105 transition-all duration-200 flex items-center gap-1"
-                                     size="sm"
-                                   >
-                                     <Edit3 className="w-3 h-3" />
-                                     Ajustar
+                                      className="absolute -top-1 -right-2 h-6 w-6 p-0 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md border border-blue-300 shadow-sm transform hover:scale-105 transition-all duration-200 flex items-center justify-center"
+                                      size="sm"
+                                      title="Ajustar"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
                                    </Button>
                                  )}
                                </h3>
