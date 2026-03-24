@@ -1029,7 +1029,16 @@ serve(async (req) => {
     
     console.log(`✅ ${regrasRecategorizacao?.length || 0} regras ativas carregadas`);
 
-    // 🛡️ PROTEÇÃO CONTRA RE-PROCESSAMENTO
+    // 🥚 Carregar regras de conversão de embalagem (uma vez por execução)
+    const { data: regrasConversao } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
+    console.log(`📦 Regras de conversão de embalagem carregadas: ${regrasEmbalagem.length}`);
+
     // Buscar nota com verificação de status processada
     const { data: nota, error: notaError } = await supabase
       .from("notas_imagens")
