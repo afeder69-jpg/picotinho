@@ -1344,8 +1344,9 @@ serve(async (req) => {
       const embalagemInfo = detectarQuantidadeEmbalagem(item.descricao, valorTotal, regrasEmbalagem, item.ean_comercial || null);
       
       // Quantidade e preço final considerando embalagem
-      const quantidadeFinal = embalagemInfo.isMultiUnit ? embalagemInfo.quantity : item.quantidade;
-      const precoUnitarioFinal = embalagemInfo.isMultiUnit ? embalagemInfo.unitPrice : item.valor_unitario;
+      // Bug fix: multiplicar item.quantidade (nº de embalagens) × unidades por embalagem
+      const quantidadeFinal = embalagemInfo.isMultiUnit ? (item.quantidade * embalagemInfo.quantity) : item.quantidade;
+      const precoUnitarioFinal = embalagemInfo.isMultiUnit ? (valorTotal / quantidadeFinal) : item.valor_unitario;
       
       if (produtosConsolidados.has(key)) {
         // Item já existe, consolidar com preço médio ponderado
