@@ -1332,7 +1332,7 @@ serve(async (req) => {
       
       // 🥚 TRATAMENTO ESPECIAL: Detectar quantidade em embalagem
       const valorTotal = item.quantidade * item.valor_unitario;
-      const embalagemInfo = detectarQuantidadeEmbalagem(item.descricao, valorTotal);
+      const embalagemInfo = detectarQuantidadeEmbalagem(item.descricao, valorTotal, regrasEmbalagem, item.ean_comercial || null);
       
       // Quantidade e preço final considerando embalagem
       const quantidadeFinal = embalagemInfo.isMultiUnit ? embalagemInfo.quantity : item.quantidade;
