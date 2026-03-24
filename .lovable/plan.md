@@ -1,71 +1,102 @@
 
 
-## Busca inteligente multi-campo na Consulta de Preços
+## Busca inteligente no Catálogo Master — reutilizando a RPC existente
 
-### Abordagem
+### Problema atual
 
-Criar uma RPC SQL que busca em `nome_padrao`, `nome_base` e `marca` simultaneamente, com suporte a múltiplas palavras, sem acentos e case-insensitive. A busca exige que **todas** as palavras digitadas apareçam em **pelo menos um** dos três campos concatenados.
+A função `buscarProdutosMaster` (linha 447) usa `.ilike` direto no Supabase JS. Isso é case-insensitive mas **não** é accent-insensitive, e trata múltiplos termos separados por `;` como OR (cada termo é uma condição `.or()`), quando o comportamento desejado para palavras dentro de um mesmo termo é AND.
 
-### Alterações
+### Solução
 
-**1. Migration SQL** — criar função `buscar_produtos_master_por_palavras`:
+Reutilizar a RPC `buscar_produtos_master_por_palavras` que já foi criada na migration anterior. Ela já faz busca em `nome_padrao`, `nome_base` e `marca` com `unaccent`, case-insensitive, e AND entre palavras.
 
-```sql
-CREATE EXTENSION IF NOT EXISTS unaccent;
+### Alteração
 
-CREATE OR REPLACE FUNCTION buscar_produtos_master_por_palavras(p_palavras TEXT[])
-RETURNS TABLE (...) AS $$
-DECLARE
-  v_query TEXT;
-  v_palavra TEXT;
-  v_search_field TEXT := 'unaccent(lower(COALESCE(nome_padrao,'''') || '' '' || COALESCE(nome_base,'''') || '' '' || COALESCE(marca,'''')))';
-BEGIN
-  v_query := 'SELECT id, nome_padrao, nome_base, marca, categoria, codigo_barras, imagem_url, sku_global, qtd_valor, qtd_unidade, unidade_base FROM produtos_master_global WHERE status = ''ativo''';
-  
-  FOREACH v_palavra IN ARRAY p_palavras LOOP
-    v_query := v_query || ' AND ' || v_search_field || ' LIKE ''%'' || unaccent(lower(' || quote_literal(v_palavra) || ')) || ''%''';
-  END LOOP;
-  
-  v_query := v_query || ' ORDER BY total_notas DESC NULLS LAST LIMIT 20';
-  RETURN QUERY EXECUTE v_query;
-END;
-$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
-```
+**1 arquivo**: `src/pages/admin/NormalizacaoGlobal.tsx`
 
-Concatenar os 3 campos garante que "marata flocao" encontra o produto mesmo que "maratá" esteja em `marca` e "flocão" em `nome_padrao`. Sem ruído extra — são campos estruturados do mesmo produto.
-
-**2. Edge Function** — `supabase/functions/consultar-precos-produto/index.ts`
-
-Substituir o bloco `tipo === 'nome'` (linhas 77-88) para normalizar o termo, dividir em palavras, e chamar a RPC:
+Substituir a função `buscarProdutosMaster` (linhas 447-485) por:
 
 ```typescript
-if (tipo === 'nome') {
-  const normalizado = termo.trim().toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const palavras = normalizado.split(/\s+/).filter(p => p.length >= 2);
-  
-  if (palavras.length === 0) {
-    return new Response(JSON.stringify({ produtos: [] }), { headers: ... });
+async function buscarProdutosMaster(termo: string) {
+  setBuscandoMaster(true);
+  try {
+    // Normalizar: remover acentos, lowercase, extrair palavras
+    const normalizado = termo.trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    
+    // Suporte a múltiplos termos com ";" — juntar todas as palavras
+    const palavras = normalizado
+      .split(/[;\s]+/)
+      .filter(p => p.length >= 2);
+
+    if (palavras.length === 0) {
+      setResultadosBusca([]);
+      return;
+    }
+
+    // Usar a mesma RPC da Consulta de Preços
+    const { data, error } = await supabase.rpc(
+      'buscar_produtos_master_por_palavras',
+      { p_palavras: palavras }
+    );
+
+    if (error) throw error;
+    setResultadosBusca(data || []);
+  } catch (error: any) {
+    console.error('Erro ao buscar produtos:', error);
+    toast({
+      title: "Erro na busca",
+      description: error.message,
+      variant: "destructive"
+    });
+  } finally {
+    setBuscandoMaster(false);
   }
-
-  const { data } = await supabase.rpc('buscar_produtos_master_por_palavras', {
-    p_palavras: palavras
-  });
-
-  return new Response(JSON.stringify({ produtos: data || [] }), { headers: ... });
 }
 ```
 
-### Por que incluir `nome_base` e `marca`
+A RPC retorna `id, nome_padrao, nome_base, marca, categoria, codigo_barras, imagem_url, sku_global, qtd_valor, qtd_unidade, unidade_base`. A tela do Catálogo Master usa `select('*')` atualmente, então campos extras como `total_notas`, `total_usuarios`, `created_at` etc. não virão da RPC. Preciso verificar quais campos a renderização do card usa.
 
-- `nome_base`: versão simplificada sem quantidade (ex: "FARINHA DE MILHO FLOCÃO MARATÁ") — útil quando o usuário digita sem a gramatura
-- `marca`: usuários frequentemente buscam por marca ("marata", "yoki") — se a marca está só nesse campo e não no `nome_padrao`, a busca atual não encontra
-- Concatenar os 3 não degrada performance — é uma operação simples em texto com LIMIT 20
+**Ajuste na RPC** (migration SQL): A RPC atual retorna apenas 11 campos e LIMIT 20. Para o Catálogo Master, precisamos:
+- Mais campos: `total_notas`, `total_usuarios`, `granel`, `categoria_unidade`, `tipo_embalagem`, `imagem_path`, `created_at`
+- LIMIT maior: 50 em vez de 20
 
-### Resultado
+A melhor abordagem: criar uma versão estendida da RPC ou simplesmente atualizar a existente para retornar todos os campos usando `RETURNS SETOF produtos_master_global` (retorna todas as colunas automaticamente).
 
-- "flocao" → encontra (accent-insensitive via `unaccent`)
-- "marata 500" → encontra (multi-palavra AND em campos concatenados)
-- "yoki" → encontra mesmo se só estiver no campo `marca`
-- Busca rápida (debounce 400ms no frontend + LIMIT 20 no SQL)
+**Migration SQL** — atualizar a RPC:
+
+```sql
+CREATE OR REPLACE FUNCTION public.buscar_produtos_master_por_palavras(
+  p_palavras TEXT[],
+  p_limite INT DEFAULT 20
+)
+RETURNS SETOF produtos_master_global AS $$
+DECLARE
+  v_query TEXT;
+  v_palavra TEXT;
+  v_search TEXT := 'unaccent(lower(COALESCE(nome_padrao,'''') || '' '' || COALESCE(nome_base,'''') || '' '' || COALESCE(marca,'''')))';
+BEGIN
+  v_query := 'SELECT * FROM produtos_master_global WHERE status = ''ativo''';
+  
+  FOREACH v_palavra IN ARRAY p_palavras LOOP
+    v_query := v_query || ' AND ' || v_search || 
+      ' LIKE ''%'' || unaccent(lower(' || quote_literal(v_palavra) || ')) || ''%''';
+  END LOOP;
+  
+  v_query := v_query || ' ORDER BY total_notas DESC NULLS LAST LIMIT ' || p_limite;
+  RETURN QUERY EXECUTE v_query;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public;
+```
+
+Mudanças na RPC:
+- `RETURNS SETOF produtos_master_global` em vez de TABLE explícito — retorna todas as colunas
+- Parâmetro `p_limite` com default 20 — a Consulta de Preços continua com 20, o Catálogo Master passa 50
+
+### Resumo de alterações
+
+1. **Migration SQL** — atualizar `buscar_produtos_master_por_palavras` para retornar todas as colunas e aceitar limite configurável
+2. **`NormalizacaoGlobal.tsx`** — substituir `buscarProdutosMaster` para usar a RPC com `p_limite: 50`
+
+Nenhuma mudança no frontend da Consulta de Preços — o default da RPC mantém o comportamento atual.
 
