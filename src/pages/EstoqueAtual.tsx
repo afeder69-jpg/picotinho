@@ -1341,7 +1341,7 @@ const EstoqueAtual = () => {
           .from('consumos_app')
           .insert({
             user_id: user?.id,
-            produto_id: itemEditando.id,
+            produto_id: idPrincipal,
             quantidade: quantidadeConsumida,
             categoria: itemEditando.categoria
           });
