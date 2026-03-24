@@ -436,16 +436,23 @@ serve(async (req) => {
             const dataFormatada = dataCompra.split('T')[0];
 
             for (const item of dados.itens) {
-              const nomeItem = normalizarNomeProduto(item.descricao || item.nome || '');
+              const nomeItemOriginal = item.descricao || item.nome || '';
+              const nomeItem = normalizarNomeProduto(nomeItemOriginal);
               
               if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
-                const preco = parseFloat(item.valor_unitario || 0);
-                const quantidade = parseFloat(item.quantidade || 0);
+                const precoInformado = toNumber(item.valor_unitario || item.preco_unitario || 0);
+                const quantidadeComprada = toNumber(item.quantidade || 1);
+
+                if (precoInformado <= 0 || quantidadeComprada <= 0) continue;
+
+                const valorTotalItem = precoInformado * quantidadeComprada;
+                const eanProduto = item.codigo_barras || item.ean || item.ean_comercial || null;
+                const embalagem = detectarQuantidadeEmbalagem(nomeItemOriginal, precoInformado, regrasEmbalagem, eanProduto);
+                const quantidadeFinal = embalagem.isMultiUnit ? quantidadeComprada * embalagem.quantity : quantidadeComprada;
+                const precoConvertido = quantidadeFinal > 0 ? valorTotalItem / quantidadeFinal : precoInformado;
                 
-                if (preco > 0 && quantidade > 0) {
-                  if (!precosPorDia[dataFormatada] || preco < precosPorDia[dataFormatada].preco) {
-                    precosPorDia[dataFormatada] = { preco, quantidade };
-                  }
+                if (!precosPorDia[dataFormatada] || precoConvertido < precosPorDia[dataFormatada].preco) {
+                  precosPorDia[dataFormatada] = { preco: precoConvertido, quantidade: quantidadeComprada };
                 }
               }
             }

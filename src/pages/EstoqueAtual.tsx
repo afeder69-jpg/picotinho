@@ -2007,9 +2007,8 @@ const EstoqueAtual = () => {
                               {mostrarPrecos && (
                                 <div className="space-y-1 text-xs">
                                    {(() => {
-                                     const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-                                     const historicoProduto = historicoPrecos[nomeExibicao];
-                                     const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
+                                      const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+                                      const unidadeFormatada = item.unidade_medida.replace('Unidade', 'Un');
 
 
                                      return (
