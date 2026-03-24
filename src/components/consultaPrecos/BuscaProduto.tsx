@@ -33,6 +33,7 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
   const [modoEan, setModoEan] = useState(false);
   const [eanManual, setEanManual] = useState('');
   const [modoScanner, setModoScanner] = useState(false);
+  const [buscandoEan, setBuscandoEan] = useState(false);
 
   // Debounced search
   useEffect(() => {
