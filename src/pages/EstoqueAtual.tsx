@@ -1647,8 +1647,7 @@ const EstoqueAtual = () => {
     
     // Subtotal com preços atuais (para exibição na coluna "Valor Atual")
     const subtotalAtual = itens.reduce((sum, item) => {
-      const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
-      const historicoProduto = historicoPrecos[nomeExibicao];
+      const historicoProduto = obterHistoricoProduto(item);
       
       // REGRA: Produtos manuais sempre usam preço inserido
       if (item.origem === 'manual') {
