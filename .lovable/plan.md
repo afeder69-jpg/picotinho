@@ -1,64 +1,72 @@
 
 
-## Diagnóstico: preço visível na consulta, mas invisível na lista para outro usuário
+## Correção: contadores `total_usuarios` e `total_notas` sempre zerados/incorretos no Catálogo Master
 
 ### Causa raiz
 
-No `comparar-precos-lista/index.ts`, a função `buscarPrecoInteligente` tem um comportamento diferente dependendo de **como** o produto foi adicionado à lista:
+Existem **dois caminhos** para criar/atualizar produtos master, e eles são inconsistentes:
 
-**Usuário A** (lançou a nota) — provavelmente adicionou o item à lista manualmente (sem `produto_id`). O sistema:
-1. Resolve o `produto_master_id` por nome (linha 310-337) → marca `masterResolvidoPorNome = true`
-2. Busca por `produto_master_id + CNPJ` → se falhar, faz fallback por nome exato (linha 175-187)
-3. Encontra o preço via nome → funciona
+1. **Função SQL `upsert_produto_master`** (migration `20251004203544`) — faz `total_usuarios = COALESCE(total_usuarios, 0) + 1` no UPDATE. Correto.
 
-**Usuário B** (você) — adicionou via Consulta de Preços, que grava `produto_id` (master ID). O sistema:
-1. Usa `item.produto_id` diretamente → `masterResolvidoPorNome = false`
-2. Busca por `produto_master_id + CNPJ` na `precos_atuais` → se o registro de preço **não tem** `produto_master_id` preenchido → nada encontrado
-3. Linha 168-170: como `masterResolvidoPorNome = false`, **pula o fallback por nome** e retorna `null` imediatamente
+2. **Edge Function `processar-normalizacao-global`** (linha 1295-1296, 1310) — usa `.upsert()` do Supabase JS com valores fixos `total_usuarios: 1, total_notas: 1`. No conflito (upsert), esses valores **sobrescrevem** os contadores existentes, resetando-os para 1 em vez de incrementar.
 
-O problema está na linha 168-170:
-```typescript
-if (!masterResolvidoPorNome) {
-  console.log(`  ❌ [MASTER-ID] Sem preço neste mercado — vínculo original, sem fallback`);
-  return null;  // ← AQUI: bloqueia o fallback por nome
-}
-```
+O produto "FARINHA DE MILHO FLOCÃO MARATÁ 500G" provavelmente foi criado ou atualizado pela Edge Function, que fixou os contadores em 1 (ou 0 se houve algum outro fluxo de criação que não inicializou esses campos).
 
-Essa lógica foi criada para "manter integridade" quando o vínculo é real, mas é excessivamente restritiva. Se `precos_atuais` não tem `produto_master_id` preenchido (comum em notas antigas), o preço existe mas é inacessível.
+### Correção proposta
 
-### Correção
+**1 arquivo**: `supabase/functions/processar-normalizacao-global/index.ts`
 
-**1 arquivo**: `supabase/functions/comparar-precos-lista/index.ts`
+Substituir o `.upsert()` direto por lógica de INSERT/UPDATE separada que incremente os contadores corretamente:
 
-Quando a busca por `produto_master_id + CNPJ` falha, sempre tentar o fallback por **nome exato** no mesmo CNPJ antes de desistir — independentemente de `masterResolvidoPorNome`. O match exato por nome + CNPJ é seguro e conservador.
+- **INSERT** (produto novo): `total_usuarios: 1, total_notas: 1` — correto como está
+- **UPDATE** (produto existente): usar `.update()` com incremento via SQL raw ou fazer um select antes e somar
+
+A abordagem mais simples e segura: usar a função SQL `upsert_produto_master` que já existe e já faz o incremento correto, em vez de chamar `.upsert()` direto.
 
 ```typescript
-// Linha 168-190 — substituir por:
-// Fallback conservador: busca EXATA por nome no mesmo CNPJ
-const { data: precoNomeExato } = await supabaseAdmin
-  .from('precos_atuais')
-  .select('valor_unitario, produto_nome, data_atualizacao')
-  .eq('estabelecimento_cnpj', cnpjMercado)
-  .ilike('produto_nome', produtoNome.trim())
-  .order('data_atualizacao', { ascending: false })
-  .limit(1)
-  .maybeSingle();
-
-if (precoNomeExato?.valor_unitario) {
-  return { valor: precoNomeExato.valor_unitario, data_atualizacao: precoNomeExato.data_atualizacao };
-}
-
-// Se veio de vínculo original (não resolvido por nome), parar aqui
-if (!masterResolvidoPorNome) {
-  return null;
-}
+// Substituir o .upsert() direto (linhas ~1308-1315) por:
+const { data, error } = await supabase.rpc('upsert_produto_master', {
+  p_sku_global: normalizacao.sku_global,
+  p_nome_padrao: normalizacao.nome_padrao,
+  p_nome_base: normalizacao.nome_base,
+  p_categoria: normalizacao.categoria,
+  p_qtd_valor: normalizacao.qtd_valor,
+  p_qtd_unidade: normalizacao.qtd_unidade,
+  p_qtd_base: normalizacao.qtd_base,
+  p_unidade_base: normalizacao.unidade_base,
+  p_categoria_unidade: normalizacao.categoria_unidade,
+  p_granel: normalizacao.granel,
+  p_marca: normalizacao.marca,
+  p_tipo_embalagem: normalizacao.tipo_embalagem,
+  p_imagem_url: normalizacao.imagem_url || null,
+  p_imagem_path: normalizacao.imagem_path || null,
+  p_confianca: normalizacao.confianca
+});
 ```
 
-A mudança: o fallback por nome exato acontece **antes** da decisão de parar. Só se o nome exato também falhar, aí sim respeita a regra de integridade para vínculos originais.
+Porém a função SQL `upsert_produto_master` não suporta `codigo_barras` nem retorna o `id`. Então precisamos:
+
+**2 arquivo**: Nova migration SQL para atualizar `upsert_produto_master`:
+- Adicionar parâmetro `p_codigo_barras TEXT DEFAULT NULL`
+- Retornar o `id` do registro no JSONB de retorno
+- Manter a lógica de incremento `+1`
+
+**3 (opcional)**: Migration SQL para recalcular os contadores existentes com base nos dados reais:
+```sql
+UPDATE produtos_master_global pmg SET
+  total_notas = (SELECT COUNT(*) FROM estoque_app WHERE produto_master_id = pmg.id),
+  total_usuarios = (SELECT COUNT(DISTINCT user_id) FROM estoque_app WHERE produto_master_id = pmg.id);
+```
+
+### Arquivos a alterar
+
+1. `supabase/functions/processar-normalizacao-global/index.ts` — usar RPC em vez de `.upsert()` direto
+2. Nova migration SQL — atualizar função `upsert_produto_master` (adicionar `codigo_barras`, retornar `id`)
+3. Nova migration SQL — recalcular contadores existentes com dados reais do `estoque_app`
 
 ### Resultado esperado
 
-- Produto adicionado via Consulta de Preços agora encontra preço mesmo se `precos_atuais` não tem `produto_master_id` preenchido
-- Consulta de Preços e Lista de Compras passam a ter comportamento consistente entre usuários
-- Nenhum match fuzzy arriscado — apenas nome exato no mesmo CNPJ
+- Contadores incrementam corretamente a cada nota processada
+- Produtos existentes têm contadores recalculados com valores reais
+- Catálogo Master exibe números corretos de usuários e notas
 
