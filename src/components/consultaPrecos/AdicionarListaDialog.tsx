@@ -73,8 +73,8 @@ const AdicionarListaDialog = ({ open, onClose, produto }: AdicionarListaDialogPr
       await inserirProdutoNaLista(listaId);
       toast.success(`${formatarNomeParaExibicao(produto.nome_padrao)} adicionado à lista!`);
       onClose();
-    } catch (err) {
-      console.error('Erro ao adicionar à lista:', err);
+    } catch (err: any) {
+      console.error('Erro ao adicionar à lista:', { code: err?.code, message: err?.message, listaId, produtoId: produto.id });
       toast.error('Erro ao adicionar produto à lista');
     } finally {
       setAdicionando(null);
