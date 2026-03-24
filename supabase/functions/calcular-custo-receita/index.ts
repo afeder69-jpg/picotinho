@@ -424,7 +424,7 @@ Deno.serve(async (req) => {
       // 5. Se ainda não tem preço, usar do estoque
       if (precoUnitario === 0 && estoque?.preco_unitario_ultimo) {
         const nomeProdutoEstoque = estoque.produto_nome || nomeBusca;
-        const embalagem = detectarQuantidadeEmbalagem(nomeProdutoEstoque, estoque.preco_unitario_ultimo);
+        const embalagem = detectarQuantidadeEmbalagem(nomeProdutoEstoque, estoque.preco_unitario_ultimo, regrasEmbalagem);
         precoUnitario = embalagem.unitPrice;
         
         if (embalagem.isMultiUnit) {

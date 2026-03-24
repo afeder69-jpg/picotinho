@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
         
         try {
           // 🥚 DETECTAR PRODUTOS MULTI-UNIDADE (OVOS)
-          const embalagemInfo = detectarQuantidadeEmbalagem(produto.texto_original);
+          const embalagemInfo = detectarQuantidadeEmbalagem(produto.texto_original, regrasEmbalagem);
 
           let textoParaNormalizar = produto.texto_original;
           let obsEmbalagem: string | null = null;
