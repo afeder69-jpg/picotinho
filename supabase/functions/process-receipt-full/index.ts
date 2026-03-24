@@ -51,44 +51,67 @@ function normalizarUnidadeMedida(unidade: string): string {
   return mapeamento[unidadeLimpa] || unidadeLimpa;
 }
 
-// 🥚 Detectar quantidade em embalagem para produtos multi-unidade (ex: ovos)
-function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): { 
-  isMultiUnit: boolean; 
-  quantity: number; 
+// 🥚 Interfaces e função para detecção de embalagem via tabela de regras
+interface RegraConversao {
+  produto_pattern: string;
+  produto_exclusao_pattern: string | null;
+  ean_pattern: string | null;
+  tipo_embalagem: string;
+  qtd_por_embalagem: number;
+  unidade_consumo: string;
+  prioridade: number;
+}
+
+interface ResultadoEmbalagem {
+  isMultiUnit: boolean;
+  quantity: number;
   unitPrice: number;
-} {
+  tipo_embalagem: string | null;
+  unidade_consumo: string;
+}
+
+function detectarQuantidadeEmbalagem(
+  nomeProduto: string, 
+  precoTotal: number,
+  regras: RegraConversao[],
+  eanProduto?: string | null
+): ResultadoEmbalagem {
   const nomeUpper = nomeProduto.toUpperCase();
-  
-  // Verificar se é produto de ovos
-  const isOvo = /\b(OVO|OVOS)\b/.test(nomeUpper) && 
-                !/\b(MASSA|MACARRAO|PASCOA|CHOCOLATE)\b/.test(nomeUpper);
-  
-  if (!isOvo) {
-    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
-  }
-  
-  // Padrões de detecção de quantidade em embalagens
-  const patterns = [
-    /\bC\/(\d+)\b/i,           // C/30, C/20
-    /\b(\d+)\s*UN(IDADES)?\b/i, // 30 UNIDADES, 30UN
-    /\b(\d+)\s*OVO/i,          // 30 OVOS
-    /\bDZ(\d+)\b/i             // DZ12 (dúzia)
-  ];
-  
-  for (const pattern of patterns) {
-    const match = nomeProduto.match(pattern);
-    if (match) {
-      const qty = parseInt(match[1]);
-      if (qty > 1 && qty <= 60) { // Razoável para ovos
-        const unitPrice = precoTotal / qty;
-        console.log(`🥚 OVOS DETECTADO: "${nomeProduto}" → ${qty} unidades (R$ ${unitPrice.toFixed(2)}/un)`);
-        return { isMultiUnit: true, quantity: qty, unitPrice };
-      }
+  const fallback: ResultadoEmbalagem = { isMultiUnit: false, quantity: 1, unitPrice: precoTotal, tipo_embalagem: null, unidade_consumo: 'UN' };
+
+  if (!regras || regras.length === 0) return fallback;
+
+  // Passada 1: EAN tem prioridade
+  if (eanProduto) {
+    for (const regra of regras) {
+      if (!regra.ean_pattern) continue;
+      try {
+        if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
+        // Testar exclusão por nome
+        if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+        const qty = regra.qtd_por_embalagem;
+        if (qty > 1 && qty <= 100) {
+          console.log(`🥚 EMBALAGEM (EAN): "${nomeProduto}" → ${qty} ${regra.unidade_consumo} (${regra.tipo_embalagem})`);
+          return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+        }
+      } catch (e) { console.warn('Regex EAN inválido:', regra.ean_pattern, e); }
     }
   }
-  
-  // Não encontrou quantidade específica, assumir 1
-  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+
+  // Passada 2: Match por nome do produto
+  for (const regra of regras) {
+    try {
+      if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
+      if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+      const qty = regra.qtd_por_embalagem;
+      if (qty > 1 && qty <= 100) {
+        console.log(`🥚 EMBALAGEM (NOME): "${nomeProduto}" → ${qty} ${regra.unidade_consumo} (${regra.tipo_embalagem})`);
+        return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+      }
+    } catch (e) { console.warn('Regex nome inválido:', regra.produto_pattern, e); }
+  }
+
+  return fallback;
 }
 
   // 🔢 Limpar e validar EAN/GTIN (somente dígitos, rejeitar inválidos)
@@ -1006,7 +1029,16 @@ serve(async (req) => {
     
     console.log(`✅ ${regrasRecategorizacao?.length || 0} regras ativas carregadas`);
 
-    // 🛡️ PROTEÇÃO CONTRA RE-PROCESSAMENTO
+    // 🥚 Carregar regras de conversão de embalagem (uma vez por execução)
+    const { data: regrasConversao } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
+    console.log(`📦 Regras de conversão de embalagem carregadas: ${regrasEmbalagem.length}`);
+
     // Buscar nota com verificação de status processada
     const { data: nota, error: notaError } = await supabase
       .from("notas_imagens")
@@ -1309,7 +1341,7 @@ serve(async (req) => {
       
       // 🥚 TRATAMENTO ESPECIAL: Detectar quantidade em embalagem
       const valorTotal = item.quantidade * item.valor_unitario;
-      const embalagemInfo = detectarQuantidadeEmbalagem(item.descricao, valorTotal);
+      const embalagemInfo = detectarQuantidadeEmbalagem(item.descricao, valorTotal, regrasEmbalagem, item.ean_comercial || null);
       
       // Quantidade e preço final considerando embalagem
       const quantidadeFinal = embalagemInfo.isMultiUnit ? embalagemInfo.quantity : item.quantidade;
@@ -1349,12 +1381,18 @@ serve(async (req) => {
           produto_nome: item.descricao,
           categoria: categoriaFinal,
           quantidade: quantidadeFinal,
-          unidade_medida: normalizarUnidadeMedida(item.unidade || 'unidade'),
+          unidade_medida: embalagemInfo.isMultiUnit ? 'Un' : normalizarUnidadeMedida(item.unidade || 'unidade'),
           preco_unitario_ultimo: precoUnitarioFinal,
           compra_id: nota.compra_id,
           origem: "nota_fiscal",
-          imagem_url: null, // Será preenchido ao encontrar master
-          ean_comercial: item.ean_comercial || null, // ✅ Propagar EAN do item
+          imagem_url: null,
+          ean_comercial: item.ean_comercial || null,
+          // Campos de rastreabilidade da embalagem
+          tipo_embalagem: embalagemInfo.tipo_embalagem || null,
+          qtd_valor: embalagemInfo.isMultiUnit ? item.quantidade : null,
+          qtd_base: embalagemInfo.isMultiUnit ? embalagemInfo.quantity : null,
+          unidade_base: embalagemInfo.isMultiUnit ? embalagemInfo.unidade_consumo.toLowerCase() : null,
+          preco_por_unidade_base: embalagemInfo.isMultiUnit ? embalagemInfo.unitPrice : null,
         });
       }
     }
@@ -1410,7 +1448,7 @@ serve(async (req) => {
         
         // 🥚 Detectar embalagem multi-unidade
         const valorTotal = produto.quantidade * produto.preco_unitario_ultimo;
-        const embalagemInfo = detectarQuantidadeEmbalagem(produto.produto_nome, valorTotal);
+        const embalagemInfo = detectarQuantidadeEmbalagem(produto.produto_nome, valorTotal, regrasEmbalagem, produto.ean_comercial || null);
         
         let resultado: { found: boolean; master: any | null } | null = null;
         

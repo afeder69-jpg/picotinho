@@ -12,37 +12,66 @@ interface BackfillUsuarioRequest {
   produtos?: string[]; // opcional: limitar a um subconjunto
 }
 
-// Função auxiliar para detectar produtos multi-unidade (ovos, etc)
-function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number) {
+// Interfaces e função para detecção de embalagem via tabela de regras
+interface RegraConversao {
+  produto_pattern: string;
+  produto_exclusao_pattern: string | null;
+  ean_pattern: string | null;
+  tipo_embalagem: string;
+  qtd_por_embalagem: number;
+  unidade_consumo: string;
+  prioridade: number;
+}
+
+interface ResultadoEmbalagem {
+  isMultiUnit: boolean;
+  quantity: number;
+  unitPrice: number;
+  tipo_embalagem: string | null;
+  unidade_consumo: string;
+}
+
+function detectarQuantidadeEmbalagem(
+  nomeProduto: string, 
+  precoTotal: number,
+  regras: RegraConversao[],
+  eanProduto?: string | null
+): ResultadoEmbalagem {
   const nomeUpper = nomeProduto.toUpperCase();
-  
-  // Detectar se é ovo
-  if (!nomeUpper.includes('OVO') && !nomeUpper.includes('OVOS')) {
-    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
-  }
-  
-  // Padrões para detectar quantidade
-  const patterns = [
-    /C\/(\d+)/,           // C/30, C/20
-    /(\d+)\s*UN(?:IDADE)?S?/i,  // 30UN, 20 UNIDADES
-    /BANDEJAS?\s*C\/?\s*(\d+)/i, // BANDEJA C/30
-  ];
-  
-  for (const pattern of patterns) {
-    const match = nomeUpper.match(pattern);
-    if (match) {
-      const qty = parseInt(match[1]);
-      if (qty >= 6 && qty <= 100) { // Validação: ovos vêm entre 6 e 100 unidades
-        return {
-          isMultiUnit: true,
-          quantity: qty,
-          unitPrice: precoTotal / qty
-        };
-      }
+  const fallback: ResultadoEmbalagem = { isMultiUnit: false, quantity: 1, unitPrice: precoTotal, tipo_embalagem: null, unidade_consumo: 'UN' };
+
+  if (!regras || regras.length === 0) return fallback;
+
+  // Passada 1: EAN tem prioridade
+  if (eanProduto) {
+    for (const regra of regras) {
+      if (!regra.ean_pattern) continue;
+      try {
+        if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
+        if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+        const qty = regra.qtd_por_embalagem;
+        if (qty > 1 && qty <= 100) {
+          console.log(`🥚 EMBALAGEM (EAN): "${nomeProduto}" → ${qty} ${regra.unidade_consumo} (${regra.tipo_embalagem})`);
+          return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+        }
+      } catch (e) { console.warn('Regex EAN inválido:', regra.ean_pattern, e); }
     }
   }
-  
-  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+
+  // Passada 2: Match por nome
+  for (const regra of regras) {
+    try {
+      if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
+      if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+      const qty = regra.qtd_por_embalagem;
+      if (qty > 1 && qty <= 100) {
+        console.log(`🥚 EMBALAGEM (NOME): "${nomeProduto}" → ${qty} ${regra.unidade_consumo} (${regra.tipo_embalagem})`);
+        return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+      }
+    } catch (e) { console.warn('Regex nome inválido:', regra.produto_pattern, e); }
+  }
+
+  return fallback;
 }
 
 interface CandidatoPreco {
@@ -62,6 +91,15 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // 🥚 Carregar regras de conversão de embalagem
+    const { data: regrasConversao } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
 
     const body = (await req.json()) as BackfillUsuarioRequest;
     const { userId, produtos } = body || {};
@@ -138,7 +176,7 @@ serve(async (req) => {
 
             // 🥚 Aplicar lógica de detecção de ovos
             const nomeOriginal = item?.descricao ?? item?.nome ?? "";
-            const embalagem = detectarQuantidadeEmbalagem(nomeOriginal, valorUnit);
+            const embalagem = detectarQuantidadeEmbalagem(nomeOriginal, valorUnit, regrasEmbalagem);
             if (embalagem.isMultiUnit) {
               valorUnit = embalagem.unitPrice;
               console.log(`🥚 BACKFILL - OVO DETECTADO: ${nomeOriginal} → ${embalagem.quantity} unidades @ R$ ${valorUnit.toFixed(3)}`);

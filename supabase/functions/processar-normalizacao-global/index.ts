@@ -5,42 +5,62 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// 🥚 Detectar quantidade em embalagem para produtos multi-unidade (ex: ovos)
-function detectarQuantidadeEmbalagem(nomeProduto: string): { 
-  isMultiUnit: boolean; 
+// Interfaces e função para detecção de embalagem via tabela de regras
+interface RegraConversao {
+  produto_pattern: string;
+  produto_exclusao_pattern: string | null;
+  ean_pattern: string | null;
+  tipo_embalagem: string;
+  qtd_por_embalagem: number;
+  unidade_consumo: string;
+  prioridade: number;
+}
+
+interface ResultadoEmbalagemNorm {
+  isMultiUnit: boolean;
   quantity: number;
-} {
+  tipo_embalagem: string | null;
+  unidade_consumo: string;
+}
+
+function detectarQuantidadeEmbalagem(
+  nomeProduto: string,
+  regras: RegraConversao[],
+  eanProduto?: string | null
+): ResultadoEmbalagemNorm {
   const nomeUpper = nomeProduto.toUpperCase();
-  
-  // Verificar se é produto de ovos
-  const isOvo = /\b(OVO|OVOS)\b/.test(nomeUpper) && 
-                !/\b(MASSA|MACARRAO|PASCOA|CHOCOLATE)\b/.test(nomeUpper);
-  
-  if (!isOvo) {
-    return { isMultiUnit: false, quantity: 1 };
-  }
-  
-  // Padrões de detecção de quantidade em embalagens
-  const patterns = [
-    /\bC\/(\d+)\b/i,           // C/30, C/20
-    /\b(\d+)\s*UN(IDADES)?\b/i, // 30 UNIDADES, 30UN
-    /\b(\d+)\s*OVO/i,          // 30 OVOS
-    /\bDZ(\d+)\b/i             // DZ12 (dúzia)
-  ];
-  
-  for (const pattern of patterns) {
-    const match = nomeProduto.match(pattern);
-    if (match) {
-      const qty = parseInt(match[1]);
-      if (qty > 1 && qty <= 60) { // Razoável para ovos
-        console.log(`🥚 OVOS DETECTADO NA NORMALIZAÇÃO: "${nomeProduto}" → ${qty} unidades`);
-        return { isMultiUnit: true, quantity: qty };
-      }
+  const fallback: ResultadoEmbalagemNorm = { isMultiUnit: false, quantity: 1, tipo_embalagem: null, unidade_consumo: 'UN' };
+
+  if (!regras || regras.length === 0) return fallback;
+
+  if (eanProduto) {
+    for (const regra of regras) {
+      if (!regra.ean_pattern) continue;
+      try {
+        if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
+        if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+        const qty = regra.qtd_por_embalagem;
+        if (qty > 1 && qty <= 100) {
+          console.log(`🥚 EMBALAGEM NORM (EAN): "${nomeProduto}" → ${qty} ${regra.unidade_consumo}`);
+          return { isMultiUnit: true, quantity: qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+        }
+      } catch (e) { console.warn('Regex EAN inválido:', regra.ean_pattern, e); }
     }
   }
-  
-  // Não encontrou quantidade específica, assumir 1
-  return { isMultiUnit: false, quantity: 1 };
+
+  for (const regra of regras) {
+    try {
+      if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
+      if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+      const qty = regra.qtd_por_embalagem;
+      if (qty > 1 && qty <= 100) {
+        console.log(`🥚 EMBALAGEM NORM (NOME): "${nomeProduto}" → ${qty} ${regra.unidade_consumo}`);
+        return { isMultiUnit: true, quantity: qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+      }
+    } catch (e) { console.warn('Regex nome inválido:', regra.produto_pattern, e); }
+  }
+
+  return fallback;
 }
 
 interface ProdutoParaNormalizar {
@@ -89,6 +109,16 @@ Deno.serve(async (req) => {
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // 🥚 Carregar regras de conversão de embalagem
+    const { data: regrasConversao } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
+    console.log(`📦 Regras de conversão carregadas: ${regrasEmbalagem.length}`);
 
     // 1. BUSCAR PRODUTOS DE NOTAS NÃO NORMALIZADAS
     console.log('📋 Buscando produtos para normalizar...');
@@ -197,7 +227,7 @@ Deno.serve(async (req) => {
         
         try {
           // 🥚 DETECTAR PRODUTOS MULTI-UNIDADE (OVOS)
-          const embalagemInfo = detectarQuantidadeEmbalagem(produto.texto_original);
+          const embalagemInfo = detectarQuantidadeEmbalagem(produto.texto_original, regrasEmbalagem);
 
           let textoParaNormalizar = produto.texto_original;
           let obsEmbalagem: string | null = null;

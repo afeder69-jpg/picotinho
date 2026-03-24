@@ -2286,6 +2286,51 @@ export type Database = {
         }
         Relationships: []
       }
+      regras_conversao_embalagem: {
+        Row: {
+          ativo: boolean
+          created_at: string | null
+          ean_pattern: string | null
+          id: string
+          prioridade: number
+          produto_exclusao_pattern: string | null
+          produto_pattern: string
+          qtd_por_embalagem: number
+          tipo_conversao: string
+          tipo_embalagem: string
+          unidade_consumo: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string | null
+          ean_pattern?: string | null
+          id?: string
+          prioridade?: number
+          produto_exclusao_pattern?: string | null
+          produto_pattern: string
+          qtd_por_embalagem: number
+          tipo_conversao?: string
+          tipo_embalagem: string
+          unidade_consumo?: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string | null
+          ean_pattern?: string | null
+          id?: string
+          prioridade?: number
+          produto_exclusao_pattern?: string | null
+          produto_pattern?: string
+          qtd_por_embalagem?: number
+          tipo_conversao?: string
+          tipo_embalagem?: string
+          unidade_consumo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       regras_recategorizacao: {
         Row: {
           ativa: boolean | null
