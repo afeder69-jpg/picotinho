@@ -85,20 +85,35 @@ const AdicionarListaDialog = ({ open, onClose, produto }: AdicionarListaDialogPr
     if (!produto || !user || !novaLista.trim()) return;
     setCriandoNova(true);
     try {
+      // Etapa 1: criar lista
       const { data: lista, error: erroLista } = await supabase
         .from('listas_compras')
         .insert({ titulo: novaLista.trim(), user_id: user.id, origem: 'manual' })
         .select('id')
         .single();
 
-      if (erroLista || !lista) throw erroLista;
+      if (erroLista || !lista) {
+        console.error('Erro ao criar lista:', { code: (erroLista as any)?.code, message: erroLista?.message });
+        toast.error('Erro ao criar lista');
+        return;
+      }
 
-      await inserirProdutoNaLista(lista.id);
+      // Etapa 2: inserir produto
+      try {
+        await inserirProdutoNaLista(lista.id);
+      } catch (itemErr: any) {
+        console.error('Erro ao inserir produto na lista:', { code: itemErr?.code, message: itemErr?.message, listaId: lista.id, produtoId: produto.id });
+        // Rollback: deletar lista vazia
+        await supabase.from('listas_compras').delete().eq('id', lista.id);
+        toast.error('Erro ao adicionar produto à lista');
+        return;
+      }
+
       toast.success(`Lista "${novaLista.trim()}" criada com ${formatarNomeParaExibicao(produto.nome_padrao)}!`);
       onClose();
-    } catch (err) {
-      console.error('Erro ao criar lista:', err);
-      toast.error('Erro ao criar lista');
+    } catch (err: any) {
+      console.error('Erro inesperado:', err);
+      toast.error('Erro inesperado ao criar lista');
     } finally {
       setCriandoNova(false);
     }

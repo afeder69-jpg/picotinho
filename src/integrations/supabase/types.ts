@@ -468,7 +468,7 @@ export type Database = {
             foreignKeyName: "listas_compras_itens_produto_id_fkey"
             columns: ["produto_id"]
             isOneToOne: false
-            referencedRelation: "estoque_app"
+            referencedRelation: "produtos_master_global"
             referencedColumns: ["id"]
           },
         ]
