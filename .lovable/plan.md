@@ -1,52 +1,50 @@
 
 
-## Busca inteligente nos itens pendentes — mesmo padrão
+## Busca inteligente no filtro de produto dos Relatórios
 
 ### Situação atual
 
-A função `buscarCandidatosPendentes` (linha 481) já busca todos os candidatos pendentes do banco e filtra localmente com `normalizarParaBusca`. Ela já é accent-insensitive e case-insensitive. Porém, o comportamento difere do padrão adotado nas outras buscas:
+O Combobox dos Relatórios usa o filtro built-in do `Command` (linha 68-70):
 
-- Múltiplos termos com `;` usam lógica **OR** (qualquer termo basta)
-- Não há lógica **AND entre palavras** dentro de um mesmo termo — se digitar "farinha milho", busca a string inteira, não cada palavra separadamente
+```
+filter={(value, search) => normalizarParaBusca(value).includes(normalizarParaBusca(search)) ? 1 : 0}
+```
+
+Isso já é accent-insensitive e case-insensitive via `normalizarParaBusca`. Porém, trata o termo como string contígua — digitar "farinha milho" busca essa sequência exata, não cada palavra independentemente.
 
 ### Solução
 
-Manter a busca local (dados já vêm do banco, são candidatos pendentes — tabela diferente da `produtos_master_global`, então a RPC não se aplica). Ajustar a lógica de filtragem para:
+Alterar a função `filter` do Combobox **apenas na instância dos Relatórios** para suportar multi-palavra AND. Duas opções:
 
-1. Normalizar o termo (remover acentos, lowercase) — já faz via `normalizarParaBusca`
-2. Dividir em palavras individuais (split por espaço e `;`)
-3. Exigir que **todas** as palavras apareçam em **pelo menos um** dos campos concatenados (`texto_original`, `nome_padrao_sugerido`, `nome_base_sugerido`, `marca_sugerida`, etc.)
+- **Opção A**: Atualizar o componente `Combobox` globalmente para que o filtro padrão já use lógica AND entre palavras. Isso beneficia todo o sistema.
+- **Opção B**: Passar um `filter` customizado só nos Relatórios.
+
+A opção A é preferível — alinha o Combobox com o padrão do sistema sem esforço extra em cada uso.
 
 ### Alteração
 
-**1 arquivo**: `src/pages/admin/NormalizacaoGlobal.tsx` — função `buscarCandidatosPendentes`
+**1 arquivo**: `src/components/ui/combobox.tsx`
 
-Substituir a lógica de filtragem (linhas 499-515) por:
+Atualizar a função filter (linha 68-70) de:
 
 ```typescript
-// Extrair palavras (split por ; e espaços, mínimo 2 chars)
-const palavras = normalizarParaBusca(termo)
-  .split(/[;\s]+/)
-  .filter(p => p.length >= 2);
-
-if (palavras.length === 0) {
-  setResultadosBuscaPendentes([]);
-  return;
-}
-
-// Concatenar campos relevantes e exigir TODAS as palavras (AND)
-const filtrados = (data || []).filter(candidato => {
-  const textoCompleto = normalizarParaBusca(
-    [candidato.texto_original, candidato.nome_padrao_sugerido,
-     candidato.nome_base_sugerido, candidato.marca_sugerida,
-     candidato.categoria_sugerida, candidato.sugestao_sku_global]
-    .filter(Boolean).join(' ')
-  );
-  return palavras.every(p => textoCompleto.includes(p));
-});
-
-setResultadosBuscaPendentes(filtrados);
+filter={(value, search) => {
+  return normalizarParaBusca(value).includes(normalizarParaBusca(search)) ? 1 : 0;
+}}
 ```
 
-Isso alinha com o padrão das outras buscas: AND entre palavras, campos concatenados, accent/case-insensitive. Sem mudança no banco nem na RPC.
+Para:
+
+```typescript
+filter={(value, search) => {
+  const normalizedValue = normalizarParaBusca(value);
+  const palavras = normalizarParaBusca(search).split(/\s+/).filter(p => p.length >= 1);
+  if (palavras.length === 0) return 1;
+  return palavras.every(p => normalizedValue.includes(p)) ? 1 : 0;
+}}
+```
+
+Isso faz com que "farinha milho" encontre "Farinha de Milho Flocão Maratá 500g" — cada palavra precisa estar presente (AND), em qualquer posição, accent/case-insensitive.
+
+Nenhuma outra alteração necessária. O Combobox dos Relatórios (e de qualquer outro lugar que use o componente) passa automaticamente a ter busca multi-palavra AND.
 
