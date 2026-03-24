@@ -66,7 +66,10 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 z-50" align="start">
         <Command shouldFilter={shouldFilter} filter={(value, search) => {
-            return normalizarParaBusca(value).includes(normalizarParaBusca(search)) ? 1 : 0;
+            const normalizedValue = normalizarParaBusca(value);
+            const palavras = normalizarParaBusca(search).split(/\s+/).filter(p => p.length >= 1);
+            if (palavras.length === 0) return 1;
+            return palavras.every(p => normalizedValue.includes(p)) ? 1 : 0;
           }}>
           <CommandInput 
             placeholder={searchPlaceholder} 
