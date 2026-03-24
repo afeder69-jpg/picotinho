@@ -209,8 +209,16 @@ export default function ListaCompras() {
     );
   }
 
-  // Se houver produtos sem preço
-  const produtosSemPreco = comparacao?.produtosSemPreco || [];
+  // Separar itens livres (produto_id null e não presentes na comparação) dos produtos sem preço
+  const todosItens = lista.listas_compras_itens || [];
+  const produtosSemPrecoRaw = comparacao?.produtosSemPreco || [];
+  
+  // Itens livres: produto_id é null
+  const itensLivres = todosItens.filter((item: any) => !item.produto_id);
+  const itensLivresIds = new Set(itensLivres.map((i: any) => i.id));
+  
+  // Produtos sem preço: excluir itens livres
+  const produtosSemPreco = produtosSemPrecoRaw.filter((item: any) => !itensLivresIds.has(item.id));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -285,6 +293,39 @@ export default function ListaCompras() {
                             quantidade: item.quantidade || 1,
                             unidade_medida: item.unidade_medida || 'un',
                             comprado: item.comprado || false,
+                            produto_id: item.produto_id || null,
+                          }}
+                          onToggleComprado={handleToggleComprado}
+                          onQuantidadeChange={handleQuantidadeChange}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {itensLivres.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3 p-3 bg-muted/50 rounded-t border border-border">
+                      <div>
+                        <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                          💬 Lembretes / Itens livres
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {itensLivres.length} {itensLivres.length === 1 ? 'item' : 'itens'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {itensLivres.map((item: any) => (
+                        <ItemProdutoSemPreco
+                          key={item.id}
+                          item={{
+                            id: item.id,
+                            produto_nome: item.produto_nome,
+                            quantidade: item.quantidade || 1,
+                            unidade_medida: item.unidade_medida || 'un',
+                            comprado: item.comprado || false,
+                            produto_id: null,
                           }}
                           onToggleComprado={handleToggleComprado}
                           onQuantidadeChange={handleQuantidadeChange}
@@ -341,6 +382,39 @@ export default function ListaCompras() {
                             quantidade: item.quantidade || 1,
                             unidade_medida: item.unidade_medida || 'un',
                             comprado: item.comprado || false,
+                            produto_id: item.produto_id || null,
+                          }}
+                          onToggleComprado={handleToggleComprado}
+                          onQuantidadeChange={handleQuantidadeChange}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {itensLivres.length > 0 && (
+                  <div className="mb-6 mt-4">
+                    <div className="flex items-center justify-between mb-3 p-3 bg-muted/50 rounded-t border border-border">
+                      <div>
+                        <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                          💬 Lembretes / Itens livres
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {itensLivres.length} {itensLivres.length === 1 ? 'item' : 'itens'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {itensLivres.map((item: any) => (
+                        <ItemProdutoSemPreco
+                          key={item.id}
+                          item={{
+                            id: item.id,
+                            produto_nome: item.produto_nome,
+                            quantidade: item.quantidade || 1,
+                            unidade_medida: item.unidade_medida || 'un',
+                            comprado: item.comprado || false,
+                            produto_id: null,
                           }}
                           onToggleComprado={handleToggleComprado}
                           onQuantidadeChange={handleQuantidadeChange}

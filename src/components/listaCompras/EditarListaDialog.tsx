@@ -28,7 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { SeletorProdutoNormalizado } from "@/components/receitas/SeletorProdutoNormalizado";
-import { Pencil, Plus, Trash2, X, Minus } from "lucide-react";
+import { Pencil, Plus, Trash2, X, Minus, MessageSquare } from "lucide-react";
 
 interface EditarListaDialogProps {
   open: boolean;
@@ -42,6 +42,7 @@ interface EditarListaDialogProps {
       quantidade: number;
       unidade_medida: string;
       comprado: boolean;
+      produto_id?: string | null;
     }>;
   };
 }
@@ -52,9 +53,9 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
   
   const [produtosEditados, setProdutosEditados] = useState(lista.listas_compras_itens);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [textoLivre, setTextoLivre] = useState('');
   const prevOpenRef = useRef(open);
 
-  // Sincronizar apenas quando o dialog ABRIR (transição de false -> true)
   useEffect(() => {
     if (open && !prevOpenRef.current) {
       setProdutosEditados(lista.listas_compras_itens);
@@ -64,13 +65,11 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
 
   const handleAdicionarNovo = async (produto: any, qtd: number, unidade: string) => {
     try {
-      // Verificar se o produto já existe na lista
       const produtoExistente = produtosEditados.find(
         p => p.produto_nome.toUpperCase() === produto.nome_padrao.toUpperCase()
       );
 
       if (produtoExistente) {
-        // Atualizar quantidade do produto existente
         const novaQuantidade = produtoExistente.quantidade + qtd;
         
         const { error } = await supabase
@@ -97,7 +96,6 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         return;
       }
 
-      // Produto novo - inserir normalmente
       const { data, error } = await supabase
         .from('listas_compras_itens')
         .insert({
@@ -118,7 +116,8 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         produto_nome: data.produto_nome,
         quantidade: data.quantidade,
         unidade_medida: data.unidade_medida,
-        comprado: data.comprado
+        comprado: data.comprado,
+        produto_id: data.produto_id
       }]);
 
       toast({ 
@@ -132,6 +131,56 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
       console.error('Erro ao adicionar produto:', error);
       toast({
         title: "❌ Erro ao adicionar produto",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAdicionarItemLivre = async () => {
+    const texto = textoLivre.trim();
+    if (!texto) {
+      toast({ title: "Digite o nome do item", variant: "destructive" });
+      return;
+    }
+    if (texto.length > 200) {
+      toast({ title: "Máximo de 200 caracteres", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('listas_compras_itens')
+        .insert({
+          produto_nome: texto,
+          quantidade: 1,
+          unidade_medida: 'UN',
+          lista_id: lista.id,
+          comprado: false,
+          produto_id: null
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setProdutosEditados(prev => [...prev, {
+        id: data.id,
+        produto_nome: data.produto_nome,
+        quantidade: data.quantidade,
+        unidade_medida: data.unidade_medida,
+        comprado: data.comprado,
+        produto_id: null
+      }]);
+
+      setTextoLivre('');
+      toast({ title: `✅ Item livre adicionado!` });
+      
+      queryClient.invalidateQueries({ queryKey: ['lista-compras', lista.id] });
+    } catch (error: any) {
+      console.error('Erro ao adicionar item livre:', error);
+      toast({
+        title: "❌ Erro ao adicionar item",
         description: error.message,
         variant: "destructive"
       });
@@ -193,12 +242,12 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
   };
 
   const handleFechar = () => {
+    setTextoLivre('');
     onClose();
   };
 
   const handleExcluirLista = async () => {
     try {
-      // 1. Deletar todos os itens da lista
       const { error: errorItens } = await supabase
         .from('listas_compras_itens')
         .delete()
@@ -206,7 +255,6 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
 
       if (errorItens) throw errorItens;
 
-      // 2. Deletar a lista
       const { error: errorLista } = await supabase
         .from('listas_compras')
         .delete()
@@ -219,11 +267,9 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         description: `A lista "${lista.titulo}" foi removida.`
       });
 
-      // 3. Fechar dialogs
       setConfirmDeleteOpen(false);
       onClose();
       
-      // 4. Invalidar cache e navegar
       queryClient.invalidateQueries({ queryKey: ['listas-compras'] });
       navigate('/listas-compras');
       
@@ -252,18 +298,51 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* SEÇÃO 1: Adicionar novos produtos */}
+          {/* Adicionar produtos do catálogo */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
-              <Label className="text-base font-semibold">Adicionar Novos Produtos</Label>
+              <Label className="text-base font-semibold">Adicionar Produtos do Catálogo</Label>
             </div>
             <SeletorProdutoNormalizado onAdicionar={handleAdicionarNovo} />
           </div>
 
+          {/* Adicionar item livre */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              <Label className="text-base font-semibold">Adicionar Item Livre</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Digite qualquer item que queira lembrar de comprar
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={textoLivre}
+                onChange={(e) => setTextoLivre(e.target.value)}
+                placeholder="Ex: biscoito redondinho com creme de maçã"
+                maxLength={200}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAdicionarItemLivre();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAdicionarItemLivre}
+                disabled={!textoLivre.trim()}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
           <Separator />
 
-          {/* SEÇÃO 3: Produtos existentes na lista */}
+          {/* Produtos existentes na lista */}
           <div className="space-y-3">
             <Label className="text-base font-semibold">
               📋 Produtos na Lista ({produtosEditados.length})
@@ -275,7 +354,14 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
                     <div className="flex items-start gap-3">
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center justify-between">
-                          <p className="font-medium">{produto.produto_nome}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{produto.produto_nome}</p>
+                            {!produto.produto_id && (
+                              <Badge variant="secondary" className="text-xs">
+                                Item livre
+                              </Badge>
+                            )}
+                          </div>
                           <Button
                             variant="ghost"
                             size="sm"
