@@ -417,7 +417,10 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
         <DialogFooter className="flex justify-between gap-2">
           <Button 
             variant="destructive" 
-            onClick={() => setConfirmDeleteOpen(true)}
+            onClick={() => {
+              onClose();
+              setTimeout(() => setConfirmDeleteOpen(true), 150);
+            }}
             className="flex items-center gap-2"
           >
             <Trash2 className="h-4 w-4" />
