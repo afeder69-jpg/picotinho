@@ -101,6 +101,7 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
 
   const handleScannerResult = useCallback((ean: string) => {
     setModoScanner(false);
+    setBuscandoEan(true);
     buscarPorEan(ean);
   }, [buscarPorEan]);
 
