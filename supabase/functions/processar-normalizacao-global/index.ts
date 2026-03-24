@@ -1275,51 +1275,42 @@ async function criarProdutoMaster(
     }
   }
 
-  // 🔥 Chamada SQL usando INSERT direto para evitar conflito de ordem de parâmetros
-  const insertData: any = {
-    sku_global: normalizacao.sku_global,
-    nome_padrao: normalizacao.nome_padrao,
-    nome_base: normalizacao.nome_base,
-    categoria: normalizacao.categoria,
-    qtd_valor: normalizacao.qtd_valor,
-    qtd_unidade: normalizacao.qtd_unidade,
-    qtd_base: normalizacao.qtd_base,
-    unidade_base: normalizacao.unidade_base,
-    categoria_unidade: normalizacao.categoria_unidade,
-    granel: normalizacao.granel,
-    marca: normalizacao.marca,
-    tipo_embalagem: normalizacao.tipo_embalagem,
-    imagem_url: normalizacao.imagem_url || null,
-    imagem_path: normalizacao.imagem_path || null,
-    confianca_normalizacao: normalizacao.confianca,
-    total_usuarios: 1,
-    total_notas: 1,
-    status: 'ativo'
-  };
-
-  // Incluir codigo_barras se disponível
+  // 🔥 Usar RPC upsert_produto_master para incrementar contadores corretamente
+  let codigoBarrasLimpo: string | null = null;
   if (codigoBarras) {
     const eanLimpo = codigoBarras.replace(/\D/g, '');
     if (eanLimpo.length >= 8) {
-      insertData.codigo_barras = eanLimpo;
+      codigoBarrasLimpo = eanLimpo;
     }
   }
 
-  const { data, error } = await supabase
-    .from('produtos_master_global')
-    .upsert(insertData, {
-      onConflict: 'sku_global',
-      ignoreDuplicates: false
-    })
-    .select()
-    .single();
+  const { data: rpcResult, error } = await supabase.rpc('upsert_produto_master', {
+    p_sku_global: normalizacao.sku_global,
+    p_nome_padrao: normalizacao.nome_padrao,
+    p_nome_base: normalizacao.nome_base,
+    p_categoria: normalizacao.categoria,
+    p_qtd_valor: normalizacao.qtd_valor,
+    p_qtd_unidade: normalizacao.qtd_unidade,
+    p_qtd_base: normalizacao.qtd_base,
+    p_unidade_base: normalizacao.unidade_base,
+    p_categoria_unidade: normalizacao.categoria_unidade,
+    p_granel: normalizacao.granel,
+    p_marca: normalizacao.marca,
+    p_tipo_embalagem: normalizacao.tipo_embalagem,
+    p_imagem_url: normalizacao.imagem_url || null,
+    p_imagem_path: normalizacao.imagem_path || null,
+    p_confianca: normalizacao.confianca,
+    p_codigo_barras: codigoBarrasLimpo
+  });
 
   if (error) {
     throw new Error(`Erro ao criar/atualizar produto master: ${error.message}`);
   }
   
-  console.log(`✅ Produto master salvo: ${data.nome_padrao} (ID: ${data.id})`);
-  return { id: data.id, nome_padrao: data.nome_padrao };
+  const masterId = rpcResult?.id;
+  const operacao = rpcResult?.operacao || 'UNKNOWN';
+  console.log(`✅ Produto master ${operacao}: ${normalizacao.nome_padrao} (ID: ${masterId})`);
+  return { id: masterId, nome_padrao: normalizacao.nome_padrao };
 }
 
 async function criarCandidato(
