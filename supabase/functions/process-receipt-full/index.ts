@@ -1439,7 +1439,7 @@ serve(async (req) => {
         
         // 🥚 Detectar embalagem multi-unidade
         const valorTotal = produto.quantidade * produto.preco_unitario_ultimo;
-        const embalagemInfo = detectarQuantidadeEmbalagem(produto.produto_nome, valorTotal);
+        const embalagemInfo = detectarQuantidadeEmbalagem(produto.produto_nome, valorTotal, regrasEmbalagem, produto.ean_comercial || null);
         
         let resultado: { found: boolean; master: any | null } | null = null;
         
