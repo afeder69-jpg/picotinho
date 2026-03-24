@@ -64,6 +64,100 @@ function normalizarNomeProduto(nome: string): string {
   return normalizado;
 }
 
+interface RegraConversao {
+  produto_pattern: string;
+  produto_exclusao_pattern: string | null;
+  ean_pattern: string | null;
+  tipo_embalagem: string;
+  qtd_por_embalagem: number;
+  unidade_consumo: string;
+  prioridade: number;
+}
+
+interface ResultadoEmbalagem {
+  isMultiUnit: boolean;
+  quantity: number;
+  unitPrice: number;
+  tipo_embalagem: string | null;
+  unidade_consumo: string;
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const sanitized = value
+      .replace(/R\$/gi, '')
+      .replace(/\s+/g, '')
+      .replace(/\.(?=\d{3}(\D|$))/g, '')
+      .replace(',', '.');
+
+    const parsed = Number(sanitized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function detectarQuantidadeEmbalagem(
+  nomeProduto: string,
+  precoTotal: number,
+  regras: RegraConversao[],
+  eanProduto?: string | null
+): ResultadoEmbalagem {
+  const nomeUpper = nomeProduto.toUpperCase();
+  const fallback: ResultadoEmbalagem = {
+    isMultiUnit: false,
+    quantity: 1,
+    unitPrice: precoTotal,
+    tipo_embalagem: null,
+    unidade_consumo: 'UN',
+  };
+
+  if (!regras || regras.length === 0) return fallback;
+
+  if (eanProduto) {
+    for (const regra of regras) {
+      if (!regra.ean_pattern) continue;
+      try {
+        if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
+        if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+        const qty = regra.qtd_por_embalagem;
+        if (qty > 1 && qty <= 100) {
+          return {
+            isMultiUnit: true,
+            quantity: qty,
+            unitPrice: precoTotal / qty,
+            tipo_embalagem: regra.tipo_embalagem,
+            unidade_consumo: regra.unidade_consumo,
+          };
+        }
+      } catch (error) {
+        console.warn('Regex EAN inválido em regras_conversao_embalagem:', regra.ean_pattern, error);
+      }
+    }
+  }
+
+  for (const regra of regras) {
+    try {
+      if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
+      if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+      const qty = regra.qtd_por_embalagem;
+      if (qty > 1 && qty <= 100) {
+        return {
+          isMultiUnit: true,
+          quantity: qty,
+          unitPrice: precoTotal / qty,
+          tipo_embalagem: regra.tipo_embalagem,
+          unidade_consumo: regra.unidade_consumo,
+        };
+      }
+    } catch (error) {
+      console.warn('Regex nome inválido em regras_conversao_embalagem:', regra.produto_pattern, error);
+    }
+  }
+
+  return fallback;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });

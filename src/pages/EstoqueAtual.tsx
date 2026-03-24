@@ -624,6 +624,25 @@ const EstoqueAtual = () => {
     return normalizarParaBusca(texto).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   };
 
+  const obterHistoricoProduto = (item: EstoqueItem) => {
+    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome_normalizado || item.produto_nome;
+    const chavesBusca = [
+      item.id,
+      nomeExibicao,
+      nomeExibicao ? normalizarTexto(nomeExibicao) : null,
+      item.produto_nome,
+      item.produto_nome ? normalizarTexto(item.produto_nome) : null,
+    ].filter(Boolean) as string[];
+
+    for (const chave of chavesBusca) {
+      if (historicoPrecos[chave]) {
+        return historicoPrecos[chave];
+      }
+    }
+
+    return null;
+  };
+
   // Função para encontrar preço atual de um produto (agora dinamicamente pela área)
   const encontrarPrecoAtual = (nomeProduto: string) => {
     console.log(`🔍 Buscando preço atual dinâmico para: "${nomeProduto}"`);
