@@ -75,13 +75,24 @@ Deno.serve(async (req) => {
     }
 
     if (tipo === 'nome') {
-      const searchTerm = termo.trim();
-      const { data } = await supabase
-        .from('produtos_master_global')
-        .select('id, nome_padrao, nome_base, marca, categoria, codigo_barras, imagem_url, sku_global, qtd_valor, qtd_unidade, unidade_base')
-        .ilike('nome_padrao', `%${searchTerm}%`)
-        .order('total_notas', { ascending: false, nullsFirst: false })
-        .limit(20);
+      const normalizado = termo.trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const palavras = normalizado.split(/\s+/).filter((p: string) => p.length >= 2);
+
+      if (palavras.length === 0) {
+        return new Response(JSON.stringify({ produtos: [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data, error: rpcError } = await supabase.rpc('buscar_produtos_master_por_palavras', {
+        p_palavras: palavras,
+      });
+
+      if (rpcError) {
+        console.error('[consultar-precos] Erro RPC busca:', rpcError);
+      }
+
       return new Response(JSON.stringify({ produtos: data || [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

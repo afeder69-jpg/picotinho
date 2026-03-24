@@ -2972,6 +2972,22 @@ export type Database = {
           variante: string
         }[]
       }
+      buscar_produtos_master_por_palavras: {
+        Args: { p_palavras: string[] }
+        Returns: {
+          categoria: string
+          codigo_barras: string
+          id: string
+          imagem_url: string
+          marca: string
+          nome_base: string
+          nome_padrao: string
+          qtd_unidade: string
+          qtd_valor: number
+          sku_global: string
+          unidade_base: string
+        }[]
+      }
       buscar_produtos_similares: {
         Args: {
           categoria_filtro: string
@@ -3360,6 +3376,7 @@ export type Database = {
         Args: { text1: string; text2: string }
         Returns: number
       }
+      unaccent: { Args: { "": string }; Returns: string }
       update_my_profile: {
         Args: { p_avatar_url?: string; p_nome?: string; p_telefone?: string }
         Returns: {
