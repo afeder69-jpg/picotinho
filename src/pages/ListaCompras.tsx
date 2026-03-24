@@ -293,6 +293,39 @@ export default function ListaCompras() {
                             quantidade: item.quantidade || 1,
                             unidade_medida: item.unidade_medida || 'un',
                             comprado: item.comprado || false,
+                            produto_id: item.produto_id || null,
+                          }}
+                          onToggleComprado={handleToggleComprado}
+                          onQuantidadeChange={handleQuantidadeChange}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {itensLivres.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3 p-3 bg-muted/50 rounded-t border border-border">
+                      <div>
+                        <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                          💬 Lembretes / Itens livres
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {itensLivres.length} {itensLivres.length === 1 ? 'item' : 'itens'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {itensLivres.map((item: any) => (
+                        <ItemProdutoSemPreco
+                          key={item.id}
+                          item={{
+                            id: item.id,
+                            produto_nome: item.produto_nome,
+                            quantidade: item.quantidade || 1,
+                            unidade_medida: item.unidade_medida || 'un',
+                            comprado: item.comprado || false,
+                            produto_id: null,
                           }}
                           onToggleComprado={handleToggleComprado}
                           onQuantidadeChange={handleQuantidadeChange}
