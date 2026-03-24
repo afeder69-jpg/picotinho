@@ -1,72 +1,71 @@
 
 
-## Correção: contadores `total_usuarios` e `total_notas` sempre zerados/incorretos no Catálogo Master
+## Busca inteligente multi-campo na Consulta de Preços
 
-### Causa raiz
+### Abordagem
 
-Existem **dois caminhos** para criar/atualizar produtos master, e eles são inconsistentes:
+Criar uma RPC SQL que busca em `nome_padrao`, `nome_base` e `marca` simultaneamente, com suporte a múltiplas palavras, sem acentos e case-insensitive. A busca exige que **todas** as palavras digitadas apareçam em **pelo menos um** dos três campos concatenados.
 
-1. **Função SQL `upsert_produto_master`** (migration `20251004203544`) — faz `total_usuarios = COALESCE(total_usuarios, 0) + 1` no UPDATE. Correto.
+### Alterações
 
-2. **Edge Function `processar-normalizacao-global`** (linha 1295-1296, 1310) — usa `.upsert()` do Supabase JS com valores fixos `total_usuarios: 1, total_notas: 1`. No conflito (upsert), esses valores **sobrescrevem** os contadores existentes, resetando-os para 1 em vez de incrementar.
+**1. Migration SQL** — criar função `buscar_produtos_master_por_palavras`:
 
-O produto "FARINHA DE MILHO FLOCÃO MARATÁ 500G" provavelmente foi criado ou atualizado pela Edge Function, que fixou os contadores em 1 (ou 0 se houve algum outro fluxo de criação que não inicializou esses campos).
+```sql
+CREATE EXTENSION IF NOT EXISTS unaccent;
 
-### Correção proposta
+CREATE OR REPLACE FUNCTION buscar_produtos_master_por_palavras(p_palavras TEXT[])
+RETURNS TABLE (...) AS $$
+DECLARE
+  v_query TEXT;
+  v_palavra TEXT;
+  v_search_field TEXT := 'unaccent(lower(COALESCE(nome_padrao,'''') || '' '' || COALESCE(nome_base,'''') || '' '' || COALESCE(marca,'''')))';
+BEGIN
+  v_query := 'SELECT id, nome_padrao, nome_base, marca, categoria, codigo_barras, imagem_url, sku_global, qtd_valor, qtd_unidade, unidade_base FROM produtos_master_global WHERE status = ''ativo''';
+  
+  FOREACH v_palavra IN ARRAY p_palavras LOOP
+    v_query := v_query || ' AND ' || v_search_field || ' LIKE ''%'' || unaccent(lower(' || quote_literal(v_palavra) || ')) || ''%''';
+  END LOOP;
+  
+  v_query := v_query || ' ORDER BY total_notas DESC NULLS LAST LIMIT 20';
+  RETURN QUERY EXECUTE v_query;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+```
 
-**1 arquivo**: `supabase/functions/processar-normalizacao-global/index.ts`
+Concatenar os 3 campos garante que "marata flocao" encontra o produto mesmo que "maratá" esteja em `marca` e "flocão" em `nome_padrao`. Sem ruído extra — são campos estruturados do mesmo produto.
 
-Substituir o `.upsert()` direto por lógica de INSERT/UPDATE separada que incremente os contadores corretamente:
+**2. Edge Function** — `supabase/functions/consultar-precos-produto/index.ts`
 
-- **INSERT** (produto novo): `total_usuarios: 1, total_notas: 1` — correto como está
-- **UPDATE** (produto existente): usar `.update()` com incremento via SQL raw ou fazer um select antes e somar
-
-A abordagem mais simples e segura: usar a função SQL `upsert_produto_master` que já existe e já faz o incremento correto, em vez de chamar `.upsert()` direto.
+Substituir o bloco `tipo === 'nome'` (linhas 77-88) para normalizar o termo, dividir em palavras, e chamar a RPC:
 
 ```typescript
-// Substituir o .upsert() direto (linhas ~1308-1315) por:
-const { data, error } = await supabase.rpc('upsert_produto_master', {
-  p_sku_global: normalizacao.sku_global,
-  p_nome_padrao: normalizacao.nome_padrao,
-  p_nome_base: normalizacao.nome_base,
-  p_categoria: normalizacao.categoria,
-  p_qtd_valor: normalizacao.qtd_valor,
-  p_qtd_unidade: normalizacao.qtd_unidade,
-  p_qtd_base: normalizacao.qtd_base,
-  p_unidade_base: normalizacao.unidade_base,
-  p_categoria_unidade: normalizacao.categoria_unidade,
-  p_granel: normalizacao.granel,
-  p_marca: normalizacao.marca,
-  p_tipo_embalagem: normalizacao.tipo_embalagem,
-  p_imagem_url: normalizacao.imagem_url || null,
-  p_imagem_path: normalizacao.imagem_path || null,
-  p_confianca: normalizacao.confianca
-});
+if (tipo === 'nome') {
+  const normalizado = termo.trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const palavras = normalizado.split(/\s+/).filter(p => p.length >= 2);
+  
+  if (palavras.length === 0) {
+    return new Response(JSON.stringify({ produtos: [] }), { headers: ... });
+  }
+
+  const { data } = await supabase.rpc('buscar_produtos_master_por_palavras', {
+    p_palavras: palavras
+  });
+
+  return new Response(JSON.stringify({ produtos: data || [] }), { headers: ... });
+}
 ```
 
-Porém a função SQL `upsert_produto_master` não suporta `codigo_barras` nem retorna o `id`. Então precisamos:
+### Por que incluir `nome_base` e `marca`
 
-**2 arquivo**: Nova migration SQL para atualizar `upsert_produto_master`:
-- Adicionar parâmetro `p_codigo_barras TEXT DEFAULT NULL`
-- Retornar o `id` do registro no JSONB de retorno
-- Manter a lógica de incremento `+1`
+- `nome_base`: versão simplificada sem quantidade (ex: "FARINHA DE MILHO FLOCÃO MARATÁ") — útil quando o usuário digita sem a gramatura
+- `marca`: usuários frequentemente buscam por marca ("marata", "yoki") — se a marca está só nesse campo e não no `nome_padrao`, a busca atual não encontra
+- Concatenar os 3 não degrada performance — é uma operação simples em texto com LIMIT 20
 
-**3 (opcional)**: Migration SQL para recalcular os contadores existentes com base nos dados reais:
-```sql
-UPDATE produtos_master_global pmg SET
-  total_notas = (SELECT COUNT(*) FROM estoque_app WHERE produto_master_id = pmg.id),
-  total_usuarios = (SELECT COUNT(DISTINCT user_id) FROM estoque_app WHERE produto_master_id = pmg.id);
-```
+### Resultado
 
-### Arquivos a alterar
-
-1. `supabase/functions/processar-normalizacao-global/index.ts` — usar RPC em vez de `.upsert()` direto
-2. Nova migration SQL — atualizar função `upsert_produto_master` (adicionar `codigo_barras`, retornar `id`)
-3. Nova migration SQL — recalcular contadores existentes com dados reais do `estoque_app`
-
-### Resultado esperado
-
-- Contadores incrementam corretamente a cada nota processada
-- Produtos existentes têm contadores recalculados com valores reais
-- Catálogo Master exibe números corretos de usuários e notas
+- "flocao" → encontra (accent-insensitive via `unaccent`)
+- "marata 500" → encontra (multi-palavra AND em campos concatenados)
+- "yoki" → encontra mesmo se só estiver no campo `marca`
+- Busca rápida (debounce 400ms no frontend + LIMIT 20 no SQL)
 
