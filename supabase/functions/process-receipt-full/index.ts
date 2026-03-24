@@ -51,44 +51,67 @@ function normalizarUnidadeMedida(unidade: string): string {
   return mapeamento[unidadeLimpa] || unidadeLimpa;
 }
 
-// 🥚 Detectar quantidade em embalagem para produtos multi-unidade (ex: ovos)
-function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number): { 
-  isMultiUnit: boolean; 
-  quantity: number; 
+// 🥚 Interfaces e função para detecção de embalagem via tabela de regras
+interface RegraConversao {
+  produto_pattern: string;
+  produto_exclusao_pattern: string | null;
+  ean_pattern: string | null;
+  tipo_embalagem: string;
+  qtd_por_embalagem: number;
+  unidade_consumo: string;
+  prioridade: number;
+}
+
+interface ResultadoEmbalagem {
+  isMultiUnit: boolean;
+  quantity: number;
   unitPrice: number;
-} {
+  tipo_embalagem: string | null;
+  unidade_consumo: string;
+}
+
+function detectarQuantidadeEmbalagem(
+  nomeProduto: string, 
+  precoTotal: number,
+  regras: RegraConversao[],
+  eanProduto?: string | null
+): ResultadoEmbalagem {
   const nomeUpper = nomeProduto.toUpperCase();
-  
-  // Verificar se é produto de ovos
-  const isOvo = /\b(OVO|OVOS)\b/.test(nomeUpper) && 
-                !/\b(MASSA|MACARRAO|PASCOA|CHOCOLATE)\b/.test(nomeUpper);
-  
-  if (!isOvo) {
-    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
-  }
-  
-  // Padrões de detecção de quantidade em embalagens
-  const patterns = [
-    /\bC\/(\d+)\b/i,           // C/30, C/20
-    /\b(\d+)\s*UN(IDADES)?\b/i, // 30 UNIDADES, 30UN
-    /\b(\d+)\s*OVO/i,          // 30 OVOS
-    /\bDZ(\d+)\b/i             // DZ12 (dúzia)
-  ];
-  
-  for (const pattern of patterns) {
-    const match = nomeProduto.match(pattern);
-    if (match) {
-      const qty = parseInt(match[1]);
-      if (qty > 1 && qty <= 60) { // Razoável para ovos
-        const unitPrice = precoTotal / qty;
-        console.log(`🥚 OVOS DETECTADO: "${nomeProduto}" → ${qty} unidades (R$ ${unitPrice.toFixed(2)}/un)`);
-        return { isMultiUnit: true, quantity: qty, unitPrice };
-      }
+  const fallback: ResultadoEmbalagem = { isMultiUnit: false, quantity: 1, unitPrice: precoTotal, tipo_embalagem: null, unidade_consumo: 'UN' };
+
+  if (!regras || regras.length === 0) return fallback;
+
+  // Passada 1: EAN tem prioridade
+  if (eanProduto) {
+    for (const regra of regras) {
+      if (!regra.ean_pattern) continue;
+      try {
+        if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
+        // Testar exclusão por nome
+        if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+        const qty = regra.qtd_por_embalagem;
+        if (qty > 1 && qty <= 100) {
+          console.log(`🥚 EMBALAGEM (EAN): "${nomeProduto}" → ${qty} ${regra.unidade_consumo} (${regra.tipo_embalagem})`);
+          return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+        }
+      } catch (e) { console.warn('Regex EAN inválido:', regra.ean_pattern, e); }
     }
   }
-  
-  // Não encontrou quantidade específica, assumir 1
-  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+
+  // Passada 2: Match por nome do produto
+  for (const regra of regras) {
+    try {
+      if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
+      if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+      const qty = regra.qtd_por_embalagem;
+      if (qty > 1 && qty <= 100) {
+        console.log(`🥚 EMBALAGEM (NOME): "${nomeProduto}" → ${qty} ${regra.unidade_consumo} (${regra.tipo_embalagem})`);
+        return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+      }
+    } catch (e) { console.warn('Regex nome inválido:', regra.produto_pattern, e); }
+  }
+
+  return fallback;
 }
 
   // 🔢 Limpar e validar EAN/GTIN (somente dígitos, rejeitar inválidos)

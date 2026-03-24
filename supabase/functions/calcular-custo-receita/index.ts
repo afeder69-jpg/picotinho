@@ -49,34 +49,61 @@ function calcularSimilaridade(texto1: string, texto2: string): number {
   return matches.length / palavras1.length;
 }
 
-function detectarQuantidadeEmbalagem(nomeProduto: string, precoTotal: number) {
+interface RegraConversao {
+  produto_pattern: string;
+  produto_exclusao_pattern: string | null;
+  ean_pattern: string | null;
+  tipo_embalagem: string;
+  qtd_por_embalagem: number;
+  unidade_consumo: string;
+  prioridade: number;
+}
+
+interface ResultadoEmbalagem {
+  isMultiUnit: boolean;
+  quantity: number;
+  unitPrice: number;
+  tipo_embalagem: string | null;
+  unidade_consumo: string;
+}
+
+function detectarQuantidadeEmbalagem(
+  nomeProduto: string, 
+  precoTotal: number,
+  regras: RegraConversao[],
+  eanProduto?: string | null
+): ResultadoEmbalagem {
   const nomeUpper = nomeProduto.toUpperCase();
-  
-  if (!nomeUpper.includes('OVO') && !nomeUpper.includes('OVOS')) {
-    return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
-  }
-  
-  const patterns = [
-    /C\/(\d+)/,
-    /(\d+)\s*UN(?:IDADE)?S?/i,
-    /BANDEJAS?\s*C\/?\s*(\d+)/i,
-  ];
-  
-  for (const pattern of patterns) {
-    const match = nomeUpper.match(pattern);
-    if (match) {
-      const qty = parseInt(match[1]);
-      if (qty >= 6 && qty <= 100) {
-        return {
-          isMultiUnit: true,
-          quantity: qty,
-          unitPrice: precoTotal / qty
-        };
-      }
+  const fallback: ResultadoEmbalagem = { isMultiUnit: false, quantity: 1, unitPrice: precoTotal, tipo_embalagem: null, unidade_consumo: 'UN' };
+
+  if (!regras || regras.length === 0) return fallback;
+
+  if (eanProduto) {
+    for (const regra of regras) {
+      if (!regra.ean_pattern) continue;
+      try {
+        if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
+        if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+        const qty = regra.qtd_por_embalagem;
+        if (qty > 1 && qty <= 100) {
+          return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+        }
+      } catch (e) { console.warn('Regex EAN inválido:', regra.ean_pattern, e); }
     }
   }
-  
-  return { isMultiUnit: false, quantity: 1, unitPrice: precoTotal };
+
+  for (const regra of regras) {
+    try {
+      if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
+      if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
+      const qty = regra.qtd_por_embalagem;
+      if (qty > 1 && qty <= 100) {
+        return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+      }
+    } catch (e) { console.warn('Regex nome inválido:', regra.produto_pattern, e); }
+  }
+
+  return fallback;
 }
 
 Deno.serve(async (req) => {
