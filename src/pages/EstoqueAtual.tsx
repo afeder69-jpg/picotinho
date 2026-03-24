@@ -378,38 +378,27 @@ const EstoqueAtual = () => {
         console.warn('⚠️ Erro na função de histórico, usando fallback:', error);
       }
 
-      // Fallback: usar função de preços atuais
-      const { data: precoAtualData } = await supabase.functions.invoke('preco-atual-usuario', {
-        body: {
-          userId: user.id,
-          latitude: coordenadas.latitude,
-          longitude: coordenadas.longitude,
-          raioKm: raio
-        }
-      });
+      // ✅ CORREÇÃO: Não usar fallback por nome que pode distorcer preço unitário
+      // O fallback anterior usava preco-atual-usuario que busca por similaridade de nome
+      // e pode retornar preço de embalagem (ex: R$14,65 da bandeja) como preço unitário
+      console.warn('⚠️ Histórico indisponível - usando preços do próprio estoque como fallback seguro');
       
-      if (precoAtualData?.success) {
-        // Converter dados do fallback para o formato esperado
-        const historicoMap: {[key: string]: any} = {};
-        
-        precoAtualData.resultados?.forEach((item: any) => {
-          historicoMap[item.produto_nome] = {
+      // Fallback seguro: usar apenas os dados que já estão no estoque (preco_unitario_ultimo)
+      const historicoMap: {[key: string]: any} = {};
+      estoque.forEach((item) => {
+        if (item.id && item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
+          historicoMap[item.id] = {
             ultimaCompraUsuario: {
-              data: item.data_atualizacao,
-              preco: item.valor_unitario,
+              data: item.updated_at,
+              preco: item.preco_unitario_ultimo,
               quantidade: 1
             },
-            menorPrecoArea: {
-              data: item.data_atualizacao,
-              preco: item.valor_unitario,
-              quantidade: 1
-            }
+            menorPrecoArea: null
           };
-        });
-
-        console.log('⚠️ FALLBACK: Histórico carregado via fallback:', historicoMap);
-        setHistoricoPrecos(historicoMap);
-      }
+        }
+      });
+      console.log('✅ Fallback seguro aplicado com preços do estoque:', Object.keys(historicoMap).length, 'produtos');
+      setHistoricoPrecos(historicoMap);
     } catch (error) {
       console.error('Erro ao carregar histórico de preços:', error);
     } finally {
@@ -804,18 +793,28 @@ const EstoqueAtual = () => {
             ? item.produto_master[0].imagem_url
             : (item.imagem_url || itemExistente.imagem_url);
           
+          // ✅ CORREÇÃO: Preservar preço do item MAIS RECENTE (por updated_at)
+          const itemMaisRecente = new Date(item.updated_at) > new Date(itemExistente.updated_at);
+          const precoFinal = itemMaisRecente 
+            ? (item.preco_unitario_ultimo || itemExistente.preco_unitario_mais_recente)
+            : (itemExistente.preco_unitario_mais_recente || item.preco_unitario_ultimo);
+          
           produtosMap.set(chave, {
             ...itemExistente,
+            // Se o item atual é mais recente, usar seu id como principal
+            id: itemMaisRecente ? item.id : itemExistente.id,
             quantidade_total: itemExistente.quantidade_total + item.quantidade,
-            quantidade: itemExistente.quantidade_total + item.quantidade, // Para compatibilidade
-            preco_unitario_mais_recente: item.preco_unitario_ultimo || itemExistente.preco_unitario_mais_recente,
-            preco_unitario_ultimo: item.preco_unitario_ultimo || itemExistente.preco_unitario_ultimo, // Para compatibilidade
+            quantidade: itemExistente.quantidade_total + item.quantidade,
+            preco_unitario_mais_recente: precoFinal,
+            preco_unitario_ultimo: precoFinal,
             ultima_atualizacao: item.updated_at > itemExistente.ultima_atualizacao ? item.updated_at : itemExistente.ultima_atualizacao,
-            updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at, // Para compatibilidade
+            updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at,
             ids_originais: [...itemExistente.ids_originais, item.id],
             nomes_originais: [...itemExistente.nomes_originais, item.produto_nome],
             itens_originais: itemExistente.itens_originais + 1,
-            imagem_url: imagemAtualizada // Atualizar com imagem mais relevante
+            imagem_url: imagemAtualizada,
+            // Preservar master_id do mais recente
+            produto_master_id: itemMaisRecente ? (item.produto_master_id || itemExistente.produto_master_id) : (itemExistente.produto_master_id || item.produto_master_id),
           });
         } else {
           // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)
