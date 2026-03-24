@@ -183,6 +183,19 @@ serve(async (req) => {
 
     console.log(`🔍 Buscando histórico para ${produtos.length} produtos do usuário ${userId}`);
 
+    const { data: regrasConversao, error: regrasErro } = await supabase
+      .from('regras_conversao_embalagem')
+      .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
+      .eq('ativo', true)
+      .eq('tipo_conversao', 'fixa')
+      .order('prioridade', { ascending: true });
+
+    if (regrasErro) {
+      console.warn('⚠️ Não foi possível carregar regras de conversão de embalagem:', regrasErro.message);
+    }
+
+    const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
+
     const resultado = [];
 
     for (const produtoData of produtos) {
