@@ -1301,17 +1301,35 @@ const EstoqueAtual = () => {
 
     try {
       const quantidadeAnterior = itemEditando.quantidade;
+      const idsOriginais = itemEditando.ids_originais || [itemEditando.id];
+      const idPrincipal = idsOriginais[0];
+      const idsSecundarios = idsOriginais.slice(1);
       
-      // Atualizar estoque
+      // Atualizar registro principal com a nova quantidade
       const { error } = await supabase
         .from('estoque_app')
         .update({
           quantidade: novaQuantidade,
           updated_at: new Date().toISOString()
         })
-        .eq('id', itemEditando.id);
+        .eq('id', idPrincipal);
 
       if (error) throw error;
+
+      // Zerar registros secundários do grupo consolidado
+      if (idsSecundarios.length > 0) {
+        const { error: erroSecundarios } = await supabase
+          .from('estoque_app')
+          .update({
+            quantidade: 0,
+            updated_at: new Date().toISOString()
+          })
+          .in('id', idsSecundarios);
+
+        if (erroSecundarios) {
+          console.error('Erro ao zerar registros secundários:', erroSecundarios);
+        }
+      }
 
       // Se houve redução na quantidade, registrar consumo
       if (novaQuantidade < quantidadeAnterior) {
