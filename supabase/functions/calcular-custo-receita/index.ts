@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
 
       if (precoUsuarioMatch?.valor_unitario) {
         const nomeProduto = precoUsuarioMatch.produto_nome || nomeBusca;
-        const embalagem = detectarQuantidadeEmbalagem(nomeProduto, precoUsuarioMatch.valor_unitario);
+        const embalagem = detectarQuantidadeEmbalagem(nomeProduto, precoUsuarioMatch.valor_unitario, regrasEmbalagem);
         precoUnitario = embalagem.unitPrice;
         
         if (embalagem.isMultiUnit) {
