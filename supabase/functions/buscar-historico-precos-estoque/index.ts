@@ -7,60 +7,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Função para normalizar nomes de produtos para matching robusto
 function normalizarNomeProduto(nome: string): string {
-  // 1. Lowercase e trim básico
-  let normalizado = nome
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' '); // Espaços múltiplos → único
-  
-  // 2. Remover acentos (Unicode normalization)
-  normalizado = normalizado
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  
-  // 3. Remover palavras descritivas comuns
+  let normalizado = nome.toLowerCase().trim().replace(/\s+/g, ' ');
+  normalizado = normalizado.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const palavrasRemover = [
     'kg', 'granel', 'unidade', 'un', 'super', 'extra',
     'tradicional', 'classico', 'trad', 'trad.', 'gra.', 'gra',
     'quilograma', 'quilogramas'
   ];
-  
   for (const palavra of palavrasRemover) {
     const regex = new RegExp(`\\b${palavra}\\b`, 'gi');
     normalizado = normalizado.replace(regex, '');
   }
-  
-  // 4. Normalizar abreviações comuns
   const abreviacoes: { [key: string]: string } = {
-    's/lac': 'sem lactose',
-    'c/lac': 'com lactose',
-    's/lactose': 'sem lactose',
-    'c/sal': 'com sal',
-    's/sal': 'sem sal',
-    'pct': 'pacote',
-    'cx': 'caixa',
-    'lt': 'litro',
-    'ml': 'mililitro',
-    'gr': 'grama',
-    'pc': 'peca',
-    'peca': 'peca'
+    's/lac': 'sem lactose', 'c/lac': 'com lactose', 's/lactose': 'sem lactose',
+    'c/sal': 'com sal', 's/sal': 'sem sal', 'pct': 'pacote', 'cx': 'caixa',
+    'lt': 'litro', 'ml': 'mililitro', 'gr': 'grama', 'pc': 'peca', 'peca': 'peca'
   };
-  
-  // Substituir cada abreviação
   for (const [abrev, completo] of Object.entries(abreviacoes)) {
-    // Usar regex para match de palavra completa
     const regex = new RegExp(`\\b${abrev}\\b`, 'gi');
     normalizado = normalizado.replace(regex, completo);
   }
-  
-  // 5. Remover pontuação exceto ponto entre números
   normalizado = normalizado.replace(/[^a-z0-9\s.]/g, ' ');
-  
-  // 6. Limpar espaços múltiplos novamente
   normalizado = normalizado.replace(/\s+/g, ' ').trim();
-  
   return normalizado;
 }
 
@@ -85,12 +54,7 @@ interface ResultadoEmbalagem {
 function toNumber(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
-    const sanitized = value
-      .replace(/R\$/gi, '')
-      .replace(/\s+/g, '')
-      .replace(/\.(?=\d{3}(\D|$))/g, '')
-      .replace(',', '.');
-
+    const sanitized = value.replace(/R\$/gi, '').replace(/\s+/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
     const parsed = Number(sanitized);
     return Number.isFinite(parsed) ? parsed : 0;
   }
@@ -98,20 +62,10 @@ function toNumber(value: unknown): number {
 }
 
 function detectarQuantidadeEmbalagem(
-  nomeProduto: string,
-  precoTotal: number,
-  regras: RegraConversao[],
-  eanProduto?: string | null
+  nomeProduto: string, precoTotal: number, regras: RegraConversao[], eanProduto?: string | null
 ): ResultadoEmbalagem {
   const nomeUpper = nomeProduto.toUpperCase();
-  const fallback: ResultadoEmbalagem = {
-    isMultiUnit: false,
-    quantity: 1,
-    unitPrice: precoTotal,
-    tipo_embalagem: null,
-    unidade_consumo: 'UN',
-  };
-
+  const fallback: ResultadoEmbalagem = { isMultiUnit: false, quantity: 1, unitPrice: precoTotal, tipo_embalagem: null, unidade_consumo: 'UN' };
   if (!regras || regras.length === 0) return fallback;
 
   if (eanProduto) {
@@ -121,18 +75,8 @@ function detectarQuantidadeEmbalagem(
         if (!new RegExp(regra.ean_pattern, 'i').test(eanProduto)) continue;
         if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
         const qty = regra.qtd_por_embalagem;
-        if (qty > 1 && qty <= 100) {
-          return {
-            isMultiUnit: true,
-            quantity: qty,
-            unitPrice: precoTotal / qty,
-            tipo_embalagem: regra.tipo_embalagem,
-            unidade_consumo: regra.unidade_consumo,
-          };
-        }
-      } catch (error) {
-        console.warn('Regex EAN inválido em regras_conversao_embalagem:', regra.ean_pattern, error);
-      }
+        if (qty > 1 && qty <= 100) return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+      } catch (e) { console.warn('Regex EAN inválido:', regra.ean_pattern, e); }
     }
   }
 
@@ -141,387 +85,187 @@ function detectarQuantidadeEmbalagem(
       if (!new RegExp(regra.produto_pattern, 'i').test(nomeUpper)) continue;
       if (regra.produto_exclusao_pattern && new RegExp(regra.produto_exclusao_pattern, 'i').test(nomeUpper)) continue;
       const qty = regra.qtd_por_embalagem;
-      if (qty > 1 && qty <= 100) {
-        return {
-          isMultiUnit: true,
-          quantity: qty,
-          unitPrice: precoTotal / qty,
-          tipo_embalagem: regra.tipo_embalagem,
-          unidade_consumo: regra.unidade_consumo,
-        };
-      }
-    } catch (error) {
-      console.warn('Regex nome inválido em regras_conversao_embalagem:', regra.produto_pattern, error);
-    }
+      if (qty > 1 && qty <= 100) return { isMultiUnit: true, quantity: qty, unitPrice: precoTotal / qty, tipo_embalagem: regra.tipo_embalagem, unidade_consumo: regra.unidade_consumo };
+    } catch (e) { console.warn('Regex nome inválido:', regra.produto_pattern, e); }
   }
 
   return fallback;
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function extrairDataCompra(dados: any): string | null {
+  const possiveisCampos = [
+    dados.compra?.data_emissao, dados.compra?.data_compra,
+    dados.dataCompra, dados.data_emissao, dados.data_compra
+  ];
+  for (const campo of possiveisCampos) {
+    if (!campo) continue;
+    try {
+      let dataTemp;
+      if (typeof campo === 'string') {
+        const dataLimpa = campo.replace(/[-+]\d{2}:\d{2}$/, '');
+        dataTemp = new Date(dataLimpa);
+      } else {
+        dataTemp = new Date(campo);
+      }
+      if (!isNaN(dataTemp.getTime()) && dataTemp.getFullYear() > 2020) return dataTemp.toISOString();
+    } catch (_) { continue; }
   }
+  return null;
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
     const { produtos, userId, latitude, longitude, raioKm } = await req.json();
 
     if (!produtos || !Array.isArray(produtos) || produtos.length === 0 || !userId) {
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Parâmetros inválidos. Necessário: produtos (array não-vazio), userId' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ success: false, error: 'Parâmetros inválidos' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    console.log(`🔍 Buscando histórico para ${produtos.length} produtos do usuário ${userId}`);
+    console.log(`🔍 Buscando histórico BATCH para ${produtos.length} produtos | user=${userId}`);
 
-    const { data: regrasConversao, error: regrasErro } = await supabase
+    // 1) Carregar regras de embalagem (1 query)
+    const { data: regrasConversao } = await supabase
       .from('regras_conversao_embalagem')
       .select('produto_pattern, produto_exclusao_pattern, ean_pattern, tipo_embalagem, qtd_por_embalagem, unidade_consumo, prioridade')
-      .eq('ativo', true)
-      .eq('tipo_conversao', 'fixa')
-      .order('prioridade', { ascending: true });
-
-    if (regrasErro) {
-      console.warn('⚠️ Não foi possível carregar regras de conversão de embalagem:', regrasErro.message);
-    }
-
+      .eq('ativo', true).eq('tipo_conversao', 'fixa').order('prioridade', { ascending: true });
     const regrasEmbalagem: RegraConversao[] = (regrasConversao || []) as RegraConversao[];
 
+    // 2) Buscar estoque do usuário para obter produto_nome_normalizado e master_id (1 query)
+    const produtoIds = produtos.map(p => typeof p === 'object' ? p.id : null).filter(Boolean);
+    let estoqueMap = new Map<string, any>();
+    
+    if (produtoIds.length > 0) {
+      const { data: estoqueData } = await supabase
+        .from('estoque_app')
+        .select('id, produto_nome, produto_nome_normalizado, produto_master_id')
+        .eq('user_id', userId)
+        .in('id', produtoIds);
+      
+      (estoqueData || []).forEach(e => estoqueMap.set(e.id, e));
+    }
+
+    // 3) Buscar TODAS as notas do usuário UMA VEZ (janela de 6 meses para performance)
+    const seisAtras = new Date();
+    seisAtras.setMonth(seisAtras.getMonth() - 6);
+    
+    const { data: notasUsuario, error: notasErr } = await supabase
+      .from('notas_imagens')
+      .select('dados_extraidos, created_at')
+      .eq('usuario_id', userId)
+      .eq('processada', true)
+      .not('dados_extraidos', 'is', null)
+      .gte('created_at', seisAtras.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (notasErr) console.warn('⚠️ Erro ao buscar notas:', notasErr.message);
+    console.log(`📄 Notas carregadas: ${notasUsuario?.length || 0}`);
+
+    // 4) Pré-processar TODOS os itens de notas em um array flat (1 passagem)
+    interface ItemNota {
+      nomeOriginal: string;
+      nomeNormalizado: string;
+      precoUnitario: number;
+      quantidade: number;
+      dataCompra: string;
+      ean: string | null;
+    }
+    
+    const todosItensNotas: ItemNota[] = [];
+    for (const nota of notasUsuario || []) {
+      const dados = nota.dados_extraidos as any;
+      if (!dados?.itens) continue;
+      const dataCompra = extrairDataCompra(dados) || nota.created_at;
+      if (!dataCompra) continue;
+
+      for (const item of dados.itens) {
+        const nomeOriginal = item.descricao || item.nome || '';
+        if (!nomeOriginal) continue;
+        const precoUnitario = toNumber(item.valor_unitario || item.preco_unitario || 0);
+        const quantidade = toNumber(item.quantidade || 1);
+        if (precoUnitario <= 0 || quantidade <= 0) continue;
+
+        todosItensNotas.push({
+          nomeOriginal,
+          nomeNormalizado: normalizarNomeProduto(nomeOriginal),
+          precoUnitario,
+          quantidade,
+          dataCompra,
+          ean: item.codigo_barras || item.ean || item.ean_comercial || null
+        });
+      }
+    }
+    console.log(`📦 Total itens pré-processados: ${todosItensNotas.length}`);
+
+    // 5) Para cada produto, buscar match no array pré-processado (sem queries adicionais)
     const resultado = [];
 
     for (const produtoData of produtos) {
-      // Suportar tanto string quanto objeto
-      const produtoNome = typeof produtoData === 'string' 
-        ? produtoData 
-        : produtoData.produto_nome;
+      const produtoNome = typeof produtoData === 'string' ? produtoData : produtoData.produto_nome;
+      const produtoId = typeof produtoData === 'object' ? produtoData.id : null;
+
+      const estoqueInfo = produtoId ? estoqueMap.get(produtoId) : null;
       
-      const produtoId = typeof produtoData === 'object' 
-        ? produtoData.id 
-        : null;
+      if (!estoqueInfo?.produto_master_id) {
+        resultado.push({ id: produtoId, produto: produtoNome, ultimaCompraUsuario: null, menorPrecoArea: null, erro: 'Produto não normalizado' });
+        continue;
+      }
 
-      const produtoMasterId = typeof produtoData === 'object'
-        ? produtoData.produto_master_id
-        : null;
+      // ✅ CORREÇÃO: Normalizar SEMPRE antes de comparar (case-insensitive)
+      const produtoNormalizado = normalizarNomeProduto(estoqueInfo.produto_nome_normalizado || estoqueInfo.produto_nome || produtoNome);
 
-      console.log(`📦 Processando: ${produtoNome} | ID: ${produtoId} | Master: ${produtoMasterId}`);
+      // Buscar matches no array pré-processado
+      let ultimaCompraDoUsuario: { data: string; preco: number; quantidade: number } | null = null;
 
-      // 🔍 BUSCAR PRODUTO NO ESTOQUE (BUSCA EXATA POR ID OU NOME)
-      let produtoEstoque = null;
-      
-      // Buscar primeiro por ID (mais preciso)
-      if (produtoId) {
-        console.log(`🔍 Buscando por ID: ${produtoId}`);
-        const { data } = await supabase
+      for (const itemNota of todosItensNotas) {
+        const match = itemNota.nomeNormalizado.includes(produtoNormalizado) || produtoNormalizado.includes(itemNota.nomeNormalizado);
+        if (!match) continue;
+
+        const valorTotalItem = itemNota.precoUnitario * itemNota.quantidade;
+        const embalagem = detectarQuantidadeEmbalagem(itemNota.nomeOriginal, itemNota.precoUnitario, regrasEmbalagem, itemNota.ean);
+        const quantidadeFinal = embalagem.isMultiUnit ? itemNota.quantidade * embalagem.quantity : itemNota.quantidade;
+        const precoConvertido = quantidadeFinal > 0 ? valorTotalItem / quantidadeFinal : itemNota.precoUnitario;
+
+        if (!ultimaCompraDoUsuario || new Date(itemNota.dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
+          ultimaCompraDoUsuario = { data: itemNota.dataCompra, preco: precoConvertido, quantidade: itemNota.quantidade };
+        }
+      }
+
+      // Fallback: usar preço do próprio estoque se não encontrou nas notas
+      if (!ultimaCompraDoUsuario && estoqueInfo) {
+        const { data: estoqueCompleto } = await supabase
           .from('estoque_app')
-          .select('produto_nome_normalizado, produto_master_id, produto_nome')
-          .eq('user_id', userId)
+          .select('preco_unitario_ultimo, preco_por_unidade_base, updated_at')
           .eq('id', produtoId)
           .maybeSingle();
-        produtoEstoque = data;
-        if (produtoEstoque) {
-          console.log(`✅ Encontrado por ID: ${produtoEstoque.produto_nome}`);
-        }
-      }
-
-      // Fallback: buscar por nome exato
-      if (!produtoEstoque && produtoNome) {
-        console.log(`🔍 Fallback: Buscando por nome exato: ${produtoNome}`);
-        const { data } = await supabase
-          .from('estoque_app')
-          .select('produto_nome_normalizado, produto_master_id, produto_nome')
-          .eq('user_id', userId)
-          .eq('produto_nome', produtoNome)
-          .maybeSingle();
-        produtoEstoque = data;
-        if (produtoEstoque) {
-          console.log(`✅ Encontrado por nome: ${produtoEstoque.produto_nome}`);
-        }
-      }
-
-      if (!produtoEstoque) {
-        console.log(`❌ Produto não encontrado: ${produtoNome}`);
-        resultado.push({
-          produto: produtoNome,
-          ultimaCompraUsuario: null,
-          menorPrecoArea: null,
-          erro: 'Produto não encontrado no estoque'
-        });
-        continue;
-      }
-
-      if (!produtoEstoque.produto_master_id) {
-        console.log(`⏳ Produto sem master_id: ${produtoNome}`);
-        resultado.push({
-          produto: produtoNome,
-          ultimaCompraUsuario: null,
-          menorPrecoArea: null,
-          erro: 'Produto não normalizado'
-        });
-        continue;
-      }
-
-      // Usar produto_nome_normalizado do banco
-      const produtoNormalizado = produtoEstoque.produto_nome_normalizado || normalizarNomeProduto(produtoNome);
-      console.log(`✅ Normalizado: "${produtoNormalizado}" (master: ${produtoEstoque.produto_master_id})`);
-      
-      // 1. Buscar última compra do próprio usuário
-      const { data: ultimaCompraUsuario, error: errorUsuario } = await supabase
-        .from('notas_imagens')
-        .select(`
-          dados_extraidos,
-          created_at
-        `)
-        .eq('usuario_id', userId)
-        .eq('processada', true)
-        .not('dados_extraidos', 'is', null)
-        .order('created_at', { ascending: false });
-
-      if (errorUsuario) {
-        console.error('Erro ao buscar compras do usuário:', errorUsuario);
-        continue;
-      }
-
-      let ultimaCompraDoUsuario = null;
-
-      // Processar notas do usuário para encontrar o produto
-      for (const nota of ultimaCompraUsuario || []) {
-        const dados = nota.dados_extraidos as any;
-        if (!dados?.itens) continue;
-
-        // Buscar data da compra com validação robusta
-        let dataCompra = null;
-        const possiveisCampos = [
-          dados.compra?.data_emissao,
-          dados.compra?.data_compra,
-          dados.dataCompra,
-          dados.data_emissao,
-          dados.data_compra
-        ];
-
-        for (const campo of possiveisCampos) {
-          if (campo) {
-            try {
-              // Tentar diferentes formatos de data
-              let dataTemp;
-              if (typeof campo === 'string') {
-                // Remover timezone se existir para evitar problemas
-                const dataLimpa = campo.replace(/[-+]\d{2}:\d{2}$/, '');
-                dataTemp = new Date(dataLimpa);
-              } else {
-                dataTemp = new Date(campo);
-              }
-              
-              if (!isNaN(dataTemp.getTime()) && dataTemp.getFullYear() > 2020) {
-                dataCompra = dataTemp.toISOString();
-                break;
-              }
-            } catch (error) {
-              continue;
-            }
+        
+        if (estoqueCompleto) {
+          const precoBase = estoqueCompleto.preco_por_unidade_base || estoqueCompleto.preco_unitario_ultimo;
+          if (precoBase && precoBase > 0) {
+            ultimaCompraDoUsuario = { data: estoqueCompleto.updated_at, preco: precoBase, quantidade: 1 };
           }
         }
-
-        if (!dataCompra) continue;
-
-        for (const item of dados.itens) {
-          const nomeItemOriginal = item.descricao || item.nome || '';
-          const nomeItem = normalizarNomeProduto(nomeItemOriginal);
-          
-          if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
-            if (!ultimaCompraDoUsuario || new Date(dataCompra) > new Date(ultimaCompraDoUsuario.data)) {
-              const precoInformado = toNumber(item.valor_unitario || item.preco_unitario || 0);
-              const quantidadeComprada = toNumber(item.quantidade || 1);
-
-              if (precoInformado <= 0 || quantidadeComprada <= 0) continue;
-
-              const valorTotalItem = precoInformado * quantidadeComprada;
-              const eanProduto = item.codigo_barras || item.ean || item.ean_comercial || null;
-              const embalagem = detectarQuantidadeEmbalagem(nomeItemOriginal, precoInformado, regrasEmbalagem, eanProduto);
-              const quantidadeFinal = embalagem.isMultiUnit ? quantidadeComprada * embalagem.quantity : quantidadeComprada;
-              const precoConvertido = quantidadeFinal > 0 ? valorTotalItem / quantidadeFinal : precoInformado;
-
-              ultimaCompraDoUsuario = {
-                data: dataCompra,
-                preco: precoConvertido,
-                quantidade: quantidadeComprada
-              };
-            }
-            break;
-          }
-        }
-
-        if (ultimaCompraDoUsuario) break;
       }
 
-      // 2. Buscar menor preço na área de atuação (se coordenadas fornecidas)
-      let menorPrecoArea = null;
-
-      if (latitude && longitude && raioKm) {
-        // Buscar todas as notas na área
-        const { data: notasArea, error: errorArea } = await supabase
-          .from('notas_imagens')
-          .select(`
-            dados_extraidos,
-            created_at,
-            usuario_id
-          `)
-          .eq('processada', true)
-          .not('dados_extraidos', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(500); // Limitar para performance
-
-        if (!errorArea && notasArea) {
-          const precosPorDia: { [data: string]: { preco: number; quantidade: number } } = {};
-
-          for (const nota of notasArea) {
-            const dados = nota.dados_extraidos as any;
-            if (!dados?.itens) continue;
-
-            // Verificar se o estabelecimento está na área (se tiver coordenadas)
-            let dentroDoRaio = true;
-            if (dados.estabelecimento?.latitude && dados.estabelecimento?.longitude) {
-              const estabLat = parseFloat(dados.estabelecimento.latitude);
-              const estabLon = parseFloat(dados.estabelecimento.longitude);
-              
-              const distancia = calcularDistancia(latitude, longitude, estabLat, estabLon);
-              dentroDoRaio = distancia <= raioKm;
-            }
-
-            if (!dentroDoRaio) continue;
-
-            // Buscar data da compra com validação robusta
-            let dataCompra = null;
-            const possiveisCampos = [
-              dados.compra?.data_emissao,
-              dados.compra?.data_compra,
-              dados.dataCompra,
-              dados.data_emissao,
-              dados.data_compra
-            ];
-
-            for (const campo of possiveisCampos) {
-              if (campo) {
-                try {
-                  // Tentar diferentes formatos de data
-                  let dataTemp;
-                  if (typeof campo === 'string') {
-                    // Remover timezone se existir para evitar problemas
-                    const dataLimpa = campo.replace(/[-+]\d{2}:\d{2}$/, '');
-                    dataTemp = new Date(dataLimpa);
-                  } else {
-                    dataTemp = new Date(campo);
-                  }
-                  
-                  if (!isNaN(dataTemp.getTime()) && dataTemp.getFullYear() > 2020) {
-                    dataCompra = dataTemp.toISOString();
-                    break;
-                  }
-                } catch (error) {
-                  continue;
-                }
-              }
-            }
-
-            if (!dataCompra) continue;
-
-            const dataFormatada = dataCompra.split('T')[0];
-
-            for (const item of dados.itens) {
-              const nomeItemOriginal = item.descricao || item.nome || '';
-              const nomeItem = normalizarNomeProduto(nomeItemOriginal);
-              
-              if (nomeItem.includes(produtoNormalizado) || produtoNormalizado.includes(nomeItem)) {
-                const precoInformado = toNumber(item.valor_unitario || item.preco_unitario || 0);
-                const quantidadeComprada = toNumber(item.quantidade || 1);
-
-                if (precoInformado <= 0 || quantidadeComprada <= 0) continue;
-
-                const valorTotalItem = precoInformado * quantidadeComprada;
-                const eanProduto = item.codigo_barras || item.ean || item.ean_comercial || null;
-                const embalagem = detectarQuantidadeEmbalagem(nomeItemOriginal, precoInformado, regrasEmbalagem, eanProduto);
-                const quantidadeFinal = embalagem.isMultiUnit ? quantidadeComprada * embalagem.quantity : quantidadeComprada;
-                const precoConvertido = quantidadeFinal > 0 ? valorTotalItem / quantidadeFinal : precoInformado;
-                
-                if (!precosPorDia[dataFormatada] || precoConvertido < precosPorDia[dataFormatada].preco) {
-                  precosPorDia[dataFormatada] = { preco: precoConvertido, quantidade: quantidadeComprada };
-                }
-              }
-            }
-          }
-
-          // Encontrar o dia mais recente com preço
-          const diasComPreco = Object.keys(precosPorDia).sort().reverse();
-          if (diasComPreco.length > 0) {
-            const diaRecente = diasComPreco[0];
-            menorPrecoArea = {
-              data: diaRecente,
-              preco: precosPorDia[diaRecente].preco,
-              quantidade: precosPorDia[diaRecente].quantidade
-            };
-          }
-        }
-      } else {
-        // Fallback: buscar na tabela precos_atuais
-        const { data: precoGeral, error: errorGeral } = await supabase
-          .from('precos_atuais')
-          .select('*')
-          .ilike('produto_nome', `%${produtoNormalizado}%`)
-          .order('data_atualizacao', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (!errorGeral && precoGeral) {
-          menorPrecoArea = {
-            data: precoGeral.data_atualizacao.split('T')[0],
-            preco: precoGeral.valor_unitario,
-            quantidade: 1
-          };
-        }
-      }
-
-      resultado.push({
-        id: produtoId,
-        produto: produtoNome,
-        ultimaCompraUsuario: ultimaCompraDoUsuario,
-        menorPrecoArea
-      });
+      resultado.push({ id: produtoId, produto: produtoNome, ultimaCompraUsuario: ultimaCompraDoUsuario, menorPrecoArea: null });
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        resultados: resultado 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.log(`✅ Resultados: ${resultado.length} produtos processados`);
 
+    return new Response(JSON.stringify({ success: true, resultados: resultado }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('Erro na função buscar-historico-precos-estoque:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
-
-// Função para calcular distância entre duas coordenadas
-function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Raio da Terra em km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}

@@ -793,18 +793,28 @@ const EstoqueAtual = () => {
             ? item.produto_master[0].imagem_url
             : (item.imagem_url || itemExistente.imagem_url);
           
+          // ✅ CORREÇÃO: Preservar preço do item MAIS RECENTE (por updated_at)
+          const itemMaisRecente = new Date(item.updated_at) > new Date(itemExistente.updated_at);
+          const precoFinal = itemMaisRecente 
+            ? (item.preco_unitario_ultimo || itemExistente.preco_unitario_mais_recente)
+            : (itemExistente.preco_unitario_mais_recente || item.preco_unitario_ultimo);
+          
           produtosMap.set(chave, {
             ...itemExistente,
+            // Se o item atual é mais recente, usar seu id como principal
+            id: itemMaisRecente ? item.id : itemExistente.id,
             quantidade_total: itemExistente.quantidade_total + item.quantidade,
-            quantidade: itemExistente.quantidade_total + item.quantidade, // Para compatibilidade
-            preco_unitario_mais_recente: item.preco_unitario_ultimo || itemExistente.preco_unitario_mais_recente,
-            preco_unitario_ultimo: item.preco_unitario_ultimo || itemExistente.preco_unitario_ultimo, // Para compatibilidade
+            quantidade: itemExistente.quantidade_total + item.quantidade,
+            preco_unitario_mais_recente: precoFinal,
+            preco_unitario_ultimo: precoFinal,
             ultima_atualizacao: item.updated_at > itemExistente.ultima_atualizacao ? item.updated_at : itemExistente.ultima_atualizacao,
-            updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at, // Para compatibilidade
+            updated_at: item.updated_at > itemExistente.updated_at ? item.updated_at : itemExistente.updated_at,
             ids_originais: [...itemExistente.ids_originais, item.id],
             nomes_originais: [...itemExistente.nomes_originais, item.produto_nome],
             itens_originais: itemExistente.itens_originais + 1,
-            imagem_url: imagemAtualizada // Atualizar com imagem mais relevante
+            imagem_url: imagemAtualizada,
+            // Preservar master_id do mais recente
+            produto_master_id: itemMaisRecente ? (item.produto_master_id || itemExistente.produto_master_id) : (itemExistente.produto_master_id || item.produto_master_id),
           });
         } else {
           // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)

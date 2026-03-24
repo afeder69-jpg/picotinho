@@ -438,56 +438,81 @@ serve(async (req) => {
 
     // 7) Buscar preços existentes na tabela precos_atuais para produtos do estoque
     // que não foram encontrados nas notas do usuário
+    // ✅ CORREÇÃO: Priorizar preco_por_unidade_base e usar produto_master_id quando disponível
     console.log('🔍 Buscando preços gerais existentes para produtos sem preço das notas...');
     
+    // Buscar preços gerais UMA VEZ (não dentro do loop)
+    const cnpjsArray = Array.from(cnpjsNoRaio);
+    let precosGeraisCache: any[] | null = null;
+    
     for (const item of estoque ?? []) {
-      // Verificar se o produto já tem resultado
       const jaTemResultado = resultados.some(r => r.produto_nome === item.produto_nome);
       if (jaTemResultado) continue;
       
       console.log(`🔍 Buscando preço geral para: ${item.produto_nome}`);
       
-      // Buscar na tabela precos_atuais preços existentes de estabelecimentos na área
-      const { data: precosGerais, error: precosErr } = await supabase
-        .from('precos_atuais')
-        .select('*')
-        .in('estabelecimento_cnpj', Array.from(cnpjsNoRaio))
-        .order('data_atualizacao', { ascending: false });
-      
-      if (precosErr) {
-        console.error('Erro ao buscar preços gerais:', precosErr);
-        continue;
+      // Lazy load: buscar preços gerais apenas uma vez
+      if (precosGeraisCache === null) {
+        const { data: precosGerais, error: precosErr } = await supabase
+          .from('precos_atuais')
+          .select('*')
+          .in('estabelecimento_cnpj', cnpjsArray)
+          .order('data_atualizacao', { ascending: false });
+        
+        if (precosErr) {
+          console.error('Erro ao buscar preços gerais:', precosErr);
+          precosGeraisCache = [];
+        } else {
+          precosGeraisCache = precosGerais || [];
+        }
       }
       
-      // Normalizar e encontrar matches
+      // ✅ PRIORIDADE 1: Buscar por produto_master_id (mais confiável)
+      if (item.produto_master_id) {
+        const matchMaster = precosGeraisCache.find(p => p.produto_master_id === item.produto_master_id);
+        if (matchMaster) {
+          // ✅ CORREÇÃO: Priorizar preco_por_unidade_base sobre valor_unitario
+          const precoFinal = matchMaster.preco_por_unidade_base && matchMaster.preco_por_unidade_base > 0
+            ? Number(matchMaster.preco_por_unidade_base)
+            : Number(matchMaster.valor_unitario);
+          
+          resultados.push({
+            produto_nome: item.produto_nome,
+            valor_unitario: precoFinal,
+            data_atualizacao: matchMaster.data_atualizacao,
+            estabelecimento_cnpj: matchMaster.estabelecimento_cnpj,
+            estabelecimento_nome: matchMaster.estabelecimento_nome,
+          });
+          console.log(`💰 Preço por master_id: ${item.produto_nome} = R$ ${precoFinal}`);
+          continue;
+        }
+      }
+      
+      // PRIORIDADE 2: Buscar por nome (com cautela)
       const alvo = normalizarTexto(item.produto_nome);
-      const candidatosGerais = (precosGerais || []).filter(p => {
+      const candidatosGerais = precosGeraisCache.filter(p => {
         const pNormalizado = normalizarTexto(p.produto_nome);
-        
-        // Mesma lógica de matching melhorada
-        const match = 
-          pNormalizado === alvo ||
+        return pNormalizado === alvo ||
           (alvo.length >= 3 && pNormalizado.includes(alvo)) ||
           (pNormalizado.length >= 3 && alvo.includes(pNormalizado)) ||
           calcularSimilaridadePalavras(alvo, pNormalizado) >= 0.6;
-        
-        if (match) {
-          console.log(`  ✅ Preço geral encontrado: ${p.produto_nome} (${p.valor_unitario}) - ${p.estabelecimento_nome}`);
-        }
-        return match;
       });
       
       if (candidatosGerais.length > 0) {
-        // Pegar o mais recente
         const melhor = candidatosGerais[0];
+        // ✅ CORREÇÃO: Priorizar preco_por_unidade_base
+        const precoFinal = melhor.preco_por_unidade_base && melhor.preco_por_unidade_base > 0
+          ? Number(melhor.preco_por_unidade_base)
+          : Number(melhor.valor_unitario);
+        
         resultados.push({
           produto_nome: item.produto_nome,
-          valor_unitario: Number(melhor.valor_unitario),
+          valor_unitario: precoFinal,
           data_atualizacao: melhor.data_atualizacao,
           estabelecimento_cnpj: melhor.estabelecimento_cnpj,
           estabelecimento_nome: melhor.estabelecimento_nome,
         });
-        console.log(`💰 Preço geral adicionado: ${item.produto_nome} = R$ ${melhor.valor_unitario}`);
+        console.log(`💰 Preço geral adicionado: ${item.produto_nome} = R$ ${precoFinal}`);
       }
     }
 
