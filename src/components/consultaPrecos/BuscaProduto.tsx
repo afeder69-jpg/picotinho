@@ -172,7 +172,6 @@ const BuscaProduto = ({ onProdutoSelecionado, onLimpar, produtoSelecionado }: Bu
               value={termoBusca}
               onChange={(e) => setTermoBusca(e.target.value)}
               className="pl-10"
-              autoFocus
             />
             {carregando && (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
