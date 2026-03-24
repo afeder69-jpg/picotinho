@@ -1,40 +1,36 @@
 
 
-## Correção: botão "Excluir Lista" trava a tela
+## Correção: Exclusão da lista não executa
 
 ### Causa raiz
 
-O `AlertDialog` de confirmação (linha 434) está sendo aberto **por cima** do `Dialog` de edição (linha 289), que continua aberto. Ambos renderizam overlays (`fixed inset-0 bg-black/80`) com `z-50`. O resultado:
+No `ListaCompras.tsx`, o componente `EditarListaDialog` tem um `key` que inclui `editDialogOpen`:
 
-- Duas camadas de overlay bloqueiam toda a interação
-- O AlertDialog fica preso atrás do overlay do Dialog principal
-- A tela fica completamente travada — não dá para cancelar nem confirmar
+```
+key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
+```
+
+Quando o botão "Excluir Lista" chama `onClose()` (que muda `editDialogOpen` para `false`), o `key` muda, e o React **desmonta e remonta** o componente inteiro. Isso destroi o estado `confirmDeleteOpen` antes do `setTimeout` de 150ms disparar. O AlertDialog nunca aparece, e a exclusão nunca é executada.
 
 ### Correção
 
-**1 arquivo**: `src/components/listaCompras/EditarListaDialog.tsx`
+**1 arquivo**: `src/pages/ListaCompras.tsx`
 
-Fechar o Dialog de edição **antes** de abrir o AlertDialog de confirmação. Quando o usuário clica "Excluir Lista":
-
-1. Fechar o Dialog de edição (`onClose()`)
-2. Abrir o AlertDialog de confirmação (`setConfirmDeleteOpen(true)`)
-
-E mover o AlertDialog para fora do fluxo do Dialog, garantindo que ele só renderize quando o Dialog já estiver fechado.
+Remover `editDialogOpen` do `key` do componente. O key deve depender apenas dos dados da lista, não do estado de abertura do dialog:
 
 ```typescript
-// Botão "Excluir Lista" — fecha o dialog de edição primeiro
-onClick={() => {
-  onClose();                       // fecha Dialog de edição
-  setConfirmDeleteOpen(true);      // abre AlertDialog de confirmação
-}}
+// De:
+key={`edit-${lista?.listas_compras_itens.length}-${editDialogOpen}`}
+// Para:
+key={`edit-${lista?.listas_compras_itens.length}`}
 ```
 
-Além disso, o AlertDialog precisa tratar o caso de cancelamento — ao cancelar, reabrir o Dialog de edição não é necessário (o usuário volta para a tela da lista normalmente).
+Isso em todas as ocorrencias do componente no arquivo (3 vezes).
 
-### Resultado esperado
+### Resultado
 
-- Clicar em "Excluir Lista" → Dialog de edição fecha → confirmação aparece sozinha
-- "Cancelar" → volta para a tela da lista (sem travamento)
-- "Sim, excluir" → exclui lista → navega para `/listas-compras`
-- Nenhum overlay duplo, nenhum travamento
+- `onClose()` fecha o Dialog sem desmontar o componente
+- `setTimeout` dispara normalmente e abre o AlertDialog de confirmação
+- Usuário confirma e `handleExcluirLista` executa a exclusão no banco
+- Navegação para `/listas-compras` acontece após exclusão bem-sucedida
 
