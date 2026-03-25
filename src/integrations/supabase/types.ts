@@ -3468,6 +3468,14 @@ export type Database = {
       }
       refresh_estoque_stats: { Args: never; Returns: undefined }
       refresh_stats_normalizacao: { Args: never; Returns: undefined }
+      resumo_estoque_por_categoria: {
+        Args: { p_user_id: string }
+        Returns: {
+          categoria: string
+          total_itens: number
+          valor_pago: number
+        }[]
+      }
       safe_mask_personal_data: {
         Args: {
           cep_input?: string

@@ -369,93 +369,78 @@ async function executeTool(
     switch (toolName) {
       // ==================== STOCK TOOLS (Phase 1) ====================
       case 'buscar_estoque': {
-        let query = supabase.from('estoque_app').select('id, produto_nome, quantidade, unidade_medida, categoria, marca, preco_unitario_ultimo, updated_at').eq('user_id', usuarioId);
+        // Para busca por produto específico, manter lógica inline de consolidação
         if (args.tipo_busca === 'produto' && args.termo) {
+          let query = supabase.from('estoque_app').select('id, produto_nome, quantidade, unidade_medida, categoria, marca, preco_unitario_ultimo, updated_at').eq('user_id', usuarioId);
           query = query.ilike('produto_nome', `%${args.termo}%`);
-        } else if (args.tipo_busca === 'categoria' && args.termo) {
-          query = query.ilike('categoria', `%${args.termo}%`);
+          const { data, error } = await query.order('produto_nome').limit(500);
+          if (error) throw error;
+          if (!data || data.length === 0) {
+            return { result: JSON.stringify({ mensagem: "Nenhum item encontrado no estoque.", itens: [] }), isWriteMutation: false };
+          }
+
+          // Consolidação inline para busca por produto
+          const normalizarNomeProduto = (nome: string): string => {
+            return nome.toUpperCase().trim().replace(/\s+/g, ' ').replace(/\bKG\b/gi, '').replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL').replace(/\s+/g, ' ').trim();
+          };
+          const produtosMap = new Map<string, any>();
+          data.forEach((item: any) => {
+            const chave = normalizarNomeProduto(item.produto_nome);
+            if (produtosMap.has(chave)) {
+              const existente = produtosMap.get(chave);
+              const novaQtdTotal = existente.quantidade_total + item.quantidade;
+              const itemMaisRecente = new Date(item.updated_at) > new Date(existente.updated_at);
+              const precoFinal = itemMaisRecente ? (item.preco_unitario_ultimo || existente.preco) : (existente.preco || item.preco_unitario_ultimo);
+              produtosMap.set(chave, { ...existente, id: itemMaisRecente ? item.id : existente.id, quantidade_total: novaQtdTotal, preco: precoFinal, updated_at: item.updated_at > existente.updated_at ? item.updated_at : existente.updated_at });
+            } else {
+              produtosMap.set(chave, { id: item.id, nome: chave, nome_original: item.produto_nome, quantidade_total: item.quantidade, unidade: item.unidade_medida, categoria: item.categoria, marca: item.marca, preco: item.preco_unitario_ultimo, updated_at: item.updated_at });
+            }
+          });
+          const itensConsolidados = Array.from(produtosMap.values()).filter((item: any) => item.quantidade_total > 0).map((item: any) => ({ id: item.id, nome: item.nome, quantidade: item.quantidade_total, unidade: item.unidade, categoria: item.categoria, marca: item.marca, preco: item.preco, atualizado: item.updated_at }));
+          const valorTotal = itensConsolidados.reduce((acc: number, item: any) => { const subtotalItem = Math.round(((item.preco || 0) * item.quantidade) * 100) / 100; return acc + subtotalItem; }, 0);
+          return { result: JSON.stringify({ total: itensConsolidados.length, valor_total: Math.round(valorTotal * 100) / 100, itens: itensConsolidados }), isWriteMutation: false };
         }
-        const { data, error } = await query.order('produto_nome').limit(500);
-        if (error) throw error;
-        if (!data || data.length === 0) {
+
+        // Para resumo geral ("tudo") ou por categoria: usar RPC como fonte única de verdade
+        const { data: resumoRPC, error: rpcError } = await supabase.rpc('resumo_estoque_por_categoria', { p_user_id: usuarioId });
+        if (rpcError) throw rpcError;
+        if (!resumoRPC || resumoRPC.length === 0) {
           return { result: JSON.stringify({ mensagem: "Nenhum item encontrado no estoque.", itens: [] }), isWriteMutation: false };
         }
 
-        // ========== CONSOLIDAÇÃO IDÊNTICA AO APP (EstoqueAtual.tsx) ==========
-        // Normalização de nome: mesma lógica do app para agrupar duplicados
-        const normalizarNomeProduto = (nome: string): string => {
-          return nome
-            .toUpperCase()
-            .trim()
-            .replace(/\s+/g, ' ')
-            .replace(/\bKG\b/gi, '')
-            .replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL')
-            .replace(/\s+/g, ' ')
-            .trim();
-        };
+        // Se busca por categoria, filtrar pelo termo usando mapeamento de sinônimos
+        let resumoFiltrado = resumoRPC;
+        if (args.tipo_busca === 'categoria' && args.termo) {
+          const termoLower = args.termo.toLowerCase().trim();
+          // Mapeamento de sinônimos para encontrar a categoria canônica
+          const sinonimoParaCanonico: Record<string, string> = {
+            'açougue': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue', 'carne': 'açougue', 'frango': 'açougue', 'peixe': 'açougue', 'bovino': 'açougue',
+            'bebidas': 'bebidas', 'bebida': 'bebidas', 'suco': 'bebidas', 'refrigerante': 'bebidas', 'cerveja': 'bebidas', 'vinho': 'bebidas', 'água': 'bebidas', 'agua': 'bebidas',
+            'hortifruti': 'hortifruti', 'frutas': 'hortifruti', 'verduras': 'hortifruti', 'legumes': 'hortifruti',
+            'laticínios/frios': 'laticínios/frios', 'laticínios': 'laticínios/frios', 'laticinios': 'laticínios/frios', 'frios': 'laticínios/frios', 'queijo': 'laticínios/frios', 'embutidos': 'laticínios/frios',
+            'higiene/farmácia': 'higiene/farmácia', 'higiene': 'higiene/farmácia', 'farmácia': 'higiene/farmácia', 'farmacia': 'higiene/farmácia',
+            'mercearia': 'mercearia',
+            'padaria': 'padaria', 'pão': 'padaria', 'pao': 'padaria',
+            'congelados': 'congelados', 'congelado': 'congelados',
+            'limpeza': 'limpeza', 'detergente': 'limpeza', 'sabão': 'limpeza',
+            'pet': 'pet', 'animais': 'pet', 'ração': 'pet', 'racao': 'pet',
+            'outros': 'outros', 'diversos': 'outros',
+          };
+          const categoriaBuscada = sinonimoParaCanonico[termoLower] || termoLower;
+          resumoFiltrado = resumoRPC.filter((r: any) => r.categoria === categoriaBuscada || r.categoria.includes(termoLower) || termoLower.includes(r.categoria));
+        }
 
-        const produtosMap = new Map<string, any>();
-
-        data.forEach((item: any) => {
-          const chave = normalizarNomeProduto(item.produto_nome);
-
-          if (produtosMap.has(chave)) {
-            const existente = produtosMap.get(chave);
-            // Somar quantidades
-            const novaQtdTotal = existente.quantidade_total + item.quantidade;
-            // Manter preço do registro mais recente (por updated_at)
-            const itemMaisRecente = new Date(item.updated_at) > new Date(existente.updated_at);
-            const precoFinal = itemMaisRecente
-              ? (item.preco_unitario_ultimo || existente.preco)
-              : (existente.preco || item.preco_unitario_ultimo);
-
-            produtosMap.set(chave, {
-              ...existente,
-              id: itemMaisRecente ? item.id : existente.id,
-              quantidade_total: novaQtdTotal,
-              preco: precoFinal,
-              updated_at: item.updated_at > existente.updated_at ? item.updated_at : existente.updated_at,
-            });
-          } else {
-            produtosMap.set(chave, {
-              id: item.id,
-              nome: chave,
-              nome_original: item.produto_nome,
-              quantidade_total: item.quantidade,
-              unidade: item.unidade_medida,
-              categoria: item.categoria,
-              marca: item.marca,
-              preco: item.preco_unitario_ultimo,
-              updated_at: item.updated_at,
-            });
-          }
-        });
-
-        // Filtrar itens com saldo <= 0 (mesma lógica padrão do app)
-        const itensConsolidados = Array.from(produtosMap.values())
-          .filter((item: any) => item.quantidade_total > 0)
-          .map((item: any) => ({
-            id: item.id,
-            nome: item.nome,
-            quantidade: item.quantidade_total,
-            unidade: item.unidade,
-            categoria: item.categoria,
-            marca: item.marca,
-            preco: item.preco,
-            atualizado: item.updated_at,
-          }));
-
-        // Calcular valor total usando preço pago pelo usuário (preco_unitario_ultimo)
-        // IMPORTANTE: arredondamento POR ITEM, idêntico ao app (EstoqueAtual.tsx linha 1643)
-        const valorTotal = itensConsolidados.reduce((acc: number, item: any) => {
-          const subtotalItem = Math.round(((item.preco || 0) * item.quantidade) * 100) / 100;
-          return acc + subtotalItem;
-        }, 0);
+        const totalItens = resumoFiltrado.reduce((acc: number, r: any) => acc + Number(r.total_itens), 0);
+        const valorTotal = resumoFiltrado.reduce((acc: number, r: any) => acc + Number(r.valor_pago), 0);
 
         return { result: JSON.stringify({
-          total: itensConsolidados.length,
+          total: totalItens,
           valor_total: Math.round(valorTotal * 100) / 100,
-          itens: itensConsolidados,
+          resumo_por_categoria: resumoFiltrado.map((r: any) => ({
+            categoria: r.categoria,
+            total_itens: Number(r.total_itens),
+            valor_pago: Number(r.valor_pago),
+          })),
         }), isWriteMutation: false };
       }
 
