@@ -211,7 +211,9 @@ const listToolDefinitions = [
               properties: {
                 produto_nome: { type: "string", description: "Nome do produto" },
                 quantidade: { type: "number", description: "Quantidade" },
-                unidade_medida: { type: "string", description: "Unidade: UN, KG, L, etc. Default UN" }
+                unidade_medida: { type: "string", description: "Unidade: UN, KG, L, etc. Default UN" },
+                produto_id: { type: "string", description: "ID do produto master (de buscar_produto_catalogo ou resolver_item_por_historico). Se fornecido, item é estruturado (item_livre=false)." },
+                item_livre: { type: "boolean", description: "Se true, item é lembrete livre sem vínculo. Default false. Só use como último recurso quando nenhuma resolução estruturada for possível." }
               },
               required: ["produto_nome", "quantidade"]
             }
@@ -258,11 +260,25 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "resolver_item_por_historico",
-      description: "Busca nos histórico de compras (notas fiscais confirmadas) do usuário para encontrar produtos habituais. Retorna os mais frequentes com último preço.",
+      description: "Busca no histórico de compras (notas fiscais confirmadas) do usuário para encontrar produtos habituais. Retorna os mais frequentes com último preço. DEVE ser chamada ANTES de adicionar_itens_lista para tentar resolver o produto de forma estruturada.",
       parameters: {
         type: "object",
         properties: {
           termo: { type: "string", description: "Termo do produto para buscar no histórico" }
+        },
+        required: ["termo"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "buscar_produto_catalogo",
+      description: "Busca produtos no catálogo master global (produtos_master_global). Use APÓS resolver_item_por_historico se o histórico não retornar resultados. Retorna produto_master_id que pode ser passado para adicionar_itens_lista para criar item estruturado (não livre).",
+      parameters: {
+        type: "object",
+        properties: {
+          termo: { type: "string", description: "Termo para buscar no catálogo de produtos" }
         },
         required: ["termo"]
       }
@@ -529,7 +545,8 @@ async function executeTool(
           produto_nome: item.produto_nome,
           quantidade: item.quantidade || 1,
           unidade_medida: item.unidade_medida || 'UN',
-          item_livre: true
+          item_livre: item.item_livre === true ? true : false,
+          ...(item.produto_id ? { produto_id: item.produto_id } : {})
         }));
 
         if (itensParaInserir.length === 0) {
@@ -675,6 +692,44 @@ async function executeTool(
             aviso: semPreco.length > 0 ? "Alguns itens não têm preço conhecido. O total é uma ESTIMATIVA parcial." : "Todos os itens têm preço. Valor é uma estimativa baseada nos últimos preços pagos.",
             detalhes: comPreco,
             sem_preco: semPreco
+          }),
+          isWriteMutation: false
+        };
+      }
+
+      case 'buscar_produto_catalogo': {
+        const termo = args.termo.toLowerCase();
+        const palavras = termo.split(/\s+/).filter((p: string) => p.length >= 2);
+        
+        let query = supabase.from('produtos_master_global')
+          .select('id, nome_padrao, nome_base, marca, categoria, unidade_base, qtd_valor, qtd_unidade')
+          .eq('status', 'aprovado');
+        
+        // Apply word-by-word ilike filter
+        for (const palavra of palavras) {
+          query = query.or(`nome_padrao.ilike.%${palavra}%,nome_base.ilike.%${palavra}%,marca.ilike.%${palavra}%`);
+        }
+        
+        const { data: produtos, error } = await query.limit(5);
+        if (error) throw error;
+        
+        if (!produtos || produtos.length === 0) {
+          return { result: JSON.stringify({ mensagem: `Nenhum produto encontrado no catálogo para "${args.termo}". Pode ser adicionado como item livre.`, produtos: [] }), isWriteMutation: false };
+        }
+        
+        return {
+          result: JSON.stringify({
+            termo: args.termo,
+            total: produtos.length,
+            produtos: produtos.map((p: any) => ({
+              produto_master_id: p.id,
+              nome: p.nome_padrao,
+              nome_base: p.nome_base,
+              marca: p.marca,
+              categoria: p.categoria,
+              unidade: p.unidade_base,
+              qtd: p.qtd_valor ? `${p.qtd_valor} ${p.qtd_unidade}` : null
+            }))
           }),
           isWriteMutation: false
         };
@@ -853,14 +908,21 @@ Regras de Listas de Compras:
 11. Quando o usuário falar em "lista", NUNCA assuma lista nova. Verifique lista ativa ou listas existentes primeiro.
 12. Ao criar lista nova: peça o nome, crie, e ela vira lista ativa automaticamente.
 13. Ao abrir/selecionar lista existente: defina como lista ativa com definir_lista_ativa.
-14. Com lista ativa, comandos de adicionar/remover/alterar operam nela sem perguntar novamente.
-15. Se pedir para adicionar "na lista" sem especificar e sem lista ativa: liste as existentes e pergunte.
-16. Use resolver_item_por_historico para sugerir o produto habitual do usuário quando relevante.
-17. Múltiplos produtos possíveis no item: liste opções e pergunte (desambiguação de produto).
-18. Múltiplas listas possíveis: liste opções e pergunte (desambiguação de lista).
-19. Para valor da lista, use calcular_valor_lista e apresente como ESTIMATIVA, nunca preço garantido.
-20. Ao adicionar múltiplos itens de uma vez, use uma única chamada de adicionar_itens_lista com array.
-21. EXCLUSÃO DE LISTA INTEIRA NÃO É PERMITIDA pelo WhatsApp. Se o usuário pedir para excluir/apagar/deletar uma lista completa, responda: "Por segurança, a exclusão de uma lista inteira só pode ser feita diretamente no aplicativo do Picotinho."
+14. RESOLUÇÃO IMPLÍCITA DE LISTA: Quando o usuário citar o nome de uma lista na mensagem (ex: "adiciona batata na lista teste 15"), use buscar_lista_por_nome para encontrá-la. Se houver EXATAMENTE UMA correspondência, use essa lista diretamente como destino da ação E defina-a como lista ativa em segundo plano (sem perguntar "quer ativar?"). Só pergunte quando houver ambiguidade real (2+ listas correspondentes).
+15. BUSCA TOLERANTE DE LISTA: A busca por nome de lista deve ser tolerante. Se o usuário disser "lista 15", busque por "15". Se houver apenas uma lista com "15" no nome (ex: "teste 15"), use-a diretamente. Se houver múltiplas (ex: "teste 15" e "15 de agosto"), apresente as opções e pergunte.
+16. Com lista ativa, comandos de adicionar/remover/alterar operam nela sem perguntar novamente.
+17. Se pedir para adicionar "na lista" sem especificar e sem lista ativa: liste as existentes e pergunte.
+
+Regras de Resolução de Produtos para Lista:
+18. ORDEM OBRIGATÓRIA ao adicionar item na lista — NUNCA pule etapas:
+    a) PRIMEIRO: use resolver_item_por_historico para verificar se o usuário já comprou esse produto antes. Se encontrar opções, use o mais frequente (ou pergunte se houver várias opções relevantes).
+    b) SEGUNDO: se o histórico não retornar resultados, use buscar_produto_catalogo para localizar no catálogo master global. Se encontrar UMA opção clara, use o produto_master_id ao inserir. Se múltiplas, pergunte qual.
+    c) TERCEIRO (último recurso): só crie como item_livre=true quando NENHUMA resolução estruturada for possível. Ao fazer isso, avise o usuário: "Adicionei como item livre. Itens livres podem não participar do cálculo de preço e comparação de mercados."
+19. Múltiplos produtos possíveis no item: liste opções e pergunte (desambiguação de produto).
+20. Múltiplas listas possíveis: liste opções e pergunte (desambiguação de lista).
+21. Para valor da lista, use calcular_valor_lista e apresente como ESTIMATIVA, nunca preço garantido.
+22. Ao adicionar múltiplos itens de uma vez, resolva cada um antes de chamar adicionar_itens_lista. Pode usar múltiplas chamadas de resolver_item_por_historico em sequência.
+23. EXCLUSÃO DE LISTA INTEIRA NÃO É PERMITIDA pelo WhatsApp. Se o usuário pedir para excluir/apagar/deletar uma lista completa, responda: "Por segurança, a exclusão de uma lista inteira só pode ser feita diretamente no aplicativo do Picotinho."
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras e organização doméstica.`;
 
