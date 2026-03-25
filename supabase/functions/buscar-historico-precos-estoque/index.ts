@@ -208,7 +208,84 @@ serve(async (req) => {
     }
     console.log(`📦 Total itens pré-processados: ${todosItensNotas.length}`);
 
-    // 5) Para cada produto, buscar match no array pré-processado (sem queries adicionais)
+    // 5) Buscar CNPJs no raio para menorPrecoArea (1 query supermercados)
+    let cnpjsNoRaio: string[] = [];
+    const cnpjParaInfo = new Map<string, string>();
+
+    if (latitude && longitude) {
+      const raio = raioKm || 5;
+      const { data: supermercados } = await supabase
+        .from('supermercados')
+        .select('nome, cnpj, latitude, longitude')
+        .eq('ativo', true)
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null);
+
+      for (const s of supermercados || []) {
+        const lat = parseFloat(String(s.latitude));
+        const lon = parseFloat(String(s.longitude));
+        if (isNaN(lat) || isNaN(lon)) continue;
+        const dist = calcularDistancia(latitude, longitude, lat, lon);
+        if (dist <= raio) {
+          cnpjsNoRaio.push(s.cnpj);
+          cnpjParaInfo.set(s.cnpj, s.nome);
+        }
+      }
+      console.log(`📍 CNPJs no raio (${raio}km): ${cnpjsNoRaio.length}`);
+    }
+
+    // 6) Coletar todos os produto_master_id para busca em lote de preços de área
+    const masterIds: string[] = [];
+    const masterIdToProdutoIds = new Map<string, string[]>();
+    
+    for (const produtoData of produtos) {
+      const produtoId = typeof produtoData === 'object' ? produtoData.id : null;
+      if (!produtoId) continue;
+      const estoqueInfo = estoqueMap.get(produtoId);
+      if (!estoqueInfo?.produto_master_id) continue;
+      const mid = estoqueInfo.produto_master_id;
+      if (!masterIds.includes(mid)) masterIds.push(mid);
+      const existing = masterIdToProdutoIds.get(mid) || [];
+      existing.push(produtoId);
+      masterIdToProdutoIds.set(mid, existing);
+    }
+
+    // 7) Buscar preços de área em lote (1 query) — usando service_role ignora RLS
+    const precosAreaMap = new Map<string, { preco: number; data: string; estabelecimento: string }>();
+    
+    if (cnpjsNoRaio.length > 0 && masterIds.length > 0) {
+      // Buscar em batches de 50 master_ids para evitar query muito grande
+      const batchSize = 50;
+      for (let i = 0; i < masterIds.length; i += batchSize) {
+        const batch = masterIds.slice(i, i + batchSize);
+        const { data: precosArea } = await supabase
+          .from('precos_atuais')
+          .select('produto_master_id, valor_unitario, preco_por_unidade_base, data_atualizacao, estabelecimento_cnpj, estabelecimento_nome')
+          .in('produto_master_id', batch)
+          .in('estabelecimento_cnpj', cnpjsNoRaio);
+
+        for (const preco of precosArea || []) {
+          const mid = preco.produto_master_id;
+          const precoEfetivo = (preco.preco_por_unidade_base && preco.preco_por_unidade_base > 0)
+            ? preco.preco_por_unidade_base
+            : preco.valor_unitario;
+          
+          if (!precoEfetivo || precoEfetivo <= 0) continue;
+          
+          const existing = precosAreaMap.get(mid);
+          if (!existing || precoEfetivo < existing.preco) {
+            precosAreaMap.set(mid, {
+              preco: precoEfetivo,
+              data: preco.data_atualizacao,
+              estabelecimento: preco.estabelecimento_nome || cnpjParaInfo.get(preco.estabelecimento_cnpj) || preco.estabelecimento_cnpj
+            });
+          }
+        }
+      }
+      console.log(`💰 Preços de área encontrados: ${precosAreaMap.size} masters`);
+    }
+
+    // 8) Para cada produto, buscar match no array pré-processado e montar resultado
     const resultado = [];
 
     for (const produtoData of produtos) {
@@ -222,7 +299,7 @@ serve(async (req) => {
         continue;
       }
 
-      // ✅ CORREÇÃO: Normalizar SEMPRE antes de comparar (case-insensitive)
+      // Normalizar SEMPRE antes de comparar (case-insensitive)
       const produtoNormalizado = normalizarNomeProduto(estoqueInfo.produto_nome_normalizado || estoqueInfo.produto_nome || produtoNome);
 
       // Buscar matches no array pré-processado
@@ -243,25 +320,29 @@ serve(async (req) => {
       }
 
       // Fallback: usar preço do próprio estoque se não encontrou nas notas
+      // CORREÇÃO: usar created_at (data de entrada no estoque), NUNCA updated_at
       if (!ultimaCompraDoUsuario && estoqueInfo) {
         const { data: estoqueCompleto } = await supabase
           .from('estoque_app')
-          .select('preco_unitario_ultimo, preco_por_unidade_base, updated_at')
+          .select('preco_unitario_ultimo, preco_por_unidade_base, created_at')
           .eq('id', produtoId)
           .maybeSingle();
         
         if (estoqueCompleto) {
           const precoBase = estoqueCompleto.preco_por_unidade_base || estoqueCompleto.preco_unitario_ultimo;
           if (precoBase && precoBase > 0) {
-            ultimaCompraDoUsuario = { data: estoqueCompleto.updated_at, preco: precoBase, quantidade: 1 };
+            ultimaCompraDoUsuario = { data: estoqueCompleto.created_at, preco: precoBase, quantidade: 1 };
           }
         }
       }
 
-      resultado.push({ id: produtoId, produto: produtoNome, ultimaCompraUsuario: ultimaCompraDoUsuario, menorPrecoArea: null });
+      // Menor preço na área: buscar do mapa pré-calculado por produto_master_id
+      const menorPrecoArea = precosAreaMap.get(estoqueInfo.produto_master_id) || null;
+
+      resultado.push({ id: produtoId, produto: produtoNome, ultimaCompraUsuario: ultimaCompraDoUsuario, menorPrecoArea });
     }
 
-    console.log(`✅ Resultados: ${resultado.length} produtos processados`);
+    console.log(`✅ Resultados: ${resultado.length} produtos processados (${precosAreaMap.size} com preço de área)`);
 
     return new Response(JSON.stringify({ success: true, resultados: resultado }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
