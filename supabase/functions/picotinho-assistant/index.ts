@@ -697,6 +697,44 @@ async function executeTool(
         };
       }
 
+      case 'buscar_produto_catalogo': {
+        const termo = args.termo.toLowerCase();
+        const palavras = termo.split(/\s+/).filter((p: string) => p.length >= 2);
+        
+        let query = supabase.from('produtos_master_global')
+          .select('id, nome_padrao, nome_base, marca, categoria, unidade_base, qtd_valor, qtd_unidade')
+          .eq('status', 'aprovado');
+        
+        // Apply word-by-word ilike filter
+        for (const palavra of palavras) {
+          query = query.or(`nome_padrao.ilike.%${palavra}%,nome_base.ilike.%${palavra}%,marca.ilike.%${palavra}%`);
+        }
+        
+        const { data: produtos, error } = await query.limit(5);
+        if (error) throw error;
+        
+        if (!produtos || produtos.length === 0) {
+          return { result: JSON.stringify({ mensagem: `Nenhum produto encontrado no catálogo para "${args.termo}". Pode ser adicionado como item livre.`, produtos: [] }), isWriteMutation: false };
+        }
+        
+        return {
+          result: JSON.stringify({
+            termo: args.termo,
+            total: produtos.length,
+            produtos: produtos.map((p: any) => ({
+              produto_master_id: p.id,
+              nome: p.nome_padrao,
+              nome_base: p.nome_base,
+              marca: p.marca,
+              categoria: p.categoria,
+              unidade: p.unidade_base,
+              qtd: p.qtd_valor ? `${p.qtd_valor} ${p.qtd_unidade}` : null
+            }))
+          }),
+          isWriteMutation: false
+        };
+      }
+
       default:
         return { result: JSON.stringify({ erro: `Tool "${toolName}" não reconhecida.` }), isWriteMutation: false };
     }
