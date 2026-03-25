@@ -645,14 +645,28 @@ async function executeTool(
           }
         }
 
-        const resultados = Object.entries(contagem)
+        const resultadosBase = Object.entries(contagem)
           .sort((a, b) => b[1].count - a[1].count)
           .slice(0, 5)
           .map(([nome, info]) => ({ nome, vezes_comprado: info.count, ultimo_preco: info.ultimo_preco, ultimo_mercado: info.ultimo_mercado }));
 
-        if (resultados.length === 0) {
+        if (resultadosBase.length === 0) {
           return { result: JSON.stringify({ mensagem: `Nenhum produto com "${args.termo}" encontrado no histórico de compras.` }), isWriteMutation: false };
         }
+
+        // Tentar resolver produto_id via catálogo master para cada resultado
+        const resultados = await Promise.all(resultadosBase.map(async (r) => {
+          try {
+            const palavras = r.nome.split(/\s+/).filter((p: string) => p.length >= 2);
+            if (palavras.length === 0) return r;
+            const { data: masters } = await supabase.rpc('buscar_produtos_master_por_palavras', { p_palavras: palavras, p_limite: 3 });
+            if (masters && masters.length === 1) {
+              return { ...r, produto_id: masters[0].id, nome_catalogo: masters[0].nome_padrao };
+            }
+            return r;
+          } catch { return r; }
+        }));
+
         return { result: JSON.stringify({ termo: args.termo, resultados }), isWriteMutation: false };
       }
 
