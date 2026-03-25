@@ -886,14 +886,56 @@ async function executeTool(
             continue;
           }
 
-          // Sem produto_id e sem item_livre — tratar como item sem vínculo
-          console.log(`📦 [insert] ${item.produto_nome} | id_original: nenhum | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: sem_id_informado`);
-          itensParaInserir.push({
-            lista_id: listaId,
+          // Sem produto_id e sem item_livre — tentar resolver no catálogo antes de desistir
+          console.log(`🔍 [fallback] "${item.produto_nome}" chegou sem produto_id. Tentando resolver no catálogo...`);
+          const palavrasFallback = item.produto_nome.split(/\s+/).filter((p: string) => p.length >= 2);
+
+          if (palavrasFallback.length > 0) {
+            const { data: mastersFallback } = await supabase.rpc('buscar_produtos_master_por_palavras', {
+              p_palavras: palavrasFallback, p_limite: 5
+            });
+
+            if (mastersFallback?.length === 1) {
+              // 1 match claro — vincular automaticamente
+              console.log(`✅ [fallback] "${item.produto_nome}" → match único: ${mastersFallback[0].nome_padrao} (${mastersFallback[0].id})`);
+              itensParaInserir.push({
+                lista_id: listaId,
+                produto_nome: item.produto_nome,
+                quantidade: item.quantidade || 1,
+                unidade_medida: item.unidade_medida || 'UN',
+                item_livre: false,
+                produto_id: mastersFallback[0].id
+              });
+              continue;
+            }
+
+            if (mastersFallback && mastersFallback.length > 1) {
+              // Múltiplas opções — perguntar ao usuário
+              console.log(`⚠️ [fallback] "${item.produto_nome}" → ${mastersFallback.length} opções. Desambiguação necessária.`);
+              itensPendentesDesambiguacao.push({
+                produto_nome: item.produto_nome,
+                quantidade: item.quantidade || 1,
+                unidade_medida: item.unidade_medida || 'UN',
+                origem_fluxo: 'fallback_sem_id',
+                opcoes: mastersFallback.map((m: any) => ({
+                  produto_id: m.id,
+                  nome_padrao: m.nome_padrao,
+                  marca: m.marca,
+                  categoria: m.categoria
+                }))
+              });
+              continue;
+            }
+          }
+
+          // 0 resultados ou palavras insuficientes — pedir confirmação para item livre
+          console.log(`❓ [fallback] "${item.produto_nome}" → sem correspondência no catálogo. Aguardando confirmação.`);
+          itensPendentesConfirmacao.push({
             produto_nome: item.produto_nome,
             quantidade: item.quantidade || 1,
             unidade_medida: item.unidade_medida || 'UN',
-            item_livre: true
+            origem_fluxo: 'fallback_sem_id',
+            motivo: `"${item.produto_nome}" não foi encontrado no catálogo. Deseja adicionar como item livre?`
           });
         }
 
