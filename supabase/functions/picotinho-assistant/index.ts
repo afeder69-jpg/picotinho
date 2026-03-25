@@ -984,6 +984,57 @@ const handler = async (req: Request): Promise<Response> => {
 
     const nomePreferido = preferencias?.nome_preferido || '';
     const listaAtivaId: string | null = preferencias?.lista_ativa_id || null;
+    const opcoesPendentes = preferencias?.opcoes_pendentes || null;
+
+    // --- Detectar escolha numérica e resolver via snapshot ---
+    let contextoEscolhaInjetado: string | null = null;
+    if (opcoesPendentes && typeof opcoesPendentes === 'object') {
+      const snap = opcoesPendentes as { timestamp?: string; contexto?: string; lista_id?: string; opcoes?: Array<{ numero: number; produto_id: string; nome: string }> };
+      const snapTimestamp = snap.timestamp ? new Date(snap.timestamp).getTime() : 0;
+      const agora = Date.now();
+      const EXPIRACAO_MS = 10 * 60 * 1000; // 10 minutos
+
+      if (agora - snapTimestamp > EXPIRACAO_MS) {
+        // Snapshot expirado — limpar
+        console.log('⏰ [SNAPSHOT] Opções pendentes expiradas, limpando.');
+        await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+      } else {
+        // Tentar detectar escolha numérica
+        let numeroEscolhido: number | null = null;
+
+        const matchNumero = conteudo.match(/^\s*(?:(?:opção|opcao|número|numero|a|quero\s+(?:a|o)?)\s*)?(\d+)\s*$/i);
+        if (matchNumero) {
+          numeroEscolhido = parseInt(matchNumero[1], 10);
+        } else if (/^\s*(?:a\s+)?primeir[ao]\s*$/i.test(conteudo)) {
+          numeroEscolhido = 1;
+        } else if (/^\s*(?:a\s+)?segund[ao]\s*$/i.test(conteudo)) {
+          numeroEscolhido = 2;
+        } else if (/^\s*(?:a\s+)?terceir[ao]\s*$/i.test(conteudo)) {
+          numeroEscolhido = 3;
+        } else if (/^\s*(?:a\s+)?quart[ao]\s*$/i.test(conteudo)) {
+          numeroEscolhido = 4;
+        } else if (/^\s*(?:a\s+)?quint[ao]\s*$/i.test(conteudo)) {
+          numeroEscolhido = 5;
+        }
+
+        if (numeroEscolhido !== null && snap.opcoes && snap.opcoes.length > 0) {
+          const opcaoEscolhida = snap.opcoes.find(o => o.numero === numeroEscolhido);
+          if (opcaoEscolhida) {
+            contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido}. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar adicionar_itens_lista. NÃO busque novamente no catálogo. O contexto da ação é: ${snap.contexto || 'adicionar_item_lista'}${snap.lista_id ? ` na lista ${snap.lista_id}` : ''}.`;
+            console.log(`✅ [SNAPSHOT] Escolha ${numeroEscolhido} resolvida → produto_id: ${opcaoEscolhida.produto_id}, nome: ${opcaoEscolhida.nome}`);
+          } else {
+            contextoEscolhaInjetado = `O usuário respondeu "${conteudo}" mas a opção ${numeroEscolhido} não existe. As opções válidas eram de 1 a ${snap.opcoes.length}. Informe o usuário e reapresente as opções: ${snap.opcoes.map(o => `${o.numero}. ${o.nome}`).join(', ')}.`;
+            console.log(`⚠️ [SNAPSHOT] Opção ${numeroEscolhido} fora do range (1-${snap.opcoes.length})`);
+          }
+          // Limpar snapshot após uso
+          await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+        } else if (numeroEscolhido === null) {
+          // Mensagem não é escolha numérica — usuário mudou de assunto, limpar snapshot
+          console.log('🔄 [SNAPSHOT] Mensagem não é escolha numérica, limpando opções pendentes.');
+          await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+        }
+      }
+    }
 
     // Load active list title if set
     let listaAtivaContexto = 'Nenhuma lista ativa no momento.';
