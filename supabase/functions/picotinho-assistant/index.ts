@@ -125,6 +125,20 @@ const stockToolDefinitions = [
         required: []
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "estoque_valor_atual",
+      description: "Calcula o valor estimado do estoque usando os PREÇOS ATUAIS dos mercados na área de atuação do usuário (não o preço pago). Use quando o usuário perguntar explicitamente por 'valor atual', 'quanto valeria hoje', 'pelos preços de hoje', 'melhores preços da área'. Retorna uma estimativa dinâmica.",
+      parameters: {
+        type: "object",
+        properties: {
+          categoria: { type: "string", description: "Filtrar por categoria específica (opcional)" }
+        },
+        required: []
+      }
+    }
   }
 ];
 
