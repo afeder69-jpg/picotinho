@@ -1,44 +1,48 @@
 
 
-## Picotinho WhatsApp — Fase 2: Plano Final com Nomenclatura Padronizada
+## Correção: integração entre busca no catálogo e gravação na lista
 
-Todas as tools de lista agora carregam sufixo `_lista` explicito, eliminando qualquer ambiguidade com operacoes de estoque.
+### Problema raiz
 
----
+O campo retornado por `buscar_produto_catalogo` é `produto_master_id` (linha 722), mas `adicionar_itens_lista` espera `produto_id` (linha 549). Quando o LLM recebe `produto_master_id` da busca e tenta passá-lo para a inserção, o campo não é reconhecido e o item é gravado sem vínculo estrutural.
 
-### Nomenclatura padronizada das tools
+O system prompt na regra 18b reforça o nome errado ("use o produto_master_id diretamente"), agravando o problema.
 
-| Tool (nome final) | Tipo | Descricao curta |
-|---|---|---|
-| `listar_listas` | leitura | Retorna listas do usuario com contagem de itens |
-| `buscar_lista_por_nome` | leitura | Busca listas por termo, desambigua se >1 match |
-| `criar_lista` | mutacao | Cria lista nova, define como ativa |
-| `definir_lista_ativa` | metadata | Atualiza lista ativa nas preferencias |
-| `listar_itens_lista` | leitura | Retorna itens de uma lista especifica ou da ativa |
-| `adicionar_itens_lista` | mutacao | Adiciona array de itens a uma lista |
-| `remover_item_lista` | mutacao | Remove item de uma lista |
-| `alterar_quantidade_item_lista` | mutacao | Altera quantidade de item em uma lista |
-| `resolver_item_por_historico` | leitura | Busca produto habitual do usuario em notas |
-| `calcular_valor_lista` | leitura | Estima valor otimizado da lista |
+### Mudanças (arquivo único: `supabase/functions/picotinho-assistant/index.ts`)
 
-**Mudancas em relacao ao plano anterior:**
-- `alterar_quantidade_item` → `alterar_quantidade_item_lista` (clareza: operacao sobre lista, nao estoque)
-- `adicionar_item_lista` → `adicionar_itens_lista` (plural, reflete que aceita array)
+**1. Renomear campo de saída do catálogo (linha 722)**
+- De: `produto_master_id: p.id`
+- Para: `produto_id: p.id`
 
-Tools de estoque da Fase 1 permanecem intactas: `baixar_estoque`, `aumentar_estoque`, `adicionar_produto`, `buscar_estoque`, `itens_acabando`, `buscar_produtos_similares`.
+**2. Atualizar descrição da tool (linha 277)**
+- De: "Retorna produto_master_id"
+- Para: "Retorna produto_id"
 
----
+**3. Enriquecer `resolver_item_por_historico` com `produto_id`**
+- Após encontrar produtos no histórico, tentar resolver cada um via RPC `buscar_produtos_master_por_palavras`
+- Se encontrar match único, incluir `produto_id` no resultado
+- Isso permite que itens do histórico também sejam adicionados como estruturados
 
-### Resto do plano — sem alteracoes
+**4. Corrigir system prompt — regra 18b (linha 917)**
+- De: "use o produto_master_id diretamente"
+- Para: "use o produto_id retornado diretamente no campo produto_id de adicionar_itens_lista"
 
-Tudo o mais permanece identico ao plano aprovado anteriormente:
+**5. Reforçar no prompt: preservar identificador ao escolher opção numerada**
+- Adicionar instrução explícita: quando o usuário responde com um número (ex: "1"), o assistente deve reutilizar o `produto_id` da opção correspondente, e não apenas o texto exibido
 
-- **Migration**: ADD COLUMN `lista_ativa_id` em `whatsapp_preferencias_usuario`
-- **Arquivo editado**: apenas `supabase/functions/picotinho-assistant/index.ts`
-- **10 tools** com a nomenclatura acima
-- **Regras 11-21** no system prompt (incluindo bloqueio de exclusao de lista)
-- **Contador** `writeMutationsExecuted` cobrindo estoque + lista
-- **`definir_lista_ativa`** e metadata, nao conta como mutacao
-- **`adicionar_itens_lista`** aceita array, conta como 1 mutacao
-- **Seguranca**: todas as queries filtram por `user_id = usuarioId`
+**6. Adicionar log de debug no insert (linhas 543-556)**
+- Antes do insert em `listas_compras_itens`, logar o payload completo para diagnóstico futuro
+
+### Resumo
+
+| Local | Mudança |
+|---|---|
+| Linha 722 | `produto_master_id` → `produto_id` na saída do catálogo |
+| Linha 277 | Descrição da tool atualizada |
+| Linhas 625-656 | `resolver_item_por_historico` tenta resolver `produto_id` via RPC |
+| Linha 917 | Regra 18b corrigida no prompt |
+| Regra nova | Instrução para preservar `produto_id` ao escolher opção numerada |
+| Linhas 543-556 | Log de payload antes do insert |
+
+Nenhuma alteração de schema. Arquivo único editado.
 
