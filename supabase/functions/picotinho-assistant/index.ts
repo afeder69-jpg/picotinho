@@ -1059,17 +1059,65 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`👤 Usuário: ${usuarioId}, Tipo: ${tipoMensagem}`);
 
-    // 2. Handle audio — not yet supported
+    // 2. Handle audio — transcrever via Whisper e continuar fluxo normal
     if (tipoMensagem === 'audio') {
-      const audioMsg = "🎤 Em breve vou entender áudios! Por enquanto, me mande por texto que eu te ajudo. 😊";
-      await sendWhatsAppMessage(remetente, audioMsg);
-      await supabase.from('whatsapp_mensagens').update({
-        resposta_enviada: audioMsg, processada: true,
-        data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
-      }).eq('id', messageId);
-      return new Response(JSON.stringify({ ok: true, action: 'audio_not_supported' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      const audioUrl = mensagem.anexo_info?.url;
+      if (!audioUrl) {
+        const erroMsg = "❌ Não consegui acessar o áudio. Pode tentar enviar novamente?";
+        await sendWhatsAppMessage(remetente, erroMsg);
+        await supabase.from('whatsapp_mensagens').update({
+          resposta_enviada: erroMsg, processada: true,
+          data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
+        }).eq('id', messageId);
+        return new Response(JSON.stringify({ ok: true, action: 'audio_no_url' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      console.log('🎤 Áudio detectado — iniciando transcrição via Whisper...');
+      console.log('🔗 URL do áudio:', audioUrl);
+
+      try {
+        const { data: transcricao, error: transcError } = await supabase.functions.invoke('transcribe-audio', {
+          body: { audioUrl }
+        });
+
+        if (transcError || !transcricao?.text) {
+          console.error('❌ Erro na transcrição:', transcError || 'Sem texto retornado');
+          const falhaMsg = "🎤 Não consegui entender o áudio. Pode repetir por texto?";
+          await sendWhatsAppMessage(remetente, falhaMsg);
+          await supabase.from('whatsapp_mensagens').update({
+            resposta_enviada: falhaMsg, processada: true,
+            data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
+          }).eq('id', messageId);
+          return new Response(JSON.stringify({ ok: true, action: 'audio_transcription_failed' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Transcrição bem-sucedida — substituir conteúdo e persistir
+        conteudo = transcricao.text;
+        console.log('✅ Transcrição concluída:', conteudo);
+
+        await supabase.from('whatsapp_mensagens').update({
+          conteudo: conteudo
+        }).eq('id', messageId);
+
+        console.log('💾 Conteúdo transcrito persistido na mensagem');
+        // Fluxo continua normalmente com o texto transcrito...
+
+      } catch (err: any) {
+        console.error('❌ Exceção na transcrição:', err.message);
+        const erroMsg = "🎤 Tive um problema ao processar seu áudio. Pode tentar por texto?";
+        await sendWhatsAppMessage(remetente, erroMsg);
+        await supabase.from('whatsapp_mensagens').update({
+          resposta_enviada: erroMsg, processada: true,
+          data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
+        }).eq('id', messageId);
+        return new Response(JSON.stringify({ ok: true, action: 'audio_transcription_error' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // 3. Load user preferences + active list context
