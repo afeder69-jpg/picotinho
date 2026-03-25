@@ -1,70 +1,60 @@
 
 
-## Plano: Alinhar leitura de estoque entre WhatsApp e Aplicativo
+## Plano: RPC + WhatsApp alinhado ao APK (sem alterar o APK)
 
-### Diagnóstico confirmado
+### Causa raiz confirmada
 
-**App (EstoqueAtual.tsx):**
-- Consolida registros duplicados via normalização de nome (uppercase, remove "KG", "GRANEL GRANEL" → "GRANEL")
-- Por padrão oculta itens com `quantidade <= 0` (toggle `mostrarItensZerados`)
-- Exibe **duas colunas** de valor: "Valor Pago" (`preco_unitario_ultimo × quantidade`) e "Valor Atual" (preço da área ou fallback para preço pago)
-- O resumo por categoria (ex: Hortifruti) conta itens **consolidados** e soma **ambos** os valores
+O APK usa `categoriasEquivalentes()` (de `src/lib/categorias.ts`) que mapeia sinônimos de categorias antes de agrupar:
+- "carnes", "frango", "peixe" → AÇOUGUE
+- "frios", "laticínios", "queijo" → LATICÍNIOS/FRIOS
+- "higiene", "farmácia" → HIGIENE/FARMÁCIA
+- etc.
 
-**WhatsApp (picotinho-assistant `buscar_estoque`):**
-- Retorna registros brutos da tabela `estoque_app` com `limit(50)`
-- Sem consolidação de nomes duplicados
-- Sem filtro de zerados
-- Soma `preco_unitario_ultimo × quantidade` por registro bruto
+O WhatsApp agrupa pela string bruta do campo `categoria` do banco. Itens com "carnes" não entram em AÇOUGUE, causando a perda de itens e valores.
 
-**Resultado:** contagem inflada, valor inflado, e limite de 50 pode cortar registros.
+### Passo 1 — Migration: criar RPC `resumo_estoque_por_categoria`
 
-### Regra funcional definida pelo usuário
+Função SQL `SECURITY DEFINER` que:
+1. Lê todos os registros de `estoque_app` do usuário (sem limit)
+2. Normaliza nomes de produtos (uppercase, remove KG, GRANEL duplicado)
+3. Consolida duplicados por nome normalizado (soma quantidades, preço do mais recente por `updated_at`)
+4. Filtra itens com quantidade total <= 0
+5. Normaliza categorias para os 11 termos canônicos usando CASE/WHEN com todos os sinônimos de `src/lib/categorias.ts`
+6. Agrupa por categoria normalizada e retorna: `categoria`, `total_itens`, `valor_pago`
+7. O cálculo de valor usa `ROUND(preco * quantidade, 2)` por item antes de somar — idêntico ao app
 
-O valor **padrão** do estoque deve usar o **preço pago pelo usuário** (`preco_unitario_ultimo`), não o preço da área. A consulta por "preço atual da área" será uma visão separada, futuramente.
+O mapeamento CASE/WHEN incluirá todos os sinônimos do fallbackMap em `categorias.ts`:
+- carnes, carne, frango, frangos, peixe, peixes, suínos, bovino → açougue
+- frios, laticínios, laticinios, queijo, embutidos, leite, iogurte, manteiga, requeijão → laticínios/frios
+- farmácia, farmacia, higiene, cuidados pessoais, sabonete, shampoo, creme dental, remedios, remédios → higiene/farmácia
+- frutas, verduras, legumes, hortaliças → hortifruti
+- E todos os demais sinônimos presentes no fallbackMap
 
-### Correção planejada
+### Passo 2 — Alterar `buscar_estoque` no `picotinho-assistant/index.ts`
 
-**Arquivo:** `supabase/functions/picotinho-assistant/index.ts`
-
-**Mudança na tool `buscar_estoque` (linhas 357-374):**
-
-1. Remover `limit(50)` e usar `limit(500)` para garantir que todos os registros sejam processados antes da consolidação
-
-2. Após a query, aplicar a **mesma lógica de consolidação** do app:
+Quando o assistente pedir um resumo geral de estoque (sem filtro de produto específico), a tool `buscar_estoque` chamará:
 
 ```typescript
-// Normalização idêntica ao app (EstoqueAtual.tsx linhas 765-773)
-const normalizarNome = (nome: string): string => {
-  return nome.toUpperCase().trim()
-    .replace(/\s+/g, ' ')
-    .replace(/\bKG\b/gi, '')
-    .replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
+const { data: resumo } = await supabase.rpc('resumo_estoque_por_categoria', { p_user_id: usuarioId });
 ```
 
-3. Agrupar por nome normalizado, somando quantidades e mantendo o preço do registro mais recente (`updated_at`)
+E usará o resultado diretamente para montar a resposta com categorias, contagens e valores — sem recalcular.
 
-4. Filtrar itens com `quantidade_total <= 0` por padrão (o app oculta zerados por padrão)
+Quando for busca por produto específico (`tipo_busca === 'produto'`), mantém a lógica atual de consolidação inline.
 
-5. Retornar no JSON:
-   - `total`: contagem de itens **consolidados** com saldo > 0
-   - `valor_total`: soma de `preco_unitario_ultimo × quantidade_consolidada` (preço pago, não preço de área)
-   - `itens`: lista consolidada com nome, quantidade, preço, categoria
+Quando for busca por categoria específica (`tipo_busca === 'categoria'`), chamará a RPC e filtrará a categoria desejada do resultado (garantindo que sinônimos sejam mapeados corretamente).
 
-### Detalhes da implementação
+### Passo 3 — Nenhuma alteração no APK
 
-A lógica de consolidação será uma réplica fiel do `Map<string, any>` usado em `EstoqueAtual.tsx` (linhas 776-840):
-
-- Chave = nome normalizado
-- Se já existe: somar quantidade, manter preço do registro com `updated_at` mais recente
-- Se não existe: criar entrada com valores do registro atual
-- Ao final: converter Map para array, filtrar `quantidade_total > 0`, calcular `valor_total`
-
-Nenhuma mudança no webhook, na transcrição ou em outras tools do assistente.
+O APK permanece inalterado. A RPC é a "fonte de verdade" que o WhatsApp consome. O APK continua com sua lógica local que já funciona corretamente.
 
 ### Resultado esperado
 
-Ao pedir "estoque de hortifruti" no WhatsApp, o assistente retornará a mesma contagem de itens e o mesmo valor total "Valor Pago" exibido no app, usando consolidação e filtro idênticos.
+O resumo por categoria do WhatsApp passará a bater exatamente com o APK em quantidade de itens e valor pago, porque ambos usarão a mesma lógica de normalização de categorias e consolidação de produtos.
+
+### Detalhes técnicos
+
+**Arquivos modificados:**
+- Nova migration SQL: `resumo_estoque_por_categoria`
+- `supabase/functions/picotinho-assistant/index.ts`: alterar case `buscar_estoque` para usar RPC quando aplicável
 
