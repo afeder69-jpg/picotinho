@@ -658,19 +658,72 @@ async function executeTool(
           });
         }
 
-        // Inserir os itens validados
+        // Upsert: consolidar itens duplicados em vez de criar novas linhas
         let inseridos: any[] = [];
-        if (itensParaInserir.length > 0) {
-          const { data, error } = await supabase.from('listas_compras_itens').insert(itensParaInserir).select();
-          if (error) throw error;
-          inseridos = data || [];
+        let consolidados: any[] = [];
+        for (const item of itensParaInserir) {
+          let existente: any = null;
+
+          if (item.produto_id) {
+            // Buscar por produto_id na mesma lista
+            const { data } = await supabase
+              .from('listas_compras_itens')
+              .select('id, produto_nome, quantidade, unidade_medida')
+              .eq('lista_id', item.lista_id)
+              .eq('produto_id', item.produto_id)
+              .limit(1)
+              .maybeSingle();
+            existente = data;
+          } else if (item.item_livre) {
+            // Item livre: buscar por nome (case-insensitive) na mesma lista
+            const { data } = await supabase
+              .from('listas_compras_itens')
+              .select('id, produto_nome, quantidade, unidade_medida')
+              .eq('lista_id', item.lista_id)
+              .eq('item_livre', true)
+              .ilike('produto_nome', item.produto_nome)
+              .limit(1)
+              .maybeSingle();
+            existente = data;
+          }
+
+          if (existente) {
+            const novaQtd = existente.quantidade + (item.quantidade || 1);
+            const { error } = await supabase
+              .from('listas_compras_itens')
+              .update({ quantidade: novaQtd })
+              .eq('id', existente.id);
+            if (error) throw error;
+            console.log(`📦 [upsert] ${item.produto_nome} | consolidado: +${item.quantidade || 1} → total ${novaQtd}`);
+            consolidados.push({
+              nome: item.produto_nome,
+              quantidade_anterior: existente.quantidade,
+              quantidade_adicionada: item.quantidade || 1,
+              quantidade_total: novaQtd,
+              unidade: existente.unidade_medida
+            });
+          } else {
+            const { data, error } = await supabase
+              .from('listas_compras_itens')
+              .insert(item)
+              .select()
+              .single();
+            if (error) throw error;
+            inseridos.push(data);
+          }
         }
 
         const resultado: any = {
           sucesso: true,
           itens_adicionados: inseridos.length,
+          itens_consolidados: consolidados.length,
           itens: inseridos.map((i: any) => ({ nome: i.produto_nome, quantidade: i.quantidade, unidade: i.unidade_medida, item_livre: i.item_livre }))
         };
+
+        if (consolidados.length > 0) {
+          resultado.consolidacoes = consolidados;
+          resultado.instrucao_consolidacao = "Alguns itens já existiam na lista e tiveram sua quantidade aumentada. Informe ao usuário a quantidade total atualizada.";
+        }
 
         if (avisos.length > 0) resultado.avisos = avisos;
 
