@@ -545,7 +545,8 @@ async function executeTool(
           produto_nome: item.produto_nome,
           quantidade: item.quantidade || 1,
           unidade_medida: item.unidade_medida || 'UN',
-          item_livre: true
+          item_livre: item.item_livre === true ? true : false,
+          ...(item.produto_id ? { produto_id: item.produto_id } : {})
         }));
 
         if (itensParaInserir.length === 0) {
