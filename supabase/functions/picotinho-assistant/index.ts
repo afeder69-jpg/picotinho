@@ -258,11 +258,25 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "resolver_item_por_historico",
-      description: "Busca nos histórico de compras (notas fiscais confirmadas) do usuário para encontrar produtos habituais. Retorna os mais frequentes com último preço.",
+      description: "Busca no histórico de compras (notas fiscais confirmadas) do usuário para encontrar produtos habituais. Retorna os mais frequentes com último preço. DEVE ser chamada ANTES de adicionar_itens_lista para tentar resolver o produto de forma estruturada.",
       parameters: {
         type: "object",
         properties: {
           termo: { type: "string", description: "Termo do produto para buscar no histórico" }
+        },
+        required: ["termo"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "buscar_produto_catalogo",
+      description: "Busca produtos no catálogo master global (produtos_master_global). Use APÓS resolver_item_por_historico se o histórico não retornar resultados. Retorna produto_master_id que pode ser passado para adicionar_itens_lista para criar item estruturado (não livre).",
+      parameters: {
+        type: "object",
+        properties: {
+          termo: { type: "string", description: "Termo para buscar no catálogo de produtos" }
         },
         required: ["termo"]
       }
