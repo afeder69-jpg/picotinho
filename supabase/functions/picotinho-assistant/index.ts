@@ -125,6 +125,20 @@ const stockToolDefinitions = [
         required: []
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "estoque_valor_atual",
+      description: "Calcula o valor estimado do estoque usando os PREÇOS ATUAIS dos mercados na área de atuação do usuário (não o preço pago). Use quando o usuário perguntar explicitamente por 'valor atual', 'quanto valeria hoje', 'pelos preços de hoje', 'melhores preços da área'. Retorna uma estimativa dinâmica.",
+      parameters: {
+        type: "object",
+        properties: {
+          categoria: { type: "string", description: "Filtrar por categoria específica (opcional)" }
+        },
+        required: []
+      }
+    }
   }
 ];
 
@@ -432,14 +446,144 @@ async function executeTool(
           }));
 
         // Calcular valor total usando preço pago pelo usuário (preco_unitario_ultimo)
+        // IMPORTANTE: arredondamento POR ITEM, idêntico ao app (EstoqueAtual.tsx linha 1643)
         const valorTotal = itensConsolidados.reduce((acc: number, item: any) => {
-          return acc + (item.quantidade * (item.preco || 0));
+          const subtotalItem = Math.round(((item.preco || 0) * item.quantidade) * 100) / 100;
+          return acc + subtotalItem;
         }, 0);
 
         return { result: JSON.stringify({
           total: itensConsolidados.length,
           valor_total: Math.round(valorTotal * 100) / 100,
           itens: itensConsolidados,
+        }), isWriteMutation: false };
+      }
+
+      case 'estoque_valor_atual': {
+        // Buscar estoque consolidado (mesma lógica de buscar_estoque)
+        let queryAtual = supabase.from('estoque_app').select('id, produto_nome, quantidade, unidade_medida, categoria, marca, preco_unitario_ultimo, updated_at, produto_master_id, produto_nome_normalizado, user_id').eq('user_id', usuarioId);
+        if (args.categoria) {
+          queryAtual = queryAtual.ilike('categoria', `%${args.categoria}%`);
+        }
+        const { data: dataAtual, error: errorAtual } = await queryAtual.order('produto_nome').limit(500);
+        if (errorAtual) throw errorAtual;
+        if (!dataAtual || dataAtual.length === 0) {
+          return { result: JSON.stringify({ mensagem: "Nenhum item encontrado no estoque.", itens: [] }), isWriteMutation: false };
+        }
+
+        // Consolidar (mesma lógica)
+        const normNome = (nome: string): string => nome.toUpperCase().trim().replace(/\s+/g, ' ').replace(/\bKG\b/gi, '').replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL').replace(/\s+/g, ' ').trim();
+        const mapAtual = new Map<string, any>();
+        dataAtual.forEach((item: any) => {
+          const chave = normNome(item.produto_nome);
+          if (mapAtual.has(chave)) {
+            const ex = mapAtual.get(chave);
+            const maisRecente = new Date(item.updated_at) > new Date(ex.updated_at);
+            mapAtual.set(chave, {
+              ...ex,
+              quantidade_total: ex.quantidade_total + item.quantidade,
+              preco_pago: maisRecente ? (item.preco_unitario_ultimo || ex.preco_pago) : (ex.preco_pago || item.preco_unitario_ultimo),
+              updated_at: item.updated_at > ex.updated_at ? item.updated_at : ex.updated_at,
+              produto_master_id: item.produto_master_id || ex.produto_master_id,
+              produto_nome_normalizado: item.produto_nome_normalizado || ex.produto_nome_normalizado,
+            });
+          } else {
+            mapAtual.set(chave, {
+              nome: chave,
+              quantidade_total: item.quantidade,
+              unidade: item.unidade_medida,
+              categoria: item.categoria,
+              preco_pago: item.preco_unitario_ultimo,
+              updated_at: item.updated_at,
+              produto_master_id: item.produto_master_id,
+              produto_nome_normalizado: item.produto_nome_normalizado,
+            });
+          }
+        });
+
+        const itensAtual = Array.from(mapAtual.values()).filter((i: any) => i.quantidade_total > 0);
+
+        // Buscar preços atuais da área via precos_atuais
+        // Buscar configuração de área do usuário
+        const { data: configUser } = await supabase.from('configuracoes_usuario').select('raio_busca_km').eq('usuario_id', usuarioId).maybeSingle();
+        const { data: perfil } = await supabase.from('profiles').select('latitude, longitude').eq('user_id', usuarioId).maybeSingle();
+        const raio = configUser?.raio_busca_km || 5.0;
+
+        // Buscar supermercados na área
+        let cnpjsArea: string[] = [];
+        if (perfil?.latitude && perfil?.longitude) {
+          const { data: mercados } = await supabase.from('supermercados').select('cnpj, latitude, longitude').not('latitude', 'is', null).not('longitude', 'is', null);
+          if (mercados) {
+            const R = 6371;
+            cnpjsArea = mercados.filter((m: any) => {
+              const dLat = (m.latitude - perfil.latitude) * Math.PI / 180;
+              const dLon = (m.longitude - perfil.longitude) * Math.PI / 180;
+              const a = Math.sin(dLat/2)**2 + Math.cos(perfil.latitude * Math.PI / 180) * Math.cos(m.latitude * Math.PI / 180) * Math.sin(dLon/2)**2;
+              return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) <= raio;
+            }).map((m: any) => m.cnpj).filter(Boolean);
+          }
+        }
+
+        // Buscar menor preço por produto na área
+        let precosArea: any[] = [];
+        if (cnpjsArea.length > 0) {
+          const { data: precos } = await supabase.from('precos_atuais').select('produto_nome, valor_unitario, estabelecimento_nome, produto_master_id').in('estabelecimento_cnpj', cnpjsArea);
+          precosArea = precos || [];
+        }
+
+        // Mapear menor preço por produto (via master_id ou nome normalizado)
+        const menorPrecoPorProduto = new Map<string, { preco: number; mercado: string }>();
+        precosArea.forEach((p: any) => {
+          const chaves: string[] = [];
+          if (p.produto_master_id) chaves.push(`master:${p.produto_master_id}`);
+          if (p.produto_nome) chaves.push(`nome:${normNome(p.produto_nome)}`);
+          chaves.forEach(chave => {
+            const atual = menorPrecoPorProduto.get(chave);
+            if (!atual || p.valor_unitario < atual.preco) {
+              menorPrecoPorProduto.set(chave, { preco: p.valor_unitario, mercado: p.estabelecimento_nome });
+            }
+          });
+        });
+
+        let valorPagoTotal = 0;
+        let valorAtualTotal = 0;
+        let itensSemPrecoArea = 0;
+        const itensDetalhe: any[] = [];
+
+        itensAtual.forEach((item: any) => {
+          const subtotalPago = Math.round(((item.preco_pago || 0) * item.quantidade_total) * 100) / 100;
+          valorPagoTotal += subtotalPago;
+
+          // Buscar preço da área (prioridade master_id, fallback nome)
+          let precoArea: { preco: number; mercado: string } | undefined;
+          if (item.produto_master_id) {
+            precoArea = menorPrecoPorProduto.get(`master:${item.produto_master_id}`);
+          }
+          if (!precoArea) {
+            precoArea = menorPrecoPorProduto.get(`nome:${item.nome}`);
+          }
+
+          if (precoArea) {
+            const subtotalAtual = Math.round((precoArea.preco * item.quantidade_total) * 100) / 100;
+            valorAtualTotal += subtotalAtual;
+            itensDetalhe.push({ nome: item.nome, quantidade: item.quantidade_total, unidade: item.unidade, preco_pago: item.preco_pago, preco_area: precoArea.preco, mercado: precoArea.mercado });
+          } else {
+            // Sem preço na área — usar preço pago como fallback
+            valorAtualTotal += subtotalPago;
+            itensSemPrecoArea++;
+            itensDetalhe.push({ nome: item.nome, quantidade: item.quantidade_total, unidade: item.unidade, preco_pago: item.preco_pago, preco_area: null, mercado: null });
+          }
+        });
+
+        return { result: JSON.stringify({
+          total_itens: itensAtual.length,
+          valor_pago: Math.round(valorPagoTotal * 100) / 100,
+          valor_atual_estimado: Math.round(valorAtualTotal * 100) / 100,
+          itens_sem_preco_area: itensSemPrecoArea,
+          raio_busca_km: raio,
+          mercados_na_area: cnpjsArea.length,
+          nota: "Valor atual é uma ESTIMATIVA baseada nos menores preços registrados nos mercados da sua área. Itens sem referência de preço na área usam o preço pago como fallback.",
+          itens: itensDetalhe,
         }), isWriteMutation: false };
       }
 
@@ -1304,6 +1448,9 @@ Regras de Estoque:
 8. Se o pedido for ambíguo, pergunte antes de agir
 9. Máximo 1 alteração (estoque ou lista) por mensagem — se precisar de mais, peça que envie outra mensagem
 10. Use a tool ultimas_compras para responder sobre histórico de compras reais
+11. VALOR DO ESTOQUE — DUAS VISÕES DISTINTAS:
+    - PADRÃO (buscar_estoque): Usa o PREÇO PAGO pelo usuário (custo de compra). Para perguntas como "quanto tenho em estoque", "valor do estoque", "estoque de hortifruti".
+    - VALOR ATUAL (estoque_valor_atual): Usa os PREÇOS ATUAIS dos mercados na ÁREA DE ATUAÇÃO. SOMENTE quando o usuário pedir EXPLICITAMENTE: "valor atual", "quanto valeria hoje", "pelos preços de hoje", "pelos melhores preços da área". Sempre apresente como ESTIMATIVA dinâmica e informe quantos itens não têm referência de preço na área.
 
 Regras de Listas de Compras:
 11. Quando o usuário falar em "lista", NUNCA assuma lista nova. Verifique lista ativa ou listas existentes primeiro.
