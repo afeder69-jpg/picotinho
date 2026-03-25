@@ -274,7 +274,7 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "buscar_produto_catalogo",
-      description: "Busca produtos no catálogo master global (produtos_master_global). Use APÓS resolver_item_por_historico se o histórico não retornar resultados. Retorna produto_master_id que pode ser passado para adicionar_itens_lista para criar item estruturado (não livre).",
+      description: "Busca produtos no catálogo master global (produtos_master_global). Use APÓS resolver_item_por_historico se o histórico não retornar resultados. Retorna produto_id que DEVE ser passado para adicionar_itens_lista no campo produto_id para criar item estruturado (não livre).",
       parameters: {
         type: "object",
         properties: {
@@ -549,6 +549,8 @@ async function executeTool(
           ...(item.produto_id ? { produto_id: item.produto_id } : {})
         }));
 
+        console.log(`📦 [adicionar_itens_lista] Payload para insert:`, JSON.stringify(itensParaInserir));
+
         if (itensParaInserir.length === 0) {
           return { result: JSON.stringify({ erro: "Nenhum item fornecido para adicionar." }), isWriteMutation: false };
         }
@@ -645,14 +647,28 @@ async function executeTool(
           }
         }
 
-        const resultados = Object.entries(contagem)
+        const resultadosBase = Object.entries(contagem)
           .sort((a, b) => b[1].count - a[1].count)
           .slice(0, 5)
           .map(([nome, info]) => ({ nome, vezes_comprado: info.count, ultimo_preco: info.ultimo_preco, ultimo_mercado: info.ultimo_mercado }));
 
-        if (resultados.length === 0) {
+        if (resultadosBase.length === 0) {
           return { result: JSON.stringify({ mensagem: `Nenhum produto com "${args.termo}" encontrado no histórico de compras.` }), isWriteMutation: false };
         }
+
+        // Tentar resolver produto_id via catálogo master para cada resultado
+        const resultados = await Promise.all(resultadosBase.map(async (r) => {
+          try {
+            const palavras = r.nome.split(/\s+/).filter((p: string) => p.length >= 2);
+            if (palavras.length === 0) return r;
+            const { data: masters } = await supabase.rpc('buscar_produtos_master_por_palavras', { p_palavras: palavras, p_limite: 3 });
+            if (masters && masters.length === 1) {
+              return { ...r, produto_id: masters[0].id, nome_catalogo: masters[0].nome_padrao };
+            }
+            return r;
+          } catch { return r; }
+        }));
+
         return { result: JSON.stringify({ termo: args.termo, resultados }), isWriteMutation: false };
       }
 
@@ -719,7 +735,7 @@ async function executeTool(
             termo: args.termo,
             total: produtos.length,
             produtos: produtos.map((p: any) => ({
-              produto_master_id: p.id,
+              produto_id: p.id,
               nome: p.nome_padrao,
               nome_base: p.nome_base,
               marca: p.marca,
@@ -914,7 +930,7 @@ Regras de Resolução de Produtos para Lista:
 18. ORDEM OBRIGATÓRIA ao adicionar item na lista — NUNCA pule etapas:
     a) PRIMEIRO: SEMPRE chame resolver_item_por_historico com o termo do produto. Se encontrar opções, use o mais frequente (ou pergunte se houver várias opções relevantes).
     b) SEGUNDO: se o histórico retornar vazio, SEMPRE chame buscar_produto_catalogo para localizar no catálogo master global.
-       - Se encontrar EXATAMENTE 1 opção óbvia, use o produto_master_id diretamente.
+       - Se encontrar EXATAMENTE 1 opção óbvia, use o produto_id retornado diretamente no campo produto_id de adicionar_itens_lista.
        - Se encontrar múltiplas opções, MOSTRE-AS em formato numerado curto e pergunte qual. Formato obrigatório:
          "Encontrei estas opções:
          1. Nescau em pó 350g
@@ -938,6 +954,7 @@ Regras de Resolução de Produtos para Lista:
 22. Ao adicionar múltiplos itens de uma vez, resolva cada um antes de chamar adicionar_itens_lista. Pode usar múltiplas chamadas de resolver_item_por_historico em sequência.
 23. EXCLUSÃO DE LISTA INTEIRA NÃO É PERMITIDA pelo WhatsApp. Se o usuário pedir para excluir/apagar/deletar uma lista completa, responda: "Por segurança, a exclusão de uma lista inteira só pode ser feita diretamente no aplicativo do Picotinho."
 24. NUNCA diga que não consegue buscar, prever ou encontrar produtos. Você TEM as tools buscar_produto_catalogo e resolver_item_por_historico. USE-AS. Se o usuário pedir item normalizado, busque e mostre os resultados encontrados.
+25. PRESERVAR IDENTIFICADOR EM ESCOLHA NUMERADA: Quando você apresentar opções numeradas ao usuário (ex: "1. Nescau 350g") e o usuário responder com um número (ex: "1"), você DEVE reutilizar o produto_id da opção correspondente que estava no resultado da tool. NUNCA reconstrua o vínculo pelo texto exibido — use o produto_id que já foi retornado pela busca. O produto_id está disponível no contexto da conversa, na resposta anterior da tool buscar_produto_catalogo ou resolver_item_por_historico.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras e organização doméstica.`;
 
