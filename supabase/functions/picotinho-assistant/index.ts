@@ -1045,7 +1045,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const usuarioId = mensagem.usuario_id;
-    const conteudo = mensagem.conteudo;
+    let conteudo = mensagem.conteudo;
     const remetente = mensagem.remetente;
     const tipoMensagem = mensagem.tipo_mensagem || 'text';
 
