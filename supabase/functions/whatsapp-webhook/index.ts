@@ -324,48 +324,24 @@ const handler = async (req: Request): Promise<Response> => {
         } catch (error) {
           console.error('❌ Erro no processamento:', error);
         }
+      /* LEGACY — menu rígido de comandos desativado, assistente IA responde naturalmente
+       * Mantido comentado para reversibilidade.
       } else {
-        // Comando não reconhecido E sem sessão ativa - enviar mensagem de erro amigável
+        // Comando não reconhecido — enviar menu de opções
         try {
           console.log('❌ Comando não reconhecido - enviando mensagem de erro');
-          
           const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
           const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
           const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
-          
           if (instanceUrl && apiToken) {
             const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
-            
-            const requestBody = {
-              phone: remetente,
-              message: "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)"
-            };
-            
-            const errorResponse = await fetch(sendTextUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Client-Token': accountSecret
-              },
-              body: JSON.stringify(requestBody)
-            });
-            
-            if (errorResponse.ok) {
-              console.log('✅ Mensagem de erro enviada com sucesso');
-              
-              // Atualizar mensagem com resposta enviada
-              await supabase
-                .from('whatsapp_mensagens')
-                .update({ resposta_enviada: requestBody.message })
-                .eq('id', mensagemSalva.id);
-            } else {
-              console.error('❌ Erro ao enviar mensagem de erro:', await errorResponse.text());
-            }
+            const requestBody = { phone: remetente, message: "👋 Olá, eu sou o Picotinho..." };
+            const errorResponse = await fetch(sendTextUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Client-Token': accountSecret }, body: JSON.stringify(requestBody) });
+            if (errorResponse.ok) { await supabase.from('whatsapp_mensagens').update({ resposta_enviada: requestBody.message }).eq('id', mensagemSalva.id); }
           }
-        } catch (error) {
-          console.error('❌ Erro ao enviar mensagem de erro:', error);
-        }
+        } catch (error) { console.error('❌ Erro ao enviar mensagem de erro:', error); }
       }
+      */ // FIM DO LEGACY
 
       return new Response(JSON.stringify({
         ok: true,
