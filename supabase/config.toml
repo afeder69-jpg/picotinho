@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.diagnosticar-masters-duplicados]
 verify_jwt = false
+
+[functions.picotinho-assistant]
+verify_jwt = false

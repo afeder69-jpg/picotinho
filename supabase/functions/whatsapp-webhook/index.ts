@@ -202,6 +202,8 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 Inicia com "-"?', textoLimpo.startsWith('-'));
         console.log('🔍 Inicia com "+"?', textoLimpo.startsWith('+'));
         
+        /* LEGACY — regex de comandos desativado, assistente IA ativo
+         * Mantido comentado para reversibilidade. Para reativar, descomentar este bloco.
         // Identificar comando baseado em palavras-chave E símbolos (só se não há anexo)
         if (!anexoInfo) {
           if (textoLimpo.startsWith('-') || textoLimpo.match(/\b(baixa|baixar|diminui|diminuir|remove|remover)\b/)) {
@@ -209,43 +211,32 @@ const handler = async (req: Request): Promise<Response> => {
           } else if (textoLimpo.startsWith('+') || textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
             comando_identificado = 'aumentar_estoque';
           } else if (textoLimpo.match(/\b(consulta|consultar|consulte|ver|verificar)\s+(categoria|cat)\b/)) {
-            // Comando específico de consulta de categoria - capturar antes da consulta geral
             comando_identificado = 'consultar_categoria';
           } else if (textoLimpo.match(/\b(categoria|cat)\b/) && !textoLimpo.match(/\b(baixa|baixar|aumenta|aumentar|inclui|incluir)\b/)) {
-            // Também reconhecer "categoria [termo]" sem "consulta" na frente
             comando_identificado = 'consultar_categoria';
           } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar|estoque)\b/)) {
             comando_identificado = 'consultar_estoque';
-        } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
+          } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
             comando_identificado = 'adicionar_produto';
           } else if (textoLimpo.match(/\b(inserir nota|inserir notas|enviar nota|enviar notas|nota fiscal|notas fiscais)\b/)) {
             comando_identificado = 'solicitar_nota';
           } else if (textoLimpo.match(/\b(lista|listas)\b/)) {
             comando_identificado = 'solicitar_lista';
-            
-            // Extrair nome da lista removendo palavras-chave
             const matchLista = textoLimpo.match(/\b(lista|listas)\b\s*(de\s+compras?)?\s*(.+)/);
             let tituloLista = '';
-            
             if (matchLista && matchLista[3]) {
-              // Pegar o texto após "lista" ou "lista de compras"
               tituloLista = matchLista[3].trim();
             } else {
-              // Fallback: remover todas as palavras-chave
               tituloLista = textoLimpo
                 .replace(/\b(lista|listas)\b/g, '')
                 .replace(/\b(de\s+)?compras?\b/g, '')
                 .trim();
             }
-            
             console.log('📋 Comando SOLICITAR LISTA identificado:', tituloLista);
-            
-            // Salvar título no webhook_data para usar no processador
-            webhookData.picotinho_params = {
-              titulo_lista: tituloLista
-            };
+            webhookData.picotinho_params = { titulo_lista: tituloLista };
           }
         }
+        */ // FIM DO LEGACY
         
         console.log('🎯 Comando identificado:', comando_identificado);
       }
@@ -306,41 +297,14 @@ const handler = async (req: Request): Promise<Response> => {
         });
       }
 
-      // Verificar se há sessões ativas antes de processar comando ou enviar erro
+      // Assistente IA: toda mensagem de usuário autenticado vai para o assistente
       let deveProcessar = false;
       let motivoProcessamento = '';
       
-      if (comando_identificado) {
+      if (telefoneAutorizado?.usuario_id) {
         deveProcessar = true;
-        motivoProcessamento = `comando identificado: ${comando_identificado}`;
-      } else {
-        // Verificar se há sessão ativa para QUALQUER tipo de resposta (não só números)
-        console.log(`🔍 Verificando se há sessão ativa para qualquer resposta...`);
-        
-        // Buscar sessões ativas para o usuário
-        const { data: sessaoAtiva } = await supabase
-          .from('whatsapp_sessions')
-          .select('*')
-          .eq('usuario_id', telefoneAutorizado.usuario_id)
-          .eq('remetente', remetente)
-          .gt('expires_at', new Date().toISOString())
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-          
-        if (sessaoAtiva) {
-          console.log(`🎯 Sessão ativa encontrada: ${sessaoAtiva.estado} - forçando processamento para qualquer resposta`);
-          deveProcessar = true;
-          motivoProcessamento = `resposta em sessão ativa: ${sessaoAtiva.estado}`;
-        } else {
-          // Verificar se é número simples para casos especiais
-          const isNumeroSimples = /^\s*\d+([,.]\d+)?\s*$/.test(conteudo);
-          console.log(`🔢 [DEBUG WEBHOOK] Testando "${conteudo}" com regex decimal: ${isNumeroSimples}`);
-          
-          if (isNumeroSimples) {
-            console.log(`🔢 Número simples sem sessão ativa: "${conteudo}"`);
-          }
-        }
+        motivoProcessamento = 'assistente IA — toda mensagem autenticada';
+        console.log('🤖 Roteando para picotinho-assistant (usuário autenticado)');
       }
 
       // Processar comando automaticamente se identificado OU se há sessão ativa
@@ -348,7 +312,7 @@ const handler = async (req: Request): Promise<Response> => {
         try {
           console.log(`🤖 Processando comando automaticamente... (${motivoProcessamento})`);
           
-          const response = await supabase.functions.invoke('process-whatsapp-command', {
+          const response = await supabase.functions.invoke('picotinho-assistant', {
             body: { messageId: mensagemSalva.id }
           });
           
@@ -360,48 +324,12 @@ const handler = async (req: Request): Promise<Response> => {
         } catch (error) {
           console.error('❌ Erro no processamento:', error);
         }
-      } else {
-        // Comando não reconhecido E sem sessão ativa - enviar mensagem de erro amigável
-        try {
-          console.log('❌ Comando não reconhecido - enviando mensagem de erro');
-          
-          const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
-          const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
-          const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
-          
-          if (instanceUrl && apiToken) {
-            const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
-            
-            const requestBody = {
-              phone: remetente,
-              message: "👋 Olá, eu sou o Picotinho, seu assistente de compras!\nEscolha uma das opções para começar:\n- Estoque (ver todo o estoque)\n- Consulta [produto]\n- Consulta Categoria [Nome da Categoria]\n- Incluir [produto]\n- Aumentar [quantidade] [produto]\n- Baixar [quantidade] [produto]\n- Inserir Nota (envie arquivo da nota fiscal)"
-            };
-            
-            const errorResponse = await fetch(sendTextUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Client-Token': accountSecret
-              },
-              body: JSON.stringify(requestBody)
-            });
-            
-            if (errorResponse.ok) {
-              console.log('✅ Mensagem de erro enviada com sucesso');
-              
-              // Atualizar mensagem com resposta enviada
-              await supabase
-                .from('whatsapp_mensagens')
-                .update({ resposta_enviada: requestBody.message })
-                .eq('id', mensagemSalva.id);
-            } else {
-              console.error('❌ Erro ao enviar mensagem de erro:', await errorResponse.text());
-            }
-          }
-        } catch (error) {
-          console.error('❌ Erro ao enviar mensagem de erro:', error);
-        }
       }
+      /* LEGACY — menu rígido de comandos desativado, assistente IA responde naturalmente
+       * Mantido comentado para reversibilidade.
+       * Anteriormente, se !deveProcessar, enviava menu de opções fixo.
+       * Agora toda mensagem autenticada vai para o assistente IA.
+      */ // FIM DO LEGACY
 
       return new Response(JSON.stringify({
         ok: true,
