@@ -324,23 +324,11 @@ const handler = async (req: Request): Promise<Response> => {
         } catch (error) {
           console.error('❌ Erro no processamento:', error);
         }
+      }
       /* LEGACY — menu rígido de comandos desativado, assistente IA responde naturalmente
        * Mantido comentado para reversibilidade.
-      } else {
-        // Comando não reconhecido — enviar menu de opções
-        try {
-          console.log('❌ Comando não reconhecido - enviando mensagem de erro');
-          const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
-          const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
-          const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
-          if (instanceUrl && apiToken) {
-            const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
-            const requestBody = { phone: remetente, message: "👋 Olá, eu sou o Picotinho..." };
-            const errorResponse = await fetch(sendTextUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Client-Token': accountSecret }, body: JSON.stringify(requestBody) });
-            if (errorResponse.ok) { await supabase.from('whatsapp_mensagens').update({ resposta_enviada: requestBody.message }).eq('id', mensagemSalva.id); }
-          }
-        } catch (error) { console.error('❌ Erro ao enviar mensagem de erro:', error); }
-      }
+       * Anteriormente, se !deveProcessar, enviava menu de opções fixo.
+       * Agora toda mensagem autenticada vai para o assistente IA.
       */ // FIM DO LEGACY
 
       return new Response(JSON.stringify({
