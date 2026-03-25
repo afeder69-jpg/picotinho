@@ -522,6 +522,7 @@ serve(async (req) => {
         const { error: upsertError } = await supabase
           .from('precos_atuais')
           .upsert({
+            user_id: userId,
             produto_nome: resultado.produto_nome,
             valor_unitario: resultado.valor_unitario,
             data_atualizacao: resultado.data_atualizacao,
@@ -529,7 +530,7 @@ serve(async (req) => {
             estabelecimento_nome: resultado.estabelecimento_nome,
             produto_codigo: null
           }, {
-            onConflict: 'produto_nome,estabelecimento_cnpj'
+            onConflict: 'user_id,produto_nome,estabelecimento_cnpj'
           });
 
         if (upsertError) {

@@ -2014,16 +2014,16 @@ const EstoqueAtual = () => {
                                       <>
                                         {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
                                         <div className="text-primary font-medium">
-                                          {(() => {
-                                            // Prioridade: dados do estoque SEMPRE primeiro
-                                            const precoExibir = item.preco_unitario_ultimo || 0;
+                                           {(() => {
+                                            // FONTE ÚNICA: historicoProduto.ultimaCompraUsuario > estoque (created_at)
+                                            // Nunca misturar data de uma fonte com preço de outra
+                                            const histCompra = historicoProduto?.ultimaCompraUsuario;
+                                            const precoExibir = histCompra?.preco || item.preco_unitario_ultimo || 0;
                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
                                             
-                                             // Buscar data: usar created_at para produtos manuais, data da nota fiscal para outros
-                                             const dataRealCompra = item.origem === 'manual' 
-                                               ? item.created_at 
-                                               : encontrarDataNotaFiscal(nomeExibicao);
-                                             const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
+                                            // Data: priorizar nota real (via histórico), fallback created_at (nunca updated_at)
+                                            const dataRealCompra = histCompra?.data || item.created_at;
+                                            const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
                                             
                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
                                           })()}
