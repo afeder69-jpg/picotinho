@@ -432,8 +432,10 @@ async function executeTool(
           }));
 
         // Calcular valor total usando preço pago pelo usuário (preco_unitario_ultimo)
+        // IMPORTANTE: arredondamento POR ITEM, idêntico ao app (EstoqueAtual.tsx linha 1643)
         const valorTotal = itensConsolidados.reduce((acc: number, item: any) => {
-          return acc + (item.quantidade * (item.preco || 0));
+          const subtotalItem = Math.round(((item.preco || 0) * item.quantidade) * 100) / 100;
+          return acc + subtotalItem;
         }, 0);
 
         return { result: JSON.stringify({
