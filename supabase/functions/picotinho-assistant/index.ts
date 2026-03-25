@@ -274,7 +274,7 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "buscar_produto_catalogo",
-      description: "Busca produtos no catálogo master global (produtos_master_global). Use APÓS resolver_item_por_historico se o histórico não retornar resultados. Retorna produto_master_id que pode ser passado para adicionar_itens_lista para criar item estruturado (não livre).",
+      description: "Busca produtos no catálogo master global (produtos_master_global). Use APÓS resolver_item_por_historico se o histórico não retornar resultados. Retorna produto_id que DEVE ser passado para adicionar_itens_lista no campo produto_id para criar item estruturado (não livre).",
       parameters: {
         type: "object",
         properties: {
