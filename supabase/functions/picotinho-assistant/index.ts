@@ -361,16 +361,86 @@ async function executeTool(
         } else if (args.tipo_busca === 'categoria' && args.termo) {
           query = query.ilike('categoria', `%${args.termo}%`);
         }
-        const { data, error } = await query.order('produto_nome').limit(50);
+        const { data, error } = await query.order('produto_nome').limit(500);
         if (error) throw error;
         if (!data || data.length === 0) {
           return { result: JSON.stringify({ mensagem: "Nenhum item encontrado no estoque.", itens: [] }), isWriteMutation: false };
         }
-        const itensFormatados = data.map((item: any) => ({
-          id: item.id, nome: item.produto_nome, quantidade: item.quantidade, unidade: item.unidade_medida,
-          categoria: item.categoria, marca: item.marca, preco: item.preco_unitario_ultimo, atualizado: item.updated_at
-        }));
-        return { result: JSON.stringify({ total: data.length, itens: itensFormatados }), isWriteMutation: false };
+
+        // ========== CONSOLIDAÇÃO IDÊNTICA AO APP (EstoqueAtual.tsx) ==========
+        // Normalização de nome: mesma lógica do app para agrupar duplicados
+        const normalizarNomeProduto = (nome: string): string => {
+          return nome
+            .toUpperCase()
+            .trim()
+            .replace(/\s+/g, ' ')
+            .replace(/\bKG\b/gi, '')
+            .replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL')
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+
+        const produtosMap = new Map<string, any>();
+
+        data.forEach((item: any) => {
+          const chave = normalizarNomeProduto(item.produto_nome);
+
+          if (produtosMap.has(chave)) {
+            const existente = produtosMap.get(chave);
+            // Somar quantidades
+            const novaQtdTotal = existente.quantidade_total + item.quantidade;
+            // Manter preço do registro mais recente (por updated_at)
+            const itemMaisRecente = new Date(item.updated_at) > new Date(existente.updated_at);
+            const precoFinal = itemMaisRecente
+              ? (item.preco_unitario_ultimo || existente.preco)
+              : (existente.preco || item.preco_unitario_ultimo);
+
+            produtosMap.set(chave, {
+              ...existente,
+              id: itemMaisRecente ? item.id : existente.id,
+              quantidade_total: novaQtdTotal,
+              preco: precoFinal,
+              updated_at: item.updated_at > existente.updated_at ? item.updated_at : existente.updated_at,
+            });
+          } else {
+            produtosMap.set(chave, {
+              id: item.id,
+              nome: chave,
+              nome_original: item.produto_nome,
+              quantidade_total: item.quantidade,
+              unidade: item.unidade_medida,
+              categoria: item.categoria,
+              marca: item.marca,
+              preco: item.preco_unitario_ultimo,
+              updated_at: item.updated_at,
+            });
+          }
+        });
+
+        // Filtrar itens com saldo <= 0 (mesma lógica padrão do app)
+        const itensConsolidados = Array.from(produtosMap.values())
+          .filter((item: any) => item.quantidade_total > 0)
+          .map((item: any) => ({
+            id: item.id,
+            nome: item.nome,
+            quantidade: item.quantidade_total,
+            unidade: item.unidade,
+            categoria: item.categoria,
+            marca: item.marca,
+            preco: item.preco,
+            atualizado: item.updated_at,
+          }));
+
+        // Calcular valor total usando preço pago pelo usuário (preco_unitario_ultimo)
+        const valorTotal = itensConsolidados.reduce((acc: number, item: any) => {
+          return acc + (item.quantidade * (item.preco || 0));
+        }, 0);
+
+        return { result: JSON.stringify({
+          total: itensConsolidados.length,
+          valor_total: Math.round(valorTotal * 100) / 100,
+          itens: itensConsolidados,
+        }), isWriteMutation: false };
       }
 
       case 'baixar_estoque': {
