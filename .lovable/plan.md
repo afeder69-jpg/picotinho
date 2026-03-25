@@ -1,23 +1,26 @@
 
 
-## Correção: validação pré-insert com confirmação explícita do usuário (IMPLEMENTADO)
+
+## Correção: persistência de contexto estruturado para escolhas numeradas (IMPLEMENTADO)
 
 ### Problema
-O `produto_id` chega ao insert mas pode não existir em `produtos_master_global`, causando erro FK 23503.
+Quando o usuário escolhe uma opção numerada (ex: "1" para MAÇÃ GALA), a próxima invocação do assistente não tem acesso ao `produto_id` real retornado pela tool anterior — o histórico só contém texto. O LLM alucina um UUID, que é bloqueado pela validação pré-insert, gerando loop infinito de desambiguação.
 
-### Mudanças aplicadas (`supabase/functions/picotinho-assistant/index.ts`)
+### Mudanças aplicadas
 
 | Local | Mudança |
 |---|---|
-| Tool definition (linha ~210) | Campo opcional `origem` adicionado para rastreabilidade |
-| `adicionar_itens_lista` (linhas 539-680) | Validação pré-insert completa: verifica existência do ID, re-resolve via RPC se inválido, retorna desambiguação ou pedido de confirmação |
-| System prompt (regra 18c/d) | Item livre só com confirmação explícita do usuário; regra 18d proíbe fallback automático |
-| Logs | Formato estruturado: `id_original`, `id_final`, `origem_fluxo`, `validacao` |
+| Schema | Coluna `opcoes_pendentes JSONB` em `whatsapp_preferencias_usuario` |
+| Linhas 985-1040 | Detecção de escolha numérica (regex: "1", "opção 2", "a primeira", etc.) + resolução via snapshot + injeção de contexto com `produto_id` real |
+| Linhas 1136-1148 | Injeção do contexto estruturado como mensagem de sistema antes da mensagem do usuário |
+| Linhas 1235-1300 | Após tool retornar opções (buscar_produto_catalogo, resolver_item_por_historico, adicionar_itens_lista com desambiguação), salvar snapshot no banco |
+| Limpeza | Snapshot limpo após uso, expiração (10min), ou mudança de assunto |
 
-### Retorno diferenciado da tool
-- `itens_adicionados`: itens gravados com sucesso
-- `itens_pendentes_desambiguacao`: itens com múltiplos matches (opções para o usuário)
-- `itens_pendentes_confirmacao`: itens sem match (aguardam confirmação para item livre)
-- `avisos`: correções automáticas aplicadas (re-resolução de ID)
+### Fluxo corrigido
+1. Tool retorna múltiplas opções → snapshot salvo em `opcoes_pendentes`
+2. Usuário responde "1" → snapshot lido, `produto_id` real resolvido
+3. Contexto injetado: "O produto_id correspondente é [UUID]. Use este ID EXATO."
+4. LLM chama `adicionar_itens_lista` com o ID real → insert bem-sucedido
+5. Snapshot limpo
 
-Nenhuma alteração de schema. Arquivo único editado. Deploy realizado.
+Nenhuma alteração de schema além da coluna. Arquivo único editado + deploy realizado.
