@@ -213,7 +213,8 @@ const listToolDefinitions = [
                 quantidade: { type: "number", description: "Quantidade" },
                 unidade_medida: { type: "string", description: "Unidade: UN, KG, L, etc. Default UN" },
                 produto_id: { type: "string", description: "ID do produto master (de buscar_produto_catalogo ou resolver_item_por_historico). Se fornecido, item é estruturado (item_livre=false)." },
-                item_livre: { type: "boolean", description: "Se true, item é lembrete livre sem vínculo. Default false. Só use como último recurso quando nenhuma resolução estruturada for possível." }
+                item_livre: { type: "boolean", description: "Se true, item é lembrete livre sem vínculo. Default false. Só use quando o USUÁRIO confirmar explicitamente que deseja adicionar como item livre." },
+                origem: { type: "string", description: "Origem do produto_id: 'catalogo', 'historico', 'opcao_numerada'. Ajuda na rastreabilidade." }
               },
               required: ["produto_nome", "quantidade"]
             }
@@ -540,31 +541,152 @@ async function executeTool(
         const { listaId, erro } = await resolveListaId(args, supabase, usuarioId, listaAtivaId);
         if (erro) return { result: JSON.stringify({ erro }), isWriteMutation: false };
 
-        const itensParaInserir = (args.itens || []).map((item: any) => ({
-          lista_id: listaId,
-          produto_nome: item.produto_nome,
-          quantidade: item.quantidade || 1,
-          unidade_medida: item.unidade_medida || 'UN',
-          item_livre: item.item_livre === true ? true : false,
-          ...(item.produto_id ? { produto_id: item.produto_id } : {})
-        }));
-
-        console.log(`📦 [adicionar_itens_lista] Payload para insert:`, JSON.stringify(itensParaInserir));
-
-        if (itensParaInserir.length === 0) {
+        if (!args.itens || args.itens.length === 0) {
           return { result: JSON.stringify({ erro: "Nenhum item fornecido para adicionar." }), isWriteMutation: false };
         }
 
-        const { data: inseridos, error } = await supabase.from('listas_compras_itens').insert(itensParaInserir).select();
-        if (error) throw error;
+        const itensParaInserir: any[] = [];
+        const itensPendentesDesambiguacao: any[] = [];
+        const itensPendentesConfirmacao: any[] = [];
+        const avisos: string[] = [];
+
+        for (const item of args.itens) {
+          const origemFluxo = item.origem || 'desconhecida';
+          let produtoId = item.produto_id || null;
+          let validacao = 'nenhum_id';
+          const produtoIdOriginal = produtoId;
+
+          if (item.item_livre === true && !produtoId) {
+            // Item livre explícito (confirmado pelo usuário) — passa direto
+            console.log(`📦 [insert] ${item.produto_nome} | id_original: nenhum | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: item_livre_explicito`);
+            itensParaInserir.push({
+              lista_id: listaId,
+              produto_nome: item.produto_nome,
+              quantidade: item.quantidade || 1,
+              unidade_medida: item.unidade_medida || 'UN',
+              item_livre: true
+            });
+            continue;
+          }
+
+          if (produtoId) {
+            // Validar existência do produto_id em produtos_master_global
+            const { data: existe } = await supabase
+              .from('produtos_master_global')
+              .select('id')
+              .eq('id', produtoId)
+              .maybeSingle();
+
+            if (existe) {
+              validacao = 'id_validado';
+              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
+              itensParaInserir.push({
+                lista_id: listaId,
+                produto_nome: item.produto_nome,
+                quantidade: item.quantidade || 1,
+                unidade_medida: item.unidade_medida || 'UN',
+                item_livre: false,
+                produto_id: produtoId
+              });
+              continue;
+            }
+
+            // ID inválido — tentar re-resolver
+            console.warn(`⚠️ produto_id ${produtoId} inválido para "${item.produto_nome}" (origem_fluxo: ${origemFluxo}). Tentando re-resolver...`);
+            const palavras = item.produto_nome.split(/\s+/).filter((p: string) => p.length >= 2);
+            const { data: masters } = await supabase.rpc('buscar_produtos_master_por_palavras', {
+              p_palavras: palavras, p_limite: 5
+            });
+
+            if (masters?.length === 1) {
+              produtoId = masters[0].id;
+              validacao = 're_resolvido';
+              avisos.push(`"${item.produto_nome}": ID original inválido (origem: ${origemFluxo}), corrigido automaticamente pelo catálogo.`);
+              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
+              itensParaInserir.push({
+                lista_id: listaId,
+                produto_nome: item.produto_nome,
+                quantidade: item.quantidade || 1,
+                unidade_medida: item.unidade_medida || 'UN',
+                item_livre: false,
+                produto_id: produtoId
+              });
+              continue;
+            }
+
+            if (masters && masters.length > 1) {
+              validacao = 'desambiguacao_necessaria';
+              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: pendente | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
+              itensPendentesDesambiguacao.push({
+                produto_nome: item.produto_nome,
+                quantidade: item.quantidade || 1,
+                unidade_medida: item.unidade_medida || 'UN',
+                id_original_invalido: produtoIdOriginal,
+                origem_fluxo: origemFluxo,
+                opcoes: masters.map((m: any) => ({
+                  produto_id: m.id,
+                  nome_padrao: m.nome_padrao,
+                  marca: m.marca,
+                  categoria: m.categoria
+                }))
+              });
+              continue;
+            }
+
+            // 0 matches — pedir confirmação para item livre
+            validacao = 'confirmacao_necessaria';
+            console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
+            itensPendentesConfirmacao.push({
+              produto_nome: item.produto_nome,
+              quantidade: item.quantidade || 1,
+              unidade_medida: item.unidade_medida || 'UN',
+              id_original_invalido: produtoIdOriginal,
+              origem_fluxo: origemFluxo,
+              motivo: `ID "${produtoIdOriginal}" não existe no catálogo e a re-resolução por nome não encontrou correspondência.`
+            });
+            continue;
+          }
+
+          // Sem produto_id e sem item_livre — tratar como item sem vínculo
+          console.log(`📦 [insert] ${item.produto_nome} | id_original: nenhum | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: sem_id_informado`);
+          itensParaInserir.push({
+            lista_id: listaId,
+            produto_nome: item.produto_nome,
+            quantidade: item.quantidade || 1,
+            unidade_medida: item.unidade_medida || 'UN',
+            item_livre: true
+          });
+        }
+
+        // Inserir os itens validados
+        let inseridos: any[] = [];
+        if (itensParaInserir.length > 0) {
+          const { data, error } = await supabase.from('listas_compras_itens').insert(itensParaInserir).select();
+          if (error) throw error;
+          inseridos = data || [];
+        }
+
+        const resultado: any = {
+          sucesso: true,
+          itens_adicionados: inseridos.length,
+          itens: inseridos.map((i: any) => ({ nome: i.produto_nome, quantidade: i.quantidade, unidade: i.unidade_medida, item_livre: i.item_livre }))
+        };
+
+        if (avisos.length > 0) resultado.avisos = avisos;
+
+        if (itensPendentesDesambiguacao.length > 0) {
+          resultado.itens_pendentes_desambiguacao = itensPendentesDesambiguacao;
+          resultado.instrucao_desambiguacao = "Alguns itens tinham ID inválido e a re-resolução encontrou múltiplas opções. Apresente as opções ao usuário em formato numerado e pergunte qual ele quer.";
+        }
+
+        if (itensPendentesConfirmacao.length > 0) {
+          resultado.itens_pendentes_confirmacao = itensPendentesConfirmacao;
+          resultado.instrucao_confirmacao = "Alguns itens tinham ID inválido e não foram encontrados no catálogo. Pergunte ao usuário se deseja adicionar como item livre (sem vínculo ao catálogo, sem comparação de preço).";
+        }
 
         return {
-          result: JSON.stringify({
-            sucesso: true,
-            itens_adicionados: inseridos.length,
-            itens: inseridos.map((i: any) => ({ nome: i.produto_nome, quantidade: i.quantidade, unidade: i.unidade_medida }))
-          }),
-          isWriteMutation: true
+          result: JSON.stringify(resultado),
+          isWriteMutation: itensParaInserir.length > 0
         };
       }
 
@@ -937,7 +1059,8 @@ Regras de Resolução de Produtos para Lista:
          2. Nescau em pó 750g
          3. Nescau pronto para beber 200ml
          Qual você quer?"
-    c) TERCEIRO (último recurso): só crie como item_livre=true quando AMBAS as buscas (histórico e catálogo) retornarem vazio. Ao fazer isso, avise: "Adicionei como item livre. Itens livres podem não participar do cálculo de preço e comparação de mercados."
+    c) TERCEIRO (último recurso): só crie como item_livre=true quando AMBAS as buscas (histórico e catálogo) retornarem vazio E o usuário confirmar explicitamente que deseja adicionar como item livre. Ao perguntar, diga: "Não encontrei esse produto no catálogo. Quer que eu adicione como item livre? (Itens livres não participam do cálculo de preço e comparação de mercados.)"
+    d) NUNCA converta automaticamente um item para item_livre por falha técnica de produto_id. Se o ID for inválido e a re-resolução não encontrar match único, pergunte ao usuário: apresente as opções encontradas (se múltiplas) ou pergunte se deseja adicionar como item livre (se nenhuma). Item livre SÓ com confirmação explícita do usuário.
     
     PROIBIDO: adicionar item_livre=true sem ter chamado resolver_item_por_historico E buscar_produto_catalogo primeiro.
     PROIBIDO: pedir ao usuário a descrição exata do produto ao invés de buscar no catálogo.
