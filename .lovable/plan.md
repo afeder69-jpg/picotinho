@@ -1,71 +1,35 @@
 
 
-## Diagnóstico: Fluxo de Áudio no WhatsApp
+## Diagnóstico: Erro de áudio no picotinho-assistant
 
-### Ponto exato da quebra
+### Causa raiz identificada
 
-**Linha 1062-1072 de `picotinho-assistant/index.ts`:**
+**Erro:** `Assignment to constant variable.`
 
-```typescript
-// 2. Handle audio — not yet supported
-if (tipoMensagem === 'audio') {
-  const audioMsg = "🎤 Em breve vou entender áudios! Por enquanto, me mande por texto que eu te ajudo. 😊";
-  await sendWhatsAppMessage(remetente, audioMsg);
-  // ... marca como processada e retorna
-  return new Response(...);
-}
-```
+**Linha 1048:** `const conteudo = mensagem.conteudo;`
+**Linha 1099:** `conteudo = transcricao.text;` — tenta reatribuir uma variável declarada com `const`.
 
-O assistente **bloqueia explicitamente** mensagens de áudio com um early return, antes mesmo de tentar transcrever. A Edge Function `transcribe-audio` existe e está funcional, mas **nunca é chamada** em nenhum ponto do fluxo.
+A transcrição via Whisper **funciona perfeitamente** (logs confirmam textos como "Oi!", "Oi, quem é você?", "Me mostrem o estoque de hortifruti"). Porém, ao tentar salvar o resultado na variável `conteudo`, o JavaScript lança `TypeError: Assignment to constant variable`, que cai no `catch` (linha 1109-1119), envia a mensagem de erro ao usuário, e faz `return`.
 
-### Comparação: fluxo antigo vs atual
+### Por que a mensagem de texto seguinte também falhou
 
-| Etapa | Fluxo antigo (legado) | Fluxo atual (assistente) |
-|---|---|---|
-| Webhook detecta áudio | Detecta corretamente, salva `tipo_mensagem: 'audio'` e `anexo_info` com URL | Idêntico — sem mudança |
-| Transcrição | Era feita pelo webhook ou por processamento separado | **Nunca acontece** — bloqueado no assistant |
-| Assistente recebe | Recebia texto transcrito | Recebe tipo `audio`, responde "em breve" e para |
+Quanto ao segundo problema relatado (mensagem de texto respondida com erro de áudio): os logs mostram que **todas as 3 invocações do assistente foram do tipo `audio`**. Não há registro de uma mensagem tipo `text` nos logs recentes. Isso indica que o problema reportado pelo usuário provavelmente foi uma percepção de que a resposta de erro do áudio chegou com delay, parecendo ser resposta à mensagem de texto seguinte. Não há evidência de contaminação de estado entre mensagens — cada invocação usa seu próprio `messageId`.
 
-### Resumo do problema
-
-1. **Webhook** (`whatsapp-webhook`): funciona corretamente — detecta áudio, extrai URL, salva `anexo_info` com a URL de download, e roteia para `picotinho-assistant`
-2. **Assistant** (`picotinho-assistant`): recebe a mensagem, verifica `tipoMensagem === 'audio'`, e **retorna imediatamente** com mensagem "em breve vou entender áudios" sem chamar `transcribe-audio`
-3. **`transcribe-audio`**: existe, usa Whisper da OpenAI, suporta download via Z-API — mas está órfã, ninguém a invoca
-
-### Plano de correção
+### Correção
 
 **Arquivo:** `supabase/functions/picotinho-assistant/index.ts`
 
-**Mudança única — substituir o bloco de early return (linhas 1062-1072) por lógica de transcrição:**
+**Mudança única na linha 1048:** trocar `const` por `let`:
 
-Em vez de responder "em breve", o assistente deve:
+```typescript
+// Antes:
+const conteudo = mensagem.conteudo;
 
-1. Extrair a URL do áudio de `mensagem.anexo_info.url`
-2. Invocar `transcribe-audio` via `supabase.functions.invoke('transcribe-audio', { body: { audioUrl } })`
-3. Se a transcrição for bem-sucedida:
-   - Substituir a variável `conteudo` pelo texto transcrito
-   - Atualizar a mensagem no banco com o conteúdo transcrito (`conteudo = textoTranscrito`)
-   - Continuar o fluxo normal do assistente (sem return)
-4. Se falhar:
-   - Enviar mensagem ao usuário pedindo para repetir por texto
-   - Retornar (mantém o early return apenas em caso de erro)
-
-```text
-Fluxo corrigido:
-
-áudio recebido
-  → extrair URL do anexo_info
-  → invocar transcribe-audio
-  → texto transcrito
-  → sobrescrever variável conteudo
-  → atualizar whatsapp_mensagens.conteudo
-  → continuar fluxo normal do assistente (tool calling, LLM, etc.)
+// Depois:
+let conteudo = mensagem.conteudo;
 ```
 
-### Detalhes técnicos
+Isso permite que a linha 1099 (`conteudo = transcricao.text`) funcione corretamente, e o fluxo continue normalmente com o texto transcrito sendo processado pelo assistente.
 
-- `mensagem.anexo_info` já contém `{ tipo: 'audio', url: '...', mimetype: 'audio/ogg' }` — basta passar `audioUrl` para `transcribe-audio`
-- A função `transcribe-audio` já lida com download via Z-API (headers de autenticação) e envio ao Whisper
-- O `supabase` client já está instanciado no escopo do handler com `service_role`, compatível com `functions.invoke`
-- Nenhuma mudança necessária no webhook nem na `transcribe-audio`
+Nenhuma outra mudança necessária. A `transcribe-audio` está operacional, o webhook está correto, e o fluxo de continuação após a transcrição já está implementado.
 
