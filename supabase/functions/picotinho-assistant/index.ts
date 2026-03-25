@@ -930,7 +930,7 @@ Regras de Resolução de Produtos para Lista:
 18. ORDEM OBRIGATÓRIA ao adicionar item na lista — NUNCA pule etapas:
     a) PRIMEIRO: SEMPRE chame resolver_item_por_historico com o termo do produto. Se encontrar opções, use o mais frequente (ou pergunte se houver várias opções relevantes).
     b) SEGUNDO: se o histórico retornar vazio, SEMPRE chame buscar_produto_catalogo para localizar no catálogo master global.
-       - Se encontrar EXATAMENTE 1 opção óbvia, use o produto_master_id diretamente.
+       - Se encontrar EXATAMENTE 1 opção óbvia, use o produto_id retornado diretamente no campo produto_id de adicionar_itens_lista.
        - Se encontrar múltiplas opções, MOSTRE-AS em formato numerado curto e pergunte qual. Formato obrigatório:
          "Encontrei estas opções:
          1. Nescau em pó 350g
