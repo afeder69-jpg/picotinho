@@ -954,6 +954,7 @@ Regras de Resolução de Produtos para Lista:
 22. Ao adicionar múltiplos itens de uma vez, resolva cada um antes de chamar adicionar_itens_lista. Pode usar múltiplas chamadas de resolver_item_por_historico em sequência.
 23. EXCLUSÃO DE LISTA INTEIRA NÃO É PERMITIDA pelo WhatsApp. Se o usuário pedir para excluir/apagar/deletar uma lista completa, responda: "Por segurança, a exclusão de uma lista inteira só pode ser feita diretamente no aplicativo do Picotinho."
 24. NUNCA diga que não consegue buscar, prever ou encontrar produtos. Você TEM as tools buscar_produto_catalogo e resolver_item_por_historico. USE-AS. Se o usuário pedir item normalizado, busque e mostre os resultados encontrados.
+25. PRESERVAR IDENTIFICADOR EM ESCOLHA NUMERADA: Quando você apresentar opções numeradas ao usuário (ex: "1. Nescau 350g") e o usuário responder com um número (ex: "1"), você DEVE reutilizar o produto_id da opção correspondente que estava no resultado da tool. NUNCA reconstrua o vínculo pelo texto exibido — use o produto_id que já foi retornado pela busca. O produto_id está disponível no contexto da conversa, na resposta anterior da tool buscar_produto_catalogo ou resolver_item_por_historico.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras e organização doméstica.`;
 
