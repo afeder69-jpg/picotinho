@@ -202,6 +202,8 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('🔍 Inicia com "-"?', textoLimpo.startsWith('-'));
         console.log('🔍 Inicia com "+"?', textoLimpo.startsWith('+'));
         
+        /* LEGACY — regex de comandos desativado, assistente IA ativo
+         * Mantido comentado para reversibilidade. Para reativar, descomentar este bloco.
         // Identificar comando baseado em palavras-chave E símbolos (só se não há anexo)
         if (!anexoInfo) {
           if (textoLimpo.startsWith('-') || textoLimpo.match(/\b(baixa|baixar|diminui|diminuir|remove|remover)\b/)) {
@@ -209,43 +211,32 @@ const handler = async (req: Request): Promise<Response> => {
           } else if (textoLimpo.startsWith('+') || textoLimpo.match(/\b(aumenta|aumentar|soma|somar|adiciona quantidade|adicionar quantidade|acrescenta|acrescentar)\b/)) {
             comando_identificado = 'aumentar_estoque';
           } else if (textoLimpo.match(/\b(consulta|consultar|consulte|ver|verificar)\s+(categoria|cat)\b/)) {
-            // Comando específico de consulta de categoria - capturar antes da consulta geral
             comando_identificado = 'consultar_categoria';
           } else if (textoLimpo.match(/\b(categoria|cat)\b/) && !textoLimpo.match(/\b(baixa|baixar|aumenta|aumentar|inclui|incluir)\b/)) {
-            // Também reconhecer "categoria [termo]" sem "consulta" na frente
             comando_identificado = 'consultar_categoria';
           } else if (textoLimpo.match(/\b(consulta|consultar|consulte|mostra|mostrar|ver|verificar|estoque)\b/)) {
             comando_identificado = 'consultar_estoque';
-        } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
+          } else if (textoLimpo.match(/\b(inclui|incluir|cria|criar|cadastra|cadastrar|adiciona|adicionar|add|novo produto|criar produto)\b/)) {
             comando_identificado = 'adicionar_produto';
           } else if (textoLimpo.match(/\b(inserir nota|inserir notas|enviar nota|enviar notas|nota fiscal|notas fiscais)\b/)) {
             comando_identificado = 'solicitar_nota';
           } else if (textoLimpo.match(/\b(lista|listas)\b/)) {
             comando_identificado = 'solicitar_lista';
-            
-            // Extrair nome da lista removendo palavras-chave
             const matchLista = textoLimpo.match(/\b(lista|listas)\b\s*(de\s+compras?)?\s*(.+)/);
             let tituloLista = '';
-            
             if (matchLista && matchLista[3]) {
-              // Pegar o texto após "lista" ou "lista de compras"
               tituloLista = matchLista[3].trim();
             } else {
-              // Fallback: remover todas as palavras-chave
               tituloLista = textoLimpo
                 .replace(/\b(lista|listas)\b/g, '')
                 .replace(/\b(de\s+)?compras?\b/g, '')
                 .trim();
             }
-            
             console.log('📋 Comando SOLICITAR LISTA identificado:', tituloLista);
-            
-            // Salvar título no webhook_data para usar no processador
-            webhookData.picotinho_params = {
-              titulo_lista: tituloLista
-            };
+            webhookData.picotinho_params = { titulo_lista: tituloLista };
           }
         }
+        */ // FIM DO LEGACY
         
         console.log('🎯 Comando identificado:', comando_identificado);
       }
