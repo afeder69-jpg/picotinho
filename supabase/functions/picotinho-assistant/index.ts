@@ -851,38 +851,42 @@ async function executeTool(
         const { listaId, erro } = await resolveListaId(args, supabase, usuarioId, listaAtivaId);
         if (erro) return { result: JSON.stringify({ erro }), isWriteMutation: false };
 
-        // Get list items
-        const { data: itens, error: itensError } = await supabase.from('listas_compras_itens').select('produto_nome, quantidade').eq('lista_id', listaId);
-        if (itensError) throw itensError;
-        if (!itens || itens.length === 0) {
-          return { result: JSON.stringify({ mensagem: "Lista vazia, nada para calcular." }), isWriteMutation: false };
+        // Invocar a mesma Edge Function que o aplicativo usa para comparação de preços
+        const { data: comparacao, error: compError } = await supabase.functions.invoke('comparar-precos-lista', {
+          body: { userId: usuarioId, listaId }
+        });
+
+        if (compError || !comparacao) {
+          console.error('❌ Erro ao invocar comparar-precos-lista:', compError);
+          return { result: JSON.stringify({ erro: 'Não foi possível calcular os preços da lista. Verifique se sua localização está cadastrada.' }), isWriteMutation: false };
         }
 
-        // Try to match each item with user's price data
-        let totalEstimado = 0;
-        const comPreco: any[] = [];
-        const semPreco: string[] = [];
+        const otimizado = comparacao.otimizado || { total: 0, economia: 0, totalMercados: 0, mercados: [] };
+        const produtosSemPreco = comparacao.produtosSemPreco || [];
 
-        for (const item of itens) {
-          const { data: precos } = await supabase.from('precos_atuais_usuario').select('valor_unitario, produto_nome').eq('user_id', usuarioId).ilike('produto_nome', `%${item.produto_nome}%`).order('data_atualizacao', { ascending: false }).limit(1);
-
-          if (precos && precos.length > 0) {
-            const subtotal = precos[0].valor_unitario * item.quantidade;
-            totalEstimado += subtotal;
-            comPreco.push({ nome: item.produto_nome, quantidade: item.quantidade, preco_unitario: precos[0].valor_unitario, subtotal });
-          } else {
-            semPreco.push(item.produto_nome);
-          }
-        }
+        // Extrair detalhes dos produtos com preço do cenário otimizado
+        const detalhes = (otimizado.mercados || []).flatMap((m: any) =>
+          (m.produtos || []).map((p: any) => ({
+            nome: p.produto_nome,
+            quantidade: p.quantidade,
+            preco_unitario: p.preco_unitario,
+            subtotal: p.preco_total,
+            mercado: m.nome
+          }))
+        );
 
         return {
           result: JSON.stringify({
-            total_estimado: Math.round(totalEstimado * 100) / 100,
-            itens_com_preco: comPreco.length,
-            itens_sem_preco: semPreco.length,
-            aviso: semPreco.length > 0 ? "Alguns itens não têm preço conhecido. O total é uma ESTIMATIVA parcial." : "Todos os itens têm preço. Valor é uma estimativa baseada nos últimos preços pagos.",
-            detalhes: comPreco,
-            sem_preco: semPreco
+            total_estimado: Math.round((otimizado.total || 0) * 100) / 100,
+            itens_com_preco: detalhes.length,
+            itens_sem_preco: produtosSemPreco.length,
+            economia: otimizado.economia > 0 ? Math.round(otimizado.economia * 100) / 100 : 0,
+            total_mercados: otimizado.totalMercados || 0,
+            aviso: produtosSemPreco.length > 0
+              ? "Alguns itens não têm preço nos mercados da sua área. O total é uma estimativa parcial."
+              : "Preços calculados com base nos mercados da sua área de atuação.",
+            detalhes,
+            sem_preco: produtosSemPreco.map((i: any) => i.produto_nome)
           }),
           isWriteMutation: false
         };
