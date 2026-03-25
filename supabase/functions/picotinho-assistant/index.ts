@@ -1136,8 +1136,15 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
     const messages: Array<{ role: string; content: string }> = [
       { role: 'system', content: systemPrompt },
       ...conversationHistory,
-      { role: 'user', content: conteudo }
     ];
+
+    // Injetar contexto estruturado de escolha numerada, se disponível
+    if (contextoEscolhaInjetado) {
+      messages.push({ role: 'system', content: contextoEscolhaInjetado });
+      console.log(`💉 [INJECT] Contexto de escolha numerada injetado no prompt`);
+    }
+
+    messages.push({ role: 'user', content: conteudo });
 
     const state = { writeMutationsExecuted: 0 };
     let finalResponse = '';
