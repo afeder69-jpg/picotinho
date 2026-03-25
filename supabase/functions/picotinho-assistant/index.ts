@@ -1232,6 +1232,68 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
           console.log(`📝 Write mutations: ${state.writeMutationsExecuted}/1`);
         }
 
+        // Salvar snapshot de opções pendentes se a tool retornou opções para o usuário
+        try {
+          const parsedResult = JSON.parse(result);
+          let opcoesParaSalvar: Array<{ numero: number; produto_id: string; nome: string }> | null = null;
+          let contextoSnapshot = '';
+          let listaIdSnapshot: string | null = null;
+
+          // Caso 1: buscar_produto_catalogo retornou múltiplos produtos
+          if (toolName === 'buscar_produto_catalogo' && parsedResult.produtos && parsedResult.produtos.length > 1) {
+            opcoesParaSalvar = parsedResult.produtos.map((p: any, i: number) => ({
+              numero: i + 1,
+              produto_id: p.produto_id,
+              nome: p.nome || p.nome_base || 'Sem nome'
+            }));
+            contextoSnapshot = 'adicionar_item_lista';
+            listaIdSnapshot = listaAtivaId;
+          }
+
+          // Caso 2: resolver_item_por_historico retornou múltiplos resultados com produto_id
+          if (toolName === 'resolver_item_por_historico' && parsedResult.resultados && parsedResult.resultados.length > 1) {
+            const comId = parsedResult.resultados.filter((r: any) => r.produto_id);
+            if (comId.length > 1) {
+              opcoesParaSalvar = comId.map((r: any, i: number) => ({
+                numero: i + 1,
+                produto_id: r.produto_id,
+                nome: r.nome_catalogo || r.nome
+              }));
+              contextoSnapshot = 'adicionar_item_lista';
+              listaIdSnapshot = listaAtivaId;
+            }
+          }
+
+          // Caso 3: adicionar_itens_lista retornou itens_pendentes_desambiguacao
+          if (toolName === 'adicionar_itens_lista' && parsedResult.itens_pendentes_desambiguacao) {
+            for (const pendente of parsedResult.itens_pendentes_desambiguacao) {
+              if (pendente.opcoes && pendente.opcoes.length > 1) {
+                opcoesParaSalvar = pendente.opcoes.map((o: any, i: number) => ({
+                  numero: i + 1,
+                  produto_id: o.produto_id,
+                  nome: o.nome_padrao || o.nome || 'Sem nome'
+                }));
+                contextoSnapshot = 'adicionar_item_lista';
+                listaIdSnapshot = listaAtivaId;
+                break; // salvar apenas o primeiro pendente por vez
+              }
+            }
+          }
+
+          if (opcoesParaSalvar && opcoesParaSalvar.length > 0) {
+            const snapshot = {
+              timestamp: new Date().toISOString(),
+              contexto: contextoSnapshot,
+              lista_id: listaIdSnapshot,
+              opcoes: opcoesParaSalvar
+            };
+            await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: snapshot }).eq('usuario_id', usuarioId);
+            console.log(`📸 [SNAPSHOT] Salvas ${opcoesParaSalvar.length} opções pendentes para o usuário (tool: ${toolName})`);
+          }
+        } catch {
+          // resultado não é JSON ou erro no parse — ignorar
+        }
+
         messages.push({
           role: 'tool',
           content: result,
