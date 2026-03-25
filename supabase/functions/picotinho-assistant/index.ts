@@ -719,7 +719,7 @@ async function executeTool(
             termo: args.termo,
             total: produtos.length,
             produtos: produtos.map((p: any) => ({
-              produto_master_id: p.id,
+              produto_id: p.id,
               nome: p.nome_padrao,
               nome_base: p.nome_base,
               marca: p.marca,
