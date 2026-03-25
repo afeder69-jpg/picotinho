@@ -525,13 +525,53 @@ async function executeTool(
         if (erro) return { result: JSON.stringify({ erro }), isWriteMutation: false };
 
         const { data: lista } = await supabase.from('listas_compras').select('titulo').eq('id', listaId).single();
-        const { data: itens, error } = await supabase.from('listas_compras_itens').select('id, produto_nome, quantidade, unidade_medida, comprado').eq('lista_id', listaId).order('created_at');
+        const { data: itens, error } = await supabase.from('listas_compras_itens').select('id, produto_nome, quantidade, unidade_medida, comprado, produto_id').eq('lista_id', listaId).order('created_at');
         if (error) throw error;
+
+        // Enriquecer com preços via mesma lógica do aplicativo (comparar-precos-lista)
+        let precosMap: Map<string, { preco_unitario: number; mercado: string }> = new Map();
+        let totalEstimado = 0;
+        let itensComPreco = 0;
+
+        try {
+          const { data: comparacao, error: compError } = await supabase.functions.invoke('comparar-precos-lista', {
+            body: { userId: usuarioId, listaId }
+          });
+
+          if (!compError && comparacao?.otimizado?.mercados) {
+            // Montar mapa de preços: chave = produto_id (prioridade) ou produto_nome normalizado
+            for (const mercado of comparacao.otimizado.mercados) {
+              for (const prod of (mercado.produtos || [])) {
+                // Usar o id do item da lista como chave primária (vem direto do comparar-precos-lista)
+                if (prod.id && !precosMap.has(`id:${prod.id}`)) {
+                  precosMap.set(`id:${prod.id}`, { preco_unitario: prod.preco_unitario, mercado: mercado.nome });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('⚠️ Falha ao buscar preços para listar_itens_lista:', e);
+          // Continua sem preços — não bloqueia a listagem
+        }
+
+        const itensEnriquecidos = (itens || []).map((i: any) => {
+          const precoInfo = precosMap.get(`id:${i.id}`);
+          if (precoInfo) {
+            itensComPreco++;
+            const subtotal = precoInfo.preco_unitario * i.quantidade;
+            totalEstimado += subtotal;
+            return { id: i.id, nome: i.produto_nome, quantidade: i.quantidade, unidade: i.unidade_medida, comprado: i.comprado, preco_unitario: precoInfo.preco_unitario, subtotal: Math.round(subtotal * 100) / 100, mercado: precoInfo.mercado };
+          }
+          return { id: i.id, nome: i.produto_nome, quantidade: i.quantidade, unidade: i.unidade_medida, comprado: i.comprado };
+        });
+
         return {
           result: JSON.stringify({
             lista: lista?.titulo || 'Sem título', lista_id: listaId,
-            total_itens: itens?.length || 0,
-            itens: (itens || []).map((i: any) => ({ id: i.id, nome: i.produto_nome, quantidade: i.quantidade, unidade: i.unidade_medida, comprado: i.comprado }))
+            total_itens: itensEnriquecidos.length,
+            itens_com_preco: itensComPreco,
+            total_estimado: itensComPreco > 0 ? Math.round(totalEstimado * 100) / 100 : null,
+            itens: itensEnriquecidos
           }),
           isWriteMutation: false
         };
