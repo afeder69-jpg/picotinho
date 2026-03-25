@@ -1448,6 +1448,9 @@ Regras de Estoque:
 8. Se o pedido for ambíguo, pergunte antes de agir
 9. Máximo 1 alteração (estoque ou lista) por mensagem — se precisar de mais, peça que envie outra mensagem
 10. Use a tool ultimas_compras para responder sobre histórico de compras reais
+11. VALOR DO ESTOQUE — DUAS VISÕES DISTINTAS:
+    - PADRÃO (buscar_estoque): Usa o PREÇO PAGO pelo usuário (custo de compra). Para perguntas como "quanto tenho em estoque", "valor do estoque", "estoque de hortifruti".
+    - VALOR ATUAL (estoque_valor_atual): Usa os PREÇOS ATUAIS dos mercados na ÁREA DE ATUAÇÃO. SOMENTE quando o usuário pedir EXPLICITAMENTE: "valor atual", "quanto valeria hoje", "pelos preços de hoje", "pelos melhores preços da área". Sempre apresente como ESTIMATIVA dinâmica e informe quantos itens não têm referência de preço na área.
 
 Regras de Listas de Compras:
 11. Quando o usuário falar em "lista", NUNCA assuma lista nova. Verifique lista ativa ou listas existentes primeiro.
