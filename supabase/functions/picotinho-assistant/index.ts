@@ -1059,7 +1059,8 @@ Regras de Resolução de Produtos para Lista:
          2. Nescau em pó 750g
          3. Nescau pronto para beber 200ml
          Qual você quer?"
-    c) TERCEIRO (último recurso): só crie como item_livre=true quando AMBAS as buscas (histórico e catálogo) retornarem vazio. Ao fazer isso, avise: "Adicionei como item livre. Itens livres podem não participar do cálculo de preço e comparação de mercados."
+    c) TERCEIRO (último recurso): só crie como item_livre=true quando AMBAS as buscas (histórico e catálogo) retornarem vazio E o usuário confirmar explicitamente que deseja adicionar como item livre. Ao perguntar, diga: "Não encontrei esse produto no catálogo. Quer que eu adicione como item livre? (Itens livres não participam do cálculo de preço e comparação de mercados.)"
+    d) NUNCA converta automaticamente um item para item_livre por falha técnica de produto_id. Se o ID for inválido e a re-resolução não encontrar match único, pergunte ao usuário: apresente as opções encontradas (se múltiplas) ou pergunte se deseja adicionar como item livre (se nenhuma). Item livre SÓ com confirmação explícita do usuário.
     
     PROIBIDO: adicionar item_livre=true sem ter chamado resolver_item_por_historico E buscar_produto_catalogo primeiro.
     PROIBIDO: pedir ao usuário a descrição exata do produto ao invés de buscar no catálogo.
