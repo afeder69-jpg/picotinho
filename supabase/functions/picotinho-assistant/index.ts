@@ -739,7 +739,7 @@ async function executeTool(
 
         return {
           result: JSON.stringify(resultado),
-          isWriteMutation: itensParaInserir.length > 0
+          isWriteMutation: inseridos.length > 0 || consolidados.length > 0
         };
       }
 
