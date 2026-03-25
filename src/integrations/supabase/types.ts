@@ -2791,6 +2791,33 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_preferencias_usuario: {
+        Row: {
+          created_at: string | null
+          estilo_conversa: string | null
+          id: string
+          nome_preferido: string | null
+          updated_at: string | null
+          usuario_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          estilo_conversa?: string | null
+          id?: string
+          nome_preferido?: string | null
+          updated_at?: string | null
+          usuario_id: string
+        }
+        Update: {
+          created_at?: string | null
+          estilo_conversa?: string | null
+          id?: string
+          nome_preferido?: string | null
+          updated_at?: string | null
+          usuario_id?: string
+        }
+        Relationships: []
+      }
       whatsapp_sessions: {
         Row: {
           contexto: Json | null
