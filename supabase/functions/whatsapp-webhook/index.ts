@@ -297,41 +297,14 @@ const handler = async (req: Request): Promise<Response> => {
         });
       }
 
-      // Verificar se há sessões ativas antes de processar comando ou enviar erro
+      // Assistente IA: toda mensagem de usuário autenticado vai para o assistente
       let deveProcessar = false;
       let motivoProcessamento = '';
       
-      if (comando_identificado) {
+      if (telefoneAutorizado?.usuario_id) {
         deveProcessar = true;
-        motivoProcessamento = `comando identificado: ${comando_identificado}`;
-      } else {
-        // Verificar se há sessão ativa para QUALQUER tipo de resposta (não só números)
-        console.log(`🔍 Verificando se há sessão ativa para qualquer resposta...`);
-        
-        // Buscar sessões ativas para o usuário
-        const { data: sessaoAtiva } = await supabase
-          .from('whatsapp_sessions')
-          .select('*')
-          .eq('usuario_id', telefoneAutorizado.usuario_id)
-          .eq('remetente', remetente)
-          .gt('expires_at', new Date().toISOString())
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-          
-        if (sessaoAtiva) {
-          console.log(`🎯 Sessão ativa encontrada: ${sessaoAtiva.estado} - forçando processamento para qualquer resposta`);
-          deveProcessar = true;
-          motivoProcessamento = `resposta em sessão ativa: ${sessaoAtiva.estado}`;
-        } else {
-          // Verificar se é número simples para casos especiais
-          const isNumeroSimples = /^\s*\d+([,.]\d+)?\s*$/.test(conteudo);
-          console.log(`🔢 [DEBUG WEBHOOK] Testando "${conteudo}" com regex decimal: ${isNumeroSimples}`);
-          
-          if (isNumeroSimples) {
-            console.log(`🔢 Número simples sem sessão ativa: "${conteudo}"`);
-          }
-        }
+        motivoProcessamento = 'assistente IA — toda mensagem autenticada';
+        console.log('🤖 Roteando para picotinho-assistant (usuário autenticado)');
       }
 
       // Processar comando automaticamente se identificado OU se há sessão ativa
