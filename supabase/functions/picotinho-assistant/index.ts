@@ -698,19 +698,16 @@ async function executeTool(
       }
 
       case 'buscar_produto_catalogo': {
-        const termo = args.termo.toLowerCase();
-        const palavras = termo.split(/\s+/).filter((p: string) => p.length >= 2);
+        const palavras = args.termo.split(/\s+/).filter((p: string) => p.length >= 2);
         
-        let query = supabase.from('produtos_master_global')
-          .select('id, nome_padrao, nome_base, marca, categoria, unidade_base, qtd_valor, qtd_unidade')
-          .eq('status', 'aprovado');
-        
-        // Apply word-by-word ilike filter
-        for (const palavra of palavras) {
-          query = query.or(`nome_padrao.ilike.%${palavra}%,nome_base.ilike.%${palavra}%,marca.ilike.%${palavra}%`);
+        if (palavras.length === 0) {
+          return { result: JSON.stringify({ mensagem: "Termo muito curto para busca.", produtos: [] }), isWriteMutation: false };
         }
-        
-        const { data: produtos, error } = await query.limit(5);
+
+        const { data: produtos, error } = await supabase.rpc('buscar_produtos_master_por_palavras', {
+          p_palavras: palavras,
+          p_limite: 8
+        });
         if (error) throw error;
         
         if (!produtos || produtos.length === 0) {
@@ -915,14 +912,32 @@ Regras de Listas de Compras:
 
 Regras de Resolução de Produtos para Lista:
 18. ORDEM OBRIGATÓRIA ao adicionar item na lista — NUNCA pule etapas:
-    a) PRIMEIRO: use resolver_item_por_historico para verificar se o usuário já comprou esse produto antes. Se encontrar opções, use o mais frequente (ou pergunte se houver várias opções relevantes).
-    b) SEGUNDO: se o histórico não retornar resultados, use buscar_produto_catalogo para localizar no catálogo master global. Se encontrar UMA opção clara, use o produto_master_id ao inserir. Se múltiplas, pergunte qual.
-    c) TERCEIRO (último recurso): só crie como item_livre=true quando NENHUMA resolução estruturada for possível. Ao fazer isso, avise o usuário: "Adicionei como item livre. Itens livres podem não participar do cálculo de preço e comparação de mercados."
-19. Múltiplos produtos possíveis no item: liste opções e pergunte (desambiguação de produto).
-20. Múltiplas listas possíveis: liste opções e pergunte (desambiguação de lista).
+    a) PRIMEIRO: SEMPRE chame resolver_item_por_historico com o termo do produto. Se encontrar opções, use o mais frequente (ou pergunte se houver várias opções relevantes).
+    b) SEGUNDO: se o histórico retornar vazio, SEMPRE chame buscar_produto_catalogo para localizar no catálogo master global.
+       - Se encontrar EXATAMENTE 1 opção óbvia, use o produto_master_id diretamente.
+       - Se encontrar múltiplas opções, MOSTRE-AS em formato numerado curto e pergunte qual. Formato obrigatório:
+         "Encontrei estas opções:
+         1. Nescau em pó 350g
+         2. Nescau em pó 750g
+         3. Nescau pronto para beber 200ml
+         Qual você quer?"
+    c) TERCEIRO (último recurso): só crie como item_livre=true quando AMBAS as buscas (histórico e catálogo) retornarem vazio. Ao fazer isso, avise: "Adicionei como item livre. Itens livres podem não participar do cálculo de preço e comparação de mercados."
+    
+    PROIBIDO: adicionar item_livre=true sem ter chamado resolver_item_por_historico E buscar_produto_catalogo primeiro.
+    PROIBIDO: pedir ao usuário a descrição exata do produto ao invés de buscar no catálogo.
+    
+    Exemplo correto para "adiciona Nescau na lista":
+    1. Chamar resolver_item_por_historico(termo: "nescau")
+    2. Se vazio, chamar buscar_produto_catalogo(termo: "nescau")
+    3. Se retornar opções, mostrar lista numerada e perguntar "Qual você quer?"
+    4. Só usar item_livre se ambas retornarem vazio.
+
+19. Múltiplos produtos possíveis no item: liste opções NUMERADAS e pergunte (desambiguação de produto). Seja curto e objetivo.
+20. Múltiplas listas possíveis: liste opções NUMERADAS e pergunte (desambiguação de lista).
 21. Para valor da lista, use calcular_valor_lista e apresente como ESTIMATIVA, nunca preço garantido.
 22. Ao adicionar múltiplos itens de uma vez, resolva cada um antes de chamar adicionar_itens_lista. Pode usar múltiplas chamadas de resolver_item_por_historico em sequência.
 23. EXCLUSÃO DE LISTA INTEIRA NÃO É PERMITIDA pelo WhatsApp. Se o usuário pedir para excluir/apagar/deletar uma lista completa, responda: "Por segurança, a exclusão de uma lista inteira só pode ser feita diretamente no aplicativo do Picotinho."
+24. NUNCA diga que não consegue buscar, prever ou encontrar produtos. Você TEM as tools buscar_produto_catalogo e resolver_item_por_historico. USE-AS. Se o usuário pedir item normalizado, busque e mostre os resultados encontrados.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras e organização doméstica.`;
 
