@@ -2798,6 +2798,7 @@ export type Database = {
           id: string
           lista_ativa_id: string | null
           nome_preferido: string | null
+          opcoes_pendentes: Json | null
           updated_at: string | null
           usuario_id: string
         }
@@ -2807,6 +2808,7 @@ export type Database = {
           id?: string
           lista_ativa_id?: string | null
           nome_preferido?: string | null
+          opcoes_pendentes?: Json | null
           updated_at?: string | null
           usuario_id: string
         }
@@ -2816,6 +2818,7 @@ export type Database = {
           id?: string
           lista_ativa_id?: string | null
           nome_preferido?: string | null
+          opcoes_pendentes?: Json | null
           updated_at?: string | null
           usuario_id?: string
         }

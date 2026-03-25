@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_preferencias_usuario ADD COLUMN IF NOT EXISTS opcoes_pendentes JSONB DEFAULT NULL;
