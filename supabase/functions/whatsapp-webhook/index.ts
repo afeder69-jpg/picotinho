@@ -312,7 +312,7 @@ const handler = async (req: Request): Promise<Response> => {
         try {
           console.log(`🤖 Processando comando automaticamente... (${motivoProcessamento})`);
           
-          const response = await supabase.functions.invoke('process-whatsapp-command', {
+          const response = await supabase.functions.invoke('picotinho-assistant', {
             body: { messageId: mensagemSalva.id }
           });
           
