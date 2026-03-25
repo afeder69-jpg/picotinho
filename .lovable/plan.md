@@ -1,26 +1,40 @@
 
 
-
-## Correção: persistência de contexto estruturado para escolhas numeradas (IMPLEMENTADO)
+## Consolidação de itens duplicados na lista de compras
 
 ### Problema
-Quando o usuário escolhe uma opção numerada (ex: "1" para MAÇÃ GALA), a próxima invocação do assistente não tem acesso ao `produto_id` real retornado pela tool anterior — o histórico só contém texto. O LLM alucina um UUID, que é bloqueado pela validação pré-insert, gerando loop infinito de desambiguação.
+Ao adicionar um produto que já existe na lista (mesmo `produto_id`), o sistema cria uma nova linha em vez de somar a quantidade ao item existente. Isso polui a lista com duplicatas.
 
-### Mudanças aplicadas
+### Solução
+Transformar o insert em lógica de upsert: antes de inserir cada item, verificar se já existe na mesma lista um item com o mesmo `produto_id`. Se existir, atualizar a quantidade somando. Se não, inserir normalmente.
 
-| Local | Mudança |
-|---|---|
-| Schema | Coluna `opcoes_pendentes JSONB` em `whatsapp_preferencias_usuario` |
-| Linhas 985-1040 | Detecção de escolha numérica (regex: "1", "opção 2", "a primeira", etc.) + resolução via snapshot + injeção de contexto com `produto_id` real |
-| Linhas 1136-1148 | Injeção do contexto estruturado como mensagem de sistema antes da mensagem do usuário |
-| Linhas 1235-1300 | Após tool retornar opções (buscar_produto_catalogo, resolver_item_por_historico, adicionar_itens_lista com desambiguação), salvar snapshot no banco |
-| Limpeza | Snapshot limpo após uso, expiração (10min), ou mudança de assunto |
+### Arquivo: `supabase/functions/picotinho-assistant/index.ts`
 
-### Fluxo corrigido
-1. Tool retorna múltiplas opções → snapshot salvo em `opcoes_pendentes`
-2. Usuário responde "1" → snapshot lido, `produto_id` real resolvido
-3. Contexto injetado: "O produto_id correspondente é [UUID]. Use este ID EXATO."
-4. LLM chama `adicionar_itens_lista` com o ID real → insert bem-sucedido
-5. Snapshot limpo
+**Mudança única — substituir o bloco de insert em massa (linhas 661-667) por lógica de upsert individual:**
 
-Nenhuma alteração de schema além da coluna. Arquivo único editado + deploy realizado.
+Para cada item em `itensParaInserir`:
+
+1. Se o item tem `produto_id` (não é item livre):
+   - Buscar em `listas_compras_itens` um registro com `lista_id` = item.lista_id **e** `produto_id` = item.produto_id
+   - **Se encontrar**: atualizar quantidade = quantidade existente + nova quantidade. Log: `📦 [upsert] ${nome} | consolidado: +${qtd} → total ${novaQtd}`
+   - **Se não encontrar**: inserir normalmente
+
+2. Se o item é `item_livre` (sem `produto_id`):
+   - Buscar por `lista_id` + `produto_nome` (case-insensitive) + `item_livre = true`
+   - **Se encontrar**: consolidar quantidade
+   - **Se não encontrar**: inserir normalmente
+
+O retorno da tool indicará quais itens foram consolidados vs inseridos como novos.
+
+### Resultado esperado
+
+| Situação | Antes | Depois |
+|---|---|---|
+| Maçã Gala (2) já na lista, usuário pede +3 | 2 linhas: Maçã Gala (2) + Maçã Gala (3) | 1 linha: Maçã Gala (5) |
+| Produto novo | Nova linha | Nova linha (sem mudança) |
+| Item livre "biscoito" já na lista, pede +1 | 2 linhas duplicadas | 1 linha consolidada |
+
+### Detalhes técnicos
+
+A lógica de upsert será aplicada no loop que hoje apenas acumula em `itensParaInserir[]`. Em vez de acumular e fazer um `.insert()` em massa no final, cada item será processado individualmente com verificação de existência prévia. Itens consolidados serão rastreados separadamente no retorno (`itens_consolidados` com nome, quantidade anterior e nova).
+
