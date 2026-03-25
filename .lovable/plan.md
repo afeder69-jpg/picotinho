@@ -1,35 +1,70 @@
 
 
-## Diagnóstico: Erro de áudio no picotinho-assistant
+## Plano: Alinhar leitura de estoque entre WhatsApp e Aplicativo
 
-### Causa raiz identificada
+### Diagnóstico confirmado
 
-**Erro:** `Assignment to constant variable.`
+**App (EstoqueAtual.tsx):**
+- Consolida registros duplicados via normalização de nome (uppercase, remove "KG", "GRANEL GRANEL" → "GRANEL")
+- Por padrão oculta itens com `quantidade <= 0` (toggle `mostrarItensZerados`)
+- Exibe **duas colunas** de valor: "Valor Pago" (`preco_unitario_ultimo × quantidade`) e "Valor Atual" (preço da área ou fallback para preço pago)
+- O resumo por categoria (ex: Hortifruti) conta itens **consolidados** e soma **ambos** os valores
 
-**Linha 1048:** `const conteudo = mensagem.conteudo;`
-**Linha 1099:** `conteudo = transcricao.text;` — tenta reatribuir uma variável declarada com `const`.
+**WhatsApp (picotinho-assistant `buscar_estoque`):**
+- Retorna registros brutos da tabela `estoque_app` com `limit(50)`
+- Sem consolidação de nomes duplicados
+- Sem filtro de zerados
+- Soma `preco_unitario_ultimo × quantidade` por registro bruto
 
-A transcrição via Whisper **funciona perfeitamente** (logs confirmam textos como "Oi!", "Oi, quem é você?", "Me mostrem o estoque de hortifruti"). Porém, ao tentar salvar o resultado na variável `conteudo`, o JavaScript lança `TypeError: Assignment to constant variable`, que cai no `catch` (linha 1109-1119), envia a mensagem de erro ao usuário, e faz `return`.
+**Resultado:** contagem inflada, valor inflado, e limite de 50 pode cortar registros.
 
-### Por que a mensagem de texto seguinte também falhou
+### Regra funcional definida pelo usuário
 
-Quanto ao segundo problema relatado (mensagem de texto respondida com erro de áudio): os logs mostram que **todas as 3 invocações do assistente foram do tipo `audio`**. Não há registro de uma mensagem tipo `text` nos logs recentes. Isso indica que o problema reportado pelo usuário provavelmente foi uma percepção de que a resposta de erro do áudio chegou com delay, parecendo ser resposta à mensagem de texto seguinte. Não há evidência de contaminação de estado entre mensagens — cada invocação usa seu próprio `messageId`.
+O valor **padrão** do estoque deve usar o **preço pago pelo usuário** (`preco_unitario_ultimo`), não o preço da área. A consulta por "preço atual da área" será uma visão separada, futuramente.
 
-### Correção
+### Correção planejada
 
 **Arquivo:** `supabase/functions/picotinho-assistant/index.ts`
 
-**Mudança única na linha 1048:** trocar `const` por `let`:
+**Mudança na tool `buscar_estoque` (linhas 357-374):**
+
+1. Remover `limit(50)` e usar `limit(500)` para garantir que todos os registros sejam processados antes da consolidação
+
+2. Após a query, aplicar a **mesma lógica de consolidação** do app:
 
 ```typescript
-// Antes:
-const conteudo = mensagem.conteudo;
-
-// Depois:
-let conteudo = mensagem.conteudo;
+// Normalização idêntica ao app (EstoqueAtual.tsx linhas 765-773)
+const normalizarNome = (nome: string): string => {
+  return nome.toUpperCase().trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\bKG\b/gi, '')
+    .replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
 ```
 
-Isso permite que a linha 1099 (`conteudo = transcricao.text`) funcione corretamente, e o fluxo continue normalmente com o texto transcrito sendo processado pelo assistente.
+3. Agrupar por nome normalizado, somando quantidades e mantendo o preço do registro mais recente (`updated_at`)
 
-Nenhuma outra mudança necessária. A `transcribe-audio` está operacional, o webhook está correto, e o fluxo de continuação após a transcrição já está implementado.
+4. Filtrar itens com `quantidade_total <= 0` por padrão (o app oculta zerados por padrão)
+
+5. Retornar no JSON:
+   - `total`: contagem de itens **consolidados** com saldo > 0
+   - `valor_total`: soma de `preco_unitario_ultimo × quantidade_consolidada` (preço pago, não preço de área)
+   - `itens`: lista consolidada com nome, quantidade, preço, categoria
+
+### Detalhes da implementação
+
+A lógica de consolidação será uma réplica fiel do `Map<string, any>` usado em `EstoqueAtual.tsx` (linhas 776-840):
+
+- Chave = nome normalizado
+- Se já existe: somar quantidade, manter preço do registro com `updated_at` mais recente
+- Se não existe: criar entrada com valores do registro atual
+- Ao final: converter Map para array, filtrar `quantidade_total > 0`, calcular `valor_total`
+
+Nenhuma mudança no webhook, na transcrição ou em outras tools do assistente.
+
+### Resultado esperado
+
+Ao pedir "estoque de hortifruti" no WhatsApp, o assistente retornará a mesma contagem de itens e o mesmo valor total "Valor Pago" exibido no app, usando consolidação e filtro idênticos.
 
