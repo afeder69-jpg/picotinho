@@ -1,86 +1,44 @@
 
-## Correção cirúrgica para o erro de preço no estoque (confirmado)
 
-### Diagnóstico fechado (causa raiz)
-1. **`buscar-historico-precos-estoque` está estourando CPU** em cargas maiores (log com `CPU Time exceeded`), então a tela cai no fallback.
-2. **Fallback atual (`preco-atual-usuario`) busca `precos_atuais` por similaridade de nome** e pode puxar preço de embalagem (ex.: R$14,65 da bandeja), não preço por unidade.
-3. **No `buscar-historico-precos-estoque`, o matching usa `produto_nome_normalizado` sem normalizar novamente**; como muitos registros estão em maiúsculo, a comparação com `nomeItem` minúsculo falha e gera histórico nulo.
-4. **No frontend (`EstoqueAtual.tsx`), a consolidação de duplicatas pode manter preço antigo** por sobrescrita na iteração, gerando inconsistência na linha “preço pago”.
+## Picotinho WhatsApp — Fase 2: Plano Final com Nomenclatura Padronizada
+
+Todas as tools de lista agora carregam sufixo `_lista` explicito, eliminando qualquer ambiguidade com operacoes de estoque.
 
 ---
 
-## O que implementar para não repetir
+### Nomenclatura padronizada das tools
 
-### 1) Corrigir o backend de histórico (principal)
-**Arquivo:** `supabase/functions/buscar-historico-precos-estoque/index.ts`
+| Tool (nome final) | Tipo | Descricao curta |
+|---|---|---|
+| `listar_listas` | leitura | Retorna listas do usuario com contagem de itens |
+| `buscar_lista_por_nome` | leitura | Busca listas por termo, desambigua se >1 match |
+| `criar_lista` | mutacao | Cria lista nova, define como ativa |
+| `definir_lista_ativa` | metadata | Atualiza lista ativa nas preferencias |
+| `listar_itens_lista` | leitura | Retorna itens de uma lista especifica ou da ativa |
+| `adicionar_itens_lista` | mutacao | Adiciona array de itens a uma lista |
+| `remover_item_lista` | mutacao | Remove item de uma lista |
+| `alterar_quantidade_item_lista` | mutacao | Altera quantidade de item em uma lista |
+| `resolver_item_por_historico` | leitura | Busca produto habitual do usuario em notas |
+| `calcular_valor_lista` | leitura | Estima valor otimizado da lista |
 
-- **Normalizar sempre** `produto_nome_normalizado` antes de comparar:
-  - `const produtoNormalizado = normalizarNomeProduto(produtoEstoque.produto_nome_normalizado || produtoNome)`
-- **Refatorar para processamento em lote** (evitar loop produto × notas):
-  - Buscar notas do usuário **uma vez**;
-  - Buscar notas da área **uma vez**;
-  - Processar itens em passagem única e preencher mapa por `produtoId`.
-- **Manter conversão segura já existente**:
-  - prioridade EAN > nome;
-  - `quantidadeFinal = quantidadeComprada * qtd_por_embalagem` quando multiembalagem;
-  - sem match seguro => sem conversão.
-- **Adicionar guarda de performance**:
-  - janela temporal (ex.: últimas N semanas) + limite configurável;
-  - retorno parcial controlado em vez de timeout.
+**Mudancas em relacao ao plano anterior:**
+- `alterar_quantidade_item` → `alterar_quantidade_item_lista` (clareza: operacao sobre lista, nao estoque)
+- `adicionar_item_lista` → `adicionar_itens_lista` (plural, reflete que aceita array)
 
----
-
-### 2) Tornar fallback da tela seguro (sem preço enganoso)
-**Arquivo:** `src/pages/EstoqueAtual.tsx`
-
-- Em `loadHistoricoPrecos`, se `buscar-historico-precos-estoque` falhar:
-  - **não usar fallback por nome que pode distorcer preço de unidade**;
-  - mostrar estado “histórico indisponível” e manter preço do próprio estoque.
-- Manter `historicoPrecos` **chaveado por `item.id`** apenas para evitar mistura entre produtos parecidos.
+Tools de estoque da Fase 1 permanecem intactas: `baixar_estoque`, `aumentar_estoque`, `adicionar_produto`, `buscar_estoque`, `itens_acabando`, `buscar_produtos_similares`.
 
 ---
 
-### 3) Ajustar fallback da função de preço atual para base unitária
-**Arquivo:** `supabase/functions/preco-atual-usuario/index.ts`
+### Resto do plano — sem alteracoes
 
-- No bloco que consulta `precos_atuais`:
-  - priorizar `preco_por_unidade_base` quando existir;
-  - usar `produto_master_id` quando disponível antes de similaridade textual;
-  - reduzir confiança de match por nome (evitar “OVOS …” casar com embalagem sem conversão).
-- Se não houver dado confiável por unidade, **não retornar preço “chutado”**.
+Tudo o mais permanece identico ao plano aprovado anteriormente:
 
----
+- **Migration**: ADD COLUMN `lista_ativa_id` em `whatsapp_preferencias_usuario`
+- **Arquivo editado**: apenas `supabase/functions/picotinho-assistant/index.ts`
+- **10 tools** com a nomenclatura acima
+- **Regras 11-21** no system prompt (incluindo bloqueio de exclusao de lista)
+- **Contador** `writeMutationsExecuted` cobrindo estoque + lista
+- **`definir_lista_ativa`** e metadata, nao conta como mutacao
+- **`adicionar_itens_lista`** aceita array, conta como 1 mutacao
+- **Seguranca**: todas as queries filtram por `user_id = usuarioId`
 
-### 4) Corrigir consolidação no frontend (preço pago coerente)
-**Arquivo:** `src/pages/EstoqueAtual.tsx` (função `loadEstoque`)
-
-- Na consolidação por chave:
-  - somar quantidade normalmente;
-  - **preservar preço/data do item mais recente** (por `updated_at`/`created_at`), sem sobrescrever com item antigo.
-
----
-
-### 5) Saneamento de dados já gravados (1 migration)
-**Arquivo novo:** `supabase/migrations/...sql`
-
-- Reprocessar/ajustar registros de `precos_atuais` de ovos com padrão de embalagem:
-  - preencher `qtd_base`, `tipo_embalagem`, `preco_por_unidade_base`;
-  - ajustar `valor_unitario` para unidade base apenas quando match for seguro.
-- Escopo inicial: padrões fixos já aprovados (cartela/bandeja/dúzia/meia dúzia).
-
----
-
-## Validação (obrigatória)
-1. Chamar `buscar-historico-precos-estoque` para o item de ovos do usuário e validar retorno em unidade (não embalagem).
-2. Abrir `/estoque` com hard refresh e confirmar que **não aparece mais R$14,65/un** para ovos.
-3. Verificar logs: sem `CPU Time exceeded` na busca de histórico.
-4. Conferir consistência:
-   - preço pago da linha principal coerente com item mais recente;
-   - preço de área coerente com unidade base;
-   - total = preço × quantidade sem distorção.
-
----
-
-## Resultado esperado após essa correção
-- O estoque para ovos deixa de mostrar valor impossível por unidade.
-- A correção passa a ser **estrutural** (performance + matching + fallback seguro), evitando recorrência do mesmo erro em futuras atualizações.
