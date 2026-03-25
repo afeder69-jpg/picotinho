@@ -172,7 +172,11 @@ serve(async (req) => {
       .from('listas_compras_itens')
       .insert(itens);
 
-    if (itensError) throw itensError;
+    if (itensError) {
+      // Rollback: remover lista órfã para evitar estado inconsistente
+      await supabase.from('listas_compras').delete().eq('id', lista.id);
+      throw itensError;
+    }
 
     return new Response(
       JSON.stringify({

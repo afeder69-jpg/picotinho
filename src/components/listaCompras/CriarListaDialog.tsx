@@ -95,6 +95,8 @@ export function CriarListaDialog({ open, onClose }: CriarListaDialogProps) {
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (!data?.listaId) throw new Error('Lista não retornada pelo servidor');
 
       toast({ title: "Lista criada com sucesso!" });
       onClose();
