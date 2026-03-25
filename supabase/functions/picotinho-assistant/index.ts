@@ -698,19 +698,16 @@ async function executeTool(
       }
 
       case 'buscar_produto_catalogo': {
-        const termo = args.termo.toLowerCase();
-        const palavras = termo.split(/\s+/).filter((p: string) => p.length >= 2);
+        const palavras = args.termo.split(/\s+/).filter((p: string) => p.length >= 2);
         
-        let query = supabase.from('produtos_master_global')
-          .select('id, nome_padrao, nome_base, marca, categoria, unidade_base, qtd_valor, qtd_unidade')
-          .eq('status', 'aprovado');
-        
-        // Apply word-by-word ilike filter
-        for (const palavra of palavras) {
-          query = query.or(`nome_padrao.ilike.%${palavra}%,nome_base.ilike.%${palavra}%,marca.ilike.%${palavra}%`);
+        if (palavras.length === 0) {
+          return { result: JSON.stringify({ mensagem: "Termo muito curto para busca.", produtos: [] }), isWriteMutation: false };
         }
-        
-        const { data: produtos, error } = await query.limit(5);
+
+        const { data: produtos, error } = await supabase.rpc('buscar_produtos_master_por_palavras', {
+          p_palavras: palavras,
+          p_limite: 8
+        });
         if (error) throw error;
         
         if (!produtos || produtos.length === 0) {
