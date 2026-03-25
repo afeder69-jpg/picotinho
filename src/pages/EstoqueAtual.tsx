@@ -389,7 +389,7 @@ const EstoqueAtual = () => {
         if (item.id && item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
           historicoMap[item.id] = {
             ultimaCompraUsuario: {
-              data: item.updated_at,
+              data: item.created_at || item.updated_at, // NUNCA usar updated_at como data de compra; created_at é o fallback seguro
               preco: item.preco_unitario_ultimo,
               quantidade: 1
             },
