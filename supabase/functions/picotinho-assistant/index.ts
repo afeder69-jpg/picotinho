@@ -582,7 +582,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
             'Authorization': `Bearer ${lovableApiKey}`
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-preview-05-20',
+            model: 'google/gemini-2.5-flash',
             messages,
             tools: toolDefinitions,
             tool_choice: 'auto',
