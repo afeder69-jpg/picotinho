@@ -549,6 +549,8 @@ async function executeTool(
           ...(item.produto_id ? { produto_id: item.produto_id } : {})
         }));
 
+        console.log(`📦 [adicionar_itens_lista] Payload para insert:`, JSON.stringify(itensParaInserir));
+
         if (itensParaInserir.length === 0) {
           return { result: JSON.stringify({ erro: "Nenhum item fornecido para adicionar." }), isWriteMutation: false };
         }
