@@ -1,40 +1,71 @@
 
 
-## Consolidação de itens duplicados na lista de compras
+## Diagnóstico: Fluxo de Áudio no WhatsApp
 
-### Problema
-Ao adicionar um produto que já existe na lista (mesmo `produto_id`), o sistema cria uma nova linha em vez de somar a quantidade ao item existente. Isso polui a lista com duplicatas.
+### Ponto exato da quebra
 
-### Solução
-Transformar o insert em lógica de upsert: antes de inserir cada item, verificar se já existe na mesma lista um item com o mesmo `produto_id`. Se existir, atualizar a quantidade somando. Se não, inserir normalmente.
+**Linha 1062-1072 de `picotinho-assistant/index.ts`:**
 
-### Arquivo: `supabase/functions/picotinho-assistant/index.ts`
+```typescript
+// 2. Handle audio — not yet supported
+if (tipoMensagem === 'audio') {
+  const audioMsg = "🎤 Em breve vou entender áudios! Por enquanto, me mande por texto que eu te ajudo. 😊";
+  await sendWhatsAppMessage(remetente, audioMsg);
+  // ... marca como processada e retorna
+  return new Response(...);
+}
+```
 
-**Mudança única — substituir o bloco de insert em massa (linhas 661-667) por lógica de upsert individual:**
+O assistente **bloqueia explicitamente** mensagens de áudio com um early return, antes mesmo de tentar transcrever. A Edge Function `transcribe-audio` existe e está funcional, mas **nunca é chamada** em nenhum ponto do fluxo.
 
-Para cada item em `itensParaInserir`:
+### Comparação: fluxo antigo vs atual
 
-1. Se o item tem `produto_id` (não é item livre):
-   - Buscar em `listas_compras_itens` um registro com `lista_id` = item.lista_id **e** `produto_id` = item.produto_id
-   - **Se encontrar**: atualizar quantidade = quantidade existente + nova quantidade. Log: `📦 [upsert] ${nome} | consolidado: +${qtd} → total ${novaQtd}`
-   - **Se não encontrar**: inserir normalmente
-
-2. Se o item é `item_livre` (sem `produto_id`):
-   - Buscar por `lista_id` + `produto_nome` (case-insensitive) + `item_livre = true`
-   - **Se encontrar**: consolidar quantidade
-   - **Se não encontrar**: inserir normalmente
-
-O retorno da tool indicará quais itens foram consolidados vs inseridos como novos.
-
-### Resultado esperado
-
-| Situação | Antes | Depois |
+| Etapa | Fluxo antigo (legado) | Fluxo atual (assistente) |
 |---|---|---|
-| Maçã Gala (2) já na lista, usuário pede +3 | 2 linhas: Maçã Gala (2) + Maçã Gala (3) | 1 linha: Maçã Gala (5) |
-| Produto novo | Nova linha | Nova linha (sem mudança) |
-| Item livre "biscoito" já na lista, pede +1 | 2 linhas duplicadas | 1 linha consolidada |
+| Webhook detecta áudio | Detecta corretamente, salva `tipo_mensagem: 'audio'` e `anexo_info` com URL | Idêntico — sem mudança |
+| Transcrição | Era feita pelo webhook ou por processamento separado | **Nunca acontece** — bloqueado no assistant |
+| Assistente recebe | Recebia texto transcrito | Recebe tipo `audio`, responde "em breve" e para |
+
+### Resumo do problema
+
+1. **Webhook** (`whatsapp-webhook`): funciona corretamente — detecta áudio, extrai URL, salva `anexo_info` com a URL de download, e roteia para `picotinho-assistant`
+2. **Assistant** (`picotinho-assistant`): recebe a mensagem, verifica `tipoMensagem === 'audio'`, e **retorna imediatamente** com mensagem "em breve vou entender áudios" sem chamar `transcribe-audio`
+3. **`transcribe-audio`**: existe, usa Whisper da OpenAI, suporta download via Z-API — mas está órfã, ninguém a invoca
+
+### Plano de correção
+
+**Arquivo:** `supabase/functions/picotinho-assistant/index.ts`
+
+**Mudança única — substituir o bloco de early return (linhas 1062-1072) por lógica de transcrição:**
+
+Em vez de responder "em breve", o assistente deve:
+
+1. Extrair a URL do áudio de `mensagem.anexo_info.url`
+2. Invocar `transcribe-audio` via `supabase.functions.invoke('transcribe-audio', { body: { audioUrl } })`
+3. Se a transcrição for bem-sucedida:
+   - Substituir a variável `conteudo` pelo texto transcrito
+   - Atualizar a mensagem no banco com o conteúdo transcrito (`conteudo = textoTranscrito`)
+   - Continuar o fluxo normal do assistente (sem return)
+4. Se falhar:
+   - Enviar mensagem ao usuário pedindo para repetir por texto
+   - Retornar (mantém o early return apenas em caso de erro)
+
+```text
+Fluxo corrigido:
+
+áudio recebido
+  → extrair URL do anexo_info
+  → invocar transcribe-audio
+  → texto transcrito
+  → sobrescrever variável conteudo
+  → atualizar whatsapp_mensagens.conteudo
+  → continuar fluxo normal do assistente (tool calling, LLM, etc.)
+```
 
 ### Detalhes técnicos
 
-A lógica de upsert será aplicada no loop que hoje apenas acumula em `itensParaInserir[]`. Em vez de acumular e fazer um `.insert()` em massa no final, cada item será processado individualmente com verificação de existência prévia. Itens consolidados serão rastreados separadamente no retorno (`itens_consolidados` com nome, quantidade anterior e nova).
+- `mensagem.anexo_info` já contém `{ tipo: 'audio', url: '...', mimetype: 'audio/ogg' }` — basta passar `audioUrl` para `transcribe-audio`
+- A função `transcribe-audio` já lida com download via Z-API (headers de autenticação) e envio ao Whisper
+- O `supabase` client já está instanciado no escopo do handler com `service_role`, compatível com `functions.invoke`
+- Nenhuma mudança necessária no webhook nem na `transcribe-audio`
 
