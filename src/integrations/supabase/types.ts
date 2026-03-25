@@ -2796,6 +2796,7 @@ export type Database = {
           created_at: string | null
           estilo_conversa: string | null
           id: string
+          lista_ativa_id: string | null
           nome_preferido: string | null
           updated_at: string | null
           usuario_id: string
@@ -2804,6 +2805,7 @@ export type Database = {
           created_at?: string | null
           estilo_conversa?: string | null
           id?: string
+          lista_ativa_id?: string | null
           nome_preferido?: string | null
           updated_at?: string | null
           usuario_id: string
@@ -2812,11 +2814,20 @@ export type Database = {
           created_at?: string | null
           estilo_conversa?: string | null
           id?: string
+          lista_ativa_id?: string | null
           nome_preferido?: string | null
           updated_at?: string | null
           usuario_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_preferencias_usuario_lista_ativa_id_fkey"
+            columns: ["lista_ativa_id"]
+            isOneToOne: false
+            referencedRelation: "listas_compras"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_sessions: {
         Row: {
