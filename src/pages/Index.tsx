@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { LogIn, LogOut } from "lucide-react";
+import { LogIn, LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 import { APP_VERSION } from "@/lib/constants";
 import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
