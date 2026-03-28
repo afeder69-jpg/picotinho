@@ -361,10 +361,9 @@ export default function NormalizacaoGlobal() {
         .not('revisado_por', 'is', null);
       
 
-      // Total de usuários
-      const { data: usuarios } = await supabase
-        .from('profiles')
-        .select('id');
+      // Total de usuários (via RPC com SECURITY DEFINER para bypass RLS)
+      const { data: totalUsuariosRpc } = await supabase.rpc('contar_usuarios_cadastrados');
+      const usuarios = totalUsuariosRpc ? Array.from({ length: totalUsuariosRpc }) : [];
 
       // Estabelecimentos pendentes de normalização
       let estabelecimentosPendentes = 0;
