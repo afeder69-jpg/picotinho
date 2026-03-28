@@ -15,15 +15,7 @@ const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [userNickname, setUserNickname] = useState<string>('');
-  const [totalUsers, setTotalUsers] = useState<number | null>(null);
   const { processingCount, processingStartTimes } = useProcessingNotes();
-
-  // Carregar contagem de usuários
-  useEffect(() => {
-    supabase.rpc('contar_usuarios_cadastrados').then(({ data }) => {
-      if (data !== null) setTotalUsers(data);
-    });
-  }, []);
 
   // Carregar apelido quando usuário faz login
   useEffect(() => {
