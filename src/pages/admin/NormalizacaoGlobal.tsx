@@ -1951,6 +1951,27 @@ export default function NormalizacaoGlobal() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
+            {/* Usuários Cadastrados */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 rounded-lg p-4 border-2 border-teal-300 dark:border-teal-700 hover:border-teal-400 dark:hover:border-teal-600 transition-all cursor-help">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Usuários</span>
+                    </div>
+                    <div className="text-3xl font-bold text-teal-700 dark:text-teal-300 mb-1">
+                      {stats.totalUsuarios}
+                    </div>
+                    <div className="text-xs text-muted-foreground">cadastrados</div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Total de usuários cadastrados no sistema</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Separador */}
