@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { LogIn, LogOut } from "lucide-react";
+import { LogIn, LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 import { APP_VERSION } from "@/lib/constants";
 import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
@@ -15,7 +15,15 @@ const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [userNickname, setUserNickname] = useState<string>('');
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
   const { processingCount, processingStartTimes } = useProcessingNotes();
+
+  // Carregar contagem de usuários
+  useEffect(() => {
+    supabase.rpc('contar_usuarios_cadastrados').then(({ data }) => {
+      if (data !== null) setTotalUsers(data);
+    });
+  }, []);
 
   // Carregar apelido quando usuário faz login
   useEffect(() => {
@@ -129,7 +137,13 @@ const Index = () => {
           <h1 className="text-2xl font-bold text-foreground leading-tight">
             Bem-vindo ao Picotinho, gerencie suas compras de supermercado
           </h1>
-          
+
+          {totalUsers !== null && (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-full px-4 py-2 mx-auto w-fit">
+              <Users className="w-4 h-4 text-primary" />
+              <span><strong className="text-foreground">{totalUsers}</strong> usuários cadastrados</span>
+            </div>
+          )}
 
           {!user && (
             <div className="text-center space-y-2">
