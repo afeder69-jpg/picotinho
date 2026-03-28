@@ -137,7 +137,13 @@ const Index = () => {
           <h1 className="text-2xl font-bold text-foreground leading-tight">
             Bem-vindo ao Picotinho, gerencie suas compras de supermercado
           </h1>
-          
+
+          {totalUsers !== null && (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-full px-4 py-2 mx-auto w-fit">
+              <Users className="w-4 h-4 text-primary" />
+              <span><strong className="text-foreground">{totalUsers}</strong> usuários cadastrados</span>
+            </div>
+          )}
 
           {!user && (
             <div className="text-center space-y-2">
