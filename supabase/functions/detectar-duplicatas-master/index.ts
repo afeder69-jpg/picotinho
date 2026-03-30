@@ -59,14 +59,18 @@ serve(async (req) => {
     }
 
     // Helper: verificar regras de negócio
-    function saoRealmenteDuplicatas(p1: any, p2: any): boolean {
+    function saoRealmenteDuplicatas(
+      p1: any,
+      p2: any,
+      options: { ignorarCategoria?: boolean } = {}
+    ): boolean {
       if (p1.qtd_valor && p2.qtd_valor && p1.qtd_unidade && p2.qtd_unidade) {
         if (p1.qtd_unidade.toUpperCase() !== p2.qtd_unidade.toUpperCase()) return false;
         const diff = Math.abs(p1.qtd_valor - p2.qtd_valor) / Math.max(p1.qtd_valor, p2.qtd_valor);
         if (diff > 0.15) return false;
       }
       if (p1.marca && p2.marca && p1.marca.toUpperCase() !== p2.marca.toUpperCase()) return false;
-      if (p1.categoria !== p2.categoria) return false;
+      if (!options.ignorarCategoria && p1.categoria !== p2.categoria) return false;
       return true;
     }
 
@@ -106,7 +110,7 @@ serve(async (req) => {
       for (let i = 1; i < produtos.length; i++) {
         const p = produtos[i];
         if (parIgnorado(produtos[0].id, p.id)) continue;
-        if (!saoRealmenteDuplicatas(produtos[0], p)) continue;
+        if (!saoRealmenteDuplicatas(produtos[0], p, { ignorarCategoria: true })) continue;
         grupoFiltrado.push(p);
       }
 
@@ -147,7 +151,7 @@ serve(async (req) => {
       for (let i = 1; i < naoAgrupados.length; i++) {
         const p = naoAgrupados[i];
         if (parIgnorado(naoAgrupados[0].id, p.id)) continue;
-        if (!saoRealmenteDuplicatas(naoAgrupados[0], p)) continue;
+        if (!saoRealmenteDuplicatas(naoAgrupados[0], p, { ignorarCategoria: true })) continue;
         grupoFiltrado.push(p);
       }
 
