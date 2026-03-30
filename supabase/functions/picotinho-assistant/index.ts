@@ -315,7 +315,37 @@ const listToolDefinitions = [
   }
 ];
 
-const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions];
+// --- Report tools (Phase 3) ---
+const reportToolDefinitions = [
+  {
+    type: "function",
+    function: {
+      name: "consultar_relatorio",
+      description: "Consulta relatório de compras do usuário com filtros opcionais. Retorna itens individuais com valores reais das notas fiscais. Use para QUALQUER pergunta sobre gastos, histórico de compras, 'quanto comprei', 'o que comprei', 'resuma minhas compras'.",
+      parameters: {
+        type: "object",
+        properties: {
+          data_inicio: { type: "string", description: "Data início formato YYYY-MM-DD (opcional)" },
+          data_fim: { type: "string", description: "Data fim formato YYYY-MM-DD (opcional)" },
+          estabelecimento: { type: "string", description: "Nome do mercado/estabelecimento (busca parcial, opcional)" },
+          categoria: { type: "string", description: "Categoria canônica: mercearia, bebidas, hortifruti, limpeza, açougue, laticínios/frios, higiene/farmácia, padaria, congelados, pet, outros (opcional)" },
+          produto: { type: "string", description: "Nome do produto (busca parcial, opcional)" }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "listar_mercados_usuario",
+      description: "Lista os mercados/estabelecimentos onde o usuário já comprou. Use para desambiguação quando o nome do mercado for parcial ou houver dúvida.",
+      parameters: { type: "object", properties: {}, required: [] }
+    }
+  }
+];
+
+const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions];
 
 // ==================== HELPER: resolve lista_id ====================
 
