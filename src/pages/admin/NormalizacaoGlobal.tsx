@@ -366,6 +366,10 @@ export default function NormalizacaoGlobal() {
       const { data: totalUsuariosRpc } = await supabase.rpc('contar_usuarios_cadastrados');
       const usuarios = totalUsuariosRpc ? Array.from({ length: totalUsuariosRpc }) : [];
 
+      // Total de notas lançadas no sistema (via RPC com SECURITY DEFINER)
+      const { data: totalNotasRpc } = await supabase.rpc('contar_notas_sistema');
+      const totalNotasSistema = totalNotasRpc || 0;
+
       // Estabelecimentos pendentes de normalização
       let estabelecimentosPendentes = 0;
       try {
