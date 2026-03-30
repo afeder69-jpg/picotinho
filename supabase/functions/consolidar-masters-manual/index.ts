@@ -163,7 +163,13 @@ serve(async (req) => {
         .in('id', remover_ids);
 
       if (deleteError) {
-        console.error('❌ Erro ao deletar duplicados:', deleteError);
+        console.error('❌ FALHA CRÍTICA ao deletar duplicados:', deleteError);
+        detalhes.push({
+          mantido: produtoMantido.nome_padrao,
+          erro: `Falha ao deletar: ${deleteError.message}`,
+          remover_ids
+        });
+        continue;
       } else {
         totalMastersRemovidos += remover_ids.length;
         console.log(`   ✅ ${remover_ids.length} produto(s) removido(s)`);
