@@ -315,7 +315,37 @@ const listToolDefinitions = [
   }
 ];
 
-const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions];
+// --- Report tools (Phase 3) ---
+const reportToolDefinitions = [
+  {
+    type: "function",
+    function: {
+      name: "consultar_relatorio",
+      description: "Consulta relatório de compras do usuário com filtros opcionais. Retorna itens individuais com valores reais das notas fiscais. Use para QUALQUER pergunta sobre gastos, histórico de compras, 'quanto comprei', 'o que comprei', 'resuma minhas compras'.",
+      parameters: {
+        type: "object",
+        properties: {
+          data_inicio: { type: "string", description: "Data início formato YYYY-MM-DD (opcional)" },
+          data_fim: { type: "string", description: "Data fim formato YYYY-MM-DD (opcional)" },
+          estabelecimento: { type: "string", description: "Nome do mercado/estabelecimento (busca parcial, opcional)" },
+          categoria: { type: "string", description: "Categoria canônica: mercearia, bebidas, hortifruti, limpeza, açougue, laticínios/frios, higiene/farmácia, padaria, congelados, pet, outros (opcional)" },
+          produto: { type: "string", description: "Nome do produto (busca parcial, opcional)" }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "listar_mercados_usuario",
+      description: "Lista os mercados/estabelecimentos onde o usuário já comprou. Use para desambiguação quando o nome do mercado for parcial ou houver dúvida.",
+      parameters: { type: "object", properties: {}, required: [] }
+    }
+  }
+];
+
+const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions];
 
 // ==================== HELPER: resolve lista_id ====================
 
@@ -1208,6 +1238,93 @@ async function executeTool(
         };
       }
 
+      // ==================== REPORT TOOLS (Phase 3) ====================
+
+      case 'consultar_relatorio': {
+        const rpcParams: any = { p_user_id: usuarioId };
+        if (args.data_inicio) rpcParams.p_data_inicio = args.data_inicio;
+        if (args.data_fim) rpcParams.p_data_fim = args.data_fim;
+        if (args.estabelecimento) rpcParams.p_estabelecimento = args.estabelecimento;
+        if (args.categoria) rpcParams.p_categoria = args.categoria;
+        if (args.produto) rpcParams.p_produto = args.produto;
+
+        const { data: registros, error } = await supabase.rpc('relatorio_compras_usuario', rpcParams);
+        if (error) throw error;
+
+        if (!registros || registros.length === 0) {
+          return { result: JSON.stringify({ mensagem: "Nenhuma compra encontrada com os filtros informados.", total_valor: 0, total_itens: 0, total_registros: 0 }), isWriteMutation: false };
+        }
+
+        // Calcular totais sobre TODOS os registros
+        const totalValor = registros.reduce((acc: number, r: any) => acc + Number(r.valor_total || 0), 0);
+        const totalItens = registros.length;
+
+        // Resumo por categoria
+        const porCategoria: Record<string, { total: number; itens: number }> = {};
+        registros.forEach((r: any) => {
+          const cat = r.categoria || 'Não categorizado';
+          if (!porCategoria[cat]) porCategoria[cat] = { total: 0, itens: 0 };
+          porCategoria[cat].total += Number(r.valor_total || 0);
+          porCategoria[cat].itens++;
+        });
+
+        // Resumo por estabelecimento
+        const porEstab: Record<string, { total: number; itens: number }> = {};
+        registros.forEach((r: any) => {
+          const est = r.estabelecimento || 'Não identificado';
+          if (!porEstab[est]) porEstab[est] = { total: 0, itens: 0 };
+          porEstab[est].total += Number(r.valor_total || 0);
+          porEstab[est].itens++;
+        });
+
+        // Limitar listagem detalhada a 30 itens (mais recentes)
+        const registrosOrdenados = registros.sort((a: any, b: any) => {
+          const da = a.data_compra || '';
+          const db = b.data_compra || '';
+          return db.localeCompare(da);
+        });
+        const limite = 30;
+        const itensExibidos = registrosOrdenados.slice(0, limite);
+
+        const resultado: any = {
+          total_valor: Math.round(totalValor * 100) / 100,
+          total_itens: totalItens,
+          total_registros: totalItens,
+          resumo_por_categoria: Object.entries(porCategoria).map(([cat, v]) => ({
+            categoria: cat,
+            total: Math.round(v.total * 100) / 100,
+            itens: v.itens
+          })).sort((a, b) => b.total - a.total),
+          resumo_por_estabelecimento: Object.entries(porEstab).map(([est, v]) => ({
+            estabelecimento: est,
+            total: Math.round(v.total * 100) / 100,
+            itens: v.itens
+          })).sort((a, b) => b.total - a.total),
+          itens: itensExibidos.map((r: any) => ({
+            data: r.data_compra,
+            produto: r.produto,
+            categoria: r.categoria,
+            quantidade: Number(r.quantidade),
+            valor_unitario: Number(r.valor_unitario),
+            valor_total: Number(r.valor_total),
+            estabelecimento: r.estabelecimento
+          }))
+        };
+
+        if (totalItens > limite) {
+          resultado.listagem_limitada = true;
+          resultado.mensagem_limitacao = `Exibindo ${limite} de ${totalItens} registros. Os totais refletem TODOS os ${totalItens} registros.`;
+        }
+
+        return { result: JSON.stringify(resultado), isWriteMutation: false };
+      }
+
+      case 'listar_mercados_usuario': {
+        const { data: mercados, error } = await supabase.rpc('listar_estabelecimentos_usuario', { p_user_id: usuarioId });
+        if (error) throw error;
+        return { result: JSON.stringify({ mercados: (mercados || []).map((m: any) => m.nome) }), isWriteMutation: false };
+      }
+
       default:
         return { result: JSON.stringify({ erro: `Tool "${toolName}" não reconhecida.` }), isWriteMutation: false };
     }
@@ -1519,7 +1636,32 @@ Regras de Resolução de Produtos para Lista:
 24. NUNCA diga que não consegue buscar, prever ou encontrar produtos. Você TEM as tools buscar_produto_catalogo e resolver_item_por_historico. USE-AS. Se o usuário pedir item normalizado, busque e mostre os resultados encontrados.
 25. PRESERVAR IDENTIFICADOR EM ESCOLHA NUMERADA: Quando você apresentar opções numeradas ao usuário (ex: "1. Nescau 350g") e o usuário responder com um número (ex: "1"), você DEVE reutilizar o produto_id da opção correspondente que estava no resultado da tool. NUNCA reconstrua o vínculo pelo texto exibido — use o produto_id que já foi retornado pela busca. O produto_id está disponível no contexto da conversa, na resposta anterior da tool buscar_produto_catalogo ou resolver_item_por_historico.
 
-Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras e organização doméstica.`;
+Regras de Relatórios:
+26. Use consultar_relatorio para QUALQUER pergunta sobre gastos, compras passadas, relatórios, "quanto comprei", "o que comprei", "resuma minhas compras".
+27. Interprete períodos naturais e converta para YYYY-MM-DD:
+    - "este mês" → primeiro dia do mês atual até hoje
+    - "mês passado" → primeiro e último dia do mês anterior
+    - "este ano" → 01/01 do ano atual até hoje
+    - "ano passado" → 01/01 a 31/12 do ano anterior
+    - "último trimestre" → 3 meses atrás até hoje
+    - "entre janeiro e março" → 01/01 a 31/03 do ano atual
+    - "ontem", "esta semana" → calcule as datas corretas
+    Data de referência: ${new Date().toISOString().split('T')[0]}
+28. PERÍODO NÃO É OBRIGATÓRIO. Se o usuário não especificar período:
+    - Para consultas genéricas ("quanto comprei de arroz?"), execute a busca em TODO o histórico.
+    - Ao responder, mencione que o resultado abrange todo o histórico disponível.
+    - Se o resultado for muito amplo, SUGIRA ao usuário restringir por período, mas NÃO trave a consulta.
+29. Categorias válidas para relatório: mercearia, bebidas, hortifruti, limpeza, açougue, laticínios/frios, higiene/farmácia, padaria, congelados, pet, outros.
+    Sinônimos: "material de limpeza"/"produtos de limpeza" → limpeza, "carnes" → açougue, "frutas"/"verduras" → hortifruti, "frios" → laticínios/frios, "higiene" → higiene/farmácia.
+30. Use listar_mercados_usuario quando o nome do mercado for ambíguo ou parcial.
+31. Formato da resposta:
+    - "quanto comprei/gastei" → responda com TOTAL consolidado
+    - "o que comprei/quais produtos" → responda com LISTAGEM de itens
+    - "resuma/resumo" → responda com RESUMO por categoria ou mercado
+32. Quando a listagem for limitada (mais de 30 itens), SEMPRE informe: o total consolidado (soma de TODOS os registros), seguido da indicação de quantos itens foram listados vs total real. Exemplo: "Total: R$ 450,00 em 85 itens. Listei os 30 mais recentes."
+33. NUNCA invente valores. Toda resposta deve vir da tool consultar_relatorio.
+
+Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
     // 6. Call AI Gateway with tool calling
     const messages: Array<{ role: string; content: string }> = [

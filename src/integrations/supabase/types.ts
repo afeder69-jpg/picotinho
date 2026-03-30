@@ -3426,6 +3426,12 @@ export type Database = {
           total_notas: number
         }[]
       }
+      listar_estabelecimentos_usuario: {
+        Args: { p_user_id: string }
+        Returns: {
+          nome: string
+        }[]
+      }
       log_profile_access: {
         Args: { access_type: string; user_uuid: string }
         Returns: undefined
@@ -3470,6 +3476,25 @@ export type Database = {
       }
       refresh_estoque_stats: { Args: never; Returns: undefined }
       refresh_stats_normalizacao: { Args: never; Returns: undefined }
+      relatorio_compras_usuario: {
+        Args: {
+          p_categoria?: string
+          p_data_fim?: string
+          p_data_inicio?: string
+          p_estabelecimento?: string
+          p_produto?: string
+          p_user_id: string
+        }
+        Returns: {
+          categoria: string
+          data_compra: string
+          estabelecimento: string
+          produto: string
+          quantidade: number
+          valor_total: number
+          valor_unitario: number
+        }[]
+      }
       resumo_estoque_por_categoria: {
         Args: { p_user_id: string }
         Returns: {
