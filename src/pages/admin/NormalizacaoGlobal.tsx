@@ -1971,14 +1971,19 @@ export default function NormalizacaoGlobal() {
                       {stats.totalUsuarios}
                     </div>
                     <div className="text-xs text-muted-foreground">cadastrados</div>
-          </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Total de usuários cadastrados no sistema</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-          {/* Card - Total de Notas */}
-          <div className="bg-card rounded-xl p-4 shadow-sm border border-border hover:shadow-md transition-shadow">
+            {/* Total de Notas no Sistema */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div>
+                  <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 rounded-lg p-4 border-2 border-violet-300 dark:border-violet-700 hover:border-violet-400 dark:hover:border-violet-600 transition-all cursor-help">
                     <div className="flex items-center gap-2 mb-2">
                       <FileText className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                       <span className="text-xs font-medium text-muted-foreground">Notas</span>
@@ -1991,12 +1996,6 @@ export default function NormalizacaoGlobal() {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Total de notas lançadas por todos os usuários</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Total de usuários cadastrados no sistema</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
