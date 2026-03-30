@@ -101,6 +101,7 @@ export default function NormalizacaoGlobal() {
     
     // Outros
     totalUsuarios: 0,
+    totalNotas: 0,
     estimativaNovos: 0,
     estabelecimentosPendentes: 0
   });
