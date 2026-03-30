@@ -405,6 +405,7 @@ export default function NormalizacaoGlobal() {
         
         // Outros
         totalUsuarios: usuarios?.length || 0,
+        totalNotas: totalNotasSistema,
         estimativaNovos,
         estabelecimentosPendentes
       });
