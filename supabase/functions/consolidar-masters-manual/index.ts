@@ -122,6 +122,20 @@ serve(async (req) => {
           referenciasGrupo += countCandidatos || 0;
           console.log(`      ✅ ${countCandidatos || 0} referência(s) em candidatos`);
         }
+
+        // 3.5 Atualizar referências em precos_atuais
+        const { count: countPrecos, error: precosError } = await supabase
+          .from('precos_atuais')
+          .update({ produto_master_id: produtoMantido.id })
+          .eq('produto_master_id', produtoRemover.id)
+          .select('*', { count: 'exact', head: true });
+
+        if (precosError) {
+          console.error('❌ Erro ao atualizar precos_atuais:', precosError);
+        } else {
+          referenciasGrupo += countPrecos || 0;
+          console.log(`      ✅ ${countPrecos || 0} referência(s) em precos_atuais`);
+        }
       }
 
       // 4. Somar estatísticas no produto mantido
