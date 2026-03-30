@@ -1653,7 +1653,7 @@ Regras de Relatórios:
     - Se o resultado for muito amplo, SUGIRA ao usuário restringir por período, mas NÃO trave a consulta.
 29. Categorias válidas para relatório: mercearia, bebidas, hortifruti, limpeza, açougue, laticínios/frios, higiene/farmácia, padaria, congelados, pet, outros.
     Sinônimos: "material de limpeza"/"produtos de limpeza" → limpeza, "carnes" → açougue, "frutas"/"verduras" → hortifruti, "frios" → laticínios/frios, "higiene" → higiene/farmácia.
-30. Use listar_mercados_usuario quando o nome do mercado for ambíguo ou parcial.
+30. SEMPRE use listar_mercados_usuario ANTES de consultar_relatorio quando o usuário mencionar um mercado. Compare o nome falado com a lista retornada e use o nome exato do sistema. Isso evita problemas com nomes como "Costa Azul" vs "COSTAZUL".
 31. Formato da resposta:
     - "quanto comprei/gastei" → responda com TOTAL consolidado
     - "o que comprei/quais produtos" → responda com LISTAGEM de itens
