@@ -19,7 +19,7 @@ serve(async (req) => {
     console.log('🔍 Iniciando detecção inteligente de duplicatas...', new Date().toISOString());
     const startTime = Date.now();
 
-    // 🆕 BUSCAR PARES JÁ MARCADOS COMO NÃO-DUPLICATAS
+    // Carregar pares já marcados como não-duplicatas
     console.log('🔍 Carregando decisões de não-duplicatas...');
     const { data: paresIgnorados, error: ignoradosError } = await supabase
       .from('masters_duplicatas_ignoradas')
@@ -27,131 +27,196 @@ serve(async (req) => {
 
     if (ignoradosError) {
       console.error('⚠️ Erro ao carregar pares ignorados:', ignoradosError);
-      // Não bloquear execução, apenas logar
     }
 
-    // Criar Set para lookup rápido O(1)
     const paresIgnoradosSet = new Set<string>();
     paresIgnorados?.forEach(par => {
       const [menor, maior] = [par.produto_1_id, par.produto_2_id].sort();
       paresIgnoradosSet.add(`${menor}_${maior}`);
     });
+    console.log(`📝 Pares já marcados como não-duplicatas: ${paresIgnoradosSet.size}`);
 
-    console.log(`📝 Total de pares já analisados e marcados como não-duplicatas: ${paresIgnoradosSet.size}`);
-
-    // Buscar apenas produtos master ativos com pelo menos 1 nota (otimização)
+    // Buscar TODOS os masters ativos (sem filtro de total_notas)
     const { data: masters, error: mastersError } = await supabase
       .from('produtos_master_global')
       .select('*')
       .eq('status', 'ativo')
-      .gte('total_notas', 1) // Só produtos que têm notas
       .order('categoria', { ascending: true })
       .order('total_notas', { ascending: false })
-      .limit(1000); // Limitar a 1000 produtos por execução
+      .limit(5000);
 
     if (mastersError) {
       console.error('❌ Erro ao buscar masters:', mastersError);
       throw mastersError;
     }
 
-    console.log(`📦 Total de masters ativos: ${masters?.length || 0}`);
+    console.log(`📦 Total de masters ativos carregados: ${masters?.length || 0}`);
 
-    // Agrupar por categoria para melhor performance
-    const mastersPorCategoria = new Map<string, any[]>();
-    
-    masters?.forEach(master => {
-      const categoria = master.categoria || 'SEM_CATEGORIA';
-      if (!mastersPorCategoria.has(categoria)) {
-        mastersPorCategoria.set(categoria, []);
-      }
-      mastersPorCategoria.get(categoria)!.push(master);
-    });
+    // Helper: verificar se par está ignorado
+    function parIgnorado(id1: string, id2: string): boolean {
+      const [menor, maior] = [id1, id2].sort();
+      return paresIgnoradosSet.has(`${menor}_${maior}`);
+    }
 
-    console.log(`📊 Total de categorias: ${mastersPorCategoria.size}`);
-
-    // Função auxiliar para validar se são realmente duplicatas
+    // Helper: verificar regras de negócio
     function saoRealmenteDuplicatas(p1: any, p2: any): boolean {
-      // Regra 1: Gramaturas/volumes diferentes > 15% → NÃO são duplicatas
       if (p1.qtd_valor && p2.qtd_valor && p1.qtd_unidade && p2.qtd_unidade) {
-        // Unidades diferentes → definitivamente não são duplicatas
-        if (p1.qtd_unidade.toUpperCase() !== p2.qtd_unidade.toUpperCase()) {
-          return false;
-        }
-        
-        // Mesma unidade mas valores muito diferentes (>15%)
-        const diffPercentual = Math.abs(p1.qtd_valor - p2.qtd_valor) / Math.max(p1.qtd_valor, p2.qtd_valor);
-        if (diffPercentual > 0.15) {
-          console.log(`⚠️ Produtos com gramaturas diferentes (${(diffPercentual * 100).toFixed(1)}%): ${p1.nome_padrao} (${p1.qtd_valor}${p1.qtd_unidade}) vs ${p2.nome_padrao} (${p2.qtd_valor}${p2.qtd_unidade})`);
-          return false;
-        }
+        if (p1.qtd_unidade.toUpperCase() !== p2.qtd_unidade.toUpperCase()) return false;
+        const diff = Math.abs(p1.qtd_valor - p2.qtd_valor) / Math.max(p1.qtd_valor, p2.qtd_valor);
+        if (diff > 0.15) return false;
       }
-      
-      // Regra 2: Marcas completamente diferentes → NÃO são duplicatas
-      if (p1.marca && p2.marca) {
-        const marcasIguais = p1.marca.toUpperCase() === p2.marca.toUpperCase();
-        if (!marcasIguais) {
-          console.log(`⚠️ Marcas diferentes: ${p1.marca} vs ${p2.marca}`);
-          return false;
-        }
-      }
-      
-      // Regra 3: Categorias diferentes → NÃO são duplicatas
-      if (p1.categoria !== p2.categoria) {
-        console.log(`⚠️ Categorias diferentes: ${p1.categoria} vs ${p2.categoria}`);
-        return false;
-      }
-      
+      if (p1.marca && p2.marca && p1.marca.toUpperCase() !== p2.marca.toUpperCase()) return false;
+      if (p1.categoria !== p2.categoria) return false;
       return true;
     }
 
     const gruposDuplicatas: any[] = [];
     let grupoIdCounter = 1;
+    const produtosJaAgrupados = new Set<string>();
+
+    // =============================================
+    // PASSADA 1: Duplicatas EXATAS (case-insensitive)
+    // =============================================
+    console.log('🔍 PASSADA 1: Buscando duplicatas exatas por nome_padrao...');
+
+    // Agrupar por UPPER(nome_padrao) + UPPER(marca)
+    const gruposPorNome = new Map<string, any[]>();
+    masters?.forEach(m => {
+      const key = `${(m.nome_padrao || '').toUpperCase().trim()}|||${(m.marca || '').toUpperCase().trim()}`;
+      if (!gruposPorNome.has(key)) gruposPorNome.set(key, []);
+      gruposPorNome.get(key)!.push(m);
+    });
+
+    // Também agrupar por nome_base + marca (para pegar variações leves no nome_padrao)
+    const gruposPorNomeBase = new Map<string, any[]>();
+    masters?.forEach(m => {
+      if (m.nome_base) {
+        const key = `${m.nome_base.toUpperCase().trim()}|||${(m.marca || '').toUpperCase().trim()}`;
+        if (!gruposPorNomeBase.has(key)) gruposPorNomeBase.set(key, []);
+        gruposPorNomeBase.get(key)!.push(m);
+      }
+    });
+
+    // Processar grupos exatos por nome_padrao
+    for (const [key, produtos] of gruposPorNome.entries()) {
+      if (produtos.length < 2) continue;
+
+      // Filtrar pares ignorados e regras de negócio
+      const grupoFiltrado = [produtos[0]];
+      for (let i = 1; i < produtos.length; i++) {
+        const p = produtos[i];
+        if (parIgnorado(produtos[0].id, p.id)) continue;
+        if (!saoRealmenteDuplicatas(produtos[0], p)) continue;
+        grupoFiltrado.push(p);
+      }
+
+      if (grupoFiltrado.length < 2) continue;
+
+      // Ordenar: mais notas primeiro, depois mais antigo
+      grupoFiltrado.sort((a, b) => {
+        if ((b.total_notas || 0) !== (a.total_notas || 0)) return (b.total_notas || 0) - (a.total_notas || 0);
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+      gruposDuplicatas.push({
+        id: `grupo_${grupoIdCounter++}`,
+        categoria: grupoFiltrado[0].categoria,
+        score_similaridade: 1.0, // Exato
+        tipo_deteccao: 'exato_nome_padrao',
+        produtos: grupoFiltrado.map(p => ({
+          id: p.id, nome_padrao: p.nome_padrao, sku_global: p.sku_global,
+          marca: p.marca, codigo_barras: p.codigo_barras,
+          qtd_valor: p.qtd_valor, qtd_unidade: p.qtd_unidade,
+          total_notas: p.total_notas, total_usuarios: p.total_usuarios, created_at: p.created_at
+        }))
+      });
+
+      grupoFiltrado.forEach(p => produtosJaAgrupados.add(p.id));
+    }
+
+    console.log(`✅ Passada 1 (nome_padrao): ${gruposDuplicatas.length} grupos exatos encontrados`);
+
+    // Processar grupos exatos por nome_base (apenas produtos não agrupados ainda)
+    const gruposAntes = gruposDuplicatas.length;
+    for (const [key, produtos] of gruposPorNomeBase.entries()) {
+      // Filtrar já agrupados
+      const naoAgrupados = produtos.filter(p => !produtosJaAgrupados.has(p.id));
+      if (naoAgrupados.length < 2) continue;
+
+      const grupoFiltrado = [naoAgrupados[0]];
+      for (let i = 1; i < naoAgrupados.length; i++) {
+        const p = naoAgrupados[i];
+        if (parIgnorado(naoAgrupados[0].id, p.id)) continue;
+        if (!saoRealmenteDuplicatas(naoAgrupados[0], p)) continue;
+        grupoFiltrado.push(p);
+      }
+
+      if (grupoFiltrado.length < 2) continue;
+
+      grupoFiltrado.sort((a, b) => {
+        if ((b.total_notas || 0) !== (a.total_notas || 0)) return (b.total_notas || 0) - (a.total_notas || 0);
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+      gruposDuplicatas.push({
+        id: `grupo_${grupoIdCounter++}`,
+        categoria: grupoFiltrado[0].categoria,
+        score_similaridade: 0.98,
+        tipo_deteccao: 'exato_nome_base',
+        produtos: grupoFiltrado.map(p => ({
+          id: p.id, nome_padrao: p.nome_padrao, sku_global: p.sku_global,
+          marca: p.marca, codigo_barras: p.codigo_barras,
+          qtd_valor: p.qtd_valor, qtd_unidade: p.qtd_unidade,
+          total_notas: p.total_notas, total_usuarios: p.total_usuarios, created_at: p.created_at
+        }))
+      });
+
+      grupoFiltrado.forEach(p => produtosJaAgrupados.add(p.id));
+    }
+
+    console.log(`✅ Passada 1 (nome_base): ${gruposDuplicatas.length - gruposAntes} grupos adicionais`);
+
+    // =============================================
+    // PASSADA 2: Similaridade (produtos não agrupados)
+    // =============================================
+    console.log('🔍 PASSADA 2: Buscando duplicatas por similaridade...');
+
+    const mastersNaoAgrupados = masters?.filter(m => !produtosJaAgrupados.has(m.id)) || [];
+    console.log(`📦 Produtos restantes para similaridade: ${mastersNaoAgrupados.length}`);
+
+    // Agrupar por categoria
+    const mastersPorCategoria = new Map<string, any[]>();
+    mastersNaoAgrupados.forEach(m => {
+      const cat = m.categoria || 'SEM_CATEGORIA';
+      if (!mastersPorCategoria.has(cat)) mastersPorCategoria.set(cat, []);
+      mastersPorCategoria.get(cat)!.push(m);
+    });
+
     let comparacoesRealizadas = 0;
-    const maxComparacoes = 5000; // Limite de comparações por execução
-    const cache = new Map<string, number>(); // Cache de comparações já feitas
+    const maxComparacoes = 5000;
+    const cache = new Map<string, number>();
 
-    // Para cada categoria, comparar produtos
     for (const [categoria, produtosCategoria] of mastersPorCategoria.entries()) {
-      console.log(`🔍 Analisando categoria: ${categoria} (${produtosCategoria.length} produtos)`);
-
-      // Comparar cada par de produtos dentro da mesma categoria
       for (let i = 0; i < produtosCategoria.length; i++) {
         const produto1 = produtosCategoria[i];
-        
-        // Array para armazenar produtos similares a este
+        if (produtosJaAgrupados.has(produto1.id)) continue;
+
         const produtosSimilares: any[] = [produto1];
-        
+
         for (let j = i + 1; j < produtosCategoria.length; j++) {
           const produto2 = produtosCategoria[j];
-          
-          // 🆕 VERIFICAR SE ESSE PAR JÁ FOI MARCADO COMO NÃO-DUPLICATA
-          const [idMenor, idMaior] = [produto1.id, produto2.id].sort();
-          const parKey = `${idMenor}_${idMaior}`;
+          if (produtosJaAgrupados.has(produto2.id)) continue;
 
-          if (paresIgnoradosSet.has(parKey)) {
-            console.log(`⏭️ Par já analisado (não-duplicata): ${produto1.nome_padrao} <-> ${produto2.nome_padrao}`);
-            continue; // Pular essa comparação
-          }
-          
-          // Verificar se passam nas regras de negócio antes de comparar
-          if (!saoRealmenteDuplicatas(produto1, produto2)) {
-            continue;
-          }
-          
-          // Verificar limite de comparações
-          if (comparacoesRealizadas >= maxComparacoes) {
-            console.log(`⚠️ Limite de ${maxComparacoes} comparações atingido. Interrompendo.`);
-            break;
-          }
-          
-          // Verificar cache
+          if (parIgnorado(produto1.id, produto2.id)) continue;
+          if (!saoRealmenteDuplicatas(produto1, produto2)) continue;
+          if (comparacoesRealizadas >= maxComparacoes) break;
+
           const cacheKey = `${produto1.id}_${produto2.id}`;
           let score: number;
-          
+
           if (cache.has(cacheKey)) {
             score = cache.get(cacheKey)!;
           } else {
-            // Usar função SQL para calcular similaridade (agora com qtd_valor e qtd_unidade)
             const { data: scoreData, error: scoreError } = await supabase
               .rpc('comparar_masters_similares', {
                 m1_nome: produto1.nome_padrao,
@@ -164,35 +229,20 @@ serve(async (req) => {
                 m2_qtd_unidade: produto2.qtd_unidade
               });
 
-            if (scoreError) {
-              console.error('❌ Erro ao calcular score:', scoreError);
-              continue;
-            }
-
+            if (scoreError) { console.error('❌ Erro score:', scoreError); continue; }
             score = scoreData as number;
             cache.set(cacheKey, score);
             comparacoesRealizadas++;
           }
 
-          // Threshold de 85% de similaridade
           if (score >= 0.85) {
-            console.log(`✅ Duplicata detectada (${Math.round(score * 100)}%):`);
-            console.log(`   - ${produto1.nome_padrao} (${produto1.marca || 'sem marca'})`);
-            console.log(`   - ${produto2.nome_padrao} (${produto2.marca || 'sem marca'})`);
-            
             produtosSimilares.push(produto2);
           }
         }
-        
-        // Verificar limite entre categorias também
-        if (comparacoesRealizadas >= maxComparacoes) {
-          console.log(`⚠️ Limite de comparações atingido. Parando análise.`);
-          break;
-        }
 
-        // Se encontrou similares (mais de 1 produto), criar grupo
+        if (comparacoesRealizadas >= maxComparacoes) break;
+
         if (produtosSimilares.length > 1) {
-          // Calcular score médio do grupo
           const scoresMedios: number[] = [];
           for (let k = 0; k < produtosSimilares.length - 1; k++) {
             const { data: scoreData } = await supabase.rpc('comparar_masters_similares', {
@@ -205,49 +255,37 @@ serve(async (req) => {
           }
           const scoreGrupo = scoresMedios.reduce((a, b) => a + b, 0) / scoresMedios.length;
 
-          // Ordenar produtos por total_notas DESC, created_at ASC
           produtosSimilares.sort((a, b) => {
-            if (b.total_notas !== a.total_notas) {
-              return b.total_notas - a.total_notas;
-            }
+            if ((b.total_notas || 0) !== (a.total_notas || 0)) return (b.total_notas || 0) - (a.total_notas || 0);
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
 
           gruposDuplicatas.push({
             id: `grupo_${grupoIdCounter++}`,
-            categoria: categoria,
+            categoria,
             score_similaridade: scoreGrupo,
+            tipo_deteccao: 'similaridade',
             produtos: produtosSimilares.map(p => ({
-              id: p.id,
-              nome_padrao: p.nome_padrao,
-              sku_global: p.sku_global,
-              marca: p.marca,
-              codigo_barras: p.codigo_barras,
-              qtd_valor: p.qtd_valor,
-              qtd_unidade: p.qtd_unidade,
-              total_notas: p.total_notas,
-              total_usuarios: p.total_usuarios,
-              created_at: p.created_at
+              id: p.id, nome_padrao: p.nome_padrao, sku_global: p.sku_global,
+              marca: p.marca, codigo_barras: p.codigo_barras,
+              qtd_valor: p.qtd_valor, qtd_unidade: p.qtd_unidade,
+              total_notas: p.total_notas, total_usuarios: p.total_usuarios, created_at: p.created_at
             }))
           });
 
-          // Remover produtos já agrupados da lista de comparação
+          produtosSimilares.forEach(p => produtosJaAgrupados.add(p.id));
           produtosCategoria.splice(i + 1, produtosSimilares.length - 1);
         }
       }
     }
 
-    const totalDuplicatas = gruposDuplicatas.reduce((acc, grupo) => 
-      acc + (grupo.produtos.length - 1), 0
-    );
-
+    const totalDuplicatas = gruposDuplicatas.reduce((acc, g) => acc + (g.produtos.length - 1), 0);
     const tempoDecorrido = ((Date.now() - startTime) / 1000).toFixed(2);
 
     console.log(`✅ Detecção concluída em ${tempoDecorrido}s:`);
-    console.log(`   - ${gruposDuplicatas.length} grupo(s) encontrado(s)`);
+    console.log(`   - ${gruposDuplicatas.length} grupo(s) total`);
     console.log(`   - ${totalDuplicatas} produto(s) duplicado(s)`);
-    console.log(`   - ${comparacoesRealizadas} comparações realizadas`);
-    console.log(`   - ${cache.size} comparações em cache`);
+    console.log(`   - ${comparacoesRealizadas} comparações por similaridade`);
 
     return new Response(
       JSON.stringify({
