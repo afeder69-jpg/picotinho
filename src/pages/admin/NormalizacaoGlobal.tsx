@@ -101,6 +101,7 @@ export default function NormalizacaoGlobal() {
     
     // Outros
     totalUsuarios: 0,
+    totalNotas: 0,
     estimativaNovos: 0,
     estabelecimentosPendentes: 0
   });
@@ -365,6 +366,10 @@ export default function NormalizacaoGlobal() {
       const { data: totalUsuariosRpc } = await supabase.rpc('contar_usuarios_cadastrados');
       const usuarios = totalUsuariosRpc ? Array.from({ length: totalUsuariosRpc }) : [];
 
+      // Total de notas lançadas no sistema (via RPC com SECURITY DEFINER)
+      const { data: totalNotasRpc } = await supabase.rpc('contar_notas_sistema');
+      const totalNotasSistema = totalNotasRpc || 0;
+
       // Estabelecimentos pendentes de normalização
       let estabelecimentosPendentes = 0;
       try {
@@ -400,6 +405,7 @@ export default function NormalizacaoGlobal() {
         
         // Outros
         totalUsuarios: usuarios?.length || 0,
+        totalNotas: totalNotasSistema,
         estimativaNovos,
         estabelecimentosPendentes
       });
@@ -1969,6 +1975,27 @@ export default function NormalizacaoGlobal() {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Total de usuários cadastrados no sistema</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Total de Notas no Sistema */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 rounded-lg p-4 border-2 border-violet-300 dark:border-violet-700 hover:border-violet-400 dark:hover:border-violet-600 transition-all cursor-help">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Notas</span>
+                    </div>
+                    <div className="text-3xl font-bold text-violet-700 dark:text-violet-300 mb-1">
+                      {stats.totalNotas}
+                    </div>
+                    <div className="text-xs text-muted-foreground">lançadas no sistema</div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Total de notas lançadas por todos os usuários</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

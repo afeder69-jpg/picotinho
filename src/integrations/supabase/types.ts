@@ -3236,6 +3236,7 @@ export type Database = {
             Returns: number
           }
       consolidar_estoque_duplicado: { Args: never; Returns: undefined }
+      contar_notas_sistema: { Args: never; Returns: number }
       contar_usuarios_cadastrados: { Args: never; Returns: number }
       corrigir_notas_estado_inconsistente: {
         Args: never
