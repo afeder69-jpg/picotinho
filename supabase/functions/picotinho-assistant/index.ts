@@ -1238,6 +1238,93 @@ async function executeTool(
         };
       }
 
+      // ==================== REPORT TOOLS (Phase 3) ====================
+
+      case 'consultar_relatorio': {
+        const rpcParams: any = { p_user_id: usuarioId };
+        if (args.data_inicio) rpcParams.p_data_inicio = args.data_inicio;
+        if (args.data_fim) rpcParams.p_data_fim = args.data_fim;
+        if (args.estabelecimento) rpcParams.p_estabelecimento = args.estabelecimento;
+        if (args.categoria) rpcParams.p_categoria = args.categoria;
+        if (args.produto) rpcParams.p_produto = args.produto;
+
+        const { data: registros, error } = await supabase.rpc('relatorio_compras_usuario', rpcParams);
+        if (error) throw error;
+
+        if (!registros || registros.length === 0) {
+          return { result: JSON.stringify({ mensagem: "Nenhuma compra encontrada com os filtros informados.", total_valor: 0, total_itens: 0, total_registros: 0 }), isWriteMutation: false };
+        }
+
+        // Calcular totais sobre TODOS os registros
+        const totalValor = registros.reduce((acc: number, r: any) => acc + Number(r.valor_total || 0), 0);
+        const totalItens = registros.length;
+
+        // Resumo por categoria
+        const porCategoria: Record<string, { total: number; itens: number }> = {};
+        registros.forEach((r: any) => {
+          const cat = r.categoria || 'Não categorizado';
+          if (!porCategoria[cat]) porCategoria[cat] = { total: 0, itens: 0 };
+          porCategoria[cat].total += Number(r.valor_total || 0);
+          porCategoria[cat].itens++;
+        });
+
+        // Resumo por estabelecimento
+        const porEstab: Record<string, { total: number; itens: number }> = {};
+        registros.forEach((r: any) => {
+          const est = r.estabelecimento || 'Não identificado';
+          if (!porEstab[est]) porEstab[est] = { total: 0, itens: 0 };
+          porEstab[est].total += Number(r.valor_total || 0);
+          porEstab[est].itens++;
+        });
+
+        // Limitar listagem detalhada a 30 itens (mais recentes)
+        const registrosOrdenados = registros.sort((a: any, b: any) => {
+          const da = a.data_compra || '';
+          const db = b.data_compra || '';
+          return db.localeCompare(da);
+        });
+        const limite = 30;
+        const itensExibidos = registrosOrdenados.slice(0, limite);
+
+        const resultado: any = {
+          total_valor: Math.round(totalValor * 100) / 100,
+          total_itens: totalItens,
+          total_registros: totalItens,
+          resumo_por_categoria: Object.entries(porCategoria).map(([cat, v]) => ({
+            categoria: cat,
+            total: Math.round(v.total * 100) / 100,
+            itens: v.itens
+          })).sort((a, b) => b.total - a.total),
+          resumo_por_estabelecimento: Object.entries(porEstab).map(([est, v]) => ({
+            estabelecimento: est,
+            total: Math.round(v.total * 100) / 100,
+            itens: v.itens
+          })).sort((a, b) => b.total - a.total),
+          itens: itensExibidos.map((r: any) => ({
+            data: r.data_compra,
+            produto: r.produto,
+            categoria: r.categoria,
+            quantidade: Number(r.quantidade),
+            valor_unitario: Number(r.valor_unitario),
+            valor_total: Number(r.valor_total),
+            estabelecimento: r.estabelecimento
+          }))
+        };
+
+        if (totalItens > limite) {
+          resultado.listagem_limitada = true;
+          resultado.mensagem_limitacao = `Exibindo ${limite} de ${totalItens} registros. Os totais refletem TODOS os ${totalItens} registros.`;
+        }
+
+        return { result: JSON.stringify(resultado), isWriteMutation: false };
+      }
+
+      case 'listar_mercados_usuario': {
+        const { data: mercados, error } = await supabase.rpc('listar_estabelecimentos_usuario', { p_user_id: usuarioId });
+        if (error) throw error;
+        return { result: JSON.stringify({ mercados: (mercados || []).map((m: any) => m.nome) }), isWriteMutation: false };
+      }
+
       default:
         return { result: JSON.stringify({ erro: `Tool "${toolName}" não reconhecida.` }), isWriteMutation: false };
     }
