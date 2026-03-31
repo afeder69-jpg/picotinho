@@ -1405,7 +1405,7 @@ async function executeTool(
 
 // ==================== SEND WHATSAPP MESSAGE ====================
 
-async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
+async function sendWhatsAppMessage(phone: string, message: string, delayTyping?: number): Promise<boolean> {
   const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
   const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
   const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
@@ -1417,13 +1417,18 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<bool
   
   try {
     const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
+    const payload: Record<string, unknown> = { phone, message };
+    if (delayTyping && delayTyping > 0) {
+      payload.delayTyping = delayTyping;
+    }
+    console.log(`📤 [SEND] delayTyping=${delayTyping ?? 0}s | phone=${phone}`);
     const response = await fetch(sendTextUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(accountSecret ? { 'Client-Token': accountSecret } : {})
       },
-      body: JSON.stringify({ phone, message })
+      body: JSON.stringify(payload)
     });
     
     if (!response.ok) {
