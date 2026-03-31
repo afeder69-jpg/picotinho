@@ -1472,6 +1472,30 @@ async function sendWhatsAppAudio(phone: string, audioBase64: string): Promise<bo
     return false;
   }
 }
+// ==================== UPDATE PRESENCE ====================
+
+async function updatePresence(phone: string, status: 'typing' | 'recording' | 'available'): Promise<void> {
+  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
+  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
+  
+  if (!instanceUrl || !apiToken) return;
+  
+  try {
+    const url = `${instanceUrl}/token/${apiToken}/update-presence`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+      },
+      body: JSON.stringify({ phone, status })
+    });
+    console.log(`👁️ [PRESENCE] ${status} → ${response.ok ? 'OK' : 'FALHOU'}`);
+  } catch (err) {
+    console.log(`⚠️ [PRESENCE] Falha ao enviar ${status}: ${err}`);
+  }
+}
 
 // ==================== GENERATE TTS ====================
 
@@ -1847,6 +1871,8 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
     let iterations = 0;
     const MAX_ITERATIONS = 5;
 
+    await updatePresence(remetente, 'typing');
+
     while (iterations < MAX_ITERATIONS) {
       iterations++;
       console.log(`🔄 [ASSISTANT] Iteração ${iterations}/${MAX_ITERATIONS}`);
@@ -2017,6 +2043,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
       // Enviar áudio se modo é 'audio' ou 'ambos'
       if (modoResposta === 'audio' || modoResposta === 'ambos') {
         try {
+          await updatePresence(remetente, 'recording');
           const audioBase64 = await generateTTS(finalResponse);
           if (audioBase64) {
             await sendWhatsAppAudio(remetente, audioBase64);
@@ -2038,6 +2065,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
         data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
       }).eq('id', messageId);
 
+      await updatePresence(remetente, 'available');
       console.log(`✅ [ASSISTANT] Resposta enviada (modo: ${modoResposta}) e persistida (${finalResponse.length} chars)`);
     }
 
