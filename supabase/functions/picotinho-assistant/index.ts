@@ -1584,7 +1584,7 @@ const handler = async (req: Request): Promise<Response> => {
       const audioUrl = mensagem.anexo_info?.url;
       if (!audioUrl) {
         const erroMsg = "❌ Não consegui acessar o áudio. Pode tentar enviar novamente?";
-        await sendWhatsAppMessage(remetente, erroMsg);
+        await sendWhatsAppMessage(remetente, erroMsg, DELAY_TYPING.FALLBACK);
         await supabase.from('whatsapp_mensagens').update({
           resposta_enviada: erroMsg, processada: true,
           data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
