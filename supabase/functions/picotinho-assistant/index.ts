@@ -12,6 +12,16 @@ const DELAY_TYPING = {
   FALLBACK: 3,            // segundos antes de fallbacks e mensagens de erro
 };
 
+// ==================== VOZ DO PICOTINHO ====================
+// Voz fixa: "fable" — masculina, leve e expressiva, combina com personagem pequeno e simpático.
+// Speed 1.1 dá um tom mais ágil e "pequenininho".
+// Para trocar no futuro, basta alterar estes valores.
+const PICOTINHO_VOICE = {
+  voice: 'fable',
+  speed: 1.1,
+  model: 'tts-1',
+};
+
 // ==================== TOOL DEFINITIONS ====================
 
 // --- Stock tools (Phase 1) ---
