@@ -1479,19 +1479,27 @@ async function updatePresence(phone: string, status: 'typing' | 'recording' | 'a
   const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
   const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
   
-  if (!instanceUrl || !apiToken) return;
+  if (!instanceUrl || !apiToken) {
+    console.log(`⚠️ [PRESENCE] Credenciais ausentes, pulando ${status}`);
+    return;
+  }
   
   try {
     const url = `${instanceUrl}/token/${apiToken}/update-presence`;
+    const payload = { phone, status };
+    console.log(`👁️ [PRESENCE] Enviando: URL=${url} | payload=${JSON.stringify(payload)}`);
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(accountSecret ? { 'Client-Token': accountSecret } : {})
       },
-      body: JSON.stringify({ phone, status })
+      body: JSON.stringify(payload)
     });
-    console.log(`👁️ [PRESENCE] ${status} → ${response.ok ? 'OK' : 'FALHOU'}`);
+    
+    const responseBody = await response.text();
+    console.log(`👁️ [PRESENCE] ${status} → HTTP ${response.status} | body: ${responseBody}`);
   } catch (err) {
     console.log(`⚠️ [PRESENCE] Falha ao enviar ${status}: ${err}`);
   }
