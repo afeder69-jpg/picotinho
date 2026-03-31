@@ -1859,7 +1859,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
     let iterations = 0;
     const MAX_ITERATIONS = 5;
 
-    await updatePresence(remetente, 'typing');
+    // delayTyping será aplicado no envio da mensagem
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
