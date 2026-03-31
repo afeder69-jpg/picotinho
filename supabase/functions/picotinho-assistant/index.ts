@@ -2053,7 +2053,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
         data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
       }).eq('id', messageId);
 
-      await updatePresence(remetente, 'available');
+      // presença removida — delayTyping cuida do indicador visual
       console.log(`✅ [ASSISTANT] Resposta enviada (modo: ${modoResposta}) e persistida (${finalResponse.length} chars)`);
     }
 
