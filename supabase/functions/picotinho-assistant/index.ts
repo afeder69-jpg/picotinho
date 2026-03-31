@@ -1605,7 +1605,7 @@ const handler = async (req: Request): Promise<Response> => {
         if (transcError || !transcricao?.text) {
           console.error('❌ Erro na transcrição:', transcError || 'Sem texto retornado');
           const falhaMsg = "🎤 Não consegui entender o áudio. Pode repetir por texto?";
-          await sendWhatsAppMessage(remetente, falhaMsg);
+          await sendWhatsAppMessage(remetente, falhaMsg, DELAY_TYPING.FALLBACK);
           await supabase.from('whatsapp_mensagens').update({
             resposta_enviada: falhaMsg, processada: true,
             data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
