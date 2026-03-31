@@ -2043,6 +2043,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
       // Enviar áudio se modo é 'audio' ou 'ambos'
       if (modoResposta === 'audio' || modoResposta === 'ambos') {
         try {
+          await updatePresence(remetente, 'recording');
           const audioBase64 = await generateTTS(finalResponse);
           if (audioBase64) {
             await sendWhatsAppAudio(remetente, audioBase64);
