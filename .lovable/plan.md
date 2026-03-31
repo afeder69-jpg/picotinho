@@ -1,16 +1,18 @@
 
 
-## Plano: Presença no WhatsApp (typing/recording)
+## Plano: Melhorar observabilidade da presença no WhatsApp
 
 ### Resumo
 
-Adicionar uma função `updatePresence` no `picotinho-assistant/index.ts` que chama o endpoint `update-presence` da Z-API, e invocar essa função nos momentos-chave do processamento para que o usuário veja "digitando" ou "gravando áudio" enquanto aguarda a resposta.
+Adicionar logs detalhados na função `updatePresence` para capturar o status HTTP e o body da resposta da Z-API, permitindo diagnóstico preciso de por que a presença não está aparecendo visualmente.
 
 ### O que será feito
 
 **1 arquivo editado:** `supabase/functions/picotinho-assistant/index.ts`
 
-**Nova função `updatePresence`** (após a função `sendWhatsAppAudio`, ~linha 1474):
+**Alteração na função `updatePresence`** (linhas 1484-1494):
+
+Substituir o log simplificado por logs completos:
 
 ```typescript
 async function updatePresence(phone: string, status: 'typing' | 'recording' | 'available'): Promise<void> {
@@ -18,65 +20,65 @@ async function updatePresence(phone: string, status: 'typing' | 'recording' | 'a
   const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
   const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
   
-  if (!instanceUrl || !apiToken) return;
+  if (!instanceUrl || !apiToken) {
+    console.log(`⚠️ [PRESENCE] Credenciais ausentes, pulando ${status}`);
+    return;
+  }
   
   try {
     const url = `${instanceUrl}/token/${apiToken}/update-presence`;
+    const payload = { phone, status };
+    console.log(`👁️ [PRESENCE] Enviando: URL=${url} | payload=${JSON.stringify(payload)}`);
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(accountSecret ? { 'Client-Token': accountSecret } : {})
       },
-      body: JSON.stringify({ phone, status })
+      body: JSON.stringify(payload)
     });
-    console.log(`👁️ [PRESENCE] ${status} → ${response.ok ? 'OK' : 'FALHOU'}`);
+    
+    const responseBody = await response.text();
+    console.log(`👁️ [PRESENCE] ${status} → HTTP ${response.status} | body: ${responseBody}`);
   } catch (err) {
     console.log(`⚠️ [PRESENCE] Falha ao enviar ${status}: ${err}`);
   }
 }
 ```
 
-- Envolvida em try/catch — **nunca bloqueia** a resposta principal
-- Usa as mesmas credenciais Z-API já configuradas (WHATSAPP_INSTANCE_URL, WHATSAPP_API_TOKEN, WHATSAPP_ACCOUNT_SECRET)
-- Log silencioso: registra sucesso/falha sem interromper o fluxo
+### O que muda nos logs
 
-**Inserções de chamada no fluxo existente (3 pontos):**
+**Antes:**
+```
+👁️ [PRESENCE] recording → OK
+```
 
-1. **Antes do loop de IA** (~linha 1849, antes do `while`): enviar `typing` para indicar que o processamento começou
-   ```typescript
-   await updatePresence(remetente, 'typing');
-   ```
-
-2. **Antes da geração de TTS** (~linha 2019, dentro do `if modoResposta === 'audio' || 'ambos'`): trocar para `recording` antes de chamar `generateTTS`
-   ```typescript
-   await updatePresence(remetente, 'recording');
-   ```
-
-3. **Após envio da resposta** (~linha 2041, depois de persistir no banco): voltar para `available`
-   ```typescript
-   await updatePresence(remetente, 'available');
-   ```
-
-### Comportamento final
-
-| Momento | Presença enviada |
-|---------|-----------------|
-| Início do processamento (antes da IA) | `typing` |
-| Antes de gerar TTS (se modo áudio/ambos) | `recording` |
-| Após enviar resposta | `available` |
+**Depois:**
+```
+👁️ [PRESENCE] Enviando: URL=https://api.z-api.io/instances/.../token/.../update-presence | payload={"phone":"5544999999999","status":"typing"}
+👁️ [PRESENCE] typing → HTTP 200 | body: {"value":true}
+```
 
 ### O que NÃO muda
 
-- Nenhuma alteração no envio de texto ou áudio
+- Nenhuma alteração no fluxo de envio de texto ou áudio
 - Nenhuma mensagem extra na conversa
-- Nenhuma migration
-- Nenhuma alteração no frontend
-- Se a presença falhar, o fluxo continua normalmente
+- O try/catch continua protegendo o fluxo principal
+- Nenhuma migration, nenhuma alteração no frontend
+
+### Próximo passo após deploy
+
+Com os logs detalhados, basta enviar uma mensagem de teste ao Picotinho e verificar nos logs:
+1. A URL exata montada
+2. O telefone enviado
+3. O status HTTP retornado
+4. O body da resposta da Z-API
+
+Com essa informação, saberemos se o problema está no endpoint, no formato do telefone, na autenticação, ou se a API aceita mas o WhatsApp simplesmente não exibe a presença nesse contexto.
 
 ### Escopo
 
-- 1 função nova: `updatePresence` (~20 linhas)
-- 3 linhas de chamada inseridas no fluxo existente
+- 1 função alterada: `updatePresence` (~15 linhas modificadas)
 - Redeploy da edge function `picotinho-assistant`
 
