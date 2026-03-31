@@ -1372,6 +1372,93 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<bool
   }
 }
 
+// ==================== SEND WHATSAPP AUDIO ====================
+
+async function sendWhatsAppAudio(phone: string, audioBase64: string): Promise<boolean> {
+  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
+  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
+  
+  if (!instanceUrl || !apiToken) {
+    console.error('❌ WhatsApp credentials missing for audio');
+    return false;
+  }
+  
+  try {
+    const sendAudioUrl = `${instanceUrl}/token/${apiToken}/send-audio`;
+    const response = await fetch(sendAudioUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+      },
+      body: JSON.stringify({
+        phone,
+        audio: audioBase64,
+        waveform: true
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('❌ Erro Z-API audio:', await response.text());
+      return false;
+    }
+    
+    console.log('✅ Áudio enviado via Z-API');
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao enviar áudio:', error);
+    return false;
+  }
+}
+
+// ==================== GENERATE TTS ====================
+
+async function generateTTS(text: string): Promise<string | null> {
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiApiKey) {
+    console.error('❌ OPENAI_API_KEY não configurada para TTS');
+    return null;
+  }
+
+  // Limitar texto para TTS (mensagens longas ficam inviáveis em áudio)
+  const textoParaAudio = text.length > 2000 ? text.substring(0, 2000) + '...' : text;
+  
+  try {
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'tts-1',
+        input: textoParaAudio,
+        voice: 'nova',
+        response_format: 'mp3'
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('❌ OpenAI TTS erro:', response.status, await response.text());
+      return null;
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64Audio = 'data:audio/mpeg;base64,' + btoa(binary);
+    console.log(`✅ TTS gerado: ${bytes.length} bytes (${textoParaAudio.length} chars de texto)`);
+    return base64Audio;
+  } catch (error) {
+    console.error('❌ Erro ao gerar TTS:', error);
+    return null;
+  }
+}
+
 // ==================== MAIN HANDLER ====================
 
 const handler = async (req: Request): Promise<Response> => {
