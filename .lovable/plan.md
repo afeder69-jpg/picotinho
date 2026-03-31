@@ -1,50 +1,82 @@
 
 
-## Diagnóstico: Relatório WhatsApp retorna vazio para "Costa Azul"
+## Plano: Presença no WhatsApp (typing/recording)
 
-### Causa raiz
+### Resumo
 
-O nome armazenado no banco é **"COSTAZUL CESÁRIO DE MELO CG"** (sem espaço entre COSTA e AZUL). O assistente passou `"Costa Azul Cesário de Melo CG"` e `"Costa Azul-Cesário de Melo, CG"` para a RPC, que usa `ILIKE '%Costa Azul%'`. Como "Costa Azul" (com espaço) não aparece em "COSTAZUL" (sem espaço), o filtro não encontra nada.
+Adicionar uma função `updatePresence` no `picotinho-assistant/index.ts` que chama o endpoint `update-presence` da Z-API, e invocar essa função nos momentos-chave do processamento para que o usuário veja "digitando" ou "gravando áudio" enquanto aguarda a resposta.
 
-O frontend não tem este problema porque usa um dropdown com os nomes exatos do banco — o usuário seleciona "COSTAZUL CESÁRIO DE MELO CG" diretamente, sem digitar.
+### O que será feito
 
-### Problema secundário
+**1 arquivo editado:** `supabase/functions/picotinho-assistant/index.ts`
 
-A regra 30 do prompt diz "Use `listar_mercados_usuario` quando o nome do mercado for ambíguo", mas a IA não está chamando essa tool antes de `consultar_relatorio`. Ela passa o nome falado direto, sem validar se existe.
+**Nova função `updatePresence`** (após a função `sendWhatsAppAudio`, ~linha 1474):
 
-### Correção proposta
-
-**1. Tornar o filtro de estabelecimento mais tolerante na RPC**
-
-Alterar a RPC `relatorio_compras_usuario` para normalizar a comparação removendo espaços, hífens e caracteres especiais de ambos os lados antes do ILIKE:
-
-```sql
--- De:
-IF p_estabelecimento IS NOT NULL AND nome_estab NOT ILIKE '%' || p_estabelecimento || '%' THEN
-
--- Para: comparação normalizada (remove espaços, hífens, pontuação)
-IF p_estabelecimento IS NOT NULL AND 
-   REGEXP_REPLACE(UPPER(nome_estab), '[^A-Z0-9]', '', 'g') 
-   NOT LIKE '%' || REGEXP_REPLACE(UPPER(p_estabelecimento), '[^A-Z0-9]', '', 'g') || '%' 
-THEN
+```typescript
+async function updatePresence(phone: string, status: 'typing' | 'recording' | 'available'): Promise<void> {
+  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
+  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
+  
+  if (!instanceUrl || !apiToken) return;
+  
+  try {
+    const url = `${instanceUrl}/token/${apiToken}/update-presence`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+      },
+      body: JSON.stringify({ phone, status })
+    });
+    console.log(`👁️ [PRESENCE] ${status} → ${response.ok ? 'OK' : 'FALHOU'}`);
+  } catch (err) {
+    console.log(`⚠️ [PRESENCE] Falha ao enviar ${status}: ${err}`);
+  }
+}
 ```
 
-Isso faz "COSTAZUL" casar com "COSTA AZUL", "costa-azul", etc.
+- Envolvida em try/catch — **nunca bloqueia** a resposta principal
+- Usa as mesmas credenciais Z-API já configuradas (WHATSAPP_INSTANCE_URL, WHATSAPP_API_TOKEN, WHATSAPP_ACCOUNT_SECRET)
+- Log silencioso: registra sucesso/falha sem interromper o fluxo
 
-Aplicar a mesma normalização na RPC `listar_estabelecimentos_usuario` não é necessário (ela apenas lista nomes, sem filtrar).
+**Inserções de chamada no fluxo existente (3 pontos):**
 
-**2. Reforçar o prompt para a IA usar `listar_mercados_usuario` proativamente**
+1. **Antes do loop de IA** (~linha 1849, antes do `while`): enviar `typing` para indicar que o processamento começou
+   ```typescript
+   await updatePresence(remetente, 'typing');
+   ```
 
-Alterar a regra 30 de:
-> "Use listar_mercados_usuario quando o nome do mercado for ambíguo ou parcial."
+2. **Antes da geração de TTS** (~linha 2019, dentro do `if modoResposta === 'audio' || 'ambos'`): trocar para `recording` antes de chamar `generateTTS`
+   ```typescript
+   await updatePresence(remetente, 'recording');
+   ```
 
-Para:
-> "SEMPRE use listar_mercados_usuario ANTES de consultar_relatorio quando o usuário mencionar um mercado. Compare o nome falado com a lista retornada e use o nome exato do sistema."
+3. **Após envio da resposta** (~linha 2041, depois de persistir no banco): voltar para `available`
+   ```typescript
+   await updatePresence(remetente, 'available');
+   ```
 
-**3. Redeploy da edge function**
+### Comportamento final
+
+| Momento | Presença enviada |
+|---------|-----------------|
+| Início do processamento (antes da IA) | `typing` |
+| Antes de gerar TTS (se modo áudio/ambos) | `recording` |
+| Após enviar resposta | `available` |
+
+### O que NÃO muda
+
+- Nenhuma alteração no envio de texto ou áudio
+- Nenhuma mensagem extra na conversa
+- Nenhuma migration
+- Nenhuma alteração no frontend
+- Se a presença falhar, o fluxo continua normalmente
 
 ### Escopo
 
-- 1 migration (alterar RPC `relatorio_compras_usuario`)
-- 1 arquivo editado: `supabase/functions/picotinho-assistant/index.ts` (prompt regra 30)
+- 1 função nova: `updatePresence` (~20 linhas)
+- 3 linhas de chamada inseridas no fluxo existente
+- Redeploy da edge function `picotinho-assistant`
 
