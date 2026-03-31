@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ==================== DELAY TYPING CONFIG ====================
+const DELAY_TYPING = {
+  RESPOSTA_PRINCIPAL: 5,  // segundos de "digitando..." antes da resposta principal
+  FALLBACK: 3,            // segundos antes de fallbacks e mensagens de erro
+};
+
 // ==================== TOOL DEFINITIONS ====================
 
 // --- Stock tools (Phase 1) ---
@@ -1399,7 +1405,7 @@ async function executeTool(
 
 // ==================== SEND WHATSAPP MESSAGE ====================
 
-async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
+async function sendWhatsAppMessage(phone: string, message: string, delayTyping?: number): Promise<boolean> {
   const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
   const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
   const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
@@ -1411,13 +1417,18 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<bool
   
   try {
     const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
+    const payload: Record<string, unknown> = { phone, message };
+    if (delayTyping && delayTyping > 0) {
+      payload.delayTyping = delayTyping;
+    }
+    console.log(`📤 [SEND] delayTyping=${delayTyping ?? 0}s | phone=${phone}`);
     const response = await fetch(sendTextUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(accountSecret ? { 'Client-Token': accountSecret } : {})
       },
-      body: JSON.stringify({ phone, message })
+      body: JSON.stringify(payload)
     });
     
     if (!response.ok) {
@@ -1472,38 +1483,7 @@ async function sendWhatsAppAudio(phone: string, audioBase64: string): Promise<bo
     return false;
   }
 }
-// ==================== UPDATE PRESENCE ====================
 
-async function updatePresence(phone: string, status: 'typing' | 'recording' | 'available'): Promise<void> {
-  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
-  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
-  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
-  
-  if (!instanceUrl || !apiToken) {
-    console.log(`⚠️ [PRESENCE] Credenciais ausentes, pulando ${status}`);
-    return;
-  }
-  
-  try {
-    const url = `${instanceUrl}/token/${apiToken}/update-presence`;
-    const payload = { phone, status };
-    console.log(`👁️ [PRESENCE] Enviando: URL=${url} | payload=${JSON.stringify(payload)}`);
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    const responseBody = await response.text();
-    console.log(`👁️ [PRESENCE] ${status} → HTTP ${response.status} | body: ${responseBody}`);
-  } catch (err) {
-    console.log(`⚠️ [PRESENCE] Falha ao enviar ${status}: ${err}`);
-  }
-}
 
 // ==================== GENERATE TTS ====================
 
@@ -1604,7 +1584,7 @@ const handler = async (req: Request): Promise<Response> => {
       const audioUrl = mensagem.anexo_info?.url;
       if (!audioUrl) {
         const erroMsg = "❌ Não consegui acessar o áudio. Pode tentar enviar novamente?";
-        await sendWhatsAppMessage(remetente, erroMsg);
+        await sendWhatsAppMessage(remetente, erroMsg, DELAY_TYPING.FALLBACK);
         await supabase.from('whatsapp_mensagens').update({
           resposta_enviada: erroMsg, processada: true,
           data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
@@ -1625,7 +1605,7 @@ const handler = async (req: Request): Promise<Response> => {
         if (transcError || !transcricao?.text) {
           console.error('❌ Erro na transcrição:', transcError || 'Sem texto retornado');
           const falhaMsg = "🎤 Não consegui entender o áudio. Pode repetir por texto?";
-          await sendWhatsAppMessage(remetente, falhaMsg);
+          await sendWhatsAppMessage(remetente, falhaMsg, DELAY_TYPING.FALLBACK);
           await supabase.from('whatsapp_mensagens').update({
             resposta_enviada: falhaMsg, processada: true,
             data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
@@ -1649,7 +1629,7 @@ const handler = async (req: Request): Promise<Response> => {
       } catch (err: any) {
         console.error('❌ Exceção na transcrição:', err.message);
         const erroMsg = "🎤 Tive um problema ao processar seu áudio. Pode tentar por texto?";
-        await sendWhatsAppMessage(remetente, erroMsg);
+        await sendWhatsAppMessage(remetente, erroMsg, DELAY_TYPING.FALLBACK);
         await supabase.from('whatsapp_mensagens').update({
           resposta_enviada: erroMsg, processada: true,
           data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
@@ -1879,7 +1859,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
     let iterations = 0;
     const MAX_ITERATIONS = 5;
 
-    await updatePresence(remetente, 'typing');
+    // delayTyping será aplicado no envio da mensagem
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
@@ -2045,25 +2025,25 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
 
       // Enviar texto se modo é 'texto' ou 'ambos'
       if (modoResposta === 'texto' || modoResposta === 'ambos') {
-        await sendWhatsAppMessage(remetente, finalResponse);
+        await sendWhatsAppMessage(remetente, finalResponse, DELAY_TYPING.RESPOSTA_PRINCIPAL);
       }
 
       // Enviar áudio se modo é 'audio' ou 'ambos'
       if (modoResposta === 'audio' || modoResposta === 'ambos') {
         try {
-          await updatePresence(remetente, 'recording');
+          // delayTyping não se aplica a áudio
           const audioBase64 = await generateTTS(finalResponse);
           if (audioBase64) {
             await sendWhatsAppAudio(remetente, audioBase64);
           } else if (modoResposta === 'audio') {
             // Fallback: se TTS falhar e modo é só áudio, enviar texto
-            await sendWhatsAppMessage(remetente, finalResponse);
+            await sendWhatsAppMessage(remetente, finalResponse, DELAY_TYPING.FALLBACK);
             console.log('⚠️ TTS falhou, fallback para texto');
           }
         } catch (err) {
           console.error('❌ Erro TTS:', err);
           if (modoResposta === 'audio') {
-            await sendWhatsAppMessage(remetente, finalResponse);
+            await sendWhatsAppMessage(remetente, finalResponse, DELAY_TYPING.FALLBACK);
           }
         }
       }
@@ -2073,7 +2053,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
         data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
       }).eq('id', messageId);
 
-      await updatePresence(remetente, 'available');
+      // presença removida — delayTyping cuida do indicador visual
       console.log(`✅ [ASSISTANT] Resposta enviada (modo: ${modoResposta}) e persistida (${finalResponse.length} chars)`);
     }
 
