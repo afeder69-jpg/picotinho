@@ -692,6 +692,7 @@ async function executeTool(
         const updateData: any = { updated_at: new Date().toISOString() };
         if (args.nome_preferido !== undefined) updateData.nome_preferido = args.nome_preferido;
         if (args.estilo_conversa !== undefined) updateData.estilo_conversa = args.estilo_conversa;
+        if (args.modo_resposta !== undefined) updateData.modo_resposta = args.modo_resposta;
         const { error } = await supabase.from('whatsapp_preferencias_usuario').upsert({ usuario_id: usuarioId, ...updateData }, { onConflict: 'usuario_id' });
         if (error) throw error;
         return { result: JSON.stringify({ sucesso: true, mensagem: "Preferência salva com sucesso!", ...updateData }), isWriteMutation: false };
