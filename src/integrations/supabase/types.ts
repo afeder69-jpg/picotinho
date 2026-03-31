@@ -2797,6 +2797,7 @@ export type Database = {
           estilo_conversa: string | null
           id: string
           lista_ativa_id: string | null
+          modo_resposta: string
           nome_preferido: string | null
           opcoes_pendentes: Json | null
           updated_at: string | null
@@ -2807,6 +2808,7 @@ export type Database = {
           estilo_conversa?: string | null
           id?: string
           lista_ativa_id?: string | null
+          modo_resposta?: string
           nome_preferido?: string | null
           opcoes_pendentes?: Json | null
           updated_at?: string | null
@@ -2817,6 +2819,7 @@ export type Database = {
           estilo_conversa?: string | null
           id?: string
           lista_ativa_id?: string | null
+          modo_resposta?: string
           nome_preferido?: string | null
           opcoes_pendentes?: Json | null
           updated_at?: string | null

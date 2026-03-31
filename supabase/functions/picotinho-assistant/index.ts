@@ -115,12 +115,13 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "salvar_preferencia",
-      description: "Salva uma preferência do usuário, como nome preferido para tratamento. Esta é uma escrita de metadata, não altera estoque.",
+      description: "Salva uma preferência do usuário, como nome preferido para tratamento ou modo de resposta. Esta é uma escrita de metadata, não altera estoque.",
       parameters: {
         type: "object",
         properties: {
           nome_preferido: { type: "string", description: "Como o usuário prefere ser chamado" },
-          estilo_conversa: { type: "string", description: "Estilo de conversa: natural, formal, descontraido" }
+          estilo_conversa: { type: "string", description: "Estilo de conversa: natural, formal, descontraido" },
+          modo_resposta: { type: "string", enum: ["texto", "audio", "ambos"], description: "Como o usuário quer receber as respostas: texto, audio ou ambos" }
         },
         required: []
       }
@@ -691,6 +692,7 @@ async function executeTool(
         const updateData: any = { updated_at: new Date().toISOString() };
         if (args.nome_preferido !== undefined) updateData.nome_preferido = args.nome_preferido;
         if (args.estilo_conversa !== undefined) updateData.estilo_conversa = args.estilo_conversa;
+        if (args.modo_resposta !== undefined) updateData.modo_resposta = args.modo_resposta;
         const { error } = await supabase.from('whatsapp_preferencias_usuario').upsert({ usuario_id: usuarioId, ...updateData }, { onConflict: 'usuario_id' });
         if (error) throw error;
         return { result: JSON.stringify({ sucesso: true, mensagem: "Preferência salva com sucesso!", ...updateData }), isWriteMutation: false };
@@ -1370,6 +1372,93 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<bool
   }
 }
 
+// ==================== SEND WHATSAPP AUDIO ====================
+
+async function sendWhatsAppAudio(phone: string, audioBase64: string): Promise<boolean> {
+  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
+  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
+  
+  if (!instanceUrl || !apiToken) {
+    console.error('❌ WhatsApp credentials missing for audio');
+    return false;
+  }
+  
+  try {
+    const sendAudioUrl = `${instanceUrl}/token/${apiToken}/send-audio`;
+    const response = await fetch(sendAudioUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+      },
+      body: JSON.stringify({
+        phone,
+        audio: audioBase64,
+        waveform: true
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('❌ Erro Z-API audio:', await response.text());
+      return false;
+    }
+    
+    console.log('✅ Áudio enviado via Z-API');
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao enviar áudio:', error);
+    return false;
+  }
+}
+
+// ==================== GENERATE TTS ====================
+
+async function generateTTS(text: string): Promise<string | null> {
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiApiKey) {
+    console.error('❌ OPENAI_API_KEY não configurada para TTS');
+    return null;
+  }
+
+  // Limitar texto para TTS (mensagens longas ficam inviáveis em áudio)
+  const textoParaAudio = text.length > 2000 ? text.substring(0, 2000) + '...' : text;
+  
+  try {
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'tts-1',
+        input: textoParaAudio,
+        voice: 'nova',
+        response_format: 'mp3'
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('❌ OpenAI TTS erro:', response.status, await response.text());
+      return null;
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64Audio = 'data:audio/mpeg;base64,' + btoa(binary);
+    console.log(`✅ TTS gerado: ${bytes.length} bytes (${textoParaAudio.length} chars de texto)`);
+    return base64Audio;
+  } catch (error) {
+    console.error('❌ Erro ao gerar TTS:', error);
+    return null;
+  }
+}
+
 // ==================== MAIN HANDLER ====================
 
 const handler = async (req: Request): Promise<Response> => {
@@ -1486,6 +1575,7 @@ const handler = async (req: Request): Promise<Response> => {
       .maybeSingle();
 
     const nomePreferido = preferencias?.nome_preferido || '';
+    const modoResposta = preferencias?.modo_resposta || 'texto';
     const listaAtivaId: string | null = preferencias?.lista_ativa_id || null;
     const opcoesPendentes = preferencias?.opcoes_pendentes || null;
 
@@ -1660,6 +1750,14 @@ Regras de Relatórios:
     - "resuma/resumo" → responda com RESUMO por categoria ou mercado
 32. Quando a listagem for limitada (mais de 30 itens), SEMPRE informe: o total consolidado (soma de TODOS os registros), seguido da indicação de quantos itens foram listados vs total real. Exemplo: "Total: R$ 450,00 em 85 itens. Listei os 30 mais recentes."
 33. NUNCA invente valores. Toda resposta deve vir da tool consultar_relatorio.
+
+Regras de Modo de Resposta:
+34. O usuário pode pedir para mudar o modo de resposta com frases como:
+    "quero que você me responda por áudio", "prefiro texto", "me responda falando",
+    "responde em áudio e texto", "volta pra texto", "pode falar comigo".
+    Quando detectar esse pedido, use salvar_preferencia com modo_resposta.
+    Valores: "texto", "audio", "ambos".
+35. Modo de resposta atual do usuário: ${modoResposta}. Respeite-o em todas as interações. Se for "audio" ou "ambos", avise o usuário que suas respostas serão enviadas também por áudio.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
@@ -1838,20 +1936,42 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
       }
     }
 
-    // 7. Send response via WhatsApp
+    // 7. Send response via WhatsApp (respecting modo_resposta)
     if (finalResponse) {
       if (finalResponse.length > 4000) {
         finalResponse = finalResponse.substring(0, 3950) + "\n\n... (mensagem truncada)";
       }
 
-      await sendWhatsAppMessage(remetente, finalResponse);
+      // Enviar texto se modo é 'texto' ou 'ambos'
+      if (modoResposta === 'texto' || modoResposta === 'ambos') {
+        await sendWhatsAppMessage(remetente, finalResponse);
+      }
+
+      // Enviar áudio se modo é 'audio' ou 'ambos'
+      if (modoResposta === 'audio' || modoResposta === 'ambos') {
+        try {
+          const audioBase64 = await generateTTS(finalResponse);
+          if (audioBase64) {
+            await sendWhatsAppAudio(remetente, audioBase64);
+          } else if (modoResposta === 'audio') {
+            // Fallback: se TTS falhar e modo é só áudio, enviar texto
+            await sendWhatsAppMessage(remetente, finalResponse);
+            console.log('⚠️ TTS falhou, fallback para texto');
+          }
+        } catch (err) {
+          console.error('❌ Erro TTS:', err);
+          if (modoResposta === 'audio') {
+            await sendWhatsAppMessage(remetente, finalResponse);
+          }
+        }
+      }
       
       await supabase.from('whatsapp_mensagens').update({
         resposta_enviada: finalResponse, processada: true,
         data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
       }).eq('id', messageId);
 
-      console.log(`✅ [ASSISTANT] Resposta enviada e persistida (${finalResponse.length} chars)`);
+      console.log(`✅ [ASSISTANT] Resposta enviada (modo: ${modoResposta}) e persistida (${finalResponse.length} chars)`);
     }
 
     return new Response(JSON.stringify({ 
