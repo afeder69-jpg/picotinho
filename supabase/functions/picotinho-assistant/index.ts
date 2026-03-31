@@ -1483,38 +1483,7 @@ async function sendWhatsAppAudio(phone: string, audioBase64: string): Promise<bo
     return false;
   }
 }
-// ==================== UPDATE PRESENCE ====================
 
-async function updatePresence(phone: string, status: 'typing' | 'recording' | 'available'): Promise<void> {
-  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
-  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
-  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
-  
-  if (!instanceUrl || !apiToken) {
-    console.log(`⚠️ [PRESENCE] Credenciais ausentes, pulando ${status}`);
-    return;
-  }
-  
-  try {
-    const url = `${instanceUrl}/token/${apiToken}/update-presence`;
-    const payload = { phone, status };
-    console.log(`👁️ [PRESENCE] Enviando: URL=${url} | payload=${JSON.stringify(payload)}`);
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    const responseBody = await response.text();
-    console.log(`👁️ [PRESENCE] ${status} → HTTP ${response.status} | body: ${responseBody}`);
-  } catch (err) {
-    console.log(`⚠️ [PRESENCE] Falha ao enviar ${status}: ${err}`);
-  }
-}
 
 // ==================== GENERATE TTS ====================
 
