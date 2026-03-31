@@ -1515,9 +1515,10 @@ async function generateTTS(text: string): Promise<string | null> {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'tts-1',
+        model: PICOTINHO_VOICE.model,
         input: textoParaAudio,
-        voice: 'nova',
+        voice: PICOTINHO_VOICE.voice,
+        speed: PICOTINHO_VOICE.speed,
         response_format: 'mp3'
       })
     });
