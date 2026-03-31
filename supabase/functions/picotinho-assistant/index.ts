@@ -1871,6 +1871,8 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
     let iterations = 0;
     const MAX_ITERATIONS = 5;
 
+    await updatePresence(remetente, 'typing');
+
     while (iterations < MAX_ITERATIONS) {
       iterations++;
       console.log(`🔄 [ASSISTANT] Iteração ${iterations}/${MAX_ITERATIONS}`);
