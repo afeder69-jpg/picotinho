@@ -12,6 +12,16 @@ const DELAY_TYPING = {
   FALLBACK: 3,            // segundos antes de fallbacks e mensagens de erro
 };
 
+// ==================== VOZ DO PICOTINHO ====================
+// Voz fixa: "fable" — masculina, leve e expressiva, combina com personagem pequeno e simpático.
+// Speed 1.1 dá um tom mais ágil e "pequenininho".
+// Para trocar no futuro, basta alterar estes valores.
+const PICOTINHO_VOICE = {
+  voice: 'fable',
+  speed: 1.1,
+  model: 'tts-1',
+};
+
 // ==================== TOOL DEFINITIONS ====================
 
 // --- Stock tools (Phase 1) ---
@@ -1505,9 +1515,10 @@ async function generateTTS(text: string): Promise<string | null> {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'tts-1',
+        model: PICOTINHO_VOICE.model,
         input: textoParaAudio,
-        voice: 'nova',
+        voice: PICOTINHO_VOICE.voice,
+        speed: PICOTINHO_VOICE.speed,
         response_format: 'mp3'
       })
     });
