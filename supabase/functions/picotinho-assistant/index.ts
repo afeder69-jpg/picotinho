@@ -2037,7 +2037,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
             await sendWhatsAppAudio(remetente, audioBase64);
           } else if (modoResposta === 'audio') {
             // Fallback: se TTS falhar e modo é só áudio, enviar texto
-            await sendWhatsAppMessage(remetente, finalResponse);
+            await sendWhatsAppMessage(remetente, finalResponse, DELAY_TYPING.FALLBACK);
             console.log('⚠️ TTS falhou, fallback para texto');
           }
         } catch (err) {
