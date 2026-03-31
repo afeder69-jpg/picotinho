@@ -7,7 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// ─── Configuração de ranking ───────────────────────────────────────────────
+// ─── Configuração ──────────────────────────────────────────────────────────
+
+const MAX_FILENAME_LENGTH = 120;
 
 const DOMINIOS_PREFERENCIAIS = [
   'amazon.com.br', 'mercadolivre.com.br', 'shopee.com.br',
@@ -17,6 +19,7 @@ const DOMINIOS_PREFERENCIAIS = [
   'condor.com.br', 'atacadao.com.br', 'assai.com.br',
   'static-americanas.b2w.io', 'a-static.mlcdn.com.br',
   'images-americanas.b2w.io', 'cf.shopee.com.br',
+  'openfoodfacts.org',
 ];
 
 const DOMINIOS_EVITAR = [
@@ -24,12 +27,21 @@ const DOMINIOS_EVITAR = [
   'youtube.com', 'tiktok.com', 'pinterest.com', 'reddit.com',
   'blogspot.com', 'wordpress.com', 'wp.com',
   'flickr.com', 'tumblr.com',
+  'kwai.com', 'likee.com',
+];
+
+const EXCLUSOES_SITE_QUERY = [
+  'tiktok.com', 'youtube.com', 'facebook.com', 'instagram.com',
+  'pinterest.com', 'twitter.com', 'x.com', 'kwai.com', 'reddit.com',
 ];
 
 const PALAVRAS_CONTEXTO_NEGATIVO = [
   'receita', 'recipe', 'como fazer', 'prateleira', 'gondola',
   'carrinho', 'supermercado interior', 'loja interior',
   'banner', 'promoção', 'oferta', 'encarte', 'folheto',
+  'video', 'shorts', 'reels', 'review', 'unboxing',
+  'comparativo', 'teste', 'testando',
+  'mao', 'segurando', 'pessoa', 'screenshot', 'montagem',
 ];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -44,20 +56,63 @@ function normalizar(texto: string): string {
     .trim();
 }
 
+function sanitizeFilePath(sku: string, produtoId: string): string {
+  let sanitized = sku
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // remove acentos
+    .replace(/\//g, '-')              // barra → traço
+    .replace(/[^a-zA-Z0-9_\-\.]/g, '_'); // chars inválidos → underscore
+
+  const suffix = `_${produtoId.substring(0, 8)}`;
+  const maxBase = MAX_FILENAME_LENGTH - suffix.length;
+  if (sanitized.length > maxBase) {
+    sanitized = sanitized.substring(0, maxBase);
+  }
+  return `${sanitized}${suffix}`;
+}
+
+function isNomePadraoConfiavel(nomePadrao: string | null): boolean {
+  if (!nomePadrao) return false;
+  const palavras = nomePadrao.trim().split(/\s+/);
+  if (palavras.length < 2) return false;
+
+  const significativas = palavras.filter(p => p.length >= 3);
+  if (significativas.length < 2) return false;
+
+  // Detectar excesso de abreviações (>50% das palavras com <=3 chars)
+  const abreviacoes = palavras.filter(p => p.length <= 3 && p.length > 0);
+  if (palavras.length >= 3 && abreviacoes.length / palavras.length > 0.5) return false;
+
+  return true;
+}
+
 function buildSearchQuery(produto: any, customQuery?: string): string {
-  // Query customizada é usada LITERALMENTE
+  // Query customizada é usada LITERALMENTE — sem sufixos, sem exclusões
   if (customQuery) return customQuery;
 
-  // Usar nome_padrao como base (já contém marca + nome + variante + gramagem)
-  const base = produto.nome_padrao || [
-    produto.marca,
-    produto.nome_base,
-    produto.qtd_valor && produto.qtd_unidade
-      ? `${produto.qtd_valor}${produto.qtd_unidade}`
-      : null,
-  ].filter(Boolean).join(' ');
+  let base: string;
+  if (isNomePadraoConfiavel(produto.nome_padrao)) {
+    base = produto.nome_padrao;
+  } else {
+    // Fallback: montar a partir dos campos individuais
+    base = [
+      produto.marca,
+      produto.nome_base,
+      produto.qtd_valor && produto.qtd_unidade
+        ? `${produto.qtd_valor}${produto.qtd_unidade}`
+        : null,
+    ].filter(Boolean).join(' ');
+    console.log(`⚠️ nome_padrao não confiável ("${produto.nome_padrao}"), usando fallback: "${base}"`);
+  }
 
-  return `${base} embalagem produto`;
+  if (!base || base.trim().length < 3) {
+    base = produto.nome_base || produto.nome_padrao || 'produto';
+  }
+
+  // Exclusões de site para limpar resultados na origem
+  const exclusoes = EXCLUSOES_SITE_QUERY.map(d => `-site:${d}`).join(' ');
+
+  return `${base} embalagem produto ${exclusoes}`;
 }
 
 interface GoogleItem {
@@ -80,50 +135,37 @@ function scoreItem(item: GoogleItem, nomeProdutoNorm: string): number {
   const snippetNorm = normalizar(item.snippet || '');
   const contextNorm = normalizar(item.image?.contextLink || '');
 
-  // 1. Domínio preferencial (+15) ou a evitar (-30)
-  if (DOMINIOS_PREFERENCIAIS.some(d => domain.includes(d))) {
-    score += 15;
-  }
-  if (DOMINIOS_EVITAR.some(d => domain.includes(d))) {
-    score -= 30;
-  }
+  // 1. Domínio preferencial (+15) ou a evitar (-50)
+  if (DOMINIOS_PREFERENCIAIS.some(d => domain.includes(d))) score += 15;
+  if (DOMINIOS_EVITAR.some(d => domain.includes(d))) score -= 50;
 
-  // 2. Matching textual: cada palavra do nome do produto presente no título (+8 cada)
-  //    Este é o critério mais forte para garantir aderência ao produto correto
+  // 2. Matching textual: palavras do nome no título (até 50pts)
   const palavrasProduto = nomeProdutoNorm.split(' ').filter(p => p.length >= 3);
-  let matchCount = 0;
-  for (const palavra of palavrasProduto) {
-    if (titleNorm.includes(palavra)) {
-      matchCount++;
-    }
-  }
   if (palavrasProduto.length > 0) {
-    // Pontuação proporcional: match completo vale muito
+    let matchCount = 0;
+    for (const palavra of palavrasProduto) {
+      if (titleNorm.includes(palavra)) matchCount++;
+    }
     const matchRatio = matchCount / palavrasProduto.length;
-    score += Math.round(matchRatio * 50); // até 50 pontos por aderência textual
+    score += Math.round(matchRatio * 50);
   }
 
-  // 3. Contexto negativo no snippet ou título (-20)
+  // 3. Contexto negativo (-20, uma vez)
   for (const neg of PALAVRAS_CONTEXTO_NEGATIVO) {
     if (snippetNorm.includes(neg) || titleNorm.includes(neg) || contextNorm.includes(neg)) {
       score -= 20;
-      break; // penalizar só uma vez
+      break;
     }
   }
 
-  // 4. Proporção da imagem (critério auxiliar, +5 se próxima de 1:1 ou 3:4)
+  // 4. Proporção da imagem (auxiliar, +5 se 0.6–1.2)
   if (item.image?.width && item.image?.height) {
     const ratio = item.image.width / item.image.height;
-    // Embalagens são tipicamente entre 0.6 e 1.2
-    if (ratio >= 0.6 && ratio <= 1.2) {
-      score += 5;
-    }
+    if (ratio >= 0.6 && ratio <= 1.2) score += 5;
   }
 
-  // 5. Imagem com tamanho razoável (+3)
-  if (item.image?.width && item.image.width >= 300) {
-    score += 3;
-  }
+  // 5. Tamanho razoável (+3)
+  if (item.image?.width && item.image.width >= 300) score += 3;
 
   return score;
 }
@@ -175,23 +217,22 @@ serve(async (req) => {
         const isCustomSearch = !!customQuery;
         const searchQuery = buildSearchQuery(produto, customQuery);
         const nomeProdutoNorm = normalizar(produto.nome_padrao || produto.nome_base || '');
+        const safeFileName = sanitizeFilePath(produto.sku_global, produto.id);
 
         console.log(`🔍 Buscando: "${searchQuery}" ${isCustomSearch ? '(customizada)' : '(auto)'}`);
+        console.log(`📁 FilePath base: ${safeFileName}`);
 
-        // Deletar imagens antigas em busca customizada
+        // Deletar imagens antigas em busca customizada (usando mesmo sanitize)
         if (isCustomSearch) {
           await supabase.storage
             .from("produtos-master-fotos")
             .remove([
-              `produtos-master/${produto.sku_global}.jpg`,
-              `produtos-master/${produto.sku_global}_opcao2.jpg`,
-              `produtos-master/${produto.sku_global}_opcao3.jpg`,
+              `produtos-master/${safeFileName}.jpg`,
+              `produtos-master/${safeFileName}_opcao2.jpg`,
+              `produtos-master/${safeFileName}_opcao3.jpg`,
             ]);
         }
 
-        // Google Custom Search: imgSize=LARGE + imgType=photo para fotos comerciais
-        // customQuery sempre start=1 (sem offset aleatório)
-        const startParam = isCustomSearch ? 1 : 1;
         const searchUrl =
           `https://www.googleapis.com/customsearch/v1?` +
           `key=${GOOGLE_API_KEY}&` +
@@ -200,7 +241,7 @@ serve(async (req) => {
           `searchType=image&` +
           `imgSize=LARGE&` +
           `imgType=photo&` +
-          `start=${startParam}&` +
+          `start=1&` +
           `num=10`;
 
         const searchResponse = await fetch(searchUrl);
@@ -217,19 +258,24 @@ serve(async (req) => {
           resultados.push({
             produtoId: produto.id, skuGlobal: produto.sku_global,
             nomeProduto: produto.nome_padrao,
-            status: "error", error: "Nenhuma imagem encontrada", query: searchQuery,
+            status: "no_results", error: "Nenhuma imagem encontrada pelo Google", query: searchQuery,
           });
           continue;
         }
 
-        // ── Rankear TODOS os resultados antes de baixar ──
+        // ── Rankear TODOS os resultados ──
         const scored = (searchData.items as GoogleItem[]).map(item => ({
           item,
           score: scoreItem(item, nomeProdutoNorm),
         }));
         scored.sort((a, b) => b.score - a.score);
 
-        console.log(`🏆 Ranking: ${scored.map(s => `${s.score}pts`).join(', ')}`);
+        console.log(`🏆 Ranking: ${scored.map(s => `${s.score}pts(${s.item.displayLink})`).join(', ')}`);
+
+        // Score mínimo dinâmico: aceita até 40pts abaixo do melhor, mínimo 0
+        const melhorScore = scored[0].score;
+        const scoreMinimo = Math.max(0, melhorScore - 40);
+        console.log(`📏 Score mínimo: ${scoreMinimo} (melhor: ${melhorScore})`);
 
         // ── Baixar as melhores até obter 3 válidas ──
         const imagensValidas: Array<{
@@ -238,9 +284,8 @@ serve(async (req) => {
 
         for (const { item, score } of scored) {
           if (imagensValidas.length >= 3) break;
-          // Pular itens com score muito negativo
-          if (score < -10) {
-            console.log(`⏭️ Pulando (score=${score}): ${item.displayLink}`);
+          if (score < scoreMinimo) {
+            console.log(`⏭️ Pulando (score=${score} < min=${scoreMinimo}): ${item.displayLink}`);
             continue;
           }
 
@@ -256,7 +301,7 @@ serve(async (req) => {
             if (!contentType || !["image/jpeg", "image/png", "image/webp"].includes(contentType)) continue;
 
             const blob = await imageResponse.blob();
-            if (blob.size > 5 * 1024 * 1024 || blob.size < 5000) continue; // min 5KB, max 5MB
+            if (blob.size > 5 * 1024 * 1024 || blob.size < 5000) continue;
 
             imagensValidas.push({
               url: item.link, blob, titulo: item.title || '',
@@ -272,17 +317,21 @@ serve(async (req) => {
           resultados.push({
             produtoId: produto.id, skuGlobal: produto.sku_global,
             nomeProduto: produto.nome_padrao,
-            status: "error", error: "Nenhuma imagem válida após ranking", query: searchQuery,
+            status: "no_valid_images",
+            error: `Nenhuma imagem válida (${scored.length} resultados, scoreMin=${scoreMinimo})`,
+            query: searchQuery,
           });
           continue;
         }
 
         // ── Upload ──
         const opcoesImagens = [];
+        let uploadErrors = 0;
+
         for (let i = 0; i < imagensValidas.length; i++) {
           const imagem = imagensValidas[i];
           const sufixo = i === 0 ? '' : `_opcao${i + 1}`;
-          const filePath = `produtos-master/${produto.sku_global}${sufixo}.jpg`;
+          const filePath = `produtos-master/${safeFileName}${sufixo}.jpg`;
 
           const arrayBuffer = await imagem.blob.arrayBuffer();
           const { error: uploadError } = await supabase.storage
@@ -290,7 +339,8 @@ serve(async (req) => {
             .upload(filePath, arrayBuffer, { contentType: "image/jpeg", upsert: true });
 
           if (uploadError) {
-            console.error(`Erro upload opção ${i + 1}:`, uploadError);
+            uploadErrors++;
+            console.error(`❌ Upload falhou opção ${i + 1} (${filePath}):`, uploadError.message);
             continue;
           }
 
@@ -306,17 +356,29 @@ serve(async (req) => {
             posicao: i + 1,
             confianca: Math.min(99, 70 + imagem.score),
           });
+          console.log(`💾 Upload OK: ${filePath}`);
         }
 
-        console.log(`✅ ${opcoesImagens.length} imagens para: ${produto.nome_padrao}`);
+        // Determinar status preciso
+        let status: string;
+        if (opcoesImagens.length === 0 && uploadErrors > 0) {
+          status = "upload_failed";
+        } else if (opcoesImagens.length > 0 && uploadErrors > 0) {
+          status = "partial_success";
+        } else {
+          status = "success";
+        }
+
+        console.log(`📦 ${status}: ${opcoesImagens.length} salvas, ${uploadErrors} falhas upload — ${produto.nome_padrao}`);
 
         resultados.push({
           produtoId: produto.id, skuGlobal: produto.sku_global,
           nomeProduto: produto.nome_padrao, opcoesImagens,
-          query: searchQuery, status: "success",
+          query: searchQuery, status,
+          ...(uploadErrors > 0 ? { uploadErrors } : {}),
         });
       } catch (error: any) {
-        console.error(`Erro ${produto.nome_padrao}:`, error);
+        console.error(`❌ Erro ${produto.nome_padrao}:`, error);
         resultados.push({
           produtoId: produto.id, skuGlobal: produto.sku_global,
           nomeProduto: produto.nome_padrao,
