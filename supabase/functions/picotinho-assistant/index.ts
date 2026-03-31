@@ -1575,6 +1575,7 @@ const handler = async (req: Request): Promise<Response> => {
       .maybeSingle();
 
     const nomePreferido = preferencias?.nome_preferido || '';
+    const modoResposta = preferencias?.modo_resposta || 'texto';
     const listaAtivaId: string | null = preferencias?.lista_ativa_id || null;
     const opcoesPendentes = preferencias?.opcoes_pendentes || null;
 
