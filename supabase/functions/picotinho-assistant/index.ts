@@ -2043,7 +2043,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
         } catch (err) {
           console.error('❌ Erro TTS:', err);
           if (modoResposta === 'audio') {
-            await sendWhatsAppMessage(remetente, finalResponse);
+            await sendWhatsAppMessage(remetente, finalResponse, DELAY_TYPING.FALLBACK);
           }
         }
       }
