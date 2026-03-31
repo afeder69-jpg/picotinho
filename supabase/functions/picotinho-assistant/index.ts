@@ -432,45 +432,106 @@ async function executeTool(
           return { result: JSON.stringify({ total: itensConsolidados.length, valor_total: Math.round(valorTotal * 100) / 100, itens: itensConsolidados }), isWriteMutation: false };
         }
 
-        // Para resumo geral ("tudo") ou por categoria: usar RPC como fonte única de verdade
-        const { data: resumoRPC, error: rpcError } = await supabase.rpc('resumo_estoque_por_categoria', { p_user_id: usuarioId });
-        if (rpcError) throw rpcError;
-        if (!resumoRPC || resumoRPC.length === 0) {
+        // Para resumo geral ("tudo") ou por categoria: buscar itens individuais para evitar alucinação
+        // Mapeamento de sinônimos (mesmo do sistema inteiro)
+        const sinonimoParaCanonico: Record<string, string> = {
+          'açougue': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue', 'carne': 'açougue', 'frango': 'açougue', 'frangos': 'açougue', 'peixe': 'açougue', 'peixes': 'açougue', 'bovino': 'açougue', 'suínos': 'açougue', 'suino': 'açougue',
+          'bebidas': 'bebidas', 'bebida': 'bebidas', 'suco': 'bebidas', 'sucos': 'bebidas', 'refrigerante': 'bebidas', 'refrigerantes': 'bebidas', 'cerveja': 'bebidas', 'cervejas': 'bebidas', 'vinho': 'bebidas', 'vinhos': 'bebidas', 'água': 'bebidas', 'agua': 'bebidas',
+          'hortifruti': 'hortifruti', 'hortfruti': 'hortifruti', 'hortifrute': 'hortifruti', 'frutas': 'hortifruti', 'verduras': 'hortifruti', 'legumes': 'hortifruti', 'hortaliças': 'hortifruti',
+          'laticínios/frios': 'laticínios/frios', 'laticínios': 'laticínios/frios', 'laticinios': 'laticínios/frios', 'frios': 'laticínios/frios', 'queijo': 'laticínios/frios', 'queijos': 'laticínios/frios', 'embutidos': 'laticínios/frios', 'leite': 'laticínios/frios', 'iogurte': 'laticínios/frios', 'manteiga': 'laticínios/frios', 'requeijão': 'laticínios/frios',
+          'higiene/farmácia': 'higiene/farmácia', 'higiene': 'higiene/farmácia', 'farmácia': 'higiene/farmácia', 'farmacia': 'higiene/farmácia', 'cuidados pessoais': 'higiene/farmácia',
+          'mercearia': 'mercearia', 'arroz': 'mercearia', 'feijão': 'mercearia', 'feijao': 'mercearia', 'macarrão': 'mercearia', 'café': 'mercearia', 'farinha': 'mercearia',
+          'padaria': 'padaria', 'pão': 'padaria', 'pao': 'padaria', 'pães': 'padaria', 'biscoito': 'padaria', 'biscoitos': 'padaria',
+          'congelados': 'congelados', 'congelado': 'congelados', 'sorvete': 'congelados',
+          'limpeza': 'limpeza', 'detergente': 'limpeza', 'sabão': 'limpeza', 'sabao': 'limpeza', 'desinfetante': 'limpeza', 'amaciante': 'limpeza',
+          'pet': 'pet', 'animais': 'pet', 'ração': 'pet', 'racao': 'pet', 'cachorro': 'pet', 'gato': 'pet',
+          'outros': 'outros', 'diversos': 'outros',
+        };
+
+        let queryEstoque = supabase.from('estoque_app')
+          .select('id, produto_nome, quantidade, unidade_medida, categoria, marca, preco_unitario_ultimo, updated_at')
+          .eq('user_id', usuarioId);
+
+        if (args.tipo_busca === 'categoria' && args.termo) {
+          const termoLower = args.termo.toLowerCase().trim();
+          const categoriaBuscada = sinonimoParaCanonico[termoLower] || termoLower;
+          queryEstoque = queryEstoque.ilike('categoria', `%${categoriaBuscada}%`);
+        }
+
+        const { data: dataEstoque, error: errEstoque } = await queryEstoque.order('produto_nome').limit(500);
+        if (errEstoque) throw errEstoque;
+        if (!dataEstoque || dataEstoque.length === 0) {
           return { result: JSON.stringify({ mensagem: "Nenhum item encontrado no estoque.", itens: [] }), isWriteMutation: false };
         }
 
-        // Se busca por categoria, filtrar pelo termo usando mapeamento de sinônimos
-        let resumoFiltrado = resumoRPC;
-        if (args.tipo_busca === 'categoria' && args.termo) {
-          const termoLower = args.termo.toLowerCase().trim();
-          // Mapeamento de sinônimos para encontrar a categoria canônica
-          const sinonimoParaCanonico: Record<string, string> = {
-            'açougue': 'açougue', 'acougue': 'açougue', 'carnes': 'açougue', 'carne': 'açougue', 'frango': 'açougue', 'peixe': 'açougue', 'bovino': 'açougue',
-            'bebidas': 'bebidas', 'bebida': 'bebidas', 'suco': 'bebidas', 'refrigerante': 'bebidas', 'cerveja': 'bebidas', 'vinho': 'bebidas', 'água': 'bebidas', 'agua': 'bebidas',
-            'hortifruti': 'hortifruti', 'frutas': 'hortifruti', 'verduras': 'hortifruti', 'legumes': 'hortifruti',
-            'laticínios/frios': 'laticínios/frios', 'laticínios': 'laticínios/frios', 'laticinios': 'laticínios/frios', 'frios': 'laticínios/frios', 'queijo': 'laticínios/frios', 'embutidos': 'laticínios/frios',
-            'higiene/farmácia': 'higiene/farmácia', 'higiene': 'higiene/farmácia', 'farmácia': 'higiene/farmácia', 'farmacia': 'higiene/farmácia',
-            'mercearia': 'mercearia',
-            'padaria': 'padaria', 'pão': 'padaria', 'pao': 'padaria',
-            'congelados': 'congelados', 'congelado': 'congelados',
-            'limpeza': 'limpeza', 'detergente': 'limpeza', 'sabão': 'limpeza',
-            'pet': 'pet', 'animais': 'pet', 'ração': 'pet', 'racao': 'pet',
-            'outros': 'outros', 'diversos': 'outros',
-          };
-          const categoriaBuscada = sinonimoParaCanonico[termoLower] || termoLower;
-          resumoFiltrado = resumoRPC.filter((r: any) => r.categoria === categoriaBuscada || r.categoria.includes(termoLower) || termoLower.includes(r.categoria));
-        }
+        // Consolidação por nome normalizado (mesma lógica do app e da busca por produto acima)
+        const normNomeEstoque = (nome: string): string => {
+          return nome.toUpperCase().trim().replace(/\s+/g, ' ').replace(/\bKG\b/gi, '').replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL').replace(/\s+/g, ' ').trim();
+        };
+        const mapEstoque = new Map<string, any>();
+        dataEstoque.forEach((item: any) => {
+          const chave = normNomeEstoque(item.produto_nome);
+          if (mapEstoque.has(chave)) {
+            const ex = mapEstoque.get(chave);
+            const novaQtd = ex.quantidade_total + item.quantidade;
+            const maisRecente = new Date(item.updated_at) > new Date(ex.updated_at);
+            mapEstoque.set(chave, {
+              ...ex,
+              id: maisRecente ? item.id : ex.id,
+              quantidade_total: novaQtd,
+              preco: maisRecente ? (item.preco_unitario_ultimo || ex.preco) : (ex.preco || item.preco_unitario_ultimo),
+              categoria: maisRecente ? item.categoria : ex.categoria,
+              updated_at: item.updated_at > ex.updated_at ? item.updated_at : ex.updated_at
+            });
+          } else {
+            mapEstoque.set(chave, {
+              id: item.id,
+              nome: chave,
+              nome_original: item.produto_nome,
+              quantidade_total: item.quantidade,
+              unidade: item.unidade_medida,
+              categoria: item.categoria,
+              marca: item.marca,
+              preco: item.preco_unitario_ultimo,
+              updated_at: item.updated_at
+            });
+          }
+        });
 
-        const totalItens = resumoFiltrado.reduce((acc: number, r: any) => acc + Number(r.total_itens), 0);
-        const valorTotal = resumoFiltrado.reduce((acc: number, r: any) => acc + Number(r.valor_pago), 0);
+        const itensConsolidadosEstoque = Array.from(mapEstoque.values())
+          .filter((item: any) => item.quantidade_total > 0)
+          .map((item: any) => ({
+            id: item.id,
+            nome: item.nome,
+            quantidade: item.quantidade_total,
+            unidade: item.unidade,
+            categoria: item.categoria,
+            marca: item.marca,
+            preco: item.preco,
+            atualizado: item.updated_at
+          }));
+
+        const valorTotalEstoque = itensConsolidadosEstoque.reduce((acc: number, item: any) => {
+          return acc + Math.round(((item.preco || 0) * item.quantidade) * 100) / 100;
+        }, 0);
+
+        // Agrupar resumo por categoria para manter compatibilidade
+        const resumoPorCat: Record<string, { total_itens: number; valor_pago: number }> = {};
+        itensConsolidadosEstoque.forEach((item: any) => {
+          const cat = item.categoria || 'outros';
+          if (!resumoPorCat[cat]) resumoPorCat[cat] = { total_itens: 0, valor_pago: 0 };
+          resumoPorCat[cat].total_itens++;
+          resumoPorCat[cat].valor_pago += Math.round(((item.preco || 0) * item.quantidade) * 100) / 100;
+        });
 
         return { result: JSON.stringify({
-          total: totalItens,
-          valor_total: Math.round(valorTotal * 100) / 100,
-          resumo_por_categoria: resumoFiltrado.map((r: any) => ({
-            categoria: r.categoria,
-            total_itens: Number(r.total_itens),
-            valor_pago: Number(r.valor_pago),
+          total: itensConsolidadosEstoque.length,
+          valor_total: Math.round(valorTotalEstoque * 100) / 100,
+          itens: itensConsolidadosEstoque,
+          resumo_por_categoria: Object.entries(resumoPorCat).map(([cat, v]) => ({
+            categoria: cat,
+            total_itens: v.total_itens,
+            valor_pago: Math.round(v.valor_pago * 100) / 100,
           })),
         }), isWriteMutation: false };
       }
