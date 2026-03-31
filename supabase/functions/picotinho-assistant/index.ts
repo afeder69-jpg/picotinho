@@ -2025,7 +2025,7 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
 
       // Enviar texto se modo é 'texto' ou 'ambos'
       if (modoResposta === 'texto' || modoResposta === 'ambos') {
-        await sendWhatsAppMessage(remetente, finalResponse);
+        await sendWhatsAppMessage(remetente, finalResponse, DELAY_TYPING.RESPOSTA_PRINCIPAL);
       }
 
       // Enviar áudio se modo é 'audio' ou 'ambos'
