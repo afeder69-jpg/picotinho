@@ -115,12 +115,13 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "salvar_preferencia",
-      description: "Salva uma preferência do usuário, como nome preferido para tratamento. Esta é uma escrita de metadata, não altera estoque.",
+      description: "Salva uma preferência do usuário, como nome preferido para tratamento ou modo de resposta. Esta é uma escrita de metadata, não altera estoque.",
       parameters: {
         type: "object",
         properties: {
           nome_preferido: { type: "string", description: "Como o usuário prefere ser chamado" },
-          estilo_conversa: { type: "string", description: "Estilo de conversa: natural, formal, descontraido" }
+          estilo_conversa: { type: "string", description: "Estilo de conversa: natural, formal, descontraido" },
+          modo_resposta: { type: "string", enum: ["texto", "audio", "ambos"], description: "Como o usuário quer receber as respostas: texto, audio ou ambos" }
         },
         required: []
       }
