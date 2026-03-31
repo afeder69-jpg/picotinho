@@ -1936,20 +1936,42 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
       }
     }
 
-    // 7. Send response via WhatsApp
+    // 7. Send response via WhatsApp (respecting modo_resposta)
     if (finalResponse) {
       if (finalResponse.length > 4000) {
         finalResponse = finalResponse.substring(0, 3950) + "\n\n... (mensagem truncada)";
       }
 
-      await sendWhatsAppMessage(remetente, finalResponse);
+      // Enviar texto se modo é 'texto' ou 'ambos'
+      if (modoResposta === 'texto' || modoResposta === 'ambos') {
+        await sendWhatsAppMessage(remetente, finalResponse);
+      }
+
+      // Enviar áudio se modo é 'audio' ou 'ambos'
+      if (modoResposta === 'audio' || modoResposta === 'ambos') {
+        try {
+          const audioBase64 = await generateTTS(finalResponse);
+          if (audioBase64) {
+            await sendWhatsAppAudio(remetente, audioBase64);
+          } else if (modoResposta === 'audio') {
+            // Fallback: se TTS falhar e modo é só áudio, enviar texto
+            await sendWhatsAppMessage(remetente, finalResponse);
+            console.log('⚠️ TTS falhou, fallback para texto');
+          }
+        } catch (err) {
+          console.error('❌ Erro TTS:', err);
+          if (modoResposta === 'audio') {
+            await sendWhatsAppMessage(remetente, finalResponse);
+          }
+        }
+      }
       
       await supabase.from('whatsapp_mensagens').update({
         resposta_enviada: finalResponse, processada: true,
         data_processamento: new Date().toISOString(), comando_identificado: 'assistente_ia'
       }).eq('id', messageId);
 
-      console.log(`✅ [ASSISTANT] Resposta enviada e persistida (${finalResponse.length} chars)`);
+      console.log(`✅ [ASSISTANT] Resposta enviada (modo: ${modoResposta}) e persistida (${finalResponse.length} chars)`);
     }
 
     return new Response(JSON.stringify({ 
