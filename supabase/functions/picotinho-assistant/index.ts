@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ==================== DELAY TYPING CONFIG ====================
+const DELAY_TYPING = {
+  RESPOSTA_PRINCIPAL: 5,  // segundos de "digitando..." antes da resposta principal
+  FALLBACK: 3,            // segundos antes de fallbacks e mensagens de erro
+};
+
 // ==================== TOOL DEFINITIONS ====================
 
 // --- Stock tools (Phase 1) ---
