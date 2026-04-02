@@ -1,84 +1,68 @@
 
 
-## Plano: Melhorar observabilidade da presença no WhatsApp
+## Diagnóstico: Login com Google redirecionando para localhost
 
-### Resumo
+### Causa raiz identificada
 
-Adicionar logs detalhados na função `updatePresence` para capturar o status HTTP e o body da resposta da Z-API, permitindo diagnóstico preciso de por que a presença não está aparecendo visualmente.
+Os **logs de autenticação do Supabase** confirmam o problema de forma objetiva:
 
-### O que será feito
-
-**1 arquivo editado:** `supabase/functions/picotinho-assistant/index.ts`
-
-**Alteração na função `updatePresence`** (linhas 1484-1494):
-
-Substituir o log simplificado por logs completos:
-
-```typescript
-async function updatePresence(phone: string, status: 'typing' | 'recording' | 'available'): Promise<void> {
-  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
-  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
-  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
-  
-  if (!instanceUrl || !apiToken) {
-    console.log(`⚠️ [PRESENCE] Credenciais ausentes, pulando ${status}`);
-    return;
-  }
-  
-  try {
-    const url = `${instanceUrl}/token/${apiToken}/update-presence`;
-    const payload = { phone, status };
-    console.log(`👁️ [PRESENCE] Enviando: URL=${url} | payload=${JSON.stringify(payload)}`);
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    const responseBody = await response.text();
-    console.log(`👁️ [PRESENCE] ${status} → HTTP ${response.status} | body: ${responseBody}`);
-  } catch (err) {
-    console.log(`⚠️ [PRESENCE] Falha ao enviar ${status}: ${err}`);
-  }
-}
+```text
+"referer": "http://localhost:3000"   ← em TODAS as requisições /authorize e /callback
 ```
 
-### O que muda nos logs
+Isso significa que o **Site URL no Supabase Auth ainda está configurado como `http://localhost:3000`**.
 
-**Antes:**
+### Por que isso causa o erro
+
+O fluxo OAuth funciona assim:
+
+```text
+1. Usuário clica "Entrar com Google" em picotinho.com.br
+2. Frontend envia redirectTo: "https://picotinho.com.br/" (via window.location.origin)
+3. Supabase redireciona para Google → usuário autentica
+4. Google retorna para https://mjsbwrtegorjxcepvrik.supabase.co/auth/v1/callback
+5. Supabase processa o callback e redireciona o usuário para...
+   → Se "https://picotinho.com.br" NÃO está na lista de Redirect URLs permitidas,
+     o Supabase IGNORA o redirectTo e usa o Site URL como fallback
+   → Site URL = http://localhost:3000 → ERRO: "conexão com localhost recusada"
 ```
-👁️ [PRESENCE] recording → OK
-```
 
-**Depois:**
-```
-👁️ [PRESENCE] Enviando: URL=https://api.z-api.io/instances/.../token/.../update-presence | payload={"phone":"5544999999999","status":"typing"}
-👁️ [PRESENCE] typing → HTTP 200 | body: {"value":true}
-```
+### O que precisa ser corrigido
 
-### O que NÃO muda
+**Nenhuma alteração no código** — o frontend já usa `window.location.origin` dinamicamente e não tem nenhuma referência a localhost. O problema é 100% configuração no painel do Supabase.
 
-- Nenhuma alteração no fluxo de envio de texto ou áudio
-- Nenhuma mensagem extra na conversa
-- O try/catch continua protegendo o fluxo principal
-- Nenhuma migration, nenhuma alteração no frontend
+### Ações necessárias (todas no Supabase Dashboard)
 
-### Próximo passo após deploy
+**1. Supabase → Authentication → URL Configuration → Site URL**
+- Alterar de `http://localhost:3000` para `https://picotinho.com.br`
 
-Com os logs detalhados, basta enviar uma mensagem de teste ao Picotinho e verificar nos logs:
-1. A URL exata montada
-2. O telefone enviado
-3. O status HTTP retornado
-4. O body da resposta da Z-API
+**2. Supabase → Authentication → URL Configuration → Redirect URLs**
+- Adicionar: `https://picotinho.com.br/**`
+- Adicionar: `https://www.picotinho.com.br/**`
+- Adicionar: `https://picotinho.lovable.app/**`
+- Manter: `picotinho://auth/callback` (usado pelo app nativo)
+- Remover ou manter `http://localhost:3000/**` apenas se ainda for necessário para desenvolvimento local
 
-Com essa informação, saberemos se o problema está no endpoint, no formato do telefone, na autenticação, ou se a API aceita mas o WhatsApp simplesmente não exibe a presença nesse contexto.
+**3. Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID**
+- Em **Authorized JavaScript origins**, adicionar:
+  - `https://picotinho.com.br`
+  - `https://www.picotinho.com.br`
+- Em **Authorized redirect URIs**, confirmar que existe:
+  - `https://mjsbwrtegorjxcepvrik.supabase.co/auth/v1/callback`
 
-### Escopo
+### Evidências
 
-- 1 função alterada: `updatePresence` (~15 linhas modificadas)
-- Redeploy da edge function `picotinho-assistant`
+| Aspecto | Status |
+|---|---|
+| Código frontend (Auth.tsx) | Correto — usa `window.location.origin` |
+| Código AuthProvider | Correto — sem referências a localhost |
+| Supabase client config | Correto — flowType PKCE, detectSessionInUrl true |
+| Auth logs do Supabase | Referer = `http://localhost:3000` em todas as requisições |
+| Busca por "localhost" no código | Zero resultados |
+
+### O que NÃO será alterado
+- Nenhum arquivo do projeto
+- Nenhuma edge function
+- Nenhuma migration
+- Fluxo nativo (deep link) permanece intacto
 
