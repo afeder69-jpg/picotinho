@@ -28,7 +28,7 @@ serve(async (req: Request) => {
     // Buscar feedback e telefone do usuário
     const { data: feedback, error: feedbackError } = await supabase
       .from('feedbacks')
-      .select('id, user_id, telefone_whatsapp, status')
+      .select('id, user_id, telefone_whatsapp, status, tipo, mensagem')
       .eq('id', feedback_id)
       .single();
 
