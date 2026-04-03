@@ -221,6 +221,20 @@ export default function NormalizacaoGlobal() {
   const [enviandoResposta, setEnviandoResposta] = useState(false);
   const [carregandoFeedbacks, setCarregandoFeedbacks] = useState(false);
 
+  // Estados para campanhas WhatsApp
+  const [campanhas, setCampanhas] = useState<any[]>([]);
+  const [campanhaDetalheOpen, setCampanhaDetalheOpen] = useState(false);
+  const [campanhaAtual, setCampanhaAtual] = useState<any>(null);
+  const [campanhaEnvios, setCampanhaEnvios] = useState<any[]>([]);
+  const [novaCampanhaOpen, setNovaCampanhaOpen] = useState(false);
+  const [novaCampanha, setNovaCampanha] = useState({ titulo: '', mensagem: '', filtro_tipo: 'todos', filtro_valor: '' });
+  const [enviandoCampanha, setEnviandoCampanha] = useState(false);
+  const [estimativaDestinatarios, setEstimativaDestinatarios] = useState<number | null>(null);
+  const [filtrosDisponiveis, setFiltrosDisponiveis] = useState<{ estados: string[], cidades: string[] }>({ estados: [], cidades: [] });
+  const [confirmarEnvioCampanhaOpen, setConfirmarEnvioCampanhaOpen] = useState(false);
+  const [carregandoCampanhas, setCarregandoCampanhas] = useState(false);
+  const [campanhasEmAndamento, setCampanhasEmAndamento] = useState(0);
+
   useEffect(() => {
     verificarAcessoMaster();
   }, []);
