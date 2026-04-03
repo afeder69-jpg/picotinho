@@ -209,6 +209,18 @@ export default function NormalizacaoGlobal() {
   // Estados para recategorização
   const [recategorizando, setRecategorizando] = useState(false);
 
+  // Estados para feedbacks/suporte
+  const [feedbackStats, setFeedbackStats] = useState({ erros: 0, sugestoes: 0, reclamacoes: 0, duvidas: 0, total: 0 });
+  const [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [feedbackFiltroTipo, setFeedbackFiltroTipo] = useState<string>('todos');
+  const [feedbackFiltroStatus, setFeedbackFiltroStatus] = useState<string>('todos');
+  const [feedbackDetalheOpen, setFeedbackDetalheOpen] = useState(false);
+  const [feedbackAtual, setFeedbackAtual] = useState<any>(null);
+  const [feedbackRespostas, setFeedbackRespostas] = useState<any[]>([]);
+  const [feedbackNovaResposta, setFeedbackNovaResposta] = useState('');
+  const [enviandoResposta, setEnviandoResposta] = useState(false);
+  const [carregandoFeedbacks, setCarregandoFeedbacks] = useState(false);
+
   useEffect(() => {
     verificarAcessoMaster();
   }, []);
