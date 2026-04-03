@@ -61,7 +61,13 @@ import {
   Check,
   Trash2,
   Building2,
-  Search
+  Search,
+  MessageSquare,
+  Send,
+  Bug,
+  Lightbulb,
+  HelpCircle,
+  ThumbsDown
 } from "lucide-react";
 import {
   Pagination,
