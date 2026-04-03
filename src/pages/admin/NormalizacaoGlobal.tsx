@@ -2108,6 +2108,33 @@ export default function NormalizacaoGlobal() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
+            {/* Suporte / Feedbacks */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={`bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 rounded-lg p-4 border-2 ${feedbackStats.total > 0 ? 'border-orange-400 dark:border-orange-600 animate-pulse' : 'border-orange-300 dark:border-orange-700'} hover:border-orange-400 dark:hover:border-orange-600 transition-all cursor-help`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <MessageSquare className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Suporte</span>
+                    </div>
+                    <div className="text-3xl font-bold text-orange-700 dark:text-orange-300 mb-1">
+                      {feedbackStats.total}
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      {feedbackStats.erros > 0 && <div>🐛 {feedbackStats.erros} erro{feedbackStats.erros > 1 ? 's' : ''}</div>}
+                      {feedbackStats.sugestoes > 0 && <div>💡 {feedbackStats.sugestoes} sugestão{feedbackStats.sugestoes > 1 ? 'ões' : ''}</div>}
+                      {feedbackStats.reclamacoes > 0 && <div>👎 {feedbackStats.reclamacoes} reclamação{feedbackStats.reclamacoes > 1 ? 'ões' : ''}</div>}
+                      {feedbackStats.duvidas > 0 && <div>❓ {feedbackStats.duvidas} dúvida{feedbackStats.duvidas > 1 ? 's' : ''}</div>}
+                      {feedbackStats.total === 0 && <div>pendentes de ação</div>}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Feedbacks pendentes de ação (novo + em análise)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Separador */}
