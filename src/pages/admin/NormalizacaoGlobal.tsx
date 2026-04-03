@@ -600,6 +600,152 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+  // ===== FUNÇÕES DE CAMPANHAS WHATSAPP =====
+  async function carregarCampanhas() {
+    setCarregandoCampanhas(true);
+    try {
+      const { data } = await supabase
+        .from('campanhas_whatsapp')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      setCampanhas(data || []);
+      const emAndamento = (data || []).filter((c: any) => c.status === 'enviando').length;
+      setCampanhasEmAndamento(emAndamento);
+    } catch (error: any) {
+      console.error('Erro ao carregar campanhas:', error);
+    } finally {
+      setCarregandoCampanhas(false);
+    }
+  }
+
+  async function carregarFiltrosCampanha() {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'filtros' },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (!error && data) {
+        setFiltrosDisponiveis({ estados: data.estados || [], cidades: data.cidades || [] });
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar filtros:', err);
+    }
+  }
+
+  async function estimarDestinatariosCampanha() {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { 
+          action: 'preview', 
+          filtro_tipo: novaCampanha.filtro_tipo, 
+          filtro_valor: novaCampanha.filtro_valor || null 
+        },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (!error && data) {
+        setEstimativaDestinatarios(data.total);
+      }
+    } catch (err: any) {
+      console.error('Erro ao estimar destinatários:', err);
+    }
+  }
+
+  async function criarEEnviarCampanha() {
+    if (!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim()) return;
+    setEnviandoCampanha(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Não autenticado');
+
+      // Criar campanha
+      const { data: campanhaCriada, error: insertError } = await supabase
+        .from('campanhas_whatsapp')
+        .insert({
+          titulo: novaCampanha.titulo.trim(),
+          mensagem: novaCampanha.mensagem.trim(),
+          filtro_tipo: novaCampanha.filtro_tipo,
+          filtro_valor: novaCampanha.filtro_valor || null,
+          criado_por: user.id,
+          status: 'rascunho'
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Disparar envio
+      const { data: session } = await supabase.auth.getSession();
+      const { data: resultado, error: envioError } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'enviar', campanha_id: campanhaCriada.id },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+
+      if (envioError) throw envioError;
+
+      toast({ title: "Campanha enviada!", description: `Processados: ${resultado?.total_processados || 0} destinatários` });
+      setNovaCampanhaOpen(false);
+      setConfirmarEnvioCampanhaOpen(false);
+      setNovaCampanha({ titulo: '', mensagem: '', filtro_tipo: 'todos', filtro_valor: '' });
+      setEstimativaDestinatarios(null);
+      await carregarCampanhas();
+    } catch (error: any) {
+      console.error('Erro ao criar campanha:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function reprocessarCampanha(campanhaId: string) {
+    setEnviandoCampanha(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data: resultado, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'enviar', campanha_id: campanhaId },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+
+      if (error) throw error;
+
+      toast({ title: "Reprocessamento concluído", description: `${resultado?.total_processados || 0} envios reprocessados` });
+      await carregarCampanhas();
+      if (campanhaAtual?.id === campanhaId) {
+        await abrirDetalheCampanha({ ...campanhaAtual, id: campanhaId });
+      }
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function abrirDetalheCampanha(campanha: any) {
+    setCampanhaAtual(campanha);
+    setCampanhaDetalheOpen(true);
+    // Carregar envios
+    const { data } = await supabase
+      .from('campanhas_whatsapp_envios')
+      .select('*')
+      .eq('campanha_id', campanha.id)
+      .order('created_at', { ascending: true });
+    setCampanhaEnvios(data || []);
+  }
+
+  function getStatusCampanhaBadge(status: string) {
+    const map: Record<string, { label: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+      rascunho: { label: 'Rascunho', variant: 'secondary' },
+      enviando: { label: 'Enviando...', variant: 'default' },
+      concluida: { label: 'Concluída', variant: 'outline' },
+      concluida_parcial: { label: 'Parcial', variant: 'destructive' },
+      falha: { label: 'Falha', variant: 'destructive' }
+    };
+    const info = map[status] || { label: status, variant: 'secondary' as const };
+    return <Badge variant={info.variant}>{info.label}</Badge>;
+  }
+
   async function buscarProdutosMaster(termo: string) {
     setBuscandoMaster(true);
     try {
