@@ -470,7 +470,95 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function buscarProdutosMaster(termo: string) {
+  async function carregarFeedbacks() {
+    setCarregandoFeedbacks(true);
+    try {
+      // Contar pendentes por tipo (novo + em_analise)
+      const { data: pendentes } = await supabase
+        .from('feedbacks')
+        .select('tipo, status')
+        .in('status', ['novo', 'em_analise']);
+
+      const stats = { erros: 0, sugestoes: 0, reclamacoes: 0, duvidas: 0, total: 0 };
+      (pendentes || []).forEach((f: any) => {
+        stats.total++;
+        if (f.tipo === 'erro') stats.erros++;
+        else if (f.tipo === 'sugestao') stats.sugestoes++;
+        else if (f.tipo === 'reclamacao') stats.reclamacoes++;
+        else if (f.tipo === 'duvida') stats.duvidas++;
+      });
+      setFeedbackStats(stats);
+
+      // Carregar feedbacks recentes
+      const { data: lista } = await supabase
+        .from('feedbacks')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      setFeedbacks(lista || []);
+    } catch (error: any) {
+      console.error('Erro ao carregar feedbacks:', error);
+    } finally {
+      setCarregandoFeedbacks(false);
+    }
+  }
+
+  async function abrirDetalheFeedback(feedback: any) {
+    setFeedbackAtual(feedback);
+    setFeedbackDetalheOpen(true);
+    setFeedbackNovaResposta('');
+    // Carregar respostas
+    const { data } = await supabase
+      .from('feedbacks_respostas')
+      .select('*')
+      .eq('feedback_id', feedback.id)
+      .order('created_at', { ascending: true });
+    setFeedbackRespostas(data || []);
+  }
+
+  async function enviarRespostaFeedback() {
+    if (!feedbackAtual || !feedbackNovaResposta.trim()) return;
+    setEnviandoResposta(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.functions.invoke('responder-feedback-whatsapp', {
+        body: {
+          feedback_id: feedbackAtual.id,
+          mensagem: feedbackNovaResposta.trim(),
+          autor_id: user?.id
+        }
+      });
+      if (error) throw error;
+      if (data?.envio_status === 'enviado') {
+        toast({ title: "Resposta enviada", description: "Mensagem enviada via WhatsApp com sucesso!" });
+      } else {
+        toast({ title: "Resposta registrada", description: `Envio WhatsApp: ${data?.envio_status || 'falha'}. ${data?.envio_erro || ''}`, variant: "destructive" });
+      }
+      setFeedbackNovaResposta('');
+      await abrirDetalheFeedback(feedbackAtual);
+      await carregarFeedbacks();
+    } catch (error: any) {
+      console.error('Erro ao enviar resposta:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoResposta(false);
+    }
+  }
+
+  async function atualizarStatusFeedback(feedbackId: string, novoStatus: string) {
+    try {
+      await supabase.from('feedbacks').update({ status: novoStatus }).eq('id', feedbackId);
+      toast({ title: "Status atualizado", description: `Feedback marcado como ${novoStatus.replace('_', ' ')}` });
+      if (feedbackAtual?.id === feedbackId) {
+        setFeedbackAtual({ ...feedbackAtual, status: novoStatus });
+      }
+      await carregarFeedbacks();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  }
+
+
     setBuscandoMaster(true);
     try {
       const normalizado = termo.trim().toLowerCase()
