@@ -85,6 +85,13 @@ import { Progress } from "@/components/ui/progress";
 import { ScrapingControls } from "@/components/admin/ImageScraping/ScrapingControls";
 import { ImagePreviewCard } from "@/components/admin/ImageScraping/ImagePreviewCard";
 
+const NOVA_CAMPANHA_INITIAL_STATE = {
+  titulo: '',
+  mensagem: '',
+  filtro_tipo: 'todos',
+  filtro_valor: '',
+};
+
 export default function NormalizacaoGlobal() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -227,11 +234,11 @@ export default function NormalizacaoGlobal() {
   const [campanhaAtual, setCampanhaAtual] = useState<any>(null);
   const [campanhaEnvios, setCampanhaEnvios] = useState<any[]>([]);
   const [novaCampanhaOpen, setNovaCampanhaOpen] = useState(false);
-  const [novaCampanha, setNovaCampanha] = useState({ titulo: '', mensagem: '', filtro_tipo: 'todos', filtro_valor: '' });
+  const [novaCampanha, setNovaCampanha] = useState(NOVA_CAMPANHA_INITIAL_STATE);
   const [enviandoCampanha, setEnviandoCampanha] = useState(false);
   const [estimativaDestinatarios, setEstimativaDestinatarios] = useState<number | null>(null);
   const [filtrosDisponiveis, setFiltrosDisponiveis] = useState<{ estados: string[], cidades: string[] }>({ estados: [], cidades: [] });
-  const [confirmarEnvioCampanhaOpen, setConfirmarEnvioCampanhaOpen] = useState(false);
+  const [confirmandoEnvioCampanha, setConfirmandoEnvioCampanha] = useState(false);
   const [carregandoCampanhas, setCarregandoCampanhas] = useState(false);
   const [campanhasEmAndamento, setCampanhasEmAndamento] = useState(0);
 
@@ -634,14 +641,26 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function estimarDestinatariosCampanha() {
+  function limparNovaCampanha() {
+    setNovaCampanha({ ...NOVA_CAMPANHA_INITIAL_STATE });
+    setEstimativaDestinatarios(null);
+    setConfirmandoEnvioCampanha(false);
+  }
+
+  function fecharNovaCampanhaDialog() {
+    if (enviandoCampanha) return;
+    setNovaCampanhaOpen(false);
+    limparNovaCampanha();
+  }
+
+  async function estimarDestinatariosCampanha(campanha = novaCampanha) {
     try {
       const { data: session } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
         body: { 
           action: 'preview', 
-          filtro_tipo: novaCampanha.filtro_tipo, 
-          filtro_valor: novaCampanha.filtro_valor || null 
+          filtro_tipo: campanha.filtro_tipo, 
+          filtro_valor: campanha.filtro_valor || null 
         },
         headers: { Authorization: `Bearer ${session?.session?.access_token}` }
       });
@@ -654,6 +673,7 @@ export default function NormalizacaoGlobal() {
   }
 
   async function criarEEnviarCampanha() {
+    if (enviandoCampanha) return;
     if (!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim()) return;
     setEnviandoCampanha(true);
     try {
@@ -687,14 +707,12 @@ export default function NormalizacaoGlobal() {
 
       toast({ title: "Campanha enviada!", description: `Processados: ${resultado?.total_processados || 0} destinatários` });
       setNovaCampanhaOpen(false);
-      setConfirmarEnvioCampanhaOpen(false);
-      setNovaCampanha({ titulo: '', mensagem: '', filtro_tipo: 'todos', filtro_valor: '' });
-      setEstimativaDestinatarios(null);
+      limparNovaCampanha();
       await carregarCampanhas();
     } catch (error: any) {
       console.error('Erro ao criar campanha:', error);
       toast({ title: "Erro", description: error.message, variant: "destructive" });
-      setConfirmarEnvioCampanhaOpen(false);
+      setConfirmandoEnvioCampanha(false);
     } finally {
       setEnviandoCampanha(false);
     }
@@ -3031,7 +3049,18 @@ export default function NormalizacaoGlobal() {
           </div>
 
           {/* Botão Nova Campanha */}
-          <Button onClick={() => { setNovaCampanhaOpen(true); estimarDestinatariosCampanha(); }} className="gap-2">
+          <Button
+            type="button"
+            onClick={() => {
+              const campanhaInicial = { ...NOVA_CAMPANHA_INITIAL_STATE };
+              setNovaCampanha(campanhaInicial);
+              setConfirmandoEnvioCampanha(false);
+              setEstimativaDestinatarios(null);
+              setNovaCampanhaOpen(true);
+              estimarDestinatariosCampanha(campanhaInicial);
+            }}
+            className="gap-2"
+          >
             <Send className="w-4 h-4" />
             Nova Campanha
           </Button>
@@ -3079,104 +3108,136 @@ export default function NormalizacaoGlobal() {
       </Tabs>
 
       {/* Dialog Nova Campanha */}
-      <Dialog open={novaCampanhaOpen} onOpenChange={(open) => { if (!enviandoCampanha) { setNovaCampanhaOpen(open); if (!open) { setEstimativaDestinatarios(null); } } }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Send className="w-5 h-5" />
-              Nova Campanha WhatsApp
-            </DialogTitle>
-            <DialogDescription>Envie uma mensagem para seus usuários ativos via WhatsApp.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="camp_titulo">Título da campanha *</Label>
-              <Input id="camp_titulo" value={novaCampanha.titulo} onChange={(e) => setNovaCampanha({...novaCampanha, titulo: e.target.value})} placeholder="Ex: Novidades do Picotinho" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="camp_msg">Mensagem *</Label>
-              <Textarea id="camp_msg" value={novaCampanha.mensagem} onChange={(e) => setNovaCampanha({...novaCampanha, mensagem: e.target.value})} placeholder="Escreva a mensagem que será enviada..." rows={5} />
-              <p className="text-xs text-muted-foreground">Prefixo automático: 📢 *Picotinho*</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Público-alvo</Label>
-              <RadioGroup value={novaCampanha.filtro_tipo} onValueChange={(v) => { setNovaCampanha({...novaCampanha, filtro_tipo: v, filtro_valor: ''}); setTimeout(estimarDestinatariosCampanha, 100); }}>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="todos" id="filtro_todos" />
-                  <Label htmlFor="filtro_todos">Todos os usuários ativos</Label>
+      <Dialog
+        open={novaCampanhaOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            fecharNovaCampanhaDialog();
+            return;
+          }
+          if (!enviandoCampanha) {
+            setNovaCampanhaOpen(true);
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-lg"
+          onPointerDownOutside={(event) => {
+            if (enviandoCampanha) event.preventDefault();
+          }}
+          onEscapeKeyDown={(event) => {
+            if (enviandoCampanha) event.preventDefault();
+          }}
+        >
+          {!confirmandoEnvioCampanha ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Send className="w-5 h-5" />
+                  Nova Campanha WhatsApp
+                </DialogTitle>
+                <DialogDescription>Envie uma mensagem para seus usuários ativos via WhatsApp.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="camp_titulo">Título da campanha *</Label>
+                  <Input id="camp_titulo" value={novaCampanha.titulo} onChange={(e) => setNovaCampanha({ ...novaCampanha, titulo: e.target.value })} placeholder="Ex: Novidades do Picotinho" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="estado" id="filtro_estado" />
-                  <Label htmlFor="filtro_estado">Por Estado</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="camp_msg">Mensagem *</Label>
+                  <Textarea id="camp_msg" value={novaCampanha.mensagem} onChange={(e) => setNovaCampanha({ ...novaCampanha, mensagem: e.target.value })} placeholder="Escreva a mensagem que será enviada..." rows={5} />
+                  <p className="text-xs text-muted-foreground">Prefixo automático: 📢 *Picotinho*</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="cidade" id="filtro_cidade" />
-                  <Label htmlFor="filtro_cidade">Por Cidade</Label>
+                <div className="space-y-2">
+                  <Label>Público-alvo</Label>
+                  <RadioGroup
+                    value={novaCampanha.filtro_tipo}
+                    onValueChange={(v) => {
+                      const proximaCampanha = { ...novaCampanha, filtro_tipo: v, filtro_valor: '' };
+                      setNovaCampanha(proximaCampanha);
+                      estimarDestinatariosCampanha(proximaCampanha);
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="todos" id="filtro_todos" />
+                      <Label htmlFor="filtro_todos">Todos os usuários ativos</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="estado" id="filtro_estado" />
+                      <Label htmlFor="filtro_estado">Por Estado</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="cidade" id="filtro_cidade" />
+                      <Label htmlFor="filtro_cidade">Por Cidade</Label>
+                    </div>
+                  </RadioGroup>
                 </div>
-              </RadioGroup>
-            </div>
-            {novaCampanha.filtro_tipo !== 'todos' && (
-              <div className="space-y-2">
-                <Label>{novaCampanha.filtro_tipo === 'estado' ? 'Estado' : 'Cidade'}</Label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={novaCampanha.filtro_valor}
-                  onChange={(e) => { setNovaCampanha({...novaCampanha, filtro_valor: e.target.value}); setTimeout(estimarDestinatariosCampanha, 100); }}
+                {novaCampanha.filtro_tipo !== 'todos' && (
+                  <div className="space-y-2">
+                    <Label>{novaCampanha.filtro_tipo === 'estado' ? 'Estado' : 'Cidade'}</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={novaCampanha.filtro_valor}
+                      onChange={(e) => {
+                        const proximaCampanha = { ...novaCampanha, filtro_valor: e.target.value };
+                        setNovaCampanha(proximaCampanha);
+                        estimarDestinatariosCampanha(proximaCampanha);
+                      }}
+                    >
+                      <option value="">Selecione...</option>
+                      {(novaCampanha.filtro_tipo === 'estado' ? filtrosDisponiveis.estados : filtrosDisponiveis.cidades).map(f => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {estimativaDestinatarios !== null && (
+                  <div className="rounded-lg bg-muted p-3">
+                    <p className="text-sm font-medium">📊 Estimativa de destinatários: <strong>{estimativaDestinatarios}</strong></p>
+                    <p className="mt-1 text-xs text-muted-foreground">Critério: telefones autorizados (verificado + ativo), DISTINCT por usuário, telefone mais recente por created_at da tabela whatsapp_telefones_autorizados</p>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={fecharNovaCampanhaDialog}>Cancelar</Button>
+                <Button
+                  type="button"
+                  onClick={() => setConfirmandoEnvioCampanha(true)}
+                  disabled={!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || (novaCampanha.filtro_tipo !== 'todos' && !novaCampanha.filtro_valor) || estimativaDestinatarios === 0}
+                  className="gap-2"
                 >
-                  <option value="">Selecione...</option>
-                  {(novaCampanha.filtro_tipo === 'estado' ? filtrosDisponiveis.estados : filtrosDisponiveis.cidades).map(f => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
+                  <Send className="w-4 h-4" />
+                  Revisar e Enviar
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Confirmar envio de campanha?</DialogTitle>
+                <DialogDescription>Revise os dados abaixo antes de disparar a campanha.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+                  <p className="font-semibold">{novaCampanha.titulo}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{novaCampanha.mensagem}</p>
+                </div>
+                <div className="space-y-2 rounded-lg border p-4 text-sm">
+                  <p><strong>Público:</strong> {novaCampanha.filtro_tipo === 'todos' ? 'Todos os usuários' : `${novaCampanha.filtro_tipo}: ${novaCampanha.filtro_valor}`}</p>
+                  <p><strong>Destinatários estimados:</strong> {estimativaDestinatarios ?? 'Calculando...'}</p>
+                  <p className="text-muted-foreground">As mensagens serão enviadas via WhatsApp com o prefixo 📢 *Picotinho*. Esta ação não pode ser desfeita.</p>
+                </div>
               </div>
-            )}
-            {estimativaDestinatarios !== null && (
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-sm font-medium">📊 Estimativa de destinatários: <strong>{estimativaDestinatarios}</strong></p>
-                <p className="text-xs text-muted-foreground mt-1">Critério: telefones autorizados (verificado + ativo), DISTINCT por usuário, telefone mais recente por created_at da tabela whatsapp_telefones_autorizados</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNovaCampanhaOpen(false)}>Cancelar</Button>
-            <Button 
-              onClick={() => setConfirmarEnvioCampanhaOpen(true)} 
-              disabled={!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || (novaCampanha.filtro_tipo !== 'todos' && !novaCampanha.filtro_valor) || estimativaDestinatarios === 0}
-              className="gap-2"
-            >
-              <Send className="w-4 h-4" />
-              Enviar Campanha
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setConfirmandoEnvioCampanha(false)} disabled={enviandoCampanha}>Voltar</Button>
+                <Button type="button" onClick={criarEEnviarCampanha} disabled={enviandoCampanha} className="gap-2">
+                  {enviandoCampanha ? <><Loader2 className="h-4 w-4 animate-spin" />Enviando...</> : <><Send className="h-4 w-4" />Confirmar e Enviar</>}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
-
-      {/* AlertDialog Confirmação de Envio */}
-      <AlertDialog open={confirmarEnvioCampanhaOpen} onOpenChange={(open) => { if (!enviandoCampanha) setConfirmarEnvioCampanhaOpen(open); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Envio de Campanha?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p><strong>{novaCampanha.titulo}</strong></p>
-              <p>Público: {novaCampanha.filtro_tipo === 'todos' ? 'Todos os usuários' : `${novaCampanha.filtro_tipo}: ${novaCampanha.filtro_valor}`}</p>
-              <p>Destinatários estimados: <strong>{estimativaDestinatarios}</strong></p>
-              <p className="text-sm mt-2">As mensagens serão enviadas via WhatsApp com o prefixo 📢 *Picotinho*. Esta ação não pode ser desfeita.</p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={enviandoCampanha}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              disabled={enviandoCampanha}
-              onClick={(e) => {
-                e.preventDefault();
-                criarEEnviarCampanha();
-              }}
-            >
-              {enviandoCampanha ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enviando...</> : 'Sim, Enviar'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Dialog Detalhe da Campanha */}
       <Dialog open={campanhaDetalheOpen} onOpenChange={setCampanhaDetalheOpen}>
