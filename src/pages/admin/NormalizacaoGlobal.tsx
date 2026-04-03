@@ -221,6 +221,20 @@ export default function NormalizacaoGlobal() {
   const [enviandoResposta, setEnviandoResposta] = useState(false);
   const [carregandoFeedbacks, setCarregandoFeedbacks] = useState(false);
 
+  // Estados para campanhas WhatsApp
+  const [campanhas, setCampanhas] = useState<any[]>([]);
+  const [campanhaDetalheOpen, setCampanhaDetalheOpen] = useState(false);
+  const [campanhaAtual, setCampanhaAtual] = useState<any>(null);
+  const [campanhaEnvios, setCampanhaEnvios] = useState<any[]>([]);
+  const [novaCampanhaOpen, setNovaCampanhaOpen] = useState(false);
+  const [novaCampanha, setNovaCampanha] = useState({ titulo: '', mensagem: '', filtro_tipo: 'todos', filtro_valor: '' });
+  const [enviandoCampanha, setEnviandoCampanha] = useState(false);
+  const [estimativaDestinatarios, setEstimativaDestinatarios] = useState<number | null>(null);
+  const [filtrosDisponiveis, setFiltrosDisponiveis] = useState<{ estados: string[], cidades: string[] }>({ estados: [], cidades: [] });
+  const [confirmarEnvioCampanhaOpen, setConfirmarEnvioCampanhaOpen] = useState(false);
+  const [carregandoCampanhas, setCarregandoCampanhas] = useState(false);
+  const [campanhasEmAndamento, setCampanhasEmAndamento] = useState(0);
+
   useEffect(() => {
     verificarAcessoMaster();
   }, []);
@@ -470,6 +484,9 @@ export default function NormalizacaoGlobal() {
       // Carregar feedbacks
       await carregarFeedbacks();
 
+      // Carregar campanhas
+      await carregarCampanhas();
+
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
       toast({
@@ -581,6 +598,152 @@ export default function NormalizacaoGlobal() {
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     }
+  }
+
+  // ===== FUNÇÕES DE CAMPANHAS WHATSAPP =====
+  async function carregarCampanhas() {
+    setCarregandoCampanhas(true);
+    try {
+      const { data } = await supabase
+        .from('campanhas_whatsapp')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      setCampanhas(data || []);
+      const emAndamento = (data || []).filter((c: any) => c.status === 'enviando').length;
+      setCampanhasEmAndamento(emAndamento);
+    } catch (error: any) {
+      console.error('Erro ao carregar campanhas:', error);
+    } finally {
+      setCarregandoCampanhas(false);
+    }
+  }
+
+  async function carregarFiltrosCampanha() {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'filtros' },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (!error && data) {
+        setFiltrosDisponiveis({ estados: data.estados || [], cidades: data.cidades || [] });
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar filtros:', err);
+    }
+  }
+
+  async function estimarDestinatariosCampanha() {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { 
+          action: 'preview', 
+          filtro_tipo: novaCampanha.filtro_tipo, 
+          filtro_valor: novaCampanha.filtro_valor || null 
+        },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (!error && data) {
+        setEstimativaDestinatarios(data.total);
+      }
+    } catch (err: any) {
+      console.error('Erro ao estimar destinatários:', err);
+    }
+  }
+
+  async function criarEEnviarCampanha() {
+    if (!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim()) return;
+    setEnviandoCampanha(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Não autenticado');
+
+      // Criar campanha
+      const { data: campanhaCriada, error: insertError } = await supabase
+        .from('campanhas_whatsapp')
+        .insert({
+          titulo: novaCampanha.titulo.trim(),
+          mensagem: novaCampanha.mensagem.trim(),
+          filtro_tipo: novaCampanha.filtro_tipo,
+          filtro_valor: novaCampanha.filtro_valor || null,
+          criado_por: user.id,
+          status: 'rascunho'
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Disparar envio
+      const { data: session } = await supabase.auth.getSession();
+      const { data: resultado, error: envioError } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'enviar', campanha_id: campanhaCriada.id },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+
+      if (envioError) throw envioError;
+
+      toast({ title: "Campanha enviada!", description: `Processados: ${resultado?.total_processados || 0} destinatários` });
+      setNovaCampanhaOpen(false);
+      setConfirmarEnvioCampanhaOpen(false);
+      setNovaCampanha({ titulo: '', mensagem: '', filtro_tipo: 'todos', filtro_valor: '' });
+      setEstimativaDestinatarios(null);
+      await carregarCampanhas();
+    } catch (error: any) {
+      console.error('Erro ao criar campanha:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function reprocessarCampanha(campanhaId: string) {
+    setEnviandoCampanha(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data: resultado, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'enviar', campanha_id: campanhaId },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+
+      if (error) throw error;
+
+      toast({ title: "Reprocessamento concluído", description: `${resultado?.total_processados || 0} envios reprocessados` });
+      await carregarCampanhas();
+      if (campanhaAtual?.id === campanhaId) {
+        await abrirDetalheCampanha({ ...campanhaAtual, id: campanhaId });
+      }
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function abrirDetalheCampanha(campanha: any) {
+    setCampanhaAtual(campanha);
+    setCampanhaDetalheOpen(true);
+    // Carregar envios
+    const { data } = await supabase
+      .from('campanhas_whatsapp_envios')
+      .select('*')
+      .eq('campanha_id', campanha.id)
+      .order('created_at', { ascending: true });
+    setCampanhaEnvios(data || []);
+  }
+
+  function getStatusCampanhaBadge(status: string) {
+    const map: Record<string, { label: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+      rascunho: { label: 'Rascunho', variant: 'secondary' },
+      enviando: { label: 'Enviando...', variant: 'default' },
+      concluida: { label: 'Concluída', variant: 'outline' },
+      concluida_parcial: { label: 'Parcial', variant: 'destructive' },
+      falha: { label: 'Falha', variant: 'destructive' }
+    };
+    const info = map[status] || { label: status, variant: 'secondary' as const };
+    return <Badge variant={info.variant}>{info.label}</Badge>;
   }
 
   async function buscarProdutosMaster(termo: string) {
@@ -2346,6 +2509,10 @@ export default function NormalizacaoGlobal() {
             <MessageSquare className="w-4 h-4" />
             Suporte {feedbackStats.total > 0 && <Badge variant="destructive" className="ml-1">{feedbackStats.total}</Badge>}
           </TabsTrigger>
+          <TabsTrigger value="campanhas" className="gap-2" onClick={() => { carregarFiltrosCampanha(); }}>
+            <Send className="w-4 h-4" />
+            Campanhas {campanhasEmAndamento > 0 && <Badge variant="default" className="ml-1">{campanhasEmAndamento}</Badge>}
+          </TabsTrigger>
         </TabsList>
 
         {/* Candidatos Pendentes */}
@@ -2832,7 +2999,240 @@ export default function NormalizacaoGlobal() {
           </div>
         </TabsContent>
 
+        {/* Campanhas WhatsApp */}
+        <TabsContent value="campanhas" className="space-y-4">
+          {/* Cards resumo */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Campanhas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{campanhas.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Concluídas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{campanhas.filter(c => c.status === 'concluida').length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Em Andamento</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">{campanhasEmAndamento}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Botão Nova Campanha */}
+          <Button onClick={() => { setNovaCampanhaOpen(true); estimarDestinatariosCampanha(); }} className="gap-2">
+            <Send className="w-4 h-4" />
+            Nova Campanha
+          </Button>
+
+          {/* Lista de campanhas */}
+          {campanhas.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Send className="w-16 h-16 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Nenhuma campanha ainda</h3>
+                <p className="text-muted-foreground text-center">Crie sua primeira campanha para enviar mensagens via WhatsApp.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {campanhas.map((campanha) => (
+                <Card key={campanha.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => abrirDetalheCampanha(campanha)}>
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold">{campanha.titulo}</h4>
+                          {getStatusCampanhaBadge(campanha.status)}
+                          <Badge variant="outline" className="text-xs">
+                            {campanha.filtro_tipo === 'todos' ? 'Todos' : `${campanha.filtro_tipo}: ${campanha.filtro_valor}`}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-1">{campanha.mensagem}</p>
+                      </div>
+                      <div className="text-right text-sm text-muted-foreground space-y-1">
+                        <div>{new Date(campanha.created_at).toLocaleDateString('pt-BR')}</div>
+                        <div className="flex gap-3">
+                          <span>📩 {campanha.total_enviados}/{campanha.total_destinatarios}</span>
+                          {campanha.total_falhas > 0 && <span className="text-destructive">❌ {campanha.total_falhas}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
       </Tabs>
+
+      {/* Dialog Nova Campanha */}
+      <Dialog open={novaCampanhaOpen} onOpenChange={(open) => { setNovaCampanhaOpen(open); if (!open) { setEstimativaDestinatarios(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5" />
+              Nova Campanha WhatsApp
+            </DialogTitle>
+            <DialogDescription>Envie uma mensagem para seus usuários ativos via WhatsApp.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="camp_titulo">Título da campanha *</Label>
+              <Input id="camp_titulo" value={novaCampanha.titulo} onChange={(e) => setNovaCampanha({...novaCampanha, titulo: e.target.value})} placeholder="Ex: Novidades do Picotinho" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="camp_msg">Mensagem *</Label>
+              <Textarea id="camp_msg" value={novaCampanha.mensagem} onChange={(e) => setNovaCampanha({...novaCampanha, mensagem: e.target.value})} placeholder="Escreva a mensagem que será enviada..." rows={5} />
+              <p className="text-xs text-muted-foreground">Prefixo automático: 📢 *Picotinho*</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Público-alvo</Label>
+              <RadioGroup value={novaCampanha.filtro_tipo} onValueChange={(v) => { setNovaCampanha({...novaCampanha, filtro_tipo: v, filtro_valor: ''}); setTimeout(estimarDestinatariosCampanha, 100); }}>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="todos" id="filtro_todos" />
+                  <Label htmlFor="filtro_todos">Todos os usuários ativos</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="estado" id="filtro_estado" />
+                  <Label htmlFor="filtro_estado">Por Estado</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="cidade" id="filtro_cidade" />
+                  <Label htmlFor="filtro_cidade">Por Cidade</Label>
+                </div>
+              </RadioGroup>
+            </div>
+            {novaCampanha.filtro_tipo !== 'todos' && (
+              <div className="space-y-2">
+                <Label>{novaCampanha.filtro_tipo === 'estado' ? 'Estado' : 'Cidade'}</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={novaCampanha.filtro_valor}
+                  onChange={(e) => { setNovaCampanha({...novaCampanha, filtro_valor: e.target.value}); setTimeout(estimarDestinatariosCampanha, 100); }}
+                >
+                  <option value="">Selecione...</option>
+                  {(novaCampanha.filtro_tipo === 'estado' ? filtrosDisponiveis.estados : filtrosDisponiveis.cidades).map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {estimativaDestinatarios !== null && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium">📊 Estimativa de destinatários: <strong>{estimativaDestinatarios}</strong></p>
+                <p className="text-xs text-muted-foreground mt-1">Critério: telefones autorizados (verificado + ativo), DISTINCT por usuário, telefone mais recente por created_at da tabela whatsapp_telefones_autorizados</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNovaCampanhaOpen(false)}>Cancelar</Button>
+            <Button 
+              onClick={() => setConfirmarEnvioCampanhaOpen(true)} 
+              disabled={!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || (novaCampanha.filtro_tipo !== 'todos' && !novaCampanha.filtro_valor) || estimativaDestinatarios === 0}
+              className="gap-2"
+            >
+              <Send className="w-4 h-4" />
+              Enviar Campanha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AlertDialog Confirmação de Envio */}
+      <AlertDialog open={confirmarEnvioCampanhaOpen} onOpenChange={setConfirmarEnvioCampanhaOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Envio de Campanha?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p><strong>{novaCampanha.titulo}</strong></p>
+              <p>Público: {novaCampanha.filtro_tipo === 'todos' ? 'Todos os usuários' : `${novaCampanha.filtro_tipo}: ${novaCampanha.filtro_valor}`}</p>
+              <p>Destinatários estimados: <strong>{estimativaDestinatarios}</strong></p>
+              <p className="text-sm mt-2">As mensagens serão enviadas via WhatsApp com o prefixo 📢 *Picotinho*. Esta ação não pode ser desfeita.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={enviandoCampanha}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={criarEEnviarCampanha} disabled={enviandoCampanha}>
+              {enviandoCampanha ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enviando...</> : 'Sim, Enviar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog Detalhe da Campanha */}
+      <Dialog open={campanhaDetalheOpen} onOpenChange={setCampanhaDetalheOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          {campanhaAtual && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Send className="w-5 h-5" />
+                  {campanhaAtual.titulo}
+                  {getStatusCampanhaBadge(campanhaAtual.status)}
+                </DialogTitle>
+                <DialogDescription>
+                  Criada em {new Date(campanhaAtual.created_at).toLocaleDateString('pt-BR')} às {new Date(campanhaAtual.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {/* Mensagem */}
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-sm font-medium mb-1">Mensagem:</p>
+                  <p className="text-sm whitespace-pre-wrap">{campanhaAtual.mensagem}</p>
+                </div>
+
+                {/* Critério de disparo */}
+                <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                  <p className="font-medium">Critério de disparo:</p>
+                  <p>Público: {campanhaAtual.filtro_tipo === 'todos' ? 'Todos os usuários ativos' : `${campanhaAtual.filtro_tipo}: ${campanhaAtual.filtro_valor}`}</p>
+                  <p>Total destinatários: {campanhaAtual.total_destinatarios}</p>
+                  <p>Enviados: {campanhaAtual.total_enviados} | Falhas: {campanhaAtual.total_falhas}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Critério: telefones verificados + ativos, DISTINCT ON (usuario_id) ORDER BY created_at DESC (tabela whatsapp_telefones_autorizados)</p>
+                </div>
+
+                {/* Botão Reprocessar */}
+                {['falha', 'concluida_parcial'].includes(campanhaAtual.status) && (
+                  <Button onClick={() => reprocessarCampanha(campanhaAtual.id)} disabled={enviandoCampanha} variant="outline" className="gap-2">
+                    <RotateCcw className="w-4 h-4" />
+                    {enviandoCampanha ? 'Reprocessando...' : 'Reprocessar Envios Pendentes/Falhos'}
+                  </Button>
+                )}
+
+                {/* Lista de envios */}
+                <div>
+                  <h4 className="font-medium mb-2">Envios ({campanhaEnvios.length})</h4>
+                  <div className="max-h-60 overflow-y-auto space-y-1">
+                    {campanhaEnvios.map((envio) => (
+                      <div key={envio.id} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded">
+                        <span className="font-mono text-xs">{envio.telefone}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={envio.status === 'enviado' ? 'outline' : envio.status === 'falha' ? 'destructive' : 'secondary'}>
+                            {envio.status}
+                          </Badge>
+                          {envio.enviado_em && <span className="text-xs text-muted-foreground">{new Date(envio.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                        </div>
+                      </div>
+                    ))}
+                    {campanhaEnvios.length === 0 && <p className="text-sm text-muted-foreground">Nenhum envio registrado.</p>}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de detalhe do feedback */}
       <Dialog open={feedbackDetalheOpen} onOpenChange={setFeedbackDetalheOpen}>
