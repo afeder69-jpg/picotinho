@@ -61,7 +61,13 @@ import {
   Check,
   Trash2,
   Building2,
-  Search
+  Search,
+  MessageSquare,
+  Send,
+  Bug,
+  Lightbulb,
+  HelpCircle,
+  ThumbsDown
 } from "lucide-react";
 import {
   Pagination,
@@ -202,6 +208,18 @@ export default function NormalizacaoGlobal() {
 
   // Estados para recategorização
   const [recategorizando, setRecategorizando] = useState(false);
+
+  // Estados para feedbacks/suporte
+  const [feedbackStats, setFeedbackStats] = useState({ erros: 0, sugestoes: 0, reclamacoes: 0, duvidas: 0, total: 0 });
+  const [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [feedbackFiltroTipo, setFeedbackFiltroTipo] = useState<string>('todos');
+  const [feedbackFiltroStatus, setFeedbackFiltroStatus] = useState<string>('todos');
+  const [feedbackDetalheOpen, setFeedbackDetalheOpen] = useState(false);
+  const [feedbackAtual, setFeedbackAtual] = useState<any>(null);
+  const [feedbackRespostas, setFeedbackRespostas] = useState<any[]>([]);
+  const [feedbackNovaResposta, setFeedbackNovaResposta] = useState('');
+  const [enviandoResposta, setEnviandoResposta] = useState(false);
+  const [carregandoFeedbacks, setCarregandoFeedbacks] = useState(false);
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -424,6 +442,9 @@ export default function NormalizacaoGlobal() {
       // Carregar produtos recentes iniciais
       await carregarProdutosRecentes();
 
+      // Carregar feedbacks
+      await carregarFeedbacks();
+
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
       toast({
@@ -446,6 +467,94 @@ export default function NormalizacaoGlobal() {
       setProdutosMaster(masterRecentes || []);
     } catch (error: any) {
       console.error('Erro ao carregar produtos recentes:', error);
+    }
+  }
+
+  async function carregarFeedbacks() {
+    setCarregandoFeedbacks(true);
+    try {
+      // Contar pendentes por tipo (novo + em_analise)
+      const { data: pendentes } = await supabase
+        .from('feedbacks')
+        .select('tipo, status')
+        .in('status', ['novo', 'em_analise']);
+
+      const stats = { erros: 0, sugestoes: 0, reclamacoes: 0, duvidas: 0, total: 0 };
+      (pendentes || []).forEach((f: any) => {
+        stats.total++;
+        if (f.tipo === 'erro') stats.erros++;
+        else if (f.tipo === 'sugestao') stats.sugestoes++;
+        else if (f.tipo === 'reclamacao') stats.reclamacoes++;
+        else if (f.tipo === 'duvida') stats.duvidas++;
+      });
+      setFeedbackStats(stats);
+
+      // Carregar feedbacks recentes
+      const { data: lista } = await supabase
+        .from('feedbacks')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      setFeedbacks(lista || []);
+    } catch (error: any) {
+      console.error('Erro ao carregar feedbacks:', error);
+    } finally {
+      setCarregandoFeedbacks(false);
+    }
+  }
+
+  async function abrirDetalheFeedback(feedback: any) {
+    setFeedbackAtual(feedback);
+    setFeedbackDetalheOpen(true);
+    setFeedbackNovaResposta('');
+    // Carregar respostas
+    const { data } = await supabase
+      .from('feedbacks_respostas')
+      .select('*')
+      .eq('feedback_id', feedback.id)
+      .order('created_at', { ascending: true });
+    setFeedbackRespostas(data || []);
+  }
+
+  async function enviarRespostaFeedback() {
+    if (!feedbackAtual || !feedbackNovaResposta.trim()) return;
+    setEnviandoResposta(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.functions.invoke('responder-feedback-whatsapp', {
+        body: {
+          feedback_id: feedbackAtual.id,
+          mensagem: feedbackNovaResposta.trim(),
+          autor_id: user?.id
+        }
+      });
+      if (error) throw error;
+      if (data?.envio_status === 'enviado') {
+        toast({ title: "Resposta enviada", description: "Mensagem enviada via WhatsApp com sucesso!" });
+      } else {
+        toast({ title: "Resposta registrada", description: `Envio WhatsApp: ${data?.envio_status || 'falha'}. ${data?.envio_erro || ''}`, variant: "destructive" });
+      }
+      setFeedbackNovaResposta('');
+      await abrirDetalheFeedback(feedbackAtual);
+      await carregarFeedbacks();
+    } catch (error: any) {
+      console.error('Erro ao enviar resposta:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoResposta(false);
+    }
+  }
+
+  async function atualizarStatusFeedback(feedbackId: string, novoStatus: 'novo' | 'em_analise' | 'respondido' | 'resolvido') {
+    try {
+      await supabase.from('feedbacks').update({ status: novoStatus }).eq('id', feedbackId);
+      toast({ title: "Status atualizado", description: `Feedback marcado como ${novoStatus.replace('_', ' ')}` });
+      if (feedbackAtual?.id === feedbackId) {
+        setFeedbackAtual({ ...feedbackAtual, status: novoStatus });
+      }
+      await carregarFeedbacks();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
     }
   }
 
@@ -1999,6 +2108,33 @@ export default function NormalizacaoGlobal() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
+            {/* Suporte / Feedbacks */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={`bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 rounded-lg p-4 border-2 ${feedbackStats.total > 0 ? 'border-orange-400 dark:border-orange-600 animate-pulse' : 'border-orange-300 dark:border-orange-700'} hover:border-orange-400 dark:hover:border-orange-600 transition-all cursor-help`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <MessageSquare className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                      <span className="text-xs font-medium text-muted-foreground">Suporte</span>
+                    </div>
+                    <div className="text-3xl font-bold text-orange-700 dark:text-orange-300 mb-1">
+                      {feedbackStats.total}
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      {feedbackStats.erros > 0 && <div>🐛 {feedbackStats.erros} erro{feedbackStats.erros > 1 ? 's' : ''}</div>}
+                      {feedbackStats.sugestoes > 0 && <div>💡 {feedbackStats.sugestoes} sugestão{feedbackStats.sugestoes > 1 ? 'ões' : ''}</div>}
+                      {feedbackStats.reclamacoes > 0 && <div>👎 {feedbackStats.reclamacoes} reclamação{feedbackStats.reclamacoes > 1 ? 'ões' : ''}</div>}
+                      {feedbackStats.duvidas > 0 && <div>❓ {feedbackStats.duvidas} dúvida{feedbackStats.duvidas > 1 ? 's' : ''}</div>}
+                      {feedbackStats.total === 0 && <div>pendentes de ação</div>}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Feedbacks pendentes de ação (novo + em análise)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Separador */}
@@ -2180,6 +2316,10 @@ export default function NormalizacaoGlobal() {
           <TabsTrigger value="raspagem-imagens" className="gap-2">
             <ImageOff className="w-4 h-4" />
             Raspagem de Imagens ({stats.produtosSemImagem})
+          </TabsTrigger>
+          <TabsTrigger value="suporte" className="gap-2">
+            <MessageSquare className="w-4 h-4" />
+            Suporte {feedbackStats.total > 0 && <Badge variant="destructive" className="ml-1">{feedbackStats.total}</Badge>}
           </TabsTrigger>
         </TabsList>
 
@@ -2581,7 +2721,188 @@ export default function NormalizacaoGlobal() {
             </div>
           </div>
         </TabsContent>
+
+        {/* Suporte / Feedbacks */}
+        <TabsContent value="suporte" className="space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            <select
+              value={feedbackFiltroTipo}
+              onChange={(e) => setFeedbackFiltroTipo(e.target.value)}
+              className="border rounded-md px-3 py-2 text-sm bg-background"
+            >
+              <option value="todos">Todos os tipos</option>
+              <option value="erro">🐛 Erros</option>
+              <option value="sugestao">💡 Sugestões</option>
+              <option value="reclamacao">👎 Reclamações</option>
+              <option value="duvida">❓ Dúvidas</option>
+            </select>
+            <select
+              value={feedbackFiltroStatus}
+              onChange={(e) => setFeedbackFiltroStatus(e.target.value)}
+              className="border rounded-md px-3 py-2 text-sm bg-background"
+            >
+              <option value="todos">Todos os status</option>
+              <option value="novo">🆕 Novo</option>
+              <option value="em_analise">🔍 Em análise</option>
+              <option value="respondido">✅ Respondido</option>
+              <option value="resolvido">✔️ Resolvido</option>
+            </select>
+            <Button variant="outline" size="sm" onClick={carregarFeedbacks} disabled={carregandoFeedbacks}>
+              <RotateCcw className={`w-4 h-4 mr-1 ${carregandoFeedbacks ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          </div>
+
+          {/* Lista de feedbacks */}
+          <div className="space-y-3">
+            {feedbacks
+              .filter(f => feedbackFiltroTipo === 'todos' || f.tipo === feedbackFiltroTipo)
+              .filter(f => feedbackFiltroStatus === 'todos' || f.status === feedbackFiltroStatus)
+              .map((feedback: any) => {
+                const tipoIcons: Record<string, string> = { erro: '🐛', sugestao: '💡', reclamacao: '👎', duvida: '❓' };
+                const tipoLabels: Record<string, string> = { erro: 'Erro', sugestao: 'Sugestão', reclamacao: 'Reclamação', duvida: 'Dúvida' };
+                const statusColors: Record<string, string> = {
+                  novo: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+                  em_analise: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+                  respondido: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+                  resolvido: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                };
+                return (
+                  <Card
+                    key={feedback.id}
+                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => abrirDetalheFeedback(feedback)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">{tipoIcons[feedback.tipo] || '📩'}</span>
+                            <span className="font-medium text-sm">{tipoLabels[feedback.tipo] || feedback.tipo}</span>
+                            <Badge className={`text-xs ${statusColors[feedback.status] || ''}`}>
+                              {feedback.status?.replace('_', ' ')}
+                            </Badge>
+                            {feedback.prioridade === 'alta' || feedback.prioridade === 'urgente' ? (
+                              <Badge variant="destructive" className="text-xs">{feedback.prioridade}</Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">{feedback.mensagem}</p>
+                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                            <span>📱 {feedback.telefone_whatsapp || 'Sem telefone'}</span>
+                            <span>📅 {new Date(feedback.created_at).toLocaleDateString('pt-BR')} {new Date(feedback.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            {feedbacks.filter(f => feedbackFiltroTipo === 'todos' || f.tipo === feedbackFiltroTipo).filter(f => feedbackFiltroStatus === 'todos' || f.status === feedbackFiltroStatus).length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>Nenhum feedback encontrado com os filtros selecionados.</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
       </Tabs>
+
+      {/* Dialog de detalhe do feedback */}
+      <Dialog open={feedbackDetalheOpen} onOpenChange={setFeedbackDetalheOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          {feedbackAtual && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="text-xl">
+                    {feedbackAtual.tipo === 'erro' ? '🐛' : feedbackAtual.tipo === 'sugestao' ? '💡' : feedbackAtual.tipo === 'reclamacao' ? '👎' : '❓'}
+                  </span>
+                  {feedbackAtual.tipo === 'erro' ? 'Relato de Erro' : feedbackAtual.tipo === 'sugestao' ? 'Sugestão' : feedbackAtual.tipo === 'reclamacao' ? 'Reclamação' : 'Dúvida'}
+                </DialogTitle>
+                <DialogDescription>
+                  Recebido em {new Date(feedbackAtual.created_at).toLocaleDateString('pt-BR')} às {new Date(feedbackAtual.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {/* Info do usuário */}
+                <div className="p-3 bg-muted rounded-lg space-y-1 text-sm">
+                  <div><strong>Telefone:</strong> {feedbackAtual.telefone_whatsapp || 'Não disponível'}</div>
+                  <div><strong>Canal:</strong> {feedbackAtual.canal}</div>
+                  <div><strong>Status:</strong> {feedbackAtual.status?.replace('_', ' ')}</div>
+                  <div><strong>Prioridade:</strong> {feedbackAtual.prioridade}</div>
+                  {feedbackAtual.contexto && <div><strong>Contexto:</strong> {feedbackAtual.contexto}</div>}
+                </div>
+
+                {/* Mensagem */}
+                <div className="p-4 border rounded-lg">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Mensagem do usuário</Label>
+                  <p className="text-sm whitespace-pre-wrap">{feedbackAtual.mensagem}</p>
+                </div>
+
+                {/* Ações de status */}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant={feedbackAtual.status === 'em_analise' ? 'default' : 'outline'} onClick={() => atualizarStatusFeedback(feedbackAtual.id, 'em_analise')}>
+                    🔍 Em análise
+                  </Button>
+                  <Button size="sm" variant={feedbackAtual.status === 'respondido' ? 'default' : 'outline'} onClick={() => atualizarStatusFeedback(feedbackAtual.id, 'respondido')}>
+                    ✅ Respondido
+                  </Button>
+                  <Button size="sm" variant={feedbackAtual.status === 'resolvido' ? 'default' : 'outline'} onClick={() => atualizarStatusFeedback(feedbackAtual.id, 'resolvido')}>
+                    ✔️ Resolvido
+                  </Button>
+                </div>
+
+                {/* Histórico de respostas */}
+                {feedbackRespostas.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Histórico de interações</Label>
+                    {feedbackRespostas.map((r: any) => (
+                      <div key={r.id} className={`p-3 rounded-lg text-sm ${r.autor_tipo === 'ia' || r.autor_tipo === 'sistema' ? 'bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800'}`}>
+                        <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground">
+                          <span className="font-medium">{r.autor_tipo === 'ia' ? '🤖 IA' : r.autor_tipo === 'sistema' ? '⚙️ Sistema' : r.autor_tipo === 'master' ? '👑 Master' : `👤 ${r.autor_tipo}`}</span>
+                          <span>{new Date(r.created_at).toLocaleDateString('pt-BR')} {new Date(r.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          {r.enviada_via_whatsapp && (
+                            <Badge variant={r.envio_whatsapp_status === 'enviado' ? 'default' : 'destructive'} className="text-xs">
+                              WhatsApp: {r.envio_whatsapp_status}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap">{r.mensagem}</p>
+                        {r.envio_whatsapp_erro && <p className="text-xs text-destructive mt-1">Erro: {r.envio_whatsapp_erro}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Campo de resposta */}
+                <div className="space-y-2 border-t pt-4">
+                  <Label>Responder via WhatsApp</Label>
+                  <Textarea
+                    placeholder="Digite sua resposta..."
+                    value={feedbackNovaResposta}
+                    onChange={(e) => setFeedbackNovaResposta(e.target.value)}
+                    rows={3}
+                  />
+                  <Button
+                    onClick={enviarRespostaFeedback}
+                    disabled={enviandoResposta || !feedbackNovaResposta.trim() || !feedbackAtual.telefone_whatsapp}
+                    className="w-full gap-2"
+                  >
+                    {enviandoResposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {enviandoResposta ? 'Enviando...' : 'Enviar via WhatsApp'}
+                  </Button>
+                  {!feedbackAtual.telefone_whatsapp && (
+                    <p className="text-xs text-destructive">⚠️ Sem telefone associado — não é possível enviar via WhatsApp.</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Edição */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>

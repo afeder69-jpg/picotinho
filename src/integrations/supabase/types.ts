@@ -292,6 +292,104 @@ export type Database = {
           },
         ]
       }
+      feedbacks: {
+        Row: {
+          atribuido_a: string | null
+          atribuido_em: string | null
+          atribuido_por: string | null
+          canal: string
+          contexto: string | null
+          created_at: string
+          id: string
+          mensagem: string
+          prioridade: Database["public"]["Enums"]["feedback_prioridade"]
+          session_id: string | null
+          status: Database["public"]["Enums"]["feedback_status"]
+          telefone_whatsapp: string | null
+          tipo: Database["public"]["Enums"]["feedback_tipo"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          atribuido_a?: string | null
+          atribuido_em?: string | null
+          atribuido_por?: string | null
+          canal?: string
+          contexto?: string | null
+          created_at?: string
+          id?: string
+          mensagem: string
+          prioridade?: Database["public"]["Enums"]["feedback_prioridade"]
+          session_id?: string | null
+          status?: Database["public"]["Enums"]["feedback_status"]
+          telefone_whatsapp?: string | null
+          tipo: Database["public"]["Enums"]["feedback_tipo"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          atribuido_a?: string | null
+          atribuido_em?: string | null
+          atribuido_por?: string | null
+          canal?: string
+          contexto?: string | null
+          created_at?: string
+          id?: string
+          mensagem?: string
+          prioridade?: Database["public"]["Enums"]["feedback_prioridade"]
+          session_id?: string | null
+          status?: Database["public"]["Enums"]["feedback_status"]
+          telefone_whatsapp?: string | null
+          tipo?: Database["public"]["Enums"]["feedback_tipo"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      feedbacks_respostas: {
+        Row: {
+          autor_id: string | null
+          autor_tipo: string
+          created_at: string
+          enviada_via_whatsapp: boolean
+          envio_whatsapp_erro: string | null
+          envio_whatsapp_status: string | null
+          feedback_id: string
+          id: string
+          mensagem: string
+        }
+        Insert: {
+          autor_id?: string | null
+          autor_tipo?: string
+          created_at?: string
+          enviada_via_whatsapp?: boolean
+          envio_whatsapp_erro?: string | null
+          envio_whatsapp_status?: string | null
+          feedback_id: string
+          id?: string
+          mensagem: string
+        }
+        Update: {
+          autor_id?: string | null
+          autor_tipo?: string
+          created_at?: string
+          enviada_via_whatsapp?: boolean
+          envio_whatsapp_erro?: string | null
+          envio_whatsapp_status?: string | null
+          feedback_id?: string
+          id?: string
+          mensagem?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_respostas_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       historico_precos_app: {
         Row: {
           created_at: string | null
@@ -3619,6 +3717,9 @@ export type Database = {
     }
     Enums: {
       app_role: "master" | "user" | "admin"
+      feedback_prioridade: "baixa" | "normal" | "alta" | "urgente"
+      feedback_status: "novo" | "em_analise" | "respondido" | "resolvido"
+      feedback_tipo: "erro" | "sugestao" | "reclamacao" | "duvida"
       fonte_receita:
         | "minha"
         | "picotinho"
@@ -3756,6 +3857,9 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["master", "user", "admin"],
+      feedback_prioridade: ["baixa", "normal", "alta", "urgente"],
+      feedback_status: ["novo", "em_analise", "respondido", "resolvido"],
+      feedback_tipo: ["erro", "sugestao", "reclamacao", "duvida"],
       fonte_receita: [
         "minha",
         "picotinho",

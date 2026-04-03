@@ -362,7 +362,27 @@ const reportToolDefinitions = [
   }
 ];
 
-const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions];
+// --- Feedback tools ---
+const feedbackToolDefinitions = [
+  {
+    type: "function",
+    function: {
+      name: "registrar_feedback",
+      description: "Registra um feedback do usuário: erro, sugestão, reclamação ou dúvida sobre o sistema. Use quando o usuário expressar insatisfação, reportar problema, fazer sugestão ou ter dúvida sobre o funcionamento do Picotinho.",
+      parameters: {
+        type: "object",
+        properties: {
+          tipo: { type: "string", enum: ["erro", "sugestao", "reclamacao", "duvida"], description: "Tipo do feedback" },
+          mensagem: { type: "string", description: "Descrição do feedback do usuário" },
+          contexto: { type: "string", description: "Contexto da ação que o usuário estava realizando (opcional)" }
+        },
+        required: ["tipo", "mensagem"]
+      }
+    }
+  }
+];
+
+const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions];
 
 // ==================== HELPER: resolve lista_id ====================
 
@@ -1404,6 +1424,64 @@ async function executeTool(
         return { result: JSON.stringify({ mercados: (mercados || []).map((m: any) => m.nome) }), isWriteMutation: false };
       }
 
+      // ==================== FEEDBACK TOOL ====================
+      case 'registrar_feedback': {
+        const tiposValidos = ['erro', 'sugestao', 'reclamacao', 'duvida'];
+        const tipo = tiposValidos.includes(args.tipo) ? args.tipo : 'duvida';
+        
+        // Buscar telefone do remetente via user_id
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('telefone')
+          .eq('user_id', usuarioId)
+          .maybeSingle();
+        
+        // Inserir feedback
+        const { data: feedback, error: fbError } = await supabase
+          .from('feedbacks')
+          .insert({
+            user_id: usuarioId,
+            tipo,
+            mensagem: args.mensagem,
+            contexto: args.contexto || null,
+            canal: 'whatsapp',
+            telefone_whatsapp: profile?.telefone || null,
+            session_id: null,
+            status: 'novo',
+            prioridade: tipo === 'erro' ? 'alta' : 'normal'
+          })
+          .select('id')
+          .single();
+        
+        if (fbError) throw fbError;
+        
+        // Registrar confirmação automática da IA no histórico
+        await supabase.from('feedbacks_respostas').insert({
+          feedback_id: feedback.id,
+          autor_id: null,
+          autor_tipo: 'ia',
+          mensagem: 'Feedback recebido e registrado automaticamente pelo assistente.',
+          enviada_via_whatsapp: false
+        });
+        
+        const tipoLabel: Record<string, string> = {
+          erro: 'relato de erro',
+          sugestao: 'sugestão',
+          reclamacao: 'reclamação',
+          duvida: 'dúvida'
+        };
+        
+        return {
+          result: JSON.stringify({
+            sucesso: true,
+            feedback_id: feedback.id,
+            tipo: tipo,
+            instrucao: `O feedback (${tipoLabel[tipo]}) foi registrado com sucesso. Responda ao usuário de forma acolhedora e simpática, confirmando que a mensagem foi recebida e que o time vai analisar com atenção. Diga que retornarão o mais rápido possível por este mesmo canal. Adapte o tom ao tipo de feedback (mais empático para erros/reclamações, mais entusiasta para sugestões).`
+          }),
+          isWriteMutation: false  // Não conta como mutação de estoque/lista
+        };
+      }
+
       default:
         return { result: JSON.stringify({ erro: `Tool "${toolName}" não reconhecida.` }), isWriteMutation: false };
     }
@@ -1848,6 +1926,14 @@ Regras de Modo de Resposta:
     Quando detectar esse pedido, use salvar_preferencia com modo_resposta.
     Valores: "texto", "audio", "ambos".
 35. Modo de resposta atual do usuário: ${modoResposta}. Respeite-o em todas as interações. Se for "audio" ou "ambos", avise o usuário que suas respostas serão enviadas também por áudio.
+
+Regras de Feedback e Suporte:
+36. Quando o usuário expressar insatisfação, reportar problema, fazer sugestão, ou tiver dúvida SOBRE O SISTEMA (não sobre compras/estoque), use a tool registrar_feedback.
+37. Frases-gatilho: "quero reportar", "tenho uma sugestão", "não funcionou", "quero reclamar", "achei um erro", "o sistema não fez", "tenho uma dúvida sobre o app", "como funciona o Picotinho", "o que vocês podem melhorar".
+38. Classifique automaticamente o tipo: erro (bugs, falhas), sugestao (melhorias, ideias), reclamacao (insatisfação), duvida (como usar).
+39. Após registrar, responda com mensagem acolhedora e natural. Exemplo: "Recebemos sua mensagem! 💛 Nosso time vai analisar com atenção e retornaremos o mais rápido possível por aqui mesmo."
+40. Adapte o tom ao tipo: mais empático para erros/reclamações, mais entusiasta para sugestões, mais didático para dúvidas.
+41. NUNCA confunda feedback sobre o sistema com pedidos de estoque, lista ou compras. "O arroz não baixou do estoque" é feedback de erro. "Baixa o arroz" é comando de estoque.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
