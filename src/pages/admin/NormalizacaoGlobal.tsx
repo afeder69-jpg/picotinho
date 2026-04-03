@@ -545,7 +545,7 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-  async function atualizarStatusFeedback(feedbackId: string, novoStatus: string) {
+  async function atualizarStatusFeedback(feedbackId: string, novoStatus: 'novo' | 'em_analise' | 'respondido' | 'resolvido') {
     try {
       await supabase.from('feedbacks').update({ status: novoStatus }).eq('id', feedbackId);
       toast({ title: "Status atualizado", description: `Feedback marcado como ${novoStatus.replace('_', ' ')}` });
