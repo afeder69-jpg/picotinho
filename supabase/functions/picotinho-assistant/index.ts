@@ -362,7 +362,27 @@ const reportToolDefinitions = [
   }
 ];
 
-const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions];
+// --- Feedback tools ---
+const feedbackToolDefinitions = [
+  {
+    type: "function",
+    function: {
+      name: "registrar_feedback",
+      description: "Registra um feedback do usuário: erro, sugestão, reclamação ou dúvida sobre o sistema. Use quando o usuário expressar insatisfação, reportar problema, fazer sugestão ou ter dúvida sobre o funcionamento do Picotinho.",
+      parameters: {
+        type: "object",
+        properties: {
+          tipo: { type: "string", enum: ["erro", "sugestao", "reclamacao", "duvida"], description: "Tipo do feedback" },
+          mensagem: { type: "string", description: "Descrição do feedback do usuário" },
+          contexto: { type: "string", description: "Contexto da ação que o usuário estava realizando (opcional)" }
+        },
+        required: ["tipo", "mensagem"]
+      }
+    }
+  }
+];
+
+const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions];
 
 // ==================== HELPER: resolve lista_id ====================
 
