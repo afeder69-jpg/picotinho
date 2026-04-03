@@ -484,6 +484,9 @@ export default function NormalizacaoGlobal() {
       // Carregar feedbacks
       await carregarFeedbacks();
 
+      // Carregar campanhas
+      await carregarCampanhas();
+
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
       toast({
