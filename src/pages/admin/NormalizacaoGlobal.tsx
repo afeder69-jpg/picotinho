@@ -694,6 +694,7 @@ export default function NormalizacaoGlobal() {
     } catch (error: any) {
       console.error('Erro ao criar campanha:', error);
       toast({ title: "Erro", description: error.message, variant: "destructive" });
+      setConfirmarEnvioCampanhaOpen(false);
     } finally {
       setEnviandoCampanha(false);
     }
@@ -3078,7 +3079,7 @@ export default function NormalizacaoGlobal() {
       </Tabs>
 
       {/* Dialog Nova Campanha */}
-      <Dialog open={novaCampanhaOpen} onOpenChange={(open) => { setNovaCampanhaOpen(open); if (!open) { setEstimativaDestinatarios(null); } }}>
+      <Dialog open={novaCampanhaOpen} onOpenChange={(open) => { if (!enviandoCampanha) { setNovaCampanhaOpen(open); if (!open) { setEstimativaDestinatarios(null); } } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -3151,7 +3152,7 @@ export default function NormalizacaoGlobal() {
       </Dialog>
 
       {/* AlertDialog Confirmação de Envio */}
-      <AlertDialog open={confirmarEnvioCampanhaOpen} onOpenChange={setConfirmarEnvioCampanhaOpen}>
+      <AlertDialog open={confirmarEnvioCampanhaOpen} onOpenChange={(open) => { if (!enviandoCampanha) setConfirmarEnvioCampanhaOpen(open); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Envio de Campanha?</AlertDialogTitle>
@@ -3164,7 +3165,13 @@ export default function NormalizacaoGlobal() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={enviandoCampanha}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={criarEEnviarCampanha} disabled={enviandoCampanha}>
+            <AlertDialogAction 
+              disabled={enviandoCampanha}
+              onClick={(e) => {
+                e.preventDefault();
+                criarEEnviarCampanha();
+              }}
+            >
               {enviandoCampanha ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enviando...</> : 'Sim, Enviar'}
             </AlertDialogAction>
           </AlertDialogFooter>
