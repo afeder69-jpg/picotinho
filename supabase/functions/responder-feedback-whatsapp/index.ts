@@ -60,7 +60,34 @@ serve(async (req: Request) => {
     } else {
       try {
         const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
-        const prefixo = '📬 *Resposta do Picotinho:*\n\n';
+
+        // Mapa de tipo para rótulo natural
+        const tipoLabels: Record<string, string> = {
+          erro: 'o erro',
+          sugestao: 'a sugestão',
+          reclamacao: 'a reclamação',
+          duvida: 'a dúvida'
+        };
+
+        // Limpar e truncar resumo original
+        function resumirFeedback(texto: string | null | undefined, maxLen = 120): string | null {
+          if (!texto || texto.trim().length < 5) return null;
+          const limpo = texto.replace(/\s+/g, ' ').trim();
+          if (limpo.length <= maxLen) return limpo;
+          const truncado = limpo.substring(0, maxLen).replace(/\s+\S*$/, '');
+          return (truncado || limpo.substring(0, maxLen)) + '…';
+        }
+
+        const tipoLabel = tipoLabels[feedback.tipo] || 'o feedback';
+        const resumo = resumirFeedback(feedback.mensagem);
+
+        let prefixo: string;
+        if (resumo) {
+          prefixo = `📬 *Resposta do Picotinho*\n\nSobre ${tipoLabel} que você nos enviou:\n_"${resumo}"_\n\n`;
+        } else {
+          prefixo = `📬 *Resposta do Picotinho*\n\nSobre ${tipoLabel} que você nos enviou:\n\n`;
+        }
+
         const response = await fetch(sendTextUrl, {
           method: 'POST',
           headers: {
