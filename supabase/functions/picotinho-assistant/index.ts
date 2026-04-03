@@ -2036,6 +2036,28 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
       // If no tool calls, we have the final response
       if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
         finalResponse = assistantMessage.content || "🤔 Não entendi. Pode repetir?";
+        
+        // === SAFETY NET: Detectar confirmação de feedback sem tool call ===
+        const feedbackConfirmKeywords = ['registrei', 'anotei', 'encaminh', 'recebemos sua', 'vou repassar', 
+          'feedback registrado', 'sua sugestão', 'seu erro', 'sua reclamação', 'sua dúvida foi', 
+          'vou anotar', 'ficou registrado', 'foi anotado', 'nosso time vai'];
+        const respLower = finalResponse.toLowerCase();
+        const pareceConfirmacaoFeedback = feedbackConfirmKeywords.some(kw => respLower.includes(kw));
+        if (pareceConfirmacaoFeedback) {
+          console.warn(`⚠️ [FEEDBACK-SAFETY] IA respondeu confirmando feedback SEM chamar registrar_feedback! Resposta: "${finalResponse.substring(0, 200)}"`);
+        }
+        
+        // === SAFETY NET 2: Detectar mensagem do usuário com forte intenção de feedback sem tool call ===
+        const userFeedbackKeywords = ['bug', 'erro no sistema', 'não funcionou', 'não apareceu', 'travou', 
+          'deu problema', 'não consegui', 'quero reportar', 'quero reclamar', 'tenho uma sugestão', 
+          'seria melhor se', 'poderia ter', 'não tá funcionando', 'deu erro', 'não carregou', 
+          'não atualizou', 'sumiu', 'achei um erro', 'problema no sistema', 'o sistema não'];
+        const userMsgLower = conteudo.toLowerCase();
+        const pareceUsuarioFeedback = userFeedbackKeywords.some(kw => userMsgLower.includes(kw));
+        if (pareceUsuarioFeedback) {
+          console.warn(`⚠️ [FEEDBACK-SAFETY-INPUT] Mensagem do usuário parece feedback sobre o sistema mas IA NÃO chamou registrar_feedback! Msg: "${conteudo.substring(0, 200)}"`);
+        }
+        
         break;
       }
 
