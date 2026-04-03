@@ -1426,6 +1426,8 @@ async function executeTool(
 
       // ==================== FEEDBACK TOOL ====================
       case 'registrar_feedback': {
+        console.log(`📋 [FEEDBACK] Tool registrar_feedback chamada — tipo: ${args.tipo}, mensagem: ${(args.mensagem || '').substring(0, 100)}`);
+        
         const tiposValidos = ['erro', 'sugestao', 'reclamacao', 'duvida'];
         const tipo = tiposValidos.includes(args.tipo) ? args.tipo : 'duvida';
         
@@ -1453,16 +1455,27 @@ async function executeTool(
           .select('id')
           .single();
         
-        if (fbError) throw fbError;
+        if (fbError) {
+          console.error(`❌ [FEEDBACK] Erro ao salvar feedback:`, fbError);
+          throw fbError;
+        }
+        
+        console.log(`✅ [FEEDBACK] Feedback ${feedback.id} salvo com sucesso — tipo: ${tipo}, prioridade: ${tipo === 'erro' ? 'alta' : 'normal'}`);
         
         // Registrar confirmação automática da IA no histórico
-        await supabase.from('feedbacks_respostas').insert({
+        const { error: respError } = await supabase.from('feedbacks_respostas').insert({
           feedback_id: feedback.id,
           autor_id: null,
           autor_tipo: 'ia',
           mensagem: 'Feedback recebido e registrado automaticamente pelo assistente.',
           enviada_via_whatsapp: false
         });
+        
+        if (respError) {
+          console.warn(`⚠️ [FEEDBACK] Feedback salvo mas erro ao registrar resposta automática:`, respError);
+        } else {
+          console.log(`✅ [FEEDBACK] Resposta automática da IA registrada em feedbacks_respostas`);
+        }
         
         const tipoLabel: Record<string, string> = {
           erro: 'relato de erro',
@@ -1478,7 +1491,7 @@ async function executeTool(
             tipo: tipo,
             instrucao: `O feedback (${tipoLabel[tipo]}) foi registrado com sucesso. Responda ao usuário de forma acolhedora e simpática, confirmando que a mensagem foi recebida e que o time vai analisar com atenção. Diga que retornarão o mais rápido possível por este mesmo canal. Adapte o tom ao tipo de feedback (mais empático para erros/reclamações, mais entusiasta para sugestões).`
           }),
-          isWriteMutation: false  // Não conta como mutação de estoque/lista
+          isWriteMutation: false
         };
       }
 
@@ -1927,13 +1940,23 @@ Regras de Modo de Resposta:
     Valores: "texto", "audio", "ambos".
 35. Modo de resposta atual do usuário: ${modoResposta}. Respeite-o em todas as interações. Se for "audio" ou "ambos", avise o usuário que suas respostas serão enviadas também por áudio.
 
-Regras de Feedback e Suporte:
-36. Quando o usuário expressar insatisfação, reportar problema, fazer sugestão, ou tiver dúvida SOBRE O SISTEMA (não sobre compras/estoque), use a tool registrar_feedback.
-37. Frases-gatilho: "quero reportar", "tenho uma sugestão", "não funcionou", "quero reclamar", "achei um erro", "o sistema não fez", "tenho uma dúvida sobre o app", "como funciona o Picotinho", "o que vocês podem melhorar".
-38. Classifique automaticamente o tipo: erro (bugs, falhas), sugestao (melhorias, ideias), reclamacao (insatisfação), duvida (como usar).
-39. Após registrar, responda com mensagem acolhedora e natural. Exemplo: "Recebemos sua mensagem! 💛 Nosso time vai analisar com atenção e retornaremos o mais rápido possível por aqui mesmo."
-40. Adapte o tom ao tipo: mais empático para erros/reclamações, mais entusiasta para sugestões, mais didático para dúvidas.
-41. NUNCA confunda feedback sobre o sistema com pedidos de estoque, lista ou compras. "O arroz não baixou do estoque" é feedback de erro. "Baixa o arroz" é comando de estoque.
+Regras de Feedback e Suporte (OBRIGATÓRIAS — LEIA COM ATENÇÃO):
+36. OBRIGATÓRIO: Quando o usuário expressar qualquer feedback sobre o sistema Picotinho (erro, sugestão, reclamação, dúvida sobre o app), você DEVE OBRIGATORIAMENTE chamar a tool registrar_feedback ANTES de responder. É TERMINANTEMENTE PROIBIDO responder ao usuário dizendo que registrou, anotou, encaminhou ou recebeu o feedback sem ter executado a tool registrar_feedback com sucesso.
+37. Frases-gatilho (exemplos, não exaustivos): "quero reportar", "tenho uma sugestão", "não funcionou", "quero reclamar", "achei um erro", "o sistema não fez", "tenho uma dúvida sobre o app", "como funciona o Picotinho", "o que vocês podem melhorar", "não apareceu", "travou", "deu problema", "não consegui", "seria melhor se", "bug", "problema no sistema", "isso tá errado", "não tá funcionando", "deu erro", "poderia ter", "falta um", "cadê o", "sumiu", "não carregou", "não atualizou".
+38. Classifique automaticamente o tipo: erro (bugs, falhas, algo que não funcionou, não apareceu, travou), sugestao (melhorias, ideias, funcionalidades novas, "seria melhor se", "poderia ter"), reclamacao (insatisfação com o serviço), duvida (como usar, o que faz, como funciona).
+39. EXEMPLOS CORRETOS (faça assim):
+    - Usuário: "o estoque não atualizou direito" → chamar registrar_feedback(tipo="erro", mensagem="Estoque não atualizou corretamente")
+    - Usuário: "seria legal ter um relatório mensal" → chamar registrar_feedback(tipo="sugestao", mensagem="Sugestão de relatório mensal")
+    - Usuário: "não gostei de como funciona a lista" → chamar registrar_feedback(tipo="reclamacao", mensagem="Insatisfação com funcionamento da lista")
+    - Usuário: "como faço pra usar o cardápio?" → chamar registrar_feedback(tipo="duvida", mensagem="Dúvida sobre como usar o cardápio")
+    - Usuário: "não apareceu minha nota" → chamar registrar_feedback(tipo="erro", mensagem="Nota fiscal não apareceu no sistema")
+    - Usuário: "travou quando tentei adicionar" → chamar registrar_feedback(tipo="erro", mensagem="Sistema travou ao adicionar item")
+40. EXEMPLOS PROIBIDOS (NUNCA faça isso):
+    - Usuário relata erro → responder "vou anotar" SEM chamar a tool ❌ PROIBIDO
+    - Usuário dá sugestão → responder "ótima ideia, vou encaminhar" SEM chamar a tool ❌ PROIBIDO
+    - Dizer "registrei sua mensagem", "anotei", "recebemos", "vou repassar" sem tool_call ❌ PROIBIDO
+    - Responder com confirmação acolhedora sem ter chamado registrar_feedback ❌ PROIBIDO
+41. Somente APÓS a tool registrar_feedback retornar sucesso (campo "sucesso": true), responda ao usuário com confirmação acolhedora. Adapte o tom: empático para erros/reclamações, entusiasta para sugestões, didático para dúvidas. NUNCA confunda feedback sobre o sistema com pedidos de estoque, lista ou compras. "O arroz não baixou do estoque" é feedback de erro. "Baixa o arroz" é comando de estoque.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
@@ -2013,6 +2036,28 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
       // If no tool calls, we have the final response
       if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
         finalResponse = assistantMessage.content || "🤔 Não entendi. Pode repetir?";
+        
+        // === SAFETY NET: Detectar confirmação de feedback sem tool call ===
+        const feedbackConfirmKeywords = ['registrei', 'anotei', 'encaminh', 'recebemos sua', 'vou repassar', 
+          'feedback registrado', 'sua sugestão', 'seu erro', 'sua reclamação', 'sua dúvida foi', 
+          'vou anotar', 'ficou registrado', 'foi anotado', 'nosso time vai'];
+        const respLower = finalResponse.toLowerCase();
+        const pareceConfirmacaoFeedback = feedbackConfirmKeywords.some(kw => respLower.includes(kw));
+        if (pareceConfirmacaoFeedback) {
+          console.warn(`⚠️ [FEEDBACK-SAFETY] IA respondeu confirmando feedback SEM chamar registrar_feedback! Resposta: "${finalResponse.substring(0, 200)}"`);
+        }
+        
+        // === SAFETY NET 2: Detectar mensagem do usuário com forte intenção de feedback sem tool call ===
+        const userFeedbackKeywords = ['bug', 'erro no sistema', 'não funcionou', 'não apareceu', 'travou', 
+          'deu problema', 'não consegui', 'quero reportar', 'quero reclamar', 'tenho uma sugestão', 
+          'seria melhor se', 'poderia ter', 'não tá funcionando', 'deu erro', 'não carregou', 
+          'não atualizou', 'sumiu', 'achei um erro', 'problema no sistema', 'o sistema não'];
+        const userMsgLower = conteudo.toLowerCase();
+        const pareceUsuarioFeedback = userFeedbackKeywords.some(kw => userMsgLower.includes(kw));
+        if (pareceUsuarioFeedback) {
+          console.warn(`⚠️ [FEEDBACK-SAFETY-INPUT] Mensagem do usuário parece feedback sobre o sistema mas IA NÃO chamou registrar_feedback! Msg: "${conteudo.substring(0, 200)}"`);
+        }
+        
         break;
       }
 
