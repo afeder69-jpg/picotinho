@@ -14,6 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
+      campanhas_whatsapp: {
+        Row: {
+          concluida_em: string | null
+          created_at: string
+          criado_por: string
+          filtro_tipo: string
+          filtro_valor: string | null
+          id: string
+          iniciada_em: string | null
+          mensagem: string
+          status: string
+          titulo: string
+          total_destinatarios: number
+          total_enviados: number
+          total_falhas: number
+          updated_at: string
+        }
+        Insert: {
+          concluida_em?: string | null
+          created_at?: string
+          criado_por: string
+          filtro_tipo?: string
+          filtro_valor?: string | null
+          id?: string
+          iniciada_em?: string | null
+          mensagem: string
+          status?: string
+          titulo: string
+          total_destinatarios?: number
+          total_enviados?: number
+          total_falhas?: number
+          updated_at?: string
+        }
+        Update: {
+          concluida_em?: string | null
+          created_at?: string
+          criado_por?: string
+          filtro_tipo?: string
+          filtro_valor?: string | null
+          id?: string
+          iniciada_em?: string | null
+          mensagem?: string
+          status?: string
+          titulo?: string
+          total_destinatarios?: number
+          total_enviados?: number
+          total_falhas?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      campanhas_whatsapp_envios: {
+        Row: {
+          campanha_id: string
+          created_at: string
+          enviado_em: string | null
+          erro: string | null
+          id: string
+          status: string
+          telefone: string
+          user_id: string
+        }
+        Insert: {
+          campanha_id: string
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          status?: string
+          telefone: string
+          user_id: string
+        }
+        Update: {
+          campanha_id?: string
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          status?: string
+          telefone?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_whatsapp_envios_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_whatsapp"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campanhas_whatsapp_respostas: {
+        Row: {
+          campanha_id: string
+          cidade: string | null
+          contexto: Json | null
+          created_at: string
+          envio_id: string | null
+          estado: string | null
+          id: string
+          mensagem: string
+          processada: boolean
+          telefone: string
+          user_id: string | null
+        }
+        Insert: {
+          campanha_id: string
+          cidade?: string | null
+          contexto?: Json | null
+          created_at?: string
+          envio_id?: string | null
+          estado?: string | null
+          id?: string
+          mensagem: string
+          processada?: boolean
+          telefone: string
+          user_id?: string | null
+        }
+        Update: {
+          campanha_id?: string
+          cidade?: string | null
+          contexto?: Json | null
+          created_at?: string
+          envio_id?: string | null
+          estado?: string | null
+          id?: string
+          mensagem?: string
+          processada?: boolean
+          telefone?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_whatsapp_respostas_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_whatsapp"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanhas_whatsapp_respostas_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_whatsapp_envios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cardapio_receitas: {
         Row: {
           cardapio_id: string
@@ -1879,6 +2028,7 @@ export type Database = {
           cidade: string | null
           created_at: string | null
           email: string | null
+          estado: string | null
           id: string
           latitude: number | null
           longitude: number | null
@@ -1898,6 +2048,7 @@ export type Database = {
           cidade?: string | null
           created_at?: string | null
           email?: string | null
+          estado?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -1917,6 +2068,7 @@ export type Database = {
           cidade?: string | null
           created_at?: string | null
           email?: string | null
+          estado?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
