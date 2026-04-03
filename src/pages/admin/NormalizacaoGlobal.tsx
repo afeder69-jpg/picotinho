@@ -2721,7 +2721,188 @@ export default function NormalizacaoGlobal() {
             </div>
           </div>
         </TabsContent>
+
+        {/* Suporte / Feedbacks */}
+        <TabsContent value="suporte" className="space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            <select
+              value={feedbackFiltroTipo}
+              onChange={(e) => setFeedbackFiltroTipo(e.target.value)}
+              className="border rounded-md px-3 py-2 text-sm bg-background"
+            >
+              <option value="todos">Todos os tipos</option>
+              <option value="erro">🐛 Erros</option>
+              <option value="sugestao">💡 Sugestões</option>
+              <option value="reclamacao">👎 Reclamações</option>
+              <option value="duvida">❓ Dúvidas</option>
+            </select>
+            <select
+              value={feedbackFiltroStatus}
+              onChange={(e) => setFeedbackFiltroStatus(e.target.value)}
+              className="border rounded-md px-3 py-2 text-sm bg-background"
+            >
+              <option value="todos">Todos os status</option>
+              <option value="novo">🆕 Novo</option>
+              <option value="em_analise">🔍 Em análise</option>
+              <option value="respondido">✅ Respondido</option>
+              <option value="resolvido">✔️ Resolvido</option>
+            </select>
+            <Button variant="outline" size="sm" onClick={carregarFeedbacks} disabled={carregandoFeedbacks}>
+              <RotateCcw className={`w-4 h-4 mr-1 ${carregandoFeedbacks ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          </div>
+
+          {/* Lista de feedbacks */}
+          <div className="space-y-3">
+            {feedbacks
+              .filter(f => feedbackFiltroTipo === 'todos' || f.tipo === feedbackFiltroTipo)
+              .filter(f => feedbackFiltroStatus === 'todos' || f.status === feedbackFiltroStatus)
+              .map((feedback: any) => {
+                const tipoIcons: Record<string, string> = { erro: '🐛', sugestao: '💡', reclamacao: '👎', duvida: '❓' };
+                const tipoLabels: Record<string, string> = { erro: 'Erro', sugestao: 'Sugestão', reclamacao: 'Reclamação', duvida: 'Dúvida' };
+                const statusColors: Record<string, string> = {
+                  novo: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+                  em_analise: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+                  respondido: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+                  resolvido: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                };
+                return (
+                  <Card
+                    key={feedback.id}
+                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => abrirDetalheFeedback(feedback)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">{tipoIcons[feedback.tipo] || '📩'}</span>
+                            <span className="font-medium text-sm">{tipoLabels[feedback.tipo] || feedback.tipo}</span>
+                            <Badge className={`text-xs ${statusColors[feedback.status] || ''}`}>
+                              {feedback.status?.replace('_', ' ')}
+                            </Badge>
+                            {feedback.prioridade === 'alta' || feedback.prioridade === 'urgente' ? (
+                              <Badge variant="destructive" className="text-xs">{feedback.prioridade}</Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">{feedback.mensagem}</p>
+                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                            <span>📱 {feedback.telefone_whatsapp || 'Sem telefone'}</span>
+                            <span>📅 {new Date(feedback.created_at).toLocaleDateString('pt-BR')} {new Date(feedback.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            {feedbacks.filter(f => feedbackFiltroTipo === 'todos' || f.tipo === feedbackFiltroTipo).filter(f => feedbackFiltroStatus === 'todos' || f.status === feedbackFiltroStatus).length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>Nenhum feedback encontrado com os filtros selecionados.</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
       </Tabs>
+
+      {/* Dialog de detalhe do feedback */}
+      <Dialog open={feedbackDetalheOpen} onOpenChange={setFeedbackDetalheOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          {feedbackAtual && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="text-xl">
+                    {feedbackAtual.tipo === 'erro' ? '🐛' : feedbackAtual.tipo === 'sugestao' ? '💡' : feedbackAtual.tipo === 'reclamacao' ? '👎' : '❓'}
+                  </span>
+                  {feedbackAtual.tipo === 'erro' ? 'Relato de Erro' : feedbackAtual.tipo === 'sugestao' ? 'Sugestão' : feedbackAtual.tipo === 'reclamacao' ? 'Reclamação' : 'Dúvida'}
+                </DialogTitle>
+                <DialogDescription>
+                  Recebido em {new Date(feedbackAtual.created_at).toLocaleDateString('pt-BR')} às {new Date(feedbackAtual.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {/* Info do usuário */}
+                <div className="p-3 bg-muted rounded-lg space-y-1 text-sm">
+                  <div><strong>Telefone:</strong> {feedbackAtual.telefone_whatsapp || 'Não disponível'}</div>
+                  <div><strong>Canal:</strong> {feedbackAtual.canal}</div>
+                  <div><strong>Status:</strong> {feedbackAtual.status?.replace('_', ' ')}</div>
+                  <div><strong>Prioridade:</strong> {feedbackAtual.prioridade}</div>
+                  {feedbackAtual.contexto && <div><strong>Contexto:</strong> {feedbackAtual.contexto}</div>}
+                </div>
+
+                {/* Mensagem */}
+                <div className="p-4 border rounded-lg">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Mensagem do usuário</Label>
+                  <p className="text-sm whitespace-pre-wrap">{feedbackAtual.mensagem}</p>
+                </div>
+
+                {/* Ações de status */}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant={feedbackAtual.status === 'em_analise' ? 'default' : 'outline'} onClick={() => atualizarStatusFeedback(feedbackAtual.id, 'em_analise')}>
+                    🔍 Em análise
+                  </Button>
+                  <Button size="sm" variant={feedbackAtual.status === 'respondido' ? 'default' : 'outline'} onClick={() => atualizarStatusFeedback(feedbackAtual.id, 'respondido')}>
+                    ✅ Respondido
+                  </Button>
+                  <Button size="sm" variant={feedbackAtual.status === 'resolvido' ? 'default' : 'outline'} onClick={() => atualizarStatusFeedback(feedbackAtual.id, 'resolvido')}>
+                    ✔️ Resolvido
+                  </Button>
+                </div>
+
+                {/* Histórico de respostas */}
+                {feedbackRespostas.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Histórico de interações</Label>
+                    {feedbackRespostas.map((r: any) => (
+                      <div key={r.id} className={`p-3 rounded-lg text-sm ${r.autor_tipo === 'ia' || r.autor_tipo === 'sistema' ? 'bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800'}`}>
+                        <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground">
+                          <span className="font-medium">{r.autor_tipo === 'ia' ? '🤖 IA' : r.autor_tipo === 'sistema' ? '⚙️ Sistema' : r.autor_tipo === 'master' ? '👑 Master' : `👤 ${r.autor_tipo}`}</span>
+                          <span>{new Date(r.created_at).toLocaleDateString('pt-BR')} {new Date(r.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          {r.enviada_via_whatsapp && (
+                            <Badge variant={r.envio_whatsapp_status === 'enviado' ? 'default' : 'destructive'} className="text-xs">
+                              WhatsApp: {r.envio_whatsapp_status}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap">{r.mensagem}</p>
+                        {r.envio_whatsapp_erro && <p className="text-xs text-destructive mt-1">Erro: {r.envio_whatsapp_erro}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Campo de resposta */}
+                <div className="space-y-2 border-t pt-4">
+                  <Label>Responder via WhatsApp</Label>
+                  <Textarea
+                    placeholder="Digite sua resposta..."
+                    value={feedbackNovaResposta}
+                    onChange={(e) => setFeedbackNovaResposta(e.target.value)}
+                    rows={3}
+                  />
+                  <Button
+                    onClick={enviarRespostaFeedback}
+                    disabled={enviandoResposta || !feedbackNovaResposta.trim() || !feedbackAtual.telefone_whatsapp}
+                    className="w-full gap-2"
+                  >
+                    {enviandoResposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {enviandoResposta ? 'Enviando...' : 'Enviar via WhatsApp'}
+                  </Button>
+                  {!feedbackAtual.telefone_whatsapp && (
+                    <p className="text-xs text-destructive">⚠️ Sem telefone associado — não é possível enviar via WhatsApp.</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Edição */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
