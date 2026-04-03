@@ -2999,6 +2999,82 @@ export default function NormalizacaoGlobal() {
           </div>
         </TabsContent>
 
+        {/* Campanhas WhatsApp */}
+        <TabsContent value="campanhas" className="space-y-4">
+          {/* Cards resumo */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Campanhas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{campanhas.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Concluídas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{campanhas.filter(c => c.status === 'concluida').length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Em Andamento</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">{campanhasEmAndamento}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Botão Nova Campanha */}
+          <Button onClick={() => { setNovaCampanhaOpen(true); estimarDestinatariosCampanha(); }} className="gap-2">
+            <Send className="w-4 h-4" />
+            Nova Campanha
+          </Button>
+
+          {/* Lista de campanhas */}
+          {campanhas.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Send className="w-16 h-16 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Nenhuma campanha ainda</h3>
+                <p className="text-muted-foreground text-center">Crie sua primeira campanha para enviar mensagens via WhatsApp.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {campanhas.map((campanha) => (
+                <Card key={campanha.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => abrirDetalheCampanha(campanha)}>
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold">{campanha.titulo}</h4>
+                          {getStatusCampanhaBadge(campanha.status)}
+                          <Badge variant="outline" className="text-xs">
+                            {campanha.filtro_tipo === 'todos' ? 'Todos' : `${campanha.filtro_tipo}: ${campanha.filtro_valor}`}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-1">{campanha.mensagem}</p>
+                      </div>
+                      <div className="text-right text-sm text-muted-foreground space-y-1">
+                        <div>{new Date(campanha.created_at).toLocaleDateString('pt-BR')}</div>
+                        <div className="flex gap-3">
+                          <span>📩 {campanha.total_enviados}/{campanha.total_destinatarios}</span>
+                          {campanha.total_falhas > 0 && <span className="text-destructive">❌ {campanha.total_falhas}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
       </Tabs>
 
       {/* Dialog de detalhe do feedback */}
