@@ -2317,6 +2317,10 @@ export default function NormalizacaoGlobal() {
             <ImageOff className="w-4 h-4" />
             Raspagem de Imagens ({stats.produtosSemImagem})
           </TabsTrigger>
+          <TabsTrigger value="suporte" className="gap-2">
+            <MessageSquare className="w-4 h-4" />
+            Suporte {feedbackStats.total > 0 && <Badge variant="destructive" className="ml-1">{feedbackStats.total}</Badge>}
+          </TabsTrigger>
         </TabsList>
 
         {/* Candidatos Pendentes */}
