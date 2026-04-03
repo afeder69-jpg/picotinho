@@ -558,7 +558,7 @@ export default function NormalizacaoGlobal() {
     }
   }
 
-
+  async function buscarProdutosMaster(termo: string) {
     setBuscandoMaster(true);
     try {
       const normalizado = termo.trim().toLowerCase()
