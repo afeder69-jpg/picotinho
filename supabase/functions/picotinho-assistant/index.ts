@@ -1426,6 +1426,8 @@ async function executeTool(
 
       // ==================== FEEDBACK TOOL ====================
       case 'registrar_feedback': {
+        console.log(`📋 [FEEDBACK] Tool registrar_feedback chamada — tipo: ${args.tipo}, mensagem: ${(args.mensagem || '').substring(0, 100)}`);
+        
         const tiposValidos = ['erro', 'sugestao', 'reclamacao', 'duvida'];
         const tipo = tiposValidos.includes(args.tipo) ? args.tipo : 'duvida';
         
@@ -1453,16 +1455,27 @@ async function executeTool(
           .select('id')
           .single();
         
-        if (fbError) throw fbError;
+        if (fbError) {
+          console.error(`❌ [FEEDBACK] Erro ao salvar feedback:`, fbError);
+          throw fbError;
+        }
+        
+        console.log(`✅ [FEEDBACK] Feedback ${feedback.id} salvo com sucesso — tipo: ${tipo}, prioridade: ${tipo === 'erro' ? 'alta' : 'normal'}`);
         
         // Registrar confirmação automática da IA no histórico
-        await supabase.from('feedbacks_respostas').insert({
+        const { error: respError } = await supabase.from('feedbacks_respostas').insert({
           feedback_id: feedback.id,
           autor_id: null,
           autor_tipo: 'ia',
           mensagem: 'Feedback recebido e registrado automaticamente pelo assistente.',
           enviada_via_whatsapp: false
         });
+        
+        if (respError) {
+          console.warn(`⚠️ [FEEDBACK] Feedback salvo mas erro ao registrar resposta automática:`, respError);
+        } else {
+          console.log(`✅ [FEEDBACK] Resposta automática da IA registrada em feedbacks_respostas`);
+        }
         
         const tipoLabel: Record<string, string> = {
           erro: 'relato de erro',
@@ -1478,7 +1491,7 @@ async function executeTool(
             tipo: tipo,
             instrucao: `O feedback (${tipoLabel[tipo]}) foi registrado com sucesso. Responda ao usuário de forma acolhedora e simpática, confirmando que a mensagem foi recebida e que o time vai analisar com atenção. Diga que retornarão o mais rápido possível por este mesmo canal. Adapte o tom ao tipo de feedback (mais empático para erros/reclamações, mais entusiasta para sugestões).`
           }),
-          isWriteMutation: false  // Não conta como mutação de estoque/lista
+          isWriteMutation: false
         };
       }
 
