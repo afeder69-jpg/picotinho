@@ -3152,7 +3152,7 @@ export default function NormalizacaoGlobal() {
       </Dialog>
 
       {/* AlertDialog Confirmação de Envio */}
-      <AlertDialog open={confirmarEnvioCampanhaOpen} onOpenChange={setConfirmarEnvioCampanhaOpen}>
+      <AlertDialog open={confirmarEnvioCampanhaOpen} onOpenChange={(open) => { if (!enviandoCampanha) setConfirmarEnvioCampanhaOpen(open); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Envio de Campanha?</AlertDialogTitle>
@@ -3165,7 +3165,13 @@ export default function NormalizacaoGlobal() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={enviandoCampanha}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={criarEEnviarCampanha} disabled={enviandoCampanha}>
+            <AlertDialogAction 
+              disabled={enviandoCampanha}
+              onClick={(e) => {
+                e.preventDefault();
+                criarEEnviarCampanha();
+              }}
+            >
               {enviandoCampanha ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enviando...</> : 'Sim, Enviar'}
             </AlertDialogAction>
           </AlertDialogFooter>
