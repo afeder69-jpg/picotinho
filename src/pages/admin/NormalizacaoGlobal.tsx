@@ -442,6 +442,9 @@ export default function NormalizacaoGlobal() {
       // Carregar produtos recentes iniciais
       await carregarProdutosRecentes();
 
+      // Carregar feedbacks
+      await carregarFeedbacks();
+
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
       toast({
