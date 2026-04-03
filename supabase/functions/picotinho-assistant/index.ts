@@ -1424,6 +1424,64 @@ async function executeTool(
         return { result: JSON.stringify({ mercados: (mercados || []).map((m: any) => m.nome) }), isWriteMutation: false };
       }
 
+      // ==================== FEEDBACK TOOL ====================
+      case 'registrar_feedback': {
+        const tiposValidos = ['erro', 'sugestao', 'reclamacao', 'duvida'];
+        const tipo = tiposValidos.includes(args.tipo) ? args.tipo : 'duvida';
+        
+        // Buscar telefone do remetente via user_id
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('telefone')
+          .eq('user_id', usuarioId)
+          .maybeSingle();
+        
+        // Inserir feedback
+        const { data: feedback, error: fbError } = await supabase
+          .from('feedbacks')
+          .insert({
+            user_id: usuarioId,
+            tipo,
+            mensagem: args.mensagem,
+            contexto: args.contexto || null,
+            canal: 'whatsapp',
+            telefone_whatsapp: profile?.telefone || null,
+            session_id: null,
+            status: 'novo',
+            prioridade: tipo === 'erro' ? 'alta' : 'normal'
+          })
+          .select('id')
+          .single();
+        
+        if (fbError) throw fbError;
+        
+        // Registrar confirmação automática da IA no histórico
+        await supabase.from('feedbacks_respostas').insert({
+          feedback_id: feedback.id,
+          autor_id: null,
+          autor_tipo: 'ia',
+          mensagem: 'Feedback recebido e registrado automaticamente pelo assistente.',
+          enviada_via_whatsapp: false
+        });
+        
+        const tipoLabel: Record<string, string> = {
+          erro: 'relato de erro',
+          sugestao: 'sugestão',
+          reclamacao: 'reclamação',
+          duvida: 'dúvida'
+        };
+        
+        return {
+          result: JSON.stringify({
+            sucesso: true,
+            feedback_id: feedback.id,
+            tipo: tipo,
+            instrucao: `O feedback (${tipoLabel[tipo]}) foi registrado com sucesso. Responda ao usuário de forma acolhedora e simpática, confirmando que a mensagem foi recebida e que o time vai analisar com atenção. Diga que retornarão o mais rápido possível por este mesmo canal. Adapte o tom ao tipo de feedback (mais empático para erros/reclamações, mais entusiasta para sugestões).`
+          }),
+          isWriteMutation: false  // Não conta como mutação de estoque/lista
+        };
+      }
+
       default:
         return { result: JSON.stringify({ erro: `Tool "${toolName}" não reconhecida.` }), isWriteMutation: false };
     }
