@@ -3079,7 +3079,7 @@ export default function NormalizacaoGlobal() {
       </Tabs>
 
       {/* Dialog Nova Campanha */}
-      <Dialog open={novaCampanhaOpen} onOpenChange={(open) => { setNovaCampanhaOpen(open); if (!open) { setEstimativaDestinatarios(null); } }}>
+      <Dialog open={novaCampanhaOpen} onOpenChange={(open) => { if (!enviandoCampanha) { setNovaCampanhaOpen(open); if (!open) { setEstimativaDestinatarios(null); } } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
