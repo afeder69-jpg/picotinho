@@ -225,6 +225,31 @@ export default function NormalizacaoGlobal() {
     verificarAcessoMaster();
   }, []);
 
+  // Auto-refresh dos dados a cada 30 segundos + ao voltar foco na aba
+  useEffect(() => {
+    if (!isMaster) return;
+
+    // Polling a cada 30s
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refresh dashboard Master (30s)');
+      carregarDados();
+    }, 30_000);
+
+    // Refresh ao voltar o foco para a aba
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔄 Auto-refresh dashboard Master (foco)');
+        carregarDados();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isMaster, paginaAtual]);
+
 
   // useEffect para busca dinâmica com debounce
   useEffect(() => {
