@@ -694,6 +694,7 @@ export default function NormalizacaoGlobal() {
     } catch (error: any) {
       console.error('Erro ao criar campanha:', error);
       toast({ title: "Erro", description: error.message, variant: "destructive" });
+      setConfirmarEnvioCampanhaOpen(false);
     } finally {
       setEnviandoCampanha(false);
     }
