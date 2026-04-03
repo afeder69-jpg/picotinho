@@ -2509,6 +2509,10 @@ export default function NormalizacaoGlobal() {
             <MessageSquare className="w-4 h-4" />
             Suporte {feedbackStats.total > 0 && <Badge variant="destructive" className="ml-1">{feedbackStats.total}</Badge>}
           </TabsTrigger>
+          <TabsTrigger value="campanhas" className="gap-2" onClick={() => { carregarFiltrosCampanha(); }}>
+            <Send className="w-4 h-4" />
+            Campanhas {campanhasEmAndamento > 0 && <Badge variant="default" className="ml-1">{campanhasEmAndamento}</Badge>}
+          </TabsTrigger>
         </TabsList>
 
         {/* Candidatos Pendentes */}
