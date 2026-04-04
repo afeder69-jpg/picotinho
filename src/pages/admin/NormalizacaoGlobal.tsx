@@ -3196,23 +3196,37 @@ export default function NormalizacaoGlobal() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {campanhas.map((campanha) => (
+              {campanhas.map((campanha) => {
+                const ultimoDisparo = campanhasDisparosMap[campanha.id];
+                const totalDisparos = (campanha.total_reenvios || 0) + 1;
+                const temDisparos = !!ultimoDisparo;
+                return (
                 <Card key={campanha.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => abrirDetalheCampanha(campanha)}>
                   <CardContent className="py-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold">{campanha.titulo}</h4>
                           {getStatusCampanhaBadge(campanha.status)}
                           <Badge variant="outline" className="text-xs">
                             {campanha.filtro_tipo === 'todos' ? 'Todos' : `${campanha.filtro_tipo}: ${campanha.filtro_valor}`}
                           </Badge>
+                          {totalDisparos > 1 && (
+                            <Badge variant="secondary" className="text-xs">
+                              Enviada {totalDisparos}x
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-1">{campanha.mensagem}</p>
                       </div>
-                      <div className="text-right text-sm text-muted-foreground space-y-1">
-                        <div>{new Date(campanha.created_at).toLocaleDateString('pt-BR')}</div>
-                        <div className="flex gap-3">
+                      <div className="text-right text-sm text-muted-foreground space-y-1 shrink-0 ml-4">
+                        <div>
+                          {temDisparos
+                            ? <>Último envio: {new Date(ultimoDisparo.iniciado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(ultimoDisparo.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                            : <>Criada em {new Date(campanha.created_at).toLocaleDateString('pt-BR')}</>
+                          }
+                        </div>
+                        <div className="flex gap-3 justify-end">
                           <span>📩 {campanha.total_enviados}/{campanha.total_destinatarios}</span>
                           {campanha.total_falhas > 0 && <span className="text-destructive">❌ {campanha.total_falhas}</span>}
                         </div>
@@ -3220,7 +3234,8 @@ export default function NormalizacaoGlobal() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
         </TabsContent>
