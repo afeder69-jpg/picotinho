@@ -233,6 +233,7 @@ export default function NormalizacaoGlobal() {
   const [campanhaDetalheOpen, setCampanhaDetalheOpen] = useState(false);
   const [campanhaAtual, setCampanhaAtual] = useState<any>(null);
   const [campanhaEnvios, setCampanhaEnvios] = useState<any[]>([]);
+  const [campanhaDisparos, setCampanhaDisparos] = useState<any[]>([]);
   const [novaCampanhaOpen, setNovaCampanhaOpen] = useState(false);
   const [novaCampanha, setNovaCampanha] = useState(NOVA_CAMPANHA_INITIAL_STATE);
   const [enviandoCampanha, setEnviandoCampanha] = useState(false);
@@ -241,6 +242,11 @@ export default function NormalizacaoGlobal() {
   const [confirmandoEnvioCampanha, setConfirmandoEnvioCampanha] = useState(false);
   const [carregandoCampanhas, setCarregandoCampanhas] = useState(false);
   const [campanhasEmAndamento, setCampanhasEmAndamento] = useState(0);
+  const [editandoCampanha, setEditandoCampanha] = useState(false);
+  const [campanhaEditada, setCampanhaEditada] = useState<any>(null);
+  const [confirmandoExclusaoCampanha, setConfirmandoExclusaoCampanha] = useState(false);
+  const [confirmandoReenvioCampanha, setConfirmandoReenvioCampanha] = useState(false);
+  const [campanhasDisparosMap, setCampanhasDisparosMap] = useState<Record<string, any>>({}); // ultimo disparo por campanha_id
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -619,6 +625,24 @@ export default function NormalizacaoGlobal() {
       setCampanhas(data || []);
       const emAndamento = (data || []).filter((c: any) => c.status === 'enviando').length;
       setCampanhasEmAndamento(emAndamento);
+
+      // Buscar o disparo mais recente por campanha
+      const ids = (data || []).map((c: any) => c.id);
+      if (ids.length > 0) {
+        const { data: disparos } = await supabase
+          .from('campanhas_whatsapp_disparos')
+          .select('*')
+          .in('campanha_id', ids)
+          .order('iniciado_em', { ascending: false });
+
+        const map: Record<string, any> = {};
+        for (const d of (disparos || [])) {
+          if (!map[d.campanha_id]) {
+            map[d.campanha_id] = d;
+          }
+        }
+        setCampanhasDisparosMap(map);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar campanhas:', error);
     } finally {
@@ -754,13 +778,99 @@ export default function NormalizacaoGlobal() {
   async function abrirDetalheCampanha(campanha: any) {
     setCampanhaAtual(campanha);
     setCampanhaDetalheOpen(true);
-    // Carregar envios
-    const { data } = await supabase
-      .from('campanhas_whatsapp_envios')
-      .select('*')
-      .eq('campanha_id', campanha.id)
-      .order('created_at', { ascending: true });
-    setCampanhaEnvios(data || []);
+    setEditandoCampanha(false);
+    setCampanhaEditada(null);
+    setConfirmandoExclusaoCampanha(false);
+    setConfirmandoReenvioCampanha(false);
+    // Carregar envios e disparos em paralelo
+    const [enviosRes, disparosRes] = await Promise.all([
+      supabase
+        .from('campanhas_whatsapp_envios')
+        .select('*')
+        .eq('campanha_id', campanha.id)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('campanhas_whatsapp_disparos')
+        .select('*')
+        .eq('campanha_id', campanha.id)
+        .order('iniciado_em', { ascending: false })
+    ]);
+    setCampanhaEnvios(enviosRes.data || []);
+    setCampanhaDisparos(disparosRes.data || []);
+  }
+
+  async function salvarEdicaoCampanha() {
+    if (!campanhaEditada || !campanhaAtual) return;
+    setEnviandoCampanha(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: {
+          action: 'editar',
+          campanha_id: campanhaAtual.id,
+          titulo: campanhaEditada.titulo,
+          mensagem: campanhaEditada.mensagem,
+          filtro_tipo: campanhaEditada.filtro_tipo,
+          filtro_valor: campanhaEditada.filtro_valor || null,
+        },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Campanha atualizada" });
+      setEditandoCampanha(false);
+      const updated = { ...campanhaAtual, ...campanhaEditada };
+      setCampanhaAtual(updated);
+      await carregarCampanhas();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function excluirCampanha() {
+    if (!campanhaAtual) return;
+    setEnviandoCampanha(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'excluir', campanha_id: campanhaAtual.id },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Campanha excluída" });
+      setCampanhaDetalheOpen(false);
+      setConfirmandoExclusaoCampanha(false);
+      await carregarCampanhas();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function reenviarCampanha() {
+    if (!campanhaAtual) return;
+    setEnviandoCampanha(true);
+    setConfirmandoReenvioCampanha(false);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data: resultado, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'reenviar', campanha_id: campanhaAtual.id },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (error) throw error;
+      if (resultado?.error) throw new Error(resultado.error);
+      toast({ title: "Reenvio concluído", description: `${resultado?.total_processados || 0} destinatários processados` });
+      await carregarCampanhas();
+      await abrirDetalheCampanha({ ...campanhaAtual, id: campanhaAtual.id });
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
   }
 
   function getStatusCampanhaBadge(status: string) {
@@ -3086,23 +3196,37 @@ export default function NormalizacaoGlobal() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {campanhas.map((campanha) => (
+              {campanhas.map((campanha) => {
+                const ultimoDisparo = campanhasDisparosMap[campanha.id];
+                const totalDisparos = (campanha.total_reenvios || 0) + 1;
+                const temDisparos = !!ultimoDisparo;
+                return (
                 <Card key={campanha.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => abrirDetalheCampanha(campanha)}>
                   <CardContent className="py-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold">{campanha.titulo}</h4>
                           {getStatusCampanhaBadge(campanha.status)}
                           <Badge variant="outline" className="text-xs">
                             {campanha.filtro_tipo === 'todos' ? 'Todos' : `${campanha.filtro_tipo}: ${campanha.filtro_valor}`}
                           </Badge>
+                          {totalDisparos > 1 && (
+                            <Badge variant="secondary" className="text-xs">
+                              Enviada {totalDisparos}x
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-1">{campanha.mensagem}</p>
                       </div>
-                      <div className="text-right text-sm text-muted-foreground space-y-1">
-                        <div>{new Date(campanha.created_at).toLocaleDateString('pt-BR')}</div>
-                        <div className="flex gap-3">
+                      <div className="text-right text-sm text-muted-foreground space-y-1 shrink-0 ml-4">
+                        <div>
+                          {temDisparos
+                            ? <>Último envio: {new Date(ultimoDisparo.iniciado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(ultimoDisparo.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                            : <>Criada em {new Date(campanha.created_at).toLocaleDateString('pt-BR')}</>
+                          }
+                        </div>
+                        <div className="flex gap-3 justify-end">
                           <span>📩 {campanha.total_enviados}/{campanha.total_destinatarios}</span>
                           {campanha.total_falhas > 0 && <span className="text-destructive">❌ {campanha.total_falhas}</span>}
                         </div>
@@ -3110,7 +3234,8 @@ export default function NormalizacaoGlobal() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -3250,67 +3375,218 @@ export default function NormalizacaoGlobal() {
       </Dialog>
 
       {/* Dialog Detalhe da Campanha */}
-      <Dialog open={campanhaDetalheOpen} onOpenChange={setCampanhaDetalheOpen}>
+      <Dialog open={campanhaDetalheOpen} onOpenChange={(open) => {
+        if (!open) {
+          setEditandoCampanha(false);
+          setCampanhaEditada(null);
+          setConfirmandoReenvioCampanha(false);
+        }
+        setCampanhaDetalheOpen(open);
+      }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           {campanhaAtual && (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Send className="w-5 h-5" />
-                  {campanhaAtual.titulo}
-                  {getStatusCampanhaBadge(campanhaAtual.status)}
+                  {editandoCampanha ? 'Editar Campanha' : campanhaAtual.titulo}
+                  {!editandoCampanha && getStatusCampanhaBadge(campanhaAtual.status)}
                 </DialogTitle>
                 <DialogDescription>
                   Criada em {new Date(campanhaAtual.created_at).toLocaleDateString('pt-BR')} às {new Date(campanhaAtual.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  {(campanhaAtual.total_reenvios || 0) > 0 && ` · Enviada ${(campanhaAtual.total_reenvios || 0) + 1} vez(es)`}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                {/* Mensagem */}
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-sm font-medium mb-1">Mensagem:</p>
-                  <p className="text-sm whitespace-pre-wrap">{campanhaAtual.mensagem}</p>
-                </div>
+                {editandoCampanha && campanhaEditada ? (
+                  /* Modo edição */
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>Título</Label>
+                      <Input value={campanhaEditada.titulo} onChange={(e) => setCampanhaEditada({ ...campanhaEditada, titulo: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Mensagem</Label>
+                      <Textarea value={campanhaEditada.mensagem} onChange={(e) => setCampanhaEditada({ ...campanhaEditada, mensagem: e.target.value })} rows={5} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Público-alvo</Label>
+                      <RadioGroup
+                        value={campanhaEditada.filtro_tipo}
+                        onValueChange={(v) => setCampanhaEditada({ ...campanhaEditada, filtro_tipo: v, filtro_valor: '' })}
+                      >
+                        <div className="flex items-center gap-2"><RadioGroupItem value="todos" id="edit_todos" /><Label htmlFor="edit_todos">Todos</Label></div>
+                        <div className="flex items-center gap-2"><RadioGroupItem value="estado" id="edit_estado" /><Label htmlFor="edit_estado">Por Estado</Label></div>
+                        <div className="flex items-center gap-2"><RadioGroupItem value="cidade" id="edit_cidade" /><Label htmlFor="edit_cidade">Por Cidade</Label></div>
+                      </RadioGroup>
+                    </div>
+                    {campanhaEditada.filtro_tipo !== 'todos' && (
+                      <div className="space-y-2">
+                        <Label>{campanhaEditada.filtro_tipo === 'estado' ? 'Estado' : 'Cidade'}</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={campanhaEditada.filtro_valor || ''}
+                          onChange={(e) => setCampanhaEditada({ ...campanhaEditada, filtro_valor: e.target.value })}
+                        >
+                          <option value="">Selecione...</option>
+                          {(campanhaEditada.filtro_tipo === 'estado' ? filtrosDisponiveis.estados : filtrosDisponiveis.cidades).map(f => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button onClick={salvarEdicaoCampanha} disabled={enviandoCampanha || !campanhaEditada.titulo.trim() || !campanhaEditada.mensagem.trim()} className="gap-2">
+                        {enviandoCampanha ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        Salvar
+                      </Button>
+                      <Button variant="outline" onClick={() => { setEditandoCampanha(false); setCampanhaEditada(null); }} disabled={enviandoCampanha}>Cancelar</Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Modo visualização */
+                  <>
+                    {/* Mensagem */}
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm font-medium mb-1">Mensagem:</p>
+                      <p className="text-sm whitespace-pre-wrap">{campanhaAtual.mensagem}</p>
+                    </div>
 
-                {/* Critério de disparo */}
-                <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
-                  <p className="font-medium">Critério de disparo:</p>
-                  <p>Público: {campanhaAtual.filtro_tipo === 'todos' ? 'Todos os usuários ativos' : `${campanhaAtual.filtro_tipo}: ${campanhaAtual.filtro_valor}`}</p>
-                  <p>Total destinatários: {campanhaAtual.total_destinatarios}</p>
-                  <p>Enviados: {campanhaAtual.total_enviados} | Falhas: {campanhaAtual.total_falhas}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Critério: telefones verificados + ativos, DISTINCT ON (usuario_id) ORDER BY created_at DESC (tabela whatsapp_telefones_autorizados)</p>
-                </div>
+                    {/* Critério de disparo */}
+                    <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                      <p className="font-medium">Critério de disparo:</p>
+                      <p>Público: {campanhaAtual.filtro_tipo === 'todos' ? 'Todos os usuários ativos' : `${campanhaAtual.filtro_tipo}: ${campanhaAtual.filtro_valor}`}</p>
+                      <p>Total destinatários: {campanhaAtual.total_destinatarios}</p>
+                      <p>Enviados: {campanhaAtual.total_enviados} | Falhas: {campanhaAtual.total_falhas}</p>
+                    </div>
 
-                {/* Botão Reprocessar */}
-                {['falha', 'concluida_parcial'].includes(campanhaAtual.status) && (
-                  <Button onClick={() => reprocessarCampanha(campanhaAtual.id)} disabled={enviandoCampanha} variant="outline" className="gap-2">
-                    <RotateCcw className="w-4 h-4" />
-                    {enviandoCampanha ? 'Reprocessando...' : 'Reprocessar Envios Pendentes/Falhos'}
-                  </Button>
-                )}
+                    {/* Ações */}
+                    <div className="flex flex-wrap gap-2">
+                      {/* Editar */}
+                      {campanhaAtual.status !== 'enviando' && (
+                        <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                          setCampanhaEditada({
+                            titulo: campanhaAtual.titulo,
+                            mensagem: campanhaAtual.mensagem,
+                            filtro_tipo: campanhaAtual.filtro_tipo,
+                            filtro_valor: campanhaAtual.filtro_valor || '',
+                          });
+                          setEditandoCampanha(true);
+                          carregarFiltrosCampanha();
+                        }}>
+                          <Edit3 className="w-4 h-4" /> Editar
+                        </Button>
+                      )}
 
-                {/* Lista de envios */}
-                <div>
-                  <h4 className="font-medium mb-2">Envios ({campanhaEnvios.length})</h4>
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {campanhaEnvios.map((envio) => (
-                      <div key={envio.id} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded">
-                        <span className="font-mono text-xs">{envio.telefone}</span>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={envio.status === 'enviado' ? 'outline' : envio.status === 'falha' ? 'destructive' : 'secondary'}>
-                            {envio.status}
-                          </Badge>
-                          {envio.enviado_em && <span className="text-xs text-muted-foreground">{new Date(envio.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                      {/* Reprocessar falhas */}
+                      {['falha', 'concluida_parcial'].includes(campanhaAtual.status) && (
+                        <Button onClick={() => reprocessarCampanha(campanhaAtual.id)} disabled={enviandoCampanha} variant="outline" size="sm" className="gap-2">
+                          <RotateCcw className="w-4 h-4" />
+                          {enviandoCampanha ? 'Reprocessando...' : 'Reprocessar falhas'}
+                        </Button>
+                      )}
+
+                      {/* Reenviar campanha completa */}
+                      {['concluida', 'concluida_parcial', 'falha'].includes(campanhaAtual.status) && !confirmandoReenvioCampanha && (
+                        <Button onClick={() => setConfirmandoReenvioCampanha(true)} disabled={enviandoCampanha} variant="outline" size="sm" className="gap-2">
+                          <Send className="w-4 h-4" /> Reenviar campanha
+                        </Button>
+                      )}
+
+                      {/* Excluir */}
+                      {campanhaAtual.status !== 'enviando' && (
+                        <Button variant="destructive" size="sm" className="gap-2" onClick={() => setConfirmandoExclusaoCampanha(true)} disabled={enviandoCampanha}>
+                          <Trash2 className="w-4 h-4" /> Excluir
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Confirmação de reenvio inline */}
+                    {confirmandoReenvioCampanha && (
+                      <div className="p-3 border border-primary/30 rounded-lg bg-muted/50 space-y-2">
+                        <p className="text-sm font-medium">⚠️ Confirmar reenvio completo?</p>
+                        <p className="text-xs text-muted-foreground">Isso limpará os envios da rodada anterior, reconsultará todos os destinatários e fará um novo disparo completo. O histórico de disparos anteriores será preservado.</p>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={reenviarCampanha} disabled={enviandoCampanha} className="gap-2">
+                            {enviandoCampanha ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            Confirmar reenvio
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setConfirmandoReenvioCampanha(false)} disabled={enviandoCampanha}>Cancelar</Button>
                         </div>
                       </div>
-                    ))}
-                    {campanhaEnvios.length === 0 && <p className="text-sm text-muted-foreground">Nenhum envio registrado.</p>}
-                  </div>
-                </div>
+                    )}
+
+                    {/* Histórico de disparos */}
+                    {campanhaDisparos.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Histórico de disparos ({campanhaDisparos.length})</h4>
+                        <div className="space-y-1">
+                          {campanhaDisparos.map((d, idx) => (
+                            <div key={d.id} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">#{campanhaDisparos.length - idx}</span>
+                                <span className="text-xs">
+                                  {new Date(d.iniciado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}{' '}
+                                  {new Date(d.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs">📩 {d.total_enviados}/{d.total_destinatarios}</span>
+                                {d.total_falhas > 0 && <span className="text-xs text-destructive">❌ {d.total_falhas}</span>}
+                                <Badge variant={d.status === 'concluida' ? 'outline' : d.status === 'falha' ? 'destructive' : 'secondary'} className="text-xs">
+                                  {d.status === 'concluida' ? 'Concluído' : d.status === 'falha' ? 'Falha' : d.status === 'concluida_parcial' ? 'Parcial' : d.status === 'enviando' ? 'Enviando...' : d.status}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lista de envios */}
+                    <div>
+                      <h4 className="font-medium mb-2">Envios ({campanhaEnvios.length})</h4>
+                      <div className="max-h-60 overflow-y-auto space-y-1">
+                        {campanhaEnvios.map((envio) => (
+                          <div key={envio.id} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded">
+                            <span className="font-mono text-xs">{envio.telefone}</span>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={envio.status === 'enviado' ? 'outline' : envio.status === 'falha' ? 'destructive' : 'secondary'}>
+                                {envio.status}
+                              </Badge>
+                              {envio.enviado_em && <span className="text-xs text-muted-foreground">{new Date(envio.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                            </div>
+                          </div>
+                        ))}
+                        {campanhaEnvios.length === 0 && <p className="text-sm text-muted-foreground">Nenhum envio registrado.</p>}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog de exclusão de campanha */}
+      <AlertDialog open={confirmandoExclusaoCampanha} onOpenChange={setConfirmandoExclusaoCampanha}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir campanha permanentemente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso apagará a campanha <strong>"{campanhaAtual?.titulo}"</strong>, todos os envios registrados e o histórico de disparos de forma permanente. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={enviandoCampanha}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={excluirCampanha} disabled={enviandoCampanha} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {enviandoCampanha ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Excluir permanentemente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog de detalhe do feedback */}
       <Dialog open={feedbackDetalheOpen} onOpenChange={setFeedbackDetalheOpen}>
