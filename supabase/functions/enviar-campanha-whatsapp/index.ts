@@ -540,42 +540,132 @@ serve(async (req: Request) => {
 
       const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
       const prefixo = `📢 *Picotinho*\n\n`;
+      const mensagemCompleta = prefixo + campanhaData.mensagem;
 
+      // ===== BATCH QUERY: preferências de áudio dos destinatários =====
+      const allUserIds = enviosPendentes.map((e: any) => e.user_id).filter(Boolean);
+      const preferenciaMap = new Map<string, string>(); // userId -> modo_resposta
+
+      if (allUserIds.length > 0) {
+        // Query em batches de 100 para respeitar limites
+        for (let i = 0; i < allUserIds.length; i += 100) {
+          const batchIds = allUserIds.slice(i, i + 100);
+          const { data: prefs } = await client
+            .from('whatsapp_preferencias_usuario')
+            .select('user_id, modo_resposta')
+            .in('user_id', batchIds);
+
+          for (const p of (prefs || [])) {
+            preferenciaMap.set(p.user_id, p.modo_resposta);
+          }
+        }
+      }
+
+      // Contar quantos precisam de áudio
+      const precisamAudio = enviosPendentes.filter((e: any) => {
+        const modo = preferenciaMap.get(e.user_id) || 'texto';
+        return modo === 'audio' || modo === 'ambos';
+      }).length;
+
+      console.log(`🔊 [CAMPANHA] Preferências: ${enviosPendentes.length - precisamAudio} texto, ${precisamAudio} com áudio`);
+
+      // ===== TTS: gerar UMA VEZ se algum destinatário precisa de áudio =====
+      let audioBase64Cache: string | null = null;
+      let ttsFalhou = false;
+
+      if (precisamAudio > 0) {
+        console.log(`🎤 [CAMPANHA] Gerando TTS para campanha (1x para ${precisamAudio} destinatários)...`);
+        audioBase64Cache = await generateCampaignTTS(mensagemCompleta);
+        if (!audioBase64Cache) {
+          ttsFalhou = true;
+          console.warn(`⚠️ [CAMPANHA-TTS] Falha na geração do áudio — destinatários com modo 'audio' receberão texto como fallback`);
+        }
+      }
+
+      // ===== ENVIO POR LOTES =====
       for (let i = 0; i < enviosPendentes.length; i += 10) {
         const lote = enviosPendentes.slice(i, i + 10);
 
-        await Promise.all(lote.map(async (envio) => {
-          try {
-            const response = await fetch(sendTextUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(accountSecret ? { 'Client-Token': accountSecret } : {})
-              },
-              body: JSON.stringify({
-                phone: envio.telefone,
-                message: prefixo + campanhaData.mensagem,
-                delayTyping: 3
-              })
-            });
+        await Promise.all(lote.map(async (envio: any) => {
+          const modoUsuario = preferenciaMap.get(envio.user_id) || 'texto';
+          const deveEnviarTexto = modoUsuario === 'texto' || modoUsuario === 'ambos' || (modoUsuario === 'audio' && ttsFalhou);
+          const deveEnviarAudio = (modoUsuario === 'audio' || modoUsuario === 'ambos') && audioBase64Cache && !ttsFalhou;
 
-            if (response.ok) {
-              await client
-                .from('campanhas_whatsapp_envios')
+          try {
+            let textoOk = false;
+            let audioOk = false;
+            let modoEfetivo = modoUsuario;
+
+            // Enviar texto
+            if (deveEnviarTexto) {
+              const response = await fetch(sendTextUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+                },
+                body: JSON.stringify({
+                  phone: envio.telefone,
+                  message: mensagemCompleta,
+                  delayTyping: 3
+                })
+              });
+
+              if (response.ok) {
+                textoOk = true;
+              } else {
+                const errBody = await response.text();
+                console.error(`❌ [CAMPANHA] Falha texto ${envio.telefone}: HTTP ${response.status}`);
+                if (!deveEnviarAudio) {
+                  await client.from('campanhas_whatsapp_envios')
+                    .update({ status: 'falha', erro: `HTTP ${response.status}: ${errBody}` })
+                    .eq('id', envio.id);
+                  return;
+                }
+              }
+            }
+
+            // Enviar áudio
+            if (deveEnviarAudio) {
+              audioOk = await sendCampaignAudio(envio.telefone, audioBase64Cache!);
+              if (!audioOk && modoUsuario === 'audio' && !textoOk) {
+                // Fallback: modo áudio mas TTS de envio falhou — tentar texto
+                console.warn(`⚠️ [CAMPANHA] Fallback texto para ${envio.telefone} (áudio falhou no envio)`);
+                const fallbackResp = await fetch(sendTextUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+                  },
+                  body: JSON.stringify({
+                    phone: envio.telefone,
+                    message: mensagemCompleta,
+                    delayTyping: 3
+                  })
+                });
+                textoOk = fallbackResp.ok;
+                modoEfetivo = 'texto (fallback)';
+              }
+            }
+
+            // Determinar status final do envio
+            if (textoOk || audioOk) {
+              await client.from('campanhas_whatsapp_envios')
                 .update({ status: 'enviado', enviado_em: new Date().toISOString(), erro: null })
                 .eq('id', envio.id);
-              console.log(`✅ [CAMPANHA] Enviado para ${envio.telefone}`);
+              
+              const detalheModo = modoUsuario === 'texto' ? '📝texto' : 
+                                  modoUsuario === 'audio' ? (audioOk ? '🔊áudio' : '📝texto(fallback)') :
+                                  `📝texto${audioOk ? '+🔊áudio' : ''}`;
+              console.log(`✅ [CAMPANHA] Enviado ${envio.telefone} [${detalheModo}]`);
             } else {
-              const errBody = await response.text();
-              await client
-                .from('campanhas_whatsapp_envios')
-                .update({ status: 'falha', erro: `HTTP ${response.status}: ${errBody}` })
+              await client.from('campanhas_whatsapp_envios')
+                .update({ status: 'falha', erro: 'Falha em todos os canais (texto+áudio)' })
                 .eq('id', envio.id);
-              console.error(`❌ [CAMPANHA] Falha ${envio.telefone}: HTTP ${response.status}`);
+              console.error(`❌ [CAMPANHA] Falha total ${envio.telefone} [modo: ${modoUsuario}]`);
             }
           } catch (err: any) {
-            await client
-              .from('campanhas_whatsapp_envios')
+            await client.from('campanhas_whatsapp_envios')
               .update({ status: 'falha', erro: err.message })
               .eq('id', envio.id);
             console.error(`❌ [CAMPANHA] Exceção ${envio.telefone}: ${err.message}`);
