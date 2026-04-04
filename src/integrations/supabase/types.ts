@@ -29,6 +29,7 @@ export type Database = {
           total_destinatarios: number
           total_enviados: number
           total_falhas: number
+          total_reenvios: number
           updated_at: string
         }
         Insert: {
@@ -45,6 +46,7 @@ export type Database = {
           total_destinatarios?: number
           total_enviados?: number
           total_falhas?: number
+          total_reenvios?: number
           updated_at?: string
         }
         Update: {
@@ -61,9 +63,51 @@ export type Database = {
           total_destinatarios?: number
           total_enviados?: number
           total_falhas?: number
+          total_reenvios?: number
           updated_at?: string
         }
         Relationships: []
+      }
+      campanhas_whatsapp_disparos: {
+        Row: {
+          campanha_id: string
+          concluido_em: string | null
+          id: string
+          iniciado_em: string
+          status: string
+          total_destinatarios: number
+          total_enviados: number
+          total_falhas: number
+        }
+        Insert: {
+          campanha_id: string
+          concluido_em?: string | null
+          id?: string
+          iniciado_em?: string
+          status?: string
+          total_destinatarios?: number
+          total_enviados?: number
+          total_falhas?: number
+        }
+        Update: {
+          campanha_id?: string
+          concluido_em?: string | null
+          id?: string
+          iniciado_em?: string
+          status?: string
+          total_destinatarios?: number
+          total_enviados?: number
+          total_falhas?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_whatsapp_disparos_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_whatsapp"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       campanhas_whatsapp_envios: {
         Row: {
