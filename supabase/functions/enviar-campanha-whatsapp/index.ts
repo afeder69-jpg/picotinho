@@ -552,11 +552,11 @@ serve(async (req: Request) => {
           const batchIds = allUserIds.slice(i, i + 100);
           const { data: prefs } = await client
             .from('whatsapp_preferencias_usuario')
-            .select('user_id, modo_resposta')
-            .in('user_id', batchIds);
+            .select('usuario_id, modo_resposta')
+            .in('usuario_id', batchIds);
 
           for (const p of (prefs || [])) {
-            preferenciaMap.set(p.user_id, p.modo_resposta);
+            preferenciaMap.set(p.usuario_id, p.modo_resposta);
           }
         }
       }
