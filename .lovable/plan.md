@@ -1,48 +1,36 @@
 
 
-## Diagnostico: Campanha enviada sem audio
+## Plano: Excluir 3 campanhas travadas
 
-### Causa raiz
+### O que sera feito
 
-No log da campanha: `🔊 [CAMPANHA] Preferências: 3 texto, 0 com áudio`
+Uma migration SQL para deletar as 3 campanhas com status "enviando" que travaram e nunca enviaram nada:
 
-Os dois usuarios com `modo_resposta = 'ambos'` nao foram identificados porque a query na linha 556 do `enviar-campanha-whatsapp/index.ts` usa `.in('user_id', batchIds)`, mas a coluna real na tabela `whatsapp_preferencias_usuario` se chama **`usuario_id`**.
+- `a64bf808-9a00-4057-a972-cf524e897521` (criada 23:49)
+- `7094ec57-54d3-4086-9ec1-c9ab48980cd7` (criada 23:48)
+- `4840b5cc-e54e-49d8-99f5-fb69de23793e` (criada 23:48)
 
-A query retorna zero resultados sem erro (Supabase ignora coluna inexistente no filtro `.in()`), entao todos caem no default `'texto'`.
+Todas com 0 destinatarios, 0 enviados, 0 falhas. Sem registros relacionados em `campanhas_whatsapp_envios` nem `campanhas_whatsapp_disparos`.
 
-### Correcao
+### O que permanece
 
-**Arquivo unico: `supabase/functions/enviar-campanha-whatsapp/index.ts`**
+As duas campanhas concluidas com sucesso:
+- "A Picanha do Lula" (3/3 enviados)
+- "Novidade no Picotinho" (3/3 enviados)
 
-Linha 553-556 — trocar:
-```typescript
-.select('user_id, modo_resposta')
-.in('user_id', batchIds);
-```
-por:
-```typescript
-.select('usuario_id, modo_resposta')
-.in('usuario_id', batchIds);
-```
+### Implementacao
 
-Linha 559 — trocar:
-```typescript
-preferenciaMap.set(p.user_id, p.modo_resposta);
-```
-por:
-```typescript
-preferenciaMap.set(p.usuario_id, p.modo_resposta);
+**Arquivo unico: nova migration SQL**
+
+```sql
+DELETE FROM campanhas_whatsapp
+WHERE id IN (
+  'a64bf808-9a00-4057-a972-cf524e897521',
+  '7094ec57-54d3-4086-9ec1-c9ab48980cd7',
+  '4840b5cc-e54e-49d8-99f5-fb69de23793e'
+)
+AND status = 'enviando';
 ```
 
-### O que NAO muda
-
-- Toda a logica de TTS, envio de audio, fallback, lotes, contadores
-- Fluxo de edicao, exclusao, reenvio
-- Restante do assistente e demais edge functions
-
-### Validacao pos-deploy
-
-- Reenviar a mesma campanha
-- Logs devem mostrar `Preferências: X texto, Y com áudio` com Y > 0
-- Usuarios com `modo_resposta = 'ambos'` devem receber texto + audio
+A condicao `AND status = 'enviando'` e uma protecao extra para garantir que so deleta se ainda estiverem no estado travado.
 
