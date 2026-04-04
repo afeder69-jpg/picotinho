@@ -625,6 +625,24 @@ export default function NormalizacaoGlobal() {
       setCampanhas(data || []);
       const emAndamento = (data || []).filter((c: any) => c.status === 'enviando').length;
       setCampanhasEmAndamento(emAndamento);
+
+      // Buscar o disparo mais recente por campanha
+      const ids = (data || []).map((c: any) => c.id);
+      if (ids.length > 0) {
+        const { data: disparos } = await supabase
+          .from('campanhas_whatsapp_disparos')
+          .select('*')
+          .in('campanha_id', ids)
+          .order('iniciado_em', { ascending: false });
+
+        const map: Record<string, any> = {};
+        for (const d of (disparos || [])) {
+          if (!map[d.campanha_id]) {
+            map[d.campanha_id] = d;
+          }
+        }
+        setCampanhasDisparosMap(map);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar campanhas:', error);
     } finally {
