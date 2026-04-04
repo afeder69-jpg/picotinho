@@ -654,6 +654,7 @@ export default function NormalizacaoGlobal() {
   }
 
   async function estimarDestinatariosCampanha(campanha = novaCampanha) {
+    setEstimativaDestinatarios(null);
     try {
       const { data: session } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
@@ -664,11 +665,20 @@ export default function NormalizacaoGlobal() {
         },
         headers: { Authorization: `Bearer ${session?.session?.access_token}` }
       });
-      if (!error && data) {
-        setEstimativaDestinatarios(data.total);
+      if (error) {
+        console.error('Erro ao estimar destinatários (edge function):', error);
+        setEstimativaDestinatarios(-1);
+        return;
       }
+      if (data?.error) {
+        console.error('Erro ao estimar destinatários (resposta):', data.error);
+        setEstimativaDestinatarios(-1);
+        return;
+      }
+      setEstimativaDestinatarios(data?.total ?? 0);
     } catch (err: any) {
       console.error('Erro ao estimar destinatários:', err);
+      setEstimativaDestinatarios(-1);
     }
   }
 

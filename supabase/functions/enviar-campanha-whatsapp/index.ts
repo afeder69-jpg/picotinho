@@ -196,126 +196,131 @@ serve(async (req: Request) => {
 
     console.log(`📢 [CAMPANHA] Iniciando envio: ${campanha.titulo} (${campanha_id})`);
 
-    // Consultar destinatários usando mesma query do preview
-    const destinatarios = await queryDestinatarios(campanha.filtro_tipo, campanha.filtro_valor);
-    
-    console.log(`📢 [CAMPANHA] ${destinatarios.length} destinatários encontrados`);
+    try {
+      // Consultar destinatários
+      const destinatarios = await queryDestinatarios(campanha.filtro_tipo, campanha.filtro_valor);
+      
+      console.log(`📢 [CAMPANHA] ${destinatarios.length} destinatários encontrados`);
 
-    // Atualizar total_destinatarios com contagem real
-    await serviceClient
-      .from('campanhas_whatsapp')
-      .update({ total_destinatarios: destinatarios.length })
-      .eq('id', campanha_id);
-
-    // INSERT envios com ON CONFLICT DO NOTHING (idempotência)
-    if (destinatarios.length > 0) {
-      const enviosInsert = destinatarios.map((d: any) => ({
-        campanha_id,
-        user_id: d.user_id,
-        telefone: d.telefone,
-        status: 'pendente'
-      }));
-
-      // Insert em lotes de 100 para evitar payload muito grande
-      for (let i = 0; i < enviosInsert.length; i += 100) {
-        const batch = enviosInsert.slice(i, i + 100);
-        await serviceClient
-          .from('campanhas_whatsapp_envios')
-          .upsert(batch, { onConflict: 'campanha_id,user_id', ignoreDuplicates: true });
-      }
-    }
-
-    // SELECT apenas envios pendentes ou com falha — NUNCA reenvia status='enviado'
-    const { data: enviosPendentes } = await serviceClient
-      .from('campanhas_whatsapp_envios')
-      .select('*')
-      .eq('campanha_id', campanha_id)
-      .in('status', ['pendente', 'falha']);
-
-    if (!enviosPendentes || enviosPendentes.length === 0) {
-      // Nada para enviar — recalcular e finalizar
-      await recalcularContadores(serviceClient, campanha_id);
-      return new Response(JSON.stringify({ ok: true, message: 'Nenhum envio pendente' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Credenciais Z-API
-    const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
-    const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
-    const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
-
-    if (!instanceUrl || !apiToken) {
       await serviceClient
         .from('campanhas_whatsapp')
-        .update({ status: 'falha' })
+        .update({ total_destinatarios: destinatarios.length })
         .eq('id', campanha_id);
 
-      return new Response(JSON.stringify({ error: 'Credenciais WhatsApp não configuradas' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+      // INSERT envios com ON CONFLICT DO NOTHING
+      if (destinatarios.length > 0) {
+        const enviosInsert = destinatarios.map((d: any) => ({
+          campanha_id,
+          user_id: d.user_id,
+          telefone: d.telefone,
+          status: 'pendente'
+        }));
 
-    const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
-    const prefixo = `📢 *Picotinho*\n\n`;
-
-    // Enviar em lotes de 10 com pausa de 2s
-    for (let i = 0; i < enviosPendentes.length; i += 10) {
-      const lote = enviosPendentes.slice(i, i + 10);
-
-      await Promise.all(lote.map(async (envio) => {
-        try {
-          const response = await fetch(sendTextUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(accountSecret ? { 'Client-Token': accountSecret } : {})
-            },
-            body: JSON.stringify({
-              phone: envio.telefone,
-              message: prefixo + campanha.mensagem,
-              delayTyping: 3
-            })
-          });
-
-          if (response.ok) {
-            await serviceClient
-              .from('campanhas_whatsapp_envios')
-              .update({ status: 'enviado', enviado_em: new Date().toISOString(), erro: null })
-              .eq('id', envio.id);
-            console.log(`✅ [CAMPANHA] Enviado para ${envio.telefone}`);
-          } else {
-            const errBody = await response.text();
-            await serviceClient
-              .from('campanhas_whatsapp_envios')
-              .update({ status: 'falha', erro: `HTTP ${response.status}: ${errBody}` })
-              .eq('id', envio.id);
-            console.error(`❌ [CAMPANHA] Falha ${envio.telefone}: HTTP ${response.status}`);
-          }
-        } catch (err: any) {
+        for (let i = 0; i < enviosInsert.length; i += 100) {
+          const batch = enviosInsert.slice(i, i + 100);
           await serviceClient
             .from('campanhas_whatsapp_envios')
-            .update({ status: 'falha', erro: err.message })
-            .eq('id', envio.id);
-          console.error(`❌ [CAMPANHA] Exceção ${envio.telefone}: ${err.message}`);
+            .upsert(batch, { onConflict: 'campanha_id,user_id', ignoreDuplicates: true });
         }
-      }));
-
-      // Pausa de 2s entre lotes (exceto último)
-      if (i + 10 < enviosPendentes.length) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
       }
+
+      // SELECT apenas envios pendentes ou com falha
+      const { data: enviosPendentes } = await serviceClient
+        .from('campanhas_whatsapp_envios')
+        .select('*')
+        .eq('campanha_id', campanha_id)
+        .in('status', ['pendente', 'falha']);
+
+      if (!enviosPendentes || enviosPendentes.length === 0) {
+        await recalcularContadores(serviceClient, campanha_id);
+        return new Response(JSON.stringify({ ok: true, message: 'Nenhum envio pendente' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Credenciais Z-API
+      const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
+      const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+      const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
+
+      if (!instanceUrl || !apiToken) {
+        await serviceClient
+          .from('campanhas_whatsapp')
+          .update({ status: 'falha' })
+          .eq('id', campanha_id);
+        return new Response(JSON.stringify({ error: 'Credenciais WhatsApp não configuradas' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
+      const prefixo = `📢 *Picotinho*\n\n`;
+
+      // Enviar em lotes de 10 com pausa de 2s
+      for (let i = 0; i < enviosPendentes.length; i += 10) {
+        const lote = enviosPendentes.slice(i, i + 10);
+
+        await Promise.all(lote.map(async (envio) => {
+          try {
+            const response = await fetch(sendTextUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+              },
+              body: JSON.stringify({
+                phone: envio.telefone,
+                message: prefixo + campanha.mensagem,
+                delayTyping: 3
+              })
+            });
+
+            if (response.ok) {
+              await serviceClient
+                .from('campanhas_whatsapp_envios')
+                .update({ status: 'enviado', enviado_em: new Date().toISOString(), erro: null })
+                .eq('id', envio.id);
+              console.log(`✅ [CAMPANHA] Enviado para ${envio.telefone}`);
+            } else {
+              const errBody = await response.text();
+              await serviceClient
+                .from('campanhas_whatsapp_envios')
+                .update({ status: 'falha', erro: `HTTP ${response.status}: ${errBody}` })
+                .eq('id', envio.id);
+              console.error(`❌ [CAMPANHA] Falha ${envio.telefone}: HTTP ${response.status}`);
+            }
+          } catch (err: any) {
+            await serviceClient
+              .from('campanhas_whatsapp_envios')
+              .update({ status: 'falha', erro: err.message })
+              .eq('id', envio.id);
+            console.error(`❌ [CAMPANHA] Exceção ${envio.telefone}: ${err.message}`);
+          }
+        }));
+
+        if (i + 10 < enviosPendentes.length) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+
+      // Recalcular contadores
+      await recalcularContadores(serviceClient, campanha_id);
+
+      console.log(`📢 [CAMPANHA] Envio concluído: ${campanha.titulo}`);
+
+      return new Response(JSON.stringify({ ok: true, total_processados: enviosPendentes.length }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+
+    } catch (envioErr: any) {
+      console.error(`❌ [CAMPANHA] Exceção fatal após marcar como enviando (${campanha_id}):`, envioErr.message);
+      await serviceClient
+        .from('campanhas_whatsapp')
+        .update({ status: 'falha', concluida_em: new Date().toISOString() })
+        .eq('id', campanha_id);
+      throw envioErr;
     }
-
-    // Recalcular contadores com COUNT real
-    await recalcularContadores(serviceClient, campanha_id);
-
-    console.log(`📢 [CAMPANHA] Envio concluído: ${campanha.titulo}`);
-
-    return new Response(JSON.stringify({ ok: true, total_processados: enviosPendentes.length }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
 
   } catch (error: any) {
     console.error('❌ [CAMPANHA] Erro:', error);
