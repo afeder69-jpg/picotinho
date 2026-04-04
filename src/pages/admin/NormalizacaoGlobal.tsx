@@ -778,13 +778,99 @@ export default function NormalizacaoGlobal() {
   async function abrirDetalheCampanha(campanha: any) {
     setCampanhaAtual(campanha);
     setCampanhaDetalheOpen(true);
-    // Carregar envios
-    const { data } = await supabase
-      .from('campanhas_whatsapp_envios')
-      .select('*')
-      .eq('campanha_id', campanha.id)
-      .order('created_at', { ascending: true });
-    setCampanhaEnvios(data || []);
+    setEditandoCampanha(false);
+    setCampanhaEditada(null);
+    setConfirmandoExclusaoCampanha(false);
+    setConfirmandoReenvioCampanha(false);
+    // Carregar envios e disparos em paralelo
+    const [enviosRes, disparosRes] = await Promise.all([
+      supabase
+        .from('campanhas_whatsapp_envios')
+        .select('*')
+        .eq('campanha_id', campanha.id)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('campanhas_whatsapp_disparos')
+        .select('*')
+        .eq('campanha_id', campanha.id)
+        .order('iniciado_em', { ascending: false })
+    ]);
+    setCampanhaEnvios(enviosRes.data || []);
+    setCampanhaDisparos(disparosRes.data || []);
+  }
+
+  async function salvarEdicaoCampanha() {
+    if (!campanhaEditada || !campanhaAtual) return;
+    setEnviandoCampanha(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: {
+          action: 'editar',
+          campanha_id: campanhaAtual.id,
+          titulo: campanhaEditada.titulo,
+          mensagem: campanhaEditada.mensagem,
+          filtro_tipo: campanhaEditada.filtro_tipo,
+          filtro_valor: campanhaEditada.filtro_valor || null,
+        },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Campanha atualizada" });
+      setEditandoCampanha(false);
+      const updated = { ...campanhaAtual, ...campanhaEditada };
+      setCampanhaAtual(updated);
+      await carregarCampanhas();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function excluirCampanha() {
+    if (!campanhaAtual) return;
+    setEnviandoCampanha(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'excluir', campanha_id: campanhaAtual.id },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Campanha excluída" });
+      setCampanhaDetalheOpen(false);
+      setConfirmandoExclusaoCampanha(false);
+      await carregarCampanhas();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
+  }
+
+  async function reenviarCampanha() {
+    if (!campanhaAtual) return;
+    setEnviandoCampanha(true);
+    setConfirmandoReenvioCampanha(false);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const { data: resultado, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
+        body: { action: 'reenviar', campanha_id: campanhaAtual.id },
+        headers: { Authorization: `Bearer ${session?.session?.access_token}` }
+      });
+      if (error) throw error;
+      if (resultado?.error) throw new Error(resultado.error);
+      toast({ title: "Reenvio concluído", description: `${resultado?.total_processados || 0} destinatários processados` });
+      await carregarCampanhas();
+      await abrirDetalheCampanha({ ...campanhaAtual, id: campanhaAtual.id });
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setEnviandoCampanha(false);
+    }
   }
 
   function getStatusCampanhaBadge(status: string) {
