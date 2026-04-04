@@ -61,84 +61,57 @@ serve(async (req: Request) => {
 
     // ===== QUERY DE DESTINATÁRIOS (compartilhada entre preview e envio) =====
     async function queryDestinatarios(fTipo: string, fValor: string | null) {
-      // Critério de usuário ativo:
-      // JOIN whatsapp_telefones_autorizados (verificado=true, ativo=true) com profiles
-      // DISTINCT ON (usuario_id) ORDER BY usuario_id, created_at DESC — telefone mais recente da tabela de telefones autorizados
-      let query = `
-        SELECT DISTINCT ON (wta.usuario_id) 
-          wta.usuario_id as user_id,
-          wta.telefone,
-          p.cidade,
-          p.estado
-        FROM whatsapp_telefones_autorizados wta
-        JOIN profiles p ON p.user_id = wta.usuario_id
-        WHERE wta.verificado = true 
-          AND wta.ativo = true
-      `;
+      let baseQuery = serviceClient
+        .from('whatsapp_telefones_autorizados')
+        .select('usuario_id, numero_whatsapp, created_at')
+        .eq('verificado', true)
+        .eq('ativo', true)
+        .order('created_at', { ascending: false });
 
-      if (fTipo === 'estado' && fValor) {
-        query += ` AND p.estado = '${fValor.replace(/'/g, "''")}'`;
-      } else if (fTipo === 'cidade' && fValor) {
-        query += ` AND p.cidade = '${fValor.replace(/'/g, "''")}'`;
+      const { data: telefones, error: telError } = await baseQuery;
+      if (telError) {
+        console.error('❌ [CAMPANHA] Erro ao buscar telefones autorizados:', JSON.stringify(telError));
+        throw new Error(`Erro ao buscar destinatários: ${telError.message}`);
       }
 
-      query += ` ORDER BY wta.usuario_id, wta.created_at DESC`;
-
-      const { data, error } = await serviceClient.rpc('execute_readonly_query', { query_text: query });
-      
-      // Fallback: usar query direta se RPC não existir
-      if (error) {
-        console.log('⚠️ [CAMPANHA] Fallback para query direta de destinatários');
-        
-        let baseQuery = serviceClient
-          .from('whatsapp_telefones_autorizados')
-          .select('usuario_id, telefone, created_at')
-          .eq('verificado', true)
-          .eq('ativo', true)
-          .order('created_at', { ascending: false });
-
-        const { data: telefones, error: telError } = await baseQuery;
-        if (telError) throw telError;
-
-        // Deduplicate by usuario_id (keep most recent by created_at — already ordered DESC)
-        const seen = new Map<string, any>();
-        for (const t of (telefones || [])) {
-          if (!seen.has(t.usuario_id)) {
-            seen.set(t.usuario_id, t);
-          }
+      // Deduplicate by usuario_id (keep most recent)
+      const seen = new Map<string, any>();
+      for (const t of (telefones || [])) {
+        if (!seen.has(t.usuario_id)) {
+          seen.set(t.usuario_id, t);
         }
-
-        // Get profiles for filtering
-        const userIds = Array.from(seen.keys());
-        if (userIds.length === 0) return [];
-
-        const { data: profiles } = await serviceClient
-          .from('profiles')
-          .select('user_id, cidade, estado')
-          .in('user_id', userIds);
-
-        const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
-
-        const result = [];
-        for (const [uid, tel] of seen) {
-          const profile = profileMap.get(uid);
-          
-          // Apply filter
-          if (fTipo === 'estado' && fValor && profile?.estado !== fValor) continue;
-          if (fTipo === 'cidade' && fValor && profile?.cidade !== fValor) continue;
-
-          result.push({
-            user_id: uid,
-            telefone: tel.telefone,
-            cidade: profile?.cidade || null,
-            estado: profile?.estado || null,
-          });
-        }
-
-        return result;
       }
 
-      return data || [];
+      const userIds = Array.from(seen.keys());
+      if (userIds.length === 0) return [];
+
+      const { data: profiles, error: profError } = await serviceClient
+        .from('profiles')
+        .select('user_id, cidade, estado')
+        .in('user_id', userIds);
+
+      if (profError) {
+        console.error('❌ [CAMPANHA] Erro ao buscar profiles:', JSON.stringify(profError));
+        throw new Error(`Erro ao buscar profiles: ${profError.message}`);
+      }
+
+      const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+
+      const result = [];
+      for (const [uid, tel] of seen) {
+        const profile = profileMap.get(uid);
+        if (fTipo === 'estado' && fValor && profile?.estado !== fValor) continue;
+        if (fTipo === 'cidade' && fValor && profile?.cidade !== fValor) continue;
+
+        result.push({
+          user_id: uid,
+          telefone: tel.numero_whatsapp,
+          cidade: profile?.cidade || null,
+          estado: profile?.estado || null,
+        });
+      }
+
+      return result;
     }
 
     // ===== ACTION: PREVIEW =====
