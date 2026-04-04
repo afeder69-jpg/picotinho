@@ -6,6 +6,104 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Mesma configuração de voz do picotinho-assistant
+const PICOTINHO_VOICE = {
+  voice: 'fable' as const,
+  speed: 1.1,
+  model: 'tts-1' as const,
+};
+
+// ==================== GENERATE TTS (campanha) ====================
+async function generateCampaignTTS(text: string): Promise<string | null> {
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiApiKey) {
+    console.error('❌ [CAMPANHA-TTS] OPENAI_API_KEY não configurada');
+    return null;
+  }
+
+  // Adaptar texto para escuta: remover prefixo visual e emojis pesados
+  let textoParaAudio = text
+    .replace(/📢\s*\*Picotinho\*\n\n/g, 'Picotinho informa: ')
+    .replace(/\*([^*]+)\*/g, '$1'); // remover negrito markdown
+
+  if (textoParaAudio.length > 2000) {
+    textoParaAudio = textoParaAudio.substring(0, 2000) + '...';
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: PICOTINHO_VOICE.model,
+        input: textoParaAudio,
+        voice: PICOTINHO_VOICE.voice,
+        speed: PICOTINHO_VOICE.speed,
+        response_format: 'mp3'
+      })
+    });
+
+    if (!response.ok) {
+      console.error('❌ [CAMPANHA-TTS] OpenAI erro:', response.status, await response.text());
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64Audio = 'data:audio/mpeg;base64,' + btoa(binary);
+    console.log(`✅ [CAMPANHA-TTS] Áudio gerado: ${bytes.length} bytes (${textoParaAudio.length} chars)`);
+    return base64Audio;
+  } catch (error) {
+    console.error('❌ [CAMPANHA-TTS] Erro ao gerar TTS:', error);
+    return null;
+  }
+}
+
+// ==================== SEND WHATSAPP AUDIO (campanha) ====================
+async function sendCampaignAudio(phone: string, audioBase64: string): Promise<boolean> {
+  const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
+  const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
+  const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
+
+  if (!instanceUrl || !apiToken) {
+    console.error('❌ [CAMPANHA-AUDIO] Credenciais WhatsApp ausentes');
+    return false;
+  }
+
+  try {
+    const sendAudioUrl = `${instanceUrl}/token/${apiToken}/send-audio`;
+    const response = await fetch(sendAudioUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accountSecret ? { 'Client-Token': accountSecret } : {})
+      },
+      body: JSON.stringify({
+        phone,
+        audio: audioBase64,
+        waveform: true
+      })
+    });
+
+    if (!response.ok) {
+      console.error(`❌ [CAMPANHA-AUDIO] Z-API erro para ${phone}:`, await response.text());
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`❌ [CAMPANHA-AUDIO] Exceção para ${phone}:`, error);
+    return false;
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
