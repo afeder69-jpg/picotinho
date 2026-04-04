@@ -233,6 +233,7 @@ export default function NormalizacaoGlobal() {
   const [campanhaDetalheOpen, setCampanhaDetalheOpen] = useState(false);
   const [campanhaAtual, setCampanhaAtual] = useState<any>(null);
   const [campanhaEnvios, setCampanhaEnvios] = useState<any[]>([]);
+  const [campanhaDisparos, setCampanhaDisparos] = useState<any[]>([]);
   const [novaCampanhaOpen, setNovaCampanhaOpen] = useState(false);
   const [novaCampanha, setNovaCampanha] = useState(NOVA_CAMPANHA_INITIAL_STATE);
   const [enviandoCampanha, setEnviandoCampanha] = useState(false);
@@ -241,6 +242,11 @@ export default function NormalizacaoGlobal() {
   const [confirmandoEnvioCampanha, setConfirmandoEnvioCampanha] = useState(false);
   const [carregandoCampanhas, setCarregandoCampanhas] = useState(false);
   const [campanhasEmAndamento, setCampanhasEmAndamento] = useState(0);
+  const [editandoCampanha, setEditandoCampanha] = useState(false);
+  const [campanhaEditada, setCampanhaEditada] = useState<any>(null);
+  const [confirmandoExclusaoCampanha, setConfirmandoExclusaoCampanha] = useState(false);
+  const [confirmandoReenvioCampanha, setConfirmandoReenvioCampanha] = useState(false);
+  const [campanhasDisparosMap, setCampanhasDisparosMap] = useState<Record<string, any>>({}); // ultimo disparo por campanha_id
 
   useEffect(() => {
     verificarAcessoMaster();
