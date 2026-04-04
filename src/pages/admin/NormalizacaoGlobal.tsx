@@ -654,6 +654,7 @@ export default function NormalizacaoGlobal() {
   }
 
   async function estimarDestinatariosCampanha(campanha = novaCampanha) {
+    setEstimativaDestinatarios(null);
     try {
       const { data: session } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
@@ -664,11 +665,20 @@ export default function NormalizacaoGlobal() {
         },
         headers: { Authorization: `Bearer ${session?.session?.access_token}` }
       });
-      if (!error && data) {
-        setEstimativaDestinatarios(data.total);
+      if (error) {
+        console.error('Erro ao estimar destinatários (edge function):', error);
+        setEstimativaDestinatarios(-1);
+        return;
       }
+      if (data?.error) {
+        console.error('Erro ao estimar destinatários (resposta):', data.error);
+        setEstimativaDestinatarios(-1);
+        return;
+      }
+      setEstimativaDestinatarios(data?.total ?? 0);
     } catch (err: any) {
       console.error('Erro ao estimar destinatários:', err);
+      setEstimativaDestinatarios(-1);
     }
   }
 
@@ -3224,7 +3234,7 @@ export default function NormalizacaoGlobal() {
                 </div>
                 <div className="space-y-2 rounded-lg border p-4 text-sm">
                   <p><strong>Público:</strong> {novaCampanha.filtro_tipo === 'todos' ? 'Todos os usuários' : `${novaCampanha.filtro_tipo}: ${novaCampanha.filtro_valor}`}</p>
-                  <p><strong>Destinatários estimados:</strong> {estimativaDestinatarios ?? 'Calculando...'}</p>
+                  <p><strong>Destinatários estimados:</strong> {estimativaDestinatarios === null ? 'Calculando...' : estimativaDestinatarios === -1 ? <span className="text-destructive">Erro ao estimar. <button type="button" className="underline" onClick={() => estimarDestinatariosCampanha()}>Tentar novamente</button></span> : estimativaDestinatarios}</p>
                   <p className="text-muted-foreground">As mensagens serão enviadas via WhatsApp com o prefixo 📢 *Picotinho*. Esta ação não pode ser desfeita.</p>
                 </div>
               </div>
