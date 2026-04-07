@@ -1561,14 +1561,36 @@ async function executeTool(
           const { data: matches, error: estErr } = await queryEst.limit(20);
           if (estErr) throw estErr;
 
-          if (!matches || matches.length === 0) {
+          // === PARTE 2: Fallback por palavras-chave se ilike não encontrou nada ===
+          let finalMatches = matches || [];
+          if (finalMatches.length === 0 && !produto_id) {
+            const keywords = produto_nome.toLowerCase().split(/\s+/).filter((k: string) => k.length >= 2);
+            if (keywords.length > 0) {
+              const { data: allStock } = await supabase.from('estoque_app')
+                .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+                .eq('user_id', usuarioId)
+                .gt('quantidade', -1)
+                .limit(500);
+              if (allStock && allStock.length > 0) {
+                finalMatches = allStock.filter((p: any) => {
+                  const nomeNorm = p.produto_nome.toLowerCase();
+                  return keywords.every((k: string) => nomeNorm.includes(k));
+                });
+                if (finalMatches.length > 0) {
+                  console.log(`🔍 [FALLBACK] "${produto_nome}" → ${finalMatches.length} match(es) por palavras-chave: ${keywords.join(', ')}`);
+                }
+              }
+            }
+          }
+
+          if (finalMatches.length === 0) {
             itensNaoEncontrados.push({ nome: produto_nome });
             continue;
           }
 
           // Consolidar por nome normalizado para contar matches reais
           const gruposConsolidados = new Map<string, any[]>();
-          matches.forEach((m: any) => {
+          finalMatches.forEach((m: any) => {
             const chave = normNomeSaldo(m.produto_nome);
             if (!gruposConsolidados.has(chave)) gruposConsolidados.set(chave, []);
             gruposConsolidados.get(chave)!.push(m);
@@ -1618,6 +1640,29 @@ async function executeTool(
               });
               continue;
             }
+          }
+
+          // === PARTE 3 + 4: Trava de plausibilidade e detecção de unidade errada ===
+          const limites: Record<string, number> = { 'KG': 50, 'L': 50, 'UN': 200, 'G': 50000, 'ML': 50000 };
+          const limiteUnidade = limites[unidadeEstoque] || limites[unidadeInformada];
+          if (limiteUnidade && saldoFinal > limiteUnidade) {
+            // Detectar possível erro de unidade (ex: 500 KG provavelmente é 500g = 0.5 KG)
+            let sugestao = '';
+            if (unidadeEstoque === 'KG' && saldoFinal >= 100) {
+              const provavel = saldoFinal / 1000;
+              sugestao = ` Talvez você quisesse dizer ${saldoFinal} g = ${provavel} kg?`;
+            } else if (unidadeEstoque === 'L' && saldoFinal >= 100) {
+              const provavel = saldoFinal / 1000;
+              sugestao = ` Talvez você quisesse dizer ${saldoFinal} ml = ${provavel} L?`;
+            }
+            itensPendentes.push({
+              nome: produto_nome,
+              motivo: `Quantidade ${saldoFinal} ${unidadeEstoque} parece muito alta para uso doméstico.${sugestao} Confirme o valor correto.`,
+              confirmar: true,
+              produto_encontrado: { id: registroPrimario.id, nome: registroPrimario.produto_nome, quantidade_atual: saldoAnterior, unidade: unidadeEstoque }
+            });
+            console.log(`⚠️ [PLAUSIBILIDADE] Bloqueado: ${produto_nome} → ${saldoFinal} ${unidadeEstoque} (limite: ${limiteUnidade})`);
+            continue;
           }
 
           // Se busca foi por nome genérico (sem produto_id), verificar se é realmente seguro
@@ -2175,6 +2220,29 @@ Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
 54. NÃO EXECUTAR PARCIALMENTE EM LOTE: Se o usuário está em contexto de inventário em lote, o sistema NÃO sai ajustando silenciosamente parte dos itens. Primeiro consolida tudo, mostra resumo, resolve pendências, só depois executa o lote confirmado.
 55. PROIBIÇÃO DE PROMOÇÃO: Item ambíguo, pendente ou com confirmar:true NUNCA pode ser promovido para itens_ajustados na mesma execução. Só após nova resposta explícita do usuário, em chamada subsequente com produto_id resolvido.
 56. RASTREABILIDADE: Cada item ajustado inclui o critério que autorizou o ajuste (produto_id_exato, nome_unico_seguro, conversao_canonica) no retorno da tool. Apresente esse dado ao responder.
+57. SEGMENTAÇÃO DE MÚLTIPLOS ITENS EM UMA MENSAGEM (CRÍTICO): Quando o usuário informar saldo de vários itens numa única mensagem, você DEVE segmentar CADA item como uma entrada INDEPENDENTE no array de itens da tool ajustar_saldo_estoque. Regras:
+    a) Separadores naturais: vírgula, "e", "também", ponto final, quebra de linha
+    b) Cada item tem seu próprio nome, quantidade e unidade — ISOLADOS
+    c) A quantidade/unidade de um item NUNCA pode contaminar outro item
+    d) Itens com "acabou" / "não tenho mais" / "também acabou" = novo_saldo: 0, unidade do estoque
+    e) EXEMPLO OBRIGATÓRIO:
+       Mensagem: "não tenho mais banana prata, minha couve também acabou e a maçã gala eu tenho só 500 gramas"
+       Segmentação CORRETA:
+       { itens: [
+         { produto_nome: "banana prata", novo_saldo: 0, unidade: "KG" },
+         { produto_nome: "couve", novo_saldo: 0, unidade: "UN" },
+         { produto_nome: "maçã gala", novo_saldo: 0.5, unidade: "KG" }
+       ]}
+       ATENÇÃO: "500 gramas" = 0.5 KG, NÃO "500 KG". Sempre converter gramas para KG antes de enviar (dividir por 1000).
+    f) "meio quilo" = 0.5 KG. "meia dúzia" = 6 UN. Nunca envie o valor bruto sem converter.
+58. VALIDAÇÃO PRÉ-ENVIO DE UNIDADE E QUANTIDADE (CRÍTICO):
+    Antes de montar o array de itens para ajustar_saldo_estoque, valide CADA item:
+    a) Se o usuário disse "gramas", converta para KG dividindo por 1000 ANTES de enviar
+    b) Se o usuário disse "meio quilo", novo_saldo = 0.5 e unidade = KG
+    c) Se o usuário disse "500 gramas", novo_saldo = 0.5 e unidade = KG (NÃO 500 KG)
+    d) NUNCA envie novo_saldo >= 100 com unidade KG ou L para um único item doméstico sem antes perguntar
+    e) REGRA DE PLAUSIBILIDADE: Se o valor parecer absurdo para uso doméstico (ex: 500 KG de maçã, 200 L de leite), NÃO envie — pergunte ao usuário se está correto
+    f) Cada item do array deve ser validado ISOLADAMENTE — não misture contexto entre itens
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
