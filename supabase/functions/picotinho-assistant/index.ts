@@ -156,6 +156,33 @@ const stockToolDefinitions = [
         required: []
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "ajustar_saldo_estoque",
+      description: "Ajusta o estoque de um ou mais produtos para o SALDO ATUAL informado pelo usuário. NÃO é entrada, baixa ou compra — é definição direta do saldo final. Cada item DEVE ter quantidade numérica EXATA e EXPLÍCITA (nunca inferida de frases vagas). Use quando o usuário disser coisas como 'acabou meu açúcar', 'agora só tenho 2 litros de leite', 'tenho meio quilo de banana'. Para saldo zero: 'acabou', 'não tenho mais' = novo_saldo 0.",
+      parameters: {
+        type: "object",
+        properties: {
+          itens: {
+            type: "array",
+            description: "Array de itens com saldo a ajustar. Cada item DEVE ter quantidade numérica exata.",
+            items: {
+              type: "object",
+              properties: {
+                produto_nome: { type: "string", description: "Nome do produto informado pelo usuário" },
+                novo_saldo: { type: "number", description: "Valor EXATO do saldo atual informado pelo usuário — NUNCA inferido de frases vagas" },
+                unidade: { type: "string", description: "Unidade: KG, L, UN, etc. DEVE corresponder ao estoque" },
+                produto_id: { type: "string", description: "ID específico do produto (obrigatório se já desambiguado)" }
+              },
+              required: ["produto_nome", "novo_saldo", "unidade"]
+            }
+          }
+        },
+        required: ["itens"]
+      }
+    }
   }
 ];
 
@@ -417,7 +444,8 @@ async function executeTool(
   
   const writeMutationTools = [
     'baixar_estoque', 'aumentar_estoque', 'adicionar_produto',
-    'criar_lista', 'adicionar_itens_lista', 'remover_item_lista', 'alterar_quantidade_item_lista'
+    'criar_lista', 'adicionar_itens_lista', 'remover_item_lista', 'alterar_quantidade_item_lista',
+    'ajustar_saldo_estoque'
   ];
   const isWriteMutation = writeMutationTools.includes(toolName);
 
@@ -1495,6 +1523,161 @@ async function executeTool(
         };
       }
 
+      case 'ajustar_saldo_estoque': {
+        if (!args.itens || !Array.isArray(args.itens) || args.itens.length === 0) {
+          return { result: JSON.stringify({ erro: "Nenhum item fornecido para ajustar." }), isWriteMutation: false };
+        }
+
+        const normNomeSaldo = (nome: string): string => {
+          return nome.toUpperCase().trim().replace(/\s+/g, ' ').replace(/\bKG\b/gi, '').replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL').replace(/\s+/g, ' ').trim();
+        };
+
+        // Conversões canônicas autorizadas (lista fechada)
+        const conversoesCanonICAS: Record<string, Record<string, number>> = {
+          'G': { 'KG': 0.001 }, 'KG': { 'G': 1000 },
+          'ML': { 'L': 0.001 }, 'L': { 'ML': 1000 },
+        };
+
+        const itensAjustados: any[] = [];
+        const itensAmbiguos: any[] = [];
+        const itensPendentes: any[] = [];
+        const itensNaoEncontrados: any[] = [];
+        const avisos: string[] = [];
+
+        for (const item of args.itens) {
+          const { produto_nome, novo_saldo, unidade, produto_id } = item;
+
+          // Buscar no estoque
+          let queryEst = supabase.from('estoque_app')
+            .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+            .eq('user_id', usuarioId);
+
+          if (produto_id) {
+            queryEst = queryEst.eq('id', produto_id);
+          } else {
+            queryEst = queryEst.ilike('produto_nome', `%${produto_nome}%`);
+          }
+
+          const { data: matches, error: estErr } = await queryEst.limit(20);
+          if (estErr) throw estErr;
+
+          if (!matches || matches.length === 0) {
+            itensNaoEncontrados.push({ nome: produto_nome });
+            continue;
+          }
+
+          // Consolidar por nome normalizado para contar matches reais
+          const gruposConsolidados = new Map<string, any[]>();
+          matches.forEach((m: any) => {
+            const chave = normNomeSaldo(m.produto_nome);
+            if (!gruposConsolidados.has(chave)) gruposConsolidados.set(chave, []);
+            gruposConsolidados.get(chave)!.push(m);
+          });
+
+          if (gruposConsolidados.size > 1 && !produto_id) {
+            // Múltiplos produtos distintos — ambíguo
+            const opcoes = Array.from(gruposConsolidados.entries()).map(([nome, registros]) => {
+              const qtdTotal = registros.reduce((s: number, r: any) => s + r.quantidade, 0);
+              const maisRecente = registros.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+              return {
+                id: maisRecente.id,
+                nome_completo: maisRecente.produto_nome,
+                nome_consolidado: nome,
+                quantidade_atual: qtdTotal,
+                unidade: maisRecente.unidade_medida,
+                marca: maisRecente.marca
+              };
+            });
+            itensAmbiguos.push({ nome: produto_nome, opcoes });
+            continue;
+          }
+
+          // 1 grupo consolidado (ou produto_id exato)
+          const grupo = Array.from(gruposConsolidados.values())[0];
+          const registroPrimario = grupo.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+          const saldoAnterior = grupo.reduce((s: number, r: any) => s + r.quantidade, 0);
+          const unidadeEstoque = registroPrimario.unidade_medida?.toUpperCase() || 'UN';
+          const unidadeInformada = (unidade || '').toUpperCase() || 'UN';
+
+          // Verificar compatibilidade de unidade
+          let saldoFinal = novo_saldo;
+          let criterio = produto_id ? 'produto_id_exato' : 'nome_unico_seguro';
+
+          if (unidadeInformada !== unidadeEstoque) {
+            // Tentar conversão canônica
+            const conv = conversoesCanonICAS[unidadeInformada]?.[unidadeEstoque];
+            if (conv !== undefined) {
+              saldoFinal = novo_saldo * conv;
+              criterio = 'conversao_canonica';
+              avisos.push(`"${produto_nome}": convertido de ${novo_saldo} ${unidadeInformada} para ${saldoFinal} ${unidadeEstoque}`);
+            } else {
+              // Conversão não canônica — pendente
+              itensPendentes.push({
+                nome: produto_nome,
+                motivo: `Unidade informada (${unidadeInformada}) incompatível com estoque (${unidadeEstoque}). Conversão não autorizada automaticamente.`
+              });
+              continue;
+            }
+          }
+
+          // Se busca foi por nome genérico (sem produto_id), verificar se é realmente seguro
+          if (!produto_id) {
+            const nomeNorm = normNomeSaldo(produto_nome);
+            const nomeEstNorm = normNomeSaldo(registroPrimario.produto_nome);
+            // Se o nome informado é muito mais curto que o do estoque, pode ser genérico demais
+            const palavrasInformadas = produto_nome.trim().split(/\s+/).length;
+            const palavrasEstoque = registroPrimario.produto_nome.trim().split(/\s+/).length;
+            if (palavrasInformadas <= 1 && palavrasEstoque >= 3) {
+              // Nome muito genérico vs nome detalhado — pedir confirmação
+              itensPendentes.push({
+                nome: produto_nome,
+                motivo: `Encontrei "${registroPrimario.produto_nome}" (${saldoAnterior} ${unidadeEstoque}). É este o item que você quer ajustar para ${novo_saldo} ${unidadeInformada}?`,
+                confirmar: true,
+                produto_encontrado: { id: registroPrimario.id, nome: registroPrimario.produto_nome, quantidade_atual: saldoAnterior, unidade: unidadeEstoque }
+              });
+              continue;
+            }
+          }
+
+          // Executar o ajuste — atualizar primário e zerar secundários
+          const { error: upErr } = await supabase.from('estoque_app')
+            .update({ quantidade: saldoFinal, updated_at: new Date().toISOString() })
+            .eq('id', registroPrimario.id)
+            .eq('user_id', usuarioId);
+          if (upErr) throw upErr;
+
+          // Zerar registros secundários do mesmo grupo
+          const idsSecundarios = grupo.filter((r: any) => r.id !== registroPrimario.id).map((r: any) => r.id);
+          if (idsSecundarios.length > 0) {
+            const { error: zeroErr } = await supabase.from('estoque_app')
+              .update({ quantidade: 0, updated_at: new Date().toISOString() })
+              .in('id', idsSecundarios);
+            if (zeroErr) console.error('⚠️ Erro ao zerar secundários:', zeroErr);
+          }
+
+          itensAjustados.push({
+            nome: registroPrimario.produto_nome,
+            saldo_anterior: saldoAnterior,
+            saldo_novo: saldoFinal,
+            unidade: unidadeEstoque,
+            criterio_autorizacao: criterio
+          });
+
+          console.log(`✅ [SALDO] ${registroPrimario.produto_nome}: ${saldoAnterior} → ${saldoFinal} ${unidadeEstoque} (criterio: ${criterio})`);
+        }
+
+        return {
+          result: JSON.stringify({
+            itens_ajustados: itensAjustados,
+            itens_ambiguos: itensAmbiguos,
+            itens_pendentes: itensPendentes,
+            itens_nao_encontrados: itensNaoEncontrados,
+            avisos
+          }),
+          isWriteMutation: itensAjustados.length > 0
+        };
+      }
+
       default:
         return { result: JSON.stringify({ erro: `Tool "${toolName}" não reconhecida.` }), isWriteMutation: false };
     }
@@ -1797,9 +1980,18 @@ const handler = async (req: Request): Promise<Response> => {
           // Limpar snapshot após uso
           await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
         } else if (numeroEscolhido === null) {
-          // Mensagem não é escolha numérica — usuário mudou de assunto, limpar snapshot
-          console.log('🔄 [SNAPSHOT] Mensagem não é escolha numérica, limpando opções pendentes.');
-          await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+          // Verificar se é confirmação de inventário em lote
+          if (snap.contexto === 'inventario_lote' && /^\s*(?:pode\s+ajustar|confirmar?|finalizar?(?:\s+inventário)?|sim|pode|ok|isso|confirma)\s*$/i.test(conteudo)) {
+            // Confirmação de inventário em lote — injetar instrução para executar
+            const itensLote = (snap as any).itens || [];
+            contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — INVENTÁRIO EM LOTE CONFIRMADO] O usuário confirmou o ajuste de inventário. Execute ajustar_saldo_estoque com EXATAMENTE estes itens (NÃO reinterprete, NÃO recalcule, NÃO acrescente): ${JSON.stringify(itensLote)}. Use os produto_id fornecidos.`;
+            console.log(`✅ [SNAPSHOT] Confirmação de inventário em lote detectada — ${itensLote.length} itens`);
+            await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+          } else {
+            // Mensagem não é escolha numérica nem confirmação — usuário mudou de assunto, limpar snapshot
+            console.log('🔄 [SNAPSHOT] Mensagem não é escolha numérica nem confirmação, limpando opções pendentes.');
+            await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+          }
         }
       }
     }
@@ -1957,6 +2149,32 @@ Regras de Feedback e Suporte (OBRIGATÓRIAS — LEIA COM ATENÇÃO):
     - Dizer "registrei sua mensagem", "anotei", "recebemos", "vou repassar" sem tool_call ❌ PROIBIDO
     - Responder com confirmação acolhedora sem ter chamado registrar_feedback ❌ PROIBIDO
 41. Somente APÓS a tool registrar_feedback retornar sucesso (campo "sucesso": true), responda ao usuário com confirmação acolhedora. Adapte o tom: empático para erros/reclamações, entusiasta para sugestões, didático para dúvidas. NUNCA confunda feedback sobre o sistema com pedidos de estoque, lista ou compras. "O arroz não baixou do estoque" é feedback de erro. "Baixa o arroz" é comando de estoque.
+
+Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
+42. INTENÇÃO "INFORMAR SALDO ATUAL": Quando o usuário informar o saldo restante no estoque (NÃO compra, entrada ou baixa), use ajustar_saldo_estoque. Frases típicas: "acabou meu X", "não tenho mais X", "agora só tenho X de Y", "só restam X", "tenho X no estoque agora", "sobrou X", "meu X acabou", "restou X".
+43. SALDO ZERO: "acabou", "não tenho mais", "meu X acabou", "não restou" = novo_saldo: 0.
+44. PROIBIÇÃO ABSOLUTA DE INVENÇÃO: O Picotinho NÃO PODE inventar, completar, deduzir ou inferir por conta própria NENHUM dos seguintes dados: produto, marca, variante, unidade, quantidade, saldo anterior, saldo novo, conversão, produto_id. Se QUALQUER um desses não estiver claro, explícito e seguro, PERGUNTAR antes de executar.
+45. PROIBIÇÃO DE INFERIR NÚMEROS: Frases vagas NÃO podem gerar ajuste. Exemplos que NUNCA geram ajuste automático: "tenho um pouco de açúcar", "sobrou banana", "tenho pouca picanha", "resta um restinho", "ainda tenho um pouco". Nesses casos, pedir a quantidade EXATA antes de ajustar.
+46. CORRESPONDÊNCIA ÚNICA E SEGURA — "1 match" NÃO basta por si só: Só pode executar diretamente quando houver correspondência única E segura, considerando: nome, contexto, unidade, marca/variante e ausência de risco real de item semelhante. Se houver QUALQUER chance razoável de o item encontrado não ser exatamente o que o usuário quis dizer, PERGUNTAR. Exemplo: busca por "leite" retorna 1 resultado "LEITE INTEGRAL PIRACANJUBA" mas o usuário poderia querer desnatado → PERGUNTAR.
+47. BUSCA CONSERVADORA: A busca por nome serve para localizar candidatos, NÃO para autorizar ajuste automático. Similaridade frouxa, aproximação excessiva ou risco de confusão entre itens parecidos OBRIGAM a perguntar.
+48. CONVERSÃO AUTOMÁTICA — SOMENTE CASOS CANÔNICOS (lista fechada): g↔kg (1000g = 1kg), ml↔L (1000ml = 1L), meia dúzia → 6 UN. QUALQUER outra conversão (peso↔unidade, volume↔unidade, formatos sem regra explícita do produto) → PERGUNTAR antes de converter.
+49. INVENTÁRIO EM LOTE: Quando o usuário listar vários itens com saldo atual ou disser "vou te passar meu estoque" / "quero ajustar meu estoque" / "anota meu inventário":
+    a) Extrair todos os itens e saldos
+    b) Itens SEM quantidade exata → lista de pendências (NUNCA em ajustados)
+    c) Itens com produto ambíguo → lista de ambíguos
+    d) Itens com unidade incompatível sem conversão canônica → lista de pendências
+    e) Montar resumo SEPARANDO CLARAMENTE: Prontos para ajuste / Ambíguos (precisam de escolha) / Incompletos (falta dado) / Não encontrados / Avisos de unidade
+    f) NÃO executar parcialmente antes do fechamento do lote
+    g) Pedir confirmação OBRIGATÓRIA do conjunto exato listado no resumo
+    h) Só chamar ajustar_saldo_estoque APÓS confirmação explícita ("pode ajustar", "confirmar", "finalizar", "sim")
+    i) A execução dispara SOMENTE o conjunto aprovado no resumo — nada pode ser acrescentado, reinterpretado ou recalculado entre o resumo e a execução
+50. INVENTÁRIO PARCIAL (PADRÃO): Somente itens mencionados são ajustados. NUNCA zerar itens não mencionados. NUNCA presumir que o usuário listou tudo.
+51. DESAMBIGUAÇÃO OBRIGATÓRIA: Se houver múltiplas opções para um item (ex: Picanha Friboi vs Picanha JBS), NUNCA escolher sozinho. Perguntar.
+52. DIFERENÇA COM BAIXAR/AUMENTAR: "baixa 2 leites" = remover 2 do saldo atual. "agora só tenho 2 litros de leite" = definir saldo como 2. São intenções DIFERENTES. Não confundir.
+53. ITEM ÚNICO SEGURO: Se for 1 item, correspondência única E segura (regra 46), quantidade exata, unidade compatível → pode ajustar diretamente sem pedir confirmação. Se QUALQUER critério falhar → perguntar.
+54. NÃO EXECUTAR PARCIALMENTE EM LOTE: Se o usuário está em contexto de inventário em lote, o sistema NÃO sai ajustando silenciosamente parte dos itens. Primeiro consolida tudo, mostra resumo, resolve pendências, só depois executa o lote confirmado.
+55. PROIBIÇÃO DE PROMOÇÃO: Item ambíguo, pendente ou com confirmar:true NUNCA pode ser promovido para itens_ajustados na mesma execução. Só após nova resposta explícita do usuário, em chamada subsequente com produto_id resolvido.
+56. RASTREABILIDADE: Cada item ajustado inclui o critério que autorizou o ajuste (produto_id_exato, nome_unico_seguro, conversao_canonica) no retorno da tool. Apresente esse dado ao responder.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
@@ -2128,6 +2346,21 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
                 contextoSnapshot = 'adicionar_item_lista';
                 listaIdSnapshot = listaAtivaId;
                 break; // salvar apenas o primeiro pendente por vez
+              }
+            }
+          }
+
+          // Caso 4: ajustar_saldo_estoque retornou itens_ambiguos com opções
+          if (toolName === 'ajustar_saldo_estoque' && parsedResult.itens_ambiguos) {
+            for (const ambiguo of parsedResult.itens_ambiguos) {
+              if (ambiguo.opcoes && ambiguo.opcoes.length > 1) {
+                opcoesParaSalvar = ambiguo.opcoes.map((o: any, i: number) => ({
+                  numero: i + 1,
+                  produto_id: o.id,
+                  nome: o.nome_completo || o.nome_consolidado || 'Sem nome'
+                }));
+                contextoSnapshot = 'ajustar_saldo_estoque';
+                break;
               }
             }
           }
