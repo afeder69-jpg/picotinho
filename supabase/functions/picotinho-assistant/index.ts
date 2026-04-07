@@ -173,10 +173,10 @@ const stockToolDefinitions = [
               properties: {
                 produto_nome: { type: "string", description: "Nome do produto informado pelo usuário" },
                 novo_saldo: { type: "number", description: "Valor EXATO do saldo atual informado pelo usuário — NUNCA inferido de frases vagas" },
-                unidade: { type: "string", description: "Unidade: KG, L, UN, etc. DEVE corresponder ao estoque" },
+                unidade: { type: "string", description: "Unidade: KG, L, UN, etc. OPCIONAL — se omitida, herda do estoque. Para saldo zero ('acabou'), NÃO envie unidade." },
                 produto_id: { type: "string", description: "ID específico do produto (obrigatório se já desambiguado)" }
               },
-              required: ["produto_nome", "novo_saldo", "unidade"]
+              required: ["produto_nome", "novo_saldo"]
             }
           }
         },
@@ -1764,26 +1764,41 @@ async function executeTool(
           const registroPrimario = grupo.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
           const saldoAnterior = grupo.reduce((s: number, r: any) => s + r.quantidade, 0);
           const unidadeEstoque = registroPrimario.unidade_medida?.toUpperCase() || 'UN';
-          const unidadeInformada = (unidade || '').toUpperCase() || 'UN';
+          const unidadeRaw = (unidade || '').toUpperCase();
 
-          // Verificar compatibilidade de unidade
+          // === HERANÇA DE UNIDADE ===
+          // Saldo zero: bypass total — herdar unidade do estoque, ignorar qualquer unidade recebida
+          // Unidade ausente: herdar do estoque
+          let unidadeInformada: string;
           let saldoFinal = novo_saldo;
           let criterio = produto_id ? 'produto_id_exato' : (criterioFallback ? 'match_nucleo_dominante' : 'nome_unico_seguro');
 
-          if (unidadeInformada !== unidadeEstoque) {
-            // Tentar conversão canônica
-            const conv = conversoesCanonICAS[unidadeInformada]?.[unidadeEstoque];
-            if (conv !== undefined) {
-              saldoFinal = novo_saldo * conv;
-              criterio = 'conversao_canonica';
-              avisos.push(`"${produto_nome}": convertido de ${novo_saldo} ${unidadeInformada} para ${saldoFinal} ${unidadeEstoque}`);
-            } else {
-              // Conversão não canônica — pendente
-              itensPendentes.push({
-                nome: produto_nome,
-                motivo: `Unidade informada (${unidadeInformada}) incompatível com estoque (${unidadeEstoque}). Conversão não autorizada automaticamente.`
-              });
-              continue;
+          if (novo_saldo === 0) {
+            // Bypass total: herdar unidade, sem validação, sem conversão, sem pendência
+            unidadeInformada = unidadeEstoque;
+            console.log(`🔄 [UNIDADE] Saldo zero para "${produto_nome}" — herdando unidade do estoque: ${unidadeEstoque}`);
+          } else if (!unidadeRaw) {
+            // Unidade não informada com saldo > 0: herdar do estoque
+            unidadeInformada = unidadeEstoque;
+            console.log(`🔄 [UNIDADE] Unidade ausente para "${produto_nome}" — herdando do estoque: ${unidadeEstoque}`);
+          } else {
+            // Unidade informada explicitamente com saldo > 0: verificar compatibilidade
+            unidadeInformada = unidadeRaw;
+            if (unidadeInformada !== unidadeEstoque) {
+              // Tentar conversão canônica
+              const conv = conversoesCanonICAS[unidadeInformada]?.[unidadeEstoque];
+              if (conv !== undefined) {
+                saldoFinal = novo_saldo * conv;
+                criterio = 'conversao_canonica';
+                avisos.push(`"${produto_nome}": convertido de ${novo_saldo} ${unidadeInformada} para ${saldoFinal} ${unidadeEstoque}`);
+              } else {
+                // Conversão não canônica — pendente
+                itensPendentes.push({
+                  nome: produto_nome,
+                  motivo: `Unidade informada (${unidadeInformada}) incompatível com estoque (${unidadeEstoque}). Conversão não autorizada automaticamente.`
+                });
+                continue;
+              }
             }
           }
 
@@ -1859,7 +1874,10 @@ async function executeTool(
             itens_ajustados: itensAjustados,
             itens_ambiguos: itensAmbiguos,
             itens_pendentes: itensPendentes,
-            itens_nao_encontrados: itensNaoEncontrados,
+            itens_nao_encontrados: itensNaoEncontrados.map(i => ({
+              ...i,
+              instrucao: "Produto não encontrado no estoque. Pergunte se o nome está correto ou liste candidatos próximos. NÃO ofereça criar item livre neste contexto."
+            })),
             avisos
           }),
           isWriteMutation: itensAjustados.length > 0
@@ -2367,16 +2385,17 @@ Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
     a) Separadores naturais: vírgula, "e", "também", ponto final, quebra de linha
     b) Cada item tem seu próprio nome, quantidade e unidade — ISOLADOS
     c) A quantidade/unidade de um item NUNCA pode contaminar outro item
-    d) Itens com "acabou" / "não tenho mais" / "também acabou" = novo_saldo: 0, unidade do estoque
+    d) Itens com "acabou" / "não tenho mais" / "também acabou" = novo_saldo: 0. NÃO envie campo unidade — o servidor herda automaticamente do estoque. Exemplo: { produto_nome: "banana prata", novo_saldo: 0 }
     e) EXEMPLO OBRIGATÓRIO:
        Mensagem: "não tenho mais banana prata, minha couve também acabou e a maçã gala eu tenho só 500 gramas"
        Segmentação CORRETA:
        { itens: [
-         { produto_nome: "banana prata", novo_saldo: 0, unidade: "KG" },
-         { produto_nome: "couve", novo_saldo: 0, unidade: "UN" },
+         { produto_nome: "banana prata", novo_saldo: 0 },
+         { produto_nome: "couve", novo_saldo: 0 },
          { produto_nome: "maçã gala", novo_saldo: 0.5, unidade: "KG" }
        ]}
        ATENÇÃO: "500 gramas" = 0.5 KG, NÃO "500 KG". Sempre converter gramas para KG antes de enviar (dividir por 1000).
+       ATENÇÃO: Itens com saldo zero NÃO têm campo unidade — o servidor herda do estoque.
     f) "meio quilo" = 0.5 KG. "meia dúzia" = 6 UN. Nunca envie o valor bruto sem converter.
 58. VALIDAÇÃO PRÉ-ENVIO DE UNIDADE E QUANTIDADE (CRÍTICO):
     Antes de montar o array de itens para ajustar_saldo_estoque, valide CADA item:
@@ -2387,6 +2406,8 @@ Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
     e) REGRA DE PLAUSIBILIDADE: Se o valor parecer absurdo para uso doméstico (ex: 500 KG de maçã, 200 L de leite), NÃO envie — pergunte ao usuário se está correto
     f) Cada item do array deve ser validado ISOLADAMENTE — não misture contexto entre itens
 59. BUSCA POR NOME RESUMIDO: O usuário pode falar o produto de forma resumida ou em ordem diferente da cadastrada (ex: "suco de caju", "gelatina de limão", "geléia italianinha"). O servidor localiza por núcleo do nome — envie o nome COMO O USUARIO FALOU, sem completar com marca, peso ou descrição comercial. NÃO invente detalhes que o usuário não disse. O tipo principal do produto (suco, gelatina, xarope, leite etc.) é obrigatório e deve aparecer no nome enviado. Se o usuário falar a marca ou adjetivo antes do tipo (ex: "italianinha geléia"), inclua ambos no nome.
+60. PROIBIÇÃO DE ITEM LIVRE EM AJUSTE DE SALDO: Quando a intenção do usuário for informar saldo atual ("acabou", "não tenho mais", "tenho X", "sobrou X"), use EXCLUSIVAMENTE ajustar_saldo_estoque. NUNCA ofereça criar item livre, adicionar produto novo ou desviar para outro fluxo nesse contexto. Se o produto não for encontrado, responda que não encontrou no estoque e pergunte se o nome está correto ou liste candidatos próximos. Criar item livre é um fluxo DIFERENTE que só se aplica quando o usuário pede explicitamente para adicionar um produto novo.
+61. ACABOU/ZEROU = ajustar_saldo_estoque com novo_saldo: 0. NÃO usar baixar_estoque (que remove quantidade parcial). "Acabou" define saldo final como zero. NÃO envie campo unidade para saldo zero — o servidor herda automaticamente do estoque.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
