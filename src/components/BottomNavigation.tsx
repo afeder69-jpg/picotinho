@@ -137,7 +137,7 @@ const BottomNavigation = () => {
     setShowQRScanner(false);
     
     try {
-      const chaveAcesso = extrairChaveNFe(data);
+      const chaveAcesso = extrairChaveNFe(urlParaProcessar);
       
       if (!chaveAcesso) {
         throw new Error('Não foi possível extrair a chave de acesso da URL');
@@ -149,12 +149,12 @@ const BottomNavigation = () => {
       const tempId = `temp-${Date.now()}`;
       console.log('🔵 [BADGE] Adicionando nota temporária:', tempId);
       addProcessingNote(tempId);
-      setProcessingNotesData(prev => new Map(prev).set(tempId, { url: data, tipoDocumento }));
+      setProcessingNotesData(prev => new Map(prev).set(tempId, { url: urlParaProcessar, tipoDocumento }));
       
       // Chamar process-url-nota SEM AGUARDAR (processamento em background)
       const functionCall = supabase.functions.invoke('process-url-nota', {
         body: {
-          url: data,
+          url: urlParaProcessar,
           userId: user.id,
           chaveAcesso,
           tipoDocumento,
