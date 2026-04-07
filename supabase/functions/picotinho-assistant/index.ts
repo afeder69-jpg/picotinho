@@ -1980,9 +1980,18 @@ const handler = async (req: Request): Promise<Response> => {
           // Limpar snapshot após uso
           await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
         } else if (numeroEscolhido === null) {
-          // Mensagem não é escolha numérica — usuário mudou de assunto, limpar snapshot
-          console.log('🔄 [SNAPSHOT] Mensagem não é escolha numérica, limpando opções pendentes.');
-          await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+          // Verificar se é confirmação de inventário em lote
+          if (snap.contexto === 'inventario_lote' && /^\s*(?:pode\s+ajustar|confirmar?|finalizar?(?:\s+inventário)?|sim|pode|ok|isso|confirma)\s*$/i.test(conteudo)) {
+            // Confirmação de inventário em lote — injetar instrução para executar
+            const itensLote = (snap as any).itens || [];
+            contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — INVENTÁRIO EM LOTE CONFIRMADO] O usuário confirmou o ajuste de inventário. Execute ajustar_saldo_estoque com EXATAMENTE estes itens (NÃO reinterprete, NÃO recalcule, NÃO acrescente): ${JSON.stringify(itensLote)}. Use os produto_id fornecidos.`;
+            console.log(`✅ [SNAPSHOT] Confirmação de inventário em lote detectada — ${itensLote.length} itens`);
+            await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+          } else {
+            // Mensagem não é escolha numérica nem confirmação — usuário mudou de assunto, limpar snapshot
+            console.log('🔄 [SNAPSHOT] Mensagem não é escolha numérica nem confirmação, limpando opções pendentes.');
+            await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: null }).eq('usuario_id', usuarioId);
+          }
         }
       }
     }
@@ -2337,6 +2346,21 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
                 contextoSnapshot = 'adicionar_item_lista';
                 listaIdSnapshot = listaAtivaId;
                 break; // salvar apenas o primeiro pendente por vez
+              }
+            }
+          }
+
+          // Caso 4: ajustar_saldo_estoque retornou itens_ambiguos com opções
+          if (toolName === 'ajustar_saldo_estoque' && parsedResult.itens_ambiguos) {
+            for (const ambiguo of parsedResult.itens_ambiguos) {
+              if (ambiguo.opcoes && ambiguo.opcoes.length > 1) {
+                opcoesParaSalvar = ambiguo.opcoes.map((o: any, i: number) => ({
+                  numero: i + 1,
+                  produto_id: o.id,
+                  nome: o.nome_completo || o.nome_consolidado || 'Sem nome'
+                }));
+                contextoSnapshot = 'ajustar_saldo_estoque';
+                break;
               }
             }
           }
