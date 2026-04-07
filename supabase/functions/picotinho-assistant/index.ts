@@ -156,6 +156,33 @@ const stockToolDefinitions = [
         required: []
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "ajustar_saldo_estoque",
+      description: "Ajusta o estoque de um ou mais produtos para o SALDO ATUAL informado pelo usuário. NÃO é entrada, baixa ou compra — é definição direta do saldo final. Cada item DEVE ter quantidade numérica EXATA e EXPLÍCITA (nunca inferida de frases vagas). Use quando o usuário disser coisas como 'acabou meu açúcar', 'agora só tenho 2 litros de leite', 'tenho meio quilo de banana'. Para saldo zero: 'acabou', 'não tenho mais' = novo_saldo 0.",
+      parameters: {
+        type: "object",
+        properties: {
+          itens: {
+            type: "array",
+            description: "Array de itens com saldo a ajustar. Cada item DEVE ter quantidade numérica exata.",
+            items: {
+              type: "object",
+              properties: {
+                produto_nome: { type: "string", description: "Nome do produto informado pelo usuário" },
+                novo_saldo: { type: "number", description: "Valor EXATO do saldo atual informado pelo usuário — NUNCA inferido de frases vagas" },
+                unidade: { type: "string", description: "Unidade: KG, L, UN, etc. DEVE corresponder ao estoque" },
+                produto_id: { type: "string", description: "ID específico do produto (obrigatório se já desambiguado)" }
+              },
+              required: ["produto_nome", "novo_saldo", "unidade"]
+            }
+          }
+        },
+        required: ["itens"]
+      }
+    }
   }
 ];
 
@@ -417,7 +444,8 @@ async function executeTool(
   
   const writeMutationTools = [
     'baixar_estoque', 'aumentar_estoque', 'adicionar_produto',
-    'criar_lista', 'adicionar_itens_lista', 'remover_item_lista', 'alterar_quantidade_item_lista'
+    'criar_lista', 'adicionar_itens_lista', 'remover_item_lista', 'alterar_quantidade_item_lista',
+    'ajustar_saldo_estoque'
   ];
   const isWriteMutation = writeMutationTools.includes(toolName);
 
@@ -1492,6 +1520,161 @@ async function executeTool(
             instrucao: `O feedback (${tipoLabel[tipo]}) foi registrado com sucesso. Responda ao usuário de forma acolhedora e simpática, confirmando que a mensagem foi recebida e que o time vai analisar com atenção. Diga que retornarão o mais rápido possível por este mesmo canal. Adapte o tom ao tipo de feedback (mais empático para erros/reclamações, mais entusiasta para sugestões).`
           }),
           isWriteMutation: false
+        };
+      }
+
+      case 'ajustar_saldo_estoque': {
+        if (!args.itens || !Array.isArray(args.itens) || args.itens.length === 0) {
+          return { result: JSON.stringify({ erro: "Nenhum item fornecido para ajustar." }), isWriteMutation: false };
+        }
+
+        const normNomeSaldo = (nome: string): string => {
+          return nome.toUpperCase().trim().replace(/\s+/g, ' ').replace(/\bKG\b/gi, '').replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL').replace(/\s+/g, ' ').trim();
+        };
+
+        // Conversões canônicas autorizadas (lista fechada)
+        const conversoesCanonICAS: Record<string, Record<string, number>> = {
+          'G': { 'KG': 0.001 }, 'KG': { 'G': 1000 },
+          'ML': { 'L': 0.001 }, 'L': { 'ML': 1000 },
+        };
+
+        const itensAjustados: any[] = [];
+        const itensAmbiguos: any[] = [];
+        const itensPendentes: any[] = [];
+        const itensNaoEncontrados: any[] = [];
+        const avisos: string[] = [];
+
+        for (const item of args.itens) {
+          const { produto_nome, novo_saldo, unidade, produto_id } = item;
+
+          // Buscar no estoque
+          let queryEst = supabase.from('estoque_app')
+            .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+            .eq('user_id', usuarioId);
+
+          if (produto_id) {
+            queryEst = queryEst.eq('id', produto_id);
+          } else {
+            queryEst = queryEst.ilike('produto_nome', `%${produto_nome}%`);
+          }
+
+          const { data: matches, error: estErr } = await queryEst.limit(20);
+          if (estErr) throw estErr;
+
+          if (!matches || matches.length === 0) {
+            itensNaoEncontrados.push({ nome: produto_nome });
+            continue;
+          }
+
+          // Consolidar por nome normalizado para contar matches reais
+          const gruposConsolidados = new Map<string, any[]>();
+          matches.forEach((m: any) => {
+            const chave = normNomeSaldo(m.produto_nome);
+            if (!gruposConsolidados.has(chave)) gruposConsolidados.set(chave, []);
+            gruposConsolidados.get(chave)!.push(m);
+          });
+
+          if (gruposConsolidados.size > 1 && !produto_id) {
+            // Múltiplos produtos distintos — ambíguo
+            const opcoes = Array.from(gruposConsolidados.entries()).map(([nome, registros]) => {
+              const qtdTotal = registros.reduce((s: number, r: any) => s + r.quantidade, 0);
+              const maisRecente = registros.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+              return {
+                id: maisRecente.id,
+                nome_completo: maisRecente.produto_nome,
+                nome_consolidado: nome,
+                quantidade_atual: qtdTotal,
+                unidade: maisRecente.unidade_medida,
+                marca: maisRecente.marca
+              };
+            });
+            itensAmbiguos.push({ nome: produto_nome, opcoes });
+            continue;
+          }
+
+          // 1 grupo consolidado (ou produto_id exato)
+          const grupo = Array.from(gruposConsolidados.values())[0];
+          const registroPrimario = grupo.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+          const saldoAnterior = grupo.reduce((s: number, r: any) => s + r.quantidade, 0);
+          const unidadeEstoque = registroPrimario.unidade_medida?.toUpperCase() || 'UN';
+          const unidadeInformada = (unidade || '').toUpperCase() || 'UN';
+
+          // Verificar compatibilidade de unidade
+          let saldoFinal = novo_saldo;
+          let criterio = produto_id ? 'produto_id_exato' : 'nome_unico_seguro';
+
+          if (unidadeInformada !== unidadeEstoque) {
+            // Tentar conversão canônica
+            const conv = conversoesCanonICAS[unidadeInformada]?.[unidadeEstoque];
+            if (conv !== undefined) {
+              saldoFinal = novo_saldo * conv;
+              criterio = 'conversao_canonica';
+              avisos.push(`"${produto_nome}": convertido de ${novo_saldo} ${unidadeInformada} para ${saldoFinal} ${unidadeEstoque}`);
+            } else {
+              // Conversão não canônica — pendente
+              itensPendentes.push({
+                nome: produto_nome,
+                motivo: `Unidade informada (${unidadeInformada}) incompatível com estoque (${unidadeEstoque}). Conversão não autorizada automaticamente.`
+              });
+              continue;
+            }
+          }
+
+          // Se busca foi por nome genérico (sem produto_id), verificar se é realmente seguro
+          if (!produto_id) {
+            const nomeNorm = normNomeSaldo(produto_nome);
+            const nomeEstNorm = normNomeSaldo(registroPrimario.produto_nome);
+            // Se o nome informado é muito mais curto que o do estoque, pode ser genérico demais
+            const palavrasInformadas = produto_nome.trim().split(/\s+/).length;
+            const palavrasEstoque = registroPrimario.produto_nome.trim().split(/\s+/).length;
+            if (palavrasInformadas <= 1 && palavrasEstoque >= 3) {
+              // Nome muito genérico vs nome detalhado — pedir confirmação
+              itensPendentes.push({
+                nome: produto_nome,
+                motivo: `Encontrei "${registroPrimario.produto_nome}" (${saldoAnterior} ${unidadeEstoque}). É este o item que você quer ajustar para ${novo_saldo} ${unidadeInformada}?`,
+                confirmar: true,
+                produto_encontrado: { id: registroPrimario.id, nome: registroPrimario.produto_nome, quantidade_atual: saldoAnterior, unidade: unidadeEstoque }
+              });
+              continue;
+            }
+          }
+
+          // Executar o ajuste — atualizar primário e zerar secundários
+          const { error: upErr } = await supabase.from('estoque_app')
+            .update({ quantidade: saldoFinal, updated_at: new Date().toISOString() })
+            .eq('id', registroPrimario.id)
+            .eq('user_id', usuarioId);
+          if (upErr) throw upErr;
+
+          // Zerar registros secundários do mesmo grupo
+          const idsSecundarios = grupo.filter((r: any) => r.id !== registroPrimario.id).map((r: any) => r.id);
+          if (idsSecundarios.length > 0) {
+            const { error: zeroErr } = await supabase.from('estoque_app')
+              .update({ quantidade: 0, updated_at: new Date().toISOString() })
+              .in('id', idsSecundarios);
+            if (zeroErr) console.error('⚠️ Erro ao zerar secundários:', zeroErr);
+          }
+
+          itensAjustados.push({
+            nome: registroPrimario.produto_nome,
+            saldo_anterior: saldoAnterior,
+            saldo_novo: saldoFinal,
+            unidade: unidadeEstoque,
+            criterio_autorizacao: criterio
+          });
+
+          console.log(`✅ [SALDO] ${registroPrimario.produto_nome}: ${saldoAnterior} → ${saldoFinal} ${unidadeEstoque} (criterio: ${criterio})`);
+        }
+
+        return {
+          result: JSON.stringify({
+            itens_ajustados: itensAjustados,
+            itens_ambiguos: itensAmbiguos,
+            itens_pendentes: itensPendentes,
+            itens_nao_encontrados: itensNaoEncontrados,
+            avisos
+          }),
+          isWriteMutation: itensAjustados.length > 0
         };
       }
 
