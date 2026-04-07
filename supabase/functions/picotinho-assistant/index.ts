@@ -1532,6 +1532,148 @@ async function executeTool(
           return nome.toUpperCase().trim().replace(/\s+/g, ' ').replace(/\bKG\b/gi, '').replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL').replace(/\s+/g, ' ').trim();
         };
 
+        // ==================== MATCHING POR NÚCLEO ====================
+        const STOP_WORDS = new Set([
+          'de','da','do','das','dos','com','sem','em','para','por','meu','minha','meus','minhas',
+          'o','a','os','as','um','uma','no','na','nos','nas','ao','aos','que','pro','pra','eu','so','ja','tb','tambem'
+        ]);
+        const TOKENS_COMERCIAIS = new Set([
+          'concentrado','premium','tradicional','especial','original','sache','pacote',
+          'garrafa','pet','lata','vidro','caixa','unidade','gramas','grama','litro','litros',
+          'quilos','quilo','tipo','marca'
+        ]);
+        const REGEX_NUM_UNIDADE = /^\d+[a-z]*$/;
+
+        // Grupos de variantes mutuamente exclusivas — expansível
+        const GRUPOS_EXCLUSIVOS = [
+          ['limao','morango','uva','maracuja','abacaxi','manga','goiaba','framboesa','menta','laranja','pessego','cereja','caju','acerola','guarana','tutti','banana','maca','melancia','melao','ameixa','kiwi','tamarindo','pitanga','jabuticaba','cupuacu'],
+          ['integral','desnatado','semidesnatado'],
+          ['zero','diet','light'],
+          ['branco','preto','vermelho','verde','amarelo','rosa'],
+          ['bovino','suino','frango','peixe','peru','cordeiro'],
+        ];
+
+        // Tipos base de produtos — para prioridade máxima no matching
+        const TIPOS_BASE_CONHECIDOS = new Set([
+          'leite','suco','gelatina','geleia','xarope','cafe','cha','iogurte','queijo','manteiga',
+          'margarina','arroz','feijao','macarrao','farinha','acucar','sal','oleo','azeite','vinagre',
+          'molho','catchup','ketchup','mostarda','maionese','creme','biscoito','bolacha','pao',
+          'bolo','cereal','aveia','granola','mel','chocolate','achocolatado','nescau','toddy',
+          'banana','maca','laranja','tomate','cebola','alho','batata','cenoura','couve','alface',
+          'carne','picanha','frango','linguica','salsicha','presunto','mortadela','bacon','ovo',
+          'sabao','detergente','amaciante','desinfetante','agua','cerveja','refrigerante','vinho',
+          'isotônico','isotonico','energetico','guaramcamp'
+        ]);
+
+        const normalizarBusca = (texto: string): string => {
+          return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        };
+
+        const tokenizar = (texto: string): string[] => {
+          return normalizarBusca(texto).split(' ').filter(t => t.length >= 2);
+        };
+
+        const classificarTokens = (tokens: string[]): { ignoraveis: string[], comerciais: string[], criticos: string[] } => {
+          const ignoraveis: string[] = [];
+          const comerciais: string[] = [];
+          const criticos: string[] = [];
+          for (const t of tokens) {
+            if (STOP_WORDS.has(t)) { ignoraveis.push(t); }
+            else if (TOKENS_COMERCIAIS.has(t) || REGEX_NUM_UNIDADE.test(t)) { comerciais.push(t); }
+            else { criticos.push(t); }
+          }
+          return { ignoraveis, comerciais, criticos };
+        };
+
+        // Extrair tipo base: primeiro token crítico que seja um tipo de produto conhecido,
+        // OU o primeiro token crítico se nenhum for tipo conhecido (fallback)
+        const extrairTipoBase = (criticos: string[]): string | null => {
+          if (criticos.length === 0) return null;
+          const tipoConhecido = criticos.find(t => TIPOS_BASE_CONHECIDOS.has(t));
+          return tipoConhecido || criticos[0];
+        };
+
+        const temConflitoVariante = (criticosUsuario: string[], criticosEstoque: string[]): boolean => {
+          for (const grupo of GRUPOS_EXCLUSIVOS) {
+            const userNoGrupo = criticosUsuario.filter(t => grupo.includes(t));
+            const estNoGrupo = criticosEstoque.filter(t => grupo.includes(t));
+            if (userNoGrupo.length > 0 && estNoGrupo.length > 0) {
+              const userSet = new Set(userNoGrupo);
+              const estSet = new Set(estNoGrupo);
+              const temIntersecao = [...userSet].some(t => estSet.has(t));
+              if (!temIntersecao) return true; // tokens diferentes no mesmo grupo = conflito
+            }
+          }
+          return false;
+        };
+
+        type MatchResult = { status: 'dominante', items: any[] } | { status: 'ambiguo', opcoes: any[] } | { status: 'nao_encontrado' };
+
+        const resolverMatchPorNucleo = (produtoNome: string, todosItens: any[]): MatchResult => {
+          const tokensUsuario = tokenizar(produtoNome);
+          const { criticos: criticosUsuario } = classificarTokens(tokensUsuario);
+          if (criticosUsuario.length === 0) return { status: 'nao_encontrado' };
+
+          const tipoBase = extrairTipoBase(criticosUsuario);
+
+          // Consolidar estoque por nome normalizado
+          const grupos = new Map<string, any[]>();
+          for (const item of todosItens) {
+            const chave = normalizarBusca(item.produto_nome);
+            if (!grupos.has(chave)) grupos.set(chave, []);
+            grupos.get(chave)!.push(item);
+          }
+
+          const candidatos: Array<{ chave: string, items: any[], score: number }> = [];
+
+          for (const [chave, items] of grupos) {
+            const tokensEst = tokenizar(items[0].produto_nome);
+            const { criticos: criticosEst } = classificarTokens(tokensEst);
+
+            // Verificar tipo base — obrigatório
+            if (tipoBase && !criticosEst.includes(tipoBase)) {
+              // Score 0 — descartar
+              continue;
+            }
+
+            // Verificar conflito de variante
+            if (temConflitoVariante(criticosUsuario, criticosEst)) {
+              continue;
+            }
+
+            // Score = cobertura dos tokens críticos do usuário
+            const encontrados = criticosUsuario.filter(t => criticosEst.includes(t));
+            const score = encontrados.length / criticosUsuario.length;
+            candidatos.push({ chave, items, score });
+          }
+
+          // Filtrar por threshold 0.8
+          const validos = candidatos.filter(c => c.score >= 0.8).sort((a, b) => b.score - a.score);
+
+          if (validos.length === 0) return { status: 'nao_encontrado' };
+          if (validos.length === 1) return { status: 'dominante', items: validos[0].items };
+
+          // Verificar dominância por margem
+          const margem = validos[0].score - validos[1].score;
+          if (margem >= 0.3) return { status: 'dominante', items: validos[0].items };
+
+          // Ambíguo
+          const opcoes = validos.slice(0, 5).map(v => {
+            const mais_recente = v.items.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+            const qtdTotal = v.items.reduce((s: number, r: any) => s + r.quantidade, 0);
+            return {
+              id: mais_recente.id,
+              nome_completo: mais_recente.produto_nome,
+              nome_consolidado: v.chave,
+              quantidade_atual: qtdTotal,
+              unidade: mais_recente.unidade_medida,
+              marca: mais_recente.marca
+            };
+          });
+          return { status: 'ambiguo', opcoes };
+        };
+        // ==================== FIM MATCHING POR NÚCLEO ====================
+
         // Conversões canônicas autorizadas (lista fechada)
         const conversoesCanonICAS: Record<string, Record<string, number>> = {
           'G': { 'KG': 0.001 }, 'KG': { 'G': 1000 },
@@ -1561,24 +1703,27 @@ async function executeTool(
           const { data: matches, error: estErr } = await queryEst.limit(20);
           if (estErr) throw estErr;
 
-          // === PARTE 2: Fallback por palavras-chave se ilike não encontrou nada ===
+          // === PARTE 2: Fallback por matching inteligente por núcleo ===
           let finalMatches = matches || [];
+          let criterioFallback = false;
           if (finalMatches.length === 0 && !produto_id) {
-            const keywords = produto_nome.toLowerCase().split(/\s+/).filter((k: string) => k.length >= 2);
-            if (keywords.length > 0) {
-              const { data: allStock } = await supabase.from('estoque_app')
-                .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
-                .eq('user_id', usuarioId)
-                .gt('quantidade', -1)
-                .limit(500);
-              if (allStock && allStock.length > 0) {
-                finalMatches = allStock.filter((p: any) => {
-                  const nomeNorm = p.produto_nome.toLowerCase();
-                  return keywords.every((k: string) => nomeNorm.includes(k));
-                });
-                if (finalMatches.length > 0) {
-                  console.log(`🔍 [FALLBACK] "${produto_nome}" → ${finalMatches.length} match(es) por palavras-chave: ${keywords.join(', ')}`);
-                }
+            const { data: allStock } = await supabase.from('estoque_app')
+              .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+              .eq('user_id', usuarioId)
+              .gt('quantidade', -1)
+              .limit(500);
+            if (allStock && allStock.length > 0) {
+              const resultado = resolverMatchPorNucleo(produto_nome, allStock);
+              if (resultado.status === 'dominante') {
+                finalMatches = resultado.items;
+                criterioFallback = true;
+                console.log(`🔍 [NUCLEO] "${produto_nome}" → match dominante: ${resultado.items[0]?.produto_nome}`);
+              } else if (resultado.status === 'ambiguo') {
+                itensAmbiguos.push({ nome: produto_nome, opcoes: resultado.opcoes });
+                console.log(`🔍 [NUCLEO] "${produto_nome}" → ambíguo (${resultado.opcoes.length} opções)`);
+                continue;
+              } else {
+                console.log(`🔍 [NUCLEO] "${produto_nome}" → não encontrado`);
               }
             }
           }
@@ -1623,7 +1768,7 @@ async function executeTool(
 
           // Verificar compatibilidade de unidade
           let saldoFinal = novo_saldo;
-          let criterio = produto_id ? 'produto_id_exato' : 'nome_unico_seguro';
+          let criterio = produto_id ? 'produto_id_exato' : (criterioFallback ? 'match_nucleo_dominante' : 'nome_unico_seguro');
 
           if (unidadeInformada !== unidadeEstoque) {
             // Tentar conversão canônica
@@ -1667,13 +1812,11 @@ async function executeTool(
 
           // Se busca foi por nome genérico (sem produto_id), verificar se é realmente seguro
           if (!produto_id) {
-            const nomeNorm = normNomeSaldo(produto_nome);
-            const nomeEstNorm = normNomeSaldo(registroPrimario.produto_nome);
-            // Se o nome informado é muito mais curto que o do estoque, pode ser genérico demais
-            const palavrasInformadas = produto_nome.trim().split(/\s+/).length;
-            const palavrasEstoque = registroPrimario.produto_nome.trim().split(/\s+/).length;
-            if (palavrasInformadas <= 1 && palavrasEstoque >= 3) {
-              // Nome muito genérico vs nome detalhado — pedir confirmação
+            // Usar tokens críticos para avaliar genericidade (não palavras brutas)
+            const tokensCriticosInfo = classificarTokens(tokenizar(produto_nome)).criticos;
+            const tokensCriticosEst = classificarTokens(tokenizar(registroPrimario.produto_nome)).criticos;
+            if (tokensCriticosInfo.length <= 1 && tokensCriticosEst.length >= 3) {
+              // Nome com 1 token crítico (ex: "leite", "café") vs nome detalhado — pedir confirmação
               itensPendentes.push({
                 nome: produto_nome,
                 motivo: `Encontrei "${registroPrimario.produto_nome}" (${saldoAnterior} ${unidadeEstoque}). É este o item que você quer ajustar para ${novo_saldo} ${unidadeInformada}?`,
