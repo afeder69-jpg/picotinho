@@ -31,7 +31,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { detectarTipoDocumento, TipoDocumento, extrairChaveNFe } from "@/lib/documentDetection";
+import { detectarTipoDocumento, TipoDocumento, extrairChaveNFe, construirUrlConsulta } from "@/lib/documentDetection";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
@@ -108,27 +108,36 @@ const BottomNavigation = () => {
     
     console.log('👤 [AUTH] Usuário autenticado:', user.id);
     
+    // Normalizar dados do QR Code: aceitar URL ou extrair chave de formatos não-URL
+    let urlParaProcessar = data;
     const urlPattern = /^https?:\/\/.+/i;
     
     if (!urlPattern.test(data)) {
-      toast({
-        title: "QR Code inválido",
-        description: "Este não parece ser um QR Code de nota fiscal válido.",
-        variant: "destructive",
-      });
-      setShowQRScanner(false);
-      return;
+      // QR code não é URL — tentar extrair chave de acesso diretamente
+      const chaveExtraida = extrairChaveNFe(data);
+      if (chaveExtraida) {
+        urlParaProcessar = construirUrlConsulta(chaveExtraida);
+        console.log('🔑 Chave extraída de QR Code não-URL:', chaveExtraida, '→', urlParaProcessar);
+      } else {
+        toast({
+          title: "QR Code inválido",
+          description: "Não foi possível identificar uma nota fiscal neste QR Code.",
+          variant: "destructive",
+        });
+        setShowQRScanner(false);
+        return;
+      }
     }
     
     // Detectar tipo de documento (NFe vs NFCe)
-    const tipoDocumento = detectarTipoDocumento(data);
+    const tipoDocumento = detectarTipoDocumento(urlParaProcessar);
     console.log(`🔍 Tipo de documento: ${tipoDocumento || 'DESCONHECIDO'}`);
     
     // Fechar scanner imediatamente
     setShowQRScanner(false);
     
     try {
-      const chaveAcesso = extrairChaveNFe(data);
+      const chaveAcesso = extrairChaveNFe(urlParaProcessar);
       
       if (!chaveAcesso) {
         throw new Error('Não foi possível extrair a chave de acesso da URL');
@@ -140,12 +149,12 @@ const BottomNavigation = () => {
       const tempId = `temp-${Date.now()}`;
       console.log('🔵 [BADGE] Adicionando nota temporária:', tempId);
       addProcessingNote(tempId);
-      setProcessingNotesData(prev => new Map(prev).set(tempId, { url: data, tipoDocumento }));
+      setProcessingNotesData(prev => new Map(prev).set(tempId, { url: urlParaProcessar, tipoDocumento }));
       
       // Chamar process-url-nota SEM AGUARDAR (processamento em background)
       const functionCall = supabase.functions.invoke('process-url-nota', {
         body: {
-          url: data,
+          url: urlParaProcessar,
           userId: user.id,
           chaveAcesso,
           tipoDocumento,

@@ -77,29 +77,39 @@ export function construirUrlConsulta(chaveAcesso: string): string {
 /**
  * Extrai a chave de acesso de uma URL de QR Code
  */
-export function extrairChaveNFe(url: string): string | null {
+export function extrairChaveNFe(dados: string): string | null {
   try {
-    const urlSanitizada = decodeURIComponent(url).replace(/[\u0000-\u001F\u007F\s]+/g, '');
-    const urlObj = new URL(urlSanitizada);
-    const params = urlObj.searchParams.get('p') || urlObj.searchParams.get('chNFe') || urlObj.searchParams.get('chave');
+    const sanitizado = decodeURIComponent(dados).replace(/[\u0000-\u001F\u007F\s]+/g, '');
 
-    if (params) {
-      const chaveParam = limparChaveAcesso(params.split('|')[0]);
-      if (chaveParam.length === 44) {
-        return chaveParam;
+    // 1. Tentar como URL (fluxo original para QR codes com http/https)
+    try {
+      const urlObj = new URL(sanitizado);
+      const params = urlObj.searchParams.get('p') || urlObj.searchParams.get('chNFe') || urlObj.searchParams.get('chave');
+
+      if (params) {
+        const chaveParam = limparChaveAcesso(params.split('|')[0]);
+        if (chaveParam.length === 44) {
+          return chaveParam;
+        }
       }
+    } catch (_) {
+      // Não é URL válida — seguir para extração direta
+      console.log('ℹ️ Dado não é URL, tentando extração direta da chave');
     }
 
-    const matchDireto = urlSanitizada.match(/(\d{44})/);
+    // 2. Buscar 44 dígitos consecutivos no conteúdo bruto
+    const matchDireto = sanitizado.match(/(\d{44})/);
     if (matchDireto) {
       return matchDireto[1];
     }
 
-    const todosOsDigitos = urlSanitizada.replace(/\D/g, '');
+    // 3. Extrair todos os dígitos e verificar se totalizam 44
+    const todosOsDigitos = sanitizado.replace(/\D/g, '');
     if (todosOsDigitos.length === 44) {
       return todosOsDigitos;
     }
 
+    // 4. Buscar subsequência válida de 44 dígitos
     for (let i = 0; i <= todosOsDigitos.length - 44; i++) {
       const candidata = todosOsDigitos.slice(i, i + 44);
       if (validarChaveAcesso(candidata).valida) {
