@@ -45,15 +45,16 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "baixar_estoque",
-      description: "Remove quantidade de um produto do estoque. Use apenas quando tiver certeza do produto. Se houver ambiguidade, use buscar_produtos_similares primeiro.",
+      description: "Remove quantidade de produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Para múltiplos itens, use o array 'itens'.",
       parameters: {
         type: "object",
         properties: {
-          produto_nome: { type: "string", description: "Nome exato ou parcial do produto" },
-          quantidade: { type: "number", description: "Quantidade a remover" },
-          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" }
+          produto_nome: { type: "string", description: "Nome do produto como o usuário falou (para item único)" },
+          quantidade: { type: "number", description: "Quantidade a remover (para item único)" },
+          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" },
+          itens: { type: "array", description: "Array de itens para baixa múltipla", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
         },
-        required: ["produto_nome", "quantidade"]
+        required: []
       }
     }
   },
@@ -61,15 +62,16 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "aumentar_estoque",
-      description: "Adiciona quantidade a um produto do estoque. Se houver ambiguidade (múltiplos produtos similares), liste as opções e peça confirmação.",
+      description: "Adiciona quantidade a produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Para múltiplos itens, use o array 'itens'.",
       parameters: {
         type: "object",
         properties: {
-          produto_nome: { type: "string", description: "Nome exato ou parcial do produto" },
-          quantidade: { type: "number", description: "Quantidade a adicionar" },
-          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" }
+          produto_nome: { type: "string", description: "Nome do produto como o usuário falou (para item único)" },
+          quantidade: { type: "number", description: "Quantidade a adicionar (para item único)" },
+          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" },
+          itens: { type: "array", description: "Array de itens para aumento múltiplo", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
         },
-        required: ["produto_nome", "quantidade"]
+        required: []
       }
     }
   },
@@ -411,7 +413,104 @@ const feedbackToolDefinitions = [
 
 const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions];
 
-// ==================== HELPER: resolve lista_id ====================
+// ==================== SHARED: MATCHING POR NÚCLEO ====================
+const STOP_WORDS_SHARED = new Set([
+  'de','da','do','das','dos','com','sem','em','para','por','meu','minha','meus','minhas',
+  'o','a','os','as','um','uma','no','na','nos','nas','ao','aos','que','pro','pra','eu','so','ja','tb','tambem'
+]);
+const TOKENS_COMERCIAIS_SHARED = new Set([
+  'concentrado','premium','tradicional','especial','original','sache','pacote',
+  'garrafa','pet','lata','vidro','caixa','unidade','gramas','grama','litro','litros',
+  'quilos','quilo','tipo','marca'
+]);
+const REGEX_NUM_UNIDADE_SHARED = /^\d+[a-z]*$/;
+const GRUPOS_EXCLUSIVOS_SHARED = [
+  ['limao','morango','uva','maracuja','abacaxi','manga','goiaba','framboesa','menta','laranja','pessego','cereja','caju','acerola','guarana','tutti','banana','maca','melancia','melao','ameixa','kiwi','tamarindo','pitanga','jabuticaba','cupuacu'],
+  ['integral','desnatado','semidesnatado'],
+  ['zero','diet','light'],
+  ['branco','preto','vermelho','verde','amarelo','rosa'],
+  ['bovino','suino','frango','peixe','peru','cordeiro'],
+];
+const TIPOS_BASE_CONHECIDOS_SHARED = new Set([
+  'leite','suco','gelatina','geleia','xarope','cafe','cha','iogurte','queijo','manteiga',
+  'margarina','arroz','feijao','macarrao','farinha','acucar','sal','oleo','azeite','vinagre',
+  'molho','catchup','ketchup','mostarda','maionese','creme','biscoito','bolacha','pao',
+  'bolo','cereal','aveia','granola','mel','chocolate','achocolatado','nescau','toddy',
+  'banana','maca','laranja','tomate','cebola','alho','batata','cenoura','couve','alface',
+  'carne','picanha','frango','linguica','salsicha','presunto','mortadela','bacon','ovo',
+  'sabao','detergente','amaciante','desinfetante','agua','cerveja','refrigerante','vinho',
+  'isotônico','isotonico','energetico','guaramcamp'
+]);
+
+function normalizarBuscaShared(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function tokenizarShared(texto: string): string[] {
+  return normalizarBuscaShared(texto).split(' ').filter(t => t.length >= 2);
+}
+function classificarTokensShared(tokens: string[]): { ignoraveis: string[], comerciais: string[], criticos: string[] } {
+  const ignoraveis: string[] = [], comerciais: string[] = [], criticos: string[] = [];
+  for (const t of tokens) {
+    if (STOP_WORDS_SHARED.has(t)) ignoraveis.push(t);
+    else if (TOKENS_COMERCIAIS_SHARED.has(t) || REGEX_NUM_UNIDADE_SHARED.test(t)) comerciais.push(t);
+    else criticos.push(t);
+  }
+  return { ignoraveis, comerciais, criticos };
+}
+function extrairTipoBaseShared(criticos: string[]): string | null {
+  if (criticos.length === 0) return null;
+  return criticos.find(t => TIPOS_BASE_CONHECIDOS_SHARED.has(t)) || criticos[0];
+}
+function temConflitoVarianteShared(criticosUsuario: string[], criticosEstoque: string[]): boolean {
+  for (const grupo of GRUPOS_EXCLUSIVOS_SHARED) {
+    const userNoGrupo = criticosUsuario.filter(t => grupo.includes(t));
+    const estNoGrupo = criticosEstoque.filter(t => grupo.includes(t));
+    if (userNoGrupo.length > 0 && estNoGrupo.length > 0) {
+      const userSet = new Set(userNoGrupo);
+      const estSet = new Set(estNoGrupo);
+      if (![...userSet].some(t => estSet.has(t))) return true;
+    }
+  }
+  return false;
+}
+
+type SharedMatchResult = { status: 'dominante', items: any[] } | { status: 'ambiguo', opcoes: any[] } | { status: 'nao_encontrado' };
+
+function resolverMatchPorNucleo(produtoNome: string, todosItens: any[]): SharedMatchResult {
+  const tokensUsuario = tokenizarShared(produtoNome);
+  const { criticos: criticosUsuario } = classificarTokensShared(tokensUsuario);
+  if (criticosUsuario.length === 0) return { status: 'nao_encontrado' };
+  const tipoBase = extrairTipoBaseShared(criticosUsuario);
+  const grupos = new Map<string, any[]>();
+  for (const item of todosItens) {
+    const chave = normalizarBuscaShared(item.produto_nome);
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave)!.push(item);
+  }
+  const candidatos: Array<{ chave: string, items: any[], score: number }> = [];
+  for (const [chave, items] of grupos) {
+    const tokensEst = tokenizarShared(items[0].produto_nome);
+    const { criticos: criticosEst } = classificarTokensShared(tokensEst);
+    if (tipoBase && !criticosEst.includes(tipoBase)) continue;
+    if (temConflitoVarianteShared(criticosUsuario, criticosEst)) continue;
+    const encontrados = criticosUsuario.filter(t => criticosEst.includes(t));
+    const score = encontrados.length / criticosUsuario.length;
+    candidatos.push({ chave, items, score });
+  }
+  const validos = candidatos.filter(c => c.score >= 0.8).sort((a, b) => b.score - a.score);
+  if (validos.length === 0) return { status: 'nao_encontrado' };
+  if (validos.length === 1) return { status: 'dominante', items: validos[0].items };
+  const margem = validos[0].score - validos[1].score;
+  if (margem >= 0.3) return { status: 'dominante', items: validos[0].items };
+  const opcoes = validos.slice(0, 5).map(v => {
+    const mais_recente = v.items.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+    const qtdTotal = v.items.reduce((s: number, r: any) => s + r.quantidade, 0);
+    return { id: mais_recente.id, nome_completo: mais_recente.produto_nome, nome_consolidado: v.chave, quantidade_atual: qtdTotal, unidade: mais_recente.unidade_medida, marca: mais_recente.marca };
+  });
+  return { status: 'ambiguo', opcoes };
+}
+// ==================== FIM SHARED MATCHING ====================
+
 
 async function resolveListaId(
   args: Record<string, any>,
@@ -728,40 +827,285 @@ async function executeTool(
         }), isWriteMutation: false };
       }
 
+      // ==================== SHARED: MATCHING POR NÚCLEO ====================
+      // (extracted to shared scope for use by baixar/aumentar/ajustar_saldo)
+
       case 'baixar_estoque': {
-        let query = supabase.from('estoque_app').select('id, produto_nome, quantidade, unidade_medida').eq('user_id', usuarioId);
-        if (args.produto_id) { query = query.eq('id', args.produto_id); } else { query = query.ilike('produto_nome', `%${args.produto_nome}%`); }
-        const { data: produtos, error } = await query;
-        if (error) throw error;
-        if (!produtos || produtos.length === 0) {
-          return { result: JSON.stringify({ erro: `Produto "${args.produto_nome}" não encontrado no estoque. Use buscar_produtos_similares para encontrar o nome correto.` }), isWriteMutation: false };
+        // Normalizar para array de itens
+        const itensBaixa = args.itens && Array.isArray(args.itens) && args.itens.length > 0
+          ? args.itens
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+
+        if (!itensBaixa[0].produto_nome && !itensBaixa[0].produto_id) {
+          return { result: JSON.stringify({ erro: "Nenhum produto informado para baixar." }), isWriteMutation: false };
         }
-        if (produtos.length > 1 && !args.produto_id) {
-          return { result: JSON.stringify({ erro: "Múltiplos produtos encontrados. Peça ao usuário para especificar qual:", opcoes: produtos.map((p: any) => ({ id: p.id, nome: p.produto_nome, quantidade: p.quantidade, unidade: p.unidade_medida })) }), isWriteMutation: false };
+
+        const baixados: any[] = [];
+        const baixaAmbiguos: any[] = [];
+        const baixaNaoEncontrados: any[] = [];
+        const baixaComProblema: any[] = [];
+
+        for (const itemBaixa of itensBaixa) {
+          const { produto_nome: pNome, quantidade: qtdBaixa, produto_id: pId } = itemBaixa;
+          try {
+            // Step 1: ilike search
+            let queryB = supabase.from('estoque_app')
+              .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+              .eq('user_id', usuarioId);
+            if (pId) { queryB = queryB.eq('id', pId); }
+            else { queryB = queryB.ilike('produto_nome', `%${pNome}%`); }
+            const { data: matchesB, error: errB } = await queryB.limit(20);
+            if (errB) throw errB;
+
+            let finalMatchesB = matchesB || [];
+
+            // Step 2: Fallback por núcleo
+            if (finalMatchesB.length === 0 && !pId) {
+              const { data: allStockB } = await supabase.from('estoque_app')
+                .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+                .eq('user_id', usuarioId).gt('quantidade', -1).limit(500);
+              if (allStockB && allStockB.length > 0) {
+                const resultadoB = resolverMatchPorNucleo(pNome, allStockB);
+                if (resultadoB.status === 'dominante') {
+                  finalMatchesB = resultadoB.items;
+                  console.log(`🔍 [BAIXA-NUCLEO] "${pNome}" → match dominante: ${resultadoB.items[0]?.produto_nome}`);
+                } else if (resultadoB.status === 'ambiguo') {
+                  baixaAmbiguos.push({
+                    produto_informado: pNome,
+                    opcoes: resultadoB.opcoes.map((o: any, i: number) => ({
+                      numero: i + 1,
+                      id: o.id,
+                      nome: o.nome_completo,
+                      quantidade_atual: o.quantidade_atual,
+                      unidade: o.unidade
+                    })),
+                    instrucao: "NÃO peça nome exato. Apresente as opções numeradas e pergunte qual o usuário quis dizer."
+                  });
+                  continue;
+                } else {
+                  baixaNaoEncontrados.push({
+                    produto_informado: pNome,
+                    instrucao: `Produto "${pNome}" não encontrado no estoque. Pergunte se o nome está correto. NÃO peça "nome exato".`
+                  });
+                  continue;
+                }
+              } else {
+                baixaNaoEncontrados.push({
+                  produto_informado: pNome,
+                  instrucao: `Produto "${pNome}" não encontrado no estoque (estoque vazio). NÃO peça "nome exato".`
+                });
+                continue;
+              }
+            }
+
+            if (finalMatchesB.length === 0) {
+              baixaNaoEncontrados.push({
+                produto_informado: pNome,
+                instrucao: `Produto "${pNome}" não encontrado no estoque. Pergunte se o nome está correto. NÃO peça "nome exato".`
+              });
+              continue;
+            }
+
+            // Step 3: Consolidar por nome normalizado
+            const gruposB = new Map<string, any[]>();
+            finalMatchesB.forEach((m: any) => {
+              const chave = normalizarBuscaShared(m.produto_nome);
+              if (!gruposB.has(chave)) gruposB.set(chave, []);
+              gruposB.get(chave)!.push(m);
+            });
+
+            if (gruposB.size > 1 && !pId) {
+              const opcoesB = Array.from(gruposB.entries()).map(([nome, regs], i) => {
+                const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
+                return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
+              });
+              baixaAmbiguos.push({
+                produto_informado: pNome,
+                opcoes: opcoesB,
+                instrucao: "NÃO peça nome exato. Apresente as opções numeradas e pergunte qual o usuário quis dizer."
+              });
+              continue;
+            }
+
+            // Step 4: Match único — verificar saldo
+            const grupoB = Array.from(gruposB.values())[0];
+            const produtoB = grupoB.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+            const saldoAtualB = grupoB.reduce((s: number, r: any) => s + r.quantidade, 0);
+
+            if (qtdBaixa > saldoAtualB) {
+              baixaComProblema.push({
+                produto: produtoB.produto_nome,
+                motivo: `Saldo insuficiente: tem ${saldoAtualB} ${produtoB.unidade_medida}, mas você pediu para baixar ${qtdBaixa} ${produtoB.unidade_medida}.`,
+                saldo_atual: saldoAtualB,
+                unidade: produtoB.unidade_medida,
+                produto_id: produtoB.id
+              });
+              continue;
+            }
+
+            // Step 5: Executar baixa
+            const novaQtdB = Math.max(0, saldoAtualB - qtdBaixa);
+            const { error: upErrB } = await supabase.from('estoque_app')
+              .update({ quantidade: novaQtdB, updated_at: new Date().toISOString() })
+              .eq('id', produtoB.id).eq('user_id', usuarioId);
+            if (upErrB) throw upErrB;
+
+            baixados.push({
+              produto: produtoB.produto_nome,
+              quantidade_anterior: saldoAtualB,
+              quantidade_removida: qtdBaixa,
+              quantidade_atual: novaQtdB,
+              unidade: produtoB.unidade_medida
+            });
+            console.log(`✅ [BAIXA] ${produtoB.produto_nome}: ${saldoAtualB} → ${novaQtdB} ${produtoB.unidade_medida}`);
+
+          } catch (itemErr: any) {
+            baixaComProblema.push({
+              produto: pNome,
+              motivo: `Erro ao processar: ${itemErr.message}`,
+              saldo_atual: null,
+              unidade: null
+            });
+          }
         }
-        const produto = produtos[0];
-        const novaQtd = Math.max(0, produto.quantidade - args.quantidade);
-        const { error: updateError } = await supabase.from('estoque_app').update({ quantidade: novaQtd, updated_at: new Date().toISOString() }).eq('id', produto.id).eq('user_id', usuarioId);
-        if (updateError) throw updateError;
-        return { result: JSON.stringify({ sucesso: true, produto: produto.produto_nome, quantidade_anterior: produto.quantidade, quantidade_removida: args.quantidade, quantidade_atual: novaQtd }), isWriteMutation: true };
+
+        return {
+          result: JSON.stringify({
+            itens_baixados: baixados,
+            itens_ambiguos: baixaAmbiguos,
+            itens_nao_encontrados: baixaNaoEncontrados,
+            itens_com_problema: baixaComProblema,
+            instrucao_formatacao: "Apresente o resultado separado por categoria. Para itens_ambiguos, mostre opções numeradas. Para itens_com_problema, mostre o saldo atual. NÃO peça 'nome exato' em nenhum caso."
+          }),
+          isWriteMutation: baixados.length > 0
+        };
       }
 
       case 'aumentar_estoque': {
-        let query = supabase.from('estoque_app').select('id, produto_nome, quantidade, unidade_medida').eq('user_id', usuarioId);
-        if (args.produto_id) { query = query.eq('id', args.produto_id); } else { query = query.ilike('produto_nome', `%${args.produto_nome}%`); }
-        const { data: produtos, error } = await query;
-        if (error) throw error;
-        if (!produtos || produtos.length === 0) {
-          return { result: JSON.stringify({ erro: `Produto "${args.produto_nome}" não encontrado no estoque. Use buscar_produtos_similares para encontrar o nome correto, ou pergunte se deseja adicionar como produto novo.` }), isWriteMutation: false };
+        // Normalizar para array de itens
+        const itensAumento = args.itens && Array.isArray(args.itens) && args.itens.length > 0
+          ? args.itens
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+
+        if (!itensAumento[0].produto_nome && !itensAumento[0].produto_id) {
+          return { result: JSON.stringify({ erro: "Nenhum produto informado para aumentar." }), isWriteMutation: false };
         }
-        if (produtos.length > 1 && !args.produto_id) {
-          return { result: JSON.stringify({ erro: "Múltiplos produtos encontrados. Peça ao usuário para especificar qual:", opcoes: produtos.map((p: any) => ({ id: p.id, nome: p.produto_nome, quantidade: p.quantidade, unidade: p.unidade_medida })) }), isWriteMutation: false };
+
+        const aumentados: any[] = [];
+        const aumentoAmbiguos: any[] = [];
+        const aumentoNaoEncontrados: any[] = [];
+        const aumentoComProblema: any[] = [];
+
+        for (const itemAumento of itensAumento) {
+          const { produto_nome: pNomeA, quantidade: qtdAumento, produto_id: pIdA } = itemAumento;
+          try {
+            let queryA = supabase.from('estoque_app')
+              .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+              .eq('user_id', usuarioId);
+            if (pIdA) { queryA = queryA.eq('id', pIdA); }
+            else { queryA = queryA.ilike('produto_nome', `%${pNomeA}%`); }
+            const { data: matchesA, error: errA } = await queryA.limit(20);
+            if (errA) throw errA;
+
+            let finalMatchesA = matchesA || [];
+
+            // Fallback por núcleo
+            if (finalMatchesA.length === 0 && !pIdA) {
+              const { data: allStockA } = await supabase.from('estoque_app')
+                .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+                .eq('user_id', usuarioId).gt('quantidade', -1).limit(500);
+              if (allStockA && allStockA.length > 0) {
+                const resultadoA = resolverMatchPorNucleo(pNomeA, allStockA);
+                if (resultadoA.status === 'dominante') {
+                  finalMatchesA = resultadoA.items;
+                  console.log(`🔍 [AUMENTO-NUCLEO] "${pNomeA}" → match dominante: ${resultadoA.items[0]?.produto_nome}`);
+                } else if (resultadoA.status === 'ambiguo') {
+                  aumentoAmbiguos.push({
+                    produto_informado: pNomeA,
+                    opcoes: resultadoA.opcoes.map((o: any, i: number) => ({
+                      numero: i + 1, id: o.id, nome: o.nome_completo, quantidade_atual: o.quantidade_atual, unidade: o.unidade
+                    })),
+                    instrucao: "NÃO peça nome exato. Apresente as opções numeradas."
+                  });
+                  continue;
+                } else {
+                  aumentoNaoEncontrados.push({
+                    produto_informado: pNomeA,
+                    instrucao: `Produto "${pNomeA}" não encontrado no estoque. Pergunte se o nome está correto ou se deseja adicionar como produto novo. NÃO peça "nome exato".`
+                  });
+                  continue;
+                }
+              }
+            }
+
+            if (finalMatchesA.length === 0) {
+              aumentoNaoEncontrados.push({
+                produto_informado: pNomeA,
+                instrucao: `Produto "${pNomeA}" não encontrado no estoque. Pergunte se o nome está correto ou se deseja adicionar como produto novo. NÃO peça "nome exato".`
+              });
+              continue;
+            }
+
+            // Consolidar
+            const gruposA = new Map<string, any[]>();
+            finalMatchesA.forEach((m: any) => {
+              const chave = normalizarBuscaShared(m.produto_nome);
+              if (!gruposA.has(chave)) gruposA.set(chave, []);
+              gruposA.get(chave)!.push(m);
+            });
+
+            if (gruposA.size > 1 && !pIdA) {
+              const opcoesA = Array.from(gruposA.entries()).map(([nome, regs], i) => {
+                const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
+                return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
+              });
+              aumentoAmbiguos.push({
+                produto_informado: pNomeA,
+                opcoes: opcoesA,
+                instrucao: "NÃO peça nome exato. Apresente as opções numeradas."
+              });
+              continue;
+            }
+
+            const grupoA = Array.from(gruposA.values())[0];
+            const produtoA = grupoA.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+            const saldoAtualA = grupoA.reduce((s: number, r: any) => s + r.quantidade, 0);
+            const novaQtdA = saldoAtualA + qtdAumento;
+
+            const { error: upErrA } = await supabase.from('estoque_app')
+              .update({ quantidade: novaQtdA, updated_at: new Date().toISOString() })
+              .eq('id', produtoA.id).eq('user_id', usuarioId);
+            if (upErrA) throw upErrA;
+
+            aumentados.push({
+              produto: produtoA.produto_nome,
+              quantidade_anterior: saldoAtualA,
+              quantidade_adicionada: qtdAumento,
+              quantidade_atual: novaQtdA,
+              unidade: produtoA.unidade_medida
+            });
+            console.log(`✅ [AUMENTO] ${produtoA.produto_nome}: ${saldoAtualA} → ${novaQtdA} ${produtoA.unidade_medida}`);
+
+          } catch (itemErr: any) {
+            aumentoComProblema.push({
+              produto: pNomeA,
+              motivo: `Erro ao processar: ${itemErr.message}`,
+              saldo_atual: null,
+              unidade: null
+            });
+          }
         }
-        const produto = produtos[0];
-        const novaQtd = produto.quantidade + args.quantidade;
-        const { error: updateError } = await supabase.from('estoque_app').update({ quantidade: novaQtd, updated_at: new Date().toISOString() }).eq('id', produto.id).eq('user_id', usuarioId);
-        if (updateError) throw updateError;
-        return { result: JSON.stringify({ sucesso: true, produto: produto.produto_nome, quantidade_anterior: produto.quantidade, quantidade_adicionada: args.quantidade, quantidade_atual: novaQtd }), isWriteMutation: true };
+
+        return {
+          result: JSON.stringify({
+            itens_aumentados: aumentados,
+            itens_ambiguos: aumentoAmbiguos,
+            itens_nao_encontrados: aumentoNaoEncontrados,
+            itens_com_problema: aumentoComProblema,
+            instrucao_formatacao: "Apresente o resultado separado por categoria. Para itens_ambiguos, mostre opções numeradas. NÃO peça 'nome exato' em nenhum caso."
+          }),
+          isWriteMutation: aumentados.length > 0
+        };
       }
 
       case 'adicionar_produto': {
@@ -1532,147 +1876,11 @@ async function executeTool(
           return nome.toUpperCase().trim().replace(/\s+/g, ' ').replace(/\bKG\b/gi, '').replace(/\bGRANEL\s+GRANEL\b/gi, 'GRANEL').replace(/\s+/g, ' ').trim();
         };
 
-        // ==================== MATCHING POR NÚCLEO ====================
-        const STOP_WORDS = new Set([
-          'de','da','do','das','dos','com','sem','em','para','por','meu','minha','meus','minhas',
-          'o','a','os','as','um','uma','no','na','nos','nas','ao','aos','que','pro','pra','eu','so','ja','tb','tambem'
-        ]);
-        const TOKENS_COMERCIAIS = new Set([
-          'concentrado','premium','tradicional','especial','original','sache','pacote',
-          'garrafa','pet','lata','vidro','caixa','unidade','gramas','grama','litro','litros',
-          'quilos','quilo','tipo','marca'
-        ]);
-        const REGEX_NUM_UNIDADE = /^\d+[a-z]*$/;
-
-        // Grupos de variantes mutuamente exclusivas — expansível
-        const GRUPOS_EXCLUSIVOS = [
-          ['limao','morango','uva','maracuja','abacaxi','manga','goiaba','framboesa','menta','laranja','pessego','cereja','caju','acerola','guarana','tutti','banana','maca','melancia','melao','ameixa','kiwi','tamarindo','pitanga','jabuticaba','cupuacu'],
-          ['integral','desnatado','semidesnatado'],
-          ['zero','diet','light'],
-          ['branco','preto','vermelho','verde','amarelo','rosa'],
-          ['bovino','suino','frango','peixe','peru','cordeiro'],
-        ];
-
-        // Tipos base de produtos — para prioridade máxima no matching
-        const TIPOS_BASE_CONHECIDOS = new Set([
-          'leite','suco','gelatina','geleia','xarope','cafe','cha','iogurte','queijo','manteiga',
-          'margarina','arroz','feijao','macarrao','farinha','acucar','sal','oleo','azeite','vinagre',
-          'molho','catchup','ketchup','mostarda','maionese','creme','biscoito','bolacha','pao',
-          'bolo','cereal','aveia','granola','mel','chocolate','achocolatado','nescau','toddy',
-          'banana','maca','laranja','tomate','cebola','alho','batata','cenoura','couve','alface',
-          'carne','picanha','frango','linguica','salsicha','presunto','mortadela','bacon','ovo',
-          'sabao','detergente','amaciante','desinfetante','agua','cerveja','refrigerante','vinho',
-          'isotônico','isotonico','energetico','guaramcamp'
-        ]);
-
-        const normalizarBusca = (texto: string): string => {
-          return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        };
-
-        const tokenizar = (texto: string): string[] => {
-          return normalizarBusca(texto).split(' ').filter(t => t.length >= 2);
-        };
-
-        const classificarTokens = (tokens: string[]): { ignoraveis: string[], comerciais: string[], criticos: string[] } => {
-          const ignoraveis: string[] = [];
-          const comerciais: string[] = [];
-          const criticos: string[] = [];
-          for (const t of tokens) {
-            if (STOP_WORDS.has(t)) { ignoraveis.push(t); }
-            else if (TOKENS_COMERCIAIS.has(t) || REGEX_NUM_UNIDADE.test(t)) { comerciais.push(t); }
-            else { criticos.push(t); }
-          }
-          return { ignoraveis, comerciais, criticos };
-        };
-
-        // Extrair tipo base: primeiro token crítico que seja um tipo de produto conhecido,
-        // OU o primeiro token crítico se nenhum for tipo conhecido (fallback)
-        const extrairTipoBase = (criticos: string[]): string | null => {
-          if (criticos.length === 0) return null;
-          const tipoConhecido = criticos.find(t => TIPOS_BASE_CONHECIDOS.has(t));
-          return tipoConhecido || criticos[0];
-        };
-
-        const temConflitoVariante = (criticosUsuario: string[], criticosEstoque: string[]): boolean => {
-          for (const grupo of GRUPOS_EXCLUSIVOS) {
-            const userNoGrupo = criticosUsuario.filter(t => grupo.includes(t));
-            const estNoGrupo = criticosEstoque.filter(t => grupo.includes(t));
-            if (userNoGrupo.length > 0 && estNoGrupo.length > 0) {
-              const userSet = new Set(userNoGrupo);
-              const estSet = new Set(estNoGrupo);
-              const temIntersecao = [...userSet].some(t => estSet.has(t));
-              if (!temIntersecao) return true; // tokens diferentes no mesmo grupo = conflito
-            }
-          }
-          return false;
-        };
-
-        type MatchResult = { status: 'dominante', items: any[] } | { status: 'ambiguo', opcoes: any[] } | { status: 'nao_encontrado' };
-
-        const resolverMatchPorNucleo = (produtoNome: string, todosItens: any[]): MatchResult => {
-          const tokensUsuario = tokenizar(produtoNome);
-          const { criticos: criticosUsuario } = classificarTokens(tokensUsuario);
-          if (criticosUsuario.length === 0) return { status: 'nao_encontrado' };
-
-          const tipoBase = extrairTipoBase(criticosUsuario);
-
-          // Consolidar estoque por nome normalizado
-          const grupos = new Map<string, any[]>();
-          for (const item of todosItens) {
-            const chave = normalizarBusca(item.produto_nome);
-            if (!grupos.has(chave)) grupos.set(chave, []);
-            grupos.get(chave)!.push(item);
-          }
-
-          const candidatos: Array<{ chave: string, items: any[], score: number }> = [];
-
-          for (const [chave, items] of grupos) {
-            const tokensEst = tokenizar(items[0].produto_nome);
-            const { criticos: criticosEst } = classificarTokens(tokensEst);
-
-            // Verificar tipo base — obrigatório
-            if (tipoBase && !criticosEst.includes(tipoBase)) {
-              // Score 0 — descartar
-              continue;
-            }
-
-            // Verificar conflito de variante
-            if (temConflitoVariante(criticosUsuario, criticosEst)) {
-              continue;
-            }
-
-            // Score = cobertura dos tokens críticos do usuário
-            const encontrados = criticosUsuario.filter(t => criticosEst.includes(t));
-            const score = encontrados.length / criticosUsuario.length;
-            candidatos.push({ chave, items, score });
-          }
-
-          // Filtrar por threshold 0.8
-          const validos = candidatos.filter(c => c.score >= 0.8).sort((a, b) => b.score - a.score);
-
-          if (validos.length === 0) return { status: 'nao_encontrado' };
-          if (validos.length === 1) return { status: 'dominante', items: validos[0].items };
-
-          // Verificar dominância por margem
-          const margem = validos[0].score - validos[1].score;
-          if (margem >= 0.3) return { status: 'dominante', items: validos[0].items };
-
-          // Ambíguo
-          const opcoes = validos.slice(0, 5).map(v => {
-            const mais_recente = v.items.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
-            const qtdTotal = v.items.reduce((s: number, r: any) => s + r.quantidade, 0);
-            return {
-              id: mais_recente.id,
-              nome_completo: mais_recente.produto_nome,
-              nome_consolidado: v.chave,
-              quantidade_atual: qtdTotal,
-              unidade: mais_recente.unidade_medida,
-              marca: mais_recente.marca
-            };
-          });
-          return { status: 'ambiguo', opcoes };
-        };
-        // ==================== FIM MATCHING POR NÚCLEO ====================
+        // Usa matching por núcleo compartilhado (definido no escopo global)
+        // Aliases locais para retrocompatibilidade do código existente
+        const normalizarBusca = normalizarBuscaShared;
+        const tokenizar = tokenizarShared;
+        const classificarTokens = classificarTokensShared;
 
         // Conversões canônicas autorizadas (lista fechada)
         const conversoesCanonICAS: Record<string, Record<string, number>> = {
@@ -2408,6 +2616,7 @@ Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
 59. BUSCA POR NOME RESUMIDO: O usuário pode falar o produto de forma resumida ou em ordem diferente da cadastrada (ex: "suco de caju", "gelatina de limão", "geléia italianinha"). O servidor localiza por núcleo do nome — envie o nome COMO O USUARIO FALOU, sem completar com marca, peso ou descrição comercial. NÃO invente detalhes que o usuário não disse. O tipo principal do produto (suco, gelatina, xarope, leite etc.) é obrigatório e deve aparecer no nome enviado. Se o usuário falar a marca ou adjetivo antes do tipo (ex: "italianinha geléia"), inclua ambos no nome.
 60. PROIBIÇÃO DE ITEM LIVRE EM AJUSTE DE SALDO: Quando a intenção do usuário for informar saldo atual ("acabou", "não tenho mais", "tenho X", "sobrou X"), use EXCLUSIVAMENTE ajustar_saldo_estoque. NUNCA ofereça criar item livre, adicionar produto novo ou desviar para outro fluxo nesse contexto. Se o produto não for encontrado, responda que não encontrou no estoque e pergunte se o nome está correto ou liste candidatos próximos. Criar item livre é um fluxo DIFERENTE que só se aplica quando o usuário pede explicitamente para adicionar um produto novo.
 61. ACABOU/ZEROU = ajustar_saldo_estoque com novo_saldo: 0. NÃO usar baixar_estoque (que remove quantidade parcial). "Acabou" define saldo final como zero. NÃO envie campo unidade para saldo zero — o servidor herda automaticamente do estoque.
+62. BAIXAR/CONSUMIR ESTOQUE: "usei X de Y", "consumi", "gastei" = baixar_estoque. Envie o nome COMO O USUARIO FALOU, sem exigir nome exato. O servidor usa o mesmo resolvedor por núcleo do ajuste de saldo. Se não encontrar, o servidor retorna candidatos próximos — apresente-os ao usuário em lista numerada limpa e organizada. NÃO peça "nome exato". Para múltiplos itens, envie array em 'itens'. Se um item falhar, os demais seguem. Apresente resultado separado: itens baixados, ambíguos, não encontrados e com problema (ex: saldo insuficiente). Em itens com problema, SEMPRE informe o saldo atual encontrado.
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
