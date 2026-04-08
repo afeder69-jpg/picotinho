@@ -2925,15 +2925,54 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
             }
           }
 
+          // Caso 5: baixar_estoque retornou itens_ambiguos com opções
+          if (toolName === 'baixar_estoque' && parsedResult.itens_ambiguos) {
+            for (const ambiguo of parsedResult.itens_ambiguos) {
+              if (ambiguo.opcoes && ambiguo.opcoes.length > 1) {
+                opcoesParaSalvar = ambiguo.opcoes.map((o: any, i: number) => ({
+                  numero: i + 1,
+                  produto_id: o.id,
+                  nome: o.nome || 'Sem nome'
+                }));
+                contextoSnapshot = 'baixar_estoque';
+                // Salvar contexto extra para reexecução
+                (opcoesParaSalvar as any).quantidade_pendente = ambiguo.quantidade_pedida;
+                (opcoesParaSalvar as any).unidade_pendente = ambiguo.unidade_pedida;
+                break;
+              }
+            }
+          }
+
+          // Caso 6: aumentar_estoque retornou itens_ambiguos com opções
+          if (toolName === 'aumentar_estoque' && parsedResult.itens_ambiguos) {
+            for (const ambiguo of parsedResult.itens_ambiguos) {
+              if (ambiguo.opcoes && ambiguo.opcoes.length > 1) {
+                opcoesParaSalvar = ambiguo.opcoes.map((o: any, i: number) => ({
+                  numero: i + 1,
+                  produto_id: o.id,
+                  nome: o.nome || 'Sem nome'
+                }));
+                contextoSnapshot = 'aumentar_estoque';
+                (opcoesParaSalvar as any).quantidade_pendente = ambiguo.quantidade_pedida;
+                (opcoesParaSalvar as any).unidade_pendente = ambiguo.unidade_pedida;
+                break;
+              }
+            }
+          }
+
           if (opcoesParaSalvar && opcoesParaSalvar.length > 0) {
-            const snapshot = {
+            const extraData = opcoesParaSalvar as any;
+            const snapshot: any = {
               timestamp: new Date().toISOString(),
               contexto: contextoSnapshot,
               lista_id: listaIdSnapshot,
               opcoes: opcoesParaSalvar
             };
+            // Preservar dados extras para reexecução
+            if (extraData.quantidade_pendente !== undefined) snapshot.quantidade_pendente = extraData.quantidade_pendente;
+            if (extraData.unidade_pendente !== undefined) snapshot.unidade_pendente = extraData.unidade_pendente;
             await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: snapshot }).eq('usuario_id', usuarioId);
-            console.log(`📸 [SNAPSHOT] Salvas ${opcoesParaSalvar.length} opções pendentes para o usuário (tool: ${toolName})`);
+            console.log(`📸 [SNAPSHOT] Salvas ${opcoesParaSalvar.length} opções pendentes para o usuário (tool: ${toolName}, contexto: ${contextoSnapshot})`);
           }
         } catch {
           // resultado não é JSON ou erro no parse — ignorar
