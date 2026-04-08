@@ -45,14 +45,15 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "baixar_estoque",
-      description: "Remove quantidade de produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Para múltiplos itens, use o array 'itens'.",
+      description: "Remove quantidade de produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Inclua a unidade quando o usuário especificar (ex: '300 gramas' → unidade: 'G'). Para múltiplos itens, use o array 'itens'.",
       parameters: {
         type: "object",
         properties: {
           produto_nome: { type: "string", description: "Nome do produto como o usuário falou (para item único)" },
           quantidade: { type: "number", description: "Quantidade a remover (para item único)" },
+          unidade: { type: "string", description: "Unidade da quantidade informada: KG, G, L, ML, UN. Envie quando o usuário especificar." },
           produto_id: { type: "string", description: "ID específico do produto (se já identificado)" },
-          itens: { type: "array", description: "Array de itens para baixa múltipla", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
+          itens: { type: "array", description: "Array de itens para baixa múltipla", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, unidade: { type: "string" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
         },
         required: []
       }
@@ -62,14 +63,15 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "aumentar_estoque",
-      description: "Adiciona quantidade a produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Para múltiplos itens, use o array 'itens'.",
+      description: "Adiciona quantidade a produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Inclua a unidade quando o usuário especificar. Para múltiplos itens, use o array 'itens'.",
       parameters: {
         type: "object",
         properties: {
           produto_nome: { type: "string", description: "Nome do produto como o usuário falou (para item único)" },
           quantidade: { type: "number", description: "Quantidade a adicionar (para item único)" },
+          unidade: { type: "string", description: "Unidade da quantidade informada: KG, G, L, ML, UN. Envie quando o usuário especificar." },
           produto_id: { type: "string", description: "ID específico do produto (se já identificado)" },
-          itens: { type: "array", description: "Array de itens para aumento múltiplo", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
+          itens: { type: "array", description: "Array de itens para aumento múltiplo", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, unidade: { type: "string" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
         },
         required: []
       }
@@ -511,6 +513,24 @@ function resolverMatchPorNucleo(produtoNome: string, todosItens: any[]): SharedM
 }
 // ==================== FIM SHARED MATCHING ====================
 
+// ==================== SHARED: CONVERSÃO DE UNIDADE ====================
+function converterParaUnidadeBase(quantidade: number, unidadeOrigem: string, unidadeEstoque: string): { quantidade_convertida: number; converteu: boolean; erro?: string } {
+  const orig = unidadeOrigem.toUpperCase().trim();
+  const dest = unidadeEstoque.toUpperCase().trim();
+  
+  if (orig === dest) return { quantidade_convertida: quantidade, converteu: false };
+  
+  // Conversões canônicas
+  if (orig === 'G' && dest === 'KG') return { quantidade_convertida: quantidade / 1000, converteu: true };
+  if (orig === 'KG' && dest === 'G') return { quantidade_convertida: quantidade * 1000, converteu: true };
+  if (orig === 'ML' && dest === 'L') return { quantidade_convertida: quantidade / 1000, converteu: true };
+  if (orig === 'L' && dest === 'ML') return { quantidade_convertida: quantidade * 1000, converteu: true };
+  
+  // Unidades incompatíveis
+  return { quantidade_convertida: quantidade, converteu: false, erro: `Não é possível converter ${orig} para ${dest} automaticamente.` };
+}
+// ==================== FIM CONVERSÃO DE UNIDADE ====================
+
 
 async function resolveListaId(
   args: Record<string, any>,
@@ -834,7 +854,7 @@ async function executeTool(
         // Normalizar para array de itens
         const itensBaixa = args.itens && Array.isArray(args.itens) && args.itens.length > 0
           ? args.itens
-          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, unidade: args.unidade, produto_id: args.produto_id }];
 
         if (!itensBaixa[0].produto_nome && !itensBaixa[0].produto_id) {
           return { result: JSON.stringify({ erro: "Nenhum produto informado para baixar." }), isWriteMutation: false };
@@ -846,7 +866,7 @@ async function executeTool(
         const baixaComProblema: any[] = [];
 
         for (const itemBaixa of itensBaixa) {
-          const { produto_nome: pNome, quantidade: qtdBaixa, produto_id: pId } = itemBaixa;
+          const { produto_nome: pNome, quantidade: qtdBaixa, unidade: unidadePedida, produto_id: pId } = itemBaixa;
           try {
             // Step 1: ilike search
             let queryB = supabase.from('estoque_app')
@@ -872,6 +892,8 @@ async function executeTool(
                 } else if (resultadoB.status === 'ambiguo') {
                   baixaAmbiguos.push({
                     produto_informado: pNome,
+                    quantidade_pedida: qtdBaixa,
+                    unidade_pedida: unidadePedida || null,
                     opcoes: resultadoB.opcoes.map((o: any, i: number) => ({
                       numero: i + 1,
                       id: o.id,
@@ -915,49 +937,92 @@ async function executeTool(
             });
 
             if (gruposB.size > 1 && !pId) {
-              const opcoesB = Array.from(gruposB.entries()).map(([nome, regs], i) => {
+              const opcoesB = Array.from(gruposB.entries()).map(([_nome, regs], i) => {
                 const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
                 return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
               });
               baixaAmbiguos.push({
                 produto_informado: pNome,
+                quantidade_pedida: qtdBaixa,
+                unidade_pedida: unidadePedida || null,
                 opcoes: opcoesB,
                 instrucao: "NÃO peça nome exato. Apresente as opções numeradas e pergunte qual o usuário quis dizer."
               });
               continue;
             }
 
-            // Step 4: Match único — verificar saldo
+            // Step 4: Match único — converter unidade e verificar saldo
             const grupoB = Array.from(gruposB.values())[0];
             const produtoB = grupoB.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
             const saldoAtualB = grupoB.reduce((s: number, r: any) => s + r.quantidade, 0);
+            const unidadeEstoqueB = produtoB.unidade_medida;
 
-            if (qtdBaixa > saldoAtualB) {
+            // Conversão de unidade antes da operação matemática
+            let qtdConvertidaB = qtdBaixa;
+            let unidadeEfetivaB = unidadePedida || unidadeEstoqueB;
+            let converteuB = false;
+            if (unidadePedida && unidadePedida.toUpperCase() !== unidadeEstoqueB.toUpperCase()) {
+              const conv = converterParaUnidadeBase(qtdBaixa, unidadePedida, unidadeEstoqueB);
+              if (conv.erro) {
+                baixaComProblema.push({
+                  produto: produtoB.produto_nome,
+                  motivo: `${conv.erro} Estoque usa ${unidadeEstoqueB}, você informou ${unidadePedida}.`,
+                  saldo_atual: saldoAtualB,
+                  unidade: unidadeEstoqueB,
+                  produto_id: produtoB.id
+                });
+                continue;
+              }
+              qtdConvertidaB = conv.quantidade_convertida;
+              converteuB = conv.converteu;
+              unidadeEfetivaB = unidadeEstoqueB;
+            }
+
+            // Arredondar para evitar erros de ponto flutuante
+            qtdConvertidaB = Math.round(qtdConvertidaB * 10000) / 10000;
+
+            if (qtdConvertidaB > saldoAtualB) {
               baixaComProblema.push({
                 produto: produtoB.produto_nome,
-                motivo: `Saldo insuficiente: tem ${saldoAtualB} ${produtoB.unidade_medida}, mas você pediu para baixar ${qtdBaixa} ${produtoB.unidade_medida}.`,
+                motivo: `Saldo insuficiente: tem ${saldoAtualB} ${unidadeEstoqueB}, mas você pediu para baixar ${qtdBaixa} ${unidadePedida || unidadeEstoqueB}${converteuB ? ` (= ${qtdConvertidaB} ${unidadeEstoqueB})` : ''}.`,
                 saldo_atual: saldoAtualB,
-                unidade: produtoB.unidade_medida,
+                unidade: unidadeEstoqueB,
                 produto_id: produtoB.id
               });
               continue;
             }
 
-            // Step 5: Executar baixa
-            const novaQtdB = Math.max(0, saldoAtualB - qtdBaixa);
+            // Step 5: Executar baixa — saldo_novo = saldo_atual - quantidade_convertida
+            const novaQtdB = Math.round(Math.max(0, saldoAtualB - qtdConvertidaB) * 10000) / 10000;
+
+            // Atualizar registro primário com o saldo novo total
             const { error: upErrB } = await supabase.from('estoque_app')
               .update({ quantidade: novaQtdB, updated_at: new Date().toISOString() })
               .eq('id', produtoB.id).eq('user_id', usuarioId);
             if (upErrB) throw upErrB;
 
+            // Zerar registros secundários do grupo consolidado (reconciliação atômica)
+            const idsSecundariosB = grupoB.filter((r: any) => r.id !== produtoB.id).map((r: any) => r.id);
+            if (idsSecundariosB.length > 0) {
+              const { error: zeroErrB } = await supabase.from('estoque_app')
+                .update({ quantidade: 0, updated_at: new Date().toISOString() })
+                .in('id', idsSecundariosB).eq('user_id', usuarioId);
+              if (zeroErrB) console.error(`⚠️ [BAIXA] Erro ao zerar secundários: ${zeroErrB.message}`);
+              else console.log(`🔄 [BAIXA] Zerados ${idsSecundariosB.length} registros secundários do grupo`);
+            }
+
             baixados.push({
               produto: produtoB.produto_nome,
-              quantidade_anterior: saldoAtualB,
-              quantidade_removida: qtdBaixa,
-              quantidade_atual: novaQtdB,
-              unidade: produtoB.unidade_medida
+              saldo_anterior: saldoAtualB,
+              quantidade_pedida: qtdBaixa,
+              unidade_pedida: unidadePedida || unidadeEstoqueB,
+              quantidade_convertida: qtdConvertidaB,
+              unidade_estoque: unidadeEstoqueB,
+              saldo_novo: novaQtdB,
+              conversao_aplicada: converteuB,
+              status: 'baixado'
             });
-            console.log(`✅ [BAIXA] ${produtoB.produto_nome}: ${saldoAtualB} → ${novaQtdB} ${produtoB.unidade_medida}`);
+            console.log(`✅ [BAIXA] ${produtoB.produto_nome}: ${saldoAtualB} - ${qtdConvertidaB} = ${novaQtdB} ${unidadeEstoqueB}${converteuB ? ` (convertido de ${qtdBaixa} ${unidadePedida})` : ''}`);
 
           } catch (itemErr: any) {
             baixaComProblema.push({
@@ -985,7 +1050,7 @@ async function executeTool(
         // Normalizar para array de itens
         const itensAumento = args.itens && Array.isArray(args.itens) && args.itens.length > 0
           ? args.itens
-          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, unidade: args.unidade, produto_id: args.produto_id }];
 
         if (!itensAumento[0].produto_nome && !itensAumento[0].produto_id) {
           return { result: JSON.stringify({ erro: "Nenhum produto informado para aumentar." }), isWriteMutation: false };
@@ -997,7 +1062,7 @@ async function executeTool(
         const aumentoComProblema: any[] = [];
 
         for (const itemAumento of itensAumento) {
-          const { produto_nome: pNomeA, quantidade: qtdAumento, produto_id: pIdA } = itemAumento;
+          const { produto_nome: pNomeA, quantidade: qtdAumento, unidade: unidadePedidaA, produto_id: pIdA } = itemAumento;
           try {
             let queryA = supabase.from('estoque_app')
               .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
@@ -1022,6 +1087,8 @@ async function executeTool(
                 } else if (resultadoA.status === 'ambiguo') {
                   aumentoAmbiguos.push({
                     produto_informado: pNomeA,
+                    quantidade_pedida: qtdAumento,
+                    unidade_pedida: unidadePedidaA || null,
                     opcoes: resultadoA.opcoes.map((o: any, i: number) => ({
                       numero: i + 1, id: o.id, nome: o.nome_completo, quantidade_atual: o.quantidade_atual, unidade: o.unidade
                     })),
@@ -1055,12 +1122,14 @@ async function executeTool(
             });
 
             if (gruposA.size > 1 && !pIdA) {
-              const opcoesA = Array.from(gruposA.entries()).map(([nome, regs], i) => {
+              const opcoesA = Array.from(gruposA.entries()).map(([_nome, regs], i) => {
                 const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
                 return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
               });
               aumentoAmbiguos.push({
                 produto_informado: pNomeA,
+                quantidade_pedida: qtdAumento,
+                unidade_pedida: unidadePedidaA || null,
                 opcoes: opcoesA,
                 instrucao: "NÃO peça nome exato. Apresente as opções numeradas."
               });
@@ -1070,21 +1139,58 @@ async function executeTool(
             const grupoA = Array.from(gruposA.values())[0];
             const produtoA = grupoA.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
             const saldoAtualA = grupoA.reduce((s: number, r: any) => s + r.quantidade, 0);
-            const novaQtdA = saldoAtualA + qtdAumento;
+            const unidadeEstoqueA = produtoA.unidade_medida;
 
+            // Conversão de unidade
+            let qtdConvertidaA = qtdAumento;
+            let converteuA = false;
+            if (unidadePedidaA && unidadePedidaA.toUpperCase() !== unidadeEstoqueA.toUpperCase()) {
+              const convA = converterParaUnidadeBase(qtdAumento, unidadePedidaA, unidadeEstoqueA);
+              if (convA.erro) {
+                aumentoComProblema.push({
+                  produto: produtoA.produto_nome,
+                  motivo: `${convA.erro} Estoque usa ${unidadeEstoqueA}, você informou ${unidadePedidaA}.`,
+                  saldo_atual: saldoAtualA,
+                  unidade: unidadeEstoqueA,
+                  produto_id: produtoA.id
+                });
+                continue;
+              }
+              qtdConvertidaA = convA.quantidade_convertida;
+              converteuA = convA.converteu;
+            }
+
+            qtdConvertidaA = Math.round(qtdConvertidaA * 10000) / 10000;
+            const novaQtdA = Math.round((saldoAtualA + qtdConvertidaA) * 10000) / 10000;
+
+            // Atualizar registro primário
             const { error: upErrA } = await supabase.from('estoque_app')
               .update({ quantidade: novaQtdA, updated_at: new Date().toISOString() })
               .eq('id', produtoA.id).eq('user_id', usuarioId);
             if (upErrA) throw upErrA;
 
+            // Zerar secundários do grupo consolidado
+            const idsSecundariosA = grupoA.filter((r: any) => r.id !== produtoA.id).map((r: any) => r.id);
+            if (idsSecundariosA.length > 0) {
+              const { error: zeroErrA } = await supabase.from('estoque_app')
+                .update({ quantidade: 0, updated_at: new Date().toISOString() })
+                .in('id', idsSecundariosA).eq('user_id', usuarioId);
+              if (zeroErrA) console.error(`⚠️ [AUMENTO] Erro ao zerar secundários: ${zeroErrA.message}`);
+              else console.log(`🔄 [AUMENTO] Zerados ${idsSecundariosA.length} registros secundários do grupo`);
+            }
+
             aumentados.push({
               produto: produtoA.produto_nome,
-              quantidade_anterior: saldoAtualA,
-              quantidade_adicionada: qtdAumento,
-              quantidade_atual: novaQtdA,
-              unidade: produtoA.unidade_medida
+              saldo_anterior: saldoAtualA,
+              quantidade_pedida: qtdAumento,
+              unidade_pedida: unidadePedidaA || unidadeEstoqueA,
+              quantidade_convertida: qtdConvertidaA,
+              unidade_estoque: unidadeEstoqueA,
+              saldo_novo: novaQtdA,
+              conversao_aplicada: converteuA,
+              status: 'aumentado'
             });
-            console.log(`✅ [AUMENTO] ${produtoA.produto_nome}: ${saldoAtualA} → ${novaQtdA} ${produtoA.unidade_medida}`);
+            console.log(`✅ [AUMENTO] ${produtoA.produto_nome}: ${saldoAtualA} + ${qtdConvertidaA} = ${novaQtdA} ${unidadeEstoqueA}${converteuA ? ` (convertido de ${qtdAumento} ${unidadePedidaA})` : ''}`);
 
           } catch (itemErr: any) {
             aumentoComProblema.push({
@@ -2385,8 +2491,20 @@ const handler = async (req: Request): Promise<Response> => {
         if (numeroEscolhido !== null && snap.opcoes && snap.opcoes.length > 0) {
           const opcaoEscolhida = snap.opcoes.find(o => o.numero === numeroEscolhido);
           if (opcaoEscolhida) {
-            contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido}. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar adicionar_itens_lista. NÃO busque novamente no catálogo. O contexto da ação é: ${snap.contexto || 'adicionar_item_lista'}${snap.lista_id ? ` na lista ${snap.lista_id}` : ''}.`;
-            console.log(`✅ [SNAPSHOT] Escolha ${numeroEscolhido} resolvida → produto_id: ${opcaoEscolhida.produto_id}, nome: ${opcaoEscolhida.nome}`);
+            const snapContexto = snap.contexto || 'adicionar_item_lista';
+            // Gerar instrução dinâmica baseada no contexto do snapshot
+            if (snapContexto === 'baixar_estoque') {
+              const snapExtra = snap as any;
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido} para BAIXAR estoque. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar baixar_estoque com quantidade ${snapExtra.quantidade_pendente || 'a mesma informada anteriormente'} e unidade ${snapExtra.unidade_pendente || 'a mesma do estoque'}. NÃO busque novamente.`;
+            } else if (snapContexto === 'aumentar_estoque') {
+              const snapExtra = snap as any;
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido} para AUMENTAR estoque. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar aumentar_estoque com quantidade ${snapExtra.quantidade_pendente || 'a mesma informada anteriormente'} e unidade ${snapExtra.unidade_pendente || 'a mesma do estoque'}. NÃO busque novamente.`;
+            } else if (snapContexto === 'ajustar_saldo_estoque') {
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido}. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar ajustar_saldo_estoque. NÃO busque novamente. O contexto da ação é: ${snapContexto}.`;
+            } else {
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido}. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar adicionar_itens_lista. NÃO busque novamente no catálogo. O contexto da ação é: ${snapContexto}${snap.lista_id ? ` na lista ${snap.lista_id}` : ''}.`;
+            }
+            console.log(`✅ [SNAPSHOT] Escolha ${numeroEscolhido} resolvida → produto_id: ${opcaoEscolhida.produto_id}, nome: ${opcaoEscolhida.nome}, contexto: ${snapContexto}`);
           } else {
             contextoEscolhaInjetado = `O usuário respondeu "${conteudo}" mas a opção ${numeroEscolhido} não existe. As opções válidas eram de 1 a ${snap.opcoes.length}. Informe o usuário e reapresente as opções: ${snap.opcoes.map(o => `${o.numero}. ${o.nome}`).join(', ')}.`;
             console.log(`⚠️ [SNAPSHOT] Opção ${numeroEscolhido} fora do range (1-${snap.opcoes.length})`);
@@ -2617,6 +2735,13 @@ Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
 60. PROIBIÇÃO DE ITEM LIVRE EM AJUSTE DE SALDO: Quando a intenção do usuário for informar saldo atual ("acabou", "não tenho mais", "tenho X", "sobrou X"), use EXCLUSIVAMENTE ajustar_saldo_estoque. NUNCA ofereça criar item livre, adicionar produto novo ou desviar para outro fluxo nesse contexto. Se o produto não for encontrado, responda que não encontrou no estoque e pergunte se o nome está correto ou liste candidatos próximos. Criar item livre é um fluxo DIFERENTE que só se aplica quando o usuário pede explicitamente para adicionar um produto novo.
 61. ACABOU/ZEROU = ajustar_saldo_estoque com novo_saldo: 0. NÃO usar baixar_estoque (que remove quantidade parcial). "Acabou" define saldo final como zero. NÃO envie campo unidade para saldo zero — o servidor herda automaticamente do estoque.
 62. BAIXAR/CONSUMIR ESTOQUE: "usei X de Y", "consumi", "gastei" = baixar_estoque. Envie o nome COMO O USUARIO FALOU, sem exigir nome exato. O servidor usa o mesmo resolvedor por núcleo do ajuste de saldo. Se não encontrar, o servidor retorna candidatos próximos — apresente-os ao usuário em lista numerada limpa e organizada. NÃO peça "nome exato". Para múltiplos itens, envie array em 'itens'. Se um item falhar, os demais seguem. Apresente resultado separado: itens baixados, ambíguos, não encontrados e com problema (ex: saldo insuficiente). Em itens com problema, SEMPRE informe o saldo atual encontrado.
+63. UNIDADE NA BAIXA/AUMENTO: Quando o usuário informar a unidade explicitamente (ex: "300 gramas", "2 litros", "500 ml"), ENVIE a unidade no campo 'unidade' da tool (G, KG, L, ML, UN). O servidor faz a conversão para a unidade do estoque automaticamente. NÃO converta gramas para kg antes de enviar — envie o valor e unidade COMO O USUARIO FALOU (ex: 300 G, não 0.3 KG). Se o usuário não mencionar unidade, não envie o campo.
+    Exemplo obrigatório para "usei 8 kg de banana prata, 1 couve e 300 gramas de maçã gala":
+    { itens: [
+      { produto_nome: "banana prata", quantidade: 8, unidade: "KG" },
+      { produto_nome: "couve", quantidade: 1, unidade: "UN" },
+      { produto_nome: "maçã gala", quantidade: 300, unidade: "G" }
+    ]}
 
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
@@ -2807,15 +2932,54 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
             }
           }
 
+          // Caso 5: baixar_estoque retornou itens_ambiguos com opções
+          if (toolName === 'baixar_estoque' && parsedResult.itens_ambiguos) {
+            for (const ambiguo of parsedResult.itens_ambiguos) {
+              if (ambiguo.opcoes && ambiguo.opcoes.length > 1) {
+                opcoesParaSalvar = ambiguo.opcoes.map((o: any, i: number) => ({
+                  numero: i + 1,
+                  produto_id: o.id,
+                  nome: o.nome || 'Sem nome'
+                }));
+                contextoSnapshot = 'baixar_estoque';
+                // Salvar contexto extra para reexecução
+                (opcoesParaSalvar as any).quantidade_pendente = ambiguo.quantidade_pedida;
+                (opcoesParaSalvar as any).unidade_pendente = ambiguo.unidade_pedida;
+                break;
+              }
+            }
+          }
+
+          // Caso 6: aumentar_estoque retornou itens_ambiguos com opções
+          if (toolName === 'aumentar_estoque' && parsedResult.itens_ambiguos) {
+            for (const ambiguo of parsedResult.itens_ambiguos) {
+              if (ambiguo.opcoes && ambiguo.opcoes.length > 1) {
+                opcoesParaSalvar = ambiguo.opcoes.map((o: any, i: number) => ({
+                  numero: i + 1,
+                  produto_id: o.id,
+                  nome: o.nome || 'Sem nome'
+                }));
+                contextoSnapshot = 'aumentar_estoque';
+                (opcoesParaSalvar as any).quantidade_pendente = ambiguo.quantidade_pedida;
+                (opcoesParaSalvar as any).unidade_pendente = ambiguo.unidade_pedida;
+                break;
+              }
+            }
+          }
+
           if (opcoesParaSalvar && opcoesParaSalvar.length > 0) {
-            const snapshot = {
+            const extraData = opcoesParaSalvar as any;
+            const snapshot: any = {
               timestamp: new Date().toISOString(),
               contexto: contextoSnapshot,
               lista_id: listaIdSnapshot,
               opcoes: opcoesParaSalvar
             };
+            // Preservar dados extras para reexecução
+            if (extraData.quantidade_pendente !== undefined) snapshot.quantidade_pendente = extraData.quantidade_pendente;
+            if (extraData.unidade_pendente !== undefined) snapshot.unidade_pendente = extraData.unidade_pendente;
             await supabase.from('whatsapp_preferencias_usuario').update({ opcoes_pendentes: snapshot }).eq('usuario_id', usuarioId);
-            console.log(`📸 [SNAPSHOT] Salvas ${opcoesParaSalvar.length} opções pendentes para o usuário (tool: ${toolName})`);
+            console.log(`📸 [SNAPSHOT] Salvas ${opcoesParaSalvar.length} opções pendentes para o usuário (tool: ${toolName}, contexto: ${contextoSnapshot})`);
           }
         } catch {
           // resultado não é JSON ou erro no parse — ignorar
