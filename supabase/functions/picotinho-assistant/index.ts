@@ -45,15 +45,16 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "baixar_estoque",
-      description: "Remove quantidade de um produto do estoque. Use apenas quando tiver certeza do produto. Se houver ambiguidade, use buscar_produtos_similares primeiro.",
+      description: "Remove quantidade de produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Para múltiplos itens, use o array 'itens'.",
       parameters: {
         type: "object",
         properties: {
-          produto_nome: { type: "string", description: "Nome exato ou parcial do produto" },
-          quantidade: { type: "number", description: "Quantidade a remover" },
-          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" }
+          produto_nome: { type: "string", description: "Nome do produto como o usuário falou (para item único)" },
+          quantidade: { type: "number", description: "Quantidade a remover (para item único)" },
+          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" },
+          itens: { type: "array", description: "Array de itens para baixa múltipla", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
         },
-        required: ["produto_nome", "quantidade"]
+        required: []
       }
     }
   },
@@ -61,15 +62,16 @@ const stockToolDefinitions = [
     type: "function",
     function: {
       name: "aumentar_estoque",
-      description: "Adiciona quantidade a um produto do estoque. Se houver ambiguidade (múltiplos produtos similares), liste as opções e peça confirmação.",
+      description: "Adiciona quantidade a produto(s) do estoque. O servidor busca por nome natural (não exige nome exato). Envie o nome como o usuário falou. Para múltiplos itens, use o array 'itens'.",
       parameters: {
         type: "object",
         properties: {
-          produto_nome: { type: "string", description: "Nome exato ou parcial do produto" },
-          quantidade: { type: "number", description: "Quantidade a adicionar" },
-          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" }
+          produto_nome: { type: "string", description: "Nome do produto como o usuário falou (para item único)" },
+          quantidade: { type: "number", description: "Quantidade a adicionar (para item único)" },
+          produto_id: { type: "string", description: "ID específico do produto (se já identificado)" },
+          itens: { type: "array", description: "Array de itens para aumento múltiplo", items: { type: "object", properties: { produto_nome: { type: "string" }, quantidade: { type: "number" }, produto_id: { type: "string" } }, required: ["produto_nome", "quantidade"] } }
         },
-        required: ["produto_nome", "quantidade"]
+        required: []
       }
     }
   },
