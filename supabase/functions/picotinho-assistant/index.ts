@@ -854,7 +854,7 @@ async function executeTool(
         // Normalizar para array de itens
         const itensBaixa = args.itens && Array.isArray(args.itens) && args.itens.length > 0
           ? args.itens
-          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, unidade: args.unidade, produto_id: args.produto_id }];
 
         if (!itensBaixa[0].produto_nome && !itensBaixa[0].produto_id) {
           return { result: JSON.stringify({ erro: "Nenhum produto informado para baixar." }), isWriteMutation: false };
@@ -866,7 +866,7 @@ async function executeTool(
         const baixaComProblema: any[] = [];
 
         for (const itemBaixa of itensBaixa) {
-          const { produto_nome: pNome, quantidade: qtdBaixa, produto_id: pId } = itemBaixa;
+          const { produto_nome: pNome, quantidade: qtdBaixa, unidade: unidadePedida, produto_id: pId } = itemBaixa;
           try {
             // Step 1: ilike search
             let queryB = supabase.from('estoque_app')
@@ -892,6 +892,8 @@ async function executeTool(
                 } else if (resultadoB.status === 'ambiguo') {
                   baixaAmbiguos.push({
                     produto_informado: pNome,
+                    quantidade_pedida: qtdBaixa,
+                    unidade_pedida: unidadePedida || null,
                     opcoes: resultadoB.opcoes.map((o: any, i: number) => ({
                       numero: i + 1,
                       id: o.id,
@@ -935,49 +937,92 @@ async function executeTool(
             });
 
             if (gruposB.size > 1 && !pId) {
-              const opcoesB = Array.from(gruposB.entries()).map(([nome, regs], i) => {
+              const opcoesB = Array.from(gruposB.entries()).map(([_nome, regs], i) => {
                 const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
                 return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
               });
               baixaAmbiguos.push({
                 produto_informado: pNome,
+                quantidade_pedida: qtdBaixa,
+                unidade_pedida: unidadePedida || null,
                 opcoes: opcoesB,
                 instrucao: "NÃO peça nome exato. Apresente as opções numeradas e pergunte qual o usuário quis dizer."
               });
               continue;
             }
 
-            // Step 4: Match único — verificar saldo
+            // Step 4: Match único — converter unidade e verificar saldo
             const grupoB = Array.from(gruposB.values())[0];
             const produtoB = grupoB.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
             const saldoAtualB = grupoB.reduce((s: number, r: any) => s + r.quantidade, 0);
+            const unidadeEstoqueB = produtoB.unidade_medida;
 
-            if (qtdBaixa > saldoAtualB) {
+            // Conversão de unidade antes da operação matemática
+            let qtdConvertidaB = qtdBaixa;
+            let unidadeEfetivaB = unidadePedida || unidadeEstoqueB;
+            let converteuB = false;
+            if (unidadePedida && unidadePedida.toUpperCase() !== unidadeEstoqueB.toUpperCase()) {
+              const conv = converterParaUnidadeBase(qtdBaixa, unidadePedida, unidadeEstoqueB);
+              if (conv.erro) {
+                baixaComProblema.push({
+                  produto: produtoB.produto_nome,
+                  motivo: `${conv.erro} Estoque usa ${unidadeEstoqueB}, você informou ${unidadePedida}.`,
+                  saldo_atual: saldoAtualB,
+                  unidade: unidadeEstoqueB,
+                  produto_id: produtoB.id
+                });
+                continue;
+              }
+              qtdConvertidaB = conv.quantidade_convertida;
+              converteuB = conv.converteu;
+              unidadeEfetivaB = unidadeEstoqueB;
+            }
+
+            // Arredondar para evitar erros de ponto flutuante
+            qtdConvertidaB = Math.round(qtdConvertidaB * 10000) / 10000;
+
+            if (qtdConvertidaB > saldoAtualB) {
               baixaComProblema.push({
                 produto: produtoB.produto_nome,
-                motivo: `Saldo insuficiente: tem ${saldoAtualB} ${produtoB.unidade_medida}, mas você pediu para baixar ${qtdBaixa} ${produtoB.unidade_medida}.`,
+                motivo: `Saldo insuficiente: tem ${saldoAtualB} ${unidadeEstoqueB}, mas você pediu para baixar ${qtdBaixa} ${unidadePedida || unidadeEstoqueB}${converteuB ? ` (= ${qtdConvertidaB} ${unidadeEstoqueB})` : ''}.`,
                 saldo_atual: saldoAtualB,
-                unidade: produtoB.unidade_medida,
+                unidade: unidadeEstoqueB,
                 produto_id: produtoB.id
               });
               continue;
             }
 
-            // Step 5: Executar baixa
-            const novaQtdB = Math.max(0, saldoAtualB - qtdBaixa);
+            // Step 5: Executar baixa — saldo_novo = saldo_atual - quantidade_convertida
+            const novaQtdB = Math.round(Math.max(0, saldoAtualB - qtdConvertidaB) * 10000) / 10000;
+
+            // Atualizar registro primário com o saldo novo total
             const { error: upErrB } = await supabase.from('estoque_app')
               .update({ quantidade: novaQtdB, updated_at: new Date().toISOString() })
               .eq('id', produtoB.id).eq('user_id', usuarioId);
             if (upErrB) throw upErrB;
 
+            // Zerar registros secundários do grupo consolidado (reconciliação atômica)
+            const idsSecundariosB = grupoB.filter((r: any) => r.id !== produtoB.id).map((r: any) => r.id);
+            if (idsSecundariosB.length > 0) {
+              const { error: zeroErrB } = await supabase.from('estoque_app')
+                .update({ quantidade: 0, updated_at: new Date().toISOString() })
+                .in('id', idsSecundariosB).eq('user_id', usuarioId);
+              if (zeroErrB) console.error(`⚠️ [BAIXA] Erro ao zerar secundários: ${zeroErrB.message}`);
+              else console.log(`🔄 [BAIXA] Zerados ${idsSecundariosB.length} registros secundários do grupo`);
+            }
+
             baixados.push({
               produto: produtoB.produto_nome,
-              quantidade_anterior: saldoAtualB,
-              quantidade_removida: qtdBaixa,
-              quantidade_atual: novaQtdB,
-              unidade: produtoB.unidade_medida
+              saldo_anterior: saldoAtualB,
+              quantidade_pedida: qtdBaixa,
+              unidade_pedida: unidadePedida || unidadeEstoqueB,
+              quantidade_convertida: qtdConvertidaB,
+              unidade_estoque: unidadeEstoqueB,
+              saldo_novo: novaQtdB,
+              conversao_aplicada: converteuB,
+              status: 'baixado'
             });
-            console.log(`✅ [BAIXA] ${produtoB.produto_nome}: ${saldoAtualB} → ${novaQtdB} ${produtoB.unidade_medida}`);
+            console.log(`✅ [BAIXA] ${produtoB.produto_nome}: ${saldoAtualB} - ${qtdConvertidaB} = ${novaQtdB} ${unidadeEstoqueB}${converteuB ? ` (convertido de ${qtdBaixa} ${unidadePedida})` : ''}`);
 
           } catch (itemErr: any) {
             baixaComProblema.push({
