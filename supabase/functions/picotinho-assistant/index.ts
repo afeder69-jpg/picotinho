@@ -413,7 +413,104 @@ const feedbackToolDefinitions = [
 
 const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions];
 
-// ==================== HELPER: resolve lista_id ====================
+// ==================== SHARED: MATCHING POR NÚCLEO ====================
+const STOP_WORDS_SHARED = new Set([
+  'de','da','do','das','dos','com','sem','em','para','por','meu','minha','meus','minhas',
+  'o','a','os','as','um','uma','no','na','nos','nas','ao','aos','que','pro','pra','eu','so','ja','tb','tambem'
+]);
+const TOKENS_COMERCIAIS_SHARED = new Set([
+  'concentrado','premium','tradicional','especial','original','sache','pacote',
+  'garrafa','pet','lata','vidro','caixa','unidade','gramas','grama','litro','litros',
+  'quilos','quilo','tipo','marca'
+]);
+const REGEX_NUM_UNIDADE_SHARED = /^\d+[a-z]*$/;
+const GRUPOS_EXCLUSIVOS_SHARED = [
+  ['limao','morango','uva','maracuja','abacaxi','manga','goiaba','framboesa','menta','laranja','pessego','cereja','caju','acerola','guarana','tutti','banana','maca','melancia','melao','ameixa','kiwi','tamarindo','pitanga','jabuticaba','cupuacu'],
+  ['integral','desnatado','semidesnatado'],
+  ['zero','diet','light'],
+  ['branco','preto','vermelho','verde','amarelo','rosa'],
+  ['bovino','suino','frango','peixe','peru','cordeiro'],
+];
+const TIPOS_BASE_CONHECIDOS_SHARED = new Set([
+  'leite','suco','gelatina','geleia','xarope','cafe','cha','iogurte','queijo','manteiga',
+  'margarina','arroz','feijao','macarrao','farinha','acucar','sal','oleo','azeite','vinagre',
+  'molho','catchup','ketchup','mostarda','maionese','creme','biscoito','bolacha','pao',
+  'bolo','cereal','aveia','granola','mel','chocolate','achocolatado','nescau','toddy',
+  'banana','maca','laranja','tomate','cebola','alho','batata','cenoura','couve','alface',
+  'carne','picanha','frango','linguica','salsicha','presunto','mortadela','bacon','ovo',
+  'sabao','detergente','amaciante','desinfetante','agua','cerveja','refrigerante','vinho',
+  'isotônico','isotonico','energetico','guaramcamp'
+]);
+
+function normalizarBuscaShared(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function tokenizarShared(texto: string): string[] {
+  return normalizarBuscaShared(texto).split(' ').filter(t => t.length >= 2);
+}
+function classificarTokensShared(tokens: string[]): { ignoraveis: string[], comerciais: string[], criticos: string[] } {
+  const ignoraveis: string[] = [], comerciais: string[] = [], criticos: string[] = [];
+  for (const t of tokens) {
+    if (STOP_WORDS_SHARED.has(t)) ignoraveis.push(t);
+    else if (TOKENS_COMERCIAIS_SHARED.has(t) || REGEX_NUM_UNIDADE_SHARED.test(t)) comerciais.push(t);
+    else criticos.push(t);
+  }
+  return { ignoraveis, comerciais, criticos };
+}
+function extrairTipoBaseShared(criticos: string[]): string | null {
+  if (criticos.length === 0) return null;
+  return criticos.find(t => TIPOS_BASE_CONHECIDOS_SHARED.has(t)) || criticos[0];
+}
+function temConflitoVarianteShared(criticosUsuario: string[], criticosEstoque: string[]): boolean {
+  for (const grupo of GRUPOS_EXCLUSIVOS_SHARED) {
+    const userNoGrupo = criticosUsuario.filter(t => grupo.includes(t));
+    const estNoGrupo = criticosEstoque.filter(t => grupo.includes(t));
+    if (userNoGrupo.length > 0 && estNoGrupo.length > 0) {
+      const userSet = new Set(userNoGrupo);
+      const estSet = new Set(estNoGrupo);
+      if (![...userSet].some(t => estSet.has(t))) return true;
+    }
+  }
+  return false;
+}
+
+type SharedMatchResult = { status: 'dominante', items: any[] } | { status: 'ambiguo', opcoes: any[] } | { status: 'nao_encontrado' };
+
+function resolverMatchPorNucleo(produtoNome: string, todosItens: any[]): SharedMatchResult {
+  const tokensUsuario = tokenizarShared(produtoNome);
+  const { criticos: criticosUsuario } = classificarTokensShared(tokensUsuario);
+  if (criticosUsuario.length === 0) return { status: 'nao_encontrado' };
+  const tipoBase = extrairTipoBaseShared(criticosUsuario);
+  const grupos = new Map<string, any[]>();
+  for (const item of todosItens) {
+    const chave = normalizarBuscaShared(item.produto_nome);
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave)!.push(item);
+  }
+  const candidatos: Array<{ chave: string, items: any[], score: number }> = [];
+  for (const [chave, items] of grupos) {
+    const tokensEst = tokenizarShared(items[0].produto_nome);
+    const { criticos: criticosEst } = classificarTokensShared(tokensEst);
+    if (tipoBase && !criticosEst.includes(tipoBase)) continue;
+    if (temConflitoVarianteShared(criticosUsuario, criticosEst)) continue;
+    const encontrados = criticosUsuario.filter(t => criticosEst.includes(t));
+    const score = encontrados.length / criticosUsuario.length;
+    candidatos.push({ chave, items, score });
+  }
+  const validos = candidatos.filter(c => c.score >= 0.8).sort((a, b) => b.score - a.score);
+  if (validos.length === 0) return { status: 'nao_encontrado' };
+  if (validos.length === 1) return { status: 'dominante', items: validos[0].items };
+  const margem = validos[0].score - validos[1].score;
+  if (margem >= 0.3) return { status: 'dominante', items: validos[0].items };
+  const opcoes = validos.slice(0, 5).map(v => {
+    const mais_recente = v.items.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+    const qtdTotal = v.items.reduce((s: number, r: any) => s + r.quantidade, 0);
+    return { id: mais_recente.id, nome_completo: mais_recente.produto_nome, nome_consolidado: v.chave, quantidade_atual: qtdTotal, unidade: mais_recente.unidade_medida, marca: mais_recente.marca };
+  });
+  return { status: 'ambiguo', opcoes };
+}
+// ==================== FIM SHARED MATCHING ====================
+
 
 async function resolveListaId(
   args: Record<string, any>,
