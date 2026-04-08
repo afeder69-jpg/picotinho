@@ -730,40 +730,285 @@ async function executeTool(
         }), isWriteMutation: false };
       }
 
+      // ==================== SHARED: MATCHING POR NÚCLEO ====================
+      // (extracted to shared scope for use by baixar/aumentar/ajustar_saldo)
+
       case 'baixar_estoque': {
-        let query = supabase.from('estoque_app').select('id, produto_nome, quantidade, unidade_medida').eq('user_id', usuarioId);
-        if (args.produto_id) { query = query.eq('id', args.produto_id); } else { query = query.ilike('produto_nome', `%${args.produto_nome}%`); }
-        const { data: produtos, error } = await query;
-        if (error) throw error;
-        if (!produtos || produtos.length === 0) {
-          return { result: JSON.stringify({ erro: `Produto "${args.produto_nome}" não encontrado no estoque. Use buscar_produtos_similares para encontrar o nome correto.` }), isWriteMutation: false };
+        // Normalizar para array de itens
+        const itensBaixa = args.itens && Array.isArray(args.itens) && args.itens.length > 0
+          ? args.itens
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+
+        if (!itensBaixa[0].produto_nome && !itensBaixa[0].produto_id) {
+          return { result: JSON.stringify({ erro: "Nenhum produto informado para baixar." }), isWriteMutation: false };
         }
-        if (produtos.length > 1 && !args.produto_id) {
-          return { result: JSON.stringify({ erro: "Múltiplos produtos encontrados. Peça ao usuário para especificar qual:", opcoes: produtos.map((p: any) => ({ id: p.id, nome: p.produto_nome, quantidade: p.quantidade, unidade: p.unidade_medida })) }), isWriteMutation: false };
+
+        const baixados: any[] = [];
+        const baixaAmbiguos: any[] = [];
+        const baixaNaoEncontrados: any[] = [];
+        const baixaComProblema: any[] = [];
+
+        for (const itemBaixa of itensBaixa) {
+          const { produto_nome: pNome, quantidade: qtdBaixa, produto_id: pId } = itemBaixa;
+          try {
+            // Step 1: ilike search
+            let queryB = supabase.from('estoque_app')
+              .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+              .eq('user_id', usuarioId);
+            if (pId) { queryB = queryB.eq('id', pId); }
+            else { queryB = queryB.ilike('produto_nome', `%${pNome}%`); }
+            const { data: matchesB, error: errB } = await queryB.limit(20);
+            if (errB) throw errB;
+
+            let finalMatchesB = matchesB || [];
+
+            // Step 2: Fallback por núcleo
+            if (finalMatchesB.length === 0 && !pId) {
+              const { data: allStockB } = await supabase.from('estoque_app')
+                .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+                .eq('user_id', usuarioId).gt('quantidade', -1).limit(500);
+              if (allStockB && allStockB.length > 0) {
+                const resultadoB = resolverMatchPorNucleo(pNome, allStockB);
+                if (resultadoB.status === 'dominante') {
+                  finalMatchesB = resultadoB.items;
+                  console.log(`🔍 [BAIXA-NUCLEO] "${pNome}" → match dominante: ${resultadoB.items[0]?.produto_nome}`);
+                } else if (resultadoB.status === 'ambiguo') {
+                  baixaAmbiguos.push({
+                    produto_informado: pNome,
+                    opcoes: resultadoB.opcoes.map((o: any, i: number) => ({
+                      numero: i + 1,
+                      id: o.id,
+                      nome: o.nome_completo,
+                      quantidade_atual: o.quantidade_atual,
+                      unidade: o.unidade
+                    })),
+                    instrucao: "NÃO peça nome exato. Apresente as opções numeradas e pergunte qual o usuário quis dizer."
+                  });
+                  continue;
+                } else {
+                  baixaNaoEncontrados.push({
+                    produto_informado: pNome,
+                    instrucao: `Produto "${pNome}" não encontrado no estoque. Pergunte se o nome está correto. NÃO peça "nome exato".`
+                  });
+                  continue;
+                }
+              } else {
+                baixaNaoEncontrados.push({
+                  produto_informado: pNome,
+                  instrucao: `Produto "${pNome}" não encontrado no estoque (estoque vazio). NÃO peça "nome exato".`
+                });
+                continue;
+              }
+            }
+
+            if (finalMatchesB.length === 0) {
+              baixaNaoEncontrados.push({
+                produto_informado: pNome,
+                instrucao: `Produto "${pNome}" não encontrado no estoque. Pergunte se o nome está correto. NÃO peça "nome exato".`
+              });
+              continue;
+            }
+
+            // Step 3: Consolidar por nome normalizado
+            const gruposB = new Map<string, any[]>();
+            finalMatchesB.forEach((m: any) => {
+              const chave = normalizarBuscaShared(m.produto_nome);
+              if (!gruposB.has(chave)) gruposB.set(chave, []);
+              gruposB.get(chave)!.push(m);
+            });
+
+            if (gruposB.size > 1 && !pId) {
+              const opcoesB = Array.from(gruposB.entries()).map(([nome, regs], i) => {
+                const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
+                return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
+              });
+              baixaAmbiguos.push({
+                produto_informado: pNome,
+                opcoes: opcoesB,
+                instrucao: "NÃO peça nome exato. Apresente as opções numeradas e pergunte qual o usuário quis dizer."
+              });
+              continue;
+            }
+
+            // Step 4: Match único — verificar saldo
+            const grupoB = Array.from(gruposB.values())[0];
+            const produtoB = grupoB.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+            const saldoAtualB = grupoB.reduce((s: number, r: any) => s + r.quantidade, 0);
+
+            if (qtdBaixa > saldoAtualB) {
+              baixaComProblema.push({
+                produto: produtoB.produto_nome,
+                motivo: `Saldo insuficiente: tem ${saldoAtualB} ${produtoB.unidade_medida}, mas você pediu para baixar ${qtdBaixa} ${produtoB.unidade_medida}.`,
+                saldo_atual: saldoAtualB,
+                unidade: produtoB.unidade_medida,
+                produto_id: produtoB.id
+              });
+              continue;
+            }
+
+            // Step 5: Executar baixa
+            const novaQtdB = Math.max(0, saldoAtualB - qtdBaixa);
+            const { error: upErrB } = await supabase.from('estoque_app')
+              .update({ quantidade: novaQtdB, updated_at: new Date().toISOString() })
+              .eq('id', produtoB.id).eq('user_id', usuarioId);
+            if (upErrB) throw upErrB;
+
+            baixados.push({
+              produto: produtoB.produto_nome,
+              quantidade_anterior: saldoAtualB,
+              quantidade_removida: qtdBaixa,
+              quantidade_atual: novaQtdB,
+              unidade: produtoB.unidade_medida
+            });
+            console.log(`✅ [BAIXA] ${produtoB.produto_nome}: ${saldoAtualB} → ${novaQtdB} ${produtoB.unidade_medida}`);
+
+          } catch (itemErr: any) {
+            baixaComProblema.push({
+              produto: pNome,
+              motivo: `Erro ao processar: ${itemErr.message}`,
+              saldo_atual: null,
+              unidade: null
+            });
+          }
         }
-        const produto = produtos[0];
-        const novaQtd = Math.max(0, produto.quantidade - args.quantidade);
-        const { error: updateError } = await supabase.from('estoque_app').update({ quantidade: novaQtd, updated_at: new Date().toISOString() }).eq('id', produto.id).eq('user_id', usuarioId);
-        if (updateError) throw updateError;
-        return { result: JSON.stringify({ sucesso: true, produto: produto.produto_nome, quantidade_anterior: produto.quantidade, quantidade_removida: args.quantidade, quantidade_atual: novaQtd }), isWriteMutation: true };
+
+        return {
+          result: JSON.stringify({
+            itens_baixados: baixados,
+            itens_ambiguos: baixaAmbiguos,
+            itens_nao_encontrados: baixaNaoEncontrados,
+            itens_com_problema: baixaComProblema,
+            instrucao_formatacao: "Apresente o resultado separado por categoria. Para itens_ambiguos, mostre opções numeradas. Para itens_com_problema, mostre o saldo atual. NÃO peça 'nome exato' em nenhum caso."
+          }),
+          isWriteMutation: baixados.length > 0
+        };
       }
 
       case 'aumentar_estoque': {
-        let query = supabase.from('estoque_app').select('id, produto_nome, quantidade, unidade_medida').eq('user_id', usuarioId);
-        if (args.produto_id) { query = query.eq('id', args.produto_id); } else { query = query.ilike('produto_nome', `%${args.produto_nome}%`); }
-        const { data: produtos, error } = await query;
-        if (error) throw error;
-        if (!produtos || produtos.length === 0) {
-          return { result: JSON.stringify({ erro: `Produto "${args.produto_nome}" não encontrado no estoque. Use buscar_produtos_similares para encontrar o nome correto, ou pergunte se deseja adicionar como produto novo.` }), isWriteMutation: false };
+        // Normalizar para array de itens
+        const itensAumento = args.itens && Array.isArray(args.itens) && args.itens.length > 0
+          ? args.itens
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+
+        if (!itensAumento[0].produto_nome && !itensAumento[0].produto_id) {
+          return { result: JSON.stringify({ erro: "Nenhum produto informado para aumentar." }), isWriteMutation: false };
         }
-        if (produtos.length > 1 && !args.produto_id) {
-          return { result: JSON.stringify({ erro: "Múltiplos produtos encontrados. Peça ao usuário para especificar qual:", opcoes: produtos.map((p: any) => ({ id: p.id, nome: p.produto_nome, quantidade: p.quantidade, unidade: p.unidade_medida })) }), isWriteMutation: false };
+
+        const aumentados: any[] = [];
+        const aumentoAmbiguos: any[] = [];
+        const aumentoNaoEncontrados: any[] = [];
+        const aumentoComProblema: any[] = [];
+
+        for (const itemAumento of itensAumento) {
+          const { produto_nome: pNomeA, quantidade: qtdAumento, produto_id: pIdA } = itemAumento;
+          try {
+            let queryA = supabase.from('estoque_app')
+              .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+              .eq('user_id', usuarioId);
+            if (pIdA) { queryA = queryA.eq('id', pIdA); }
+            else { queryA = queryA.ilike('produto_nome', `%${pNomeA}%`); }
+            const { data: matchesA, error: errA } = await queryA.limit(20);
+            if (errA) throw errA;
+
+            let finalMatchesA = matchesA || [];
+
+            // Fallback por núcleo
+            if (finalMatchesA.length === 0 && !pIdA) {
+              const { data: allStockA } = await supabase.from('estoque_app')
+                .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
+                .eq('user_id', usuarioId).gt('quantidade', -1).limit(500);
+              if (allStockA && allStockA.length > 0) {
+                const resultadoA = resolverMatchPorNucleo(pNomeA, allStockA);
+                if (resultadoA.status === 'dominante') {
+                  finalMatchesA = resultadoA.items;
+                  console.log(`🔍 [AUMENTO-NUCLEO] "${pNomeA}" → match dominante: ${resultadoA.items[0]?.produto_nome}`);
+                } else if (resultadoA.status === 'ambiguo') {
+                  aumentoAmbiguos.push({
+                    produto_informado: pNomeA,
+                    opcoes: resultadoA.opcoes.map((o: any, i: number) => ({
+                      numero: i + 1, id: o.id, nome: o.nome_completo, quantidade_atual: o.quantidade_atual, unidade: o.unidade
+                    })),
+                    instrucao: "NÃO peça nome exato. Apresente as opções numeradas."
+                  });
+                  continue;
+                } else {
+                  aumentoNaoEncontrados.push({
+                    produto_informado: pNomeA,
+                    instrucao: `Produto "${pNomeA}" não encontrado no estoque. Pergunte se o nome está correto ou se deseja adicionar como produto novo. NÃO peça "nome exato".`
+                  });
+                  continue;
+                }
+              }
+            }
+
+            if (finalMatchesA.length === 0) {
+              aumentoNaoEncontrados.push({
+                produto_informado: pNomeA,
+                instrucao: `Produto "${pNomeA}" não encontrado no estoque. Pergunte se o nome está correto ou se deseja adicionar como produto novo. NÃO peça "nome exato".`
+              });
+              continue;
+            }
+
+            // Consolidar
+            const gruposA = new Map<string, any[]>();
+            finalMatchesA.forEach((m: any) => {
+              const chave = normalizarBuscaShared(m.produto_nome);
+              if (!gruposA.has(chave)) gruposA.set(chave, []);
+              gruposA.get(chave)!.push(m);
+            });
+
+            if (gruposA.size > 1 && !pIdA) {
+              const opcoesA = Array.from(gruposA.entries()).map(([nome, regs], i) => {
+                const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
+                return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
+              });
+              aumentoAmbiguos.push({
+                produto_informado: pNomeA,
+                opcoes: opcoesA,
+                instrucao: "NÃO peça nome exato. Apresente as opções numeradas."
+              });
+              continue;
+            }
+
+            const grupoA = Array.from(gruposA.values())[0];
+            const produtoA = grupoA.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+            const saldoAtualA = grupoA.reduce((s: number, r: any) => s + r.quantidade, 0);
+            const novaQtdA = saldoAtualA + qtdAumento;
+
+            const { error: upErrA } = await supabase.from('estoque_app')
+              .update({ quantidade: novaQtdA, updated_at: new Date().toISOString() })
+              .eq('id', produtoA.id).eq('user_id', usuarioId);
+            if (upErrA) throw upErrA;
+
+            aumentados.push({
+              produto: produtoA.produto_nome,
+              quantidade_anterior: saldoAtualA,
+              quantidade_adicionada: qtdAumento,
+              quantidade_atual: novaQtdA,
+              unidade: produtoA.unidade_medida
+            });
+            console.log(`✅ [AUMENTO] ${produtoA.produto_nome}: ${saldoAtualA} → ${novaQtdA} ${produtoA.unidade_medida}`);
+
+          } catch (itemErr: any) {
+            aumentoComProblema.push({
+              produto: pNomeA,
+              motivo: `Erro ao processar: ${itemErr.message}`,
+              saldo_atual: null,
+              unidade: null
+            });
+          }
         }
-        const produto = produtos[0];
-        const novaQtd = produto.quantidade + args.quantidade;
-        const { error: updateError } = await supabase.from('estoque_app').update({ quantidade: novaQtd, updated_at: new Date().toISOString() }).eq('id', produto.id).eq('user_id', usuarioId);
-        if (updateError) throw updateError;
-        return { result: JSON.stringify({ sucesso: true, produto: produto.produto_nome, quantidade_anterior: produto.quantidade, quantidade_adicionada: args.quantidade, quantidade_atual: novaQtd }), isWriteMutation: true };
+
+        return {
+          result: JSON.stringify({
+            itens_aumentados: aumentados,
+            itens_ambiguos: aumentoAmbiguos,
+            itens_nao_encontrados: aumentoNaoEncontrados,
+            itens_com_problema: aumentoComProblema,
+            instrucao_formatacao: "Apresente o resultado separado por categoria. Para itens_ambiguos, mostre opções numeradas. NÃO peça 'nome exato' em nenhum caso."
+          }),
+          isWriteMutation: aumentados.length > 0
+        };
       }
 
       case 'adicionar_produto': {
