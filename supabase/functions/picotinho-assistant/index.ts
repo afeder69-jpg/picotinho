@@ -513,6 +513,24 @@ function resolverMatchPorNucleo(produtoNome: string, todosItens: any[]): SharedM
 }
 // ==================== FIM SHARED MATCHING ====================
 
+// ==================== SHARED: CONVERSÃO DE UNIDADE ====================
+function converterParaUnidadeBase(quantidade: number, unidadeOrigem: string, unidadeEstoque: string): { quantidade_convertida: number; converteu: boolean; erro?: string } {
+  const orig = unidadeOrigem.toUpperCase().trim();
+  const dest = unidadeEstoque.toUpperCase().trim();
+  
+  if (orig === dest) return { quantidade_convertida: quantidade, converteu: false };
+  
+  // Conversões canônicas
+  if (orig === 'G' && dest === 'KG') return { quantidade_convertida: quantidade / 1000, converteu: true };
+  if (orig === 'KG' && dest === 'G') return { quantidade_convertida: quantidade * 1000, converteu: true };
+  if (orig === 'ML' && dest === 'L') return { quantidade_convertida: quantidade / 1000, converteu: true };
+  if (orig === 'L' && dest === 'ML') return { quantidade_convertida: quantidade * 1000, converteu: true };
+  
+  // Unidades incompatíveis
+  return { quantidade_convertida: quantidade, converteu: false, erro: `Não é possível converter ${orig} para ${dest} automaticamente.` };
+}
+// ==================== FIM CONVERSÃO DE UNIDADE ====================
+
 
 async function resolveListaId(
   args: Record<string, any>,
