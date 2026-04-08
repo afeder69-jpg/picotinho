@@ -1050,7 +1050,7 @@ async function executeTool(
         // Normalizar para array de itens
         const itensAumento = args.itens && Array.isArray(args.itens) && args.itens.length > 0
           ? args.itens
-          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, produto_id: args.produto_id }];
+          : [{ produto_nome: args.produto_nome, quantidade: args.quantidade, unidade: args.unidade, produto_id: args.produto_id }];
 
         if (!itensAumento[0].produto_nome && !itensAumento[0].produto_id) {
           return { result: JSON.stringify({ erro: "Nenhum produto informado para aumentar." }), isWriteMutation: false };
@@ -1062,7 +1062,7 @@ async function executeTool(
         const aumentoComProblema: any[] = [];
 
         for (const itemAumento of itensAumento) {
-          const { produto_nome: pNomeA, quantidade: qtdAumento, produto_id: pIdA } = itemAumento;
+          const { produto_nome: pNomeA, quantidade: qtdAumento, unidade: unidadePedidaA, produto_id: pIdA } = itemAumento;
           try {
             let queryA = supabase.from('estoque_app')
               .select('id, produto_nome, quantidade, unidade_medida, marca, categoria, updated_at')
@@ -1087,6 +1087,8 @@ async function executeTool(
                 } else if (resultadoA.status === 'ambiguo') {
                   aumentoAmbiguos.push({
                     produto_informado: pNomeA,
+                    quantidade_pedida: qtdAumento,
+                    unidade_pedida: unidadePedidaA || null,
                     opcoes: resultadoA.opcoes.map((o: any, i: number) => ({
                       numero: i + 1, id: o.id, nome: o.nome_completo, quantidade_atual: o.quantidade_atual, unidade: o.unidade
                     })),
@@ -1120,12 +1122,14 @@ async function executeTool(
             });
 
             if (gruposA.size > 1 && !pIdA) {
-              const opcoesA = Array.from(gruposA.entries()).map(([nome, regs], i) => {
+              const opcoesA = Array.from(gruposA.entries()).map(([_nome, regs], i) => {
                 const qtdTotal = regs.reduce((s: number, r: any) => s + r.quantidade, 0);
                 return { numero: i + 1, id: regs[0].id, nome: regs[0].produto_nome, quantidade_atual: qtdTotal, unidade: regs[0].unidade_medida };
               });
               aumentoAmbiguos.push({
                 produto_informado: pNomeA,
+                quantidade_pedida: qtdAumento,
+                unidade_pedida: unidadePedidaA || null,
                 opcoes: opcoesA,
                 instrucao: "NÃO peça nome exato. Apresente as opções numeradas."
               });
@@ -1135,21 +1139,58 @@ async function executeTool(
             const grupoA = Array.from(gruposA.values())[0];
             const produtoA = grupoA.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
             const saldoAtualA = grupoA.reduce((s: number, r: any) => s + r.quantidade, 0);
-            const novaQtdA = saldoAtualA + qtdAumento;
+            const unidadeEstoqueA = produtoA.unidade_medida;
 
+            // Conversão de unidade
+            let qtdConvertidaA = qtdAumento;
+            let converteuA = false;
+            if (unidadePedidaA && unidadePedidaA.toUpperCase() !== unidadeEstoqueA.toUpperCase()) {
+              const convA = converterParaUnidadeBase(qtdAumento, unidadePedidaA, unidadeEstoqueA);
+              if (convA.erro) {
+                aumentoComProblema.push({
+                  produto: produtoA.produto_nome,
+                  motivo: `${convA.erro} Estoque usa ${unidadeEstoqueA}, você informou ${unidadePedidaA}.`,
+                  saldo_atual: saldoAtualA,
+                  unidade: unidadeEstoqueA,
+                  produto_id: produtoA.id
+                });
+                continue;
+              }
+              qtdConvertidaA = convA.quantidade_convertida;
+              converteuA = convA.converteu;
+            }
+
+            qtdConvertidaA = Math.round(qtdConvertidaA * 10000) / 10000;
+            const novaQtdA = Math.round((saldoAtualA + qtdConvertidaA) * 10000) / 10000;
+
+            // Atualizar registro primário
             const { error: upErrA } = await supabase.from('estoque_app')
               .update({ quantidade: novaQtdA, updated_at: new Date().toISOString() })
               .eq('id', produtoA.id).eq('user_id', usuarioId);
             if (upErrA) throw upErrA;
 
+            // Zerar secundários do grupo consolidado
+            const idsSecundariosA = grupoA.filter((r: any) => r.id !== produtoA.id).map((r: any) => r.id);
+            if (idsSecundariosA.length > 0) {
+              const { error: zeroErrA } = await supabase.from('estoque_app')
+                .update({ quantidade: 0, updated_at: new Date().toISOString() })
+                .in('id', idsSecundariosA).eq('user_id', usuarioId);
+              if (zeroErrA) console.error(`⚠️ [AUMENTO] Erro ao zerar secundários: ${zeroErrA.message}`);
+              else console.log(`🔄 [AUMENTO] Zerados ${idsSecundariosA.length} registros secundários do grupo`);
+            }
+
             aumentados.push({
               produto: produtoA.produto_nome,
-              quantidade_anterior: saldoAtualA,
-              quantidade_adicionada: qtdAumento,
-              quantidade_atual: novaQtdA,
-              unidade: produtoA.unidade_medida
+              saldo_anterior: saldoAtualA,
+              quantidade_pedida: qtdAumento,
+              unidade_pedida: unidadePedidaA || unidadeEstoqueA,
+              quantidade_convertida: qtdConvertidaA,
+              unidade_estoque: unidadeEstoqueA,
+              saldo_novo: novaQtdA,
+              conversao_aplicada: converteuA,
+              status: 'aumentado'
             });
-            console.log(`✅ [AUMENTO] ${produtoA.produto_nome}: ${saldoAtualA} → ${novaQtdA} ${produtoA.unidade_medida}`);
+            console.log(`✅ [AUMENTO] ${produtoA.produto_nome}: ${saldoAtualA} + ${qtdConvertidaA} = ${novaQtdA} ${unidadeEstoqueA}${converteuA ? ` (convertido de ${qtdAumento} ${unidadePedidaA})` : ''}`);
 
           } catch (itemErr: any) {
             aumentoComProblema.push({
