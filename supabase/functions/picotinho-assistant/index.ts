@@ -2491,8 +2491,20 @@ const handler = async (req: Request): Promise<Response> => {
         if (numeroEscolhido !== null && snap.opcoes && snap.opcoes.length > 0) {
           const opcaoEscolhida = snap.opcoes.find(o => o.numero === numeroEscolhido);
           if (opcaoEscolhida) {
-            contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido}. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar adicionar_itens_lista. NÃO busque novamente no catálogo. O contexto da ação é: ${snap.contexto || 'adicionar_item_lista'}${snap.lista_id ? ` na lista ${snap.lista_id}` : ''}.`;
-            console.log(`✅ [SNAPSHOT] Escolha ${numeroEscolhido} resolvida → produto_id: ${opcaoEscolhida.produto_id}, nome: ${opcaoEscolhida.nome}`);
+            const snapContexto = snap.contexto || 'adicionar_item_lista';
+            // Gerar instrução dinâmica baseada no contexto do snapshot
+            if (snapContexto === 'baixar_estoque') {
+              const snapExtra = snap as any;
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido} para BAIXAR estoque. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar baixar_estoque com quantidade ${snapExtra.quantidade_pendente || 'a mesma informada anteriormente'} e unidade ${snapExtra.unidade_pendente || 'a mesma do estoque'}. NÃO busque novamente.`;
+            } else if (snapContexto === 'aumentar_estoque') {
+              const snapExtra = snap as any;
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido} para AUMENTAR estoque. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar aumentar_estoque com quantidade ${snapExtra.quantidade_pendente || 'a mesma informada anteriormente'} e unidade ${snapExtra.unidade_pendente || 'a mesma do estoque'}. NÃO busque novamente.`;
+            } else if (snapContexto === 'ajustar_saldo_estoque') {
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido}. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar ajustar_saldo_estoque. NÃO busque novamente. O contexto da ação é: ${snapContexto}.`;
+            } else {
+              contextoEscolhaInjetado = `[CONTEXTO ESTRUTURADO — USE EXATAMENTE ESTES DADOS] O usuário escolheu a opção ${numeroEscolhido}. O produto_id correspondente é "${opcaoEscolhida.produto_id}". O nome do produto é "${opcaoEscolhida.nome}". Use este produto_id EXATO ao chamar adicionar_itens_lista. NÃO busque novamente no catálogo. O contexto da ação é: ${snapContexto}${snap.lista_id ? ` na lista ${snap.lista_id}` : ''}.`;
+            }
+            console.log(`✅ [SNAPSHOT] Escolha ${numeroEscolhido} resolvida → produto_id: ${opcaoEscolhida.produto_id}, nome: ${opcaoEscolhida.nome}, contexto: ${snapContexto}`);
           } else {
             contextoEscolhaInjetado = `O usuário respondeu "${conteudo}" mas a opção ${numeroEscolhido} não existe. As opções válidas eram de 1 a ${snap.opcoes.length}. Informe o usuário e reapresente as opções: ${snap.opcoes.map(o => `${o.numero}. ${o.nome}`).join(', ')}.`;
             console.log(`⚠️ [SNAPSHOT] Opção ${numeroEscolhido} fora do range (1-${snap.opcoes.length})`);
