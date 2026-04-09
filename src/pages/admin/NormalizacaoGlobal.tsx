@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -3591,6 +3591,10 @@ export default function NormalizacaoGlobal() {
       {/* Dialog de detalhe do feedback */}
       <Dialog open={feedbackDetalheOpen} onOpenChange={setFeedbackDetalheOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <X className="h-5 w-5" />
+            <span className="sr-only">Fechar</span>
+          </DialogClose>
           {feedbackAtual && (
             <>
               <DialogHeader>
