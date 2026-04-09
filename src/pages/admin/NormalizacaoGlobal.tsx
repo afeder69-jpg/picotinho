@@ -3591,6 +3591,10 @@ export default function NormalizacaoGlobal() {
       {/* Dialog de detalhe do feedback */}
       <Dialog open={feedbackDetalheOpen} onOpenChange={setFeedbackDetalheOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <X className="h-5 w-5" />
+            <span className="sr-only">Fechar</span>
+          </DialogClose>
           {feedbackAtual && (
             <>
               <DialogHeader>
