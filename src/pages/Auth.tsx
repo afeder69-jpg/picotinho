@@ -434,6 +434,41 @@ const AuthPage = () => {
                   {isLoading ? "Entrando..." : "Entrar"}
                 </Button>
 
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full text-sm text-muted-foreground"
+                  onClick={async () => {
+                    if (!formData.email || !validateEmail(formData.email)) {
+                      toast({
+                        title: "Informe seu e-mail",
+                        description: "Preencha o campo de e-mail para receber o link de redefinição de senha.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    try {
+                      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+                        redirectTo: `${window.location.origin}/reset-password`,
+                      });
+                      if (error) throw error;
+                      toast({
+                        title: "E-mail enviado! ✉️",
+                        description: "Verifique sua caixa de entrada para redefinir sua senha.",
+                      });
+                    } catch (err: any) {
+                      toast({
+                        title: "Erro",
+                        description: err.message || "Não foi possível enviar o e-mail. Tente novamente.",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                  disabled={isLoading}
+                >
+                  Esqueci minha senha
+                </Button>
+
                 <div className="relative my-4">
                   <Separator />
                   <div className="absolute inset-0 flex items-center justify-center">
