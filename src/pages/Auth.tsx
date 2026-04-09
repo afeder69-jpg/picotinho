@@ -115,11 +115,17 @@ const AuthPage = () => {
 
     try {
       // Cadastro no Supabase Auth
+      // O telefone é passado em options.data (user_metadata)
+      // O trigger handle_new_user no banco cria o perfil automaticamente
+      const cleanPhone = formData.telefone.replace(/\D/g, '');
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            telefone: cleanPhone
+          }
         }
       });
 
@@ -147,36 +153,6 @@ const AuthPage = () => {
       }
 
       if (data.user) {
-        // Criar perfil com telefone
-        const cleanPhone = formData.telefone.replace(/\D/g, '');
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            user_id: data.user.id,
-            telefone: cleanPhone
-          });
-
-        if (profileError) {
-          if (profileError.message.includes('duplicate key')) {
-            toast({
-              title: "Erro no cadastro",
-              description: "Este telefone já está cadastrado. Use outro número.",
-              variant: "destructive",
-            });
-            
-            // Deletar usuário criado se o perfil falhar
-            await supabase.auth.admin.deleteUser(data.user.id);
-            return;
-          } else {
-            toast({
-              title: "Erro no cadastro",
-              description: "Erro ao salvar informações do perfil",
-              variant: "destructive",
-            });
-            return;
-          }
-        }
-
         toast({
           title: "Cadastro realizado com sucesso! ✅",
           description: "Enviamos um e-mail de confirmação para sua caixa de entrada. Acesse seu e-mail e clique no link para ativar sua conta.",
