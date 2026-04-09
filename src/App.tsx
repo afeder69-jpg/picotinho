@@ -31,6 +31,7 @@ import DataDeletion from "./pages/DataDeletion";
 import Privacy from "./pages/Privacy";
 import ConsultaPrecos from "./pages/ConsultaPrecos";
 import Terms from "./pages/Terms";
+import ResetPassword from "./pages/ResetPassword";
 
 import BottomNavigation from "./components/BottomNavigation";
 import NotFound from "./pages/NotFound";
@@ -114,6 +115,7 @@ const App = () => {
                 <Route path="/data-deletion" element={<DataDeletion />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>
