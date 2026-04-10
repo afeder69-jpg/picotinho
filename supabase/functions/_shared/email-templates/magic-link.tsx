@@ -30,12 +30,12 @@ export const MagicLinkEmail = ({
     <Body style={main}>
       <Container style={container}>
         <Img src="https://picotinho.com.br/logo-picotinho.png" width="120" height="40" alt="Picotinho" style={logo} />
-        <Heading style={h1}>Seu link de acesso ✨</Heading>
+        <Heading style={h1}>Seu link de acesso 🔗</Heading>
         <Text style={text}>
-          Clique no botão abaixo para acessar o Picotinho. Este link expira em breve.
+          Clique no botão abaixo para acessar sua conta no Picotinho. Este link expira em breve.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Acessar o Picotinho
+          Acessar Picotinho
         </Button>
         <Text style={footerText}>
           Se o botão não funcionar, copie e cole este link no navegador:{' '}

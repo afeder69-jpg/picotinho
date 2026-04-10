@@ -30,13 +30,13 @@ export const SignupEmail = ({
 }: SignupEmailProps) => (
   <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Bem-vindo ao Picotinho! Confirme seu e-mail 🛒</Preview>
+    <Preview>Confirme seu cadastro no Picotinho</Preview>
     <Body style={main}>
       <Container style={container}>
         <Img src="https://picotinho.com.br/logo-picotinho.png" width="120" height="40" alt="Picotinho" style={logo} />
         <Heading style={h1}>Bem-vindo ao Picotinho! 🛒</Heading>
         <Text style={text}>
-          Olá! Que bom ter você por aqui. Para começar a organizar suas compras de supermercado, confirme seu e-mail clicando no botão abaixo:
+          Olá! Para concluir seu cadastro e começar a organizar suas compras de supermercado, confirme seu e-mail clicando no botão abaixo:
         </Text>
         <Button style={button} href={confirmationUrl}>
           Confirmar E-mail

@@ -37,20 +37,18 @@ export const EmailChangeEmail = ({
         <Heading style={h1}>Alteração de e-mail ✉️</Heading>
         <Text style={text}>
           Você solicitou a alteração do e-mail da sua conta no Picotinho de{' '}
-          <strong>{email}</strong> para <strong>{newEmail}</strong>.
+          <Link href={`mailto:${email}`} style={link}>{email}</Link>{' '}
+          para{' '}
+          <Link href={`mailto:${newEmail}`} style={link}>{newEmail}</Link>.
         </Text>
         <Text style={text}>
-          Clique no botão abaixo para confirmar essa alteração:
+          Clique no botão abaixo para confirmar a alteração:
         </Text>
         <Button style={button} href={confirmationUrl}>
           Confirmar Alteração
         </Button>
-        <Text style={footerText}>
-          Se o botão não funcionar, copie e cole este link no navegador:{' '}
-          <Link href={confirmationUrl} style={link}>{confirmationUrl}</Link>
-        </Text>
         <Text style={footer}>
-          Se você não solicitou essa alteração, proteja sua conta imediatamente.
+          Se você não solicitou esta alteração, proteja sua conta imediatamente.
         </Text>
         <Text style={brand}>© 2025 Picotinho — Gerencie suas compras de supermercado</Text>
       </Container>
@@ -76,6 +74,5 @@ const button = {
   textDecoration: 'none',
   display: 'inline-block' as const,
 }
-const footerText = { fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: '24px 0 0', wordBreak: 'break-all' as const }
 const footer = { fontSize: '13px', color: '#94a3b8', margin: '20px 0 0' }
 const brand = { fontSize: '12px', color: '#cbd5e1', margin: '30px 0 0', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }

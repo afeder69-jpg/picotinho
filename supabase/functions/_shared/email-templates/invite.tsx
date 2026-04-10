@@ -28,21 +28,23 @@ export const InviteEmail = ({
 }: InviteEmailProps) => (
   <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Você foi convidado para o Picotinho! 🛒</Preview>
+    <Preview>Você foi convidado para o Picotinho</Preview>
     <Body style={main}>
       <Container style={container}>
         <Img src="https://picotinho.com.br/logo-picotinho.png" width="120" height="40" alt="Picotinho" style={logo} />
         <Heading style={h1}>Você foi convidado! 🎉</Heading>
         <Text style={text}>
-          Alguém te convidou para usar o{' '}
-          <Link href={siteUrl} style={link}><strong>Picotinho</strong></Link>
+          Você foi convidado para participar do{' '}
+          <Link href={siteUrl} style={link}>
+            <strong>Picotinho</strong>
+          </Link>
           . Clique no botão abaixo para aceitar o convite e criar sua conta.
         </Text>
         <Button style={button} href={confirmationUrl}>
           Aceitar Convite
         </Button>
         <Text style={footer}>
-          Se você não esperava esse convite, pode ignorar este e-mail com segurança.
+          Se você não estava esperando este convite, pode ignorar este e-mail com segurança.
         </Text>
         <Text style={brand}>© 2025 Picotinho — Gerencie suas compras de supermercado</Text>
       </Container>
