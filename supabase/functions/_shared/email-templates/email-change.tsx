@@ -10,6 +10,7 @@ import {
   Heading,
   Html,
   Img,
+  Link,
   Preview,
   Text,
 } from 'npm:@react-email/components@0.0.22'
@@ -32,40 +33,26 @@ export const EmailChangeEmail = ({
     <Preview>Confirme a alteração do seu e-mail no Picotinho</Preview>
     <Body style={main}>
       <Container style={container}>
-        <div style={logoContainer}>
-          <Img
-            src="https://picotinho.com.br/logo-picotinho.png"
-            width="120"
-            height="120"
-            alt="Picotinho"
-            style={logo}
-          />
-        </div>
+        <Img src="https://picotinho.com.br/logo-picotinho.png" width="120" height="40" alt="Picotinho" style={logo} />
         <Heading style={h1}>Alteração de e-mail ✉️</Heading>
         <Text style={text}>
-          Você solicitou a troca do e-mail da sua conta no Picotinho.
+          Você solicitou a alteração do e-mail da sua conta no Picotinho de{' '}
+          <strong>{email}</strong> para <strong>{newEmail}</strong>.
         </Text>
-        <div style={infoBox}>
-          <Text style={infoLabel}>E-mail atual:</Text>
-          <Text style={infoValue}>{email}</Text>
-          <Text style={infoLabel}>Novo e-mail:</Text>
-          <Text style={infoValue}>{newEmail}</Text>
-        </div>
         <Text style={text}>
           Clique no botão abaixo para confirmar essa alteração:
         </Text>
-        <div style={buttonContainer}>
-          <Button style={button} href={confirmationUrl}>
-            Confirmar alteração
-          </Button>
-        </div>
-        <div style={divider} />
+        <Button style={button} href={confirmationUrl}>
+          Confirmar Alteração
+        </Button>
+        <Text style={footerText}>
+          Se o botão não funcionar, copie e cole este link no navegador:{' '}
+          <Link href={confirmationUrl} style={link}>{confirmationUrl}</Link>
+        </Text>
         <Text style={footer}>
-          Se você não solicitou essa alteração, proteja sua conta imediatamente alterando sua senha.
+          Se você não solicitou essa alteração, proteja sua conta imediatamente.
         </Text>
-        <Text style={footerBrand}>
-          © 2025 Picotinho — Suas compras organizadas com carinho 💚
-        </Text>
+        <Text style={brand}>© 2025 Picotinho — Gerencie suas compras de supermercado</Text>
       </Container>
     </Body>
   </Html>
@@ -73,17 +60,22 @@ export const EmailChangeEmail = ({
 
 export default EmailChangeEmail
 
-const main = { backgroundColor: '#f0fdf4', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }
-const container = { backgroundColor: '#ffffff', padding: '40px 30px', maxWidth: '560px', margin: '40px auto', borderRadius: '16px', border: '1px solid #dcfce7' }
-const logoContainer = { textAlign: 'center' as const, marginBottom: '24px' }
-const logo = { display: 'inline-block' as const, borderRadius: '16px' }
-const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#166534', margin: '0 0 16px', textAlign: 'center' as const }
-const text = { fontSize: '15px', color: '#374151', lineHeight: '1.6', margin: '0 0 16px' }
-const infoBox = { backgroundColor: '#f0fdf4', borderRadius: '12px', padding: '16px 20px', margin: '0 0 16px', border: '1px solid #dcfce7' }
-const infoLabel = { fontSize: '12px', color: '#6b7280', margin: '0', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
-const infoValue = { fontSize: '15px', color: '#166534', fontWeight: '600' as const, margin: '2px 0 12px' }
-const buttonContainer = { textAlign: 'center' as const, margin: '28px 0' }
-const button = { backgroundColor: '#16a34a', color: '#ffffff', fontSize: '16px', fontWeight: '600' as const, borderRadius: '12px', padding: '14px 32px', textDecoration: 'none', display: 'inline-block' as const }
-const divider = { borderTop: '1px solid #e5e7eb', margin: '24px 0' }
-const footer = { fontSize: '13px', color: '#9ca3af', margin: '0 0 8px', textAlign: 'center' as const }
-const footerBrand = { fontSize: '12px', color: '#bbf7d0', margin: '0', textAlign: 'center' as const, backgroundColor: '#166534', padding: '12px', borderRadius: '8px' }
+const main = { backgroundColor: '#ffffff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+const container = { padding: '30px 25px', maxWidth: '560px', margin: '0 auto' }
+const logo = { margin: '0 0 24px' }
+const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#16a34a', margin: '0 0 20px' }
+const text = { fontSize: '15px', color: '#1e293b', lineHeight: '1.6', margin: '0 0 24px' }
+const link = { color: '#16a34a', textDecoration: 'underline' }
+const button = {
+  backgroundColor: '#16a34a',
+  color: '#ffffff',
+  fontSize: '15px',
+  fontWeight: '600' as const,
+  borderRadius: '8px',
+  padding: '14px 28px',
+  textDecoration: 'none',
+  display: 'inline-block' as const,
+}
+const footerText = { fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: '24px 0 0', wordBreak: 'break-all' as const }
+const footer = { fontSize: '13px', color: '#94a3b8', margin: '20px 0 0' }
+const brand = { fontSize: '12px', color: '#cbd5e1', margin: '30px 0 0', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }

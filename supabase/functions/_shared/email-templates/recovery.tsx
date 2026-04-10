@@ -10,6 +10,7 @@ import {
   Heading,
   Html,
   Img,
+  Link,
   Preview,
   Text,
 } from 'npm:@react-email/components@0.0.22'
@@ -25,41 +26,25 @@ export const RecoveryEmail = ({
 }: RecoveryEmailProps) => (
   <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Redefina sua senha no Picotinho 🔒</Preview>
+    <Preview>Redefinir sua senha no Picotinho</Preview>
     <Body style={main}>
       <Container style={container}>
-        <div style={logoContainer}>
-          <Img
-            src="https://picotinho.com.br/logo-picotinho.png"
-            width="120"
-            height="120"
-            alt="Picotinho"
-            style={logo}
-          />
-        </div>
-        <Heading style={h1}>Redefinir senha 🔐</Heading>
+        <Img src="https://picotinho.com.br/logo-picotinho.png" width="120" height="40" alt="Picotinho" style={logo} />
+        <Heading style={h1}>Redefinir sua senha 🔑</Heading>
         <Text style={text}>
-          Recebemos uma solicitação para redefinir a senha da sua conta no Picotinho.
+          Recebemos uma solicitação para redefinir a senha da sua conta no Picotinho. Clique no botão abaixo para criar uma nova senha:
         </Text>
-        <Text style={text}>
-          Clique no botão abaixo para criar uma nova senha. O link é válido por tempo limitado.
+        <Button style={button} href={confirmationUrl}>
+          Redefinir Senha
+        </Button>
+        <Text style={footerText}>
+          Se o botão não funcionar, copie e cole este link no navegador:{' '}
+          <Link href={confirmationUrl} style={link}>{confirmationUrl}</Link>
         </Text>
-        <div style={buttonContainer}>
-          <Button style={button} href={confirmationUrl}>
-            Criar nova senha
-          </Button>
-        </div>
-        <Text style={smallText}>
-          Se o botão não funcionar, copie e cole este link no seu navegador:
-        </Text>
-        <Text style={linkText}>{confirmationUrl}</Text>
-        <div style={divider} />
         <Text style={footer}>
-          Se você não solicitou essa alteração, sua senha continua segura. Basta ignorar este e-mail.
+          Se você não solicitou a redefinição de senha, pode ignorar este e-mail. Sua senha não será alterada.
         </Text>
-        <Text style={footerBrand}>
-          © 2025 Picotinho — Suas compras organizadas com carinho 💚
-        </Text>
+        <Text style={brand}>© 2025 Picotinho — Gerencie suas compras de supermercado</Text>
       </Container>
     </Body>
   </Html>
@@ -67,16 +52,22 @@ export const RecoveryEmail = ({
 
 export default RecoveryEmail
 
-const main = { backgroundColor: '#f0fdf4', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }
-const container = { backgroundColor: '#ffffff', padding: '40px 30px', maxWidth: '560px', margin: '40px auto', borderRadius: '16px', border: '1px solid #dcfce7' }
-const logoContainer = { textAlign: 'center' as const, marginBottom: '24px' }
-const logo = { display: 'inline-block' as const, borderRadius: '16px' }
-const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#166534', margin: '0 0 16px', textAlign: 'center' as const }
-const text = { fontSize: '15px', color: '#374151', lineHeight: '1.6', margin: '0 0 16px' }
-const buttonContainer = { textAlign: 'center' as const, margin: '28px 0' }
-const button = { backgroundColor: '#16a34a', color: '#ffffff', fontSize: '16px', fontWeight: '600' as const, borderRadius: '12px', padding: '14px 32px', textDecoration: 'none', display: 'inline-block' as const }
-const smallText = { fontSize: '13px', color: '#6b7280', lineHeight: '1.5', margin: '0 0 4px' }
-const linkText = { fontSize: '12px', color: '#16a34a', wordBreak: 'break-all' as const, margin: '0 0 24px' }
-const divider = { borderTop: '1px solid #e5e7eb', margin: '24px 0' }
-const footer = { fontSize: '13px', color: '#9ca3af', margin: '0 0 8px', textAlign: 'center' as const }
-const footerBrand = { fontSize: '12px', color: '#bbf7d0', margin: '0', textAlign: 'center' as const, backgroundColor: '#166534', padding: '12px', borderRadius: '8px' }
+const main = { backgroundColor: '#ffffff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+const container = { padding: '30px 25px', maxWidth: '560px', margin: '0 auto' }
+const logo = { margin: '0 0 24px' }
+const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#16a34a', margin: '0 0 20px' }
+const text = { fontSize: '15px', color: '#1e293b', lineHeight: '1.6', margin: '0 0 24px' }
+const link = { color: '#16a34a', textDecoration: 'underline' }
+const button = {
+  backgroundColor: '#16a34a',
+  color: '#ffffff',
+  fontSize: '15px',
+  fontWeight: '600' as const,
+  borderRadius: '8px',
+  padding: '14px 28px',
+  textDecoration: 'none',
+  display: 'inline-block' as const,
+}
+const footerText = { fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: '24px 0 0', wordBreak: 'break-all' as const }
+const footer = { fontSize: '13px', color: '#94a3b8', margin: '20px 0 0' }
+const brand = { fontSize: '12px', color: '#cbd5e1', margin: '30px 0 0', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }

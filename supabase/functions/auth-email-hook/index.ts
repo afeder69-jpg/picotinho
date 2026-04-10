@@ -17,12 +17,12 @@ const corsHeaders = {
 }
 
 const EMAIL_SUBJECTS: Record<string, string> = {
-  signup: 'Confirme seu cadastro no Picotinho 🛒',
-  invite: 'Você foi convidado para o Picotinho! 🎉',
-  magiclink: 'Seu link de acesso ao Picotinho ✨',
-  recovery: 'Redefinir sua senha no Picotinho 🔐',
+  signup: 'Confirme seu cadastro no Picotinho',
+  invite: 'Você foi convidado para o Picotinho',
+  magiclink: 'Seu link de acesso ao Picotinho',
+  recovery: 'Redefinir sua senha no Picotinho',
   email_change: 'Confirme a alteração do seu e-mail',
-  reauthentication: 'Seu código de verificação do Picotinho 🔑',
+  reauthentication: 'Seu código de verificação',
 }
 
 // Template mapping
