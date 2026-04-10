@@ -70,10 +70,9 @@ const AuthPage = () => {
       (event, session) => {
         console.log('🔄 Auth state changed:', event);
         if (event === 'SIGNED_IN' && session?.user) {
-          // Não redirecionar se estamos em /reset-password com code/recovery ativo
+          // Não redirecionar se recovery está ativo (flag + pathname)
           const isRecoveryFlow = window.location.pathname === '/reset-password'
-            && (new URLSearchParams(window.location.search).has('code')
-                || window.location.hash.includes('type=recovery'));
+            || sessionStorage.getItem('picotinho_recovery_active') === 'true';
           if (isRecoveryFlow) {
             console.log('⏳ Recovery flow ativo, não redirecionar');
             return;
