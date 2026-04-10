@@ -1,79 +1,66 @@
 
+Objetivo: destravar a ativação real dos e-mails branded, porque o sintoma novo é decisivo: no seu projeto não aparece a área “Emails” no Cloud, só o cartão do Supabase. Isso indica que o problema provavelmente não é mais o template em si, e sim que a infraestrutura gerenciada de e-mail do projeto não está realmente habilitada/vinculada nesse ambiente.
 
-## Correcao: Multi-item Parsing, Busca Inteligente e Trava de Plausibilidade
+O que consegui confirmar agora no código:
+- O projeto local já tem um `auth-email-hook` preparado.
+- Ele está configurado para enfileirar e-mails com remetente `Picotinho <no-reply@alerta.picotinho.com.br>`.
+- O `supabase/config.toml` já referencia `auth-email-hook`.
+- O front já tem cooldown em cadastro e reset.
+- Ainda existe uma função legada `send-confirmation-email` com Resend no repositório, mas ela não parece ser o fluxo principal do auth.
+- Portanto, o fallback para `Supabase Auth <noreply@mail.app.supabase.io>` sugere que o ambiente publicado ainda não está usando a camada gerenciada de e-mail do projeto.
 
-### Arquivo alterado
+Diagnóstico mais provável
+- O projeto atual não está com o recurso de e-mail gerenciado visível/ativo no Cloud.
+- Sem essa ativação no ambiente do projeto, o Supabase continua usando o envio padrão dele.
+- Ou seja: hoje o hook pode existir no código, mas não necessariamente está reconciliado/assumido pela infraestrutura de produção.
 
-`supabase/functions/picotinho-assistant/index.ts` (unico)
+Plano de correção
+1. Verificar o estado real do domínio e da infraestrutura de e-mail do projeto
+- Confirmar se existe domínio de envio ativo para este projeto.
+- Confirmar se a infraestrutura gerenciada de e-mail está habilitada para este projeto/workspace.
+- Confirmar se o projeto está com o recurso de e-mail disponível no Cloud e não apenas Supabase conectado.
 
----
+2. Identificar o bloqueio exato
+Possibilidades que vou checar:
+- domínio existe mas não está vinculado a este projeto
+- infraestrutura de e-mail não foi ativada neste ambiente
+- hook não foi reconciliado em produção
+- deploy foi para código, mas não para o pipeline gerenciado de auth e-mail
+- existe algum estado “blocked / function_not_found / waiting_dns / disabled”
 
-### Parte 1: Reforco no System Prompt — Segmentacao de Multi-itens
+3. Corrigir a ativação
+Dependendo do estado encontrado, o ajuste será um destes:
+- reativar o e-mail gerenciado no projeto
+- reconciliar o domínio já configurado com o projeto atual
+- reescrever/reaplicar o scaffold oficial dos templates sobre o setup existente
+- redeployar o `auth-email-hook`
+- reabilitar a integração de e-mails do projeto se ela estiver desligada
 
-Adicionar regras 57-58 apos as existentes:
+4. Revisar o ambiente publicado
+- Garantir que a ativação esteja no ambiente certo, não só no preview/dev.
+- Confirmar que o projeto publicado passe a usar o hook de auth e não o fallback padrão do Supabase.
 
-- **Regra 57**: Segmentacao obrigatoria de multiplos itens em mensagem unica. Cada item isolado com nome, quantidade e unidade independentes. Exemplo explicito no prompt mostrando que "500 gramas" = 0.5 KG, nunca 500 KG.
-- **Regra 58**: Validacao pre-envio de unidade/quantidade. Nunca enviar novo_saldo >= 100 KG para item domestico sem perguntar. Regra de plausibilidade explicita.
+5. Limpeza de legado e redução de confusão
+- Revisar se a função antiga `send-confirmation-email` deve ser removida ou isolada para evitar confusão futura.
+- Revisar se há outros pontos de reenvio além do Auth principal que ainda precisam de cooldown.
+- Se existir UI de “reenviar confirmação / código / magic link”, aplicar o mesmo padrão de cooldown nesses pontos.
 
-~20 linhas adicionadas ao system prompt.
+6. Validação final após ativação
+Depois da correção, vou validar:
+- serviço efetivamente responsável pelo envio
+- remetente final ativo
+- se o hook está executando em produção
+- se o fallback para Supabase foi eliminado
+- quais fluxos de auth já estão conectados aos templates branded
 
----
+Risco e expectativa
+- O risco para o site em produção continua baixo, porque isso atua na camada de e-mail/auth e não exige mexer nos registros A do site.
+- Se o painel “Emails” realmente não estiver habilitado para este projeto/workspace, a correção pode depender de uma reativação da infraestrutura do projeto antes de qualquer teste final.
+- A ausência do menu “Emails” é hoje o principal indicador de onde está o problema.
 
-### Parte 2: Busca Inteligente por Nucleo do Produto (server-side)
-
-No case `ajustar_saldo_estoque`, apos `ilike` retornar 0 resultados, fallback por palavras-chave:
-
-1. Extrair palavras do produto_nome (minimo 2 caracteres)
-2. Buscar todos os itens do estoque do usuario
-3. Filtrar itens cujo nome normalizado contem TODAS as palavras-chave
-4. 1 grupo consolidado → match unico (mesmas regras de seguranca)
-5. Multiplos grupos → ambiguo
-6. 0 → nao encontrado
-
-Resolve: "banana prata", "suco de caju", "isotônico", "xarope de guaramcamp".
-
-~30 linhas.
-
----
-
-### Parte 3: Trava de Plausibilidade (server-side)
-
-Validacao ANTES de executar update:
-
-- KG: novo_saldo > 50 → **bloquear**, retornar como `pendente`
-- L: novo_saldo > 50 → **bloquear**
-- UN: novo_saldo > 200 → **bloquear**
-- G: novo_saldo > 50000 → **bloquear**
-- ML: novo_saldo > 50000 → **bloquear**
-
-Motivo retornado: "Quantidade X unidade parece muito alta para uso domestico. Confirme o valor correto."
-
-~15 linhas.
-
----
-
-### Parte 4: Deteccao de Unidade Possivelmente Errada (server-side) — SEM CORRECAO AUTOMATICA
-
-Quando o valor recebido apresentar indicio de unidade errada (ex: `novo_saldo: 500, unidade: "KG"`):
-
-- **Bloquear a gravacao** — item vai para `itens_pendentes`
-- **Retornar sugestao** no motivo, ex: "O valor 500 KG parece incompativel. Talvez o usuario quisesse dizer 500 g = 0,5 kg. Confirme o valor correto."
-- **Nunca converter e gravar automaticamente**
-
-Diferenca da versao anterior: antes havia auto-correcao silenciosa. Agora o comportamento e identico ao da trava de plausibilidade — bloqueia e pergunta.
-
-~10 linhas.
-
----
-
-### Resumo
-
-| Parte | O que faz | Linhas |
-|-------|-----------|--------|
-| 1 | Regras 57-58 no system prompt | ~20 |
-| 2 | Fallback busca por palavras-chave | ~30 |
-| 3 | Trava de plausibilidade | ~15 |
-| 4 | Deteccao unidade errada → bloquear + sugerir | ~10 |
-
-Total: ~75 linhas novas. Zero removidas. Zero impacto em fluxos existentes.
-
+Entregável após aprovação
+- diagnóstico exato do bloqueio
+- correção aplicada no ambiente certo
+- confirmação do remetente ativo
+- confirmação se o hook está rodando em produção
+- explicação objetiva do que impedia a ativação antes
