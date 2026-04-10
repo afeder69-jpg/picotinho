@@ -17,12 +17,12 @@ const corsHeaders = {
 }
 
 const EMAIL_SUBJECTS: Record<string, string> = {
-  signup: 'Confirm your email',
-  invite: "You've been invited",
-  magiclink: 'Your login link',
-  recovery: 'Reset your password',
-  email_change: 'Confirm your new email',
-  reauthentication: 'Your verification code',
+  signup: 'Confirme seu cadastro no Picotinho',
+  invite: 'Você foi convidado para o Picotinho',
+  magiclink: 'Seu link de acesso ao Picotinho',
+  recovery: 'Redefinir sua senha no Picotinho',
+  email_change: 'Confirme a alteração do seu e-mail',
+  reauthentication: 'Seu código de verificação',
 }
 
 // Template mapping
@@ -256,7 +256,7 @@ async function handleWebhook(req: Request): Promise<Response> {
       run_id,
       message_id: messageId,
       to: payload.data.email,
-      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      from: `Picotinho <no-reply@${SENDER_DOMAIN}>`,
       sender_domain: SENDER_DOMAIN,
       subject: EMAIL_SUBJECTS[emailType] || 'Notification',
       html,
