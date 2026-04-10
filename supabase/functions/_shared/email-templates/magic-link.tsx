@@ -9,8 +9,6 @@ import {
   Head,
   Heading,
   Html,
-  Img,
-  Link,
   Preview,
   Text,
 } from 'npm:@react-email/components@0.0.22'
@@ -24,27 +22,22 @@ export const MagicLinkEmail = ({
   siteName,
   confirmationUrl,
 }: MagicLinkEmailProps) => (
-  <Html lang="pt-BR" dir="ltr">
+  <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Seu link de acesso ao Picotinho</Preview>
+    <Preview>Your login link for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Img src="https://picotinho.com.br/logo-picotinho.png" width="120" height="40" alt="Picotinho" style={logo} />
-        <Heading style={h1}>Seu link de acesso ✨</Heading>
+        <Heading style={h1}>Your login link</Heading>
         <Text style={text}>
-          Clique no botão abaixo para acessar o Picotinho. Este link expira em breve.
+          Click the button below to log in to {siteName}. This link will expire
+          shortly.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Acessar o Picotinho
+          Log In
         </Button>
-        <Text style={footerText}>
-          Se o botão não funcionar, copie e cole este link no navegador:{' '}
-          <Link href={confirmationUrl} style={link}>{confirmationUrl}</Link>
-        </Text>
         <Text style={footer}>
-          Se você não solicitou este link, pode ignorar este e-mail com segurança.
+          If you didn't request this link, you can safely ignore this email.
         </Text>
-        <Text style={brand}>© 2025 Picotinho — Gerencie suas compras de supermercado</Text>
       </Container>
     </Body>
   </Html>
@@ -52,22 +45,26 @@ export const MagicLinkEmail = ({
 
 export default MagicLinkEmail
 
-const main = { backgroundColor: '#ffffff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
-const container = { padding: '30px 25px', maxWidth: '560px', margin: '0 auto' }
-const logo = { margin: '0 0 24px' }
-const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#16a34a', margin: '0 0 20px' }
-const text = { fontSize: '15px', color: '#1e293b', lineHeight: '1.6', margin: '0 0 24px' }
-const link = { color: '#16a34a', textDecoration: 'underline' }
-const button = {
-  backgroundColor: '#16a34a',
-  color: '#ffffff',
-  fontSize: '15px',
-  fontWeight: '600' as const,
-  borderRadius: '8px',
-  padding: '14px 28px',
-  textDecoration: 'none',
-  display: 'inline-block' as const,
+const main = { backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }
+const container = { padding: '20px 25px' }
+const h1 = {
+  fontSize: '22px',
+  fontWeight: 'bold' as const,
+  color: '#000000',
+  margin: '0 0 20px',
 }
-const footerText = { fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: '24px 0 0', wordBreak: 'break-all' as const }
-const footer = { fontSize: '13px', color: '#94a3b8', margin: '20px 0 0' }
-const brand = { fontSize: '12px', color: '#cbd5e1', margin: '30px 0 0', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }
+const text = {
+  fontSize: '14px',
+  color: '#55575d',
+  lineHeight: '1.5',
+  margin: '0 0 25px',
+}
+const button = {
+  backgroundColor: '#000000',
+  color: '#ffffff',
+  fontSize: '14px',
+  borderRadius: '8px',
+  padding: '12px 20px',
+  textDecoration: 'none',
+}
+const footer = { fontSize: '12px', color: '#999999', margin: '30px 0 0' }
