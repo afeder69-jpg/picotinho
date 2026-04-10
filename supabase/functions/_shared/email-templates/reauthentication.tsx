@@ -8,6 +8,7 @@ import {
   Head,
   Heading,
   Html,
+  Img,
   Preview,
   Text,
 } from 'npm:@react-email/components@0.0.22'
@@ -17,17 +18,36 @@ interface ReauthenticationEmailProps {
 }
 
 export const ReauthenticationEmail = ({ token }: ReauthenticationEmailProps) => (
-  <Html lang="en" dir="ltr">
+  <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Your verification code</Preview>
+    <Preview>Seu código de verificação do Picotinho: {token}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Confirm reauthentication</Heading>
-        <Text style={text}>Use the code below to confirm your identity:</Text>
-        <Text style={codeStyle}>{token}</Text>
+        <div style={logoContainer}>
+          <Img
+            src="https://picotinho.com.br/logo-picotinho.png"
+            width="120"
+            height="120"
+            alt="Picotinho"
+            style={logo}
+          />
+        </div>
+        <Heading style={h1}>Código de verificação 🔑</Heading>
+        <Text style={text}>
+          Use o código abaixo para confirmar sua identidade no Picotinho:
+        </Text>
+        <div style={codeContainer}>
+          <Text style={codeStyle}>{token}</Text>
+        </div>
+        <Text style={text}>
+          Este código expira em poucos minutos. Não compartilhe com ninguém.
+        </Text>
+        <div style={divider} />
         <Text style={footer}>
-          This code will expire shortly. If you didn't request this, you can
-          safely ignore this email.
+          Se você não solicitou esse código, pode ignorar este e-mail com segurança.
+        </Text>
+        <Text style={footerBrand}>
+          © 2025 Picotinho — Suas compras organizadas com carinho 💚
         </Text>
       </Container>
     </Body>
@@ -36,25 +56,14 @@ export const ReauthenticationEmail = ({ token }: ReauthenticationEmailProps) => 
 
 export default ReauthenticationEmail
 
-const main = { backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }
-const container = { padding: '20px 25px' }
-const h1 = {
-  fontSize: '22px',
-  fontWeight: 'bold' as const,
-  color: '#000000',
-  margin: '0 0 20px',
-}
-const text = {
-  fontSize: '14px',
-  color: '#55575d',
-  lineHeight: '1.5',
-  margin: '0 0 25px',
-}
-const codeStyle = {
-  fontFamily: 'Courier, monospace',
-  fontSize: '22px',
-  fontWeight: 'bold' as const,
-  color: '#000000',
-  margin: '0 0 30px',
-}
-const footer = { fontSize: '12px', color: '#999999', margin: '30px 0 0' }
+const main = { backgroundColor: '#f0fdf4', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }
+const container = { backgroundColor: '#ffffff', padding: '40px 30px', maxWidth: '560px', margin: '40px auto', borderRadius: '16px', border: '1px solid #dcfce7' }
+const logoContainer = { textAlign: 'center' as const, marginBottom: '24px' }
+const logo = { display: 'inline-block' as const, borderRadius: '16px' }
+const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#166534', margin: '0 0 16px', textAlign: 'center' as const }
+const text = { fontSize: '15px', color: '#374151', lineHeight: '1.6', margin: '0 0 16px', textAlign: 'center' as const }
+const codeContainer = { textAlign: 'center' as const, margin: '24px 0', backgroundColor: '#f0fdf4', borderRadius: '12px', padding: '20px', border: '2px dashed #86efac' }
+const codeStyle = { fontFamily: '"SF Mono", "Fira Code", "Courier New", monospace', fontSize: '32px', fontWeight: 'bold' as const, color: '#166534', letterSpacing: '8px', margin: '0' }
+const divider = { borderTop: '1px solid #e5e7eb', margin: '24px 0' }
+const footer = { fontSize: '13px', color: '#9ca3af', margin: '0 0 8px', textAlign: 'center' as const }
+const footerBrand = { fontSize: '12px', color: '#bbf7d0', margin: '0', textAlign: 'center' as const, backgroundColor: '#166534', padding: '12px', borderRadius: '8px' }
