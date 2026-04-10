@@ -1,109 +1,75 @@
-project_id = "mjsbwrtegorjxcepvrik" # validação setor implementada
+project_id = "mjsbwrtegorjxcepvrik"
 
-# Normalização por CNPJ implementada - 2025-11-03
-
-[functions.process-nfe-serpro]
-verify_jwt = false
-
-[functions.process-structured-receipt]
-verify_jwt = false
-
-[functions.process-nfce-infosimples]
-verify_jwt = false
-
-[functions.process-nfe-infosimples]
-verify_jwt = false
-
-[functions.enviar-lista-whatsapp]
-verify_jwt = true
-
-[functions.enviar-pdf-whatsapp]
-verify_jwt = true
-
-[functions.buscar-imagens-produtos]
-verify_jwt = false
-
-[functions.process-url-nota]
-verify_jwt = false
-
-[functions.consolidar-masters-duplicados]
-verify_jwt = false
-
-
-[functions.validate-receipt]
-verify_jwt = false
-
-[functions.process-receipt]
-verify_jwt = false
-
-[functions.process-receipt-ai]
-verify_jwt = false
-
-[functions.process-receipt-full]
-verify_jwt = false
-
-[functions.capture-receipt-external]
-verify_jwt = false
-
-[functions.process-receipt-pdf]
-verify_jwt = false
-
-[functions.whatsapp-webhook]
-verify_jwt = false
-
-[functions.fix-whatsapp-command]
-verify_jwt = false
-
-[functions.auto-fix-stuck-notes]
-verify_jwt = false
-
-[functions.backfill-preco-atual]
-verify_jwt = false
-
-[functions.process-danfe-pdf-disabled]
-verify_jwt = false
-
-[functions.processar-normalizacao-global]
-verify_jwt = false
-
-[functions.aplicar-normalizacao-retroativa]
-verify_jwt = false
-
-[functions.analisar-impacto-normalizacao]
-verify_jwt = false
-
-[functions.reconciliar-estoque-master]
-verify_jwt = false
-
-[functions.detectar-duplicatas-master]
-verify_jwt = false
-
-[functions.consolidar-masters-manual]
-verify_jwt = false
-
-[functions.normalizar-estabelecimentos-existentes]
-verify_jwt = false
-
-[functions.limpar-duplicatas-estabelecimentos]
-verify_jwt = false
-
-[functions.process-html-capturado]
-verify_jwt = false
-
-[functions.transcribe-audio]
-verify_jwt = false
-
-[functions.interpret-command]
-verify_jwt = false
-
-[functions.process-whatsapp-command]
-verify_jwt = false
-
-[functions.contar-duplicatas-master]
-verify_jwt = false
-
-[functions.diagnosticar-masters-duplicados]
-verify_jwt = false
-
-[functions.picotinho-assistant]
-verify_jwt = false
+[functions]
+  [functions.analisar-impacto-normalizacao]
+    verify_jwt = false
+  [functions.aplicar-normalizacao-retroativa]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.auto-fix-stuck-notes]
+    verify_jwt = false
+  [functions.backfill-preco-atual]
+    verify_jwt = false
+  [functions.buscar-imagens-produtos]
+    verify_jwt = false
+  [functions.capture-receipt-external]
+    verify_jwt = false
+  [functions.consolidar-masters-duplicados]
+    verify_jwt = false
+  [functions.consolidar-masters-manual]
+    verify_jwt = false
+  [functions.contar-duplicatas-master]
+    verify_jwt = false
+  [functions.detectar-duplicatas-master]
+    verify_jwt = false
+  [functions.diagnosticar-masters-duplicados]
+    verify_jwt = false
+  [functions.enviar-lista-whatsapp]
+    verify_jwt = true
+  [functions.enviar-pdf-whatsapp]
+    verify_jwt = true
+  [functions.fix-whatsapp-command]
+    verify_jwt = false
+  [functions.interpret-command]
+    verify_jwt = false
+  [functions.limpar-duplicatas-estabelecimentos]
+    verify_jwt = false
+  [functions.normalizar-estabelecimentos-existentes]
+    verify_jwt = false
+  [functions.picotinho-assistant]
+    verify_jwt = false
+  [functions.process-danfe-pdf-disabled]
+    verify_jwt = false
+  [functions.process-html-capturado]
+    verify_jwt = false
+  [functions.process-nfce-infosimples]
+    verify_jwt = false
+  [functions.process-nfe-infosimples]
+    verify_jwt = false
+  [functions.process-nfe-serpro]
+    verify_jwt = false
+  [functions.process-receipt]
+    verify_jwt = false
+  [functions.process-receipt-ai]
+    verify_jwt = false
+  [functions.process-receipt-full]
+    verify_jwt = false
+  [functions.process-receipt-pdf]
+    verify_jwt = false
+  [functions.process-structured-receipt]
+    verify_jwt = false
+  [functions.process-url-nota]
+    verify_jwt = false
+  [functions.process-whatsapp-command]
+    verify_jwt = false
+  [functions.processar-normalizacao-global]
+    verify_jwt = false
+  [functions.reconciliar-estoque-master]
+    verify_jwt = false
+  [functions.transcribe-audio]
+    verify_jwt = false
+  [functions.validate-receipt]
+    verify_jwt = false
+  [functions.whatsapp-webhook]
+    verify_jwt = false
