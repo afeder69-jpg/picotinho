@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
+
+const RECOVERY_TIMEOUT_MS = 15000; // 15s máximo de espera pela sessão
 
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
@@ -19,56 +21,76 @@ const ResetPassword = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    const processRecovery = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      const hash = window.location.hash;
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
-      // Fallback: hash flow (não-PKCE)
-      if (hash.includes('type=recovery')) {
-        setIsRecovery(true);
-        setIsProcessing(false);
-        return;
-      }
+    const params = new URLSearchParams(window.location.search);
+    const hasCode = params.has('code');
+    const hasHashRecovery = window.location.hash.includes('type=recovery');
+    const hasRecoveryMarker = hasCode || hasHashRecovery;
 
-      // PKCE flow
-      if (code) {
-        try {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error('Erro ao trocar code por sessão:', error.message);
-            setErrorMessage('Este link de redefinição expirou ou já foi utilizado. Solicite um novo link na tela de login.');
-          } else if (data.session) {
-            setIsRecovery(true);
-            // Limpar code da URL para evitar reprocessamento em refresh
-            window.history.replaceState({}, '', window.location.pathname);
-          } else {
-            setErrorMessage('Não foi possível validar o link. Solicite um novo link na tela de login.');
-          }
-        } catch (e) {
-          console.error('Erro inesperado no recovery:', e);
-          setErrorMessage('Este link de redefinição expirou ou já foi utilizado. Solicite um novo link na tela de login.');
-        }
-        setIsProcessing(false);
-        return;
-      }
+    console.log('[ResetPassword] Init — hasCode:', hasCode, 'hasHashRecovery:', hasHashRecovery);
 
-      // Sem code nem hash → link inválido
+    if (!hasRecoveryMarker) {
+      console.log('[ResetPassword] Nenhum marcador de recovery encontrado');
       setErrorMessage('Este link de redefinição expirou ou já foi utilizado. Solicite um novo link na tela de login.');
+      setIsProcessing(false);
+      return;
+    }
+
+    // Marca na sessionStorage que estamos em recovery (para o guard do Auth.tsx)
+    sessionStorage.setItem('picotinho_recovery_active', 'true');
+
+    let resolved = false;
+
+    const resolve = (success: boolean, error?: string) => {
+      if (resolved) return;
+      resolved = true;
+      if (success) {
+        console.log('[ResetPassword] ✅ Recovery validado, liberando formulário');
+        setIsRecovery(true);
+      } else {
+        console.log('[ResetPassword] ❌ Recovery falhou:', error);
+        setErrorMessage(error || 'Este link de redefinição expirou ou já foi utilizado. Solicite um novo link na tela de login.');
+        sessionStorage.removeItem('picotinho_recovery_active');
+      }
       setIsProcessing(false);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setIsRecovery(true);
-        setIsProcessing(false);
+    // Timeout de segurança
+    const timeout = setTimeout(() => {
+      console.log('[ResetPassword] ⏰ Timeout aguardando sessão de recovery');
+      resolve(false, 'Tempo esgotado ao processar o link. Solicite um novo link na tela de login.');
+    }, RECOVERY_TIMEOUT_MS);
+
+    // Tentar sessão já existente (detectSessionInUrl pode já ter processado)
+    const checkExistingSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('[ResetPassword] getSession:', session ? 'sessão encontrada' : 'sem sessão');
+      if (session && !resolved) {
+        clearTimeout(timeout);
+        resolve(true);
+      }
+    };
+
+    // Listener para capturar o evento quando detectSessionInUrl processar o code
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[ResetPassword] onAuthStateChange:', event, session ? 'com sessão' : 'sem sessão');
+      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
+        clearTimeout(timeout);
+        resolve(true);
       }
     });
 
-    processRecovery();
-    return () => subscription.unsubscribe();
+    checkExistingSession();
+
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleResetPassword = async () => {
@@ -101,6 +123,7 @@ const ResetPassword = () => {
           variant: "destructive",
         });
       } else {
+        sessionStorage.removeItem('picotinho_recovery_active');
         toast({
           title: "Senha redefinida com sucesso! ✅",
           description: "Você já pode fazer login com sua nova senha.",
