@@ -11,6 +11,37 @@ import { Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 
 const RECOVERY_TIMEOUT_MS = 15000; // 15s máximo de espera pela sessão
 
+const mapAuthError = (message: string): { title: string; description: string; variant: string } => {
+  const lower = message.toLowerCase();
+
+  if (lower.includes('new password should be different')) {
+    return {
+      title: 'Senha igual à anterior',
+      description: 'A nova senha precisa ser diferente da anterior. Tente outra senha.',
+      variant: 'default',
+    };
+  }
+  if (lower.includes('password') && lower.includes('least')) {
+    return {
+      title: 'Senha muito curta',
+      description: 'A senha precisa ter pelo menos 6 caracteres.',
+      variant: 'default',
+    };
+  }
+  if (lower.includes('session') || lower.includes('not authenticated')) {
+    return {
+      title: 'Sessão expirada',
+      description: 'Sua sessão expirou. Solicite um novo link de redefinição na tela de login.',
+      variant: 'destructive',
+    };
+  }
+  return {
+    title: 'Não foi possível alterar a senha',
+    description: 'Ocorreu um erro inesperado. Tente novamente ou solicite um novo link.',
+    variant: 'destructive',
+  };
+};
+
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -117,10 +148,11 @@ const ResetPassword = () => {
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
+        const friendlyMessage = mapAuthError(error.message);
         toast({
-          title: "Erro ao redefinir senha",
-          description: error.message,
-          variant: "destructive",
+          title: friendlyMessage.title,
+          description: friendlyMessage.description,
+          variant: friendlyMessage.variant as any,
         });
       } else {
         sessionStorage.removeItem('picotinho_recovery_active');
