@@ -7,7 +7,7 @@ import PicotinhoLogo from '@/components/PicotinhoLogo';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
@@ -15,22 +15,59 @@ const ResetPassword = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
+    const processRecovery = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const hash = window.location.hash;
+
+      // Fallback: hash flow (não-PKCE)
+      if (hash.includes('type=recovery')) {
+        setIsRecovery(true);
+        setIsProcessing(false);
+        return;
+      }
+
+      // PKCE flow
+      if (code) {
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error('Erro ao trocar code por sessão:', error.message);
+            setErrorMessage('Este link de redefinição expirou ou já foi utilizado. Solicite um novo link na tela de login.');
+          } else if (data.session) {
+            setIsRecovery(true);
+            // Limpar code da URL para evitar reprocessamento em refresh
+            window.history.replaceState({}, '', window.location.pathname);
+          } else {
+            setErrorMessage('Não foi possível validar o link. Solicite um novo link na tela de login.');
+          }
+        } catch (e) {
+          console.error('Erro inesperado no recovery:', e);
+          setErrorMessage('Este link de redefinição expirou ou já foi utilizado. Solicite um novo link na tela de login.');
+        }
+        setIsProcessing(false);
+        return;
+      }
+
+      // Sem code nem hash → link inválido
+      setErrorMessage('Este link de redefinição expirou ou já foi utilizado. Solicite um novo link na tela de login.');
+      setIsProcessing(false);
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsRecovery(true);
+        setIsProcessing(false);
       }
     });
 
-    // Check hash for recovery token
-    const hash = window.location.hash;
-    if (hash.includes('type=recovery')) {
-      setIsRecovery(true);
-    }
-
+    processRecovery();
     return () => subscription.unsubscribe();
   }, []);
 
@@ -81,6 +118,27 @@ const ResetPassword = () => {
     }
   };
 
+  // Loading enquanto processa o token
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <PicotinhoLogo size="lg" />
+            </div>
+            <CardTitle>Processando...</CardTitle>
+            <CardDescription>Validando seu link de redefinição de senha</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Erro: link inválido/expirado
   if (!isRecovery) {
     return (
       <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
@@ -89,9 +147,9 @@ const ResetPassword = () => {
             <div className="flex justify-center mb-4">
               <PicotinhoLogo size="lg" />
             </div>
-            <CardTitle>Link inválido</CardTitle>
+            <CardTitle>Link expirado</CardTitle>
             <CardDescription>
-              Este link de redefinição de senha é inválido ou expirou. Solicite um novo link na tela de login.
+              {errorMessage || 'Este link de redefinição de senha é inválido ou expirou. Solicite um novo link na tela de login.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

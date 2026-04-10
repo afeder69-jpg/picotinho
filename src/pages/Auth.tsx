@@ -70,6 +70,14 @@ const AuthPage = () => {
       (event, session) => {
         console.log('🔄 Auth state changed:', event);
         if (event === 'SIGNED_IN' && session?.user) {
+          // Não redirecionar se estamos em /reset-password com code/recovery ativo
+          const isRecoveryFlow = window.location.pathname === '/reset-password'
+            && (new URLSearchParams(window.location.search).has('code')
+                || window.location.hash.includes('type=recovery'));
+          if (isRecoveryFlow) {
+            console.log('⏳ Recovery flow ativo, não redirecionar');
+            return;
+          }
           console.log('✅ Login detectado! Redirecionando para home...');
           navigate('/');
         }
@@ -149,6 +157,16 @@ const AuthPage = () => {
       }
 
       if (data.user) {
+        // Supabase retorna user com identities vazio quando e-mail já existe
+        if (!data.user.identities || data.user.identities.length === 0) {
+          toast({
+            title: "E-mail já cadastrado",
+            description: "Este e-mail já está cadastrado. Caso não lembre sua senha, utilize 'Esqueci minha senha'.",
+            variant: "default",
+          });
+          return;
+        }
+
         signupCooldown.startCooldown();
         toast({
           title: "Cadastro realizado com sucesso! ✅",
