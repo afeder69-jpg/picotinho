@@ -9,7 +9,7 @@ import {
   Head,
   Heading,
   Html,
-  Img,
+  Link,
   Preview,
   Text,
 } from 'npm:@react-email/components@0.0.22'
@@ -27,43 +27,31 @@ export const SignupEmail = ({
   recipient,
   confirmationUrl,
 }: SignupEmailProps) => (
-  <Html lang="pt-BR" dir="ltr">
+  <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Bem-vindo ao Picotinho! Confirme seu e-mail para começar 🛒</Preview>
+    <Preview>Confirm your email for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <div style={logoContainer}>
-          <Img
-            src="https://picotinho.com.br/logo-picotinho.png"
-            width="120"
-            height="120"
-            alt="Picotinho"
-            style={logo}
-          />
-        </div>
-        <Heading style={h1}>Bem-vindo ao Picotinho! 🎉</Heading>
+        <Heading style={h1}>Confirm your email</Heading>
         <Text style={text}>
-          Que bom ter você por aqui! Estamos quase lá.
+          Thanks for signing up for{' '}
+          <Link href={siteUrl} style={link}>
+            <strong>{siteName}</strong>
+          </Link>
+          !
         </Text>
         <Text style={text}>
-          Para ativar sua conta e começar a organizar suas compras de supermercado,
-          confirme seu e-mail clicando no botão abaixo:
+          Please confirm your email address (
+          <Link href={`mailto:${recipient}`} style={link}>
+            {recipient}
+          </Link>
+          ) by clicking the button below:
         </Text>
-        <div style={buttonContainer}>
-          <Button style={button} href={confirmationUrl}>
-            Confirmar meu e-mail
-          </Button>
-        </div>
-        <Text style={smallText}>
-          Se o botão não funcionar, copie e cole este link no seu navegador:
-        </Text>
-        <Text style={linkText}>{confirmationUrl}</Text>
-        <div style={divider} />
+        <Button style={button} href={confirmationUrl}>
+          Verify Email
+        </Button>
         <Text style={footer}>
-          Se você não criou uma conta no Picotinho, pode ignorar este e-mail com segurança.
-        </Text>
-        <Text style={footerBrand}>
-          © 2025 Picotinho — Suas compras organizadas com carinho 💚
+          If you didn't create an account, you can safely ignore this email.
         </Text>
       </Container>
     </Body>
@@ -72,16 +60,27 @@ export const SignupEmail = ({
 
 export default SignupEmail
 
-const main = { backgroundColor: '#f0fdf4', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }
-const container = { backgroundColor: '#ffffff', padding: '40px 30px', maxWidth: '560px', margin: '40px auto', borderRadius: '16px', border: '1px solid #dcfce7' }
-const logoContainer = { textAlign: 'center' as const, marginBottom: '24px' }
-const logo = { display: 'inline-block' as const, borderRadius: '16px' }
-const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#166534', margin: '0 0 16px', textAlign: 'center' as const }
-const text = { fontSize: '15px', color: '#374151', lineHeight: '1.6', margin: '0 0 16px' }
-const buttonContainer = { textAlign: 'center' as const, margin: '28px 0' }
-const button = { backgroundColor: '#16a34a', color: '#ffffff', fontSize: '16px', fontWeight: '600' as const, borderRadius: '12px', padding: '14px 32px', textDecoration: 'none', display: 'inline-block' as const }
-const smallText = { fontSize: '13px', color: '#6b7280', lineHeight: '1.5', margin: '0 0 4px' }
-const linkText = { fontSize: '12px', color: '#16a34a', wordBreak: 'break-all' as const, margin: '0 0 24px' }
-const divider = { borderTop: '1px solid #e5e7eb', margin: '24px 0' }
-const footer = { fontSize: '13px', color: '#9ca3af', margin: '0 0 8px', textAlign: 'center' as const }
-const footerBrand = { fontSize: '12px', color: '#bbf7d0', margin: '0', textAlign: 'center' as const, backgroundColor: '#166534', padding: '12px', borderRadius: '8px' }
+const main = { backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }
+const container = { padding: '20px 25px' }
+const h1 = {
+  fontSize: '22px',
+  fontWeight: 'bold' as const,
+  color: '#000000',
+  margin: '0 0 20px',
+}
+const text = {
+  fontSize: '14px',
+  color: '#55575d',
+  lineHeight: '1.5',
+  margin: '0 0 25px',
+}
+const link = { color: 'inherit', textDecoration: 'underline' }
+const button = {
+  backgroundColor: '#000000',
+  color: '#ffffff',
+  fontSize: '14px',
+  borderRadius: '8px',
+  padding: '12px 20px',
+  textDecoration: 'none',
+}
+const footer = { fontSize: '12px', color: '#999999', margin: '30px 0 0' }
