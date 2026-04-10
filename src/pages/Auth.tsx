@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,35 @@ import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/inappbrowser';
 
+const COOLDOWN_SECONDS = 60;
+
+const useCooldown = () => {
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCooldown = useCallback(() => {
+    setSecondsLeft(COOLDOWN_SECONDS);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  return { secondsLeft, isOnCooldown: secondsLeft > 0, startCooldown };
+};
+
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -25,9 +54,11 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const isNative = Capacitor.isNativePlatform();
 
+  const resetCooldown = useCooldown();
+  const signupCooldown = useCooldown();
+
   // Auto-redirect após login com Google
   useEffect(() => {
-    // Verificar se já está logado ao carregar a página
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         console.log('✅ Usuário já logado, redirecionando...');
@@ -35,11 +66,9 @@ const AuthPage = () => {
       }
     });
 
-    // Monitorar mudanças no estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('🔄 Auth state changed:', event);
-        
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('✅ Login detectado! Redirecionando para home...');
           navigate('/');
@@ -56,17 +85,12 @@ const AuthPage = () => {
   };
 
   const validateTelefone = (telefone: string) => {
-    // Remove todos os caracteres não numéricos
     const cleanPhone = telefone.replace(/\D/g, '');
-    // Verifica se tem 10 ou 11 dígitos (celular brasileiro)
     return cleanPhone.length >= 10 && cleanPhone.length <= 11;
   };
 
   const formatTelefone = (value: string) => {
-    // Remove caracteres não numéricos
     const cleanValue = value.replace(/\D/g, '');
-    
-    // Aplica máscara (11) 99999-9999
     if (cleanValue.length <= 11) {
       return cleanValue
         .replace(/^(\d{2})(\d)/g, '($1) $2')
@@ -82,93 +106,60 @@ const AuthPage = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-
   const handleSignUp = async () => {
+    if (signupCooldown.isOnCooldown) return;
+
     if (!validateEmail(formData.email)) {
-      toast({
-        title: "Erro de validação",
-        description: "Por favor, insira um e-mail válido",
-        variant: "destructive",
-      });
+      toast({ title: "Erro de validação", description: "Por favor, insira um e-mail válido", variant: "destructive" });
       return;
     }
 
     if (!validateTelefone(formData.telefone)) {
-      toast({
-        title: "Erro de validação",
-        description: "Por favor, insira um telefone válido (10 ou 11 dígitos)",
-        variant: "destructive",
-      });
+      toast({ title: "Erro de validação", description: "Por favor, insira um telefone válido (10 ou 11 dígitos)", variant: "destructive" });
       return;
     }
 
     if (formData.password.length < 6) {
-      toast({
-        title: "Erro de validação",
-        description: "A senha deve ter pelo menos 6 caracteres",
-        variant: "destructive",
-      });
+      toast({ title: "Erro de validação", description: "A senha deve ter pelo menos 6 caracteres", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Cadastro no Supabase Auth
-      // O telefone é passado em options.data (user_metadata)
-      // O trigger handle_new_user no banco cria o perfil automaticamente
       const cleanPhone = formData.telefone.replace(/\D/g, '');
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            telefone: cleanPhone
-          }
+          data: { telefone: cleanPhone }
         }
       });
 
       if (signUpError) {
         if (signUpError.message.includes('already registered')) {
-          toast({
-            title: "E-mail já cadastrado",
-            description: "Este e-mail já possui uma conta. Por favor, faça login ou use outro e-mail.",
-            variant: "default",
-          });
+          toast({ title: "E-mail já cadastrado", description: "Este e-mail já possui uma conta. Por favor, faça login ou use outro e-mail.", variant: "default" });
         } else if (signUpError.message.includes('rate limit')) {
-          toast({
-            title: "Muitas tentativas",
-            description: "Por favor, aguarde alguns segundos antes de tentar novamente.",
-            variant: "default",
-          });
+          toast({ title: "Muitas tentativas", description: "Por favor, aguarde alguns segundos antes de tentar novamente.", variant: "default" });
         } else {
-          toast({
-            title: "Aguarde um momento",
-            description: "Por favor, aguarde alguns segundos antes de tentar novamente.",
-            variant: "default",
-          });
+          toast({ title: "Aguarde um momento", description: "Por favor, aguarde alguns segundos antes de tentar novamente.", variant: "default" });
         }
         return;
       }
 
       if (data.user) {
+        signupCooldown.startCooldown();
         toast({
           title: "Cadastro realizado com sucesso! ✅",
           description: "Enviamos um e-mail de confirmação para sua caixa de entrada. Acesse seu e-mail e clique no link para ativar sua conta.",
           variant: "default",
         });
-
-        // Limpar o formulário
         setFormData({ email: '', password: '', telefone: '' });
       }
     } catch (error) {
       console.error('Erro no cadastro:', error);
-      toast({
-        title: "Erro no cadastro",
-        description: "Ocorreu um erro inesperado. Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro no cadastro", description: "Ocorreu um erro inesperado. Tente novamente.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -177,55 +168,27 @@ const AuthPage = () => {
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      console.log('🚨🚨🚨 AUTH.TSX: USANDO INAPPBROWSER.OPEN() 🚨🚨🚨');
-      console.log('❌ NÃO É MAIS Browser.open()');
-      console.log('📱 Biblioteca: @capgo/inappbrowser v7.29.0');
-      console.log('⏰ Timestamp:', new Date().toISOString());
-      console.log('🚀 Iniciando login com Google (Deep Link)...');
-      console.log('📱 Plataforma:', isNative ? 'Native (APK)' : 'Web');
+      console.log('🚀 Iniciando login com Google...');
 
       if (isNative) {
         const redirectTo = 'picotinho://auth/callback';
-        console.log('🔗 Deep Link configurado:', redirectTo);
-        
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
-          options: {
-            redirectTo,
-            skipBrowserRedirect: true
-          }
+          options: { redirectTo, skipBrowserRedirect: true }
         });
-
-        if (error) {
-          console.error('❌ Erro ao iniciar OAuth:', error);
-          throw error;
-        }
-
-        console.log('🌐 URL de autenticação gerada:', data.url);
-        console.log('📱 Abrindo Browser nativo...');
-        
+        if (error) throw error;
         await InAppBrowser.open({ url: data.url });
-        console.log('✅ Browser aberto com sucesso');
-        
       } else {
-        // Web - fluxo normal
         const redirectUrl = `${window.location.origin}/`;
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
-          options: {
-            redirectTo: redirectUrl
-          }
+          options: { redirectTo: redirectUrl }
         });
-
         if (error) throw error;
       }
     } catch (error: any) {
       console.error('❌ Erro no login com Google:', error);
-      toast({
-        title: "Erro no login com Google",
-        description: error.message || "Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro no login com Google", description: error.message || "Tente novamente.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -235,50 +198,26 @@ const AuthPage = () => {
     try {
       setIsLoading(true);
       console.log('🚀 Iniciando login com Facebook...');
-      console.log('📱 Plataforma:', isNative ? 'Native (APK)' : 'Web');
 
       if (isNative) {
         const redirectTo = 'picotinho://auth/callback';
-        console.log('🔗 Deep Link configurado:', redirectTo);
-        
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'facebook',
-          options: {
-            redirectTo,
-            skipBrowserRedirect: true
-          }
+          options: { redirectTo, skipBrowserRedirect: true }
         });
-
-        if (error) {
-          console.error('❌ Erro ao iniciar OAuth:', error);
-          throw error;
-        }
-
-        console.log('🌐 URL de autenticação gerada:', data.url);
-        console.log('📱 Abrindo Browser nativo...');
-        
+        if (error) throw error;
         await InAppBrowser.open({ url: data.url });
-        console.log('✅ Browser aberto com sucesso');
-        
       } else {
-        // Web - fluxo normal
         const redirectUrl = `${window.location.origin}/`;
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'facebook',
-          options: {
-            redirectTo: redirectUrl
-          }
+          options: { redirectTo: redirectUrl }
         });
-
         if (error) throw error;
       }
     } catch (error: any) {
       console.error('❌ Erro no login com Facebook:', error);
-      toast({
-        title: "Erro no login com Facebook",
-        description: error.message || "Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro no login com Facebook", description: error.message || "Tente novamente.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -286,20 +225,12 @@ const AuthPage = () => {
 
   const handleSignIn = async () => {
     if (!validateEmail(formData.email)) {
-      toast({
-        title: "Erro de validação",
-        description: "Por favor, insira um e-mail válido",
-        variant: "destructive",
-      });
+      toast({ title: "Erro de validação", description: "Por favor, insira um e-mail válido", variant: "destructive" });
       return;
     }
 
     if (!formData.password) {
-      toast({
-        title: "Erro de validação",
-        description: "Por favor, insira sua senha",
-        variant: "destructive",
-      });
+      toast({ title: "Erro de validação", description: "Por favor, insira sua senha", variant: "destructive" });
       return;
     }
 
@@ -313,43 +244,52 @@ const AuthPage = () => {
 
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
-          toast({
-            title: "Erro no login",
-            description: "E-mail ou senha incorretos",
-            variant: "destructive",
-          });
+          toast({ title: "Erro no login", description: "E-mail ou senha incorretos", variant: "destructive" });
         } else if (error.message.includes('Email not confirmed')) {
-          toast({
-            title: "E-mail não confirmado",
-            description: "Verifique seu e-mail e clique no link de confirmação antes de fazer login",
-            variant: "destructive",
-          });
+          toast({ title: "E-mail não confirmado", description: "Verifique seu e-mail e clique no link de confirmação antes de fazer login", variant: "destructive" });
         } else {
-          toast({
-            title: "Erro no login",
-            description: error.message,
-            variant: "destructive",
-          });
+          toast({ title: "Erro no login", description: error.message, variant: "destructive" });
         }
         return;
       }
 
-      toast({
-        title: "Login realizado!",
-        description: "Bem-vindo de volta!",
-      });
-
-      // Redirecionar para página principal
+      toast({ title: "Login realizado!", description: "Bem-vindo de volta!" });
       navigate('/');
     } catch (error) {
       console.error('Erro no login:', error);
-      toast({
-        title: "Erro no login",
-        description: "Ocorreu um erro inesperado. Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro no login", description: "Ocorreu um erro inesperado. Tente novamente.", variant: "destructive" });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (resetCooldown.isOnCooldown) return;
+
+    if (!formData.email || !validateEmail(formData.email)) {
+      toast({
+        title: "Informe seu e-mail",
+        description: "Preencha o campo de e-mail para receber o link de redefinição de senha.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      resetCooldown.startCooldown();
+      toast({
+        title: "E-mail enviado! ✉️",
+        description: "Verifique sua caixa de entrada para redefinir sua senha.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Erro",
+        description: err.message || "Não foi possível enviar o e-mail. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -369,11 +309,9 @@ const AuthPage = () => {
 
         <Card>
           <CardHeader className="text-center">
-            {/* Logo do Picotinho */}
             <div className="flex justify-center mb-4">
               <PicotinhoLogo size="lg" />
             </div>
-            
             <CardDescription>
               Gerencie suas compras de supermercado
             </CardDescription>
@@ -417,11 +355,7 @@ const AuthPage = () => {
                       className="absolute right-0 top-0 h-full px-3"
                       onClick={() => setShowPassword(!showPassword)}
                     >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
@@ -438,43 +372,18 @@ const AuthPage = () => {
                   type="button"
                   variant="link"
                   className="w-full text-sm text-muted-foreground"
-                  onClick={async () => {
-                    if (!formData.email || !validateEmail(formData.email)) {
-                      toast({
-                        title: "Informe seu e-mail",
-                        description: "Preencha o campo de e-mail para receber o link de redefinição de senha.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-                    try {
-                      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
-                        redirectTo: `${window.location.origin}/reset-password`,
-                      });
-                      if (error) throw error;
-                      toast({
-                        title: "E-mail enviado! ✉️",
-                        description: "Verifique sua caixa de entrada para redefinir sua senha.",
-                      });
-                    } catch (err: any) {
-                      toast({
-                        title: "Erro",
-                        description: err.message || "Não foi possível enviar o e-mail. Tente novamente.",
-                        variant: "destructive",
-                      });
-                    }
-                  }}
-                  disabled={isLoading}
+                  onClick={handleForgotPassword}
+                  disabled={isLoading || resetCooldown.isOnCooldown}
                 >
-                  Esqueci minha senha
+                  {resetCooldown.isOnCooldown
+                    ? `Aguarde ${resetCooldown.secondsLeft}s para reenviar`
+                    : "Esqueci minha senha"}
                 </Button>
 
                 <div className="relative my-4">
                   <Separator />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="bg-background px-2 text-xs text-muted-foreground">
-                      ou
-                    </span>
+                    <span className="bg-background px-2 text-xs text-muted-foreground">ou</span>
                   </div>
                 </div>
 
@@ -550,11 +459,7 @@ const AuthPage = () => {
                       className="absolute right-0 top-0 h-full px-3"
                       onClick={() => setShowPassword(!showPassword)}
                     >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -564,10 +469,12 @@ const AuthPage = () => {
 
                 <Button
                   onClick={handleSignUp}
-                  disabled={isLoading}
+                  disabled={isLoading || signupCooldown.isOnCooldown}
                   className="w-full"
                 >
-                  {isLoading ? "Cadastrando..." : "Cadastrar"}
+                  {signupCooldown.isOnCooldown
+                    ? `E-mail enviado! Aguarde ${signupCooldown.secondsLeft}s`
+                    : isLoading ? "Cadastrando..." : "Cadastrar"}
                 </Button>
 
                 <p className="text-xs text-muted-foreground text-center mb-4">
@@ -577,9 +484,7 @@ const AuthPage = () => {
                 <div className="relative my-4">
                   <Separator />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="bg-background px-2 text-xs text-muted-foreground">
-                      ou
-                    </span>
+                    <span className="bg-background px-2 text-xs text-muted-foreground">ou</span>
                   </div>
                 </div>
 
