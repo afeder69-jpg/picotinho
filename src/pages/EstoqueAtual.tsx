@@ -1551,7 +1551,9 @@ const EstoqueAtual = () => {
       
       if (produtosDaCategoria.length > 0) {
         const categoriaNormalizada = normalizarCategoria(categoria);
-        grouped[categoriaNormalizada] = produtosDaCategoria;
+        grouped[categoriaNormalizada] = produtosDaCategoria.sort((a, b) =>
+          a.produto_nome.localeCompare(b.produto_nome, 'pt-BR')
+        );
         console.log(`🏷️ Categoria ${categoriaNormalizada}: ${produtosDaCategoria.length} produtos`);
       }
     });
@@ -1559,7 +1561,13 @@ const EstoqueAtual = () => {
     console.log('🏷️ Total de categorias criadas:', Object.keys(grouped).length);
     console.log('🏷️ Total de produtos após agrupamento:', Object.values(grouped).reduce((total, itens) => total + itens.length, 0));
 
-    return grouped;
+    // Ordenar categorias alfabeticamente (apenas exibição)
+    const sortedGrouped: Record<string, EstoqueItem[]> = {};
+    Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(key => {
+      sortedGrouped[key] = grouped[key];
+    });
+
+    return sortedGrouped;
   };
 
   console.log('🎯 RENDERIZAÇÃO - Estado atual:', {
