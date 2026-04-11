@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { normalizarParaBusca } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -103,6 +103,34 @@ const EstoqueAtual = () => {
   const [mostrarResumo, setMostrarResumo] = useState(false);
   const [mostrarPrecos, setMostrarPrecos] = useState(false);
   const isMobile = useIsMobile();
+
+  // Estados isolados para busca local (não alteram renderização principal)
+  const [buscaEstoqueAberta, setBuscaEstoqueAberta] = useState(false);
+  const [termoBuscaEstoque, setTermoBuscaEstoque] = useState('');
+
+  // Resultados da busca local (leitura paralela do array estoque, sem modificá-lo)
+  const resultadosBuscaEstoque = useMemo(() => {
+    if (!termoBuscaEstoque || termoBuscaEstoque.trim().length < 2) return [];
+    const termoNormalizado = normalizarParaBusca(termoBuscaEstoque);
+    const palavras = termoNormalizado.split(' ').filter(p => p.length > 0);
+    if (palavras.length === 0) return [];
+
+    const resultados: { nome: string; hash: string; categoria: string }[] = [];
+    for (const item of estoque) {
+      if (resultados.length >= 8) break;
+      const nomeItem = normalizarParaBusca(item.produto_nome_exibicao ?? item.produto_nome ?? '');
+      if (!nomeItem) continue;
+      const match = palavras.every(p => nomeItem.includes(p));
+      if (match) {
+        resultados.push({
+          nome: item.produto_nome_exibicao ?? item.produto_nome ?? '',
+          hash: item.hash_agrupamento,
+          categoria: item.categoria ?? '',
+        });
+      }
+    }
+    return resultados;
+  }, [termoBuscaEstoque, estoque]);
 
   // Função para obter coordenadas do usuário (prioriza CEP do perfil)
   const obterCoordenadas = async (): Promise<{ latitude: number; longitude: number }> => {
