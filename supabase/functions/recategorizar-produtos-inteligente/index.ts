@@ -196,50 +196,75 @@ serve(async (req) => {
 
     for (const produto of produtos || []) {
       const nomeProduto = produto.nome_padrao;
-      const categoriaAtual = (produto.categoria || '').toUpperCase();
+      const categoriaAtual = (produto.categoria ?? '').toUpperCase();
       
-      // Verificar se alguma keyword conflitante matcha este produto
-      let temConflito = false;
-      for (const conflito of conflitos) {
-        if (keywordMatchesProduct(conflito.keyword, nomeProduto)) {
-          temConflito = true;
-          produtosComConflito++;
-          console.warn(`⚠️ Produto "${nomeProduto}" ignorado por conflito na keyword "${conflito.keyword}"`);
-          break;
-        }
+      // =====================================================
+      // ETAPA 5: Coletar TODAS as regras que casam com o produto
+      // =====================================================
+      interface RegraMatch {
+        regra: RecategorizationRule;
+        maxTokens: number; // maior nº de tokens entre as keywords que casaram
+        isGlobal: boolean;
+        descricao: string;
       }
-      if (temConflito) continue;
 
-      // Encontrar a primeira regra que matcha (prioridade: global > específica)
-      let regraAplicavel: RecategorizationRule | null = null;
-      
+      const matches: RegraMatch[] = [];
+
       for (const regra of regrasOrdenadas) {
         // Verificar match de keyword (somente keywords sem conflito)
-        const matchKeyword = regra.keywords.some(kw => {
-          if (keywordsComConflito.has(normalizeText(kw))) return false;
-          return keywordMatchesProduct(kw, nomeProduto);
-        });
+        let maxTokensForMatch = 0;
+        let hasMatch = false;
 
-        if (!matchKeyword) continue;
+        for (const kw of regra.keywords) {
+          if (keywordsComConflito.has(normalizeText(kw))) continue;
+          if (keywordMatchesProduct(kw, nomeProduto)) {
+            hasMatch = true;
+            const tokens = tokenize(kw).length;
+            if (tokens > maxTokensForMatch) maxTokensForMatch = tokens;
+          }
+        }
+
+        if (!hasMatch) continue;
 
         // Se é regra específica, verificar categoria de origem
-        if (regra.categorias_origem && regra.categorias_origem.length > 0) {
-          const origemMatch = regra.categorias_origem.some(cat =>
+        const isGlobal = !regra.categorias_origem || regra.categorias_origem.length === 0;
+        if (!isGlobal) {
+          const origemMatch = regra.categorias_origem!.some(cat =>
             categoriaAtual === cat.toUpperCase()
           );
           if (!origemMatch) continue;
         }
 
-        regraAplicavel = regra;
-        break; // Primeira regra que matcha vence (globais já vêm primeiro)
+        matches.push({
+          regra,
+          maxTokens: maxTokensForMatch,
+          isGlobal,
+          descricao: regra.descricao,
+        });
       }
 
-      if (!regraAplicavel) {
+      if (matches.length === 0) {
         produtosIgnorados++;
         continue;
       }
 
-      const categoriaDestino = regraAplicavel.categoria_destino.toUpperCase();
+      // =====================================================
+      // ETAPA 6: Selecionar regra vencedora por especificidade
+      // =====================================================
+      // Ordenar: 1) mais tokens vence, 2) global vence específica, 3) descrição alfabética (determinístico)
+      matches.sort((a, b) => {
+        if (b.maxTokens !== a.maxTokens) return b.maxTokens - a.maxTokens;
+        if (a.isGlobal !== b.isGlobal) return a.isGlobal ? -1 : 1;
+        return a.descricao.localeCompare(b.descricao);
+      });
+
+      const regraVencedora = matches[0];
+
+      if (matches.length > 1 && matches[0].regra.categoria_destino !== matches[1].regra.categoria_destino) {
+        console.log(`🏆 Produto "${nomeProduto}": regra "${regraVencedora.descricao}" (${regraVencedora.maxTokens} tokens) venceu sobre "${matches[1].descricao}" (${matches[1].maxTokens} tokens)`);
+      }
+
+      const categoriaDestino = regraVencedora.regra.categoria_destino.toUpperCase();
 
       // Idempotência: se já está na categoria correta, pular
       if (categoriaAtual === categoriaDestino) {
@@ -248,7 +273,7 @@ serve(async (req) => {
       }
 
       // =====================================================
-      // ETAPA 5: Atualizar o produto MASTER
+      // ETAPA 7: Atualizar o produto MASTER
       // =====================================================
       console.log(`🔄 Master: ${nomeProduto} | ${categoriaAtual} → ${categoriaDestino}`);
 
@@ -266,16 +291,15 @@ serve(async (req) => {
           produto_nome: nomeProduto,
           categoria_anterior: categoriaAtual,
           categoria_nova: categoriaDestino,
-          razao: regraAplicavel.descricao,
+          razao: regraVencedora.regra.descricao,
           status: 'erro'
         });
         continue;
       }
 
       // =====================================================
-      // ETAPA 6: Propagar para estoque_app (apenas vinculados)
+      // ETAPA 8: Propagar para estoque_app (apenas vinculados)
       // =====================================================
-      // estoque_app tem constraint CHECK que exige categorias em lowercase
       const categoriaEstoque = categoriaDestino.toLowerCase();
       const { data: estoqueAtualizado, error: estoqueError } = await supabase
         .from('estoque_app')
@@ -300,7 +324,7 @@ serve(async (req) => {
         produto_nome: nomeProduto,
         categoria_anterior: categoriaAtual,
         categoria_nova: categoriaDestino,
-        razao: regraAplicavel.descricao,
+        razao: regraVencedora.regra.descricao,
         status: 'sucesso',
         propagados_estoque: propagados,
       });
