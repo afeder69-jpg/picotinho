@@ -17,6 +17,8 @@ import { useNavigate } from 'react-router-dom';
 import { formatarQuantidade, formatarNomeParaExibicao } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import { normalizarCategoria, categoriasEquivalentes, ordemCategorias, categoriasNormalizadas } from '@/lib/categorias';
+import { useIsMobile } from '@/hooks/use-mobile';
+import SwipeableEstoqueItem from '@/components/estoque/SwipeableEstoqueItem';
 
 interface EstoqueItem {
   id?: string;
