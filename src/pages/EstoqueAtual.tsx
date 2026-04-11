@@ -102,6 +102,7 @@ const EstoqueAtual = () => {
   // Estados para controle de visibilidade
   const [mostrarResumo, setMostrarResumo] = useState(false);
   const [mostrarPrecos, setMostrarPrecos] = useState(false);
+  const isMobile = useIsMobile();
 
   // Função para obter coordenadas do usuário (prioriza CEP do perfil)
   const obterCoordenadas = async (): Promise<{ latitude: number; longitude: number }> => {
@@ -1316,12 +1317,12 @@ const EstoqueAtual = () => {
     });
   };
 
-  const salvarAjuste = async () => {
-    if (!itemEditando) return;
-
+  // Função central reutilizável de ajuste de estoque
+  // Extraída de salvarAjuste para ser chamada tanto pelo modal quanto pelo swipe
+  const executarAjusteEstoque = async (item: EstoqueItem, novaQtd: number) => {
     try {
-      const quantidadeAnterior = itemEditando.quantidade;
-      const idsOriginais = itemEditando.ids_originais || [itemEditando.id];
+      const quantidadeAnterior = item.quantidade;
+      const idsOriginais = item.ids_originais || [item.id];
       const idPrincipal = idsOriginais[0];
       const idsSecundarios = idsOriginais.slice(1);
       
@@ -1329,7 +1330,7 @@ const EstoqueAtual = () => {
       const { error } = await supabase
         .from('estoque_app')
         .update({
-          quantidade: novaQuantidade,
+          quantidade: novaQtd,
           updated_at: new Date().toISOString()
         })
         .eq('id', idPrincipal);
@@ -1352,8 +1353,8 @@ const EstoqueAtual = () => {
       }
 
       // Se houve redução na quantidade, registrar consumo
-      if (novaQuantidade < quantidadeAnterior) {
-        const quantidadeConsumida = quantidadeAnterior - novaQuantidade;
+      if (novaQtd < quantidadeAnterior) {
+        const quantidadeConsumida = quantidadeAnterior - novaQtd;
         
         const { data: { user } } = await supabase.auth.getUser();
         
@@ -1363,7 +1364,7 @@ const EstoqueAtual = () => {
             user_id: user?.id,
             produto_id: idPrincipal,
             quantidade: quantidadeConsumida,
-            categoria: itemEditando.categoria
+            categoria: item.categoria
           });
 
         if (consumoError) {
@@ -1373,11 +1374,10 @@ const EstoqueAtual = () => {
       }
 
       await loadEstoque();
-      fecharModalEdicao();
       
       toast({
         title: "Quantidade atualizada",
-        description: `${itemEditando.produto_nome}: ${formatarQuantidade(novaQuantidade)} ${itemEditando.unidade_medida}`,
+        description: `${item.produto_nome}: ${formatarQuantidade(novaQtd)} ${item.unidade_medida}`,
       });
     } catch (error) {
       console.error('Erro ao salvar ajuste:', error);
@@ -1387,6 +1387,12 @@ const EstoqueAtual = () => {
         description: "Não foi possível salvar o ajuste.",
       });
     }
+  };
+
+  const salvarAjuste = async () => {
+    if (!itemEditando) return;
+    await executarAjusteEstoque(itemEditando, novaQuantidade);
+    fecharModalEdicao();
   };
 
   // Funções para exclusão de produto
