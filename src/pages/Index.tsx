@@ -122,7 +122,7 @@ const Index = () => {
             <img 
               src="/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png" 
               alt="Mascote Picotinho" 
-              className="w-32 h-32 object-contain"
+              className="w-32 h-32 object-contain mix-blend-multiply"
             />
           </div>
           
