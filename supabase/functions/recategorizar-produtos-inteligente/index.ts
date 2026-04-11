@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface RecategorizationRule {
   keywords: string[];
-  categorias_origem?: string[];
+  categorias_origem?: string[] | null;
   categoria_destino: string;
   descricao: string;
   ativa: boolean;
@@ -20,6 +20,56 @@ interface Mudanca {
   categoria_nova: string;
   razao: string;
   status: 'sucesso' | 'erro';
+  propagados_estoque?: number;
+}
+
+interface ConflitosDetectados {
+  keyword: string;
+  destinos: string[];
+  regra_ids: string[];
+}
+
+// Normalizar texto: lowercase, sem acentos
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+// Tokenizar texto em palavras
+function tokenize(text: string): string[] {
+  return normalizeText(text).split(/\s+/).filter(t => t.length > 0);
+}
+
+// Verificar se keyword faz match no nome do produto (por token, não substring)
+function keywordMatchesProduct(keyword: string, productName: string): boolean {
+  const normalizedKeyword = normalizeText(keyword);
+  const normalizedProduct = normalizeText(productName);
+  
+  // Se a keyword tem múltiplas palavras, verificar como frase contígua
+  const keywordTokens = tokenize(keyword);
+  const productTokens = tokenize(productName);
+  
+  if (keywordTokens.length === 1) {
+    // Keyword de uma palavra: match exato por token
+    return productTokens.some(token => token === keywordTokens[0]);
+  }
+  
+  // Keyword multi-palavra: verificar sequência contígua de tokens
+  for (let i = 0; i <= productTokens.length - keywordTokens.length; i++) {
+    let match = true;
+    for (let j = 0; j < keywordTokens.length; j++) {
+      if (productTokens[i + j] !== keywordTokens[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return true;
+  }
+  
+  return false;
 }
 
 serve(async (req) => {
@@ -32,12 +82,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🔍 Iniciando recategorização inteligente de produtos...');
+    console.log('🔍 Iniciando recategorização inteligente no MASTER...');
 
-    // Buscar regras ativas da tabela
+    // =====================================================
+    // ETAPA 1: Buscar regras ativas
+    // =====================================================
     const { data: regras, error: regrasError } = await supabase
       .from('regras_recategorizacao')
-      .select('keywords, categorias_origem, categoria_destino, descricao, ativa')
+      .select('id, keywords, categorias_origem, categoria_destino, descricao, ativa')
       .eq('ativa', true);
 
     if (regrasError) {
@@ -47,10 +99,14 @@ serve(async (req) => {
     if (!regras || regras.length === 0) {
       return new Response(JSON.stringify({
         sucesso: true,
-        produtos_analisados: 0,
-        produtos_recategorizados: 0,
-        produtos_mantidos: 0,
+        produtos_master_analisados: 0,
+        produtos_alterados: 0,
+        produtos_ja_corretos: 0,
+        produtos_ignorados: 0,
+        produtos_com_conflito: 0,
+        conflitos_detectados: [],
         mudancas: [],
+        estoque_propagados: 0,
         timestamp: new Date().toISOString(),
         aviso: 'Nenhuma regra ativa encontrada'
       }), {
@@ -61,107 +117,214 @@ serve(async (req) => {
 
     console.log(`📋 Total de regras ativas: ${regras.length}`);
 
-    // Buscar todos os produtos do estoque
-    const { data: produtos, error: produtosError } = await supabase
-      .from('estoque_app')
-      .select('id, produto_nome, categoria, user_id');
-
-    if (produtosError) {
-      throw new Error(`Erro ao buscar produtos: ${produtosError.message}`);
+    // =====================================================
+    // ETAPA 2: Detectar conflitos entre regras
+    // =====================================================
+    const keywordMap = new Map<string, { destinos: Set<string>; regra_ids: Set<string> }>();
+    
+    for (const regra of regras) {
+      for (const kw of regra.keywords) {
+        const normalizedKw = normalizeText(kw);
+        if (!keywordMap.has(normalizedKw)) {
+          keywordMap.set(normalizedKw, { destinos: new Set(), regra_ids: new Set() });
+        }
+        const entry = keywordMap.get(normalizedKw)!;
+        entry.destinos.add(regra.categoria_destino.toUpperCase());
+        entry.regra_ids.add(regra.id);
+      }
     }
 
-    console.log(`📦 Total de produtos encontrados: ${produtos?.length || 0}`);
+    const conflitos: ConflitosDetectados[] = [];
+    const keywordsComConflito = new Set<string>();
+    
+    for (const [keyword, entry] of keywordMap) {
+      if (entry.destinos.size > 1) {
+        conflitos.push({
+          keyword,
+          destinos: Array.from(entry.destinos),
+          regra_ids: Array.from(entry.regra_ids),
+        });
+        keywordsComConflito.add(keyword);
+        console.warn(`⚠️ CONFLITO: keyword "${keyword}" tem destinos conflitantes: ${Array.from(entry.destinos).join(', ')}`);
+      }
+    }
+
+    // =====================================================
+    // ETAPA 3: Preparar regras sem conflito, com prioridade
+    // =====================================================
+    // Prioridade: regras globais (sem categorias_origem) primeiro, depois específicas
+    const regrasGlobais: RecategorizationRule[] = [];
+    const regrasEspecificas: RecategorizationRule[] = [];
+    
+    for (const regra of regras) {
+      // Excluir regras cujas keywords estejam todas em conflito
+      const temKeywordValida = regra.keywords.some(kw => !keywordsComConflito.has(normalizeText(kw)));
+      if (!temKeywordValida) {
+        console.warn(`⏭️ Regra "${regra.descricao}" pulada: todas as keywords em conflito`);
+        continue;
+      }
+      
+      if (!regra.categorias_origem || regra.categorias_origem.length === 0) {
+        regrasGlobais.push(regra);
+      } else {
+        regrasEspecificas.push(regra);
+      }
+    }
+
+    // Regras ordenadas: globais primeiro, depois específicas
+    const regrasOrdenadas = [...regrasGlobais, ...regrasEspecificas];
+
+    // =====================================================
+    // ETAPA 4: Buscar todos os produtos master
+    // =====================================================
+    const { data: produtos, error: produtosError } = await supabase
+      .from('produtos_master_global')
+      .select('id, nome_padrao, categoria');
+
+    if (produtosError) {
+      throw new Error(`Erro ao buscar produtos master: ${produtosError.message}`);
+    }
+
+    console.log(`📦 Total de produtos master: ${produtos?.length || 0}`);
 
     const mudancas: Mudanca[] = [];
-    let produtosRecategorizados = 0;
-    let produtosAnalisados = 0;
+    let produtosAlterados = 0;
+    let produtosJaCorretos = 0;
+    let produtosIgnorados = 0;
+    let produtosComConflito = 0;
+    let estoquePropagados = 0;
 
     for (const produto of produtos || []) {
-      produtosAnalisados++;
-      const nomeLower = produto.produto_nome.toLowerCase();
+      const nomeProduto = produto.nome_padrao;
       const categoriaAtual = produto.categoria.toUpperCase();
+      
+      // Verificar se alguma keyword conflitante matcha este produto
+      let temConflito = false;
+      for (const conflito of conflitos) {
+        if (keywordMatchesProduct(conflito.keyword, nomeProduto)) {
+          temConflito = true;
+          produtosComConflito++;
+          console.warn(`⚠️ Produto "${nomeProduto}" ignorado por conflito na keyword "${conflito.keyword}"`);
+          break;
+        }
+      }
+      if (temConflito) continue;
 
-      // Verificar cada regra
-      for (const regra of regras) {
-        // Verificar se alguma keyword match
-        const matchKeyword = regra.keywords.some(keyword => 
-          nomeLower.includes(keyword.toLowerCase())
-        );
+      // Encontrar a primeira regra que matcha (prioridade: global > específica)
+      let regraAplicavel: RecategorizationRule | null = null;
+      
+      for (const regra of regrasOrdenadas) {
+        // Verificar match de keyword (somente keywords sem conflito)
+        const matchKeyword = regra.keywords.some(kw => {
+          if (keywordsComConflito.has(normalizeText(kw))) return false;
+          return keywordMatchesProduct(kw, nomeProduto);
+        });
 
         if (!matchKeyword) continue;
 
-        // Verificar se precisa recategorizar
-        const categoriaAlvo = regra.categoria_destino.toUpperCase();
-        
-        // Se já está na categoria correta, pular
-        if (categoriaAtual === categoriaAlvo) {
-          console.log(`✅ ${produto.produto_nome} já está em ${categoriaAlvo}`);
-          continue;
-        }
-
-        // Se há restrição de categoria origem, verificar
+        // Se é regra específica, verificar categoria de origem
         if (regra.categorias_origem && regra.categorias_origem.length > 0) {
-          const categoriaOrigemMatch = regra.categorias_origem.some(cat => 
-            categoriaAtual.includes(cat.toUpperCase()) || cat.toUpperCase().includes(categoriaAtual)
+          const origemMatch = regra.categorias_origem.some(cat =>
+            categoriaAtual === cat.toUpperCase()
           );
-          
-          if (!categoriaOrigemMatch) {
-            console.log(`⏭️ ${produto.produto_nome} está em ${categoriaAtual}, mas regra só aplica para ${regra.categorias_origem.join(', ')}`);
-            continue;
-          }
+          if (!origemMatch) continue;
         }
 
-        // Recategorizar
-        console.log(`🔄 Recategorizando: ${produto.produto_nome}`);
-        console.log(`   De: ${categoriaAtual} → Para: ${categoriaAlvo}`);
-
-        const { error: updateError } = await supabase
-          .from('estoque_app')
-          .update({ 
-            categoria: categoriaAlvo.toLowerCase(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', produto.id);
-
-        if (updateError) {
-          console.error(`❌ Erro ao atualizar ${produto.produto_nome}:`, updateError.message);
-          mudancas.push({
-            produto_nome: produto.produto_nome,
-            categoria_anterior: categoriaAtual,
-            categoria_nova: categoriaAlvo,
-            razao: regra.descricao,
-            status: 'erro'
-          });
-        } else {
-          console.log(`✅ Produto recategorizado: ${produto.produto_nome}`);
-          produtosRecategorizados++;
-          mudancas.push({
-            produto_nome: produto.produto_nome,
-            categoria_anterior: categoriaAtual,
-            categoria_nova: categoriaAlvo,
-            razao: regra.descricao,
-            status: 'sucesso'
-          });
-        }
-
-        // Só aplicar a primeira regra que fizer match
-        break;
+        regraAplicavel = regra;
+        break; // Primeira regra que matcha vence (globais já vêm primeiro)
       }
+
+      if (!regraAplicavel) {
+        produtosIgnorados++;
+        continue;
+      }
+
+      const categoriaDestino = regraAplicavel.categoria_destino.toUpperCase();
+
+      // Idempotência: se já está na categoria correta, pular
+      if (categoriaAtual === categoriaDestino) {
+        produtosJaCorretos++;
+        continue;
+      }
+
+      // =====================================================
+      // ETAPA 5: Atualizar o produto MASTER
+      // =====================================================
+      console.log(`🔄 Master: ${nomeProduto} | ${categoriaAtual} → ${categoriaDestino}`);
+
+      const { error: updateError } = await supabase
+        .from('produtos_master_global')
+        .update({
+          categoria: categoriaDestino,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', produto.id);
+
+      if (updateError) {
+        console.error(`❌ Erro ao atualizar master ${nomeProduto}:`, updateError.message);
+        mudancas.push({
+          produto_nome: nomeProduto,
+          categoria_anterior: categoriaAtual,
+          categoria_nova: categoriaDestino,
+          razao: regraAplicavel.descricao,
+          status: 'erro'
+        });
+        continue;
+      }
+
+      // =====================================================
+      // ETAPA 6: Propagar para estoque_app (apenas vinculados)
+      // =====================================================
+      const { data: estoqueAtualizado, error: estoqueError } = await supabase
+        .from('estoque_app')
+        .update({
+          categoria: categoriaDestino,
+          updated_at: new Date().toISOString()
+        })
+        .eq('produto_master_id', produto.id)
+        .neq('categoria', categoriaDestino)
+        .select('id');
+
+      const propagados = estoqueAtualizado?.length || 0;
+      if (estoqueError) {
+        console.warn(`⚠️ Erro ao propagar para estoque do master ${nomeProduto}:`, estoqueError.message);
+      } else if (propagados > 0) {
+        console.log(`   📦 Propagado para ${propagados} registros de estoque`);
+      }
+
+      estoquePropagados += propagados;
+      produtosAlterados++;
+      mudancas.push({
+        produto_nome: nomeProduto,
+        categoria_anterior: categoriaAtual,
+        categoria_nova: categoriaDestino,
+        razao: regraAplicavel.descricao,
+        status: 'sucesso',
+        propagados_estoque: propagados,
+      });
     }
 
     const resultado = {
       sucesso: true,
-      produtos_analisados: produtosAnalisados,
-      produtos_recategorizados: produtosRecategorizados,
-      produtos_mantidos: produtosAnalisados - produtosRecategorizados,
-      mudancas: mudancas,
+      produtos_master_analisados: (produtos || []).length,
+      produtos_alterados: produtosAlterados,
+      produtos_ja_corretos: produtosJaCorretos,
+      produtos_ignorados: produtosIgnorados,
+      produtos_com_conflito: produtosComConflito,
+      conflitos_detectados: conflitos,
+      mudancas,
+      estoque_propagados: estoquePropagados,
       timestamp: new Date().toISOString()
     };
 
-    console.log('📊 Resultado da recategorização:');
-    console.log(`   Total analisado: ${resultado.produtos_analisados}`);
-    console.log(`   Recategorizados: ${resultado.produtos_recategorizados}`);
-    console.log(`   Mantidos: ${resultado.produtos_mantidos}`);
+    console.log('📊 Resultado da recategorização master:');
+    console.log(`   Master analisados: ${resultado.produtos_master_analisados}`);
+    console.log(`   Alterados: ${resultado.produtos_alterados}`);
+    console.log(`   Já corretos: ${resultado.produtos_ja_corretos}`);
+    console.log(`   Ignorados (sem match): ${resultado.produtos_ignorados}`);
+    console.log(`   Com conflito: ${resultado.produtos_com_conflito}`);
+    console.log(`   Estoque propagados: ${resultado.estoque_propagados}`);
+    console.log(`   Conflitos: ${conflitos.length}`);
 
     return new Response(JSON.stringify(resultado), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
