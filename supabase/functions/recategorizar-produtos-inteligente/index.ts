@@ -196,7 +196,7 @@ serve(async (req) => {
 
     for (const produto of produtos || []) {
       const nomeProduto = produto.nome_padrao;
-      const categoriaAtual = produto.categoria.toUpperCase();
+      const categoriaAtual = (produto.categoria || '').toUpperCase();
       
       // Verificar se alguma keyword conflitante matcha este produto
       let temConflito = false;
@@ -275,14 +275,16 @@ serve(async (req) => {
       // =====================================================
       // ETAPA 6: Propagar para estoque_app (apenas vinculados)
       // =====================================================
+      // estoque_app tem constraint CHECK que exige categorias em lowercase
+      const categoriaEstoque = categoriaDestino.toLowerCase();
       const { data: estoqueAtualizado, error: estoqueError } = await supabase
         .from('estoque_app')
         .update({
-          categoria: categoriaDestino,
+          categoria: categoriaEstoque,
           updated_at: new Date().toISOString()
         })
         .eq('produto_master_id', produto.id)
-        .neq('categoria', categoriaDestino)
+        .neq('categoria', categoriaEstoque)
         .select('id');
 
       const propagados = estoqueAtualizado?.length || 0;

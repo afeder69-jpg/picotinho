@@ -1578,19 +1578,39 @@ const EstoqueAtual = () => {
     // Agrupar por categoria usando a ordem definida
     const grouped: Record<string, EstoqueItem[]> = {};
     
+    const itensAgrupados = new Set<string>();
+    
     ordemCategorias.forEach(categoria => {
-      const produtosDaCategoria = items.filter(item => 
-        categoriasEquivalentes(item.categoria, categoria)
-      );
+      const produtosDaCategoria = items.filter(item => {
+        if (itensAgrupados.has(item.hash_agrupamento)) return false;
+        return categoriasEquivalentes(item.categoria, categoria);
+      });
       
       if (produtosDaCategoria.length > 0) {
         const categoriaNormalizada = normalizarCategoria(categoria);
         grouped[categoriaNormalizada] = produtosDaCategoria.sort((a, b) =>
           a.produto_nome.localeCompare(b.produto_nome, 'pt-BR')
         );
+        produtosDaCategoria.forEach(p => itensAgrupados.add(p.hash_agrupamento));
         console.log(`🏷️ Categoria ${categoriaNormalizada}: ${produtosDaCategoria.length} produtos`);
       }
     });
+    
+    // Capturar produtos órfãos (sem categoria válida ou não agrupados)
+    const produtosOrfaos = items.filter(item => !itensAgrupados.has(item.hash_agrupamento));
+    if (produtosOrfaos.length > 0) {
+      console.log(`🏷️ Produtos sem categoria válida: ${produtosOrfaos.length}`);
+      const categoriaPadrao = 'OUTROS';
+      if (grouped[categoriaPadrao]) {
+        grouped[categoriaPadrao] = [...grouped[categoriaPadrao], ...produtosOrfaos].sort((a, b) =>
+          a.produto_nome.localeCompare(b.produto_nome, 'pt-BR')
+        );
+      } else {
+        grouped[categoriaPadrao] = produtosOrfaos.sort((a, b) =>
+          a.produto_nome.localeCompare(b.produto_nome, 'pt-BR')
+        );
+      }
+    }
     
     console.log('🏷️ Total de categorias criadas:', Object.keys(grouped).length);
     console.log('🏷️ Total de produtos após agrupamento:', Object.values(grouped).reduce((total, itens) => total + itens.length, 0));
