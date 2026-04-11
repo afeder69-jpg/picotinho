@@ -1725,6 +1725,18 @@ const EstoqueAtual = () => {
         <Button
           variant="outline"
           size="sm"
+          onClick={() => {
+            setBuscaEstoqueAberta(v => !v);
+            if (buscaEstoqueAberta) setTermoBuscaEstoque('');
+          }}
+          className="gap-1"
+          aria-label="Buscar no estoque"
+        >
+          <Search className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setMostrarResumo(!mostrarResumo)}
           className="gap-2"
         >
@@ -1769,6 +1781,61 @@ const EstoqueAtual = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
+
+      {/* Painel de busca local isolado */}
+      {buscaEstoqueAberta && (
+        <div className="bg-card border-b border-border px-4 py-3 sticky top-[57px] z-10">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <Input
+              type="text"
+              placeholder="Buscar produto no estoque..."
+              value={termoBuscaEstoque}
+              onChange={(e) => setTermoBuscaEstoque(e.target.value)}
+              className="h-9 text-sm"
+              autoFocus
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setBuscaEstoqueAberta(false);
+                setTermoBuscaEstoque('');
+              }}
+              className="flex-shrink-0 px-2"
+            >
+              ✕
+            </Button>
+          </div>
+          {termoBuscaEstoque.trim().length >= 2 && (
+            <div className="mt-2 rounded-md border border-border bg-popover max-h-64 overflow-y-auto">
+              {resultadosBuscaEstoque.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  Nenhum produto encontrado
+                </div>
+              ) : (
+                resultadosBuscaEstoque.map((r, idx) => (
+                  <button
+                    key={`${r.hash}-${idx}`}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 transition-colors"
+                    onClick={() => {
+                      const el = document.getElementById(`item-estoque-${r.hash}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                      setBuscaEstoqueAberta(false);
+                      setTermoBuscaEstoque('');
+                    }}
+                  >
+                    <span className="font-medium">{formatarNomeParaExibicao(r.nome)}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{r.categoria}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
       
       <div className="container mx-auto p-6">
         <div className="space-y-4">
