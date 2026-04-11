@@ -2052,6 +2052,7 @@ const EstoqueAtual = () => {
                        
                           const itemContent = (
                             <div 
+                              id={`item-estoque-${item.hash_agrupamento}`}
                               className={`flex items-center py-2 border-b border-border last:border-0 ${
                                 quantidade === 0 ? 'bg-red-50 border-red-200' : ''
                               }`}
