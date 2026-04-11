@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { normalizarParaBusca } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -107,6 +107,8 @@ const EstoqueAtual = () => {
   // Estados isolados para busca local (não alteram renderização principal)
   const [buscaEstoqueAberta, setBuscaEstoqueAberta] = useState(false);
   const [termoBuscaEstoque, setTermoBuscaEstoque] = useState('');
+  const [itemDestacadoHash, setItemDestacadoHash] = useState<string | null>(null);
+  const timerDestaqueRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Resultados da busca local (leitura paralela do array estoque, sem modificá-lo)
   const resultadosBuscaEstoque = useMemo(() => {
@@ -1823,6 +1825,10 @@ const EstoqueAtual = () => {
                       if (el) {
                         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                       }
+                      // Destaque temporário
+                      if (timerDestaqueRef.current) clearTimeout(timerDestaqueRef.current);
+                      setItemDestacadoHash(r.hash);
+                      timerDestaqueRef.current = setTimeout(() => setItemDestacadoHash(null), 5000);
                       setBuscaEstoqueAberta(false);
                       setTermoBuscaEstoque('');
                     }}
@@ -2053,7 +2059,9 @@ const EstoqueAtual = () => {
                           const itemContent = (
                             <div 
                               id={`item-estoque-${item.hash_agrupamento}`}
-                              className={`flex items-center py-2 border-b border-border last:border-0 ${
+                              className={`flex items-center py-2 border-b border-border last:border-0 transition-all duration-500 ${
+                                itemDestacadoHash === item.hash_agrupamento ? 'bg-yellow-100 ring-1 ring-yellow-300' : ''
+                              } ${
                                 quantidade === 0 ? 'bg-red-50 border-red-200' : ''
                               }`}
                             >
