@@ -1403,7 +1403,9 @@ const EstoqueAtual = () => {
         }
       }
 
+      const scrollY = window.scrollY;
       await loadEstoque();
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
       
       toast({
         title: "Quantidade atualizada",
@@ -1454,7 +1456,9 @@ const EstoqueAtual = () => {
 
       fecharModalExclusao();
       fecharModalEdicao();
-      loadEstoque();
+      const scrollY = window.scrollY;
+      await loadEstoque();
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
     } catch (error) {
       console.error('Erro ao excluir produto:', error);
       toast({
