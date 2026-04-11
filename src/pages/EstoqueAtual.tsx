@@ -1946,9 +1946,8 @@ const EstoqueAtual = () => {
                         const historicoProduto = obterHistoricoProduto(item);
                         const quantidade = parseFloat(item.quantidade.toString());
                        
-                          return (
+                          const itemContent = (
                             <div 
-                              key={item.id} 
                               className={`flex items-center py-2 border-b border-border last:border-0 ${
                                 quantidade === 0 ? 'bg-red-50 border-red-200' : ''
                               }`}
@@ -2133,7 +2132,25 @@ const EstoqueAtual = () => {
                                   </div>
                           </div>
                        </div>
-                    );
+                          );
+
+                          if (isMobile) {
+                            return (
+                              <SwipeableEstoqueItem
+                                key={item.id}
+                                onSwipeRight={() => executarAjusteEstoque(item, 0)}
+                                onSwipeLeft={() => abrirModalEdicao(item)}
+                              >
+                                {itemContent}
+                              </SwipeableEstoqueItem>
+                            );
+                          }
+
+                          return (
+                            <div key={item.id}>
+                              {itemContent}
+                            </div>
+                          );
                   })}
                 </div>
               </CardContent>
