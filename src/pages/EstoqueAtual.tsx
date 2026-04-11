@@ -1683,7 +1683,7 @@ const EstoqueAtual = () => {
       subtotal: Math.round(subtotalPago * 100) / 100,  // Para ordenação, usar preços pagos
       subtotalAtual: Math.round(subtotalAtual * 100) / 100 
     };
-  }).sort((a, b) => b.subtotalAtual - a.subtotalAtual); // Ordenar por valor atual
+  }).sort((a, b) => a.categoria.localeCompare(b.categoria, 'pt-BR')); // Ordenar por valor atual
   
   // Total do estoque considerando apenas preços atuais disponíveis
   const valorTotalEstoque = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotalAtual, 0);
