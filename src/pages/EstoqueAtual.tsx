@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { normalizarParaBusca } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, Settings, Image, ImageOff, Sparkles, DollarSign, Eye, EyeOff, X } from 'lucide-react';
+import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, Settings, Image, ImageOff, Sparkles, DollarSign, Eye, EyeOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -103,13 +103,6 @@ const EstoqueAtual = () => {
   const [mostrarResumo, setMostrarResumo] = useState(false);
   const [mostrarPrecos, setMostrarPrecos] = useState(false);
   const isMobile = useIsMobile();
-
-  // Estados para busca inteligente no estoque
-  const [buscaEstoqueAberta, setBuscaEstoqueAberta] = useState(false);
-  const [termoBuscaEstoque, setTermoBuscaEstoque] = useState('');
-  const [itemDestacado, setItemDestacado] = useState<string | null>(null);
-  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const buscaEstoqueInputRef = useRef<HTMLInputElement>(null);
 
   // Função para obter coordenadas do usuário (prioriza CEP do perfil)
   const obterCoordenadas = async (): Promise<{ latitude: number; longitude: number }> => {
@@ -1698,66 +1691,9 @@ const EstoqueAtual = () => {
   // Total dos preços pagos (para coluna "Valor Pago")
   const valorTotalPago = subtotaisPorCategoria.reduce((sum, cat) => sum + cat.subtotal, 0);
 
-  // Busca inteligente local no estoque
-  const resultadosBuscaEstoque = useMemo(() => {
-    if (termoBuscaEstoque.length < 2) return [];
-    const termoNorm = normalizarParaBusca(termoBuscaEstoque);
-    const palavras = termoNorm.split(' ').filter(p => p.length > 0);
-    if (palavras.length === 0) return [];
-
-    const resultados: EstoqueItem[] = [];
-    for (const item of estoque) {
-      const nomeNorm = normalizarParaBusca(item.produto_nome_exibicao || item.produto_nome || '');
-      if (palavras.every(p => nomeNorm.includes(p))) {
-        resultados.push(item);
-        if (resultados.length >= 8) break;
-      }
-    }
-    return resultados;
-  }, [termoBuscaEstoque, estoque]);
-
-  const handleSelecionarBuscaEstoque = useCallback((item: EstoqueItem) => {
-    setBuscaEstoqueAberta(false);
-    setTermoBuscaEstoque('');
-
-    const elementId = `item-estoque-${item.hash_agrupamento}`;
-    // Small delay to let search UI close before scrolling
-    setTimeout(() => {
-      const el = document.getElementById(elementId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
-
-    // Clear previous timer
-    if (highlightTimerRef.current) {
-      clearTimeout(highlightTimerRef.current);
-    }
-    setItemDestacado(item.hash_agrupamento);
-    highlightTimerRef.current = setTimeout(() => {
-      setItemDestacado(null);
-      highlightTimerRef.current = null;
-    }, 3000);
-  }, []);
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PageHeader title="Estoque Atual">
-        <Button
-          variant={buscaEstoqueAberta ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            setBuscaEstoqueAberta(!buscaEstoqueAberta);
-            setTermoBuscaEstoque('');
-            if (!buscaEstoqueAberta) {
-              setTimeout(() => buscaEstoqueInputRef.current?.focus(), 100);
-            }
-          }}
-          className="gap-2"
-        >
-          <Search className="w-4 h-4" />
-          Buscar
-        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -1806,69 +1742,6 @@ const EstoqueAtual = () => {
         </DropdownMenu>
       </PageHeader>
       
-      {/* Campo de busca inteligente no estoque */}
-      {buscaEstoqueAberta && (
-        <div className="sticky top-[57px] z-[9] bg-background border-b border-border px-4 py-3 shadow-sm">
-          <div className="container mx-auto max-w-4xl">
-            <div className="relative flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  ref={buscaEstoqueInputRef}
-                  type="text"
-                  placeholder="Buscar produto no estoque..."
-                  value={termoBuscaEstoque}
-                  onChange={(e) => setTermoBuscaEstoque(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setBuscaEstoqueAberta(false);
-                      setTermoBuscaEstoque('');
-                    }
-                  }}
-                  className="pl-9 pr-3"
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setBuscaEstoqueAberta(false);
-                  setTermoBuscaEstoque('');
-                }}
-                aria-label="Fechar busca"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            {/* Dropdown de sugestões */}
-            {termoBuscaEstoque.length >= 2 && (
-              <div className="mt-2 bg-card border border-border rounded-md shadow-md max-h-72 overflow-y-auto">
-                {resultadosBuscaEstoque.length === 0 ? (
-                  <div className="px-4 py-3 text-sm text-muted-foreground text-center">
-                    Nenhum produto encontrado
-                  </div>
-                ) : (
-                  resultadosBuscaEstoque.map((item) => (
-                    <button
-                      key={item.hash_agrupamento}
-                      onClick={() => handleSelecionarBuscaEstoque(item)}
-                      className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors border-b border-border last:border-0 flex items-center justify-between gap-2"
-                    >
-                      <span className="text-sm font-medium truncate">
-                        {formatarNomeParaExibicao(item.produto_nome_exibicao || item.produto_nome || '')}
-                      </span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        {formatarQuantidade(item.quantidade)} {item.unidade_medida}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <div className="container mx-auto p-6">
         <div className="space-y-4">
 
@@ -2082,13 +1955,11 @@ const EstoqueAtual = () => {
                         const historicoProduto = obterHistoricoProduto(item);
                         const quantidade = parseFloat(item.quantidade.toString());
                        
-                          const isDestacado = itemDestacado === item.hash_agrupamento;
                           const itemContent = (
                             <div 
-                              id={`item-estoque-${item.hash_agrupamento}`}
-                              className={`flex items-center py-2 border-b border-border last:border-0 transition-all duration-500 ${
+                              className={`flex items-center py-2 border-b border-border last:border-0 ${
                                 quantidade === 0 ? 'bg-red-50 border-red-200' : ''
-                              } ${isDestacado ? 'ring-2 ring-primary bg-primary/10' : ''}`}
+                              }`}
                             >
                              <div className="flex-1 overflow-hidden relative">
                                 <div className="flex items-center gap-2">
