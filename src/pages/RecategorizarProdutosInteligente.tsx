@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle, XCircle, ArrowRight, Plus, Trash2, Edit, Power } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, ArrowRight, Plus, Trash2, Edit, Power, AlertTriangle } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import {
   Table,
@@ -40,14 +40,25 @@ interface Mudanca {
   categoria_nova: string;
   razao: string;
   status: 'sucesso' | 'erro';
+  propagados_estoque?: number;
+}
+
+interface ConflitosDetectados {
+  keyword: string;
+  destinos: string[];
+  regra_ids: string[];
 }
 
 interface ResultadoRecategorizacao {
   sucesso: boolean;
-  produtos_analisados: number;
-  produtos_recategorizados: number;
-  produtos_mantidos: number;
+  produtos_master_analisados: number;
+  produtos_alterados: number;
+  produtos_ja_corretos: number;
+  produtos_ignorados: number;
+  produtos_com_conflito: number;
+  conflitos_detectados: ConflitosDetectados[];
   mudancas: Mudanca[];
+  estoque_propagados: number;
   timestamp: string;
 }
 
@@ -99,7 +110,7 @@ const RecategorizarProdutosInteligente = () => {
 
       if (error) throw error;
       setRegras(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar regras:', error);
       toast({
         title: "Erro ao carregar regras",
@@ -126,9 +137,9 @@ const RecategorizarProdutosInteligente = () => {
       setResultado(data);
       toast({
         title: "Recategorização concluída!",
-        description: `${data.produtos_recategorizados} produtos foram recategorizados de ${data.produtos_analisados} analisados.`,
+        description: `${data.produtos_alterados} produtos master alterados de ${data.produtos_master_analisados} analisados.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro na recategorização:", error);
       toast({
         title: "Erro na recategorização",
@@ -194,7 +205,7 @@ const RecategorizarProdutosInteligente = () => {
       setEditandoRegra(null);
       setDialogAberto(false);
       carregarRegras();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar regra:', error);
       toast({
         title: "Erro ao salvar regra",
@@ -219,7 +230,7 @@ const RecategorizarProdutosInteligente = () => {
       });
       
       carregarRegras();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao atualizar regra:', error);
       toast({
         title: "Erro ao atualizar regra",
@@ -244,7 +255,7 @@ const RecategorizarProdutosInteligente = () => {
       });
       
       carregarRegras();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao deletar regra:', error);
       toast({
         title: "Erro ao deletar regra",
@@ -285,9 +296,9 @@ const RecategorizarProdutosInteligente = () => {
           <TabsContent value="executar" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Recategorização Automática de Produtos</CardTitle>
+                <CardTitle>Recategorização Automática de Produtos Master</CardTitle>
                 <CardDescription>
-                  Esta ferramenta corrige automaticamente as categorias de produtos baseado em regras configuradas
+                  Consolida a categoria oficial no cadastro master global. A categoria é propagada para o estoque de todos os usuários vinculados.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -299,10 +310,10 @@ const RecategorizarProdutosInteligente = () => {
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Recategorizando...
+                      Recategorizando Master...
                     </>
                   ) : (
-                    "Executar Recategorização Inteligente"
+                    "Executar Recategorização no Master"
                   )}
                 </Button>
               </CardContent>
@@ -317,33 +328,91 @@ const RecategorizarProdutosInteligente = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
+                  {/* Contadores principais */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <Card>
-                      <CardContent className="pt-6">
+                      <CardContent className="pt-4 pb-3">
                         <div className="text-center">
-                          <p className="text-2xl font-bold text-primary">{resultado.produtos_analisados}</p>
-                          <p className="text-sm text-muted-foreground">Analisados</p>
+                          <p className="text-2xl font-bold text-primary">{resultado.produtos_master_analisados}</p>
+                          <p className="text-xs text-muted-foreground">Masters analisados</p>
                         </div>
                       </CardContent>
                     </Card>
                     <Card>
-                      <CardContent className="pt-6">
+                      <CardContent className="pt-4 pb-3">
                         <div className="text-center">
-                          <p className="text-2xl font-bold text-green-600">{resultado.produtos_recategorizados}</p>
-                          <p className="text-sm text-muted-foreground">Recategorizados</p>
+                          <p className="text-2xl font-bold text-green-600">{resultado.produtos_alterados}</p>
+                          <p className="text-xs text-muted-foreground">Alterados</p>
                         </div>
                       </CardContent>
                     </Card>
                     <Card>
-                      <CardContent className="pt-6">
+                      <CardContent className="pt-4 pb-3">
                         <div className="text-center">
-                          <p className="text-2xl font-bold text-muted-foreground">{resultado.produtos_mantidos}</p>
-                          <p className="text-sm text-muted-foreground">Mantidos</p>
+                          <p className="text-2xl font-bold text-blue-600">{resultado.produtos_ja_corretos}</p>
+                          <p className="text-xs text-muted-foreground">Já corretos</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-4 pb-3">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-muted-foreground">{resultado.produtos_ignorados}</p>
+                          <p className="text-xs text-muted-foreground">Sem match</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-4 pb-3">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-orange-500">{resultado.produtos_com_conflito}</p>
+                          <p className="text-xs text-muted-foreground">Com conflito</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-4 pb-3">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-purple-600">{resultado.estoque_propagados}</p>
+                          <p className="text-xs text-muted-foreground">Estoque propagado</p>
                         </div>
                       </CardContent>
                     </Card>
                   </div>
 
+                  {/* Conflitos detectados */}
+                  {resultado.conflitos_detectados && resultado.conflitos_detectados.length > 0 && (
+                    <Card className="border-orange-300 bg-orange-50 dark:bg-orange-950/20">
+                      <CardContent className="pt-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="h-5 w-5 text-orange-500" />
+                          <h4 className="font-semibold text-orange-700 dark:text-orange-400">
+                            Conflitos de Regra Detectados
+                          </h4>
+                        </div>
+                        <p className="text-sm text-orange-600 dark:text-orange-300 mb-3">
+                          As keywords abaixo possuem regras ativas com destinos diferentes. Os produtos afetados foram ignorados. Corrija as regras conflitantes.
+                        </p>
+                        <div className="space-y-2">
+                          {resultado.conflitos_detectados.map((conflito, i) => (
+                            <div key={i} className="flex items-center gap-2 text-sm">
+                              <Badge variant="outline" className="text-orange-600 border-orange-300">
+                                {conflito.keyword}
+                              </Badge>
+                              <span className="text-muted-foreground">→</span>
+                              {conflito.destinos.map((d, j) => (
+                                <Badge key={j} variant="secondary" className="text-xs">
+                                  {d}
+                                </Badge>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Mudanças realizadas */}
                   {resultado.mudancas && resultado.mudancas.length > 0 && (
                     <div>
                       <h3 className="font-semibold mb-3">Mudanças Realizadas:</h3>
@@ -351,10 +420,11 @@ const RecategorizarProdutosInteligente = () => {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Produto</TableHead>
-                              <TableHead>Categoria Anterior</TableHead>
+                              <TableHead>Produto Master</TableHead>
+                              <TableHead>Anterior</TableHead>
                               <TableHead className="w-12"></TableHead>
-                              <TableHead>Categoria Nova</TableHead>
+                              <TableHead>Nova</TableHead>
+                              <TableHead>Estoque</TableHead>
                               <TableHead>Status</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -372,10 +442,19 @@ const RecategorizarProdutosInteligente = () => {
                                   <Badge variant="default">{mudanca.categoria_nova}</Badge>
                                 </TableCell>
                                 <TableCell>
+                                  {mudanca.propagados_estoque != null && mudanca.propagados_estoque > 0 ? (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {mudanca.propagados_estoque}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
                                   {mudanca.status === 'sucesso' ? (
                                     <CheckCircle className="h-4 w-4 text-green-600" />
                                   ) : (
-                                    <XCircle className="h-4 w-4 text-red-600" />
+                                    <XCircle className="h-4 w-4 text-destructive" />
                                   )}
                                 </TableCell>
                               </TableRow>
@@ -390,7 +469,7 @@ const RecategorizarProdutosInteligente = () => {
                     <Card className="bg-muted">
                       <CardContent className="pt-6">
                         <p className="text-center text-muted-foreground">
-                          Nenhum produto precisou ser recategorizado. Todas as categorias já estão corretas! ✅
+                          Nenhum produto master precisou ser recategorizado. Todas as categorias já estão corretas! ✅
                         </p>
                       </CardContent>
                     </Card>
@@ -407,7 +486,7 @@ const RecategorizarProdutosInteligente = () => {
                   <div>
                     <CardTitle>Regras de Recategorização</CardTitle>
                     <CardDescription>
-                      Gerencie as regras para recategorização automática de produtos
+                      Gerencie as regras para recategorização automática de produtos master
                     </CardDescription>
                   </div>
                   <Button onClick={abrirNova}>

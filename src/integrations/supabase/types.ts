@@ -3765,6 +3765,7 @@ export type Database = {
         Args: { texto: string }
         Returns: string
       }
+      normalize_keyword: { Args: { input: string }; Returns: string }
       popular_precos_atuais_das_notas: { Args: never; Returns: undefined }
       recalcular_estoque_completo: { Args: never; Returns: undefined }
       recalcular_estoque_usuario: {
