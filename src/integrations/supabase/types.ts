@@ -409,7 +409,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          categoria: string
+          categoria?: string
           compra_id?: string | null
           created_at?: string
           ean_comercial?: string | null
@@ -1847,7 +1847,7 @@ export type Database = {
         Insert: {
           aprovado_em?: string | null
           aprovado_por?: string | null
-          categoria: string
+          categoria?: string
           categoria_unidade?: string | null
           codigo_barras?: string | null
           confianca_normalizacao?: number | null
