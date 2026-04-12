@@ -18,34 +18,32 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Validar JWT do chamador (apenas masters) ou service_role
-    const authHeader = req.headers.get('Authorization');
-    const isServiceRole = authHeader?.includes(supabaseKey);
+    // Validar: aceita service_role key diretamente OU master autenticado
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace('Bearer ', '');
     
-    if (!isServiceRole) {
-      if (!authHeader) {
-        return new Response(JSON.stringify({ error: 'Autenticação necessária' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Tentar validar como usuário master
+    let autorizado = false;
+    if (token) {
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) {
+        const { data: isMaster } = await supabase.rpc('has_role', {
+          _user_id: user.id,
+          _role: 'master',
         });
+        autorizado = !!isMaster;
       }
-
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-      if (authError || !user) {
-        return new Response(JSON.stringify({ error: 'Token inválido' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const { data: isMaster } = await supabase.rpc('has_role', {
-        _user_id: user.id,
-        _role: 'master',
+    }
+    
+    // Também aceitar chamada interna (quando invocada por outra edge function com service_role)
+    if (!autorizado && token === supabaseKey) {
+      autorizado = true;
+    }
+    
+    if (!autorizado) {
+      return new Response(JSON.stringify({ error: 'Apenas masters podem executar' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-      if (!isMaster) {
-        return new Response(JSON.stringify({ error: 'Apenas masters podem executar' }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
     }
 
     const body = await req.json().catch(() => ({}));
