@@ -232,7 +232,7 @@ export default function Relatorios() {
                   if (produtoNome && quantidade > 0) {
                     // Buscar categoria do produto
                     const nomeItem = produtoNome.toUpperCase().trim();
-                    let categoria = 'Não categorizado';
+                    let categoria = 'Outros';
                     
                     // 1. Busca exata
                     if (mapaCategorias.has(nomeItem)) {
@@ -285,7 +285,7 @@ export default function Relatorios() {
             todosOsDados.push({
               data: consumo.data_consumo.split('T')[0],
               produto: estoque.produto_nome,
-              categoria: consumo.categoria || 'Não categorizado',
+              categoria: consumo.categoria || 'Outros',
               quantidade: consumo.quantidade,
               valor: valorTotal,
               mercado: "Casa (consumo)",
