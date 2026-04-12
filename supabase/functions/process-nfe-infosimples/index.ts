@@ -356,7 +356,7 @@ async function processarNFe(supabase: any, userId: string, notaImagemId: string,
   const { error: updateError } = await supabase
     .from('notas_imagens')
     .update({
-      processada: true,
+      processada: false, // CORRIGIDO: somente process-receipt-full pode marcar como true
       pdf_gerado: false,
       dados_extraidos: dadosExtraidos,
       updated_at: new Date().toISOString(),

@@ -600,7 +600,7 @@ async function processarNFCe(
   const { error: updateError } = await supabase
     .from('notas_imagens')
     .update({
-      processada: true,
+      processada: false, // CORRIGIDO: somente process-receipt-full pode marcar como true
       pdf_gerado: false, // 🔥 Novo: flag para controlar geração de PDF
       dados_extraidos: dadosExtraidos,
       imagem_url: nfceData.site_receipt, // HTML da nota fiscal
