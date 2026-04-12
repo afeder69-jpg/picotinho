@@ -948,8 +948,51 @@ async function buscarProdutoMaster(
 }
 
 // ================== RECATEGORIZAÇÃO DINÂMICA ==================
+// ⚠️ ESPELHADO de recategorizar-produtos-inteligente/index.ts
+// Qualquer ajuste na lógica de categorização DEVE ser refletido nos dois pontos
+// para evitar divergência entre ingestão de nota e recategorização master.
 
-// 🔄 Aplicar regras de recategorização automaticamente
+// Normalizar texto: lowercase, sem acentos
+function normalizeTextForCateg(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+// Tokenizar texto em palavras
+function tokenizeForCateg(text: string): string[] {
+  return normalizeTextForCateg(text).split(/\s+/).filter(t => t.length > 0);
+}
+
+// Verificar se keyword faz match no nome do produto (por token exato, NÃO substring)
+function keywordMatchesProductForCateg(keyword: string, productName: string): boolean {
+  const keywordTokens = tokenizeForCateg(keyword);
+  const productTokens = tokenizeForCateg(productName);
+  
+  if (keywordTokens.length === 1) {
+    return productTokens.some(token => token === keywordTokens[0]);
+  }
+  
+  // Keyword multi-palavra: verificar sequência contígua de tokens
+  for (let i = 0; i <= productTokens.length - keywordTokens.length; i++) {
+    let match = true;
+    for (let j = 0; j < keywordTokens.length; j++) {
+      if (productTokens[i + j] !== keywordTokens[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return true;
+  }
+  
+  return false;
+}
+
+// 🔄 Aplicar regras de recategorização com lógica determinística por especificidade
+// Mesma lógica de recategorizar-produtos-inteligente: coleta TODAS as regras,
+// ordena por especificidade (tokens), escopo (global > específica), e desempate alfabético.
 async function aplicarRegrasRecategorizacao(
   produtoNome: string,
   categoriaAtual: string,
@@ -957,42 +1000,86 @@ async function aplicarRegrasRecategorizacao(
   contador?: { value: number }
 ): Promise<string> {
   try {
-    // Se não há regras em cache, retornar categoria atual
+    // Se não há regras em cache, aplicar fallback
     if (!regrasCache || regrasCache.length === 0) {
+      // Fallback obrigatório: nunca retornar vazio/nulo
+      if (!categoriaAtual || categoriaAtual.trim() === '') return 'outros';
       return categoriaAtual;
     }
 
-    const nomeLower = produtoNome.toLowerCase();
-    const categoriaUpper = categoriaAtual.toUpperCase();
+    const categoriaUpper = (categoriaAtual || '').toUpperCase();
 
-    // Verificar cada regra
+    // Coletar TODAS as regras que casam com o produto
+    interface RegraMatch {
+      regra: any;
+      maxTokens: number;
+      isGlobal: boolean;
+      descricao: string;
+    }
+
+    const matches: RegraMatch[] = [];
+
     for (const regra of regrasCache) {
-      // Verificar se alguma keyword faz match
-      const matchKeyword = regra.keywords.some((kw: string) => 
-        nomeLower.includes(kw.toLowerCase())
-      );
+      let maxTokensForMatch = 0;
+      let hasMatch = false;
 
-      if (!matchKeyword) continue;
+      for (const kw of regra.keywords) {
+        if (keywordMatchesProductForCateg(kw, produtoNome)) {
+          hasMatch = true;
+          const tokens = tokenizeForCateg(kw).length;
+          if (tokens > maxTokensForMatch) maxTokensForMatch = tokens;
+        }
+      }
+
+      if (!hasMatch) continue;
 
       // Verificar restrição de categoria origem (se existir)
-      if (regra.categorias_origem && regra.categorias_origem.length > 0) {
-        const origemMatch = regra.categorias_origem.some((cat: string) => 
-          categoriaUpper.includes(cat.toUpperCase())
+      const isGlobal = !regra.categorias_origem || regra.categorias_origem.length === 0;
+      if (!isGlobal) {
+        const origemMatch = regra.categorias_origem.some((cat: string) =>
+          categoriaUpper === cat.toUpperCase()
         );
         if (!origemMatch) continue;
       }
 
-      // ✅ Regra aplicável! Incrementar contador e retornar nova categoria
-      if (contador) contador.value++;
-      console.log(`🔄 Recategorizado: "${produtoNome}" | ${categoriaAtual} → ${regra.categoria_destino} | ${regra.descricao}`);
-      
-      return regra.categoria_destino.toLowerCase();
+      matches.push({
+        regra,
+        maxTokens: maxTokensForMatch,
+        isGlobal,
+        descricao: regra.descricao || '',
+      });
     }
 
-    return categoriaAtual; // Nenhuma regra aplicável
+    if (matches.length === 0) {
+      // Nenhuma regra casou — garantir fallback
+      if (!categoriaAtual || categoriaAtual.trim() === '') return 'outros';
+      return categoriaAtual;
+    }
+
+    // Ordenar por especificidade determinística:
+    // 1) mais tokens vence, 2) global vence específica, 3) descrição alfabética
+    matches.sort((a, b) => {
+      if (b.maxTokens !== a.maxTokens) return b.maxTokens - a.maxTokens;
+      if (a.isGlobal !== b.isGlobal) return a.isGlobal ? -1 : 1;
+      return a.descricao.localeCompare(b.descricao);
+    });
+
+    const regraVencedora = matches[0];
+
+    if (matches.length > 1 && matches[0].regra.categoria_destino !== matches[1].regra.categoria_destino) {
+      console.log(`🏆 Ingestão: "${produtoNome}" → regra "${regraVencedora.descricao}" (${regraVencedora.maxTokens} tokens) venceu sobre "${matches[1].descricao}" (${matches[1].maxTokens} tokens)`);
+    }
+
+    if (contador) contador.value++;
+    const novaCategoria = regraVencedora.regra.categoria_destino.toLowerCase();
+    console.log(`🔄 Recategorizado: "${produtoNome}" | ${categoriaAtual} → ${novaCategoria} | ${regraVencedora.descricao}`);
+    
+    return novaCategoria;
   } catch (error: any) {
     console.error(`⚠️ Erro ao aplicar regras: ${error.message}`);
-    return categoriaAtual; // Fallback: manter categoria original
+    // Fallback: manter categoria original ou 'outros'
+    if (!categoriaAtual || categoriaAtual.trim() === '') return 'outros';
+    return categoriaAtual;
   }
 }
 
