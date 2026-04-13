@@ -2,15 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import SwipeableListaItem from "./SwipeableListaItem";
-import { formatarUnidadeMedida } from "@/lib/utils";
-
-function formatarUnidadeItem(unidade: string): string {
-  const upper = unidade.toUpperCase().trim();
-  if (upper === 'PESO') return 'pct';
-  if (upper === 'VOLUME') return 'un';
-  if (upper === 'UNIDADE') return 'un';
-  return formatarUnidadeMedida(unidade);
-}
+import { formatarUnidadeListaCompras } from "@/lib/utils";
 
 interface ItemLista {
   id: string;
@@ -51,7 +43,7 @@ export function ItemProdutoLista({ item, onToggleComprado, onRemover, onEditarQu
 
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-sm text-muted-foreground">
-                {item.quantidade} {formatarUnidadeItem(item.unidade_medida)}
+                {item.quantidade} {formatarUnidadeListaCompras(item.unidade_medida)}
               </span>
               {item.item_livre && (
                 <Badge variant="secondary" className="text-xs">

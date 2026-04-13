@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { SeletorTelefoneWhatsApp } from "./SeletorTelefoneWhatsApp";
+import { formatarUnidadeListaCompras } from "@/lib/utils";
 
 interface ExportarListaDialogProps {
   open: boolean;
@@ -31,7 +32,7 @@ export function ExportarListaDialog({
     
     return dados.mercados.map((mercado: any) => {
       const produtos = mercado.produtos.map((p: any) => 
-        `☐ ${p.produto_nome} - ${p.quantidade} ${p.unidade_medida} - R$ ${p.preco_unitario.toFixed(2)}`
+        `☐ ${p.produto_nome} - ${p.quantidade} ${formatarUnidadeListaCompras(p.unidade_medida)} - R$ ${p.preco_unitario.toFixed(2)}`
       ).join('\n');
       
       return `🏪 ${mercado.nome} (R$ ${mercado.total.toFixed(2)}):\n${produtos}`;
@@ -323,7 +324,7 @@ ${gerarTextoProdutos(dados)}
                         alignItems: 'center',
                         color: '#6b7280'
                       }}>
-                        <span>{produto.quantidade} {produto.unidade_medida}</span>
+                        <span>{produto.quantidade} {formatarUnidadeListaCompras(produto.unidade_medida)}</span>
                         <span>×</span>
                         <span>R$ {produto.preco_unitario.toFixed(2)}</span>
                         <span>=</span>

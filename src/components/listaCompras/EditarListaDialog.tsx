@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { formatarUnidadeListaCompras } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -402,7 +403,7 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
                           </div>
 
                           <Badge variant="secondary" className="h-7 px-2">
-                            {produto.unidade_medida}
+                            {formatarUnidadeListaCompras(produto.unidade_medida)}
                           </Badge>
                         </div>
                       </div>
