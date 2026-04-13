@@ -34,7 +34,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Verificar usuário autenticado
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      throw new Error('User not authenticated');
+      throw new Error('Sua sessão expirou. Faça login novamente.');
     }
 
     const { codigo }: VerificarCodigoRequest = await req.json();
@@ -53,7 +53,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (configError) {
       console.error('Erro ao buscar telefones:', configError);
-      throw new Error('Erro ao verificar código');
+      throw new Error('Erro ao verificar código. Tente novamente em instantes.');
     }
 
     if (!telefones || telefones.length === 0) {
@@ -70,7 +70,7 @@ const handler = async (req: Request): Promise<Response> => {
         const dataCodigo = new Date(telefone.data_codigo);
         const diferencaMinutos = (agora.getTime() - dataCodigo.getTime()) / (1000 * 60);
 
-        if (diferencaMinutos <= 10) {
+        if (diferencaMinutos <= 30) {
           telefoneParaVerificar = telefone;
           break;
         }
@@ -88,7 +88,7 @@ const handler = async (req: Request): Promise<Response> => {
         .eq('usuario_id', user.id)
         .eq('verificado', false);
 
-      throw new Error('Código incorreto ou expirado. Solicite um novo código.');
+      throw new Error('O código informado é inválido ou expirou. Solicite um novo código.');
     }
 
     // Marcar telefone como verificado

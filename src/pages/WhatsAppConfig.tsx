@@ -19,6 +19,7 @@ import {
   telefonesIguais,
   erroTelefoneAmigavel,
 } from "@/lib/telefone";
+import { extrairErroWhatsApp } from "@/lib/errosWhatsApp";
 
 interface WhatsAppConfig {
   id?: string;
@@ -185,7 +186,8 @@ export default function WhatsAppConfig() {
       }
     } catch (error: any) {
       console.error('Erro ao enviar código:', error);
-      toast.error(error.message || "Erro ao enviar código de verificação");
+      const mensagem = await extrairErroWhatsApp(error);
+      toast.error(mensagem);
     }
     setLoading(false);
   };
@@ -217,7 +219,8 @@ export default function WhatsAppConfig() {
       }
     } catch (error: any) {
       console.error('Erro ao verificar código:', error);
-      toast.error(error.message || "Erro ao verificar código");
+      const mensagem = await extrairErroWhatsApp(error);
+      toast.error(mensagem);
     }
     setLoadingVerificacao(false);
   };
@@ -265,7 +268,8 @@ export default function WhatsAppConfig() {
       }
     } catch (error: any) {
       console.error('Erro ao enviar código:', error);
-      toast.error(error.message || "Erro ao enviar código de verificação");
+      const mensagem = await extrairErroWhatsApp(error);
+      toast.error(mensagem);
     }
     setLoading(false);
   };
@@ -344,7 +348,8 @@ export default function WhatsAppConfig() {
       }
     } catch (error: any) {
       console.error('Erro ao enviar código:', error);
-      toast.error(error.message || "Erro ao enviar código de verificação");
+      const mensagem = await extrairErroWhatsApp(error);
+      toast.error(mensagem);
     }
     setLoading(false);
   };
@@ -376,7 +381,8 @@ export default function WhatsAppConfig() {
       }
     } catch (error: any) {
       console.error('Erro ao verificar código:', error);
-      toast.error(error.message || "Erro ao verificar código");
+      const mensagem = await extrairErroWhatsApp(error);
+      toast.error(mensagem);
     }
     setLoadingVerificacaoExtra(false);
   };
@@ -435,7 +441,8 @@ export default function WhatsAppConfig() {
       }
     } catch (error: any) {
       console.error('Erro ao reenviar código:', error);
-      toast.error(error.message || "Erro ao reenviar código");
+      const mensagem = await extrairErroWhatsApp(error);
+      toast.error(mensagem);
     }
     setLoading(false);
   };
