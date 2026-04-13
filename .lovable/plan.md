@@ -1,27 +1,49 @@
 
 
-## Corrigir layout da Normalização Global Master no mobile
+## Corrigir overflow mobile completo na Normalização Global Master
 
 ### Problema
-A `TabsList` com 5 abas (Pendentes, Catálogo Master, Raspagem de Imagens, Suporte, Campanhas) fica em uma linha horizontal que extrapola a largura da tela no celular, obrigando o usuário a rolar a página inteira para o lado.
+As abas foram corrigidas, mas os cards de candidatos pendentes e do catálogo continuam estourando a largura no celular. Os botões "Editar e Aprovar", "Aprovar" e "Rejeitar" ficam lado a lado junto com o título e badges numa mesma linha horizontal, impossível de caber em 350px.
 
-### Solucao
+### Areas com overflow identificadas
+
+1. **Cards de Pendentes (linhas ~2740-2782)**: `flex items-start justify-between` coloca titulo+badges e 3 botões na mesma linha. No mobile, estoura.
+
+2. **Cards do Catálogo Master (linhas ~2951-3000)**: Mesmo padrão — botão "Editar" + stats ao lado do título numa linha horizontal.
+
+3. **Cards de Campanhas (linhas ~3234-3270)**: `flex items-center justify-between` com badges + dados de envio na mesma linha.
+
+4. **Paginação (linha ~2829)**: `flex items-center justify-between` com texto + pagination links pode estourar.
+
+5. **Titulo+badges dos candidatos (linha ~2742-2748)**: `flex items-center gap-2` sem `flex-wrap` faz os badges saírem da tela.
+
+### Solução
 
 **Arquivo: `src/pages/admin/NormalizacaoGlobal.tsx`**
 
-1. **Container da pagina (linha 2262)**: Reduzir o padding em mobile de `p-6` para `px-3 py-4 md:p-6` para aproveitar melhor o espaco.
+1. **Cards de Pendentes** — Empilhar verticalmente no mobile:
+   - Mudar o container principal de `flex items-start justify-between` para empilhamento vertical no mobile
+   - Linha de badges (titulo + confiança + categoria): adicionar `flex-wrap`
+   - Botões (Editar e Aprovar, Aprovar, Rejeitar): empilhar abaixo do conteúdo no mobile com `flex flex-col md:flex-row` ou `flex-wrap`, e no mobile usar `w-full` nos botões
 
-2. **Header (linha 2264-2270)**: Ajustar o titulo para `text-xl md:text-3xl` e o icone para `w-6 h-6 md:w-8 md:h-8` em mobile.
+2. **Cards do Catálogo Master** — Mesma abordagem:
+   - Empilhar botão "Editar" e stats abaixo do título no mobile
+   - Badges já têm `flex-wrap`, OK
 
-3. **TabsList (linhas 2662-2683)**: Tornar a lista de abas responsiva com duas abordagens combinadas:
-   - Adicionar `flex-wrap` na `TabsList` para que as abas quebrem em multiplas linhas no mobile em vez de extrapolarem
-   - Ajustar a altura da `TabsList` com `h-auto` para acomodar as linhas extras
-   - Nos `TabsTrigger`, usar `text-xs md:text-sm` e reduzir padding para versoes compactas no mobile
-   - Esconder os icones das abas em mobile (`hidden md:block`) para economizar espaco, mantendo apenas o texto
+3. **Cards de Campanhas** — Empilhar info + dados de envio:
+   - Mudar para `flex flex-col md:flex-row` no container principal do card
+   - Dados de envio ficam abaixo no mobile
 
-4. **Cards de estatisticas e grids internas**: Verificar se ha `grid-cols-3` ou similares que tambem estourem — ajustar para `grid-cols-1 sm:grid-cols-3` onde necessario (ex: relatorio de consolidacao na linha 2615).
+4. **Paginação** — Empilhar texto + links:
+   - Mudar para `flex flex-col gap-2 md:flex-row md:items-center md:justify-between`
 
-### Detalhes tecnicos
-- A `TabsList` do shadcn/ui usa `inline-flex` por padrao — sobrescrever com classes `flex flex-wrap h-auto` resolve o overflow
-- Manter funcionalidade identica, apenas ajustes de CSS/Tailwind
+5. **Adicionar `overflow-hidden` no container** para prevenir scroll horizontal residual
+
+6. **Input de busca**: Remover `max-w-md` no mobile para ocupar a largura toda (`max-w-full md:max-w-md`)
+
+### Detalhes técnicos
+- Todas as alterações são exclusivamente CSS/Tailwind — zero impacto em funcionalidade
+- Padrão principal: substituir `flex justify-between` por empilhamento vertical no mobile via `flex-col md:flex-row`
+- Botões de ação em mobile: usar largura total ou `flex-wrap` com gap menor
+- Arquivo único: `src/pages/admin/NormalizacaoGlobal.tsx`
 
