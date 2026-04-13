@@ -156,13 +156,21 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { action, campanha_id, titulo, mensagem, filtro_tipo, filtro_valor } = body;
+    const { action, campanha_id, titulo, mensagem, filtro_tipo, filtro_valor, tipo_mensagem } = body;
 
     // ===== QUERY DE DESTINATÁRIOS =====
-    async function queryDestinatarios(fTipo: string, fValor: string | null) {
+    // Mapeia tipo_mensagem_proativa → coluna de preferência
+    const PREF_COLUMN_MAP: Record<string, string> = {
+      promocao: 'pref_promocoes',
+      novidade: 'pref_novidades',
+      aviso_estoque: 'pref_avisos_estoque',
+      dica: 'pref_dicas',
+    };
+
+    async function queryDestinatarios(fTipo: string, fValor: string | null, tipoMensagem?: string) {
       const { data: telefones, error: telError } = await serviceClient
         .from('whatsapp_telefones_autorizados')
-        .select('usuario_id, numero_whatsapp, created_at')
+        .select('usuario_id, numero_whatsapp, created_at, pref_promocoes, pref_novidades, pref_avisos_estoque, pref_dicas')
         .eq('verificado', true)
         .eq('ativo', true)
         .order('created_at', { ascending: false });
@@ -172,8 +180,20 @@ serve(async (req: Request) => {
         throw new Error(`Erro ao buscar destinatários: ${telError.message}`);
       }
 
+      // Filtrar por preferência de mensagem se tipo definido
+      const prefColumn = tipoMensagem ? PREF_COLUMN_MAP[tipoMensagem] : null;
+      const telefonesFiltered = (telefones || []).filter((t: any) => {
+        if (!prefColumn) return true;
+        return t[prefColumn] === true;
+      });
+
+      const filtrados = (telefones || []).length - telefonesFiltered.length;
+      if (filtrados > 0) {
+        console.log(`🔇 [CAMPANHA] ${filtrados} telefone(s) filtrado(s) por preferência (tipo: ${tipoMensagem})`);
+      }
+
       const seen = new Map<string, any>();
-      for (const t of (telefones || [])) {
+      for (const t of telefonesFiltered) {
         if (!seen.has(t.usuario_id)) {
           seen.set(t.usuario_id, t);
         }
@@ -279,6 +299,7 @@ serve(async (req: Request) => {
       if (mensagem !== undefined) updateFields.mensagem = mensagem;
       if (filtro_tipo !== undefined) updateFields.filtro_tipo = filtro_tipo;
       if (filtro_valor !== undefined) updateFields.filtro_valor = filtro_valor || null;
+      if (tipo_mensagem !== undefined) updateFields.tipo_mensagem = tipo_mensagem;
       updateFields.updated_at = new Date().toISOString();
 
       await serviceClient
@@ -359,6 +380,13 @@ serve(async (req: Request) => {
 
       if (!['concluida', 'concluida_parcial', 'falha'].includes(campanha.status)) {
         return new Response(JSON.stringify({ error: `Status '${campanha.status}' não permite reenvio` }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Bloquear reenvio de campanhas sem tipo_mensagem definido
+      if (!campanha.tipo_mensagem) {
+        return new Response(JSON.stringify({ error: 'tipo_mensagem é obrigatório para reenviar. Classifique a campanha antes (promocao, novidade, aviso_estoque, dica).' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
@@ -451,6 +479,14 @@ serve(async (req: Request) => {
       });
     }
 
+    // Bloquear envio de campanhas sem tipo_mensagem definido
+    if (!campanha.tipo_mensagem) {
+      return new Response(JSON.stringify({ error: 'tipo_mensagem é obrigatório para enviar. Classifique a campanha antes (promocao, novidade, aviso_estoque, dica).' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Marcar como enviando
     await serviceClient
       .from('campanhas_whatsapp')
@@ -492,8 +528,12 @@ serve(async (req: Request) => {
     }
 
     // ===== FUNÇÃO DE ENVIO COMPARTILHADA =====
+    // PADRÃO OBRIGATÓRIO para envio proativo: toda mensagem proativa enviada por qualquer edge function
+    // deve ter tipo obrigatório (promocao, novidade, aviso_estoque, dica) e verificar a preferência
+    // do telefone antes de enviar. Use a função SQL verificar_preferencia_telefone() ou filtre via
+    // queryDestinatarios com o parâmetro tipoMensagem.
     async function executarEnvio(client: any, campanhaId: string, campanhaData: any): Promise<number> {
-      const destinatarios = await queryDestinatarios(campanhaData.filtro_tipo, campanhaData.filtro_valor);
+      const destinatarios = await queryDestinatarios(campanhaData.filtro_tipo, campanhaData.filtro_valor, campanhaData.tipo_mensagem);
       
       console.log(`📢 [CAMPANHA] ${destinatarios.length} destinatários encontrados`);
 

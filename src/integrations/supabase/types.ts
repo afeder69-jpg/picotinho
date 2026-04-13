@@ -25,6 +25,9 @@ export type Database = {
           iniciada_em: string | null
           mensagem: string
           status: string
+          tipo_mensagem:
+            | Database["public"]["Enums"]["tipo_mensagem_proativa"]
+            | null
           titulo: string
           total_destinatarios: number
           total_enviados: number
@@ -42,6 +45,9 @@ export type Database = {
           iniciada_em?: string | null
           mensagem: string
           status?: string
+          tipo_mensagem?:
+            | Database["public"]["Enums"]["tipo_mensagem_proativa"]
+            | null
           titulo: string
           total_destinatarios?: number
           total_enviados?: number
@@ -59,6 +65,9 @@ export type Database = {
           iniciada_em?: string | null
           mensagem?: string
           status?: string
+          tipo_mensagem?:
+            | Database["public"]["Enums"]["tipo_mensagem_proativa"]
+            | null
           titulo?: string
           total_destinatarios?: number
           total_enviados?: number
@@ -3176,7 +3185,12 @@ export type Database = {
           created_at: string
           data_codigo: string | null
           id: string
+          nome_pessoa: string | null
           numero_whatsapp: string
+          pref_avisos_estoque: boolean
+          pref_dicas: boolean
+          pref_novidades: boolean
+          pref_promocoes: boolean
           tipo: string
           updated_at: string
           usuario_id: string
@@ -3189,7 +3203,12 @@ export type Database = {
           created_at?: string
           data_codigo?: string | null
           id?: string
+          nome_pessoa?: string | null
           numero_whatsapp: string
+          pref_avisos_estoque?: boolean
+          pref_dicas?: boolean
+          pref_novidades?: boolean
+          pref_promocoes?: boolean
           tipo?: string
           updated_at?: string
           usuario_id: string
@@ -3202,7 +3221,12 @@ export type Database = {
           created_at?: string
           data_codigo?: string | null
           id?: string
+          nome_pessoa?: string | null
           numero_whatsapp?: string
+          pref_avisos_estoque?: boolean
+          pref_dicas?: boolean
+          pref_novidades?: boolean
+          pref_promocoes?: boolean
           tipo?: string
           updated_at?: string
           usuario_id?: string
@@ -3911,6 +3935,13 @@ export type Database = {
               quantidade_necessaria: string
             }[]
           }
+      verificar_preferencia_telefone: {
+        Args: {
+          p_telefone: string
+          p_tipo: Database["public"]["Enums"]["tipo_mensagem_proativa"]
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "master" | "user" | "admin"
@@ -3925,6 +3956,7 @@ export type Database = {
         | "brasileiras"
       status_receita: "rascunho" | "publicada" | "arquivada"
       tipo_disponibilidade: "completo" | "parcial" | "faltando"
+      tipo_mensagem_proativa: "promocao" | "novidade" | "aviso_estoque" | "dica"
       tipo_refeicao: "cafe_manha" | "almoco" | "jantar" | "lanche" | "sobremesa"
     }
     CompositeTypes: {
@@ -4066,6 +4098,7 @@ export const Constants = {
       ],
       status_receita: ["rascunho", "publicada", "arquivada"],
       tipo_disponibilidade: ["completo", "parcial", "faltando"],
+      tipo_mensagem_proativa: ["promocao", "novidade", "aviso_estoque", "dica"],
       tipo_refeicao: ["cafe_manha", "almoco", "jantar", "lanche", "sobremesa"],
     },
   },

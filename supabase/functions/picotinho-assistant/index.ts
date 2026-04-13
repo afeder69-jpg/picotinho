@@ -413,7 +413,51 @@ const feedbackToolDefinitions = [
   }
 ];
 
-const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions];
+// --- Preferences tools ---
+const preferencesToolDefinitions = [
+  {
+    type: "function",
+    function: {
+      name: "gerenciar_preferencias_mensagens",
+      description: "Altera as preferências de mensagens proativas do telefone que está conversando. Cada preferência controla um tipo de mensagem: promoções, novidades, avisos de estoque, dicas. Modo 'definir' altera apenas as preferências informadas (sem tocar nas demais). Modo 'exclusivo' ativa as informadas e desativa TODAS as demais.",
+      parameters: {
+        type: "object",
+        properties: {
+          pref_promocoes: { type: "boolean", description: "Ativar/desativar promoções e ofertas" },
+          pref_novidades: { type: "boolean", description: "Ativar/desativar novidades do Picotinho" },
+          pref_avisos_estoque: { type: "boolean", description: "Ativar/desativar avisos de estoque" },
+          pref_dicas: { type: "boolean", description: "Ativar/desativar dicas e sugestões úteis" },
+          modo: { type: "string", enum: ["definir", "exclusivo"], description: "definir = altera só as informadas. exclusivo = ativa as informadas e desativa as demais." }
+        },
+        required: ["modo"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "consultar_preferencias_mensagens",
+      description: "Consulta o estado atual das preferências de mensagens proativas do telefone que está conversando. Use quando o usuário perguntar quais mensagens estão ativas.",
+      parameters: { type: "object", properties: {}, required: [] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "atualizar_nome_telefone",
+      description: "Atualiza o nome da pessoa vinculada ao telefone que está conversando. Use quando o usuário disser frases como 'esse número é da cozinheira', 'coloca o nome desse telefone como Camila'.",
+      parameters: {
+        type: "object",
+        properties: {
+          nome_pessoa: { type: "string", description: "Nome da pessoa vinculada ao telefone" }
+        },
+        required: ["nome_pessoa"]
+      }
+    }
+  }
+];
+
+const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions, ...preferencesToolDefinitions];
 
 // ==================== SHARED: MATCHING POR NÚCLEO ====================
 const STOP_WORDS_SHARED = new Set([
@@ -1973,6 +2017,156 @@ async function executeTool(
         };
       }
 
+      // ==================== PREFERENCES TOOLS ====================
+      case 'gerenciar_preferencias_mensagens': {
+        // Identificar o telefone remetente
+        // 'remetente' está disponível no escopo da handler function, mas não aqui.
+        // Precisamos passar o remetente como contexto extra. Vamos usar a busca por usuario_id + telefone ativo.
+        const telefoneLimpo = (args._remetente || '').replace(/[^0-9]/g, '');
+        
+        const { data: telData, error: telError } = await supabase
+          .from('whatsapp_telefones_autorizados')
+          .select('id, pref_promocoes, pref_novidades, pref_avisos_estoque, pref_dicas, nome_pessoa')
+          .eq('usuario_id', usuarioId)
+          .eq('verificado', true)
+          .eq('ativo', true);
+        
+        if (telError) throw telError;
+        
+        // Encontrar pelo número normalizado
+        let telefoneAlvo = (telData || []).find((t: any) => 
+          t.numero_whatsapp?.replace(/[^0-9]/g, '') === telefoneLimpo
+        );
+        
+        // Fallback: se não encontrou pelo número, usar o primeiro verificado
+        if (!telefoneAlvo && telData && telData.length > 0) {
+          telefoneAlvo = telData[0];
+        }
+        
+        if (!telefoneAlvo) {
+          return { result: JSON.stringify({ erro: "Nenhum telefone verificado encontrado para esta conta." }), isWriteMutation: false };
+        }
+        
+        const modo = args.modo || 'definir';
+        const updateFields: any = {};
+        
+        if (modo === 'exclusivo') {
+          // Desativar tudo primeiro, depois ativar apenas as informadas
+          updateFields.pref_promocoes = args.pref_promocoes === true;
+          updateFields.pref_novidades = args.pref_novidades === true;
+          updateFields.pref_avisos_estoque = args.pref_avisos_estoque === true;
+          updateFields.pref_dicas = args.pref_dicas === true;
+        } else {
+          // Modo definir: alterar apenas as informadas
+          if (args.pref_promocoes !== undefined) updateFields.pref_promocoes = args.pref_promocoes;
+          if (args.pref_novidades !== undefined) updateFields.pref_novidades = args.pref_novidades;
+          if (args.pref_avisos_estoque !== undefined) updateFields.pref_avisos_estoque = args.pref_avisos_estoque;
+          if (args.pref_dicas !== undefined) updateFields.pref_dicas = args.pref_dicas;
+        }
+        
+        const { error: updError } = await supabase
+          .from('whatsapp_telefones_autorizados')
+          .update(updateFields)
+          .eq('id', telefoneAlvo.id);
+        
+        if (updError) throw updError;
+        
+        // Buscar estado final
+        const { data: estadoFinal } = await supabase
+          .from('whatsapp_telefones_autorizados')
+          .select('pref_promocoes, pref_novidades, pref_avisos_estoque, pref_dicas, nome_pessoa')
+          .eq('id', telefoneAlvo.id)
+          .single();
+        
+        return {
+          result: JSON.stringify({
+            sucesso: true,
+            estado_final: {
+              promocoes: estadoFinal?.pref_promocoes ?? true,
+              novidades: estadoFinal?.pref_novidades ?? true,
+              avisos_estoque: estadoFinal?.pref_avisos_estoque ?? true,
+              dicas: estadoFinal?.pref_dicas ?? true
+            },
+            nome_pessoa: estadoFinal?.nome_pessoa || null,
+            instrucao: "OBRIGATÓRIO: Confirme ao usuário o estado final completo de TODAS as 4 preferências, listando explicitamente o que ficou ✅ ativo e o que ficou ❌ desativado neste número."
+          }),
+          isWriteMutation: false
+        };
+      }
+
+      case 'consultar_preferencias_mensagens': {
+        const { data: telData, error: telError } = await supabase
+          .from('whatsapp_telefones_autorizados')
+          .select('pref_promocoes, pref_novidades, pref_avisos_estoque, pref_dicas, nome_pessoa, numero_whatsapp')
+          .eq('usuario_id', usuarioId)
+          .eq('verificado', true)
+          .eq('ativo', true);
+        
+        if (telError) throw telError;
+        
+        if (!telData || telData.length === 0) {
+          return { result: JSON.stringify({ erro: "Nenhum telefone verificado encontrado." }), isWriteMutation: false };
+        }
+        
+        // Retornar preferências de todos os telefones verificados
+        const preferencias = telData.map((t: any) => ({
+          numero: t.numero_whatsapp,
+          nome_pessoa: t.nome_pessoa || null,
+          promocoes: t.pref_promocoes,
+          novidades: t.pref_novidades,
+          avisos_estoque: t.pref_avisos_estoque,
+          dicas: t.pref_dicas
+        }));
+        
+        return {
+          result: JSON.stringify({
+            sucesso: true,
+            telefones: preferencias,
+            instrucao: "Liste as preferências de forma clara para o usuário, usando ✅ para ativo e ❌ para desativado."
+          }),
+          isWriteMutation: false
+        };
+      }
+
+      case 'atualizar_nome_telefone': {
+        const telefoneLimpoNome = (args._remetente || '').replace(/[^0-9]/g, '');
+        
+        const { data: telData } = await supabase
+          .from('whatsapp_telefones_autorizados')
+          .select('id, numero_whatsapp')
+          .eq('usuario_id', usuarioId)
+          .eq('verificado', true)
+          .eq('ativo', true);
+        
+        let telefoneAlvoNome = (telData || []).find((t: any) => 
+          t.numero_whatsapp?.replace(/[^0-9]/g, '') === telefoneLimpoNome
+        );
+        
+        if (!telefoneAlvoNome && telData && telData.length > 0) {
+          telefoneAlvoNome = telData[0];
+        }
+        
+        if (!telefoneAlvoNome) {
+          return { result: JSON.stringify({ erro: "Nenhum telefone verificado encontrado." }), isWriteMutation: false };
+        }
+        
+        const { error: updNomeError } = await supabase
+          .from('whatsapp_telefones_autorizados')
+          .update({ nome_pessoa: args.nome_pessoa })
+          .eq('id', telefoneAlvoNome.id);
+        
+        if (updNomeError) throw updNomeError;
+        
+        return {
+          result: JSON.stringify({
+            sucesso: true,
+            nome_pessoa: args.nome_pessoa,
+            instrucao: `Confirme ao usuário que o nome deste telefone foi atualizado para "${args.nome_pessoa}".`
+          }),
+          isWriteMutation: false
+        };
+      }
+
       case 'ajustar_saldo_estoque': {
         if (!args.itens || !Array.isArray(args.itens) || args.itens.length === 0) {
           return { result: JSON.stringify({ erro: "Nenhum item fornecido para ajustar." }), isWriteMutation: false };
@@ -2743,7 +2937,20 @@ Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
       { produto_nome: "maçã gala", quantidade: 300, unidade: "G" }
     ]}
 
+Regras de Preferências de Mensagens:
+64. O usuário pode gerenciar suas preferências de mensagens proativas pelo WhatsApp. Há 4 tipos: promoções e ofertas, novidades do Picotinho, avisos de estoque, dicas e sugestões úteis.
+65. INTERPRETAÇÃO DE COMANDOS:
+    - "quero avisos de estoque" / "ativa promoções" → modo: definir, ativa apenas a preferência mencionada (sem alterar as demais)
+    - "quero SÓ avisos de estoque" / "quero APENAS dicas" → modo: exclusivo, ativa a mencionada e desativa TODAS as demais
+    - "marca tudo" / "ativa tudo" → modo: definir, todas as 4 como true
+    - "desmarca tudo" / "desativa tudo" → modo: definir, todas as 4 como false
+    - "não quero receber promoções" → modo: definir, pref_promocoes: false
+    - "quais mensagens estão ativas?" / "o que eu recebo?" → use consultar_preferencias_mensagens
+66. OBRIGATÓRIO: Após QUALQUER alteração de preferências, confirme o estado final COMPLETO das 4 preferências usando ✅ e ❌.
+67. O usuário pode atualizar o nome vinculado ao telefone com frases como "esse número é da cozinheira", "coloca o nome desse telefone como Camila". Use atualizar_nome_telefone.
+
 Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
+
 
     // 6. Call AI Gateway with tool calling
     const messages: Array<{ role: string; content: string }> = [
@@ -2861,6 +3068,11 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
         }
 
         console.log(`🔧 [TOOL] ${toolName}(${JSON.stringify(toolArgs)})`);
+        
+        // Injetar remetente para tools de preferências que precisam identificar o telefone
+        if (['gerenciar_preferencias_mensagens', 'atualizar_nome_telefone'].includes(toolName)) {
+          toolArgs._remetente = remetente;
+        }
         
         const { result, isWriteMutation } = await executeTool(toolName, toolArgs, supabase, usuarioId, state, listaAtivaId);
         

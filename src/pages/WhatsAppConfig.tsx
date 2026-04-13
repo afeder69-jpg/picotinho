@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Smartphone, Shield, CheckCircle, Plus, Trash2, UserCheck } from "lucide-react";
+import { ArrowLeft, Smartphone, Shield, CheckCircle, Plus, Trash2, UserCheck, Bell } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -31,6 +32,11 @@ interface TelefoneAutorizado {
   data_codigo?: string;
   ativo: boolean;
   created_at: string;
+  pref_promocoes: boolean;
+  pref_novidades: boolean;
+  pref_avisos_estoque: boolean;
+  pref_dicas: boolean;
+  nome_pessoa: string | null;
 }
 
 
@@ -668,6 +674,113 @@ export default function WhatsAppConfig() {
             </CardContent>
           </Card>
 
+          {/* Preferências de Mensagens */}
+          {telefones.filter(t => t.verificado).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  Preferências de Mensagens
+                </CardTitle>
+                <CardDescription>
+                  Escolha quais tipos de mensagens proativas cada telefone recebe
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {telefones.filter(t => t.verificado).map((telefone) => (
+                  <div key={`pref-${telefone.id}`} className="p-4 border rounded-lg space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{formatarNumero(telefone.numero_whatsapp)}</span>
+                        <Badge variant={telefone.tipo === 'principal' ? 'default' : 'secondary'}>
+                          {telefone.tipo === 'principal' ? 'Principal' : 'Extra'}
+                        </Badge>
+                        {telefone.nome_pessoa && (
+                          <span className="text-sm text-muted-foreground">({telefone.nome_pessoa})</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Campo nome_pessoa */}
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Nome da pessoa neste telefone
+                      </label>
+                      <Input
+                        placeholder="Ex: Camila, Cozinheira, João"
+                        value={telefone.nome_pessoa || ""}
+                        onChange={async (e) => {
+                          const novoNome = e.target.value;
+                          setTelefones(prev => prev.map(t => t.id === telefone.id ? { ...t, nome_pessoa: novoNome } : t));
+                        }}
+                        onBlur={async (e) => {
+                          const novoNome = e.target.value || null;
+                          await supabase
+                            .from('whatsapp_telefones_autorizados')
+                            .update({ nome_pessoa: novoNome } as any)
+                            .eq('id', telefone.id);
+                        }}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+
+                    {/* Checkboxes de preferências */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { key: 'pref_promocoes' as const, label: 'Promoções e ofertas' },
+                        { key: 'pref_novidades' as const, label: 'Novidades do Picotinho' },
+                        { key: 'pref_avisos_estoque' as const, label: 'Avisos de estoque' },
+                        { key: 'pref_dicas' as const, label: 'Dicas e sugestões' },
+                      ].map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={telefone[key]}
+                            onCheckedChange={async (checked) => {
+                              const newValue = checked === true;
+                              setTelefones(prev => prev.map(t => t.id === telefone.id ? { ...t, [key]: newValue } : t));
+                              await supabase
+                                .from('whatsapp_telefones_autorizados')
+                                .update({ [key]: newValue } as any)
+                                .eq('id', telefone.id);
+                            }}
+                          />
+                          <span className="text-sm">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* Botões marcar/desmarcar tudo */}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const updates = { pref_promocoes: true, pref_novidades: true, pref_avisos_estoque: true, pref_dicas: true };
+                          setTelefones(prev => prev.map(t => t.id === telefone.id ? { ...t, ...updates } : t));
+                          await supabase.from('whatsapp_telefones_autorizados').update(updates as any).eq('id', telefone.id);
+                          toast.success("Todas as mensagens ativadas");
+                        }}
+                      >
+                        Marcar tudo
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const updates = { pref_promocoes: false, pref_novidades: false, pref_avisos_estoque: false, pref_dicas: false };
+                          setTelefones(prev => prev.map(t => t.id === telefone.id ? { ...t, ...updates } : t));
+                          await supabase.from('whatsapp_telefones_autorizados').update(updates as any).eq('id', telefone.id);
+                          toast.success("Todas as mensagens desativadas");
+                        }}
+                      >
+                        Desmarcar tudo
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
           {/* Verificação de Código Pendente para Telefones Extras */}
           {telefonePendente && (
             <Card className="border-blue-200 bg-blue-50">
