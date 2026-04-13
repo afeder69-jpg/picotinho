@@ -364,6 +364,13 @@ serve(async (req: Request) => {
         });
       }
 
+      // Bloquear reenvio de campanhas sem tipo_mensagem definido
+      if (!campanha.tipo_mensagem) {
+        return new Response(JSON.stringify({ error: 'tipo_mensagem é obrigatório para reenviar. Classifique a campanha antes (promocao, novidade, aviso_estoque, dica).' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // Deletar apenas envios operacionais (NÃO o histórico de disparos)
       await serviceClient
         .from('campanhas_whatsapp_envios')
