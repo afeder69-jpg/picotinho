@@ -1,35 +1,35 @@
 
 
-## Plano: Corrigir categorias desalinhadas no estoque
+## Plano: Liberar leitura de produtos master para todos os usuários autenticados
 
 ### Problema
-7 registros no `estoque_app` estão com categoria diferente do seu `produtos_master_global` vinculado. São registros antigos que não foram alcançados pela propagação da recategorização.
+A tabela `produtos_master_global` possui apenas uma política SELECT:
+- **"Masters podem ver todos os produtos master"** → `has_role(auth.uid(), 'master')`
 
-A manteiga com sal que você mencionou é um desses casos — o master já está correto em LATICÍNIOS/FRIOS, mas o estoque ficou preso em "padaria".
+Usuários comuns autenticados não conseguem ler nenhum produto. A busca de ingredientes nas receitas retorna array vazio silenciosamente.
+
+Funciona no seu celular porque você tem role `master`.
 
 ### Correção
 
-**Uma única migration SQL** que sincroniza a categoria do estoque com o master para todos os registros divergentes:
+Uma migration SQL adicionando uma política SELECT para todos os usuários autenticados:
 
 ```sql
-UPDATE estoque_app e
-SET categoria = lower(m.categoria), updated_at = now()
-FROM produtos_master_global m
-WHERE e.produto_master_id = m.id
-  AND lower(m.categoria) != e.categoria;
+CREATE POLICY "Usuarios autenticados podem ler produtos master ativos"
+ON public.produtos_master_global
+FOR SELECT
+TO authenticated
+USING (status = 'ativo');
 ```
 
-Isso corrige os 7 registros de uma vez:
-- 3 manteigas: padaria → laticínios/frios
-- 2 bebidas isotônicas: hortifruti → bebidas
-- 2 gelatinas: hortifruti → mercearia
+Isso permite que qualquer usuário logado leia produtos com status `ativo`, sem expor produtos inativos ou em rascunho. As políticas de INSERT/UPDATE/DELETE continuam restritas a masters.
 
 ### O que NÃO muda
 - Nenhuma Edge Function
 - Nenhum componente frontend
-- Nenhuma lógica de recategorização
-- Apenas dados desalinhados são corrigidos
+- Permissões de escrita (continuam restritas a masters)
+- Apenas uma nova política de leitura
 
 ### Resultado
-Após a correção, a manteiga com sal aparecerá em laticínios/frios no estoque, alinhada com o master.
+Após a correção, todos os usuários autenticados verão os produtos na busca de ingredientes ao cadastrar receitas.
 
