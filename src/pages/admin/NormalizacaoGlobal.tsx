@@ -2908,7 +2908,7 @@ export default function NormalizacaoGlobal() {
               placeholder="Buscar... (use ; para múltiplos termos: ex: leite ; piracanjuba)"
               value={filtroMaster}
               onChange={(e) => setFiltroMaster(e.target.value)}
-              className="max-w-md"
+              className="w-full md:max-w-md"
             />
             {filtroMaster && filtroMaster.includes(';') && (
               <div className="text-xs text-muted-foreground">
