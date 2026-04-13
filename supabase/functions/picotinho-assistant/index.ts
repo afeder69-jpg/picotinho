@@ -246,11 +246,12 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "listar_itens_lista",
-      description: "Retorna os itens de uma lista de compras específica. Se lista_id não for informado, usa a lista ativa.",
+      description: "Retorna os itens de uma lista de compras específica. Se lista_id não for informado, usa a lista ativa. Se não houver lista ativa, passe nome_lista para resolver automaticamente.",
       parameters: {
         type: "object",
         properties: {
-          lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" }
+          lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" }
         },
         required: []
       }
@@ -260,11 +261,12 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "adicionar_itens_lista",
-      description: "Adiciona um ou mais itens a uma lista de compras. Aceita array de itens para inserção em lote. Se lista_id não for informado, usa a lista ativa.",
+      description: "Adiciona um ou mais itens a uma lista de compras. Aceita array de itens para inserção em lote. Se lista_id não for informado, usa a lista ativa. Se não houver lista ativa, passe nome_lista para resolver automaticamente.",
       parameters: {
         type: "object",
         properties: {
           lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" },
           itens: {
             type: "array",
             description: "Array de itens a adicionar",
@@ -295,6 +297,7 @@ const listToolDefinitions = [
         type: "object",
         properties: {
           lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" },
           item_nome: { type: "string", description: "Nome do item a remover" },
           item_id: { type: "string", description: "ID específico do item (se já identificado)" }
         },
@@ -311,6 +314,7 @@ const listToolDefinitions = [
         type: "object",
         properties: {
           lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" },
           item_nome: { type: "string", description: "Nome do item" },
           item_id: { type: "string", description: "ID específico do item (se já identificado)" },
           nova_quantidade: { type: "number", description: "Nova quantidade do item" }
@@ -576,22 +580,86 @@ function converterParaUnidadeBase(quantidade: number, unidadeOrigem: string, uni
 // ==================== FIM CONVERSÃO DE UNIDADE ====================
 
 
+// Validar formato UUID
+function isValidUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
+// Normalizar texto para comparação de nomes de lista
+function normalizarNomeLista(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function resolveListaId(
   args: Record<string, any>,
   supabase: any,
   usuarioId: string,
   listaAtivaId: string | null
 ): Promise<{ listaId: string | null; erro: string | null }> {
-  const listaId = args.lista_id || listaAtivaId;
-  if (!listaId) {
-    return { listaId: null, erro: "Nenhuma lista ativa definida. Use listar_listas para ver suas listas ou criar_lista para criar uma nova." };
+  // 1. Tentar lista_id dos args ou lista ativa
+  let listaId = args.lista_id || listaAtivaId;
+
+  // 2. Validar formato UUID — ignorar IDs fabricados silenciosamente
+  if (listaId && !isValidUUID(listaId)) {
+    console.warn(`⚠️ ID de lista inválido ignorado (não é UUID): ${listaId}`);
+    listaId = null;
   }
-  // Verify ownership
-  const { data, error } = await supabase.from('listas_compras').select('id').eq('id', listaId).eq('user_id', usuarioId).maybeSingle();
-  if (error || !data) {
-    return { listaId: null, erro: "Lista não encontrada ou não pertence a este usuário." };
+
+  // 3. Se temos um ID válido, verificar ownership
+  if (listaId) {
+    const { data, error } = await supabase.from('listas_compras').select('id').eq('id', listaId).eq('user_id', usuarioId).maybeSingle();
+    if (!error && data) {
+      return { listaId, erro: null };
+    }
+    // ID não encontrado — cair no fallback por nome
+    listaId = null;
   }
-  return { listaId, erro: null };
+
+  // 4. Fallback: resolver pelo nome_lista informado nos args
+  const nomeLista = args.nome_lista;
+  if (nomeLista) {
+    const nomeNormalizado = normalizarNomeLista(nomeLista);
+
+    // 4a. Busca exata normalizada primeiro
+    const { data: todas, error: errTodas } = await supabase
+      .from('listas_compras')
+      .select('id, titulo')
+      .eq('user_id', usuarioId)
+      .order('created_at', { ascending: false });
+
+    if (!errTodas && todas && todas.length > 0) {
+      // Tentar match exato normalizado
+      const matchesExatos = todas.filter((l: any) => normalizarNomeLista(l.titulo) === nomeNormalizado);
+      if (matchesExatos.length === 1) {
+        return { listaId: matchesExatos[0].id, erro: null };
+      }
+      if (matchesExatos.length > 1) {
+        const nomes = matchesExatos.map((l: any) => `• ${l.titulo}`).join('\n');
+        return { listaId: null, erro: `Encontrei ${matchesExatos.length} listas com esse nome:\n${nomes}\nQual delas você quer?` };
+      }
+
+      // 4b. Busca parcial (contém o termo)
+      const matchesParciais = todas.filter((l: any) => normalizarNomeLista(l.titulo).includes(nomeNormalizado));
+      if (matchesParciais.length === 1) {
+        return { listaId: matchesParciais[0].id, erro: null };
+      }
+      if (matchesParciais.length > 1) {
+        const nomes = matchesParciais.map((l: any) => `• ${l.titulo}`).join('\n');
+        return { listaId: null, erro: `Encontrei ${matchesParciais.length} listas parecidas:\n${nomes}\nQual delas você quer?` };
+      }
+    }
+
+    // Nenhuma lista encontrada com esse nome
+    return { listaId: null, erro: `Não encontrei nenhuma lista chamada "${nomeLista}". Quer que eu crie uma nova com esse nome?` };
+  }
+
+  // 5. Sem ID e sem nome — erro genérico amigável
+  return { listaId: null, erro: "Você não tem nenhuma lista ativa no momento. Me diga o nome da lista que quer usar, ou posso criar uma nova pra você!" };
 }
 
 // ==================== TOOL EXECUTION ====================
@@ -1358,10 +1426,14 @@ async function executeTool(
       }
 
       case 'definir_lista_ativa': {
+        // Validate UUID format
+        if (!args.lista_id || !isValidUUID(args.lista_id)) {
+          return { result: JSON.stringify({ erro: "Lista não encontrada. Use buscar_lista_por_nome para localizar a lista pelo nome." }), isWriteMutation: false };
+        }
         // Verify list exists and belongs to user
         const { data: lista, error: listError } = await supabase.from('listas_compras').select('id, titulo').eq('id', args.lista_id).eq('user_id', usuarioId).maybeSingle();
         if (listError || !lista) {
-          return { result: JSON.stringify({ erro: "Lista não encontrada." }), isWriteMutation: false };
+          return { result: JSON.stringify({ erro: "Lista não encontrada. Use buscar_lista_por_nome para localizar a lista pelo nome." }), isWriteMutation: false };
         }
         const { error } = await supabase.from('whatsapp_preferencias_usuario').upsert({
           usuario_id: usuarioId, lista_ativa_id: args.lista_id, updated_at: new Date().toISOString()
@@ -2785,6 +2857,14 @@ Regras de Listas de Compras:
 13. Ao abrir/selecionar lista existente: defina como lista ativa com definir_lista_ativa.
 14. RESOLUÇÃO IMPLÍCITA DE LISTA: Quando o usuário citar o nome de uma lista na mensagem (ex: "adiciona batata na lista teste 15"), use buscar_lista_por_nome para encontrá-la. Se houver EXATAMENTE UMA correspondência, use essa lista diretamente como destino da ação E defina-a como lista ativa em segundo plano (sem perguntar "quer ativar?"). Só pergunte quando houver ambiguidade real (2+ listas correspondentes).
 15. BUSCA TOLERANTE DE LISTA: A busca por nome de lista deve ser tolerante. Se o usuário disser "lista 15", busque por "15". Se houver apenas uma lista com "15" no nome (ex: "teste 15"), use-a diretamente. Se houver múltiplas (ex: "teste 15" e "15 de agosto"), apresente as opções e pergunte.
+15b. RESOLUÇÃO AUTOMÁTICA POR NOME: Ao chamar adicionar_itens_lista, remover_item_lista, alterar_quantidade_item_lista ou listar_itens_lista, se você NÃO tem o lista_id mas sabe o nome da lista, passe o parâmetro nome_lista nos argumentos. O sistema resolve automaticamente pelo nome — não precisa chamar buscar_lista_por_nome antes.
+15c. PROIBIÇÃO ABSOLUTA DE FABRICAR IDs: NUNCA invente, fabrique ou adivinhe IDs de lista. IDs são UUIDs no formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx e só podem ser obtidos a partir do retorno de tools (buscar_lista_por_nome, listar_listas, criar_lista). Se você não tem o ID, passe nome_lista.
+15d. EXEMPLO DE FLUXO CORRETO:
+    Usuário: "adiciona leite na nova lista"
+    → Chamar adicionar_itens_lista com nome_lista="nova lista" (o sistema resolve automaticamente)
+    OU
+    → Chamar buscar_lista_por_nome(termo: "nova lista"), depois usar o ID retornado
+    NUNCA inventar um ID como "654b9d03..." — isso causa erro.
 16. Com lista ativa, comandos de adicionar/remover/alterar operam nela sem perguntar novamente.
 17. Se pedir para adicionar "na lista" sem especificar e sem lista ativa: liste as existentes e pergunte.
 
