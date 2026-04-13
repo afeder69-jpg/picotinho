@@ -413,7 +413,51 @@ const feedbackToolDefinitions = [
   }
 ];
 
-const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions];
+// --- Preferences tools ---
+const preferencesToolDefinitions = [
+  {
+    type: "function",
+    function: {
+      name: "gerenciar_preferencias_mensagens",
+      description: "Altera as preferências de mensagens proativas do telefone que está conversando. Cada preferência controla um tipo de mensagem: promoções, novidades, avisos de estoque, dicas. Modo 'definir' altera apenas as preferências informadas (sem tocar nas demais). Modo 'exclusivo' ativa as informadas e desativa TODAS as demais.",
+      parameters: {
+        type: "object",
+        properties: {
+          pref_promocoes: { type: "boolean", description: "Ativar/desativar promoções e ofertas" },
+          pref_novidades: { type: "boolean", description: "Ativar/desativar novidades do Picotinho" },
+          pref_avisos_estoque: { type: "boolean", description: "Ativar/desativar avisos de estoque" },
+          pref_dicas: { type: "boolean", description: "Ativar/desativar dicas e sugestões úteis" },
+          modo: { type: "string", enum: ["definir", "exclusivo"], description: "definir = altera só as informadas. exclusivo = ativa as informadas e desativa as demais." }
+        },
+        required: ["modo"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "consultar_preferencias_mensagens",
+      description: "Consulta o estado atual das preferências de mensagens proativas do telefone que está conversando. Use quando o usuário perguntar quais mensagens estão ativas.",
+      parameters: { type: "object", properties: {}, required: [] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "atualizar_nome_telefone",
+      description: "Atualiza o nome da pessoa vinculada ao telefone que está conversando. Use quando o usuário disser frases como 'esse número é da cozinheira', 'coloca o nome desse telefone como Camila'.",
+      parameters: {
+        type: "object",
+        properties: {
+          nome_pessoa: { type: "string", description: "Nome da pessoa vinculada ao telefone" }
+        },
+        required: ["nome_pessoa"]
+      }
+    }
+  }
+];
+
+const toolDefinitions = [...stockToolDefinitions, ...listToolDefinitions, ...reportToolDefinitions, ...feedbackToolDefinitions, ...preferencesToolDefinitions];
 
 // ==================== SHARED: MATCHING POR NÚCLEO ====================
 const STOP_WORDS_SHARED = new Set([
