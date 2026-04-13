@@ -838,6 +838,8 @@ export default function NormalizacaoGlobal() {
           mensagem: campanhaEditada.mensagem,
           filtro_tipo: campanhaEditada.filtro_tipo,
           filtro_valor: campanhaEditada.filtro_valor || null,
+          tipo_mensagem: campanhaEditada.tipo_mensagem || undefined,
+          envio_emergencial: campanhaEditada.envio_emergencial,
         },
         headers: { Authorization: `Bearer ${session?.session?.access_token}` }
       });
