@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Plus, ShoppingCart, Calendar, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +15,32 @@ import { ptBR } from "date-fns/locale";
 export default function ListasComprasIndex() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [criarDialogOpen, setCriarDialogOpen] = useState(false);
+
+  // === REALTIME: atualizar índice quando listas ou itens mudam ===
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`listas-compras-index-${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'listas_compras',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['listas-compras', user.id] });
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'listas_compras_itens',
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['listas-compras', user.id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, queryClient]);
 
   const { data: listas = [], isLoading } = useQuery({
     queryKey: ['listas-compras', user?.id],
