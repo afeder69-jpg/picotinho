@@ -1597,12 +1597,13 @@ async function executeTool(
 
             if (existe) {
               validacao = 'id_validado';
-              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
+              const unidadeResolvida = await resolverUnidadeParaLista(produtoId, supabase);
+              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeResolvida}`);
               itensParaInserir.push({
                 lista_id: listaId,
                 produto_nome: item.produto_nome,
                 quantidade: item.quantidade || 1,
-                unidade_medida: item.unidade_medida || 'UN',
+                unidade_medida: unidadeResolvida,
                 item_livre: false,
                 produto_id: produtoId
               });
