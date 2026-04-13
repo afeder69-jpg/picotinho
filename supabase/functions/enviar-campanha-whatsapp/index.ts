@@ -156,7 +156,7 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { action, campanha_id, titulo, mensagem, filtro_tipo, filtro_valor } = body;
+    const { action, campanha_id, titulo, mensagem, filtro_tipo, filtro_valor, tipo_mensagem } = body;
 
     // ===== QUERY DE DESTINATÁRIOS =====
     async function queryDestinatarios(fTipo: string, fValor: string | null) {
@@ -279,6 +279,7 @@ serve(async (req: Request) => {
       if (mensagem !== undefined) updateFields.mensagem = mensagem;
       if (filtro_tipo !== undefined) updateFields.filtro_tipo = filtro_tipo;
       if (filtro_valor !== undefined) updateFields.filtro_valor = filtro_valor || null;
+      if (tipo_mensagem !== undefined) updateFields.tipo_mensagem = tipo_mensagem;
       updateFields.updated_at = new Date().toISOString();
 
       await serviceClient
