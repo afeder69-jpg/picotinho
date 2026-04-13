@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatarUnidadeListaCompras } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -79,7 +80,7 @@ export function EditarQuantidadeDialog({ open, onClose, item, onSalvar }: Editar
             >
               <Plus className="h-4 w-4" />
             </Button>
-            <span className="text-sm text-muted-foreground">{item.unidade_medida}</span>
+            <span className="text-sm text-muted-foreground">{formatarUnidadeListaCompras(item.unidade_medida)}</span>
           </div>
         </div>
 

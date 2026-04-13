@@ -1,5 +1,6 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
+import { formatarUnidadeListaCompras } from "@/lib/utils";
 
 interface ProdutoMarcado {
   id: string;
@@ -40,7 +41,7 @@ export function ItemProdutoInterativo({ produto, onToggle }: ItemProdutoInterati
           
           <div className="flex items-center justify-between mt-2 text-sm">
             <div className="flex items-center gap-3 text-muted-foreground">
-              <span>{produto.quantidade} {produto.unidade_medida}</span>
+              <span>{produto.quantidade} {formatarUnidadeListaCompras(produto.unidade_medida)}</span>
               <span>×</span>
               <span>R$ {produto.preco_unitario.toFixed(2)}</span>
             </div>

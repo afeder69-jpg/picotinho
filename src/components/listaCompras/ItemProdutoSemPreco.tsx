@@ -3,6 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { formatarUnidadeListaCompras } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
@@ -79,7 +80,7 @@ export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange
               >
                 <Plus className="h-3 w-3" />
               </Button>
-              <span className="text-xs text-muted-foreground">{item.unidade_medida}</span>
+              <span className="text-xs text-muted-foreground">{formatarUnidadeListaCompras(item.unidade_medida)}</span>
             </div>
           </div>
         </div>
