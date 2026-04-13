@@ -59,6 +59,10 @@ interface ResultadoRecategorizacao {
   conflitos_detectados: ConflitosDetectados[];
   mudancas: Mudanca[];
   estoque_propagados: number;
+  orfaos_analisados?: number;
+  orfaos_alterados?: number;
+  orfaos_ja_corretos?: number;
+  orfaos_ignorados?: number;
   timestamp: string;
 }
 
@@ -135,9 +139,10 @@ const RecategorizarProdutosInteligente = () => {
       if (error) throw error;
 
       setResultado(data);
+      const orfaosMsg = data.orfaos_alterados ? ` + ${data.orfaos_alterados} órfãos corrigidos` : '';
       toast({
         title: "Recategorização concluída!",
-        description: `${data.produtos_alterados} produtos master alterados de ${data.produtos_master_analisados} analisados.`,
+        description: `${data.produtos_alterados} produtos master alterados de ${data.produtos_master_analisados} analisados${orfaosMsg}.`,
       });
     } catch (error: any) {
       console.error("Erro na recategorização:", error);
@@ -378,6 +383,16 @@ const RecategorizarProdutosInteligente = () => {
                         </div>
                       </CardContent>
                     </Card>
+                    {(resultado.orfaos_alterados != null && resultado.orfaos_alterados > 0) && (
+                      <Card>
+                        <CardContent className="pt-4 pb-3">
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-teal-600">{resultado.orfaos_alterados}</p>
+                            <p className="text-xs text-muted-foreground">Órfãos corrigidos</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
 
                   {/* Conflitos detectados */}
