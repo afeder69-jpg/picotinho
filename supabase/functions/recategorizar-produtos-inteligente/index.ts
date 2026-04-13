@@ -330,6 +330,120 @@ serve(async (req) => {
       });
     }
 
+    // =====================================================
+    // ETAPA 9: Segunda passagem — itens órfãos no estoque_app
+    // =====================================================
+    console.log('🔍 Iniciando segunda passagem: itens órfãos no estoque_app (sem produto_master_id)...');
+
+    const { data: itensOrfaos, error: orfaosError } = await supabase
+      .from('estoque_app')
+      .select('id, produto_nome, categoria, user_id')
+      .is('produto_master_id', null);
+
+    if (orfaosError) {
+      console.error('❌ Erro ao buscar itens órfãos:', orfaosError.message);
+    }
+
+    let orfaosAlterados = 0;
+    let orfaosJaCorretos = 0;
+    let orfaosIgnorados = 0;
+
+    for (const item of itensOrfaos || []) {
+      const nomeProduto = item.produto_nome;
+      const categoriaAtual = (item.categoria ?? '').toUpperCase();
+
+      interface RegraMatchOrfao {
+        regra: RecategorizationRule;
+        maxTokens: number;
+        isGlobal: boolean;
+        descricao: string;
+      }
+
+      const matches: RegraMatchOrfao[] = [];
+
+      for (const regra of regrasOrdenadas) {
+        let maxTokensForMatch = 0;
+        let hasMatch = false;
+
+        for (const kw of regra.keywords) {
+          if (keywordsComConflito.has(normalizeText(kw))) continue;
+          if (keywordMatchesProduct(kw, nomeProduto)) {
+            hasMatch = true;
+            const tokens = tokenize(kw).length;
+            if (tokens > maxTokensForMatch) maxTokensForMatch = tokens;
+          }
+        }
+
+        if (!hasMatch) continue;
+
+        const isGlobal = !regra.categorias_origem || regra.categorias_origem.length === 0;
+        if (!isGlobal) {
+          const origemMatch = regra.categorias_origem!.some(cat =>
+            categoriaAtual === cat.toUpperCase()
+          );
+          if (!origemMatch) continue;
+        }
+
+        matches.push({
+          regra,
+          maxTokens: maxTokensForMatch,
+          isGlobal,
+          descricao: regra.descricao,
+        });
+      }
+
+      if (matches.length === 0) {
+        orfaosIgnorados++;
+        continue;
+      }
+
+      matches.sort((a, b) => {
+        if (b.maxTokens !== a.maxTokens) return b.maxTokens - a.maxTokens;
+        if (a.isGlobal !== b.isGlobal) return a.isGlobal ? -1 : 1;
+        return a.descricao.localeCompare(b.descricao);
+      });
+
+      const regraVencedora = matches[0];
+      const categoriaDestino = regraVencedora.regra.categoria_destino.toLowerCase();
+
+      if (item.categoria === categoriaDestino) {
+        orfaosJaCorretos++;
+        continue;
+      }
+
+      console.log(`🔄 Órfão: ${nomeProduto} | ${item.categoria} → ${categoriaDestino}`);
+
+      const { error: updateOrfaoError } = await supabase
+        .from('estoque_app')
+        .update({
+          categoria: categoriaDestino,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', item.id);
+
+      if (updateOrfaoError) {
+        console.error(`❌ Erro ao atualizar órfão ${nomeProduto}:`, updateOrfaoError.message);
+        mudancas.push({
+          produto_nome: nomeProduto,
+          categoria_anterior: item.categoria,
+          categoria_nova: categoriaDestino,
+          razao: `[órfão] ${regraVencedora.regra.descricao}`,
+          status: 'erro'
+        });
+        continue;
+      }
+
+      orfaosAlterados++;
+      mudancas.push({
+        produto_nome: nomeProduto,
+        categoria_anterior: item.categoria,
+        categoria_nova: categoriaDestino,
+        razao: `[órfão] ${regraVencedora.regra.descricao}`,
+        status: 'sucesso',
+        propagados_estoque: 0,
+      });
+    }
+
     const resultado = {
       sucesso: true,
       produtos_master_analisados: (produtos || []).length,
@@ -340,6 +454,10 @@ serve(async (req) => {
       conflitos_detectados: conflitos,
       mudancas,
       estoque_propagados: estoquePropagados,
+      orfaos_analisados: (itensOrfaos || []).length,
+      orfaos_alterados: orfaosAlterados,
+      orfaos_ja_corretos: orfaosJaCorretos,
+      orfaos_ignorados: orfaosIgnorados,
       timestamp: new Date().toISOString()
     };
 
@@ -351,6 +469,11 @@ serve(async (req) => {
     console.log(`   Com conflito: ${resultado.produtos_com_conflito}`);
     console.log(`   Estoque propagados: ${resultado.estoque_propagados}`);
     console.log(`   Conflitos: ${conflitos.length}`);
+    console.log('📊 Resultado órfãos:');
+    console.log(`   Órfãos analisados: ${resultado.orfaos_analisados}`);
+    console.log(`   Órfãos alterados: ${resultado.orfaos_alterados}`);
+    console.log(`   Órfãos já corretos: ${resultado.orfaos_ja_corretos}`);
+    console.log(`   Órfãos ignorados: ${resultado.orfaos_ignorados}`);
 
     return new Response(JSON.stringify(resultado), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
