@@ -3616,6 +3616,8 @@ export default function NormalizacaoGlobal() {
                             mensagem: campanhaAtual.mensagem,
                             filtro_tipo: campanhaAtual.filtro_tipo,
                             filtro_valor: campanhaAtual.filtro_valor || '',
+                            tipo_mensagem: campanhaAtual.tipo_mensagem || '',
+                            envio_emergencial: !!campanhaAtual.envio_emergencial,
                           });
                           setEditandoCampanha(true);
                           carregarFiltrosCampanha();
