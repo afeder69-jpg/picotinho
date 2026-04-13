@@ -194,8 +194,8 @@ const handler = async (req: Request): Promise<Response> => {
     if (updateError) {
       console.error('Erro ao salvar código:', updateError);
 
-      // Tratar erro de índice único (race condition)
-      if (updateError.code === '23505' && updateError.message?.includes('idx_unique_numero_whatsapp_ativo')) {
+      // Tratar qualquer erro de unicidade (race condition ou duplicidade cross-user)
+      if (updateError.code === '23505') {
         return new Response(JSON.stringify({
           success: false,
           error: 'Este número de WhatsApp já está vinculado a outra conta.'
@@ -205,7 +205,7 @@ const handler = async (req: Request): Promise<Response> => {
         });
       }
 
-      throw new Error('Erro ao salvar código de verificação');
+      throw new Error('Não foi possível registrar este número. Tente novamente em instantes.');
     }
 
     // Enviar código via WhatsApp usando Z-API
