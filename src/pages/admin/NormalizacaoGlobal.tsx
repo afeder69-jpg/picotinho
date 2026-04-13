@@ -251,6 +251,8 @@ export default function NormalizacaoGlobal() {
   const [novaCampanha, setNovaCampanha] = useState(NOVA_CAMPANHA_INITIAL_STATE);
   const [enviandoCampanha, setEnviandoCampanha] = useState(false);
   const [estimativaDestinatarios, setEstimativaDestinatarios] = useState<number | null>(null);
+  const [estimativaEmergencial, setEstimativaEmergencial] = useState<number | null>(null);
+  const [estimativaDiferenca, setEstimativaDiferenca] = useState<number | null>(null);
   const [filtrosDisponiveis, setFiltrosDisponiveis] = useState<{ estados: string[], cidades: string[] }>({ estados: [], cidades: [] });
   const [confirmandoEnvioCampanha, setConfirmandoEnvioCampanha] = useState(false);
   const [carregandoCampanhas, setCarregandoCampanhas] = useState(false);
