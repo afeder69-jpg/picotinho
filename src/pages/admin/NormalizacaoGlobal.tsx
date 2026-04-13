@@ -3319,6 +3319,25 @@ export default function NormalizacaoGlobal() {
                   <Textarea id="camp_msg" value={novaCampanha.mensagem} onChange={(e) => setNovaCampanha({ ...novaCampanha, mensagem: e.target.value })} placeholder="Escreva a mensagem que será enviada..." rows={5} />
                   <p className="text-xs text-muted-foreground">Prefixo automático: 📢 *Picotinho*</p>
                 </div>
+                {/* Tipo da mensagem (obrigatório) */}
+                <div className="space-y-2">
+                  <Label>Tipo da mensagem *</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={novaCampanha.tipo_mensagem}
+                    onChange={(e) => {
+                      const proximaCampanha = { ...novaCampanha, tipo_mensagem: e.target.value };
+                      setNovaCampanha(proximaCampanha);
+                      estimarDestinatariosCampanha(proximaCampanha);
+                    }}
+                  >
+                    <option value="">Selecione o tipo...</option>
+                    {TIPO_MENSAGEM_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">O envio respeitará as preferências dos usuários para este tipo de mensagem.</p>
+                </div>
                 <div className="space-y-2">
                   <Label>Público-alvo</Label>
                   <RadioGroup
@@ -3362,10 +3381,40 @@ export default function NormalizacaoGlobal() {
                     </select>
                   </div>
                 )}
+                {/* Envio emergencial - apenas para master */}
+                {isMaster && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="camp_emergencial"
+                        checked={novaCampanha.envio_emergencial}
+                        onCheckedChange={(checked) => setNovaCampanha({ ...novaCampanha, envio_emergencial: !!checked })}
+                      />
+                      <Label htmlFor="camp_emergencial" className="text-sm font-medium cursor-pointer">
+                        🚨 Envio emergencial (ignorar preferências dos usuários)
+                      </Label>
+                    </div>
+                    {novaCampanha.envio_emergencial && (
+                      <div className="rounded-lg border border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-sm space-y-1">
+                        <p className="font-medium text-yellow-800 dark:text-yellow-300">⚠️ Modo emergencial ativado</p>
+                        <p className="text-yellow-700 dark:text-yellow-400">Esta campanha ignorará as preferências de tipo de mensagem dos usuários e será enviada para todos os telefones elegíveis. Use apenas em casos excepcionais (incidentes de segurança, avisos urgentes do sistema, comunicações críticas).</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Estimativa de destinatários */}
                 {estimativaDestinatarios !== null && (
-                  <div className="rounded-lg bg-muted p-3">
-                    <p className="text-sm font-medium">📊 Estimativa de destinatários: <strong>{estimativaDestinatarios}</strong></p>
-                    <p className="mt-1 text-xs text-muted-foreground">Critério: telefones autorizados (verificado + ativo), DISTINCT por usuário, telefone mais recente por created_at da tabela whatsapp_telefones_autorizados</p>
+                  <div className="rounded-lg bg-muted p-3 space-y-1">
+                    <p className="text-sm font-medium">📊 Destinatários (respeitando preferências): <strong>{estimativaDestinatarios}</strong></p>
+                    {novaCampanha.envio_emergencial && estimativaEmergencial !== null && (
+                      <>
+                        <p className="text-sm font-medium">🚨 Destinatários (emergencial): <strong>{estimativaEmergencial}</strong></p>
+                        {estimativaDiferenca !== null && estimativaDiferenca > 0 && (
+                          <p className="text-xs text-yellow-700 dark:text-yellow-400">+{estimativaDiferenca} destinatário(s) adicional(is) por ignorar preferências</p>
+                        )}
+                      </>
+                    )}
+                    <p className="text-xs text-muted-foreground">Critério: telefones autorizados (verificado + ativo), DISTINCT por usuário</p>
                   </div>
                 )}
               </div>
@@ -3373,8 +3422,14 @@ export default function NormalizacaoGlobal() {
                 <Button type="button" variant="outline" onClick={fecharNovaCampanhaDialog}>Cancelar</Button>
                 <Button
                   type="button"
-                  onClick={() => setConfirmandoEnvioCampanha(true)}
-                  disabled={!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || (novaCampanha.filtro_tipo !== 'todos' && !novaCampanha.filtro_valor) || estimativaDestinatarios === 0}
+                  onClick={() => {
+                    if (novaCampanha.envio_emergencial) {
+                      setConfirmandoEmergencial(true);
+                    } else {
+                      setConfirmandoEnvioCampanha(true);
+                    }
+                  }}
+                  disabled={!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || !novaCampanha.tipo_mensagem || (novaCampanha.filtro_tipo !== 'todos' && !novaCampanha.filtro_valor) || estimativaDestinatarios === 0}
                   className="gap-2"
                 >
                   <Send className="w-4 h-4" />
@@ -3394,8 +3449,15 @@ export default function NormalizacaoGlobal() {
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{novaCampanha.mensagem}</p>
                 </div>
                 <div className="space-y-2 rounded-lg border p-4 text-sm">
+                  <p><strong>Tipo:</strong> {getTipoMensagemLabel(novaCampanha.tipo_mensagem)}</p>
                   <p><strong>Público:</strong> {novaCampanha.filtro_tipo === 'todos' ? 'Todos os usuários' : `${novaCampanha.filtro_tipo}: ${novaCampanha.filtro_valor}`}</p>
-                  <p><strong>Destinatários estimados:</strong> {estimativaDestinatarios === null ? 'Calculando...' : estimativaDestinatarios === -1 ? <span className="text-destructive">Erro ao estimar. <button type="button" className="underline" onClick={() => estimarDestinatariosCampanha()}>Tentar novamente</button></span> : estimativaDestinatarios}</p>
+                  <p><strong>Destinatários estimados:</strong> {novaCampanha.envio_emergencial ? (estimativaEmergencial ?? estimativaDestinatarios ?? 'Calculando...') : (estimativaDestinatarios === null ? 'Calculando...' : estimativaDestinatarios === -1 ? <span className="text-destructive">Erro ao estimar. <button type="button" className="underline" onClick={() => estimarDestinatariosCampanha()}>Tentar novamente</button></span> : estimativaDestinatarios)}</p>
+                  {novaCampanha.envio_emergencial && (
+                    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 mt-2 space-y-1">
+                      <p className="font-semibold text-destructive">🚨 ENVIO EMERGENCIAL</p>
+                      <p className="text-destructive/90 text-xs">Esta campanha ignorará as preferências de mensagens dos usuários. A mensagem será enviada para todos os telefones elegíveis. Esta opção deve ser usada apenas em casos excepcionais.</p>
+                    </div>
+                  )}
                   <p className="text-muted-foreground">As mensagens serão enviadas via WhatsApp com o prefixo 📢 *Picotinho*. Esta ação não pode ser desfeita.</p>
                 </div>
               </div>
@@ -3407,10 +3469,6 @@ export default function NormalizacaoGlobal() {
               </DialogFooter>
             </>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Detalhe da Campanha */}
       <Dialog open={campanhaDetalheOpen} onOpenChange={(open) => {
         if (!open) {
           setEditandoCampanha(false);
