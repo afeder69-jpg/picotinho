@@ -3236,6 +3236,14 @@ export default function NormalizacaoGlobal() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold">{campanha.titulo}</h4>
                           {getStatusCampanhaBadge(campanha.status)}
+                          {campanha.tipo_mensagem ? (
+                            <Badge variant="outline" className="text-xs">{getTipoMensagemLabel(campanha.tipo_mensagem)}</Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs">Sem tipo</Badge>
+                          )}
+                          {campanha.envio_emergencial && (
+                            <Badge variant="destructive" className="text-xs">🚨 Emergencial</Badge>
+                          )}
                           <Badge variant="outline" className="text-xs">
                             {campanha.filtro_tipo === 'todos' ? 'Todos' : `${campanha.filtro_tipo}: ${campanha.filtro_valor}`}
                           </Badge>
