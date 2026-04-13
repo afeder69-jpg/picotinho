@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, Share2, Trash2, Pencil } from "lucide-react";
+import { ArrowLeft, FileText, Share2, Trash2, Pencil, DollarSign, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -13,6 +13,9 @@ interface ListaComprasHeaderProps {
   onExportar: () => void;
   onEditar?: () => void;
   onLimpar?: () => void;
+  onCarregarPrecos?: () => void;
+  precosCarregados?: boolean;
+  loadingPrecos?: boolean;
   loading?: boolean;
 }
 
@@ -24,6 +27,9 @@ export function ListaComprasHeader({
   onExportar,
   onEditar,
   onLimpar,
+  onCarregarPrecos,
+  precosCarregados = false,
+  loadingPrecos = false,
   loading = false
 }: ListaComprasHeaderProps) {
   const origemLabel = {
@@ -62,14 +68,38 @@ export function ListaComprasHeader({
             <span className="hidden sm:inline">Editar</span>
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={onVerTabela} disabled={loading}>
-          <FileText className="mr-2 h-4 w-4" />
-          <span className="hidden sm:inline">Tabela</span>
-        </Button>
-        <Button variant="outline" size="sm" onClick={onExportar} disabled={loading}>
-          <Share2 className="mr-2 h-4 w-4" />
-          <span className="hidden sm:inline">Exportar</span>
-        </Button>
+
+        {/* Botão Preços: visível apenas quando preços não foram carregados */}
+        {!precosCarregados && onCarregarPrecos && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onCarregarPrecos}
+            disabled={loadingPrecos}
+          >
+            {loadingPrecos ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <DollarSign className="mr-2 h-4 w-4" />
+            )}
+            <span>Preços</span>
+          </Button>
+        )}
+
+        {/* Tabela e Exportar: visíveis apenas quando preços estão carregados */}
+        {precosCarregados && (
+          <>
+            <Button variant="outline" size="sm" onClick={onVerTabela} disabled={loading}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Tabela</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={onExportar} disabled={loading}>
+              <Share2 className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Exportar</span>
+            </Button>
+          </>
+        )}
+
         {onLimpar && (
           <Button variant="outline" size="sm" onClick={onLimpar} disabled={loading}>
             <Trash2 className="h-4 w-4" />
