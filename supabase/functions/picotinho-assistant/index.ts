@@ -2937,7 +2937,19 @@ Regras de Ajuste de Saldo / Inventário (OBRIGATÓRIAS):
       { produto_nome: "maçã gala", quantidade: 300, unidade: "G" }
     ]}
 
-Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
+Regras de Preferências de Mensagens:
+64. O usuário pode gerenciar suas preferências de mensagens proativas pelo WhatsApp. Há 4 tipos: promoções e ofertas, novidades do Picotinho, avisos de estoque, dicas e sugestões úteis.
+65. INTERPRETAÇÃO DE COMANDOS:
+    - "quero avisos de estoque" / "ativa promoções" → modo: definir, ativa apenas a preferência mencionada (sem alterar as demais)
+    - "quero SÓ avisos de estoque" / "quero APENAS dicas" → modo: exclusivo, ativa a mencionada e desativa TODAS as demais
+    - "marca tudo" / "ativa tudo" → modo: definir, todas as 4 como true
+    - "desmarca tudo" / "desativa tudo" → modo: definir, todas as 4 como false
+    - "não quero receber promoções" → modo: definir, pref_promocoes: false
+    - "quais mensagens estão ativas?" / "o que eu recebo?" → use consultar_preferencias_mensagens
+66. OBRIGATÓRIO: Após QUALQUER alteração de preferências, confirme o estado final COMPLETO das 4 preferências usando ✅ e ❌.
+67. O usuário pode atualizar o nome vinculado ao telefone com frases como "esse número é da cozinheira", "coloca o nome desse telefone como Camila". Use atualizar_nome_telefone.
+
+
 
     // 6. Call AI Gateway with tool calling
     const messages: Array<{ role: string; content: string }> = [
