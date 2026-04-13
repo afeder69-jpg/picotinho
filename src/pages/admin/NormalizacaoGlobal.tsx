@@ -2259,12 +2259,12 @@ export default function NormalizacaoGlobal() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6 pb-24">
+    <div className="container mx-auto px-3 py-4 md:p-6 space-y-4 md:space-y-6 pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Shield className="w-8 h-8 text-primary" />
+          <h1 className="text-xl md:text-3xl font-bold flex items-center gap-2">
+            <Shield className="w-6 h-6 md:w-8 md:h-8 text-primary" />
             Normalização Global Master
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -2612,7 +2612,7 @@ export default function NormalizacaoGlobal() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Grupos Consolidados</p>
                 <p className="text-2xl font-bold text-green-600">{relatorioConsolidacao.grupos_consolidados}</p>
@@ -2659,26 +2659,26 @@ export default function NormalizacaoGlobal() {
 
       {/* Tabs */}
       <Tabs defaultValue="pendentes" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="pendentes" className="gap-2">
-            <Clock className="w-4 h-4" />
+        <TabsList className="flex flex-wrap h-auto gap-1 w-full">
+          <TabsTrigger value="pendentes" className="gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3">
+            <Clock className="w-4 h-4 hidden md:block" />
             Pendentes ({stats.pendentesTotal})
           </TabsTrigger>
-          <TabsTrigger value="catalogo" className="gap-2">
-            <Package className="w-4 h-4" />
-            Catálogo Master
+          <TabsTrigger value="catalogo" className="gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3">
+            <Package className="w-4 h-4 hidden md:block" />
+            Catálogo
           </TabsTrigger>
-          <TabsTrigger value="raspagem-imagens" className="gap-2">
-            <ImageOff className="w-4 h-4" />
-            Raspagem de Imagens ({stats.produtosSemImagem})
+          <TabsTrigger value="raspagem-imagens" className="gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3">
+            <ImageOff className="w-4 h-4 hidden md:block" />
+            Imagens ({stats.produtosSemImagem})
           </TabsTrigger>
-          <TabsTrigger value="suporte" className="gap-2">
-            <MessageSquare className="w-4 h-4" />
-            Suporte {feedbackStats.total > 0 && <Badge variant="destructive" className="ml-1">{feedbackStats.total}</Badge>}
+          <TabsTrigger value="suporte" className="gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3">
+            <MessageSquare className="w-4 h-4 hidden md:block" />
+            Suporte {feedbackStats.total > 0 && <Badge variant="destructive" className="ml-1 text-xs">{feedbackStats.total}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="campanhas" className="gap-2" onClick={() => { carregarFiltrosCampanha(); }}>
-            <Send className="w-4 h-4" />
-            Campanhas {campanhasEmAndamento > 0 && <Badge variant="default" className="ml-1">{campanhasEmAndamento}</Badge>}
+          <TabsTrigger value="campanhas" className="gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3" onClick={() => { carregarFiltrosCampanha(); }}>
+            <Send className="w-4 h-4 hidden md:block" />
+            Campanhas {campanhasEmAndamento > 0 && <Badge variant="default" className="ml-1 text-xs">{campanhasEmAndamento}</Badge>}
           </TabsTrigger>
         </TabsList>
 
