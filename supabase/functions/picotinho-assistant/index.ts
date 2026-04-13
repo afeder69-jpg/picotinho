@@ -580,6 +580,62 @@ function converterParaUnidadeBase(quantidade: number, unidadeOrigem: string, uni
 // ==================== FIM CONVERSÃO DE UNIDADE ====================
 
 
+// ==================== RESOLUÇÃO DE UNIDADE PARA LISTA ====================
+
+function normalizarUnidadeSaida(valor: string | null | undefined): string {
+  if (!valor) return 'UN';
+  const v = valor.toUpperCase().trim().replace(/\./g, '');
+  const mapa: Record<string, string> = {
+    'QUILO': 'KG', 'QUILOS': 'KG', 'QUILOGRAMA': 'KG', 'QUILOGRAMAS': 'KG', 'KGS': 'KG', 'KG': 'KG',
+    'GRAMA': 'G', 'GRAMAS': 'G', 'GR': 'G', 'GRS': 'G', 'G': 'G',
+    'LITRO': 'L', 'LITROS': 'L', 'LTS': 'L', 'LT': 'L', 'L': 'L',
+    'MILILITRO': 'ML', 'MILILITROS': 'ML', 'MLS': 'ML', 'ML': 'ML',
+    'UNIDADE': 'UN', 'UNIDADES': 'UN', 'UND': 'UN', 'UNID': 'UN', 'UN': 'UN',
+  };
+  return mapa[v] || v || 'UN';
+}
+
+async function resolverUnidadeParaLista(produtoId: string, supabase: any): Promise<string> {
+  try {
+    const { data: master } = await supabase
+      .from('produtos_master_global')
+      .select('granel, unidade_base, categoria_unidade, qtd_valor')
+      .eq('id', produtoId)
+      .maybeSingle();
+
+    if (!master) return 'UN';
+
+    // Produto granel → usar unidade real normalizada
+    if (master.granel === true) {
+      const unidadeBase = master.unidade_base;
+      if (unidadeBase && unidadeBase.trim() !== '') {
+        return normalizarUnidadeSaida(unidadeBase);
+      }
+      // Fallback por categoria quando unidade_base é nula/vazia
+      if (master.categoria_unidade === 'PESO') return 'KG';
+      if (master.categoria_unidade === 'VOLUME') return 'L';
+      return 'UN';
+    }
+
+    // Produto embalado (qtd_valor > 0) → unidade de compra
+    if (master.qtd_valor && master.qtd_valor > 0) return 'UN';
+
+    // Categoria UNIDADE → UN
+    if (master.categoria_unidade === 'UNIDADE') return 'UN';
+
+    // Categoria PESO ou VOLUME sem qtd_valor (cadastro incompleto) → tratar como embalado
+    if (master.categoria_unidade === 'PESO' || master.categoria_unidade === 'VOLUME') return 'UN';
+
+    // Fallback final
+    return 'UN';
+  } catch (e) {
+    console.warn('⚠️ Erro ao resolver unidade para lista:', e);
+    return 'UN';
+  }
+}
+
+// ==================== FIM RESOLUÇÃO DE UNIDADE PARA LISTA ====================
+
 // Validar formato UUID
 function isValidUUID(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
