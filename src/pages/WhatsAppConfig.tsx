@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Smartphone, Shield, CheckCircle, Plus, Trash2, UserCheck } from "lucide-react";
+import { ArrowLeft, Smartphone, Shield, CheckCircle, Plus, Trash2, UserCheck, Bell } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -31,6 +32,11 @@ interface TelefoneAutorizado {
   data_codigo?: string;
   ativo: boolean;
   created_at: string;
+  pref_promocoes: boolean;
+  pref_novidades: boolean;
+  pref_avisos_estoque: boolean;
+  pref_dicas: boolean;
+  nome_pessoa: string | null;
 }
 
 
