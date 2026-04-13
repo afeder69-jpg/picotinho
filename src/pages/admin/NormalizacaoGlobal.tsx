@@ -262,6 +262,7 @@ export default function NormalizacaoGlobal() {
   const [confirmandoExclusaoCampanha, setConfirmandoExclusaoCampanha] = useState(false);
   const [confirmandoReenvioCampanha, setConfirmandoReenvioCampanha] = useState(false);
   const [campanhasDisparosMap, setCampanhasDisparosMap] = useState<Record<string, any>>({}); // ultimo disparo por campanha_id
+  const [confirmandoEmergencial, setConfirmandoEmergencial] = useState(false);
 
   useEffect(() => {
     verificarAcessoMaster();
