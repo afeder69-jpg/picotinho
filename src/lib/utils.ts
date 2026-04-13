@@ -104,3 +104,16 @@ export function formatarUnidadeMedida(unidade: string): string {
   
   return mapeamento[unidadeLower] || unidadeLower;
 }
+
+/**
+ * Formata unidade de medida para exibição em listas de compras.
+ * Converte categorias genéricas do banco (PESO, VOLUME, UNIDADE) em abreviações de embalagem.
+ */
+export function formatarUnidadeListaCompras(unidade: string): string {
+  if (!unidade) return 'un';
+  const upper = unidade.toUpperCase().trim();
+  if (upper === 'PESO') return 'pct';
+  if (upper === 'VOLUME') return 'un';
+  if (upper === 'UNIDADE') return 'un';
+  return formatarUnidadeMedida(unidade);
+}
