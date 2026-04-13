@@ -618,8 +618,8 @@ export default function WhatsAppConfig() {
                     <div className="flex items-center gap-3">
                       <Smartphone className="h-5 w-5 text-gray-500" />
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{formatarTelefoneBR(telefone.numero_whatsapp)}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium whitespace-nowrap">{formatarTelefoneBR(telefone.numero_whatsapp)}</span>
                           <Badge variant={telefone.tipo === 'principal' ? 'default' : 'secondary'}>
                             {telefone.tipo === 'principal' ? 'Principal' : 'Extra'}
                           </Badge>
@@ -682,8 +682,8 @@ export default function WhatsAppConfig() {
                 {telefones.filter(t => t.verificado).map((telefone) => (
                   <div key={`pref-${telefone.id}`} className="p-4 border rounded-lg space-y-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{formatarTelefoneBR(telefone.numero_whatsapp)}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium whitespace-nowrap">{formatarTelefoneBR(telefone.numero_whatsapp)}</span>
                         <Badge variant={telefone.tipo === 'principal' ? 'default' : 'secondary'}>
                           {telefone.tipo === 'principal' ? 'Principal' : 'Extra'}
                         </Badge>
