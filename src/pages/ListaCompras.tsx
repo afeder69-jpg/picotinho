@@ -55,7 +55,7 @@ export default function ListaCompras() {
   const exclusoesPendentesRef = useRef<Map<string, ExclusaoPendente>>(new Map());
 
   // === EDITAR QUANTIDADE (dialog) ===
-  const [itemEditando, setItemEditando] = useState<ItemLocal | null>(null);
+  const [itemEditando, setItemEditando] = useState<{ id: string; produto_nome: string; quantidade: number; unidade_medida: string } | null>(null);
 
   // Buscar lista (leve, sem comparação)
   const { data: lista, isLoading: loadingLista } = useQuery({
