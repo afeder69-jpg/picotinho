@@ -2857,6 +2857,14 @@ Regras de Listas de Compras:
 13. Ao abrir/selecionar lista existente: defina como lista ativa com definir_lista_ativa.
 14. RESOLUÇÃO IMPLÍCITA DE LISTA: Quando o usuário citar o nome de uma lista na mensagem (ex: "adiciona batata na lista teste 15"), use buscar_lista_por_nome para encontrá-la. Se houver EXATAMENTE UMA correspondência, use essa lista diretamente como destino da ação E defina-a como lista ativa em segundo plano (sem perguntar "quer ativar?"). Só pergunte quando houver ambiguidade real (2+ listas correspondentes).
 15. BUSCA TOLERANTE DE LISTA: A busca por nome de lista deve ser tolerante. Se o usuário disser "lista 15", busque por "15". Se houver apenas uma lista com "15" no nome (ex: "teste 15"), use-a diretamente. Se houver múltiplas (ex: "teste 15" e "15 de agosto"), apresente as opções e pergunte.
+15b. RESOLUÇÃO AUTOMÁTICA POR NOME: Ao chamar adicionar_itens_lista, remover_item_lista, alterar_quantidade_item_lista ou listar_itens_lista, se você NÃO tem o lista_id mas sabe o nome da lista, passe o parâmetro nome_lista nos argumentos. O sistema resolve automaticamente pelo nome — não precisa chamar buscar_lista_por_nome antes.
+15c. PROIBIÇÃO ABSOLUTA DE FABRICAR IDs: NUNCA invente, fabrique ou adivinhe IDs de lista. IDs são UUIDs no formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx e só podem ser obtidos a partir do retorno de tools (buscar_lista_por_nome, listar_listas, criar_lista). Se você não tem o ID, passe nome_lista.
+15d. EXEMPLO DE FLUXO CORRETO:
+    Usuário: "adiciona leite na nova lista"
+    → Chamar adicionar_itens_lista com nome_lista="nova lista" (o sistema resolve automaticamente)
+    OU
+    → Chamar buscar_lista_por_nome(termo: "nova lista"), depois usar o ID retornado
+    NUNCA inventar um ID como "654b9d03..." — isso causa erro.
 16. Com lista ativa, comandos de adicionar/remover/alterar operam nela sem perguntar novamente.
 17. Se pedir para adicionar "na lista" sem especificar e sem lista ativa: liste as existentes e pergunte.
 
