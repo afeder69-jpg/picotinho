@@ -159,10 +159,18 @@ serve(async (req: Request) => {
     const { action, campanha_id, titulo, mensagem, filtro_tipo, filtro_valor, tipo_mensagem } = body;
 
     // ===== QUERY DE DESTINATÁRIOS =====
-    async function queryDestinatarios(fTipo: string, fValor: string | null) {
+    // Mapeia tipo_mensagem_proativa → coluna de preferência
+    const PREF_COLUMN_MAP: Record<string, string> = {
+      promocao: 'pref_promocoes',
+      novidade: 'pref_novidades',
+      aviso_estoque: 'pref_avisos_estoque',
+      dica: 'pref_dicas',
+    };
+
+    async function queryDestinatarios(fTipo: string, fValor: string | null, tipoMensagem?: string) {
       const { data: telefones, error: telError } = await serviceClient
         .from('whatsapp_telefones_autorizados')
-        .select('usuario_id, numero_whatsapp, created_at')
+        .select('usuario_id, numero_whatsapp, created_at, pref_promocoes, pref_novidades, pref_avisos_estoque, pref_dicas')
         .eq('verificado', true)
         .eq('ativo', true)
         .order('created_at', { ascending: false });
@@ -172,8 +180,20 @@ serve(async (req: Request) => {
         throw new Error(`Erro ao buscar destinatários: ${telError.message}`);
       }
 
+      // Filtrar por preferência de mensagem se tipo definido
+      const prefColumn = tipoMensagem ? PREF_COLUMN_MAP[tipoMensagem] : null;
+      const telefonesFiltered = (telefones || []).filter((t: any) => {
+        if (!prefColumn) return true;
+        return t[prefColumn] === true;
+      });
+
+      const filtrados = (telefones || []).length - telefonesFiltered.length;
+      if (filtrados > 0) {
+        console.log(`🔇 [CAMPANHA] ${filtrados} telefone(s) filtrado(s) por preferência (tipo: ${tipoMensagem})`);
+      }
+
       const seen = new Map<string, any>();
-      for (const t of (telefones || [])) {
+      for (const t of telefonesFiltered) {
         if (!seen.has(t.usuario_id)) {
           seen.set(t.usuario_id, t);
         }
