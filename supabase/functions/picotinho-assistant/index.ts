@@ -1678,12 +1678,13 @@ async function executeTool(
 
             if (mastersFallback?.length === 1) {
               // 1 match claro — vincular automaticamente
-              console.log(`✅ [fallback] "${item.produto_nome}" → match único: ${mastersFallback[0].nome_padrao} (${mastersFallback[0].id})`);
+              const unidadeFallback = await resolverUnidadeParaLista(mastersFallback[0].id, supabase);
+              console.log(`✅ [fallback] "${item.produto_nome}" → match único: ${mastersFallback[0].nome_padrao} (${mastersFallback[0].id}) | unidade_resolvida: ${unidadeFallback}`);
               itensParaInserir.push({
                 lista_id: listaId,
                 produto_nome: item.produto_nome,
                 quantidade: item.quantidade || 1,
-                unidade_medida: item.unidade_medida || 'UN',
+                unidade_medida: unidadeFallback,
                 item_livre: false,
                 produto_id: mastersFallback[0].id
               });
