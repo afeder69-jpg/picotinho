@@ -86,9 +86,8 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    const numeroComPrefixo = telefone.numero_whatsapp.startsWith('55')
-      ? telefone.numero_whatsapp
-      : `55${telefone.numero_whatsapp}`;
+    // O banco já garante formato 55 + DDD + número (13 dígitos) via trigger
+    const numeroParaEnvio = telefone.numero_whatsapp;
 
     const mensagem = formatarListaCompras(body);
 
@@ -105,9 +104,10 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
+    // Z-API recebe o número COM prefixo 55
     const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
     
-    console.log(`📱 Enviando lista para ${numeroComPrefixo}`);
+    console.log(`📱 Enviando lista para ${numeroParaEnvio}`);
     console.log(`📝 Mensagem (primeiros 200 chars): ${mensagem.substring(0, 200)}...`);
 
     const whatsappResponse = await fetch(sendTextUrl, {
@@ -117,7 +117,7 @@ const handler = async (req: Request): Promise<Response> => {
         'Client-Token': accountSecret,
       },
       body: JSON.stringify({
-        phone: numeroComPrefixo,
+        phone: numeroParaEnvio,
         message: mensagem,
       }),
     });

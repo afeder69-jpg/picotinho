@@ -9,7 +9,7 @@ const corsHeaders = {
 interface EnviarPDFRequest {
   pdf_base64: string;
   filename: string;
-  telefone_id?: string; // ID do telefone específico (opcional)
+  telefone_id?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -48,8 +48,6 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`📄 Enviando PDF "${filename}" para usuário ${user.id}`);
 
     // Buscar número verificado do usuário
-    // Se telefone_id foi informado, usar esse específico
-    // Caso contrário, usar o principal (comportamento padrão)
     let query = supabase
       .from('whatsapp_telefones_autorizados')
       .select('numero_whatsapp')
@@ -72,13 +70,11 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Configure e verifique seu número WhatsApp primeiro');
     }
 
-    // Garantir prefixo 55 (Brasil) para envio via Z-API
-    const numeroComPrefixo = telefone.numero_whatsapp.startsWith('55') 
-      ? telefone.numero_whatsapp 
-      : `55${telefone.numero_whatsapp}`;
+    // O banco já garante formato 55 + DDD + número (13 dígitos) via trigger
+    const numeroParaEnvio = telefone.numero_whatsapp;
 
     // Validar tamanho do PDF (limite Z-API ~5MB)
-    const pdfSize = pdf_base64.length * 0.75 / 1024 / 1024; // Estimar tamanho em MB
+    const pdfSize = pdf_base64.length * 0.75 / 1024 / 1024;
     if (pdfSize > 5) {
       throw new Error('PDF muito grande. Limite: 5MB');
     }
@@ -97,10 +93,10 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Credenciais WhatsApp não configuradas');
     }
 
-    // Enviar documento via Z-API
+    // Enviar documento via Z-API — número COM prefixo 55
     const sendDocumentUrl = `${instanceUrl}/token/${apiToken}/send-document`;
     
-    console.log(`📱 Enviando PDF para ${numeroComPrefixo}`);
+    console.log(`📱 Enviando PDF para ${numeroParaEnvio}`);
     console.log(`📊 Tamanho estimado: ${pdfSize.toFixed(2)}MB`);
 
     const whatsappResponse = await fetch(sendDocumentUrl, {
@@ -110,7 +106,7 @@ const handler = async (req: Request): Promise<Response> => {
         'Client-Token': accountSecret,
       },
       body: JSON.stringify({
-        phone: numeroComPrefixo,
+        phone: numeroParaEnvio,
         document: `data:application/pdf;base64,${pdf_base64}`,
         filename: filename,
       }),
