@@ -2259,7 +2259,7 @@ export default function NormalizacaoGlobal() {
   }
 
   return (
-    <div className="container mx-auto px-3 py-4 md:p-6 space-y-4 md:space-y-6 pb-24">
+    <div className="container mx-auto px-3 py-4 md:p-6 space-y-4 md:space-y-6 pb-24 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -2690,7 +2690,7 @@ export default function NormalizacaoGlobal() {
               placeholder="Buscar pendentes... (use ; para múltiplos termos: ex: manteiga ; aviação)"
               value={filtroPendentes}
               onChange={(e) => setFiltroPendentes(e.target.value)}
-              className="max-w-md"
+              className="w-full md:max-w-md"
             />
             {filtroPendentes && filtroPendentes.includes(';') && (
               <div className="text-xs text-muted-foreground">
@@ -2737,25 +2737,25 @@ export default function NormalizacaoGlobal() {
             (filtroPendentes ? resultadosBuscaPendentes : candidatos).map((candidato) => (
               <Card key={candidato.id}>
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{candidato.nome_padrao_sugerido}</CardTitle>
+                  <div className="flex flex-col gap-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <CardTitle className="text-base md:text-lg">{candidato.nome_padrao_sugerido}</CardTitle>
                         <Badge variant={candidato.confianca_ia >= 80 ? "default" : "secondary"}>
                           {candidato.confianca_ia}% confiança
                         </Badge>
                         <Badge variant="outline">{candidato.categoria_sugerida}</Badge>
                       </div>
-                      <CardDescription>
+                      <CardDescription className="break-words">
                         Texto original: "{candidato.texto_original}"
                       </CardDescription>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button 
                         size="sm" 
                         variant="outline"
                         onClick={() => abrirModalEdicao(candidato)}
-                        className="gap-1"
+                        className="gap-1 flex-1 min-w-[120px] md:flex-none"
                       >
                         <Edit3 className="w-4 h-4" />
                         Editar e Aprovar
@@ -2764,7 +2764,7 @@ export default function NormalizacaoGlobal() {
                         size="sm" 
                         variant="default"
                         onClick={() => aprovarSemModificacoes(candidato.id)}
-                        className="gap-1"
+                        className="gap-1 flex-1 min-w-[90px] md:flex-none"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         Aprovar
@@ -2773,7 +2773,7 @@ export default function NormalizacaoGlobal() {
                         size="sm" 
                         variant="destructive"
                         onClick={() => abrirModalRejeicao(candidato)}
-                        className="gap-1"
+                        className="gap-1 flex-1 min-w-[90px] md:flex-none"
                       >
                         <XCircle className="w-4 h-4" />
                         Rejeitar
@@ -2826,7 +2826,7 @@ export default function NormalizacaoGlobal() {
           
           {/* Paginação */}
           {totalPaginas > 1 && (
-            <div className="flex items-center justify-between mt-6">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mt-6">
               <div className="text-sm text-muted-foreground">
                 Página {paginaAtual} de {totalPaginas} • {stats.pendentesTotal} candidatos no total
               </div>
@@ -2948,11 +2948,11 @@ export default function NormalizacaoGlobal() {
               .map((produto) => (
               <Card key={produto.id}>
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4 flex-1">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-start gap-3 md:gap-4">
                       {/* Foto do produto */}
                       {produto.imagem_url && (
-                        <div className="w-16 h-16 rounded-md overflow-hidden bg-muted border flex-shrink-0">
+                        <div className="w-12 h-12 md:w-16 md:h-16 rounded-md overflow-hidden bg-muted border flex-shrink-0">
                           <img 
                             src={produto.imagem_url} 
                             alt={produto.nome_padrao}
@@ -2961,9 +2961,9 @@ export default function NormalizacaoGlobal() {
                         </div>
                       )}
                       
-                      <div className="space-y-2 flex-1">
+                      <div className="space-y-2 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <CardTitle className="text-lg">{produto.nome_padrao}</CardTitle>
+                          <CardTitle className="text-base md:text-lg">{produto.nome_padrao}</CardTitle>
                           <Badge variant="outline">{produto.categoria}</Badge>
                           {produto.status === 'ativo' && (
                             <Badge variant="default">Ativo</Badge>
@@ -2972,11 +2972,11 @@ export default function NormalizacaoGlobal() {
                             {produto.imagem_url ? "COM FOTO" : "SEM FOTO"}
                           </Badge>
                         </div>
-                        <CardDescription>SKU: {produto.sku_global}</CardDescription>
+                        <CardDescription className="break-words">SKU: {produto.sku_global}</CardDescription>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <Button
                         size="sm"
                         variant="outline"
@@ -3231,8 +3231,8 @@ export default function NormalizacaoGlobal() {
                 return (
                 <Card key={campanha.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => abrirDetalheCampanha(campanha)}>
                   <CardContent className="py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold">{campanha.titulo}</h4>
                           {getStatusCampanhaBadge(campanha.status)}
@@ -3255,14 +3255,14 @@ export default function NormalizacaoGlobal() {
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-1">{campanha.mensagem}</p>
                       </div>
-                      <div className="text-right text-sm text-muted-foreground space-y-1 shrink-0 ml-4">
+                      <div className="text-sm text-muted-foreground space-y-1 shrink-0 md:text-right">
                         <div>
                           {temDisparos
                             ? <>Último envio: {new Date(ultimoDisparo.iniciado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(ultimoDisparo.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
                             : <>Criada em {new Date(campanha.created_at).toLocaleDateString('pt-BR')}</>
                           }
                         </div>
-                        <div className="flex gap-3 justify-end">
+                        <div className="flex gap-3 md:justify-end">
                           <span>📩 {campanha.total_enviados}/{campanha.total_destinatarios}</span>
                           {campanha.total_falhas > 0 && <span className="text-destructive">❌ {campanha.total_falhas}</span>}
                         </div>
