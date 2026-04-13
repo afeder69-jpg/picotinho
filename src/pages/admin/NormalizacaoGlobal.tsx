@@ -3528,6 +3528,33 @@ export default function NormalizacaoGlobal() {
                       <Label>Mensagem</Label>
                       <Textarea value={campanhaEditada.mensagem} onChange={(e) => setCampanhaEditada({ ...campanhaEditada, mensagem: e.target.value })} rows={5} />
                     </div>
+                    {/* Tipo da mensagem na edição */}
+                    <div className="space-y-2">
+                      <Label>Tipo da mensagem *</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={campanhaEditada.tipo_mensagem || ''}
+                        onChange={(e) => setCampanhaEditada({ ...campanhaEditada, tipo_mensagem: e.target.value })}
+                      >
+                        <option value="">Selecione o tipo...</option>
+                        {TIPO_MENSAGEM_OPTIONS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Envio emergencial na edição - só editável em rascunho */}
+                    {isMaster && campanhaAtual?.status === 'rascunho' ? (
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          id="edit_emergencial"
+                          checked={!!campanhaEditada.envio_emergencial}
+                          onCheckedChange={(checked) => setCampanhaEditada({ ...campanhaEditada, envio_emergencial: !!checked })}
+                        />
+                        <Label htmlFor="edit_emergencial" className="text-sm cursor-pointer">🚨 Envio emergencial</Label>
+                      </div>
+                    ) : campanhaAtual?.envio_emergencial ? (
+                      <Badge variant="destructive">🚨 Emergencial (travado)</Badge>
+                    ) : null}
                     <div className="space-y-2">
                       <Label>Público-alvo</Label>
                       <RadioGroup
