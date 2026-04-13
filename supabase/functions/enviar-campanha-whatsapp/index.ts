@@ -528,8 +528,12 @@ serve(async (req: Request) => {
     }
 
     // ===== FUNÇÃO DE ENVIO COMPARTILHADA =====
+    // PADRÃO OBRIGATÓRIO para envio proativo: toda mensagem proativa enviada por qualquer edge function
+    // deve ter tipo obrigatório (promocao, novidade, aviso_estoque, dica) e verificar a preferência
+    // do telefone antes de enviar. Use a função SQL verificar_preferencia_telefone() ou filtre via
+    // queryDestinatarios com o parâmetro tipoMensagem.
     async function executarEnvio(client: any, campanhaId: string, campanhaData: any): Promise<number> {
-      const destinatarios = await queryDestinatarios(campanhaData.filtro_tipo, campanhaData.filtro_valor);
+      const destinatarios = await queryDestinatarios(campanhaData.filtro_tipo, campanhaData.filtro_valor, campanhaData.tipo_mensagem);
       
       console.log(`📢 [CAMPANHA] ${destinatarios.length} destinatários encontrados`);
 
