@@ -3468,7 +3468,32 @@ export default function NormalizacaoGlobal() {
                 </Button>
               </DialogFooter>
             </>
-          )}
+           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* AlertDialog de confirmação emergencial (dupla confirmação) */}
+      <AlertDialog open={confirmandoEmergencial} onOpenChange={setConfirmandoEmergencial}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🚨 Confirmar envio emergencial?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">Você está prestes a enviar uma campanha emergencial que <strong>ignorará as preferências de mensagens dos usuários</strong>.</span>
+              <span className="block">A mensagem será enviada para <strong>todos os telefones elegíveis</strong>, mesmo que o usuário tenha desativado este tipo de mensagem.</span>
+              <span className="block font-medium">Esta opção deve ser usada apenas em casos excepcionais (incidentes de segurança, avisos urgentes, comunicações críticas).</span>
+              <span className="block">Deseja continuar?</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmandoEmergencial(false); setConfirmandoEnvioCampanha(true); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sim, prosseguir com envio emergencial
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog Detalhe da Campanha */}
       <Dialog open={campanhaDetalheOpen} onOpenChange={(open) => {
         if (!open) {
           setEditandoCampanha(false);
