@@ -1,12 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Info, ShoppingCart } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, Info, Loader2 } from "lucide-react";
 import { ListaComprasHeader } from "@/components/listaCompras/ListaComprasHeader";
 import { ComparacaoTabs } from "@/components/listaCompras/ComparacaoTabs";
 import { CardResumoOtimizado } from "@/components/listaCompras/CardResumoOtimizado";
@@ -15,6 +14,27 @@ import { TabelaComparativa } from "@/components/listaCompras/TabelaComparativa";
 import { ExportarListaDialog } from "@/components/listaCompras/ExportarListaDialog";
 import { EditarListaDialog } from "@/components/listaCompras/EditarListaDialog";
 import { ItemProdutoSemPreco } from "@/components/listaCompras/ItemProdutoSemPreco";
+import { ItemProdutoLista } from "@/components/listaCompras/ItemProdutoLista";
+import { EditarQuantidadeDialog } from "@/components/listaCompras/EditarQuantidadeDialog";
+import { ToastAction } from "@/components/ui/toast";
+
+interface ItemLocal {
+  id: string;
+  produto_nome: string;
+  quantidade: number;
+  unidade_medida: string;
+  comprado: boolean;
+  item_livre: boolean;
+  produto_id: string | null;
+  lista_id: string;
+  created_at: string;
+}
+
+interface ExclusaoPendente {
+  timer: ReturnType<typeof setTimeout>;
+  item: ItemLocal;
+  indice: number;
+}
 
 export default function ListaCompras() {
   const { id } = useParams<{ id: string }>();
@@ -27,7 +47,17 @@ export default function ListaCompras() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  // Buscar lista
+  // === LAZY LOADING: preços só carregam sob demanda ===
+  const [precosCarregados, setPrecosCarregados] = useState(false);
+  
+  // === ESTADO LOCAL dos itens (para undo/swipe) ===
+  const [itensLocais, setItensLocais] = useState<ItemLocal[]>([]);
+  const exclusoesPendentesRef = useRef<Map<string, ExclusaoPendente>>(new Map());
+
+  // === EDITAR QUANTIDADE (dialog) ===
+  const [itemEditando, setItemEditando] = useState<ItemLocal | null>(null);
+
+  // Buscar lista (leve, sem comparação)
   const { data: lista, isLoading: loadingLista } = useQuery({
     queryKey: ['lista-compras', id],
     queryFn: async () => {
@@ -41,10 +71,9 @@ export default function ListaCompras() {
     },
     enabled: !!id,
     refetchOnWindowFocus: true,
-    refetchInterval: 10000, // Atualizar a cada 10s
   });
 
-  // Buscar comparação de preços
+  // Buscar comparação de preços (SOMENTE quando o usuário clicar em "Preços")
   const { data: comparacao, isLoading: loadingComparacao } = useQuery({
     queryKey: ['comparacao-precos', id],
     queryFn: async () => {
@@ -57,11 +86,43 @@ export default function ListaCompras() {
       if (error) throw error;
       return data;
     },
-    enabled: !!lista && !!user,
-    staleTime: 0, // Sempre buscar dados frescos
-    refetchOnWindowFocus: true,
-    refetchInterval: 15000, // Atualizar a cada 15s
+    enabled: precosCarregados && !!lista && !!user,
+    staleTime: Infinity,
   });
+
+  // === SINCRONIZAR itensLocais com a query da lista ===
+  useEffect(() => {
+    if (!lista?.listas_compras_itens) return;
+    const pendentes = exclusoesPendentesRef.current;
+    const itens = (lista.listas_compras_itens as ItemLocal[]).filter(
+      (item) => !pendentes.has(item.id)
+    );
+    setItensLocais(itens);
+  }, [lista?.listas_compras_itens]);
+
+  // === CLEANUP dos timeouts ao desmontar ===
+  useEffect(() => {
+    const pendentes = exclusoesPendentesRef.current;
+    return () => {
+      pendentes.forEach((p) => clearTimeout(p.timer));
+      pendentes.clear();
+    };
+  }, []);
+
+  // === INVALIDAR PREÇOS quando a lista muda ===
+  const invalidarPrecos = useCallback(() => {
+    if (precosCarregados) {
+      setPrecosCarregados(false);
+      queryClient.removeQueries({ queryKey: ['comparacao-precos', id] });
+    }
+  }, [precosCarregados, queryClient, id]);
+
+  // === HANDLER: Carregar preços (botão "Preços") ===
+  const handleCarregarPrecos = useCallback(() => {
+    // Descartar query anterior para garantir dados frescos
+    queryClient.removeQueries({ queryKey: ['comparacao-precos', id] });
+    setPrecosCarregados(true);
+  }, [queryClient, id]);
 
   // Mutation para marcar produto como comprado
   const toggleCompradoMutation = useMutation({
@@ -88,22 +149,101 @@ export default function ListaCompras() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
-      queryClient.invalidateQueries({ queryKey: ['comparacao-precos', id] });
+      invalidarPrecos();
     }
   });
 
-  const handleToggleComprado = (itemId: string) => {
-    const item = lista?.listas_compras_itens.find((i: any) => i.id === itemId);
+  // Mutation para deletar item
+  const deletarItemMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase
+        .from('listas_compras_itens')
+        .delete()
+        .eq('id', itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
+      invalidarPrecos();
+    }
+  });
+
+  const handleToggleComprado = useCallback((itemId: string) => {
+    // Atualizar localmente de imediato
+    setItensLocais(prev => prev.map(item => 
+      item.id === itemId ? { ...item, comprado: !item.comprado } : item
+    ));
+    const item = itensLocais.find(i => i.id === itemId);
     if (item) {
       toggleCompradoMutation.mutate({ itemId, comprado: item.comprado });
     }
-  };
+  }, [itensLocais, toggleCompradoMutation]);
 
-  const handleQuantidadeChange = (itemId: string, quantidade: number) => {
+  const handleQuantidadeChange = useCallback((itemId: string, quantidade: number) => {
+    // Atualizar localmente
+    setItensLocais(prev => prev.map(item =>
+      item.id === itemId ? { ...item, quantidade } : item
+    ));
     atualizarQuantidadeMutation.mutate({ itemId, quantidade });
-  };
+  }, [atualizarQuantidadeMutation]);
 
-  if (loadingLista || loadingComparacao) {
+  // === REMOVER COM DESFAZER (7 segundos) ===
+  const handleRemoverItem = useCallback((itemId: string) => {
+    const indice = itensLocais.findIndex(i => i.id === itemId);
+    if (indice === -1) return;
+    const item = itensLocais[indice];
+
+    // Remover visualmente
+    setItensLocais(prev => prev.filter(i => i.id !== itemId));
+
+    // Agendar exclusão definitiva
+    const timer = setTimeout(() => {
+      exclusoesPendentesRef.current.delete(itemId);
+      deletarItemMutation.mutate(itemId);
+    }, 7000);
+
+    exclusoesPendentesRef.current.set(itemId, { timer, item, indice });
+
+    toast({
+      title: "Item removido",
+      description: item.produto_nome,
+      duration: 7500,
+      action: (
+        <ToastAction altText="Desfazer" onClick={() => {
+          // Cancelar exclusão
+          const pendente = exclusoesPendentesRef.current.get(itemId);
+          if (pendente) {
+            clearTimeout(pendente.timer);
+            exclusoesPendentesRef.current.delete(itemId);
+            // Restaurar na posição original
+            setItensLocais(prev => {
+              const novo = [...prev];
+              const posicao = Math.min(pendente.indice, novo.length);
+              novo.splice(posicao, 0, pendente.item);
+              return novo;
+            });
+          }
+        }}>
+          Desfazer
+        </ToastAction>
+      ),
+    });
+  }, [itensLocais, deletarItemMutation]);
+
+  // === EDITAR QUANTIDADE via dialog ===
+  const handleSalvarQuantidade = useCallback((itemId: string, quantidade: number) => {
+    handleQuantidadeChange(itemId, quantidade);
+  }, [handleQuantidadeChange]);
+
+  // === HANDLER ao fechar EditarListaDialog ===
+  const handleFecharEdicao = useCallback(() => {
+    setEditDialogOpen(false);
+    queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
+    invalidarPrecos();
+  }, [queryClient, id, invalidarPrecos]);
+
+  // ---- LOADING INICIAL (apenas lista, sem esperar preços) ----
+  if (loadingLista) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center">
         <div className="text-center">
@@ -128,15 +268,78 @@ export default function ListaCompras() {
     );
   }
 
-  const dadosAtivos = comparacao?.[tabAtiva];
-  const totalProdutos = lista.listas_compras_itens?.length || 0;
+  const totalProdutos = itensLocais.length;
 
-  // Verificar se existem mercados próximos E se conseguimos encontrar preços
+  // === MODO LEVE (sem preços carregados) ===
+  if (!precosCarregados || !comparacao) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <div className="container max-w-5xl mx-auto p-4 space-y-6 pb-24">
+          <ListaComprasHeader
+            lista={lista}
+            totalProdutos={totalProdutos}
+            onVoltar={() => navigate('/listas-compras')}
+            onVerTabela={() => {}}
+            onExportar={() => {}}
+            onEditar={() => setEditDialogOpen(true)}
+            onCarregarPrecos={handleCarregarPrecos}
+            precosCarregados={false}
+            loadingPrecos={loadingComparacao}
+          />
+
+          {loadingComparacao && (
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertTitle>Buscando preços...</AlertTitle>
+              <AlertDescription>
+                Comparando preços nos mercados da sua área de atuação.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-2">
+            {itensLocais.map(item => (
+              <ItemProdutoLista
+                key={item.id}
+                item={item}
+                onToggleComprado={handleToggleComprado}
+                onRemover={handleRemoverItem}
+                onEditarQuantidade={(it) => setItemEditando(it)}
+              />
+            ))}
+          </div>
+
+          {itensLocais.length === 0 && !loadingLista && (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>Nenhum item nesta lista.</p>
+            </div>
+          )}
+
+          <EditarQuantidadeDialog
+            open={!!itemEditando}
+            onClose={() => setItemEditando(null)}
+            item={itemEditando}
+            onSalvar={handleSalvarQuantidade}
+          />
+
+          <EditarListaDialog
+            key={`edit-${lista?.listas_compras_itens?.length}`}
+            open={editDialogOpen}
+            onClose={handleFecharEdicao}
+            lista={lista}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // === MODO COMPLETO (preços carregados) ===
+  const dadosAtivos = comparacao?.[tabAtiva];
   const temMercadosProximos = comparacao?.supermercados && comparacao.supermercados.length > 0;
   const temPrecosEncontrados = comparacao?.otimizado?.mercados && comparacao.otimizado.mercados.length > 0;
 
-  // CENÁRIO 1: Sem mercados próximos de fato
-  if (comparacao && !temMercadosProximos) {
+  // CENÁRIO 1: Sem mercados próximos
+  if (!temMercadosProximos) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
         <div className="container max-w-5xl mx-auto p-4 space-y-6">
@@ -147,8 +350,8 @@ export default function ListaCompras() {
             onVerTabela={() => {}}
             onExportar={() => {}}
             onEditar={() => setEditDialogOpen(true)}
+            precosCarregados={true}
           />
-
           <Alert>
             <Info className="h-4 w-4" />
             <AlertTitle>Nenhum mercado próximo</AlertTitle>
@@ -157,14 +360,10 @@ export default function ListaCompras() {
               Configure sua localização ou aumente o raio de busca em Configurações.
             </AlertDescription>
           </Alert>
-
           <EditarListaDialog
-            key={`edit-${lista?.listas_compras_itens.length}`}
+            key={`edit-${lista?.listas_compras_itens?.length}`}
             open={editDialogOpen}
-            onClose={() => {
-              setEditDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
-            }}
+            onClose={handleFecharEdicao}
             lista={lista}
           />
         </div>
@@ -173,7 +372,7 @@ export default function ListaCompras() {
   }
 
   // CENÁRIO 2: Mercados encontrados mas sem preços
-  if (comparacao && temMercadosProximos && !temPrecosEncontrados) {
+  if (temMercadosProximos && !temPrecosEncontrados) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
         <div className="container max-w-5xl mx-auto p-4 space-y-6">
@@ -184,8 +383,8 @@ export default function ListaCompras() {
             onVerTabela={() => {}}
             onExportar={() => {}}
             onEditar={() => setEditDialogOpen(true)}
+            precosCarregados={true}
           />
-
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Mercados encontrados, mas sem preços</AlertTitle>
@@ -194,14 +393,10 @@ export default function ListaCompras() {
               Adicione notas fiscais desses mercados para habilitar a comparação de preços.
             </AlertDescription>
           </Alert>
-
           <EditarListaDialog
-            key={`edit-${lista?.listas_compras_itens.length}`}
+            key={`edit-${lista?.listas_compras_itens?.length}`}
             open={editDialogOpen}
-            onClose={() => {
-              setEditDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
-            }}
+            onClose={handleFecharEdicao}
             lista={lista}
           />
         </div>
@@ -209,15 +404,11 @@ export default function ListaCompras() {
     );
   }
 
-  // Separar itens livres (produto_id null e não presentes na comparação) dos produtos sem preço
+  // CENÁRIO 3: Preços encontrados - fluxo completo
   const todosItens = lista.listas_compras_itens || [];
   const produtosSemPrecoRaw = comparacao?.produtosSemPreco || [];
-  
-  // Itens livres: flag explícita item_livre
   const itensLivres = todosItens.filter((item: any) => item.item_livre === true);
   const itensLivresIds = new Set(itensLivres.map((i: any) => i.id));
-  
-  // Produtos sem preço: excluir itens livres
   const produtosSemPreco = produtosSemPrecoRaw.filter((item: any) => !itensLivresIds.has(item.id));
 
   return (
@@ -230,7 +421,8 @@ export default function ListaCompras() {
           onVerTabela={() => setTabelaAberta(true)}
           onExportar={() => setExportDialogOpen(true)}
           onEditar={() => setEditDialogOpen(true)}
-          loading={loadingLista || loadingComparacao}
+          precosCarregados={true}
+          loading={loadingLista}
         />
 
         {produtosSemPreco.length > 0 && produtosSemPreco.length === totalProdutos && (
@@ -441,19 +633,9 @@ export default function ListaCompras() {
             />
 
             <EditarListaDialog
-              key={`edit-${lista?.listas_compras_itens.length}`}
+              key={`edit-${lista?.listas_compras_itens?.length}`}
               open={editDialogOpen}
-              onClose={() => {
-                setEditDialogOpen(false);
-                queryClient.invalidateQueries({ 
-                  queryKey: ['lista-compras', id],
-                  refetchType: 'active'
-                });
-                queryClient.invalidateQueries({ 
-                  queryKey: ['comparacao-precos', id],
-                  refetchType: 'active'
-                });
-              }}
+              onClose={handleFecharEdicao}
               lista={lista}
             />
           </>
