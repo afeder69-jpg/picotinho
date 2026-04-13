@@ -275,7 +275,7 @@ const listToolDefinitions = [
               properties: {
                 produto_nome: { type: "string", description: "Nome do produto" },
                 quantidade: { type: "number", description: "Quantidade" },
-                unidade_medida: { type: "string", description: "Unidade: UN, KG, L, etc. Default UN" },
+                unidade_medida: { type: "string", description: "Unidade informada pelo usuário (será corrigida automaticamente pelo sistema com base no produto master). Default UN" },
                 produto_id: { type: "string", description: "ID do produto master (de buscar_produto_catalogo ou resolver_item_por_historico). Se fornecido, item é estruturado (item_livre=false)." },
                 item_livre: { type: "boolean", description: "Se true, item é lembrete livre sem vínculo. Default false. Só use quando o USUÁRIO confirmar explicitamente que deseja adicionar como item livre." },
                 origem: { type: "string", description: "Origem do produto_id: 'catalogo', 'historico', 'opcao_numerada'. Ajuda na rastreabilidade." }
@@ -579,6 +579,62 @@ function converterParaUnidadeBase(quantidade: number, unidadeOrigem: string, uni
 }
 // ==================== FIM CONVERSÃO DE UNIDADE ====================
 
+
+// ==================== RESOLUÇÃO DE UNIDADE PARA LISTA ====================
+
+function normalizarUnidadeSaida(valor: string | null | undefined): string {
+  if (!valor) return 'UN';
+  const v = valor.toUpperCase().trim().replace(/\./g, '');
+  const mapa: Record<string, string> = {
+    'QUILO': 'KG', 'QUILOS': 'KG', 'QUILOGRAMA': 'KG', 'QUILOGRAMAS': 'KG', 'KGS': 'KG', 'KG': 'KG',
+    'GRAMA': 'G', 'GRAMAS': 'G', 'GR': 'G', 'GRS': 'G', 'G': 'G',
+    'LITRO': 'L', 'LITROS': 'L', 'LTS': 'L', 'LT': 'L', 'L': 'L',
+    'MILILITRO': 'ML', 'MILILITROS': 'ML', 'MLS': 'ML', 'ML': 'ML',
+    'UNIDADE': 'UN', 'UNIDADES': 'UN', 'UND': 'UN', 'UNID': 'UN', 'UN': 'UN',
+  };
+  return mapa[v] || v || 'UN';
+}
+
+async function resolverUnidadeParaLista(produtoId: string, supabase: any): Promise<string> {
+  try {
+    const { data: master } = await supabase
+      .from('produtos_master_global')
+      .select('granel, unidade_base, categoria_unidade, qtd_valor')
+      .eq('id', produtoId)
+      .maybeSingle();
+
+    if (!master) return 'UN';
+
+    // Produto granel → usar unidade real normalizada
+    if (master.granel === true) {
+      const unidadeBase = master.unidade_base;
+      if (unidadeBase && unidadeBase.trim() !== '') {
+        return normalizarUnidadeSaida(unidadeBase);
+      }
+      // Fallback por categoria quando unidade_base é nula/vazia
+      if (master.categoria_unidade === 'PESO') return 'KG';
+      if (master.categoria_unidade === 'VOLUME') return 'L';
+      return 'UN';
+    }
+
+    // Produto embalado (qtd_valor > 0) → unidade de compra
+    if (master.qtd_valor && master.qtd_valor > 0) return 'UN';
+
+    // Categoria UNIDADE → UN
+    if (master.categoria_unidade === 'UNIDADE') return 'UN';
+
+    // Categoria PESO ou VOLUME sem qtd_valor (cadastro incompleto) → tratar como embalado
+    if (master.categoria_unidade === 'PESO' || master.categoria_unidade === 'VOLUME') return 'UN';
+
+    // Fallback final
+    return 'UN';
+  } catch (e) {
+    console.warn('⚠️ Erro ao resolver unidade para lista:', e);
+    return 'UN';
+  }
+}
+
+// ==================== FIM RESOLUÇÃO DE UNIDADE PARA LISTA ====================
 
 // Validar formato UUID
 function isValidUUID(id: string): boolean {
@@ -1541,12 +1597,13 @@ async function executeTool(
 
             if (existe) {
               validacao = 'id_validado';
-              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
+              const unidadeResolvida = await resolverUnidadeParaLista(produtoId, supabase);
+              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeResolvida}`);
               itensParaInserir.push({
                 lista_id: listaId,
                 produto_nome: item.produto_nome,
                 quantidade: item.quantidade || 1,
-                unidade_medida: item.unidade_medida || 'UN',
+                unidade_medida: unidadeResolvida,
                 item_livre: false,
                 produto_id: produtoId
               });
@@ -1564,12 +1621,13 @@ async function executeTool(
               produtoId = masters[0].id;
               validacao = 're_resolvido';
               avisos.push(`"${item.produto_nome}": ID original inválido (origem: ${origemFluxo}), corrigido automaticamente pelo catálogo.`);
-              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
+              const unidadeReResolvida = await resolverUnidadeParaLista(produtoId, supabase);
+              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeReResolvida}`);
               itensParaInserir.push({
                 lista_id: listaId,
                 produto_nome: item.produto_nome,
                 quantidade: item.quantidade || 1,
-                unidade_medida: item.unidade_medida || 'UN',
+                unidade_medida: unidadeReResolvida,
                 item_livre: false,
                 produto_id: produtoId
               });
@@ -1620,12 +1678,13 @@ async function executeTool(
 
             if (mastersFallback?.length === 1) {
               // 1 match claro — vincular automaticamente
-              console.log(`✅ [fallback] "${item.produto_nome}" → match único: ${mastersFallback[0].nome_padrao} (${mastersFallback[0].id})`);
+              const unidadeFallback = await resolverUnidadeParaLista(mastersFallback[0].id, supabase);
+              console.log(`✅ [fallback] "${item.produto_nome}" → match único: ${mastersFallback[0].nome_padrao} (${mastersFallback[0].id}) | unidade_resolvida: ${unidadeFallback}`);
               itensParaInserir.push({
                 lista_id: listaId,
                 produto_nome: item.produto_nome,
                 quantidade: item.quantidade || 1,
-                unidade_medida: item.unidade_medida || 'UN',
+                unidade_medida: unidadeFallback,
                 item_livre: false,
                 produto_id: mastersFallback[0].id
               });
