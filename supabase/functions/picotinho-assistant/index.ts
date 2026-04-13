@@ -609,7 +609,11 @@ async function resolverUnidadeParaLista(produtoId: string, supabase: any): Promi
     if (master.granel === true) {
       const unidadeBase = master.unidade_base;
       if (unidadeBase && unidadeBase.trim() !== '') {
-        return normalizarUnidadeSaida(unidadeBase);
+        const normalizada = normalizarUnidadeSaida(unidadeBase);
+        // Promover subunidades técnicas para unidades de compra humanas/comerciais
+        if (normalizada === 'G') return 'KG';
+        if (normalizada === 'ML') return 'L';
+        return normalizada;
       }
       // Fallback por categoria quando unidade_base é nula/vazia
       if (master.categoria_unidade === 'PESO') return 'KG';
