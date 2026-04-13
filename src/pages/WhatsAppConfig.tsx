@@ -19,6 +19,7 @@ import {
   telefonesIguais,
   erroTelefoneAmigavel,
 } from "@/lib/telefone";
+import { extrairErroWhatsApp } from "@/lib/errosWhatsApp";
 
 interface WhatsAppConfig {
   id?: string;
