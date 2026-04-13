@@ -73,6 +73,23 @@ export default function ListaCompras() {
     refetchOnWindowFocus: true,
   });
 
+  // === REALTIME: atualizar lista automaticamente quando itens mudam ===
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`lista-compras-itens-${id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'listas_compras_itens',
+        filter: `lista_id=eq.${id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['lista-compras', id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, queryClient]);
+
   // Buscar comparação de preços (SOMENTE quando o usuário clicar em "Preços")
   const { data: comparacao, isLoading: loadingComparacao } = useQuery({
     queryKey: ['comparacao-precos', id],
