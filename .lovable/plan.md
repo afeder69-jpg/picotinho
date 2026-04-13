@@ -1,27 +1,39 @@
 
 
-## Correção: inativar o registro correto de SUPERDELLI
+## Plano: Corrigir exibicao da unidade de medida na lista de compras
 
-### Diagnóstico
+### Problema
 
-A migração anterior usou o UUID `334e4cde-4029-4e68-b951-7f72b2f57cd3`, mas o ID real do registro é `334e4cde-ab2d-4c3a-a9dc-4356cfd38fe3`. O UPDATE executou sem erro mas afetou zero linhas — o registro SUPERDELLI sem CNPJ continua ativo.
+O banco armazena categorias genéricas de medida: `PESO`, `UNIDADE`, `VOLUME`. Na tela, esses valores aparecem por extenso e em maiúsculas, quando deveriam mostrar abreviações de embalagem como "pct", "un", etc.
 
-### Correção
+### Solução
 
-Executar um UPDATE com o ID correto para inativar o registro:
+Alterar apenas o `ItemProdutoLista.tsx` para formatar a unidade antes de exibir, usando um mapeamento simples:
 
-```sql
-UPDATE public.normalizacoes_estabelecimentos
-SET ativo = false, updated_at = now()
-WHERE id = '334e4cde-ab2d-4c3a-a9dc-4356cfd38fe3'
-  AND ativo = true
-  AND cnpj_original IS NULL;
+| Valor no banco | Exibição |
+|---|---|
+| PESO | pct |
+| VOLUME | un |
+| UNIDADE | un |
+| outros (kg, g, ml, etc.) | usar `formatarUnidadeMedida` existente |
+
+### Arquivo a modificar
+
+**`src/components/listaCompras/ItemProdutoLista.tsx`** (linha 44-45)
+
+Adicionar função local de mapeamento antes do render:
+
+```typescript
+function formatarUnidadeItem(unidade: string): string {
+  const upper = unidade.toUpperCase().trim();
+  if (upper === 'PESO') return 'pct';
+  if (upper === 'VOLUME') return 'un';
+  if (upper === 'UNIDADE') return 'un';
+  return formatarUnidadeMedida(unidade);
+}
 ```
 
-Isso é uma operação de dados (não schema), então será feita via ferramenta de insert/update, sem necessidade de migração.
+E na linha 45, trocar `{item.unidade_medida}` por `{formatarUnidadeItem(item.unidade_medida)}`.
 
-### Resultado esperado
-
-- O registro "SUPERDELLI ATACADÃO SUPERMERCADO → SUPERDELLI" desaparece da listagem ativa
-- Apenas "SUPERDELLI ATACADO E SUPERMERCADOS SA → MEGABOX RECREIO" (com CNPJ) permanece ativo
+Nenhum outro arquivo será alterado. Checkboxes, maiúsculas nos nomes e demais estilos permanecem como estão.
 
