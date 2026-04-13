@@ -21,10 +21,9 @@ async function generateCampaignTTS(text: string): Promise<string | null> {
     return null;
   }
 
-  // Adaptar texto para escuta: remover prefixo visual e emojis pesados
   let textoParaAudio = text
     .replace(/📢\s*\*Picotinho\*\n\n/g, 'Picotinho informa: ')
-    .replace(/\*([^*]+)\*/g, '$1'); // remover negrito markdown
+    .replace(/\*([^*]+)\*/g, '$1');
 
   if (textoParaAudio.length > 2000) {
     textoParaAudio = textoParaAudio.substring(0, 2000) + '...';
@@ -156,10 +155,9 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { action, campanha_id, titulo, mensagem, filtro_tipo, filtro_valor, tipo_mensagem } = body;
+    const { action, campanha_id, titulo, mensagem, filtro_tipo, filtro_valor, tipo_mensagem, envio_emergencial } = body;
 
     // ===== QUERY DE DESTINATÁRIOS =====
-    // Mapeia tipo_mensagem_proativa → coluna de preferência
     const PREF_COLUMN_MAP: Record<string, string> = {
       promocao: 'pref_promocoes',
       novidade: 'pref_novidades',
@@ -167,7 +165,7 @@ serve(async (req: Request) => {
       dica: 'pref_dicas',
     };
 
-    async function queryDestinatarios(fTipo: string, fValor: string | null, tipoMensagem?: string) {
+    async function queryDestinatarios(fTipo: string, fValor: string | null, tipoMensagem?: string, ignorarPreferencias = false) {
       const { data: telefones, error: telError } = await serviceClient
         .from('whatsapp_telefones_autorizados')
         .select('usuario_id, numero_whatsapp, created_at, pref_promocoes, pref_novidades, pref_avisos_estoque, pref_dicas')
@@ -180,16 +178,22 @@ serve(async (req: Request) => {
         throw new Error(`Erro ao buscar destinatários: ${telError.message}`);
       }
 
-      // Filtrar por preferência de mensagem se tipo definido
-      const prefColumn = tipoMensagem ? PREF_COLUMN_MAP[tipoMensagem] : null;
-      const telefonesFiltered = (telefones || []).filter((t: any) => {
-        if (!prefColumn) return true;
-        return t[prefColumn] === true;
-      });
+      // Filtrar por preferência de mensagem se tipo definido E não for emergencial
+      let telefonesFiltered: any[];
+      if (ignorarPreferencias) {
+        telefonesFiltered = telefones || [];
+        console.log(`🚨 [CAMPANHA] Modo emergencial: ignorando preferências de ${tipoMensagem}`);
+      } else {
+        const prefColumn = tipoMensagem ? PREF_COLUMN_MAP[tipoMensagem] : null;
+        telefonesFiltered = (telefones || []).filter((t: any) => {
+          if (!prefColumn) return true;
+          return t[prefColumn] === true;
+        });
 
-      const filtrados = (telefones || []).length - telefonesFiltered.length;
-      if (filtrados > 0) {
-        console.log(`🔇 [CAMPANHA] ${filtrados} telefone(s) filtrado(s) por preferência (tipo: ${tipoMensagem})`);
+        const filtrados = (telefones || []).length - telefonesFiltered.length;
+        if (filtrados > 0) {
+          console.log(`🔇 [CAMPANHA] ${filtrados} telefone(s) filtrado(s) por preferência (tipo: ${tipoMensagem})`);
+        }
       }
 
       const seen = new Map<string, any>();
@@ -233,12 +237,24 @@ serve(async (req: Request) => {
 
     // ===== ACTION: PREVIEW =====
     if (action === 'preview') {
-      const destinatarios = await queryDestinatarios(filtro_tipo || 'todos', filtro_valor || null);
+      const tipoMsg = tipo_mensagem || null;
+      const fTipo = filtro_tipo || 'todos';
+      const fValor = filtro_valor || null;
+
+      // Sempre calcular total normal (respeitando preferências)
+      const destinatariosNormal = await queryDestinatarios(fTipo, fValor, tipoMsg, false);
+      // Calcular total emergencial (ignorando preferências)
+      const destinatariosEmergencial = await queryDestinatarios(fTipo, fValor, tipoMsg, true);
+
       return new Response(JSON.stringify({ 
-        total: destinatarios.length,
+        total: destinatariosNormal.length,
+        total_normal: destinatariosNormal.length,
+        total_emergencial: destinatariosEmergencial.length,
+        diferenca: destinatariosEmergencial.length - destinatariosNormal.length,
         criterio: {
-          filtro_tipo: filtro_tipo || 'todos',
-          filtro_valor: filtro_valor || null,
+          filtro_tipo: fTipo,
+          filtro_valor: fValor,
+          tipo_mensagem: tipoMsg,
           descricao: `Telefones autorizados (verificado=true, ativo=true) com DISTINCT ON (usuario_id) ORDER BY created_at DESC`
         }
       }), {
@@ -300,6 +316,10 @@ serve(async (req: Request) => {
       if (filtro_tipo !== undefined) updateFields.filtro_tipo = filtro_tipo;
       if (filtro_valor !== undefined) updateFields.filtro_valor = filtro_valor || null;
       if (tipo_mensagem !== undefined) updateFields.tipo_mensagem = tipo_mensagem;
+      // envio_emergencial só pode ser alterado se status === 'rascunho'
+      if (envio_emergencial !== undefined && campanha.status === 'rascunho') {
+        updateFields.envio_emergencial = !!envio_emergencial;
+      }
       updateFields.updated_at = new Date().toISOString();
 
       await serviceClient
@@ -340,7 +360,6 @@ serve(async (req: Request) => {
         });
       }
 
-      // CASCADE cuida de disparos; deletar envios explicitamente
       await serviceClient
         .from('campanhas_whatsapp_envios')
         .delete()
@@ -384,7 +403,6 @@ serve(async (req: Request) => {
         });
       }
 
-      // Bloquear reenvio de campanhas sem tipo_mensagem definido
       if (!campanha.tipo_mensagem) {
         return new Response(JSON.stringify({ error: 'tipo_mensagem é obrigatório para reenviar. Classifique a campanha antes (promocao, novidade, aviso_estoque, dica).' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -397,7 +415,6 @@ serve(async (req: Request) => {
         .delete()
         .eq('campanha_id', campanha_id);
 
-      // Incrementar total_reenvios e resetar contadores
       await serviceClient
         .from('campanhas_whatsapp')
         .update({
@@ -411,9 +428,8 @@ serve(async (req: Request) => {
         })
         .eq('id', campanha_id);
 
-      console.log(`🔄 [CAMPANHA] Reenvio #${(campanha.total_reenvios || 0) + 1}: ${campanha.titulo} (${campanha_id})`);
+      console.log(`🔄 [CAMPANHA] Reenvio #${(campanha.total_reenvios || 0) + 1}: ${campanha.titulo} (${campanha_id})${campanha.envio_emergencial ? ' [EMERGENCIAL]' : ''}`);
 
-      // Criar registro de disparo
       const { data: disparo } = await serviceClient
         .from('campanhas_whatsapp_disparos')
         .insert({
@@ -426,9 +442,8 @@ serve(async (req: Request) => {
 
       const disparoId = disparo?.id;
 
-      // Executar envio
       try {
-        const resultado = await executarEnvio(serviceClient, campanha_id, campanha);
+        const resultado = await executarEnvio(serviceClient, campanha_id, campanha, userId);
         await finalizarDisparo(serviceClient, campanha_id, disparoId);
         return new Response(JSON.stringify({ ok: true, total_processados: resultado }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -458,7 +473,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Buscar campanha
     const { data: campanha, error: campError } = await serviceClient
       .from('campanhas_whatsapp')
       .select('*')
@@ -479,7 +493,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Bloquear envio de campanhas sem tipo_mensagem definido
     if (!campanha.tipo_mensagem) {
       return new Response(JSON.stringify({ error: 'tipo_mensagem é obrigatório para enviar. Classifique a campanha antes (promocao, novidade, aviso_estoque, dica).' }), {
         status: 400,
@@ -493,9 +506,8 @@ serve(async (req: Request) => {
       .update({ status: 'enviando', iniciada_em: new Date().toISOString() })
       .eq('id', campanha_id);
 
-    console.log(`📢 [CAMPANHA] Iniciando envio: ${campanha.titulo} (${campanha_id})`);
+    console.log(`📢 [CAMPANHA] Iniciando envio: ${campanha.titulo} (${campanha_id})${campanha.envio_emergencial ? ' [EMERGENCIAL]' : ''}`);
 
-    // Criar registro de disparo
     const { data: disparo } = await serviceClient
       .from('campanhas_whatsapp_disparos')
       .insert({
@@ -509,7 +521,7 @@ serve(async (req: Request) => {
     const disparoId = disparo?.id;
 
     try {
-      const totalProcessados = await executarEnvio(serviceClient, campanha_id, campanha);
+      const totalProcessados = await executarEnvio(serviceClient, campanha_id, campanha, userId);
       await finalizarDisparo(serviceClient, campanha_id, disparoId);
 
       console.log(`📢 [CAMPANHA] Envio concluído: ${campanha.titulo}`);
@@ -532,15 +544,40 @@ serve(async (req: Request) => {
     // deve ter tipo obrigatório (promocao, novidade, aviso_estoque, dica) e verificar a preferência
     // do telefone antes de enviar. Use a função SQL verificar_preferencia_telefone() ou filtre via
     // queryDestinatarios com o parâmetro tipoMensagem.
-    async function executarEnvio(client: any, campanhaId: string, campanhaData: any): Promise<number> {
-      const destinatarios = await queryDestinatarios(campanhaData.filtro_tipo, campanhaData.filtro_valor, campanhaData.tipo_mensagem);
+    async function executarEnvio(client: any, campanhaId: string, campanhaData: any, masterId: string): Promise<number> {
+      const isEmergencial = !!campanhaData.envio_emergencial;
+      const destinatarios = await queryDestinatarios(
+        campanhaData.filtro_tipo,
+        campanhaData.filtro_valor,
+        campanhaData.tipo_mensagem,
+        isEmergencial
+      );
       
-      console.log(`📢 [CAMPANHA] ${destinatarios.length} destinatários encontrados`);
+      console.log(`📢 [CAMPANHA] ${destinatarios.length} destinatários encontrados${isEmergencial ? ' (EMERGENCIAL - preferências ignoradas)' : ''}`);
 
       await client
         .from('campanhas_whatsapp')
         .update({ total_destinatarios: destinatarios.length })
         .eq('id', campanhaId);
+
+      // Registrar auditoria emergencial
+      if (isEmergencial) {
+        try {
+          await client
+            .from('campanhas_whatsapp_auditoria_emergencial')
+            .insert({
+              campanha_id: campanhaId,
+              campanha_titulo: campanhaData.titulo,
+              campanha_mensagem_preview: (campanhaData.mensagem || '').substring(0, 500),
+              master_id: masterId,
+              tipo_mensagem: campanhaData.tipo_mensagem,
+              total_destinatarios: destinatarios.length,
+            });
+          console.log(`📋 [CAMPANHA] Auditoria emergencial registrada: ${campanhaData.titulo} (${destinatarios.length} destinatários)`);
+        } catch (auditErr: any) {
+          console.error('⚠️ [CAMPANHA] Erro ao registrar auditoria emergencial (não impede envio):', auditErr.message);
+        }
+      }
 
       if (destinatarios.length > 0) {
         const enviosInsert = destinatarios.map((d: any) => ({
@@ -584,10 +621,9 @@ serve(async (req: Request) => {
 
       // ===== BATCH QUERY: preferências de áudio dos destinatários =====
       const allUserIds = enviosPendentes.map((e: any) => e.user_id).filter(Boolean);
-      const preferenciaMap = new Map<string, string>(); // userId -> modo_resposta
+      const preferenciaMap = new Map<string, string>();
 
       if (allUserIds.length > 0) {
-        // Query em batches de 100 para respeitar limites
         for (let i = 0; i < allUserIds.length; i += 100) {
           const batchIds = allUserIds.slice(i, i + 100);
           const { data: prefs } = await client
@@ -601,7 +637,6 @@ serve(async (req: Request) => {
         }
       }
 
-      // Contar quantos precisam de áudio
       const precisamAudio = enviosPendentes.filter((e: any) => {
         const modo = preferenciaMap.get(e.user_id) || 'texto';
         return modo === 'audio' || modo === 'ambos';
@@ -609,7 +644,6 @@ serve(async (req: Request) => {
 
       console.log(`🔊 [CAMPANHA] Preferências: ${enviosPendentes.length - precisamAudio} texto, ${precisamAudio} com áudio`);
 
-      // ===== TTS: gerar UMA VEZ se algum destinatário precisa de áudio =====
       let audioBase64Cache: string | null = null;
       let ttsFalhou = false;
 
@@ -636,7 +670,6 @@ serve(async (req: Request) => {
             let audioOk = false;
             let modoEfetivo = modoUsuario;
 
-            // Enviar texto
             if (deveEnviarTexto) {
               const response = await fetch(sendTextUrl, {
                 method: 'POST',
@@ -665,11 +698,9 @@ serve(async (req: Request) => {
               }
             }
 
-            // Enviar áudio
             if (deveEnviarAudio) {
               audioOk = await sendCampaignAudio(envio.telefone, audioBase64Cache!);
               if (!audioOk && modoUsuario === 'audio' && !textoOk) {
-                // Fallback: modo áudio mas TTS de envio falhou — tentar texto
                 console.warn(`⚠️ [CAMPANHA] Fallback texto para ${envio.telefone} (áudio falhou no envio)`);
                 const fallbackResp = await fetch(sendTextUrl, {
                   method: 'POST',
@@ -688,7 +719,6 @@ serve(async (req: Request) => {
               }
             }
 
-            // Determinar status final do envio
             if (textoOk || audioOk) {
               await client.from('campanhas_whatsapp_envios')
                 .update({ status: 'enviado', enviado_em: new Date().toISOString(), erro: null })

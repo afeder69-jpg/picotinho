@@ -19,6 +19,7 @@ export type Database = {
           concluida_em: string | null
           created_at: string
           criado_por: string
+          envio_emergencial: boolean
           filtro_tipo: string
           filtro_valor: string | null
           id: string
@@ -39,6 +40,7 @@ export type Database = {
           concluida_em?: string | null
           created_at?: string
           criado_por: string
+          envio_emergencial?: boolean
           filtro_tipo?: string
           filtro_valor?: string | null
           id?: string
@@ -59,6 +61,7 @@ export type Database = {
           concluida_em?: string | null
           created_at?: string
           criado_por?: string
+          envio_emergencial?: boolean
           filtro_tipo?: string
           filtro_valor?: string | null
           id?: string
@@ -76,6 +79,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      campanhas_whatsapp_auditoria_emergencial: {
+        Row: {
+          campanha_id: string
+          campanha_mensagem_preview: string | null
+          campanha_titulo: string
+          created_at: string
+          id: string
+          master_id: string
+          tipo_mensagem: Database["public"]["Enums"]["tipo_mensagem_proativa"]
+          total_destinatarios: number
+        }
+        Insert: {
+          campanha_id: string
+          campanha_mensagem_preview?: string | null
+          campanha_titulo: string
+          created_at?: string
+          id?: string
+          master_id: string
+          tipo_mensagem: Database["public"]["Enums"]["tipo_mensagem_proativa"]
+          total_destinatarios?: number
+        }
+        Update: {
+          campanha_id?: string
+          campanha_mensagem_preview?: string | null
+          campanha_titulo?: string
+          created_at?: string
+          id?: string
+          master_id?: string
+          tipo_mensagem?: Database["public"]["Enums"]["tipo_mensagem_proativa"]
+          total_destinatarios?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_whatsapp_auditoria_emergencial_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_whatsapp"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       campanhas_whatsapp_disparos: {
         Row: {

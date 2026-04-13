@@ -90,7 +90,20 @@ const NOVA_CAMPANHA_INITIAL_STATE = {
   mensagem: '',
   filtro_tipo: 'todos',
   filtro_valor: '',
+  tipo_mensagem: '' as string,
+  envio_emergencial: false,
 };
+
+const TIPO_MENSAGEM_OPTIONS = [
+  { value: 'promocao', label: 'Promoção' },
+  { value: 'novidade', label: 'Novidade do Picotinho' },
+  { value: 'aviso_estoque', label: 'Aviso de estoque' },
+  { value: 'dica', label: 'Dica / sugestão útil' },
+];
+
+function getTipoMensagemLabel(tipo: string | null): string {
+  return TIPO_MENSAGEM_OPTIONS.find(o => o.value === tipo)?.label || tipo || 'Sem tipo';
+}
 
 export default function NormalizacaoGlobal() {
   const navigate = useNavigate();
@@ -238,6 +251,8 @@ export default function NormalizacaoGlobal() {
   const [novaCampanha, setNovaCampanha] = useState(NOVA_CAMPANHA_INITIAL_STATE);
   const [enviandoCampanha, setEnviandoCampanha] = useState(false);
   const [estimativaDestinatarios, setEstimativaDestinatarios] = useState<number | null>(null);
+  const [estimativaEmergencial, setEstimativaEmergencial] = useState<number | null>(null);
+  const [estimativaDiferenca, setEstimativaDiferenca] = useState<number | null>(null);
   const [filtrosDisponiveis, setFiltrosDisponiveis] = useState<{ estados: string[], cidades: string[] }>({ estados: [], cidades: [] });
   const [confirmandoEnvioCampanha, setConfirmandoEnvioCampanha] = useState(false);
   const [carregandoCampanhas, setCarregandoCampanhas] = useState(false);
@@ -247,6 +262,7 @@ export default function NormalizacaoGlobal() {
   const [confirmandoExclusaoCampanha, setConfirmandoExclusaoCampanha] = useState(false);
   const [confirmandoReenvioCampanha, setConfirmandoReenvioCampanha] = useState(false);
   const [campanhasDisparosMap, setCampanhasDisparosMap] = useState<Record<string, any>>({}); // ultimo disparo por campanha_id
+  const [confirmandoEmergencial, setConfirmandoEmergencial] = useState(false);
 
   useEffect(() => {
     verificarAcessoMaster();
@@ -668,7 +684,10 @@ export default function NormalizacaoGlobal() {
   function limparNovaCampanha() {
     setNovaCampanha({ ...NOVA_CAMPANHA_INITIAL_STATE });
     setEstimativaDestinatarios(null);
+    setEstimativaEmergencial(null);
+    setEstimativaDiferenca(null);
     setConfirmandoEnvioCampanha(false);
+    setConfirmandoEmergencial(false);
   }
 
   function fecharNovaCampanhaDialog() {
@@ -679,13 +698,16 @@ export default function NormalizacaoGlobal() {
 
   async function estimarDestinatariosCampanha(campanha = novaCampanha) {
     setEstimativaDestinatarios(null);
+    setEstimativaEmergencial(null);
+    setEstimativaDiferenca(null);
     try {
       const { data: session } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
         body: { 
           action: 'preview', 
           filtro_tipo: campanha.filtro_tipo, 
-          filtro_valor: campanha.filtro_valor || null 
+          filtro_valor: campanha.filtro_valor || null,
+          tipo_mensagem: campanha.tipo_mensagem || null
         },
         headers: { Authorization: `Bearer ${session?.session?.access_token}` }
       });
@@ -699,7 +721,9 @@ export default function NormalizacaoGlobal() {
         setEstimativaDestinatarios(-1);
         return;
       }
-      setEstimativaDestinatarios(data?.total ?? 0);
+      setEstimativaDestinatarios(data?.total_normal ?? data?.total ?? 0);
+      setEstimativaEmergencial(data?.total_emergencial ?? null);
+      setEstimativaDiferenca(data?.diferenca ?? null);
     } catch (err: any) {
       console.error('Erro ao estimar destinatários:', err);
       setEstimativaDestinatarios(-1);
@@ -708,7 +732,7 @@ export default function NormalizacaoGlobal() {
 
   async function criarEEnviarCampanha() {
     if (enviandoCampanha) return;
-    if (!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim()) return;
+    if (!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || !novaCampanha.tipo_mensagem) return;
     setEnviandoCampanha(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -722,9 +746,11 @@ export default function NormalizacaoGlobal() {
           mensagem: novaCampanha.mensagem.trim(),
           filtro_tipo: novaCampanha.filtro_tipo,
           filtro_valor: novaCampanha.filtro_valor || null,
+          tipo_mensagem: novaCampanha.tipo_mensagem,
+          envio_emergencial: novaCampanha.envio_emergencial,
           criado_por: user.id,
           status: 'rascunho'
-        })
+        } as any)
         .select()
         .single();
 
@@ -812,6 +838,8 @@ export default function NormalizacaoGlobal() {
           mensagem: campanhaEditada.mensagem,
           filtro_tipo: campanhaEditada.filtro_tipo,
           filtro_valor: campanhaEditada.filtro_valor || null,
+          tipo_mensagem: campanhaEditada.tipo_mensagem || undefined,
+          envio_emergencial: campanhaEditada.envio_emergencial,
         },
         headers: { Authorization: `Bearer ${session?.session?.access_token}` }
       });
@@ -3208,6 +3236,14 @@ export default function NormalizacaoGlobal() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold">{campanha.titulo}</h4>
                           {getStatusCampanhaBadge(campanha.status)}
+                          {campanha.tipo_mensagem ? (
+                            <Badge variant="outline" className="text-xs">{getTipoMensagemLabel(campanha.tipo_mensagem)}</Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs">Sem tipo</Badge>
+                          )}
+                          {campanha.envio_emergencial && (
+                            <Badge variant="destructive" className="text-xs">🚨 Emergencial</Badge>
+                          )}
                           <Badge variant="outline" className="text-xs">
                             {campanha.filtro_tipo === 'todos' ? 'Todos' : `${campanha.filtro_tipo}: ${campanha.filtro_valor}`}
                           </Badge>
@@ -3283,6 +3319,25 @@ export default function NormalizacaoGlobal() {
                   <Textarea id="camp_msg" value={novaCampanha.mensagem} onChange={(e) => setNovaCampanha({ ...novaCampanha, mensagem: e.target.value })} placeholder="Escreva a mensagem que será enviada..." rows={5} />
                   <p className="text-xs text-muted-foreground">Prefixo automático: 📢 *Picotinho*</p>
                 </div>
+                {/* Tipo da mensagem (obrigatório) */}
+                <div className="space-y-2">
+                  <Label>Tipo da mensagem *</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={novaCampanha.tipo_mensagem}
+                    onChange={(e) => {
+                      const proximaCampanha = { ...novaCampanha, tipo_mensagem: e.target.value };
+                      setNovaCampanha(proximaCampanha);
+                      estimarDestinatariosCampanha(proximaCampanha);
+                    }}
+                  >
+                    <option value="">Selecione o tipo...</option>
+                    {TIPO_MENSAGEM_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">O envio respeitará as preferências dos usuários para este tipo de mensagem.</p>
+                </div>
                 <div className="space-y-2">
                   <Label>Público-alvo</Label>
                   <RadioGroup
@@ -3326,10 +3381,40 @@ export default function NormalizacaoGlobal() {
                     </select>
                   </div>
                 )}
+                {/* Envio emergencial - apenas para master */}
+                {isMaster && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="camp_emergencial"
+                        checked={novaCampanha.envio_emergencial}
+                        onCheckedChange={(checked) => setNovaCampanha({ ...novaCampanha, envio_emergencial: !!checked })}
+                      />
+                      <Label htmlFor="camp_emergencial" className="text-sm font-medium cursor-pointer">
+                        🚨 Envio emergencial (ignorar preferências dos usuários)
+                      </Label>
+                    </div>
+                    {novaCampanha.envio_emergencial && (
+                      <div className="rounded-lg border border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-sm space-y-1">
+                        <p className="font-medium text-yellow-800 dark:text-yellow-300">⚠️ Modo emergencial ativado</p>
+                        <p className="text-yellow-700 dark:text-yellow-400">Esta campanha ignorará as preferências de tipo de mensagem dos usuários e será enviada para todos os telefones elegíveis. Use apenas em casos excepcionais (incidentes de segurança, avisos urgentes do sistema, comunicações críticas).</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Estimativa de destinatários */}
                 {estimativaDestinatarios !== null && (
-                  <div className="rounded-lg bg-muted p-3">
-                    <p className="text-sm font-medium">📊 Estimativa de destinatários: <strong>{estimativaDestinatarios}</strong></p>
-                    <p className="mt-1 text-xs text-muted-foreground">Critério: telefones autorizados (verificado + ativo), DISTINCT por usuário, telefone mais recente por created_at da tabela whatsapp_telefones_autorizados</p>
+                  <div className="rounded-lg bg-muted p-3 space-y-1">
+                    <p className="text-sm font-medium">📊 Destinatários (respeitando preferências): <strong>{estimativaDestinatarios}</strong></p>
+                    {novaCampanha.envio_emergencial && estimativaEmergencial !== null && (
+                      <>
+                        <p className="text-sm font-medium">🚨 Destinatários (emergencial): <strong>{estimativaEmergencial}</strong></p>
+                        {estimativaDiferenca !== null && estimativaDiferenca > 0 && (
+                          <p className="text-xs text-yellow-700 dark:text-yellow-400">+{estimativaDiferenca} destinatário(s) adicional(is) por ignorar preferências</p>
+                        )}
+                      </>
+                    )}
+                    <p className="text-xs text-muted-foreground">Critério: telefones autorizados (verificado + ativo), DISTINCT por usuário</p>
                   </div>
                 )}
               </div>
@@ -3337,8 +3422,14 @@ export default function NormalizacaoGlobal() {
                 <Button type="button" variant="outline" onClick={fecharNovaCampanhaDialog}>Cancelar</Button>
                 <Button
                   type="button"
-                  onClick={() => setConfirmandoEnvioCampanha(true)}
-                  disabled={!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || (novaCampanha.filtro_tipo !== 'todos' && !novaCampanha.filtro_valor) || estimativaDestinatarios === 0}
+                  onClick={() => {
+                    if (novaCampanha.envio_emergencial) {
+                      setConfirmandoEmergencial(true);
+                    } else {
+                      setConfirmandoEnvioCampanha(true);
+                    }
+                  }}
+                  disabled={!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || !novaCampanha.tipo_mensagem || (novaCampanha.filtro_tipo !== 'todos' && !novaCampanha.filtro_valor) || estimativaDestinatarios === 0}
                   className="gap-2"
                 >
                   <Send className="w-4 h-4" />
@@ -3358,8 +3449,15 @@ export default function NormalizacaoGlobal() {
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{novaCampanha.mensagem}</p>
                 </div>
                 <div className="space-y-2 rounded-lg border p-4 text-sm">
+                  <p><strong>Tipo:</strong> {getTipoMensagemLabel(novaCampanha.tipo_mensagem)}</p>
                   <p><strong>Público:</strong> {novaCampanha.filtro_tipo === 'todos' ? 'Todos os usuários' : `${novaCampanha.filtro_tipo}: ${novaCampanha.filtro_valor}`}</p>
-                  <p><strong>Destinatários estimados:</strong> {estimativaDestinatarios === null ? 'Calculando...' : estimativaDestinatarios === -1 ? <span className="text-destructive">Erro ao estimar. <button type="button" className="underline" onClick={() => estimarDestinatariosCampanha()}>Tentar novamente</button></span> : estimativaDestinatarios}</p>
+                  <p><strong>Destinatários estimados:</strong> {novaCampanha.envio_emergencial ? (estimativaEmergencial ?? estimativaDestinatarios ?? 'Calculando...') : (estimativaDestinatarios === null ? 'Calculando...' : estimativaDestinatarios === -1 ? <span className="text-destructive">Erro ao estimar. <button type="button" className="underline" onClick={() => estimarDestinatariosCampanha()}>Tentar novamente</button></span> : estimativaDestinatarios)}</p>
+                  {novaCampanha.envio_emergencial && (
+                    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 mt-2 space-y-1">
+                      <p className="font-semibold text-destructive">🚨 ENVIO EMERGENCIAL</p>
+                      <p className="text-destructive/90 text-xs">Esta campanha ignorará as preferências de mensagens dos usuários. A mensagem será enviada para todos os telefones elegíveis. Esta opção deve ser usada apenas em casos excepcionais.</p>
+                    </div>
+                  )}
                   <p className="text-muted-foreground">As mensagens serão enviadas via WhatsApp com o prefixo 📢 *Picotinho*. Esta ação não pode ser desfeita.</p>
                 </div>
               </div>
@@ -3370,9 +3468,30 @@ export default function NormalizacaoGlobal() {
                 </Button>
               </DialogFooter>
             </>
-          )}
+           )}
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog de confirmação emergencial (dupla confirmação) */}
+      <AlertDialog open={confirmandoEmergencial} onOpenChange={setConfirmandoEmergencial}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🚨 Confirmar envio emergencial?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">Você está prestes a enviar uma campanha emergencial que <strong>ignorará as preferências de mensagens dos usuários</strong>.</span>
+              <span className="block">A mensagem será enviada para <strong>todos os telefones elegíveis</strong>, mesmo que o usuário tenha desativado este tipo de mensagem.</span>
+              <span className="block font-medium">Esta opção deve ser usada apenas em casos excepcionais (incidentes de segurança, avisos urgentes, comunicações críticas).</span>
+              <span className="block">Deseja continuar?</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmandoEmergencial(false); setConfirmandoEnvioCampanha(true); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sim, prosseguir com envio emergencial
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog Detalhe da Campanha */}
       <Dialog open={campanhaDetalheOpen} onOpenChange={(open) => {
@@ -3409,6 +3528,33 @@ export default function NormalizacaoGlobal() {
                       <Label>Mensagem</Label>
                       <Textarea value={campanhaEditada.mensagem} onChange={(e) => setCampanhaEditada({ ...campanhaEditada, mensagem: e.target.value })} rows={5} />
                     </div>
+                    {/* Tipo da mensagem na edição */}
+                    <div className="space-y-2">
+                      <Label>Tipo da mensagem *</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={campanhaEditada.tipo_mensagem || ''}
+                        onChange={(e) => setCampanhaEditada({ ...campanhaEditada, tipo_mensagem: e.target.value })}
+                      >
+                        <option value="">Selecione o tipo...</option>
+                        {TIPO_MENSAGEM_OPTIONS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Envio emergencial na edição - só editável em rascunho */}
+                    {isMaster && campanhaAtual?.status === 'rascunho' ? (
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          id="edit_emergencial"
+                          checked={!!campanhaEditada.envio_emergencial}
+                          onCheckedChange={(checked) => setCampanhaEditada({ ...campanhaEditada, envio_emergencial: !!checked })}
+                        />
+                        <Label htmlFor="edit_emergencial" className="text-sm cursor-pointer">🚨 Envio emergencial</Label>
+                      </div>
+                    ) : campanhaAtual?.envio_emergencial ? (
+                      <Badge variant="destructive">🚨 Emergencial (travado)</Badge>
+                    ) : null}
                     <div className="space-y-2">
                       <Label>Público-alvo</Label>
                       <RadioGroup
@@ -3452,6 +3598,18 @@ export default function NormalizacaoGlobal() {
                       <p className="text-sm whitespace-pre-wrap">{campanhaAtual.mensagem}</p>
                     </div>
 
+                    {/* Tipo e badges */}
+                    <div className="flex flex-wrap gap-2">
+                      {campanhaAtual.tipo_mensagem ? (
+                        <Badge variant="outline">{getTipoMensagemLabel(campanhaAtual.tipo_mensagem)}</Badge>
+                      ) : (
+                        <Badge variant="destructive">Sem tipo</Badge>
+                      )}
+                      {campanhaAtual.envio_emergencial && (
+                        <Badge variant="destructive">🚨 Emergencial</Badge>
+                      )}
+                    </div>
+
                     {/* Critério de disparo */}
                     <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
                       <p className="font-medium">Critério de disparo:</p>
@@ -3470,6 +3628,8 @@ export default function NormalizacaoGlobal() {
                             mensagem: campanhaAtual.mensagem,
                             filtro_tipo: campanhaAtual.filtro_tipo,
                             filtro_valor: campanhaAtual.filtro_valor || '',
+                            tipo_mensagem: campanhaAtual.tipo_mensagem || '',
+                            envio_emergencial: !!campanhaAtual.envio_emergencial,
                           });
                           setEditandoCampanha(true);
                           carregarFiltrosCampanha();
