@@ -1,35 +1,50 @@
 
 
-## Plano: Liberar leitura de produtos master para todos os usuários autenticados
+## Plano: Corrigir recategorização do Listerine e itens órfãos
 
-### Problema
-A tabela `produtos_master_global` possui apenas uma política SELECT:
-- **"Masters podem ver todos os produtos master"** → `has_role(auth.uid(), 'master')`
+### Diagnóstico
 
-Usuários comuns autenticados não conseguem ler nenhum produto. A busca de ingredientes nas receitas retorna array vazio silenciosamente.
+Três problemas combinados impediram a recategorização:
 
-Funciona no seu celular porque você tem role `master`.
+1. **Typo na regra**: A keyword cadastrada é `"Enxaguando bucal"` — deveria ser `"Enxaguante bucal"`. Por isso a regra nunca casa com nenhum produto.
 
-### Correção
+2. **Produto sem master**: O item "Enxaguante bucal listerine melancia e hortelã" no estoque está com `produto_master_id = NULL`. A recategorização inteligente só atua em `produtos_master_global` e propaga via vínculo — itens órfãos ficam invisíveis.
 
-Uma migration SQL adicionando uma política SELECT para todos os usuários autenticados:
+3. **Lacuna arquitetural**: A recategorização inteligente ignora completamente itens do `estoque_app` sem vínculo ao master. Isso significa que qualquer produto que entrou sem normalização fica preso na categoria original para sempre.
 
+### Correção (3 passos)
+
+**Passo 1 — Corrigir o typo na regra (migration SQL)**
 ```sql
-CREATE POLICY "Usuarios autenticados podem ler produtos master ativos"
-ON public.produtos_master_global
-FOR SELECT
-TO authenticated
-USING (status = 'ativo');
+UPDATE regras_recategorizacao 
+SET keywords = ARRAY['enxaguante bucal']
+WHERE id = 'acb709ef-08e2-4bba-9bca-f06d2776422c';
 ```
 
-Isso permite que qualquer usuário logado leia produtos com status `ativo`, sem expor produtos inativos ou em rascunho. As políticas de INSERT/UPDATE/DELETE continuam restritas a masters.
+**Passo 2 — Corrigir itens órfãos no estoque via migration SQL**
+
+Aplicar as regras de recategorização diretamente nos itens do `estoque_app` que não têm `produto_master_id`, usando a mesma lógica de match por tokens. Para o caso imediato:
+
+```sql
+UPDATE estoque_app
+SET categoria = 'higiene/farmácia', updated_at = now()
+WHERE produto_master_id IS NULL
+  AND lower(produto_nome) LIKE '%enxaguante bucal%'
+  AND categoria != 'higiene/farmácia';
+```
+
+**Passo 3 — Adicionar lógica de fallback na edge function `recategorizar-produtos-inteligente`**
+
+Após processar os masters, adicionar uma segunda passagem que aplica as regras ativas diretamente nos itens do `estoque_app` que não têm `produto_master_id`. Isso garante que itens órfãos também sejam recategorizados para todos os usuários, usando a mesma lógica de match por tokens e a mesma hierarquia de prioridade.
 
 ### O que NÃO muda
-- Nenhuma Edge Function
 - Nenhum componente frontend
-- Permissões de escrita (continuam restritas a masters)
-- Apenas uma nova política de leitura
+- Lógica de match por tokens (mantida igual)
+- Hierarquia de prioridade de regras (mantida igual)
+- Propagação master → estoque para itens vinculados (mantida igual)
 
-### Resultado
-Após a correção, todos os usuários autenticados verão os produtos na busca de ingredientes ao cadastrar receitas.
+### Resultado esperado
+- O typo na regra será corrigido
+- O Listerine de melancia (e qualquer outro enxaguante bucal órfão) será movido para HIGIENE/FARMÁCIA
+- Futuras recategorizações cobrirão itens sem master automaticamente
 
