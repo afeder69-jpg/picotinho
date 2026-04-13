@@ -684,7 +684,10 @@ export default function NormalizacaoGlobal() {
   function limparNovaCampanha() {
     setNovaCampanha({ ...NOVA_CAMPANHA_INITIAL_STATE });
     setEstimativaDestinatarios(null);
+    setEstimativaEmergencial(null);
+    setEstimativaDiferenca(null);
     setConfirmandoEnvioCampanha(false);
+    setConfirmandoEmergencial(false);
   }
 
   function fecharNovaCampanhaDialog() {
@@ -695,13 +698,16 @@ export default function NormalizacaoGlobal() {
 
   async function estimarDestinatariosCampanha(campanha = novaCampanha) {
     setEstimativaDestinatarios(null);
+    setEstimativaEmergencial(null);
+    setEstimativaDiferenca(null);
     try {
       const { data: session } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke('enviar-campanha-whatsapp', {
         body: { 
           action: 'preview', 
           filtro_tipo: campanha.filtro_tipo, 
-          filtro_valor: campanha.filtro_valor || null 
+          filtro_valor: campanha.filtro_valor || null,
+          tipo_mensagem: campanha.tipo_mensagem || null
         },
         headers: { Authorization: `Bearer ${session?.session?.access_token}` }
       });
@@ -715,7 +721,9 @@ export default function NormalizacaoGlobal() {
         setEstimativaDestinatarios(-1);
         return;
       }
-      setEstimativaDestinatarios(data?.total ?? 0);
+      setEstimativaDestinatarios(data?.total_normal ?? data?.total ?? 0);
+      setEstimativaEmergencial(data?.total_emergencial ?? null);
+      setEstimativaDiferenca(data?.diferenca ?? null);
     } catch (err: any) {
       console.error('Erro ao estimar destinatários:', err);
       setEstimativaDestinatarios(-1);
@@ -724,7 +732,7 @@ export default function NormalizacaoGlobal() {
 
   async function criarEEnviarCampanha() {
     if (enviandoCampanha) return;
-    if (!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim()) return;
+    if (!novaCampanha.titulo.trim() || !novaCampanha.mensagem.trim() || !novaCampanha.tipo_mensagem) return;
     setEnviandoCampanha(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -738,9 +746,11 @@ export default function NormalizacaoGlobal() {
           mensagem: novaCampanha.mensagem.trim(),
           filtro_tipo: novaCampanha.filtro_tipo,
           filtro_valor: novaCampanha.filtro_valor || null,
+          tipo_mensagem: novaCampanha.tipo_mensagem,
+          envio_emergencial: novaCampanha.envio_emergencial,
           criado_por: user.id,
           status: 'rascunho'
-        })
+        } as any)
         .select()
         .single();
 
