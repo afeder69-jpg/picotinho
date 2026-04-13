@@ -10,6 +10,8 @@ interface EnviarCodigoRequest {
   numero_whatsapp: string;
 }
 
+const PRAZO_ABANDONO_MINUTOS = 30;
+
 /**
  * Normaliza telefone brasileiro: aceita 11 ou 13 dígitos.
  * Retorna sempre 13 dígitos com prefixo 55, ou null se inválido.
@@ -19,6 +21,77 @@ function normalizarTelefone(input: string): string | null {
   if (digitos.length === 11) return `55${digitos}`;
   if (digitos.length === 13 && digitos.startsWith('55')) return digitos;
   return null;
+}
+
+/**
+ * Verifica se existe registro ativo do número em outra conta.
+ * Se existir mas for abandonado (não verificado + código expirado > 30min),
+ * desativa automaticamente e registra log.
+ * Retorna true se o número está bloqueado para o usuário atual.
+ */
+async function verificarDuplicidadeCrossUser(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  numeroNormalizado: string,
+  userId: string
+): Promise<{ bloqueado: boolean; motivo?: string }> {
+  const { data: registrosAtivos, error } = await supabaseAdmin
+    .from('whatsapp_telefones_autorizados')
+    .select('id, usuario_id, verificado, data_codigo')
+    .eq('numero_whatsapp', numeroNormalizado)
+    .eq('ativo', true)
+    .neq('usuario_id', userId);
+
+  if (error) {
+    console.error('Erro ao verificar duplicidade cross-user:', error);
+    throw new Error('Erro ao verificar disponibilidade do número');
+  }
+
+  if (!registrosAtivos || registrosAtivos.length === 0) {
+    return { bloqueado: false };
+  }
+
+  // Verificar cada registro ativo de outro usuário
+  for (const registro of registrosAtivos) {
+    if (registro.verificado) {
+      // Número verificado em outra conta → bloqueio definitivo
+      console.log(`🚫 Número ${numeroNormalizado} está verificado e ativo na conta ${registro.usuario_id}. Bloqueando cadastro para ${userId}.`);
+      return {
+        bloqueado: true,
+        motivo: 'Este número de WhatsApp já está vinculado a outra conta.'
+      };
+    }
+
+    // Não verificado → checar se o código expirou (> 30 minutos)
+    const dataCodigo = registro.data_codigo ? new Date(registro.data_codigo) : null;
+    const agora = new Date();
+    const minutosDesdeEnvio = dataCodigo
+      ? (agora.getTime() - dataCodigo.getTime()) / (1000 * 60)
+      : Infinity;
+
+    if (minutosDesdeEnvio <= PRAZO_ABANDONO_MINUTOS) {
+      // Código ainda válido em outra conta → bloqueio temporário
+      console.log(`🚫 Número ${numeroNormalizado} tem verificação pendente (< ${PRAZO_ABANDONO_MINUTOS}min) na conta ${registro.usuario_id}. Bloqueando cadastro para ${userId}.`);
+      return {
+        bloqueado: true,
+        motivo: 'Este número de WhatsApp já está vinculado a outra conta.'
+      };
+    }
+
+    // Código expirado → desativar registro abandonado automaticamente
+    console.log(`🔄 Desativando registro abandonado: número ${numeroNormalizado}, conta ${registro.usuario_id}, registro ${registro.id}. Código expirado há ${Math.round(minutosDesdeEnvio)} minutos. Liberando para ${userId}.`);
+
+    const { error: updateError } = await supabaseAdmin
+      .from('whatsapp_telefones_autorizados')
+      .update({ ativo: false })
+      .eq('id', registro.id);
+
+    if (updateError) {
+      console.error(`❌ Erro ao desativar registro abandonado ${registro.id}:`, updateError);
+      // Não bloquear por falha interna, mas logar
+    }
+  }
+
+  return { bloqueado: false };
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -32,14 +105,17 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Authorization header required');
     }
 
+    // Client autenticado (para operações do usuário)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    // Client admin (para verificação cross-user sem restrição de RLS)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     // Verificar usuário autenticado
@@ -53,6 +129,23 @@ const handler = async (req: Request): Promise<Response> => {
     const numeroNormalizado = normalizarTelefone(numero_whatsapp || '');
     if (!numeroNormalizado) {
       throw new Error('Número inválido. Informe DDD + número (11 dígitos) ou com prefixo 55 (13 dígitos).');
+    }
+
+    // ===== VERIFICAÇÃO DE DUPLICIDADE CROSS-USER =====
+    const { bloqueado, motivo } = await verificarDuplicidadeCrossUser(
+      supabaseAdmin,
+      numeroNormalizado,
+      user.id
+    );
+
+    if (bloqueado) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: motivo
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
     }
 
     // Gerar código de verificação de 6 dígitos
@@ -85,7 +178,6 @@ const handler = async (req: Request): Promise<Response> => {
     const tipoTelefone = telefonePrincipal ? 'extra' : 'principal';
 
     // Inserir ou atualizar telefone com código de verificação
-    // O trigger no banco normaliza automaticamente o numero_whatsapp
     const { error: updateError } = await supabase
       .from('whatsapp_telefones_autorizados')
       .upsert({
@@ -101,6 +193,18 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (updateError) {
       console.error('Erro ao salvar código:', updateError);
+
+      // Tratar erro de índice único (race condition)
+      if (updateError.code === '23505' && updateError.message?.includes('idx_unique_numero_whatsapp_ativo')) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Este número de WhatsApp já está vinculado a outra conta.'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       throw new Error('Erro ao salvar código de verificação');
     }
 
@@ -125,9 +229,8 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    const mensagem = `🔐 *Código de Verificação Picotinho*\n\nSeu código de verificação é: *${codigo}*\n\nEste código expira em 10 minutos.\n\n_Não compartilhe este código com ninguém._`;
+    const mensagem = `🔐 *Código de Verificação Picotinho*\n\nSeu código de verificação é: *${codigo}*\n\nEste código expira em ${PRAZO_ABANDONO_MINUTOS} minutos.\n\n_Não compartilhe este código com ninguém._`;
 
-    // Z-API recebe o número COM prefixo 55 (13 dígitos)
     const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
     
     console.log(`📱 Enviando código ${codigo} para número ${numeroNormalizado}`);
