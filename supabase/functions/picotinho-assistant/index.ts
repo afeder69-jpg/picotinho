@@ -3056,6 +3056,11 @@ Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar c
 
         console.log(`🔧 [TOOL] ${toolName}(${JSON.stringify(toolArgs)})`);
         
+        // Injetar remetente para tools de preferências que precisam identificar o telefone
+        if (['gerenciar_preferencias_mensagens', 'atualizar_nome_telefone'].includes(toolName)) {
+          toolArgs._remetente = remetente;
+        }
+        
         const { result, isWriteMutation } = await executeTool(toolName, toolArgs, supabase, usuarioId, state, listaAtivaId);
         
         if (isWriteMutation) {
