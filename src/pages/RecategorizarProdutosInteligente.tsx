@@ -139,9 +139,10 @@ const RecategorizarProdutosInteligente = () => {
       if (error) throw error;
 
       setResultado(data);
+      const orfaosMsg = data.orfaos_alterados ? ` + ${data.orfaos_alterados} órfãos corrigidos` : '';
       toast({
         title: "Recategorização concluída!",
-        description: `${data.produtos_alterados} produtos master alterados de ${data.produtos_master_analisados} analisados.`,
+        description: `${data.produtos_alterados} produtos master alterados de ${data.produtos_master_analisados} analisados${orfaosMsg}.`,
       });
     } catch (error: any) {
       console.error("Erro na recategorização:", error);
