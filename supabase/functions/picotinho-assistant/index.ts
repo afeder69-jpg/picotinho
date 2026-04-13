@@ -580,22 +580,86 @@ function converterParaUnidadeBase(quantidade: number, unidadeOrigem: string, uni
 // ==================== FIM CONVERSÃO DE UNIDADE ====================
 
 
+// Validar formato UUID
+function isValidUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
+// Normalizar texto para comparação de nomes de lista
+function normalizarNomeLista(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function resolveListaId(
   args: Record<string, any>,
   supabase: any,
   usuarioId: string,
   listaAtivaId: string | null
 ): Promise<{ listaId: string | null; erro: string | null }> {
-  const listaId = args.lista_id || listaAtivaId;
-  if (!listaId) {
-    return { listaId: null, erro: "Nenhuma lista ativa definida. Use listar_listas para ver suas listas ou criar_lista para criar uma nova." };
+  // 1. Tentar lista_id dos args ou lista ativa
+  let listaId = args.lista_id || listaAtivaId;
+
+  // 2. Validar formato UUID — ignorar IDs fabricados silenciosamente
+  if (listaId && !isValidUUID(listaId)) {
+    console.warn(`⚠️ ID de lista inválido ignorado (não é UUID): ${listaId}`);
+    listaId = null;
   }
-  // Verify ownership
-  const { data, error } = await supabase.from('listas_compras').select('id').eq('id', listaId).eq('user_id', usuarioId).maybeSingle();
-  if (error || !data) {
-    return { listaId: null, erro: "Lista não encontrada ou não pertence a este usuário." };
+
+  // 3. Se temos um ID válido, verificar ownership
+  if (listaId) {
+    const { data, error } = await supabase.from('listas_compras').select('id').eq('id', listaId).eq('user_id', usuarioId).maybeSingle();
+    if (!error && data) {
+      return { listaId, erro: null };
+    }
+    // ID não encontrado — cair no fallback por nome
+    listaId = null;
   }
-  return { listaId, erro: null };
+
+  // 4. Fallback: resolver pelo nome_lista informado nos args
+  const nomeLista = args.nome_lista;
+  if (nomeLista) {
+    const nomeNormalizado = normalizarNomeLista(nomeLista);
+
+    // 4a. Busca exata normalizada primeiro
+    const { data: todas, error: errTodas } = await supabase
+      .from('listas_compras')
+      .select('id, titulo')
+      .eq('user_id', usuarioId)
+      .order('created_at', { ascending: false });
+
+    if (!errTodas && todas && todas.length > 0) {
+      // Tentar match exato normalizado
+      const matchesExatos = todas.filter((l: any) => normalizarNomeLista(l.titulo) === nomeNormalizado);
+      if (matchesExatos.length === 1) {
+        return { listaId: matchesExatos[0].id, erro: null };
+      }
+      if (matchesExatos.length > 1) {
+        const nomes = matchesExatos.map((l: any) => `• ${l.titulo}`).join('\n');
+        return { listaId: null, erro: `Encontrei ${matchesExatos.length} listas com esse nome:\n${nomes}\nQual delas você quer?` };
+      }
+
+      // 4b. Busca parcial (contém o termo)
+      const matchesParciais = todas.filter((l: any) => normalizarNomeLista(l.titulo).includes(nomeNormalizado));
+      if (matchesParciais.length === 1) {
+        return { listaId: matchesParciais[0].id, erro: null };
+      }
+      if (matchesParciais.length > 1) {
+        const nomes = matchesParciais.map((l: any) => `• ${l.titulo}`).join('\n');
+        return { listaId: null, erro: `Encontrei ${matchesParciais.length} listas parecidas:\n${nomes}\nQual delas você quer?` };
+      }
+    }
+
+    // Nenhuma lista encontrada com esse nome
+    return { listaId: null, erro: `Não encontrei nenhuma lista chamada "${nomeLista}". Quer que eu crie uma nova com esse nome?` };
+  }
+
+  // 5. Sem ID e sem nome — erro genérico amigável
+  return { listaId: null, erro: "Você não tem nenhuma lista ativa no momento. Me diga o nome da lista que quer usar, ou posso criar uma nova pra você!" };
 }
 
 // ==================== TOOL EXECUTION ====================
