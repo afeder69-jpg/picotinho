@@ -90,7 +90,20 @@ const NOVA_CAMPANHA_INITIAL_STATE = {
   mensagem: '',
   filtro_tipo: 'todos',
   filtro_valor: '',
+  tipo_mensagem: '' as string,
+  envio_emergencial: false,
 };
+
+const TIPO_MENSAGEM_OPTIONS = [
+  { value: 'promocao', label: 'Promoção' },
+  { value: 'novidade', label: 'Novidade do Picotinho' },
+  { value: 'aviso_estoque', label: 'Aviso de estoque' },
+  { value: 'dica', label: 'Dica / sugestão útil' },
+];
+
+function getTipoMensagemLabel(tipo: string | null): string {
+  return TIPO_MENSAGEM_OPTIONS.find(o => o.value === tipo)?.label || tipo || 'Sem tipo';
+}
 
 export default function NormalizacaoGlobal() {
   const navigate = useNavigate();
