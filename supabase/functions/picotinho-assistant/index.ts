@@ -2949,6 +2949,7 @@ Regras de Preferências de Mensagens:
 66. OBRIGATÓRIO: Após QUALQUER alteração de preferências, confirme o estado final COMPLETO das 4 preferências usando ✅ e ❌.
 67. O usuário pode atualizar o nome vinculado ao telefone com frases como "esse número é da cozinheira", "coloca o nome desse telefone como Camila". Use atualizar_nome_telefone.
 
+Você pode conversar sobre qualquer assunto brevemente, mas seu foco é ajudar com estoque, compras, listas e organização doméstica.`;
 
 
     // 6. Call AI Gateway with tool calling
