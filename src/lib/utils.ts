@@ -112,7 +112,7 @@ export function formatarUnidadeMedida(unidade: string): string {
 export function formatarUnidadeListaCompras(unidade: string): string {
   if (!unidade) return 'un';
   const upper = unidade.toUpperCase().trim();
-  if (upper === 'PESO') return 'pct';
+  if (upper === 'PESO') return 'kg';
   if (upper === 'VOLUME') return 'un';
   if (upper === 'UNIDADE') return 'un';
   return formatarUnidadeMedida(unidade);
