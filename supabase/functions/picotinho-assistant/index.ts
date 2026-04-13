@@ -275,7 +275,7 @@ const listToolDefinitions = [
               properties: {
                 produto_nome: { type: "string", description: "Nome do produto" },
                 quantidade: { type: "number", description: "Quantidade" },
-                unidade_medida: { type: "string", description: "Unidade: UN, KG, L, etc. Default UN" },
+                unidade_medida: { type: "string", description: "Unidade informada pelo usuário (será corrigida automaticamente pelo sistema com base no produto master). Default UN" },
                 produto_id: { type: "string", description: "ID do produto master (de buscar_produto_catalogo ou resolver_item_por_historico). Se fornecido, item é estruturado (item_livre=false)." },
                 item_livre: { type: "boolean", description: "Se true, item é lembrete livre sem vínculo. Default false. Só use quando o USUÁRIO confirmar explicitamente que deseja adicionar como item livre." },
                 origem: { type: "string", description: "Origem do produto_id: 'catalogo', 'historico', 'opcao_numerada'. Ajuda na rastreabilidade." }
