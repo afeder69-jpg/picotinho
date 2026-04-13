@@ -3598,6 +3598,18 @@ export default function NormalizacaoGlobal() {
                       <p className="text-sm whitespace-pre-wrap">{campanhaAtual.mensagem}</p>
                     </div>
 
+                    {/* Tipo e badges */}
+                    <div className="flex flex-wrap gap-2">
+                      {campanhaAtual.tipo_mensagem ? (
+                        <Badge variant="outline">{getTipoMensagemLabel(campanhaAtual.tipo_mensagem)}</Badge>
+                      ) : (
+                        <Badge variant="destructive">Sem tipo</Badge>
+                      )}
+                      {campanhaAtual.envio_emergencial && (
+                        <Badge variant="destructive">🚨 Emergencial</Badge>
+                      )}
+                    </div>
+
                     {/* Critério de disparo */}
                     <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
                       <p className="font-medium">Critério de disparo:</p>
