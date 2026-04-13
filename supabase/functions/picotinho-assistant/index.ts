@@ -1426,10 +1426,14 @@ async function executeTool(
       }
 
       case 'definir_lista_ativa': {
+        // Validate UUID format
+        if (!args.lista_id || !isValidUUID(args.lista_id)) {
+          return { result: JSON.stringify({ erro: "Lista não encontrada. Use buscar_lista_por_nome para localizar a lista pelo nome." }), isWriteMutation: false };
+        }
         // Verify list exists and belongs to user
         const { data: lista, error: listError } = await supabase.from('listas_compras').select('id, titulo').eq('id', args.lista_id).eq('user_id', usuarioId).maybeSingle();
         if (listError || !lista) {
-          return { result: JSON.stringify({ erro: "Lista não encontrada." }), isWriteMutation: false };
+          return { result: JSON.stringify({ erro: "Lista não encontrada. Use buscar_lista_por_nome para localizar a lista pelo nome." }), isWriteMutation: false };
         }
         const { error } = await supabase.from('whatsapp_preferencias_usuario').upsert({
           usuario_id: usuarioId, lista_ativa_id: args.lista_id, updated_at: new Date().toISOString()
