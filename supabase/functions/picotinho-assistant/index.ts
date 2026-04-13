@@ -246,11 +246,12 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "listar_itens_lista",
-      description: "Retorna os itens de uma lista de compras específica. Se lista_id não for informado, usa a lista ativa.",
+      description: "Retorna os itens de uma lista de compras específica. Se lista_id não for informado, usa a lista ativa. Se não houver lista ativa, passe nome_lista para resolver automaticamente.",
       parameters: {
         type: "object",
         properties: {
-          lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" }
+          lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" }
         },
         required: []
       }
@@ -260,11 +261,12 @@ const listToolDefinitions = [
     type: "function",
     function: {
       name: "adicionar_itens_lista",
-      description: "Adiciona um ou mais itens a uma lista de compras. Aceita array de itens para inserção em lote. Se lista_id não for informado, usa a lista ativa.",
+      description: "Adiciona um ou mais itens a uma lista de compras. Aceita array de itens para inserção em lote. Se lista_id não for informado, usa a lista ativa. Se não houver lista ativa, passe nome_lista para resolver automaticamente.",
       parameters: {
         type: "object",
         properties: {
           lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" },
           itens: {
             type: "array",
             description: "Array de itens a adicionar",
@@ -295,6 +297,7 @@ const listToolDefinitions = [
         type: "object",
         properties: {
           lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" },
           item_nome: { type: "string", description: "Nome do item a remover" },
           item_id: { type: "string", description: "ID específico do item (se já identificado)" }
         },
@@ -311,6 +314,7 @@ const listToolDefinitions = [
         type: "object",
         properties: {
           lista_id: { type: "string", description: "ID da lista (opcional, usa lista ativa se omitido)" },
+          nome_lista: { type: "string", description: "Nome da lista, usado como fallback se lista_id não for fornecido e não houver lista ativa" },
           item_nome: { type: "string", description: "Nome do item" },
           item_id: { type: "string", description: "ID específico do item (se já identificado)" },
           nova_quantidade: { type: "number", description: "Nova quantidade do item" }
