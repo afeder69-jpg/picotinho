@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { formatarTelefoneBR } from "@/lib/telefone";
 
 interface Telefone {
   id: string;
@@ -44,13 +45,12 @@ export function SeletorTelefoneWhatsApp({ open, onSelect, onCancel }: SeletorTel
         .eq('usuario_id', user.id)
         .eq('verificado', true)
         .eq('ativo', true)
-        .order('tipo', { ascending: false }); // Principal primeiro
+        .order('tipo', { ascending: false });
 
       if (error) throw error;
 
       setTelefones(data || []);
       
-      // Selecionar principal por padrão
       const principal = data?.find(t => t.tipo === 'principal');
       if (principal) {
         setTelefoneSelecionado(principal.id);
@@ -64,17 +64,6 @@ export function SeletorTelefoneWhatsApp({ open, onSelect, onCancel }: SeletorTel
     } finally {
       setCarregando(false);
     }
-  };
-
-  const formatarNumero = (numero: string) => {
-    // Remove o prefixo 55 se houver
-    const numeroLimpo = numero.startsWith('55') ? numero.substring(2) : numero;
-    
-    // Formata: (XX) XXXXX-XXXX
-    if (numeroLimpo.length === 11) {
-      return `(${numeroLimpo.substring(0, 2)}) ${numeroLimpo.substring(2, 7)}-${numeroLimpo.substring(7)}`;
-    }
-    return numeroLimpo;
   };
 
   const handleEnviar = () => {
@@ -129,7 +118,7 @@ export function SeletorTelefoneWhatsApp({ open, onSelect, onCancel }: SeletorTel
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">
-                          {formatarNumero(telefone.numero_whatsapp)}
+                          {formatarTelefoneBR(telefone.numero_whatsapp)}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">

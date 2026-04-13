@@ -11,6 +11,14 @@ import PicotinhoLogo from "@/components/PicotinhoLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
+import {
+  normalizarTelefoneBR,
+  validarCelularBR,
+  formatarTelefoneBR,
+  extrairNumeroNacional,
+  telefonesIguais,
+  erroTelefoneAmigavel,
+} from "@/lib/telefone";
 
 interface WhatsAppConfig {
   id?: string;
@@ -88,7 +96,8 @@ export default function WhatsAppConfig() {
 
       if (data) {
         setConfigExistente(data);
-        setNumeroWhatsApp(data.numero_whatsapp || "");
+        // Exibir sem o 55 no input
+        setNumeroWhatsApp(extrairNumeroNacional(data.numero_whatsapp || ""));
         
         // Verificar se há número pendente
         let webhookData = null;
@@ -100,7 +109,7 @@ export default function WhatsAppConfig() {
         
         if (webhookData?.numero_pendente) {
           setNumeroPendente(webhookData.numero_pendente);
-          setNumeroWhatsApp(webhookData.numero_pendente);
+          setNumeroWhatsApp(extrairNumeroNacional(webhookData.numero_pendente));
         }
         
         // Se tem código pendente, mostrar campo de verificação
@@ -111,6 +120,24 @@ export default function WhatsAppConfig() {
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
     }
+  };
+
+  const validarEEnviar = (numero: string): string | null => {
+    const erro = erroTelefoneAmigavel(numero);
+    if (erro) {
+      toast.error(erro);
+      return null;
+    }
+    if (!validarCelularBR(numero)) {
+      toast.error("Número de celular brasileiro inválido. Verifique o DDD e o número.");
+      return null;
+    }
+    const normalizado = normalizarTelefoneBR(numero);
+    if (!normalizado) {
+      toast.error("Não foi possível normalizar o número. Digite DDD + número (ex: 21 99999-9999)");
+      return null;
+    }
+    return normalizado;
   };
 
   const salvarEEnviarCodigo = async () => {
@@ -124,24 +151,20 @@ export default function WhatsAppConfig() {
       return;
     }
     
-    // Validar formato obrigatório: 13 dígitos começando com 55
-    if (numeroWhatsApp.length !== 13 || !numeroWhatsApp.startsWith('55')) {
-      toast.error("Formato obrigatório: 5521999999999 (código do país + área + número)");
-      return;
-    }
+    const normalizado = validarEEnviar(numeroWhatsApp);
+    if (!normalizado) return;
     
     // Se está tentando mudar um número já verificado, pedir confirmação
-    if (configExistente?.verificado && numeroWhatsApp !== configExistente.numero_whatsapp) {
+    if (configExistente?.verificado && !telefonesIguais(numeroWhatsApp, configExistente.numero_whatsapp)) {
       setShowConfirmDialog(true);
       return;
     }
     
     setLoading(true);
     try {
-      // Enviar código de verificação
       const { data, error } = await supabase.functions.invoke('enviar-codigo-verificacao', {
         body: {
-          numero_whatsapp: numeroWhatsApp.trim()
+          numero_whatsapp: normalizado
         }
       });
 
@@ -150,9 +173,8 @@ export default function WhatsAppConfig() {
       if (data?.success) {
         toast.success("Código de verificação enviado! Verifique seu WhatsApp.");
         setAguardandoCodigo(true);
-        loadConfig(); // Recarregar para atualizar status
+        loadConfig();
         
-        // Em ambiente de desenvolvimento, mostrar o código
         if (data.codigo_debug) {
           toast.info(`Código para teste: ${data.codigo_debug}`, {
             duration: 10000,
@@ -161,7 +183,7 @@ export default function WhatsAppConfig() {
       } else {
         throw new Error(data?.error || 'Erro ao enviar código');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao enviar código:', error);
       toast.error(error.message || "Erro ao enviar código de verificação");
     }
@@ -188,12 +210,12 @@ export default function WhatsAppConfig() {
         toast.success("Número verificado com sucesso! 🎉");
         setAguardandoCodigo(false);
         setCodigoVerificacao("");
-        setNumeroPendente(""); // Limpar número pendente
-        loadConfig(); // Recarregar configuração
+        setNumeroPendente("");
+        loadConfig();
       } else {
         throw new Error(data?.error || 'Erro ao verificar código');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao verificar código:', error);
       toast.error(error.message || "Erro ao verificar código");
     }
@@ -209,19 +231,20 @@ export default function WhatsAppConfig() {
     setShowConfirmDialog(false);
     await procederEnvioCodigo();
     
-    // Focar no campo de código após enviar
     setTimeout(() => {
       codigoInputRef.current?.focus();
     }, 100);
   };
 
   const procederEnvioCodigo = async () => {
+    const normalizado = validarEEnviar(numeroWhatsApp);
+    if (!normalizado) return;
+
     setLoading(true);
     try {
-      // Enviar código de verificação
       const { data, error } = await supabase.functions.invoke('enviar-codigo-verificacao', {
         body: {
-          numero_whatsapp: numeroWhatsApp.trim()
+          numero_whatsapp: normalizado
         }
       });
 
@@ -230,9 +253,8 @@ export default function WhatsAppConfig() {
       if (data?.success) {
         toast.success("Código de verificação enviado! Verifique seu WhatsApp.");
         setAguardandoCodigo(true);
-        loadConfig(); // Recarregar para atualizar status
+        loadConfig();
         
-        // Em ambiente de desenvolvimento, mostrar o código
         if (data.codigo_debug) {
           toast.info(`Código para teste: ${data.codigo_debug}`, {
             duration: 10000,
@@ -241,33 +263,11 @@ export default function WhatsAppConfig() {
       } else {
         throw new Error(data?.error || 'Erro ao enviar código');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao enviar código:', error);
       toast.error(error.message || "Erro ao enviar código de verificação");
     }
     setLoading(false);
-  };
-
-  const formatarNumero = (numero: string) => {
-    // Remove tudo que não é número
-    const cleaned = numero.replace(/\D/g, '');
-    
-    // Formatação para números com código do país (13 dígitos) ou sem (11 dígitos)
-    if (cleaned.length <= 11) {
-      // Formato nacional: (XX) XXXXX-XXXX
-      return cleaned
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2');
-    } else if (cleaned.length <= 13) {
-      // Formato internacional: +XX (XX) XXXXX-XXXX
-      return cleaned
-        .replace(/(\d{2})(\d{2})(\d)/, '+$1 ($2) $3')
-        .replace(/(\d{5})(\d)/, '$1-$2');
-    }
-    // Limita a 13 dígitos para formato internacional
-    return cleaned.slice(0, 13)
-      .replace(/(\d{2})(\d{2})(\d)/, '+$1 ($2) $3')
-      .replace(/(\d{5})(\d)/, '$1-$2');
   };
 
   // Funções para múltiplos telefones
@@ -283,7 +283,6 @@ export default function WhatsAppConfig() {
       if (error) throw error;
       setTelefones((data || []) as TelefoneAutorizado[]);
       
-      // Verificar se há algum telefone pendente de verificação
       const pendente = data?.find(t => !t.verificado && t.codigo_verificacao);
       if (pendente) {
         setAguardandoCodigoExtra(pendente.id);
@@ -305,14 +304,11 @@ export default function WhatsAppConfig() {
       return;
     }
     
-    // Validar formato obrigatório: 13 dígitos começando com 55
-    if (novoNumero.length !== 13 || !novoNumero.startsWith('55')) {
-      toast.error("Formato obrigatório: 5521999999999 (código do país + área + número)");
-      return;
-    }
+    const normalizado = validarEEnviar(novoNumero);
+    if (!normalizado) return;
 
     // Verificar se não é duplicado
-    if (telefones.some(t => t.numero_whatsapp === novoNumero)) {
+    if (telefones.some(t => telefonesIguais(t.numero_whatsapp, normalizado))) {
       toast.error("Este número já está cadastrado");
       return;
     }
@@ -327,7 +323,7 @@ export default function WhatsAppConfig() {
     try {
       const { data, error } = await supabase.functions.invoke('enviar-codigo-verificacao', {
         body: {
-          numero_whatsapp: novoNumero.trim()
+          numero_whatsapp: normalizado
         }
       });
 
@@ -336,9 +332,8 @@ export default function WhatsAppConfig() {
       if (data?.success) {
         toast.success("Código de verificação enviado! Verifique o WhatsApp.");
         setCodigoVerificacaoExtra("");
-        loadTelefones(); // Recarregar lista
+        loadTelefones();
         
-        // Em ambiente de desenvolvimento, mostrar o código
         if (data.codigo_debug) {
           toast.info(`Código para teste: ${data.codigo_debug}`, {
             duration: 10000,
@@ -347,7 +342,7 @@ export default function WhatsAppConfig() {
       } else {
         throw new Error(data?.error || 'Erro ao enviar código');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao enviar código:', error);
       toast.error(error.message || "Erro ao enviar código de verificação");
     }
@@ -374,12 +369,12 @@ export default function WhatsAppConfig() {
         toast.success(`Telefone ${data.tipo_telefone} verificado com sucesso! 🎉`);
         setAguardandoCodigoExtra(null);
         setCodigoVerificacaoExtra("");
-        setNovoNumero(""); // Limpar campo de novo número
-        loadTelefones(); // Recarregar lista
+        setNovoNumero("");
+        loadTelefones();
       } else {
         throw new Error(data?.error || 'Erro ao verificar código');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao verificar código:', error);
       toast.error(error.message || "Erro ao verificar código");
     }
@@ -390,7 +385,6 @@ export default function WhatsAppConfig() {
     const telefone = telefones.find(t => t.id === telefoneId);
     if (!telefone) return;
 
-    // Não permitir remover telefone principal se é o único verificado
     if (telefone.tipo === 'principal' && telefones.filter(t => t.verificado).length === 1) {
       toast.error("Não é possível remover o único telefone principal verificado. Adicione outro telefone primeiro.");
       return;
@@ -439,7 +433,7 @@ export default function WhatsAppConfig() {
       } else {
         throw new Error(data?.error || 'Erro ao reenviar código');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao reenviar código:', error);
       toast.error(error.message || "Erro ao reenviar código");
     }
@@ -477,7 +471,7 @@ export default function WhatsAppConfig() {
                   Número Verificado
                 </CardTitle>
                 <CardDescription className="text-green-700">
-                  Seu número {formatarNumero(configExistente.numero_whatsapp)} está ativo e pode receber comandos do Picotinho
+                  Seu número {formatarTelefoneBR(configExistente.numero_whatsapp)} está ativo e pode receber comandos do Picotinho
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -492,8 +486,8 @@ export default function WhatsAppConfig() {
                   Troca de Número Pendente
                 </CardTitle>
                 <CardDescription className="text-orange-700">
-                  Número ativo: {formatarNumero(configExistente?.numero_whatsapp || "")} <br/>
-                  Aguardando verificação: {formatarNumero(numeroPendente)}
+                  Número ativo: {formatarTelefoneBR(configExistente?.numero_whatsapp || "")} <br/>
+                  Aguardando verificação: {formatarTelefoneBR(numeroPendente)}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -518,22 +512,20 @@ export default function WhatsAppConfig() {
                   Número do WhatsApp
                 </label>
                   <Input
-                    placeholder="5521999999999 (formato obrigatório)"
-                    value={formatarNumero(numeroWhatsApp)}
+                    placeholder="21 99999-9999"
+                    value={numeroWhatsApp}
                     onChange={(e) => {
-                      // Remove formatação antes de salvar
-                      const numero = e.target.value.replace(/\D/g, '');
+                      const numero = e.target.value.replace(/\D/g, '').slice(0, 11);
                       setNumeroWhatsApp(numero);
-                      // Se mudou o número, cancelar verificação pendente
-                      if (numero !== configExistente?.numero_whatsapp) {
+                      if (configExistente && !telefonesIguais(numero, configExistente.numero_whatsapp)) {
                         setAguardandoCodigo(false);
                         setCodigoVerificacao("");
                       }
                     }}
-                    maxLength={20}
+                    maxLength={15}
                   />
                 <p className="text-xs text-gray-500 mt-1">
-                  <strong>Obrigatório:</strong> Código do país + área + número (13 dígitos: 5521999999999)
+                  DDD + número (ex: 21 99999-9999). O código do Brasil (+55) é adicionado automaticamente.
                 </p>
               </div>
 
@@ -555,7 +547,7 @@ export default function WhatsAppConfig() {
                         Verificação Necessária
                       </CardTitle>
                       <CardDescription className="text-blue-700">
-                        Enviamos um código de 6 dígitos para {formatarNumero(numeroWhatsApp)}. 
+                        Enviamos um código de 6 dígitos para {formatarTelefoneBR(numeroWhatsApp)}. 
                         Digite o código abaixo para verificar seu número.
                       </CardDescription>
                     </CardHeader>
@@ -627,7 +619,7 @@ export default function WhatsAppConfig() {
                       <Smartphone className="h-5 w-5 text-gray-500" />
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{formatarNumero(telefone.numero_whatsapp)}</span>
+                          <span className="font-medium">{formatarTelefoneBR(telefone.numero_whatsapp)}</span>
                           <Badge variant={telefone.tipo === 'principal' ? 'default' : 'secondary'}>
                             {telefone.tipo === 'principal' ? 'Principal' : 'Extra'}
                           </Badge>
@@ -691,7 +683,7 @@ export default function WhatsAppConfig() {
                   <div key={`pref-${telefone.id}`} className="p-4 border rounded-lg space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{formatarNumero(telefone.numero_whatsapp)}</span>
+                        <span className="font-medium">{formatarTelefoneBR(telefone.numero_whatsapp)}</span>
                         <Badge variant={telefone.tipo === 'principal' ? 'default' : 'secondary'}>
                           {telefone.tipo === 'principal' ? 'Principal' : 'Extra'}
                         </Badge>
@@ -790,7 +782,7 @@ export default function WhatsAppConfig() {
                   Verificação Pendente - Telefone Extra
                 </CardTitle>
                 <CardDescription className="text-blue-700">
-                  Digite o código de 6 dígitos enviado para {formatarNumero(telefonePendente.numero_whatsapp)}
+                  Digite o código de 6 dígitos enviado para {formatarTelefoneBR(telefonePendente.numero_whatsapp)}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -852,16 +844,16 @@ export default function WhatsAppConfig() {
                     Número do WhatsApp Extra
                   </label>
                   <Input
-                    placeholder="5521999999999 (formato obrigatório)"
-                    value={formatarNumero(novoNumero)}
+                    placeholder="21 99999-9999"
+                    value={novoNumero}
                     onChange={(e) => {
-                      const numero = e.target.value.replace(/\D/g, '');
+                      const numero = e.target.value.replace(/\D/g, '').slice(0, 11);
                       setNovoNumero(numero);
                     }}
-                    maxLength={20}
+                    maxLength={15}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    <strong>Obrigatório:</strong> Código do país + área + número (13 dígitos: 5521999999999)
+                    DDD + número (ex: 21 99999-9999). O código do Brasil (+55) é adicionado automaticamente.
                   </p>
                 </div>
 

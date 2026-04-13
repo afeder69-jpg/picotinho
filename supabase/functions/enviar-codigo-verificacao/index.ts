@@ -10,6 +10,17 @@ interface EnviarCodigoRequest {
   numero_whatsapp: string;
 }
 
+/**
+ * Normaliza telefone brasileiro: aceita 11 ou 13 dígitos.
+ * Retorna sempre 13 dígitos com prefixo 55, ou null se inválido.
+ */
+function normalizarTelefone(input: string): string | null {
+  const digitos = input.replace(/\D/g, '');
+  if (digitos.length === 11) return `55${digitos}`;
+  if (digitos.length === 13 && digitos.startsWith('55')) return digitos;
+  return null;
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -39,17 +50,15 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { numero_whatsapp }: EnviarCodigoRequest = await req.json();
 
-    if (!numero_whatsapp || numero_whatsapp.length !== 13 || !numero_whatsapp.startsWith('55')) {
-      throw new Error('Número do WhatsApp deve ter 13 dígitos e começar com 55');
+    const numeroNormalizado = normalizarTelefone(numero_whatsapp || '');
+    if (!numeroNormalizado) {
+      throw new Error('Número inválido. Informe DDD + número (11 dígitos) ou com prefixo 55 (13 dígitos).');
     }
-
-    // Remover o prefixo 55 para envio via API
-    const numeroSemPrefixo = numero_whatsapp.startsWith('55') ? numero_whatsapp.substring(2) : numero_whatsapp;
 
     // Gerar código de verificação de 6 dígitos
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
     
-    console.log(`Gerando código ${codigo} para número ${numero_whatsapp} (enviando para ${numeroSemPrefixo})`);
+    console.log(`Gerando código ${codigo} para número ${numeroNormalizado}`);
 
     // Contar quantos telefones o usuário já tem
     const { data: telefonesExistentes, error: configError } = await supabase
@@ -65,31 +74,23 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Verificar se o usuário já não ultrapassou o limite de 3 telefones
     if (telefonesExistentes && telefonesExistentes.length >= 3) {
-      // Verificar se este número já está na lista (permitir reenvio de código)
-      const numeroJaExiste = telefonesExistentes.find(t => t.numero_whatsapp === numero_whatsapp);
+      const numeroJaExiste = telefonesExistentes.find(t => t.numero_whatsapp === numeroNormalizado);
       if (!numeroJaExiste) {
         throw new Error('Você já possui o máximo de 3 telefones autorizados. Remova um telefone para adicionar outro.');
       }
     }
-
-    // Verificar se este número específico já está sendo usado ou pendente
-    const { data: numeroExistente } = await supabase
-      .from('whatsapp_telefones_autorizados')
-      .select('*')
-      .eq('numero_whatsapp', numero_whatsapp)
-      .eq('usuario_id', user.id)
-      .maybeSingle();
 
     // Determinar o tipo do telefone (principal ou extra)
     const telefonePrincipal = telefonesExistentes?.find(t => t.tipo === 'principal');
     const tipoTelefone = telefonePrincipal ? 'extra' : 'principal';
 
     // Inserir ou atualizar telefone com código de verificação
+    // O trigger no banco normaliza automaticamente o numero_whatsapp
     const { error: updateError } = await supabase
       .from('whatsapp_telefones_autorizados')
       .upsert({
         usuario_id: user.id,
-        numero_whatsapp: numero_whatsapp,
+        numero_whatsapp: numeroNormalizado,
         tipo: tipoTelefone,
         codigo_verificacao: codigo,
         data_codigo: new Date().toISOString(),
@@ -103,8 +104,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Erro ao salvar código de verificação');
     }
 
-
-    // Enviar código via WhatsApp usando EXATAMENTE a mesma estrutura do webhook
+    // Enviar código via WhatsApp usando Z-API
     const instanceUrl = Deno.env.get('WHATSAPP_INSTANCE_URL');
     const apiToken = Deno.env.get('WHATSAPP_API_TOKEN');
     const accountSecret = Deno.env.get('WHATSAPP_ACCOUNT_SECRET');
@@ -127,23 +127,21 @@ const handler = async (req: Request): Promise<Response> => {
 
     const mensagem = `🔐 *Código de Verificação Picotinho*\n\nSeu código de verificação é: *${codigo}*\n\nEste código expira em 10 minutos.\n\n_Não compartilhe este código com ninguém._`;
 
-    // Usar EXATAMENTE a mesma estrutura que funciona no webhook
+    // Z-API recebe o número COM prefixo 55 (13 dígitos)
     const sendTextUrl = `${instanceUrl}/token/${apiToken}/send-text`;
     
-    console.log(`📱 Enviando código ${codigo} para número ${numeroSemPrefixo}`);
+    console.log(`📱 Enviando código ${codigo} para número ${numeroNormalizado}`);
     console.log(`🔗 URL: ${sendTextUrl}`);
-    console.log(`📋 Headers: Client-Token=${accountSecret.substring(0, 8)}..., API Token=${apiToken.substring(0, 8)}...`);
 
     try {
       const whatsappResponse = await fetch(sendTextUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Usar Account Secret como Client-Token (igual ao webhook)
           'Client-Token': accountSecret,
         },
         body: JSON.stringify({
-          phone: numeroSemPrefixo,
+          phone: numeroNormalizado,
           message: mensagem,
         }),
       });
@@ -154,7 +152,6 @@ const handler = async (req: Request): Promise<Response> => {
 
       if (!whatsappResponse.ok) {
         console.error('❌ Erro ao enviar mensagem WhatsApp:', whatsappResult);
-        // Se falhou, NUNCA mostrar o código - deve dar erro real
         return new Response(JSON.stringify({ 
           success: false, 
           error: `Falha no envio WhatsApp: ${whatsappResult?.error || 'Erro desconhecido'}`,
