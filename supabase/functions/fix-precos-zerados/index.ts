@@ -157,15 +157,29 @@ serve(async (req) => {
     // Processar cada produto faltante individualmente para evitar conflitos
     for (const produto of produtosFaltantes) {
       try {
+        // Resolver produto_master_id
+        let produtoMasterId: string | null = null;
+        const { data: masterMatch, count: masterCount } = await supabase
+          .from('produtos_master_global')
+          .select('id', { count: 'exact' })
+          .eq('nome_padrao', produto.produto_nome_normalizado)
+          .limit(2);
+        if (masterCount === 1 && masterMatch?.[0]?.id) {
+          produtoMasterId = masterMatch[0].id;
+        }
+
+        const upsertPayload: any = {
+          produto_nome: produto.produto_nome_normalizado,
+          valor_unitario: produto.valor_unitario,
+          estabelecimento_nome: produto.estabelecimento_nome,
+          estabelecimento_cnpj: produto.estabelecimento_cnpj,
+          data_atualizacao: produto.data_atualizacao
+        };
+        if (produtoMasterId) upsertPayload.produto_master_id = produtoMasterId;
+
         const { error: insertError } = await supabase
           .from('precos_atuais')
-          .upsert({
-            produto_nome: produto.produto_nome_normalizado,
-            valor_unitario: produto.valor_unitario,
-            estabelecimento_nome: produto.estabelecimento_nome,
-            estabelecimento_cnpj: produto.estabelecimento_cnpj,
-            data_atualizacao: produto.data_atualizacao
-          }, {
+          .upsert(upsertPayload, {
             onConflict: 'produto_nome,estabelecimento_cnpj'
           });
 
