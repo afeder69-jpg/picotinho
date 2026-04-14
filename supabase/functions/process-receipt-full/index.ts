@@ -1733,6 +1733,40 @@ serve(async (req) => {
             }
           }
           
+          
+          // 📝 AUTO-REGISTRO DE SINÔNIMO após vínculo seguro
+          try {
+            const removerAcentosSin = (texto: string): string => 
+              texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+            
+            const nomeOriginalNorm = removerAcentosSin(nomeLimpo);
+            const nomeMasterNorm = removerAcentosSin(resultado.master.nome_padrao || '');
+            
+            // Só registrar sinônimo se os nomes normalizados forem realmente diferentes
+            if (nomeOriginalNorm && nomeMasterNorm && nomeOriginalNorm !== nomeMasterNorm && nomeOriginalNorm.length > 2) {
+              const { error: sinInsertErr } = await supabase
+                .from('produtos_sinonimos_globais')
+                .insert({
+                  produto_master_id: resultado.master.id,
+                  texto_variacao: nomeLimpo.toUpperCase().trim(),
+                  fonte: 'auto_ingestao',
+                  confianca: 90,
+                  aprovado_em: new Date().toISOString()
+                })
+                // Idempotente: não duplicar sinônimos já existentes
+                .select()
+                .maybeSingle();
+              
+              if (!sinInsertErr) {
+                console.log(`📝 Sinônimo registrado: "${nomeLimpo}" → "${resultado.master.nome_padrao}"`);
+              }
+              // Silenciar erro de conflito (sinônimo já existe)
+            }
+          } catch (sinErr: any) {
+            // Não bloquear o fluxo por falha no registro de sinônimo
+            console.log(`ℹ️ Sinônimo não registrado para "${nomeLimpo}": ${sinErr.message}`);
+          }
+          
           console.log(`✅ Normalizado: ${produto.produto_nome} (SKU: ${produto.sku_global})`);
         } else {
           // ⚠️ Master não encontrado - CRIAR produto_nome_normalizado mesmo assim
