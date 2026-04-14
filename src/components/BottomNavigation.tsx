@@ -717,7 +717,7 @@ const BottomNavigation = () => {
       console.log('🔌 [REALTIME] Desconectando listener');
       supabase.removeChannel(channel);
     };
-  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes, toast, navigate]);
+  }, [user?.id, removeProcessingNote, toast, navigate]);
 
   // useEffect para polling de fallback (verifica a cada 3 segundos)
   useEffect(() => {
