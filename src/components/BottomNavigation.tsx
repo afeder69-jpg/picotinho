@@ -53,6 +53,20 @@ const BottomNavigation = () => {
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
   const activelyProcessingRef = useRef<Set<string>>(new Set());
+  
+  // Refs para evitar reconexão do Realtime quando esses states mudam
+  const processingNotesDataRef = useRef(processingNotesData);
+  const processingTimersRef = useRef(processingTimers);
+  const confirmedNotesRef = useRef(confirmedNotes);
+  const showCupomViewerRef = useRef(showCupomViewer);
+  const showInternalWebViewerRef = useRef(showInternalWebViewer);
+
+  // Manter refs sincronizadas com os states
+  useEffect(() => { processingNotesDataRef.current = processingNotesData; }, [processingNotesData]);
+  useEffect(() => { processingTimersRef.current = processingTimers; }, [processingTimers]);
+  useEffect(() => { confirmedNotesRef.current = confirmedNotes; }, [confirmedNotes]);
+  useEffect(() => { showCupomViewerRef.current = showCupomViewer; }, [showCupomViewer]);
+  useEffect(() => { showInternalWebViewerRef.current = showInternalWebViewer; }, [showInternalWebViewer]);
 
   // Listen for open-scanner event from other pages
   useEffect(() => {
@@ -570,13 +584,13 @@ const BottomNavigation = () => {
           });
           
           // ✅ VALIDAÇÃO 1: Se o viewer já está aberto, ignorar
-          if (showCupomViewer || showInternalWebViewer) {
+          if (showCupomViewerRef.current || showInternalWebViewerRef.current) {
             console.log('⚠️ [REALTIME] Viewer já está aberto, ignorando evento');
             return;
           }
           
           // ✅ VALIDAÇÃO 2: Se a nota já foi confirmada, ignorar
-          if (confirmedNotes.has(notaAtualizada.id)) {
+          if (confirmedNotesRef.current.has(notaAtualizada.id)) {
             console.log('⚠️ [REALTIME] Nota já foi confirmada, ignorando');
             return;
           }
@@ -592,7 +606,7 @@ const BottomNavigation = () => {
           if (estoqueCount && estoqueCount > 0) {
             console.log('⚠️ [REALTIME] Nota já tem itens no estoque, ignorando:', estoqueCount);
             // Limpar do mapa de processamento se existir
-            if (processingNotesData.has(notaAtualizada.id)) {
+            if (processingNotesDataRef.current.has(notaAtualizada.id)) {
               removeProcessingNote(notaAtualizada.id);
               setProcessingNotesData(prev => {
                 const newMap = new Map(prev);
@@ -646,7 +660,7 @@ const BottomNavigation = () => {
               }
 
               // Recuperar URL e tipo de documento do mapa local
-              const notaInfo = processingNotesData.get(notaAtualizada.id);
+              const notaInfo = processingNotesDataRef.current.get(notaAtualizada.id);
               
               // ✅ PROCESSAMENTO AUTOMÁTICO
               console.log('🤖 [REALTIME] Iniciando processamento automático');
@@ -675,7 +689,7 @@ const BottomNavigation = () => {
                 return newMap;
               });
               
-              const timerId = processingTimers.get(notaAtualizada.id);
+              const timerId = processingTimersRef.current.get(notaAtualizada.id);
               if (timerId) {
                 clearTimeout(timerId);
                 setProcessingTimers(prev => {
@@ -703,7 +717,7 @@ const BottomNavigation = () => {
       console.log('🔌 [REALTIME] Desconectando listener');
       supabase.removeChannel(channel);
     };
-  }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes, toast, navigate]);
+  }, [user?.id, removeProcessingNote, toast, navigate]);
 
   // useEffect para polling de fallback (verifica a cada 3 segundos)
   useEffect(() => {
@@ -734,7 +748,7 @@ const BottomNavigation = () => {
           continue;
         }
 
-        if (data?.processada && data?.dados_extraidos) {
+        if (!data?.processada && data?.dados_extraidos) {
           console.log('✅ [POLLING] Nota processada detectada via polling!', noteId);
           
           // ✅ Verificar se já foi confirmada
@@ -812,7 +826,7 @@ const BottomNavigation = () => {
         .from('notas_imagens')
         .select('id, dados_extraidos')
         .eq('usuario_id', user.id)
-        .eq('processada', true)
+        .eq('processada', false)
         .eq('normalizada', false)
         .eq('produtos_normalizados', 0)
         .is('processing_started_at', null)
