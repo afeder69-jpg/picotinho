@@ -1723,7 +1723,7 @@ async function executeTool(
           // 0 resultados ou palavras insuficientes — pedir confirmação para item livre
           console.log(`❓ [fallback] "${item.produto_nome}" → sem correspondência no catálogo. Aguardando confirmação.`);
           itensPendentesConfirmacao.push({
-            produto_nome: item.produto_nome,
+            produto_nome: normalizarNomeLista(item.produto_nome),
             quantidade: item.quantidade || 1,
             unidade_medida: item.unidade_medida || 'UN',
             origem_fluxo: 'fallback_sem_id',
