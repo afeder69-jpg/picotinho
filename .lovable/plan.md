@@ -1,39 +1,47 @@
 
 
-## Plano: Corrigir exibicao da unidade de medida na lista de compras
+## Análise: "Buscar e Consolidar Duplicatas" na Normalização Global Master
 
-### Problema
+### Status geral
 
-O banco armazena categorias genéricas de medida: `PESO`, `UNIDADE`, `VOLUME`. Na tela, esses valores aparecem por extenso e em maiúsculas, quando deveriam mostrar abreviações de embalagem como "pct", "un", etc.
+O fluxo envolve 3 funções e a UI:
+1. **`detectar-duplicatas-master`** — detecção (passada 1: exata por nome_padrao/nome_base; passada 2: similaridade via RPC `comparar_masters_similares`) — **OK, sem problemas**
+2. **`consolidar-masters-manual`** — consolidação individual/em lote pela UI — **BUG ENCONTRADO**
+3. **`consolidar-masters-duplicados`** — consolidação automática (não usada pela UI, é standalone) — **OK**
+4. **UI em `NormalizacaoGlobal.tsx`** — botão "Buscar e Consolidar duplicatas" → modal com grupos → consolidação individual/em lote — **OK**
 
-### Solução
+### Bug encontrado
 
-Alterar apenas o `ItemProdutoLista.tsx` para formatar a unidade antes de exibir, usando um mapeamento simples:
-
-| Valor no banco | Exibição |
-|---|---|
-| PESO | pct |
-| VOLUME | un |
-| UNIDADE | un |
-| outros (kg, g, ml, etc.) | usar `formatarUnidadeMedida` existente |
-
-### Arquivo a modificar
-
-**`src/components/listaCompras/ItemProdutoLista.tsx`** (linha 44-45)
-
-Adicionar função local de mapeamento antes do render:
+**Arquivo**: `supabase/functions/consolidar-masters-manual/index.ts`, linha 82
 
 ```typescript
-function formatarUnidadeItem(unidade: string): string {
-  const upper = unidade.toUpperCase().trim();
-  if (upper === 'PESO') return 'pct';
-  if (upper === 'VOLUME') return 'un';
-  if (upper === 'UNIDADE') return 'un';
-  return formatarUnidadeMedida(unidade);
-}
+// ERRADO — coluna "origem" não existe na tabela
+.insert({
+  produto_master_id: produtoMantido.id,
+  texto_variacao: produtoRemover.sku_global,
+  confianca: 1.0,
+  total_ocorrencias: produtoRemover.total_notas || 1,
+  origem: 'consolidacao_manual'  // ← BUG: a coluna se chama "fonte"
+})
 ```
 
-E na linha 45, trocar `{item.unidade_medida}` por `{formatarUnidadeItem(item.unidade_medida)}`.
+A tabela `produtos_sinonimos_globais` tem a coluna `fonte` (não `origem`). Esse insert pode falhar silenciosamente ou com erro, impedindo que sinônimos sejam criados durante a consolidação manual. Os masters são deletados mas os sinônimos não ficam registrados, o que pode causar re-fragmentação futura.
 
-Nenhum outro arquivo será alterado. Checkboxes, maiúsculas nos nomes e demais estilos permanecem como estão.
+A função `consolidar-masters-duplicados` (automática) usa `fonte` corretamente na linha 144.
+
+### Plano de correção
+
+**Arquivo**: `supabase/functions/consolidar-masters-manual/index.ts`
+
+1. Linha 82: trocar `origem: 'consolidacao_manual'` para `fonte: 'consolidacao_manual'`
+2. Adicionar `aprovado_em: new Date().toISOString()` para marcar o sinônimo como aprovado (necessário para a Estratégia 0.5 que filtra por `aprovado_em IS NOT NULL`)
+3. Deploy da função
+
+Essa é a única correção necessária. O resto do fluxo (detecção, UI, consolidação automática) está correto e não foi afetado pelas alterações estruturais anteriores.
+
+### Escopo
+
+- 1 arquivo: `supabase/functions/consolidar-masters-manual/index.ts`
+- Sem migração SQL
+- Sem mudança de frontend
 
