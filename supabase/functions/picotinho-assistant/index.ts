@@ -1600,17 +1600,18 @@ async function executeTool(
             // Validar existência do produto_id em produtos_master_global
             const { data: existe } = await supabase
               .from('produtos_master_global')
-              .select('id')
+              .select('id, nome_padrao')
               .eq('id', produtoId)
               .maybeSingle();
 
             if (existe) {
               validacao = 'id_validado';
               const unidadeResolvida = await resolverUnidadeParaLista(produtoId, supabase);
-              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeResolvida}`);
+              const nomeFinal = existe.nome_padrao || normalizarNomeLista(item.produto_nome);
+              console.log(`📦 [insert] ${nomeFinal} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeResolvida}`);
               itensParaInserir.push({
                 lista_id: listaId,
-                produto_nome: item.produto_nome,
+                produto_nome: nomeFinal,
                 quantidade: item.quantidade || 1,
                 unidade_medida: unidadeResolvida,
                 item_livre: false,
