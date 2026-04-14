@@ -606,7 +606,7 @@ const BottomNavigation = () => {
           if (estoqueCount && estoqueCount > 0) {
             console.log('⚠️ [REALTIME] Nota já tem itens no estoque, ignorando:', estoqueCount);
             // Limpar do mapa de processamento se existir
-            if (processingNotesData.has(notaAtualizada.id)) {
+            if (processingNotesDataRef.current.has(notaAtualizada.id)) {
               removeProcessingNote(notaAtualizada.id);
               setProcessingNotesData(prev => {
                 const newMap = new Map(prev);
