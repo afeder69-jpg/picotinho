@@ -226,7 +226,15 @@ export default function NormalizacaoGlobal() {
   const [consolidandoGrupo, setConsolidandoGrupo] = useState<string | null>(null);
   const [modalDuplicatasOpen, setModalDuplicatasOpen] = useState(false);
 
-  // Estados para recategorização
+  // Estados para absorção de pendentes
+  const [detectandoAbsorviveis, setDetectandoAbsorviveis] = useState(false);
+  const [modalAbsorcaoOpen, setModalAbsorcaoOpen] = useState(false);
+  const [absorcaoResultados, setAbsorcaoResultados] = useState<{ inequivocos: any[], sugestoes: any[], sem_match: any[] } | null>(null);
+  const [absorvendo, setAbsorvendo] = useState(false);
+  const [absorcaoRelatorio, setAbsorcaoRelatorio] = useState<any>(null);
+  const [absorcaoTabAtiva, setAbsorcaoTabAtiva] = useState('inequivocos');
+  const [sugestoesAceitas, setSugestoesAceitas] = useState<Set<string>>(new Set());
+
   const [recategorizando, setRecategorizando] = useState(false);
 
   // Estados para feedbacks/suporte
