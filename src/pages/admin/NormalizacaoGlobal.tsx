@@ -236,6 +236,8 @@ export default function NormalizacaoGlobal() {
   const [absorcaoTabAtiva, setAbsorcaoTabAtiva] = useState('inequivocos');
   const [sugestoesAceitas, setSugestoesAceitas] = useState<Set<string>>(new Set());
   const [semMatchScoreRange, setSemMatchScoreRange] = useState<[number, number]>([0, 100]);
+  const [confirmacaoManual, setConfirmacaoManual] = useState<{ candidato_id: string; texto_original: string; master_id: string; master_nome: string; bloqueios: string[] } | null>(null);
+  const [vinculandoManual, setVinculandoManual] = useState<string | null>(null);
 
   const [recategorizando, setRecategorizando] = useState(false);
 

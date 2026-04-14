@@ -405,8 +405,107 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
+    } else if (acao === 'absorver_manual') {
+      const { candidato_id, master_id, bloqueios_ignorados } = body;
+
+      if (!candidato_id || !master_id) {
+        return new Response(JSON.stringify({ error: 'candidato_id e master_id obrigatórios' }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log(`🔗 Vínculo manual: candidato=${candidato_id} → master=${master_id}`);
+
+      // Trava 1: candidato ainda pendente
+      const { data: candidato } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('status, texto_original')
+        .eq('id', candidato_id)
+        .single();
+
+      if (!candidato || candidato.status !== 'pendente') {
+        return new Response(JSON.stringify({
+          error: 'Candidato não está mais pendente',
+          status_atual: candidato?.status,
+        }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Trava 2: master ainda ativo
+      const { data: master } = await supabase
+        .from('produtos_master_global')
+        .select('status, nome_padrao')
+        .eq('id', master_id)
+        .single();
+
+      if (!master || master.status !== 'ativo') {
+        return new Response(JSON.stringify({
+          error: 'Master não está mais ativo',
+          master_id,
+        }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Atualizar candidato
+      const { error: updateErr } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .update({
+          status: 'manual_aprovado',
+          sugestao_produto_master: master_id,
+          revisado_em: new Date().toISOString(),
+        })
+        .eq('id', candidato_id)
+        .eq('status', 'pendente');
+
+      if (updateErr) {
+        return new Response(JSON.stringify({ error: 'Erro ao atualizar candidato', detalhe: updateErr.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Criar sinônimo com fonte diferenciada
+      const { error: sinErr } = await supabase
+        .from('produtos_sinonimos_globais')
+        .upsert({
+          produto_master_id: master_id,
+          texto_variacao: candidato.texto_original,
+          confianca: 0.9,
+          total_ocorrencias: 1,
+          fonte: 'decisao_manual',
+          aprovado_em: new Date().toISOString(),
+        }, {
+          onConflict: 'produto_master_id,texto_variacao',
+        });
+
+      if (sinErr) {
+        console.warn(`⚠️ Erro ao criar sinônimo manual:`, sinErr.message);
+      }
+
+      // Log da decisão manual
+      await supabase.from('normalizacao_decisoes_log').insert({
+        candidato_id,
+        texto_original: candidato.texto_original,
+        decisao: 'vinculo_manual',
+        produto_master_final: master_id,
+        sugestao_ia: {
+          motivo: 'Decisão manual do usuário',
+          bloqueios_ignorados: bloqueios_ignorados || [],
+        },
+      });
+
+      console.log(`✅ Vínculo manual criado: "${candidato.texto_original}" → "${master.nome_padrao}"`);
+
+      return new Response(JSON.stringify({
+        sucesso: true,
+        candidato_id,
+        master_id,
+        master_nome: master.nome_padrao,
+        texto_original: candidato.texto_original,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+
     } else {
-      return new Response(JSON.stringify({ error: 'Ação inválida. Use: detectar, absorver' }), {
+      return new Response(JSON.stringify({ error: 'Ação inválida. Use: detectar, absorver, absorver_manual' }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
