@@ -3407,6 +3407,26 @@ export type Database = {
         Args: { p_candidato_id: string }
         Returns: string
       }
+      buscar_matches_pendentes_masters: {
+        Args: { p_limit?: number }
+        Returns: {
+          camada: string
+          candidato_categoria: string
+          candidato_id: string
+          candidato_marca: string
+          candidato_nome_padrao_sugerido: string
+          candidato_qtd_unidade: string
+          candidato_qtd_valor: number
+          master_categoria: string
+          master_id: string
+          master_marca: string
+          master_nome_padrao: string
+          master_qtd_unidade: string
+          master_qtd_valor: number
+          score: number
+          texto_original: string
+        }[]
+      }
       buscar_produto_por_sku: {
         Args: { sku_busca: string }
         Returns: {
@@ -3836,6 +3856,7 @@ export type Database = {
       normalizar_produto_completo: { Args: { nome: string }; Returns: string }
       normalizar_produto_v1: { Args: { nome_original: string }; Returns: Json }
       normalizar_texto: { Args: { texto: string }; Returns: string }
+      normalizar_texto_robusto: { Args: { texto: string }; Returns: string }
       normalizar_texto_similaridade: {
         Args: { texto: string }
         Returns: string
