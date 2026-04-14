@@ -1572,6 +1572,11 @@ async function executeTool(
         const itensPendentesConfirmacao: any[] = [];
         const avisos: string[] = [];
 
+        // Helper: normalizar nome para CAIXA ALTA com trim e remoção de espaços duplicados
+        const normalizarNomeLista = (nome: string): string => {
+          return nome.trim().replace(/\s+/g, ' ').toUpperCase();
+        };
+
         for (const item of args.itens) {
           const origemFluxo = item.origem || 'desconhecida';
           let produtoId = item.produto_id || null;
@@ -1583,7 +1588,7 @@ async function executeTool(
             console.log(`📦 [insert] ${item.produto_nome} | id_original: nenhum | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: item_livre_explicito`);
             itensParaInserir.push({
               lista_id: listaId,
-              produto_nome: item.produto_nome,
+              produto_nome: normalizarNomeLista(item.produto_nome),
               quantidade: item.quantidade || 1,
               unidade_medida: item.unidade_medida || 'UN',
               item_livre: true
@@ -1595,17 +1600,18 @@ async function executeTool(
             // Validar existência do produto_id em produtos_master_global
             const { data: existe } = await supabase
               .from('produtos_master_global')
-              .select('id')
+              .select('id, nome_padrao')
               .eq('id', produtoId)
               .maybeSingle();
 
             if (existe) {
               validacao = 'id_validado';
               const unidadeResolvida = await resolverUnidadeParaLista(produtoId, supabase);
-              console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeResolvida}`);
+              const nomeFinal = existe.nome_padrao || normalizarNomeLista(item.produto_nome);
+              console.log(`📦 [insert] ${nomeFinal} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeResolvida}`);
               itensParaInserir.push({
                 lista_id: listaId,
-                produto_nome: item.produto_nome,
+                produto_nome: nomeFinal,
                 quantidade: item.quantidade || 1,
                 unidade_medida: unidadeResolvida,
                 item_livre: false,
@@ -1629,7 +1635,7 @@ async function executeTool(
               console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeReResolvida}`);
               itensParaInserir.push({
                 lista_id: listaId,
-                produto_nome: item.produto_nome,
+                produto_nome: masters[0].nome_padrao || normalizarNomeLista(item.produto_nome),
                 quantidade: item.quantidade || 1,
                 unidade_medida: unidadeReResolvida,
                 item_livre: false,
@@ -1642,7 +1648,7 @@ async function executeTool(
               validacao = 'desambiguacao_necessaria';
               console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: pendente | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
               itensPendentesDesambiguacao.push({
-                produto_nome: item.produto_nome,
+                produto_nome: normalizarNomeLista(item.produto_nome),
                 quantidade: item.quantidade || 1,
                 unidade_medida: item.unidade_medida || 'UN',
                 id_original_invalido: produtoIdOriginal,
@@ -1661,7 +1667,7 @@ async function executeTool(
             validacao = 'confirmacao_necessaria';
             console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
             itensPendentesConfirmacao.push({
-              produto_nome: item.produto_nome,
+              produto_nome: normalizarNomeLista(item.produto_nome),
               quantidade: item.quantidade || 1,
               unidade_medida: item.unidade_medida || 'UN',
               id_original_invalido: produtoIdOriginal,
@@ -1686,7 +1692,7 @@ async function executeTool(
               console.log(`✅ [fallback] "${item.produto_nome}" → match único: ${mastersFallback[0].nome_padrao} (${mastersFallback[0].id}) | unidade_resolvida: ${unidadeFallback}`);
               itensParaInserir.push({
                 lista_id: listaId,
-                produto_nome: item.produto_nome,
+                produto_nome: mastersFallback[0].nome_padrao || normalizarNomeLista(item.produto_nome),
                 quantidade: item.quantidade || 1,
                 unidade_medida: unidadeFallback,
                 item_livre: false,
@@ -1699,7 +1705,7 @@ async function executeTool(
               // Múltiplas opções — perguntar ao usuário
               console.log(`⚠️ [fallback] "${item.produto_nome}" → ${mastersFallback.length} opções. Desambiguação necessária.`);
               itensPendentesDesambiguacao.push({
-                produto_nome: item.produto_nome,
+                produto_nome: normalizarNomeLista(item.produto_nome),
                 quantidade: item.quantidade || 1,
                 unidade_medida: item.unidade_medida || 'UN',
                 origem_fluxo: 'fallback_sem_id',
@@ -1717,7 +1723,7 @@ async function executeTool(
           // 0 resultados ou palavras insuficientes — pedir confirmação para item livre
           console.log(`❓ [fallback] "${item.produto_nome}" → sem correspondência no catálogo. Aguardando confirmação.`);
           itensPendentesConfirmacao.push({
-            produto_nome: item.produto_nome,
+            produto_nome: normalizarNomeLista(item.produto_nome),
             quantidade: item.quantidade || 1,
             unidade_medida: item.unidade_medida || 'UN',
             origem_fluxo: 'fallback_sem_id',
