@@ -1572,6 +1572,11 @@ async function executeTool(
         const itensPendentesConfirmacao: any[] = [];
         const avisos: string[] = [];
 
+        // Helper: normalizar nome para CAIXA ALTA com trim e remoção de espaços duplicados
+        const normalizarNomeLista = (nome: string): string => {
+          return nome.trim().replace(/\s+/g, ' ').toUpperCase();
+        };
+
         for (const item of args.itens) {
           const origemFluxo = item.origem || 'desconhecida';
           let produtoId = item.produto_id || null;
