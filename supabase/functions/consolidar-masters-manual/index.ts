@@ -79,7 +79,8 @@ serve(async (req) => {
             texto_variacao: produtoRemover.sku_global,
             confianca: 1.0,
             total_ocorrencias: produtoRemover.total_notas || 1,
-            origem: 'consolidacao_manual'
+            fonte: 'consolidacao_manual',
+            aprovado_em: new Date().toISOString()
           });
 
         if (sinonimoError) {
