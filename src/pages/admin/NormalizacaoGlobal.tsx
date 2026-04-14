@@ -5015,6 +5015,30 @@ export default function NormalizacaoGlobal() {
                                     ))}
                                   </div>
                                 )}
+                                {item.master_id && item.master_nome_padrao && (
+                                  <div className="flex justify-end mt-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-xs gap-1"
+                                      disabled={vinculandoManual === item.candidato_id}
+                                      onClick={() => setConfirmacaoManual({
+                                        candidato_id: item.candidato_id,
+                                        texto_original: item.texto_original || '(sem texto)',
+                                        master_id: item.master_id,
+                                        master_nome: item.master_nome_padrao,
+                                        bloqueios: item.bloqueios || [],
+                                      })}
+                                    >
+                                      {vinculandoManual === item.candidato_id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Check className="w-3 h-3" />
+                                      )}
+                                      Vincular
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -5032,6 +5056,46 @@ export default function NormalizacaoGlobal() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog de confirmação de vínculo manual */}
+      <AlertDialog open={!!confirmacaoManual} onOpenChange={(open) => !open && setConfirmacaoManual(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar vínculo manual</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Você está prestes a vincular manualmente:</p>
+                <div className="bg-muted rounded-md p-3 space-y-1 text-sm">
+                  <p><strong>Pendente:</strong> {confirmacaoManual?.texto_original}</p>
+                  <p><strong>Master:</strong> {confirmacaoManual?.master_nome}</p>
+                </div>
+                {confirmacaoManual?.bloqueios && confirmacaoManual.bloqueios.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Bloqueios que serão ignorados:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {confirmacaoManual.bloqueios.map((b: string, i: number) => (
+                        <Badge key={i} variant="destructive" className="text-xs">
+                          {({'marca_diferente': 'Marca diferente', 'gramatura_diferente': 'Gramatura diferente', 'variante_conflitante': 'Variante conflitante', 'categoria_incompativel': 'Categoria incompatível', 'score_insuficiente': 'Score insuficiente'} as Record<string, string>)[b] || b.replace(/_/g, ' ')}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground italic">
+                  Esta é uma decisão manual. O sistema registrará que você aprovou este vínculo ignorando os bloqueios automáticos.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!vinculandoManual}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executarVinculoManual} disabled={!!vinculandoManual}>
+              {vinculandoManual ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Confirmar vínculo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
