@@ -1588,7 +1588,7 @@ async function executeTool(
             console.log(`📦 [insert] ${item.produto_nome} | id_original: nenhum | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: item_livre_explicito`);
             itensParaInserir.push({
               lista_id: listaId,
-              produto_nome: item.produto_nome,
+              produto_nome: normalizarNomeLista(item.produto_nome),
               quantidade: item.quantidade || 1,
               unidade_medida: item.unidade_medida || 'UN',
               item_livre: true
