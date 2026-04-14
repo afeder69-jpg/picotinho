@@ -1082,6 +1082,51 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+  async function detectarPendentesAbsorviveis() {
+    setDetectandoAbsorviveis(true);
+    setAbsorcaoResultados(null);
+    setAbsorcaoRelatorio(null);
+    setSugestoesAceitas(new Set());
+    setAbsorcaoTabAtiva('inequivocos');
+    try {
+      const { data, error } = await supabase.functions.invoke('detectar-pendentes-absorviveis', {
+        body: { acao: 'detectar', limit: 500 }
+      });
+      if (error) throw error;
+      setAbsorcaoResultados({
+        inequivocos: data.inequivocos || [],
+        sugestoes: data.sugestoes || [],
+        sem_match: data.sem_match || [],
+      });
+      setModalAbsorcaoOpen(true);
+      toast({ title: "Detecção concluída", description: `${data.inequivocos?.length || 0} inequívocos, ${data.sugestoes?.length || 0} sugestões, ${data.sem_match?.length || 0} sem match` });
+    } catch (error: any) {
+      console.error('Erro ao detectar absorvíveis:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setDetectandoAbsorviveis(false);
+    }
+  }
+
+  async function executarAbsorcao(idsParaAbsorver: string[]) {
+    if (idsParaAbsorver.length === 0) return;
+    setAbsorvendo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('detectar-pendentes-absorviveis', {
+        body: { acao: 'absorver', ids: idsParaAbsorver }
+      });
+      if (error) throw error;
+      setAbsorcaoRelatorio(data);
+      toast({ title: "Absorção concluída", description: `${data.total_absorvidos} absorvidos, ${data.total_pulados} pulados` });
+      await carregarDados();
+    } catch (error: any) {
+      console.error('Erro ao absorver:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setAbsorvendo(false);
+    }
+  }
+
 
 
   async function handleConsolidarDuplicatas() {
