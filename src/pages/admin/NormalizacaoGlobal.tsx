@@ -26,6 +26,7 @@ function normalizarCategoriaParaEstoque(cat: string | null | undefined): string 
   const key = (cat || '').toLowerCase().trim();
   return map[key] || 'outros';
 }
+import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -234,6 +235,7 @@ export default function NormalizacaoGlobal() {
   const [absorcaoRelatorio, setAbsorcaoRelatorio] = useState<any>(null);
   const [absorcaoTabAtiva, setAbsorcaoTabAtiva] = useState('inequivocos');
   const [sugestoesAceitas, setSugestoesAceitas] = useState<Set<string>>(new Set());
+  const [semMatchScoreRange, setSemMatchScoreRange] = useState<[number, number]>([0, 100]);
 
   const [recategorizando, setRecategorizando] = useState(false);
 
@@ -4909,25 +4911,88 @@ export default function NormalizacaoGlobal() {
                 <TabsContent value="sem_match" className="space-y-3">
                   {absorcaoResultados.sem_match.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">Todos os pendentes tiveram match.</p>
-                  ) : (
-                    <div className="max-h-80 overflow-y-auto space-y-1">
-                      {absorcaoResultados.sem_match.map((item: any) => (
-                        <div key={item.candidato_id} className="text-sm border-b pb-1 flex items-center gap-2">
-                          <span className="truncate flex-1" title={item.texto_original}>{item.texto_original}</span>
-                          {item.bloqueios?.length > 0 && (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              {item.bloqueios.join(', ')}
-                            </span>
-                          )}
-                          {item.score > 0 && (
-                            <Badge variant="outline" className="text-xs shrink-0">
-                              {Math.round(item.score * 100)}%
-                            </Badge>
-                          )}
+                  ) : (() => {
+                    const bloqueioLabels: Record<string, string> = {
+                      marca_diferente: 'Marca diferente',
+                      gramatura_diferente: 'Gramatura diferente',
+                      variante_conflitante: 'Variante conflitante',
+                      categoria_incompativel: 'Categoria incompatível',
+                      categoria_penalizada: 'Categoria penalizada',
+                      score_insuficiente: 'Score insuficiente',
+                      multiplos_masters: 'Múltiplos masters',
+                      sem_candidato: 'Sem candidato similar',
+                    };
+                    const filtrados = absorcaoResultados.sem_match
+                      .filter((item: any) => {
+                        const pct = Math.round((item.score ?? 0) * 100);
+                        return pct >= semMatchScoreRange[0] && pct <= semMatchScoreRange[1];
+                      })
+                      .sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0));
+
+                    return (
+                      <>
+                        {/* Filtro por score */}
+                        <div className="space-y-2 px-1">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Filtro por score: {semMatchScoreRange[0]}% – {semMatchScoreRange[1]}%</span>
+                            <span>Mostrando {filtrados.length} de {absorcaoResultados.sem_match.length}</span>
+                          </div>
+                          <Slider
+                            min={0}
+                            max={100}
+                            step={5}
+                            value={semMatchScoreRange}
+                            onValueChange={(v) => setSemMatchScoreRange(v as [number, number])}
+                            className="w-full"
+                          />
                         </div>
-                      ))}
-                    </div>
-                  )}
+
+                        {/* Lista */}
+                        <div className="max-h-[400px] overflow-y-auto space-y-2">
+                          {filtrados.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">Nenhum item nesta faixa de score.</p>
+                          ) : filtrados.map((item: any) => {
+                            const pct = Math.round((item.score ?? 0) * 100);
+                            const scoreColor = pct >= 60 ? 'text-yellow-600 border-yellow-400' : pct >= 40 ? 'text-orange-600 border-orange-400' : 'text-muted-foreground border-border';
+                            return (
+                              <div key={item.candidato_id} className="text-sm border rounded-md p-2 space-y-1">
+                                <div className="flex items-start gap-2">
+                                  <span className="font-medium flex-1 break-words" title={item.texto_original}>
+                                    {item.texto_original || '(sem texto)'}
+                                  </span>
+                                  <Badge variant="outline" className={`text-xs shrink-0 ${scoreColor}`}>
+                                    {pct}%
+                                  </Badge>
+                                </div>
+                                {(item.master_nome_padrao || item.score > 0) && (
+                                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <span>→</span>
+                                    <span className="italic">
+                                      {item.master_nome_padrao || '(master não identificado)'}
+                                    </span>
+                                    {item.camada && (
+                                      <Badge variant="secondary" className="text-[10px] ml-1 px-1 py-0">
+                                        {item.camada}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                                {item.bloqueios?.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {item.bloqueios.map((b: string, i: number) => (
+                                      <Badge key={i} variant="destructive" className="text-[10px] px-1.5 py-0 font-normal">
+                                        {bloqueioLabels[b] || b.replace(/_/g, ' ')}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </TabsContent>
               </Tabs>
             </div>
