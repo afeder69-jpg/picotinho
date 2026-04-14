@@ -1565,6 +1565,75 @@ serve(async (req) => {
           }
         }
         
+        // 🔎 ESTRATÉGIA 0.5: Sinônimos conhecidos + nome normalizado (antes da IA)
+        if (!resultado) {
+          try {
+            // Helper para remover acentos
+            const removerAcentos = (texto: string): string => 
+              texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+            
+            const nomeNormalizado05 = removerAcentos(nomeLimpo);
+            console.log(`🔎 Estratégia 0.5: buscando sinônimo/nome normalizado para "${nomeNormalizado05}"`);
+            
+            // Passo 1: Buscar sinônimo aprovado exato
+            const { data: sinonimos, error: sinErr } = await supabase
+              .from('produtos_sinonimos_globais')
+              .select('produto_master_id, texto_variacao')
+              .not('aprovado_em', 'is', null)
+              .not('produto_master_id', 'is', null);
+            
+            if (!sinErr && sinonimos && sinonimos.length > 0) {
+              // Filtrar por match normalizado (sem acentos, case-insensitive)
+              const matchesSinonimo = sinonimos.filter(s => 
+                removerAcentos(s.texto_variacao) === nomeNormalizado05
+              );
+              
+              if (matchesSinonimo.length === 1) {
+                // Match único inequívoco por sinônimo
+                const { data: masterSinonimo } = await supabase
+                  .from('produtos_master_global')
+                  .select('*')
+                  .eq('id', matchesSinonimo[0].produto_master_id)
+                  .eq('ativo', true)
+                  .single();
+                
+                if (masterSinonimo) {
+                  resultado = { found: true, master: masterSinonimo };
+                  eanNormalizacoes; // Reusing counter group — logged separately below
+                  console.log(`✅ SINÔNIMO MATCH: "${nomeLimpo}" → ${masterSinonimo.nome_padrao} (sinônimo: "${matchesSinonimo[0].texto_variacao}")`);
+                }
+              } else if (matchesSinonimo.length > 1) {
+                console.log(`⚠️ Estratégia 0.5: ${matchesSinonimo.length} sinônimos encontrados para "${nomeNormalizado05}" — ambíguo, seguindo para IA`);
+              }
+            }
+            
+            // Passo 2: Se não encontrou sinônimo, buscar por nome normalizado no master
+            if (!resultado) {
+              const { data: mastersPorNome, error: masterErr } = await supabase
+                .from('produtos_master_global')
+                .select('*')
+                .eq('ativo', true);
+              
+              if (!masterErr && mastersPorNome) {
+                const matchesMaster = mastersPorNome.filter(m => 
+                  removerAcentos(m.nome_padrao || '') === nomeNormalizado05
+                );
+                
+                if (matchesMaster.length === 1) {
+                  resultado = { found: true, master: matchesMaster[0] };
+                  console.log(`✅ NOME NORMALIZADO MATCH: "${nomeLimpo}" → ${matchesMaster[0].nome_padrao}`);
+                } else if (matchesMaster.length > 1) {
+                  console.log(`⚠️ Estratégia 0.5: ${matchesMaster.length} masters com mesmo nome normalizado "${nomeNormalizado05}" — ambíguo, seguindo para IA`);
+                } else {
+                  console.log(`ℹ️ Estratégia 0.5: nenhum match para "${nomeNormalizado05}" — seguindo para IA/fuzzy`);
+                }
+              }
+            }
+          } catch (e05: any) {
+            console.error(`⚠️ Erro na Estratégia 0.5: ${e05.message}`);
+          }
+        }
+        
         // 🤖 ESTRATÉGIA 1: Normalização com IA (se ativado e chave disponível)
         if (USE_AI_NORMALIZATION && lovableApiKey) {
           try {
@@ -1662,6 +1731,40 @@ serve(async (req) => {
             } catch (eanSaveErr: any) {
               console.error(`⚠️ Erro ao salvar EAN no master: ${eanSaveErr.message}`);
             }
+          }
+          
+          
+          // 📝 AUTO-REGISTRO DE SINÔNIMO após vínculo seguro
+          try {
+            const removerAcentosSin = (texto: string): string => 
+              texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+            
+            const nomeOriginalNorm = removerAcentosSin(nomeLimpo);
+            const nomeMasterNorm = removerAcentosSin(resultado.master.nome_padrao || '');
+            
+            // Só registrar sinônimo se os nomes normalizados forem realmente diferentes
+            if (nomeOriginalNorm && nomeMasterNorm && nomeOriginalNorm !== nomeMasterNorm && nomeOriginalNorm.length > 2) {
+              const { error: sinInsertErr } = await supabase
+                .from('produtos_sinonimos_globais')
+                .insert({
+                  produto_master_id: resultado.master.id,
+                  texto_variacao: nomeLimpo.toUpperCase().trim(),
+                  fonte: 'auto_ingestao',
+                  confianca: 90,
+                  aprovado_em: new Date().toISOString()
+                })
+                // Idempotente: não duplicar sinônimos já existentes
+                .select()
+                .maybeSingle();
+              
+              if (!sinInsertErr) {
+                console.log(`📝 Sinônimo registrado: "${nomeLimpo}" → "${resultado.master.nome_padrao}"`);
+              }
+              // Silenciar erro de conflito (sinônimo já existe)
+            }
+          } catch (sinErr: any) {
+            // Não bloquear o fluxo por falha no registro de sinônimo
+            console.log(`ℹ️ Sinônimo não registrado para "${nomeLimpo}": ${sinErr.message}`);
           }
           
           console.log(`✅ Normalizado: ${produto.produto_nome} (SKU: ${produto.sku_global})`);

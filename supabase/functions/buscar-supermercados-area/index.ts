@@ -239,10 +239,51 @@ serve(async (req) => {
       }
     }
 
-    console.log(`📍 Encontrados ${supermercadosComNotasAtivas.length} supermercados com notas fiscais ativas`);
+    console.log(`📍 Encontrados ${supermercadosComNotasAtivas.length} supermercados com notas fiscais ativas (antes da deduplicação)`);
+
+    // 🔄 DEDUPLICAÇÃO POR CNPJ — garantir no máximo 1 entrada por supermercado real
+    const deduplicadosPorCnpj = new Map<string, any>();
+    
+    for (const supermercado of supermercadosComNotasAtivas) {
+      // Extrair CNPJ normalizado de cada entrada
+      let cnpjEntry = '';
+      if (supermercado.fonte === 'cadastrado') {
+        cnpjEntry = idParaCnpj.get(supermercado.id) || supermercado.cnpj?.replace(/[^\d]/g, '') || '';
+      } else if (supermercado.fonte === 'nota_fiscal' && supermercado.id?.startsWith('temp_')) {
+        cnpjEntry = supermercado.id.replace('temp_', '');
+      } else {
+        cnpjEntry = supermercado.cnpj?.replace(/[^\d]/g, '') || '';
+      }
+      
+      if (!cnpjEntry) {
+        // Sem CNPJ identificável — manter entrada (não pode deduplicar)
+        deduplicadosPorCnpj.set(`unknown_${supermercado.id}`, supermercado);
+        continue;
+      }
+      
+      const existente = deduplicadosPorCnpj.get(cnpjEntry);
+      if (!existente) {
+        deduplicadosPorCnpj.set(cnpjEntry, supermercado);
+      } else {
+        // Priorizar: cadastrado > nota_fiscal; em empate, manter o com mais dados
+        const fonteAtualMelhor = supermercado.fonte === 'cadastrado' && existente.fonte !== 'cadastrado';
+        const mesmaFonteMaisDados = supermercado.fonte === existente.fonte && 
+          (supermercado.endereco && !existente.endereco);
+        
+        if (fonteAtualMelhor || mesmaFonteMaisDados) {
+          console.log(`🔄 CNPJ ${cnpjEntry}: substituindo "${existente.nome}" (${existente.fonte}) por "${supermercado.nome}" (${supermercado.fonte})`);
+          deduplicadosPorCnpj.set(cnpjEntry, supermercado);
+        } else {
+          console.log(`🔄 CNPJ ${cnpjEntry}: mantendo "${existente.nome}" (${existente.fonte}), descartando "${supermercado.nome}" (${supermercado.fonte})`);
+        }
+      }
+    }
+    
+    const supermercadosDeduplicados = Array.from(deduplicadosPorCnpj.values());
+    console.log(`🔄 Deduplicação por CNPJ: ${supermercadosComNotasAtivas.length} → ${supermercadosDeduplicados.length} supermercados únicos`);
 
     // Filtrar supermercados dentro do raio especificado
-    const supermercadosNoRaio = supermercadosComNotasAtivas.filter(supermercado => {
+    const supermercadosNoRaio = supermercadosDeduplicados.filter(supermercado => {
       const distancia = calcularDistancia(
         latitude,
         longitude,
