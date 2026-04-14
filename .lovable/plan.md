@@ -1,47 +1,62 @@
 
 
-## Análise: "Buscar e Consolidar Duplicatas" na Normalização Global Master
+## Plano: Ação manual assistida na aba "Sem match"
 
-### Status geral
+### Resumo
 
-O fluxo envolve 3 funções e a UI:
-1. **`detectar-duplicatas-master`** — detecção (passada 1: exata por nome_padrao/nome_base; passada 2: similaridade via RPC `comparar_masters_similares`) — **OK, sem problemas**
-2. **`consolidar-masters-manual`** — consolidação individual/em lote pela UI — **BUG ENCONTRADO**
-3. **`consolidar-masters-duplicados`** — consolidação automática (não usada pela UI, é standalone) — **OK**
-4. **UI em `NormalizacaoGlobal.tsx`** — botão "Buscar e Consolidar duplicatas" → modal com grupos → consolidação individual/em lote — **OK**
+Adicionar botão "Vincular manualmente" em cada item da aba Sem match, com confirmação individual via AlertDialog, usando uma nova ação `absorver_manual` na Edge Function existente que registra a decisão como manual e cria sinônimo com fonte diferenciada.
 
-### Bug encontrado
+### O que muda
 
-**Arquivo**: `supabase/functions/consolidar-masters-manual/index.ts`, linha 82
+**1. Edge Function `detectar-pendentes-absorviveis` — nova ação `absorver_manual`**
 
-```typescript
-// ERRADO — coluna "origem" não existe na tabela
-.insert({
-  produto_master_id: produtoMantido.id,
-  texto_variacao: produtoRemover.sku_global,
-  confianca: 1.0,
-  total_ocorrencias: produtoRemover.total_notas || 1,
-  origem: 'consolidacao_manual'  // ← BUG: a coluna se chama "fonte"
-})
-```
+Recebe: `{ acao: 'absorver_manual', candidato_id, master_id }`
 
-A tabela `produtos_sinonimos_globais` tem a coluna `fonte` (não `origem`). Esse insert pode falhar silenciosamente ou com erro, impedindo que sinônimos sejam criados durante a consolidação manual. Os masters são deletados mas os sinônimos não ficam registrados, o que pode causar re-fragmentação futura.
+Executa (item único, nunca lote):
+- Trava 1: candidato ainda `pendente`
+- Trava 2: master ainda `ativo`
+- Atualiza candidato → `status: 'manual_aprovado'`, `sugestao_produto_master: master_id`
+- Cria sinônimo com `fonte: 'decisao_manual'`, `confianca: 0.9`
+- Log em `normalizacao_decisoes_log` com `decisao: 'vinculo_manual'` e `sugestao_ia: { motivo: 'Decisão manual do usuário', bloqueios_ignorados: [...] }`
+- Retorna sucesso ou erro com motivo
 
-A função `consolidar-masters-duplicados` (automática) usa `fonte` corretamente na linha 144.
+**2. UI na aba Sem match (`NormalizacaoGlobal.tsx`)**
 
-### Plano de correção
+Em cada item que tenha `master_id` e `master_nome_padrao`:
+- Botão pequeno "Vincular" (ícone link)
+- Ao clicar, abre AlertDialog de confirmação mostrando:
+  - Texto original do pendente
+  - Nome do master destino
+  - Bloqueios que foram ignorados
+  - Texto: "Esta é uma decisão manual. O sistema registrará que você aprovou este vínculo ignorando os bloqueios automáticos."
+- Ao confirmar, chama a Edge Function com `acao: 'absorver_manual'`
+- Sucesso: remove o item da lista localmente, mostra toast
+- Erro: mostra toast com motivo
 
-**Arquivo**: `supabase/functions/consolidar-masters-manual/index.ts`
+**3. Estado local**
+- `vinculandoManual: string | null` — ID do candidato em processo
+- `confirmacaoManual: { candidato_id, texto_original, master_id, master_nome, bloqueios } | null` — dados para o AlertDialog
 
-1. Linha 82: trocar `origem: 'consolidacao_manual'` para `fonte: 'consolidacao_manual'`
-2. Adicionar `aprovado_em: new Date().toISOString()` para marcar o sinônimo como aprovado (necessário para a Estratégia 0.5 que filtra por `aprovado_em IS NOT NULL`)
-3. Deploy da função
+### O que NAO muda
 
-Essa é a única correção necessária. O resto do fluxo (detecção, UI, consolidação automática) está correto e não foi afetado pelas alterações estruturais anteriores.
+- Regras automáticas de inequívocos e sugestões
+- Ação `absorver` existente (lote)
+- RPC SQL
+- Nenhuma tabela nova, nenhum trigger novo
 
-### Escopo
+### Arquivos alterados
 
-- 1 arquivo: `supabase/functions/consolidar-masters-manual/index.ts`
-- Sem migração SQL
-- Sem mudança de frontend
+| Arquivo | Alteração |
+|---|---|
+| `supabase/functions/detectar-pendentes-absorviveis/index.ts` | Nova branch `acao === 'absorver_manual'` (~40 linhas) |
+| `src/pages/admin/NormalizacaoGlobal.tsx` | Botão + AlertDialog + handler na aba sem_match |
+
+### Diferenciação no log e sinônimo
+
+| Campo | Absorção automática | Vínculo manual |
+|---|---|---|
+| `decisao` | `absorcao_pendente` | `vinculo_manual` |
+| `fonte` (sinônimo) | `absorcao_pendente` | `decisao_manual` |
+| `confianca` (sinônimo) | `1.0` | `0.9` |
+| `motivo` no log | Camada + score | "Decisão manual" + bloqueios ignorados |
 
