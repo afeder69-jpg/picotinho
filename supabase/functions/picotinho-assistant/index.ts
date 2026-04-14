@@ -1635,7 +1635,7 @@ async function executeTool(
               console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: ${produtoId} | origem_fluxo: ${origemFluxo} | validacao: ${validacao} | unidade_resolvida: ${unidadeReResolvida}`);
               itensParaInserir.push({
                 lista_id: listaId,
-                produto_nome: item.produto_nome,
+                produto_nome: masters[0].nome_padrao || normalizarNomeLista(item.produto_nome),
                 quantidade: item.quantidade || 1,
                 unidade_medida: unidadeReResolvida,
                 item_livre: false,
