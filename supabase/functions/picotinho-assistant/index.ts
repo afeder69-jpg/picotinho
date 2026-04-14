@@ -1705,7 +1705,7 @@ async function executeTool(
               // Múltiplas opções — perguntar ao usuário
               console.log(`⚠️ [fallback] "${item.produto_nome}" → ${mastersFallback.length} opções. Desambiguação necessária.`);
               itensPendentesDesambiguacao.push({
-                produto_nome: item.produto_nome,
+                produto_nome: normalizarNomeLista(item.produto_nome),
                 quantidade: item.quantidade || 1,
                 unidade_medida: item.unidade_medida || 'UN',
                 origem_fluxo: 'fallback_sem_id',
