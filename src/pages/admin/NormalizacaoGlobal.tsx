@@ -2737,8 +2737,19 @@ export default function NormalizacaoGlobal() {
 
         {/* Candidatos Pendentes */}
         <TabsContent value="pendentes" className="space-y-4">
-          {/* Campo de busca */}
-          <div className="mb-4 space-y-2">
+          {/* Botão Detectar Absorvíveis + Campo de busca */}
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={detectarPendentesAbsorviveis}
+                disabled={detectandoAbsorviveis}
+                variant="outline"
+                className="gap-2"
+              >
+                {detectandoAbsorviveis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                {detectandoAbsorviveis ? 'Detectando...' : 'Detectar absorvíveis'}
+              </Button>
+            </div>
             <Input
               placeholder="Buscar pendentes... (use ; para múltiplos termos: ex: manteiga ; aviação)"
               value={filtroPendentes}
