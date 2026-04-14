@@ -759,7 +759,8 @@ const EstoqueAtual = () => {
           *,
           produto_master:produtos_master_global(
             imagem_url,
-            imagem_path
+            imagem_path,
+            nome_padrao
           )
         `)
         .eq('user_id', user.id)
