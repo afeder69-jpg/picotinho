@@ -1692,7 +1692,7 @@ async function executeTool(
               console.log(`✅ [fallback] "${item.produto_nome}" → match único: ${mastersFallback[0].nome_padrao} (${mastersFallback[0].id}) | unidade_resolvida: ${unidadeFallback}`);
               itensParaInserir.push({
                 lista_id: listaId,
-                produto_nome: item.produto_nome,
+                produto_nome: mastersFallback[0].nome_padrao || normalizarNomeLista(item.produto_nome),
                 quantidade: item.quantidade || 1,
                 unidade_medida: unidadeFallback,
                 item_livre: false,
