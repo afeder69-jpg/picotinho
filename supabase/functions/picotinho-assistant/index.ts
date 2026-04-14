@@ -1667,7 +1667,7 @@ async function executeTool(
             validacao = 'confirmacao_necessaria';
             console.log(`📦 [insert] ${item.produto_nome} | id_original: ${produtoIdOriginal} | id_final: nenhum | origem_fluxo: ${origemFluxo} | validacao: ${validacao}`);
             itensPendentesConfirmacao.push({
-              produto_nome: item.produto_nome,
+              produto_nome: normalizarNomeLista(item.produto_nome),
               quantidade: item.quantidade || 1,
               unidade_medida: item.unidade_medida || 'UN',
               id_original_invalido: produtoIdOriginal,
