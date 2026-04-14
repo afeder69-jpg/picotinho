@@ -226,7 +226,15 @@ export default function NormalizacaoGlobal() {
   const [consolidandoGrupo, setConsolidandoGrupo] = useState<string | null>(null);
   const [modalDuplicatasOpen, setModalDuplicatasOpen] = useState(false);
 
-  // Estados para recategorização
+  // Estados para absorção de pendentes
+  const [detectandoAbsorviveis, setDetectandoAbsorviveis] = useState(false);
+  const [modalAbsorcaoOpen, setModalAbsorcaoOpen] = useState(false);
+  const [absorcaoResultados, setAbsorcaoResultados] = useState<{ inequivocos: any[], sugestoes: any[], sem_match: any[] } | null>(null);
+  const [absorvendo, setAbsorvendo] = useState(false);
+  const [absorcaoRelatorio, setAbsorcaoRelatorio] = useState<any>(null);
+  const [absorcaoTabAtiva, setAbsorcaoTabAtiva] = useState('inequivocos');
+  const [sugestoesAceitas, setSugestoesAceitas] = useState<Set<string>>(new Set());
+
   const [recategorizando, setRecategorizando] = useState(false);
 
   // Estados para feedbacks/suporte
@@ -1071,6 +1079,51 @@ export default function NormalizacaoGlobal() {
       });
     } finally {
       setSincronizandoManual(false);
+    }
+  }
+
+  async function detectarPendentesAbsorviveis() {
+    setDetectandoAbsorviveis(true);
+    setAbsorcaoResultados(null);
+    setAbsorcaoRelatorio(null);
+    setSugestoesAceitas(new Set());
+    setAbsorcaoTabAtiva('inequivocos');
+    try {
+      const { data, error } = await supabase.functions.invoke('detectar-pendentes-absorviveis', {
+        body: { acao: 'detectar', limit: 500 }
+      });
+      if (error) throw error;
+      setAbsorcaoResultados({
+        inequivocos: data.inequivocos || [],
+        sugestoes: data.sugestoes || [],
+        sem_match: data.sem_match || [],
+      });
+      setModalAbsorcaoOpen(true);
+      toast({ title: "Detecção concluída", description: `${data.inequivocos?.length || 0} inequívocos, ${data.sugestoes?.length || 0} sugestões, ${data.sem_match?.length || 0} sem match` });
+    } catch (error: any) {
+      console.error('Erro ao detectar absorvíveis:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setDetectandoAbsorviveis(false);
+    }
+  }
+
+  async function executarAbsorcao(idsParaAbsorver: string[]) {
+    if (idsParaAbsorver.length === 0) return;
+    setAbsorvendo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('detectar-pendentes-absorviveis', {
+        body: { acao: 'absorver', ids: idsParaAbsorver }
+      });
+      if (error) throw error;
+      setAbsorcaoRelatorio(data);
+      toast({ title: "Absorção concluída", description: `${data.total_absorvidos} absorvidos, ${data.total_pulados} pulados` });
+      await carregarDados();
+    } catch (error: any) {
+      console.error('Erro ao absorver:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setAbsorvendo(false);
     }
   }
 
@@ -2684,8 +2737,19 @@ export default function NormalizacaoGlobal() {
 
         {/* Candidatos Pendentes */}
         <TabsContent value="pendentes" className="space-y-4">
-          {/* Campo de busca */}
-          <div className="mb-4 space-y-2">
+          {/* Botão Detectar Absorvíveis + Campo de busca */}
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={detectarPendentesAbsorviveis}
+                disabled={detectandoAbsorviveis}
+                variant="outline"
+                className="gap-2"
+              >
+                {detectandoAbsorviveis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                {detectandoAbsorviveis ? 'Detectando...' : 'Detectar absorvíveis'}
+              </Button>
+            </div>
             <Input
               placeholder="Buscar pendentes... (use ; para múltiplos termos: ex: manteiga ; aviação)"
               value={filtroPendentes}
@@ -4699,6 +4763,181 @@ export default function NormalizacaoGlobal() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Absorção de Pendentes */}
+      <Dialog open={modalAbsorcaoOpen} onOpenChange={setModalAbsorcaoOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Absorção de Pendentes pelo Catálogo Master</DialogTitle>
+            <DialogDescription>
+              Pendentes que correspondem a masters existentes, classificados por nível de confiança.
+            </DialogDescription>
+          </DialogHeader>
+
+          {absorcaoRelatorio ? (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Relatório da Absorção</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm">✅ <strong>{absorcaoRelatorio.total_absorvidos}</strong> pendentes absorvidos com sucesso</p>
+                  {absorcaoRelatorio.total_pulados > 0 && (
+                    <p className="text-sm">⚠️ <strong>{absorcaoRelatorio.total_pulados}</strong> pendentes pulados (revalidação falhou)</p>
+                  )}
+                  {absorcaoRelatorio.pulados?.length > 0 && (
+                    <div className="mt-2 max-h-40 overflow-y-auto">
+                      {absorcaoRelatorio.pulados.map((p: any, i: number) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          ID {p.candidato_id?.slice(0, 8)}... — {p.motivo}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              <DialogFooter>
+                <Button onClick={() => { setModalAbsorcaoOpen(false); setAbsorcaoRelatorio(null); }}>
+                  Fechar
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : absorcaoResultados ? (
+            <div className="space-y-4">
+              <Tabs value={absorcaoTabAtiva} onValueChange={setAbsorcaoTabAtiva}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="inequivocos" className="flex-1">
+                    Inequívocos ({absorcaoResultados.inequivocos.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="sugestoes" className="flex-1">
+                    Sugestões ({absorcaoResultados.sugestoes.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="sem_match" className="flex-1">
+                    Sem match ({absorcaoResultados.sem_match.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="inequivocos" className="space-y-3">
+                  {absorcaoResultados.inequivocos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhum match inequívoco encontrado.</p>
+                  ) : (
+                    <>
+                      <Card>
+                        <CardContent className="pt-4">
+                          <p className="text-sm mb-3">
+                            <strong>{absorcaoResultados.inequivocos.length}</strong> pendentes serão absorvidos pelos masters indicados:
+                          </p>
+                          <div className="max-h-60 overflow-y-auto space-y-2">
+                            {absorcaoResultados.inequivocos.map((item: any) => (
+                              <div key={item.candidato_id} className="flex items-center gap-2 text-sm border-b pb-2">
+                                <span className="text-muted-foreground truncate flex-1" title={item.texto_original}>
+                                  {item.texto_original}
+                                </span>
+                                <span className="text-muted-foreground">→</span>
+                                <span className="font-medium truncate flex-1" title={item.master_nome_padrao}>
+                                  {item.master_nome_padrao}
+                                </span>
+                                <Badge variant="outline" className="text-xs shrink-0">
+                                  {item.camada}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Button
+                        onClick={() => executarAbsorcao(absorcaoResultados.inequivocos.map((i: any) => i.candidato_id))}
+                        disabled={absorvendo}
+                        className="w-full gap-2"
+                      >
+                        {absorvendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        {absorvendo ? 'Absorvendo...' : `Absorver todos (${absorcaoResultados.inequivocos.length})`}
+                      </Button>
+                    </>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="sugestoes" className="space-y-3">
+                  {absorcaoResultados.sugestoes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhuma sugestão forte encontrada.</p>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto space-y-2">
+                      {absorcaoResultados.sugestoes.map((item: any) => (
+                        <Card key={item.candidato_id}>
+                          <CardContent className="pt-3 pb-3">
+                            <div className="flex items-center gap-2 text-sm">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-muted-foreground truncate" title={item.texto_original}>{item.texto_original}</p>
+                                <p className="font-medium truncate" title={item.master_nome_padrao}>→ {item.master_nome_padrao}</p>
+                              </div>
+                              <Badge variant="secondary" className="text-xs shrink-0">
+                                {Math.round(item.score * 100)}%
+                              </Badge>
+                              <div className="flex gap-1 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant={sugestoesAceitas.has(item.candidato_id) ? "default" : "outline"}
+                                  onClick={() => {
+                                    const novo = new Set(sugestoesAceitas);
+                                    if (novo.has(item.candidato_id)) novo.delete(item.candidato_id);
+                                    else novo.add(item.candidato_id);
+                                    setSugestoesAceitas(novo);
+                                  }}
+                                  className="gap-1"
+                                >
+                                  <Check className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                  {sugestoesAceitas.size > 0 && (
+                    <Button
+                      onClick={() => executarAbsorcao(Array.from(sugestoesAceitas))}
+                      disabled={absorvendo}
+                      className="w-full gap-2"
+                    >
+                      {absorvendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      Absorver selecionados ({sugestoesAceitas.size})
+                    </Button>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="sem_match" className="space-y-3">
+                  {absorcaoResultados.sem_match.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Todos os pendentes tiveram match.</p>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto space-y-1">
+                      {absorcaoResultados.sem_match.map((item: any) => (
+                        <div key={item.candidato_id} className="text-sm border-b pb-1 flex items-center gap-2">
+                          <span className="truncate flex-1" title={item.texto_original}>{item.texto_original}</span>
+                          {item.bloqueios?.length > 0 && (
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              {item.bloqueios.join(', ')}
+                            </span>
+                          )}
+                          {item.score > 0 && (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {Math.round(item.score * 100)}%
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
