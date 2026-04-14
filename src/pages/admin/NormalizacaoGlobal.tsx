@@ -1131,6 +1131,33 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+  async function executarVinculoManual() {
+    if (!confirmacaoManual) return;
+    const { candidato_id, master_id, bloqueios } = confirmacaoManual;
+    setVinculandoManual(candidato_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('detectar-pendentes-absorviveis', {
+        body: { acao: 'absorver_manual', candidato_id, master_id, bloqueios_ignorados: bloqueios }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      // Remove item from local list
+      if (absorcaoResultados) {
+        setAbsorcaoResultados({
+          ...absorcaoResultados,
+          sem_match: absorcaoResultados.sem_match.filter((i: any) => i.candidato_id !== candidato_id),
+        });
+      }
+      toast({ title: "Vínculo manual criado", description: `"${data.texto_original}" → "${data.master_nome}"` });
+    } catch (error: any) {
+      console.error('Erro no vínculo manual:', error);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setVinculandoManual(null);
+      setConfirmacaoManual(null);
+    }
+  }
+
 
 
   async function handleConsolidarDuplicatas() {
