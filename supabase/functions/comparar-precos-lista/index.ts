@@ -179,6 +179,31 @@ serve(async (req) => {
           return { valor: precoNomeExato.valor_unitario, data_atualizacao: precoNomeExato.data_atualizacao };
         }
 
+        // NOVO FALLBACK: buscar pelo nome_padrao do master (pode diferir do nome do item na lista)
+        if (produtoMasterId) {
+          const { data: masterInfo } = await supabaseAdmin
+            .from('produtos_master_global')
+            .select('nome_padrao')
+            .eq('id', produtoMasterId)
+            .maybeSingle();
+
+          if (masterInfo?.nome_padrao && masterInfo.nome_padrao.trim().toLowerCase() !== produtoNome.trim().toLowerCase()) {
+            const { data: precoViaMaster } = await supabaseAdmin
+              .from('precos_atuais')
+              .select('valor_unitario, produto_nome, data_atualizacao')
+              .eq('estabelecimento_cnpj', cnpjMercado)
+              .ilike('produto_nome', masterInfo.nome_padrao.trim())
+              .order('data_atualizacao', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (precoViaMaster?.valor_unitario) {
+              console.log(`  ✅ [FALLBACK-NOME-MASTER] R$ ${precoViaMaster.valor_unitario} - "${precoViaMaster.produto_nome}" (master: "${masterInfo.nome_padrao}") @ CNPJ ${cnpjMercado}`);
+              return { valor: precoViaMaster.valor_unitario, data_atualizacao: precoViaMaster.data_atualizacao };
+            }
+          }
+        }
+
         // Se veio de vínculo original (não resolvido por nome), parar aqui
         if (!masterResolvidoPorNome) {
           console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — vínculo original, sem fallback`);

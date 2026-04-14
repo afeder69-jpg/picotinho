@@ -208,18 +208,30 @@ serve(async (req) => {
     }
 
     if (deveAtualizar) {
+      // Resolver produto_master_id
+      let produtoMasterId: string | null = null;
+      const nomeUpper = produtoNome.toUpperCase().trim();
+      const { data: masterMatch, count: masterCount } = await supabase
+        .from("produtos_master_global")
+        .select("id", { count: "exact" })
+        .eq("nome_padrao", nomeUpper)
+        .limit(2);
+      if (masterCount === 1 && masterMatch?.[0]?.id) {
+        produtoMasterId = masterMatch[0].id;
+      }
+
+      const upsertPayload: any = {
+        produto_nome: produtoNome,
+        estabelecimento_cnpj: estadoAtual.cnpj,
+        estabelecimento_nome: estadoAtual.estabelecimento,
+        valor_unitario: estadoAtual.preco,
+        data_atualizacao: estadoAtual.data.toISOString(),
+      };
+      if (produtoMasterId) upsertPayload.produto_master_id = produtoMasterId;
+
       const { data: upsertData, error: upErr } = await supabase
         .from("precos_atuais")
-        .upsert(
-          {
-            produto_nome: produtoNome,
-            estabelecimento_cnpj: estadoAtual.cnpj,
-            estabelecimento_nome: estadoAtual.estabelecimento,
-            valor_unitario: estadoAtual.preco,
-            data_atualizacao: estadoAtual.data.toISOString(),
-          },
-          { onConflict: "produto_nome,estabelecimento_cnpj" }
-        )
+        .upsert(upsertPayload, { onConflict: "produto_nome,estabelecimento_cnpj" })
         .select();
 
       if (upErr) throw upErr;

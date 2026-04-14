@@ -196,18 +196,29 @@ serve(async (req) => {
       if (estoqueMatch?.produto_master_id) {
         produtoMasterId = estoqueMatch.produto_master_id;
       } else {
-        // Fallback: try via candidatos normalizacao
-        const { data: candidatoMatch } = await supabase
-          .from('produtos_candidatos_normalizacao')
-          .select('sugestao_produto_master')
-          .ilike('texto_original', produtoNomeNormalizado)
-          .not('sugestao_produto_master', 'is', null)
-          .in('status', ['auto_aprovado', 'aprovado'])
-          .limit(1)
-          .maybeSingle();
+        // Fallback 2: busca direta no catálogo master por nome_padrao (match exato)
+        const { data: masterMatch, count: masterCount } = await supabase
+          .from('produtos_master_global')
+          .select('id', { count: 'exact' })
+          .eq('nome_padrao', produtoNomeNormalizado)
+          .limit(2);
         
-        if (candidatoMatch?.sugestao_produto_master) {
-          produtoMasterId = candidatoMatch.sugestao_produto_master;
+        if (masterCount === 1 && masterMatch?.[0]?.id) {
+          produtoMasterId = masterMatch[0].id;
+        } else {
+          // Fallback 3: via candidatos normalizacao aprovados
+          const { data: candidatoMatch } = await supabase
+            .from('produtos_candidatos_normalizacao')
+            .select('sugestao_produto_master')
+            .ilike('texto_original', produtoNomeNormalizado)
+            .not('sugestao_produto_master', 'is', null)
+            .in('status', ['auto_aprovado', 'aprovado'])
+            .limit(1)
+            .maybeSingle();
+          
+          if (candidatoMatch?.sugestao_produto_master) {
+            produtoMasterId = candidatoMatch.sugestao_produto_master;
+          }
         }
       }
       

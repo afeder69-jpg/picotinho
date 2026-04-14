@@ -442,7 +442,7 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
           <AlertDialogDescription>
             Tem certeza que deseja excluir a lista <strong>"{lista.titulo}"</strong>?
             <br /><br />
-            Esta ação não pode ser desfeita. Todos os {produtosEditados.length} produtos 
+            Esta ação não pode ser desfeita. Todos os {produtosEditados?.length ?? 0} produtos 
             desta lista serão removidos permanentemente.
           </AlertDialogDescription>
         </AlertDialogHeader>
