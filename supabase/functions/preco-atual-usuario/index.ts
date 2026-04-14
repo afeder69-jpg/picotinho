@@ -519,17 +519,48 @@ serve(async (req) => {
     // 8) Salvar/atualizar os preços na tabela precos_atuais (apenas novos das notas)
     for (const resultado of resultados) {
       try {
+        // Resolver produto_master_id antes do upsert
+        let produtoMasterId: string | null = null;
+        const nomeUpper = resultado.produto_nome.toUpperCase().trim();
+        
+        // Prioridade 1: match exato no catálogo master
+        const { data: masterMatch, count: masterCount } = await supabase
+          .from('produtos_master_global')
+          .select('id', { count: 'exact' })
+          .eq('nome_padrao', nomeUpper)
+          .limit(2);
+        
+        if (masterCount === 1 && masterMatch?.[0]?.id) {
+          produtoMasterId = masterMatch[0].id;
+        } else {
+          // Prioridade 2: candidatos aprovados
+          const { data: candidatoMatch } = await supabase
+            .from('produtos_candidatos_normalizacao')
+            .select('sugestao_produto_master')
+            .ilike('texto_original', nomeUpper)
+            .not('sugestao_produto_master', 'is', null)
+            .in('status', ['auto_aprovado', 'aprovado'])
+            .limit(1)
+            .maybeSingle();
+          if (candidatoMatch?.sugestao_produto_master) {
+            produtoMasterId = candidatoMatch.sugestao_produto_master;
+          }
+        }
+
+        const upsertPayload: any = {
+          user_id: userId,
+          produto_nome: resultado.produto_nome,
+          valor_unitario: resultado.valor_unitario,
+          data_atualizacao: resultado.data_atualizacao,
+          estabelecimento_cnpj: resultado.estabelecimento_cnpj,
+          estabelecimento_nome: resultado.estabelecimento_nome,
+          produto_codigo: null
+        };
+        if (produtoMasterId) upsertPayload.produto_master_id = produtoMasterId;
+
         const { error: upsertError } = await supabase
           .from('precos_atuais')
-          .upsert({
-            user_id: userId,
-            produto_nome: resultado.produto_nome,
-            valor_unitario: resultado.valor_unitario,
-            data_atualizacao: resultado.data_atualizacao,
-            estabelecimento_cnpj: resultado.estabelecimento_cnpj,
-            estabelecimento_nome: resultado.estabelecimento_nome,
-            produto_codigo: null
-          }, {
+          .upsert(upsertPayload, {
             onConflict: 'user_id,produto_nome,estabelecimento_cnpj'
           });
 

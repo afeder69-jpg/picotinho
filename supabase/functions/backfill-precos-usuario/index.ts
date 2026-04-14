@@ -249,18 +249,30 @@ serve(async (req) => {
           }
 
           if (deveAtualizar) {
+            // Resolver produto_master_id
+            let produtoMasterId: string | null = null;
+            const nomeUpper = produtoNome.toUpperCase().trim();
+            const { data: masterMatch, count: masterCount } = await supabase
+              .from("produtos_master_global")
+              .select("id", { count: "exact" })
+              .eq("nome_padrao", nomeUpper)
+              .limit(2);
+            if (masterCount === 1 && masterMatch?.[0]?.id) {
+              produtoMasterId = masterMatch[0].id;
+            }
+
+            const upsertPayload: any = {
+              produto_nome: produtoNome,
+              estabelecimento_cnpj: melhor.estabelecimentoCnpj,
+              estabelecimento_nome: melhor.estabelecimentoNome,
+              valor_unitario: melhor.valorUnitario,
+              data_atualizacao: melhor.dataAtualizacaoISO,
+            };
+            if (produtoMasterId) upsertPayload.produto_master_id = produtoMasterId;
+
             const { error: erroUpsert } = await supabase
               .from("precos_atuais")
-              .upsert(
-                {
-                  produto_nome: produtoNome,
-                  estabelecimento_cnpj: melhor.estabelecimentoCnpj,
-                  estabelecimento_nome: melhor.estabelecimentoNome,
-                  valor_unitario: melhor.valorUnitario,
-                  data_atualizacao: melhor.dataAtualizacaoISO,
-                },
-                { onConflict: "produto_nome,estabelecimento_cnpj" }
-              );
+              .upsert(upsertPayload, { onConflict: "produto_nome,estabelecimento_cnpj" });
 
             if (erroUpsert) {
               logs.push({ produto: produtoNome, estab: melhor.estabelecimentoCnpj, status: "ERRO_UPSERT", erro: erroUpsert.message });
