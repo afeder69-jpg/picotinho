@@ -3600,6 +3600,13 @@ export type Database = {
             }
             Returns: number
           }
+      comparar_masters_similares_batch: {
+        Args: { pares: Json }
+        Returns: {
+          idx: number
+          score: number
+        }[]
+      }
       consolidar_estoque_duplicado: { Args: never; Returns: undefined }
       contar_notas_sistema: { Args: never; Returns: number }
       contar_usuarios_cadastrados: { Args: never; Returns: number }

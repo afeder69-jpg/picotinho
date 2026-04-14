@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const BATCH_SIZE = 200;
+const MAX_COMPARACOES = 5000;
+const THRESHOLD_SIMILARIDADE = 0.85;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,11 +20,15 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('🔍 Iniciando detecção inteligente de duplicatas...', new Date().toISOString());
     const startTime = Date.now();
+    const tempos: Record<string, number> = {};
 
-    // Carregar pares já marcados como não-duplicatas
-    console.log('🔍 Carregando decisões de não-duplicatas...');
+    console.log('🔍 Iniciando detecção inteligente de duplicatas...', new Date().toISOString());
+
+    // =============================================
+    // CARREGAR PARES IGNORADOS
+    // =============================================
+    let t0 = Date.now();
     const { data: paresIgnorados, error: ignoradosError } = await supabase
       .from('masters_duplicatas_ignoradas')
       .select('produto_1_id, produto_2_id');
@@ -34,9 +42,13 @@ serve(async (req) => {
       const [menor, maior] = [par.produto_1_id, par.produto_2_id].sort();
       paresIgnoradosSet.add(`${menor}_${maior}`);
     });
-    console.log(`📝 Pares já marcados como não-duplicatas: ${paresIgnoradosSet.size}`);
+    tempos['carregar_ignorados'] = Date.now() - t0;
+    console.log(`📝 Pares ignorados: ${paresIgnoradosSet.size} (${tempos['carregar_ignorados']}ms)`);
 
-    // Buscar TODOS os masters ativos (sem filtro de total_notas)
+    // =============================================
+    // CARREGAR MASTERS ATIVOS
+    // =============================================
+    t0 = Date.now();
     const { data: masters, error: mastersError } = await supabase
       .from('produtos_master_global')
       .select('*')
@@ -49,19 +61,19 @@ serve(async (req) => {
       console.error('❌ Erro ao buscar masters:', mastersError);
       throw mastersError;
     }
+    tempos['carregar_masters'] = Date.now() - t0;
+    console.log(`📦 Masters ativos: ${masters?.length || 0} (${tempos['carregar_masters']}ms)`);
 
-    console.log(`📦 Total de masters ativos carregados: ${masters?.length || 0}`);
-
-    // Helper: verificar se par está ignorado
+    // =============================================
+    // HELPERS
+    // =============================================
     function parIgnorado(id1: string, id2: string): boolean {
       const [menor, maior] = [id1, id2].sort();
       return paresIgnoradosSet.has(`${menor}_${maior}`);
     }
 
-    // Helper: verificar regras de negócio
     function saoRealmenteDuplicatas(
-      p1: any,
-      p2: any,
+      p1: any, p2: any,
       options: { ignorarCategoria?: boolean } = {}
     ): boolean {
       if (p1.qtd_valor && p2.qtd_valor && p1.qtd_unidade && p2.qtd_unidade) {
@@ -74,16 +86,33 @@ serve(async (req) => {
       return true;
     }
 
+    function ordenarPorRelevancia(arr: any[]) {
+      arr.sort((a, b) => {
+        if ((b.total_notas || 0) !== (a.total_notas || 0)) return (b.total_notas || 0) - (a.total_notas || 0);
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+    }
+
+    function mapProduto(p: any) {
+      return {
+        id: p.id, nome_padrao: p.nome_padrao, sku_global: p.sku_global,
+        marca: p.marca, codigo_barras: p.codigo_barras,
+        qtd_valor: p.qtd_valor, qtd_unidade: p.qtd_unidade,
+        total_notas: p.total_notas, total_usuarios: p.total_usuarios, created_at: p.created_at
+      };
+    }
+
     const gruposDuplicatas: any[] = [];
     let grupoIdCounter = 1;
     const produtosJaAgrupados = new Set<string>();
 
     // =============================================
-    // PASSADA 1: Duplicatas EXATAS (case-insensitive)
+    // PASSADA 1: Duplicatas EXATAS
     // =============================================
-    console.log('🔍 PASSADA 1: Buscando duplicatas exatas por nome_padrao...');
+    t0 = Date.now();
+    console.log('🔍 PASSADA 1: Buscando duplicatas exatas...');
 
-    // Agrupar por UPPER(nome_padrao) + UPPER(marca)
+    // Por nome_padrao + marca
     const gruposPorNome = new Map<string, any[]>();
     masters?.forEach(m => {
       const key = `${(m.nome_padrao || '').toUpperCase().trim()}|||${(m.marca || '').toUpperCase().trim()}`;
@@ -91,7 +120,29 @@ serve(async (req) => {
       gruposPorNome.get(key)!.push(m);
     });
 
-    // Também agrupar por nome_base + marca (para pegar variações leves no nome_padrao)
+    for (const [, produtos] of gruposPorNome.entries()) {
+      if (produtos.length < 2) continue;
+      const grupoFiltrado = [produtos[0]];
+      for (let i = 1; i < produtos.length; i++) {
+        const p = produtos[i];
+        if (parIgnorado(produtos[0].id, p.id)) continue;
+        if (!saoRealmenteDuplicatas(produtos[0], p, { ignorarCategoria: true })) continue;
+        grupoFiltrado.push(p);
+      }
+      if (grupoFiltrado.length < 2) continue;
+      ordenarPorRelevancia(grupoFiltrado);
+      gruposDuplicatas.push({
+        id: `grupo_${grupoIdCounter++}`, categoria: grupoFiltrado[0].categoria,
+        score_similaridade: 1.0, tipo_deteccao: 'exato_nome_padrao',
+        produtos: grupoFiltrado.map(mapProduto)
+      });
+      grupoFiltrado.forEach(p => produtosJaAgrupados.add(p.id));
+    }
+
+    const gruposPassada1a = gruposDuplicatas.length;
+    console.log(`✅ Passada 1 (nome_padrao): ${gruposPassada1a} grupos`);
+
+    // Por nome_base + marca
     const gruposPorNomeBase = new Map<string, any[]>();
     masters?.forEach(m => {
       if (m.nome_base) {
@@ -101,52 +152,9 @@ serve(async (req) => {
       }
     });
 
-    // Processar grupos exatos por nome_padrao
-    for (const [key, produtos] of gruposPorNome.entries()) {
-      if (produtos.length < 2) continue;
-
-      // Filtrar pares ignorados e regras de negócio
-      const grupoFiltrado = [produtos[0]];
-      for (let i = 1; i < produtos.length; i++) {
-        const p = produtos[i];
-        if (parIgnorado(produtos[0].id, p.id)) continue;
-        if (!saoRealmenteDuplicatas(produtos[0], p, { ignorarCategoria: true })) continue;
-        grupoFiltrado.push(p);
-      }
-
-      if (grupoFiltrado.length < 2) continue;
-
-      // Ordenar: mais notas primeiro, depois mais antigo
-      grupoFiltrado.sort((a, b) => {
-        if ((b.total_notas || 0) !== (a.total_notas || 0)) return (b.total_notas || 0) - (a.total_notas || 0);
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-
-      gruposDuplicatas.push({
-        id: `grupo_${grupoIdCounter++}`,
-        categoria: grupoFiltrado[0].categoria,
-        score_similaridade: 1.0, // Exato
-        tipo_deteccao: 'exato_nome_padrao',
-        produtos: grupoFiltrado.map(p => ({
-          id: p.id, nome_padrao: p.nome_padrao, sku_global: p.sku_global,
-          marca: p.marca, codigo_barras: p.codigo_barras,
-          qtd_valor: p.qtd_valor, qtd_unidade: p.qtd_unidade,
-          total_notas: p.total_notas, total_usuarios: p.total_usuarios, created_at: p.created_at
-        }))
-      });
-
-      grupoFiltrado.forEach(p => produtosJaAgrupados.add(p.id));
-    }
-
-    console.log(`✅ Passada 1 (nome_padrao): ${gruposDuplicatas.length} grupos exatos encontrados`);
-
-    // Processar grupos exatos por nome_base (apenas produtos não agrupados ainda)
-    const gruposAntes = gruposDuplicatas.length;
-    for (const [key, produtos] of gruposPorNomeBase.entries()) {
-      // Filtrar já agrupados
+    for (const [, produtos] of gruposPorNomeBase.entries()) {
       const naoAgrupados = produtos.filter(p => !produtosJaAgrupados.has(p.id));
       if (naoAgrupados.length < 2) continue;
-
       const grupoFiltrado = [naoAgrupados[0]];
       for (let i = 1; i < naoAgrupados.length; i++) {
         const p = naoAgrupados[i];
@@ -154,36 +162,24 @@ serve(async (req) => {
         if (!saoRealmenteDuplicatas(naoAgrupados[0], p, { ignorarCategoria: true })) continue;
         grupoFiltrado.push(p);
       }
-
       if (grupoFiltrado.length < 2) continue;
-
-      grupoFiltrado.sort((a, b) => {
-        if ((b.total_notas || 0) !== (a.total_notas || 0)) return (b.total_notas || 0) - (a.total_notas || 0);
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-
+      ordenarPorRelevancia(grupoFiltrado);
       gruposDuplicatas.push({
-        id: `grupo_${grupoIdCounter++}`,
-        categoria: grupoFiltrado[0].categoria,
-        score_similaridade: 0.98,
-        tipo_deteccao: 'exato_nome_base',
-        produtos: grupoFiltrado.map(p => ({
-          id: p.id, nome_padrao: p.nome_padrao, sku_global: p.sku_global,
-          marca: p.marca, codigo_barras: p.codigo_barras,
-          qtd_valor: p.qtd_valor, qtd_unidade: p.qtd_unidade,
-          total_notas: p.total_notas, total_usuarios: p.total_usuarios, created_at: p.created_at
-        }))
+        id: `grupo_${grupoIdCounter++}`, categoria: grupoFiltrado[0].categoria,
+        score_similaridade: 0.98, tipo_deteccao: 'exato_nome_base',
+        produtos: grupoFiltrado.map(mapProduto)
       });
-
       grupoFiltrado.forEach(p => produtosJaAgrupados.add(p.id));
     }
 
-    console.log(`✅ Passada 1 (nome_base): ${gruposDuplicatas.length - gruposAntes} grupos adicionais`);
+    tempos['passada_1'] = Date.now() - t0;
+    console.log(`✅ Passada 1 (nome_base): ${gruposDuplicatas.length - gruposPassada1a} grupos adicionais (${tempos['passada_1']}ms total)`);
 
     // =============================================
-    // PASSADA 2: Similaridade (produtos não agrupados)
+    // PASSADA 2: Similaridade com BATCH RPC
     // =============================================
-    console.log('🔍 PASSADA 2: Buscando duplicatas por similaridade...');
+    t0 = Date.now();
+    console.log('🔍 PASSADA 2: Buscando duplicatas por similaridade (batch)...');
 
     const mastersNaoAgrupados = masters?.filter(m => !produtosJaAgrupados.has(m.id)) || [];
     console.log(`📦 Produtos restantes para similaridade: ${mastersNaoAgrupados.length}`);
@@ -196,108 +192,156 @@ serve(async (req) => {
       mastersPorCategoria.get(cat)!.push(m);
     });
 
-    let comparacoesRealizadas = 0;
-    const maxComparacoes = 5000;
-    const cache = new Map<string, number>();
+    // Fase 1: Acumular todos os pares candidatos
+    interface ParCandidato {
+      i: number; // índice do produto1 no array da categoria
+      j: number; // índice do produto2 no array da categoria
+      cat: string;
+      produto1: any;
+      produto2: any;
+    }
+
+    const paresCandidatos: ParCandidato[] = [];
 
     for (const [categoria, produtosCategoria] of mastersPorCategoria.entries()) {
-      for (let i = 0; i < produtosCategoria.length; i++) {
+      for (let i = 0; i < produtosCategoria.length && paresCandidatos.length < MAX_COMPARACOES; i++) {
         const produto1 = produtosCategoria[i];
         if (produtosJaAgrupados.has(produto1.id)) continue;
 
-        const produtosSimilares: any[] = [produto1];
-
-        for (let j = i + 1; j < produtosCategoria.length; j++) {
+        for (let j = i + 1; j < produtosCategoria.length && paresCandidatos.length < MAX_COMPARACOES; j++) {
           const produto2 = produtosCategoria[j];
           if (produtosJaAgrupados.has(produto2.id)) continue;
-
           if (parIgnorado(produto1.id, produto2.id)) continue;
           if (!saoRealmenteDuplicatas(produto1, produto2)) continue;
-          if (comparacoesRealizadas >= maxComparacoes) break;
 
-          const cacheKey = `${produto1.id}_${produto2.id}`;
-          let score: number;
-
-          if (cache.has(cacheKey)) {
-            score = cache.get(cacheKey)!;
-          } else {
-            const { data: scoreData, error: scoreError } = await supabase
-              .rpc('comparar_masters_similares', {
-                m1_nome: produto1.nome_padrao,
-                m1_marca: produto1.marca,
-                m1_qtd_valor: produto1.qtd_valor,
-                m1_qtd_unidade: produto1.qtd_unidade,
-                m2_nome: produto2.nome_padrao,
-                m2_marca: produto2.marca,
-                m2_qtd_valor: produto2.qtd_valor,
-                m2_qtd_unidade: produto2.qtd_unidade
-              });
-
-            if (scoreError) { console.error('❌ Erro score:', scoreError); continue; }
-            score = scoreData as number;
-            cache.set(cacheKey, score);
-            comparacoesRealizadas++;
-          }
-
-          if (score >= 0.85) {
-            produtosSimilares.push(produto2);
-          }
-        }
-
-        if (comparacoesRealizadas >= maxComparacoes) break;
-
-        if (produtosSimilares.length > 1) {
-          const scoresMedios: number[] = [];
-          for (let k = 0; k < produtosSimilares.length - 1; k++) {
-            const { data: scoreData } = await supabase.rpc('comparar_masters_similares', {
-              m1_nome: produtosSimilares[k].nome_padrao,
-              m1_marca: produtosSimilares[k].marca,
-              m2_nome: produtosSimilares[k + 1].nome_padrao,
-              m2_marca: produtosSimilares[k + 1].marca
-            });
-            scoresMedios.push(scoreData as number);
-          }
-          const scoreGrupo = scoresMedios.reduce((a, b) => a + b, 0) / scoresMedios.length;
-
-          produtosSimilares.sort((a, b) => {
-            if ((b.total_notas || 0) !== (a.total_notas || 0)) return (b.total_notas || 0) - (a.total_notas || 0);
-            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-          });
-
-          gruposDuplicatas.push({
-            id: `grupo_${grupoIdCounter++}`,
-            categoria,
-            score_similaridade: scoreGrupo,
-            tipo_deteccao: 'similaridade',
-            produtos: produtosSimilares.map(p => ({
-              id: p.id, nome_padrao: p.nome_padrao, sku_global: p.sku_global,
-              marca: p.marca, codigo_barras: p.codigo_barras,
-              qtd_valor: p.qtd_valor, qtd_unidade: p.qtd_unidade,
-              total_notas: p.total_notas, total_usuarios: p.total_usuarios, created_at: p.created_at
-            }))
-          });
-
-          produtosSimilares.forEach(p => produtosJaAgrupados.add(p.id));
-          produtosCategoria.splice(i + 1, produtosSimilares.length - 1);
+          paresCandidatos.push({ i, j, cat: categoria, produto1, produto2 });
         }
       }
     }
 
-    const totalDuplicatas = gruposDuplicatas.reduce((acc, g) => acc + (g.produtos.length - 1), 0);
-    const tempoDecorrido = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`📊 Pares candidatos acumulados: ${paresCandidatos.length}`);
 
-    console.log(`✅ Detecção concluída em ${tempoDecorrido}s:`);
+    // Fase 2: Processar pares em batches via RPC
+    const scores = new Map<string, number>(); // "id1_id2" -> score
+
+    for (let batchStart = 0; batchStart < paresCandidatos.length; batchStart += BATCH_SIZE) {
+      const batch = paresCandidatos.slice(batchStart, batchStart + BATCH_SIZE);
+      const paresJson = batch.map(p => ({
+        m1_nome: p.produto1.nome_padrao,
+        m1_marca: p.produto1.marca,
+        m2_nome: p.produto2.nome_padrao,
+        m2_marca: p.produto2.marca,
+      }));
+
+      const { data: batchScores, error: batchError } = await supabase
+        .rpc('comparar_masters_similares_batch', { pares: paresJson });
+
+      if (batchError) {
+        console.error(`❌ Erro batch ${batchStart}:`, batchError);
+        continue;
+      }
+
+      batchScores?.forEach((row: { idx: number; score: number }) => {
+        const par = batch[row.idx];
+        if (par && row.score >= THRESHOLD_SIMILARIDADE) {
+          const [id1, id2] = [par.produto1.id, par.produto2.id].sort();
+          scores.set(`${id1}_${id2}`, row.score);
+        }
+      });
+    }
+
+    console.log(`⏱️ Batch RPC concluído: ${scores.size} pares acima do threshold (${Date.now() - t0}ms)`);
+
+    // Fase 3: Montar grupos a partir dos scores
+    const t1 = Date.now();
+
+    // Build adjacency from scores
+    const adjacency = new Map<string, Set<string>>();
+    for (const key of scores.keys()) {
+      const [id1, id2] = key.split('_');
+      if (!adjacency.has(id1)) adjacency.set(id1, new Set());
+      if (!adjacency.has(id2)) adjacency.set(id2, new Set());
+      adjacency.get(id1)!.add(id2);
+      adjacency.get(id2)!.add(id1);
+    }
+
+    // Find connected components
+    const visitado = new Set<string>();
+    const mastersMap = new Map<string, any>();
+    masters?.forEach(m => mastersMap.set(m.id, m));
+
+    for (const [startId] of adjacency.entries()) {
+      if (visitado.has(startId) || produtosJaAgrupados.has(startId)) continue;
+
+      // BFS
+      const componente: string[] = [];
+      const fila = [startId];
+      while (fila.length > 0) {
+        const atual = fila.shift()!;
+        if (visitado.has(atual) || produtosJaAgrupados.has(atual)) continue;
+        visitado.add(atual);
+        componente.push(atual);
+        const vizinhos = adjacency.get(atual);
+        if (vizinhos) {
+          for (const v of vizinhos) {
+            if (!visitado.has(v) && !produtosJaAgrupados.has(v)) fila.push(v);
+          }
+        }
+      }
+
+      if (componente.length < 2) continue;
+
+      const produtosGrupo = componente.map(id => mastersMap.get(id)).filter(Boolean);
+      if (produtosGrupo.length < 2) continue;
+
+      // Calcular score médio do grupo
+      let somaScores = 0;
+      let countScores = 0;
+      for (let x = 0; x < componente.length; x++) {
+        for (let y = x + 1; y < componente.length; y++) {
+          const [a, b] = [componente[x], componente[y]].sort();
+          const s = scores.get(`${a}_${b}`);
+          if (s !== undefined) {
+            somaScores += s;
+            countScores++;
+          }
+        }
+      }
+      const scoreGrupo = countScores > 0 ? somaScores / countScores : 0.85;
+
+      ordenarPorRelevancia(produtosGrupo);
+
+      gruposDuplicatas.push({
+        id: `grupo_${grupoIdCounter++}`,
+        categoria: produtosGrupo[0].categoria,
+        score_similaridade: parseFloat(scoreGrupo.toFixed(3)),
+        tipo_deteccao: 'similaridade',
+        produtos: produtosGrupo.map(mapProduto)
+      });
+
+      produtosGrupo.forEach(p => produtosJaAgrupados.add(p.id));
+    }
+
+    tempos['passada_2'] = Date.now() - t0;
+    tempos['montagem_grupos'] = Date.now() - t1;
+
+    const totalDuplicatas = gruposDuplicatas.reduce((acc, g) => acc + (g.produtos.length - 1), 0);
+    const tempoTotal = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    console.log(`✅ Detecção concluída em ${tempoTotal}s:`);
     console.log(`   - ${gruposDuplicatas.length} grupo(s) total`);
     console.log(`   - ${totalDuplicatas} produto(s) duplicado(s)`);
-    console.log(`   - ${comparacoesRealizadas} comparações por similaridade`);
+    console.log(`   - ${paresCandidatos.length} comparações realizadas`);
+    console.log(`⏱️ Tempos: ${JSON.stringify(tempos)}`);
 
     return new Response(
       JSON.stringify({
         grupos: gruposDuplicatas,
         total_grupos: gruposDuplicatas.length,
         total_duplicatas: totalDuplicatas,
-        comparacoes_realizadas: comparacoesRealizadas,
-        tempo_decorrido_s: parseFloat(tempoDecorrido),
+        comparacoes_realizadas: paresCandidatos.length,
+        tempo_decorrido_s: parseFloat(tempoTotal),
+        tempos_internos: tempos,
         executado_em: new Date().toISOString()
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
