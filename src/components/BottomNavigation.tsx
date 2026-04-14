@@ -584,13 +584,13 @@ const BottomNavigation = () => {
           });
           
           // ✅ VALIDAÇÃO 1: Se o viewer já está aberto, ignorar
-          if (showCupomViewer || showInternalWebViewer) {
+          if (showCupomViewerRef.current || showInternalWebViewerRef.current) {
             console.log('⚠️ [REALTIME] Viewer já está aberto, ignorando evento');
             return;
           }
           
           // ✅ VALIDAÇÃO 2: Se a nota já foi confirmada, ignorar
-          if (confirmedNotes.has(notaAtualizada.id)) {
+          if (confirmedNotesRef.current.has(notaAtualizada.id)) {
             console.log('⚠️ [REALTIME] Nota já foi confirmada, ignorando');
             return;
           }
