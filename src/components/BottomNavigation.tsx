@@ -53,6 +53,20 @@ const BottomNavigation = () => {
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
   const activelyProcessingRef = useRef<Set<string>>(new Set());
+  
+  // Refs para evitar reconexão do Realtime quando esses states mudam
+  const processingNotesDataRef = useRef(processingNotesData);
+  const processingTimersRef = useRef(processingTimers);
+  const confirmedNotesRef = useRef(confirmedNotes);
+  const showCupomViewerRef = useRef(showCupomViewer);
+  const showInternalWebViewerRef = useRef(showInternalWebViewer);
+
+  // Manter refs sincronizadas com os states
+  useEffect(() => { processingNotesDataRef.current = processingNotesData; }, [processingNotesData]);
+  useEffect(() => { processingTimersRef.current = processingTimers; }, [processingTimers]);
+  useEffect(() => { confirmedNotesRef.current = confirmedNotes; }, [confirmedNotes]);
+  useEffect(() => { showCupomViewerRef.current = showCupomViewer; }, [showCupomViewer]);
+  useEffect(() => { showInternalWebViewerRef.current = showInternalWebViewer; }, [showInternalWebViewer]);
 
   // Listen for open-scanner event from other pages
   useEffect(() => {
@@ -734,7 +748,7 @@ const BottomNavigation = () => {
           continue;
         }
 
-        if (data?.processada && data?.dados_extraidos) {
+        if (!data?.processada && data?.dados_extraidos) {
           console.log('✅ [POLLING] Nota processada detectada via polling!', noteId);
           
           // ✅ Verificar se já foi confirmada
@@ -812,7 +826,7 @@ const BottomNavigation = () => {
         .from('notas_imagens')
         .select('id, dados_extraidos')
         .eq('usuario_id', user.id)
-        .eq('processada', true)
+        .eq('processada', false)
         .eq('normalizada', false)
         .eq('produtos_normalizados', 0)
         .is('processing_started_at', null)
