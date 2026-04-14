@@ -660,7 +660,7 @@ const BottomNavigation = () => {
               }
 
               // Recuperar URL e tipo de documento do mapa local
-              const notaInfo = processingNotesData.get(notaAtualizada.id);
+              const notaInfo = processingNotesDataRef.current.get(notaAtualizada.id);
               
               // ✅ PROCESSAMENTO AUTOMÁTICO
               console.log('🤖 [REALTIME] Iniciando processamento automático');
@@ -689,7 +689,7 @@ const BottomNavigation = () => {
                 return newMap;
               });
               
-              const timerId = processingTimers.get(notaAtualizada.id);
+              const timerId = processingTimersRef.current.get(notaAtualizada.id);
               if (timerId) {
                 clearTimeout(timerId);
                 setProcessingTimers(prev => {
