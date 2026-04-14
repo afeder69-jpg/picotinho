@@ -6,6 +6,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface GrupoInput {
+  manter_id: string;
+  remover_ids: string[];
+}
+
+interface DetalheGrupo {
+  mantido: string;
+  mantido_sku: string;
+  removidos: string[];
+  sinonimos_criados: number;
+  sinonimos_migrados: number;
+  sinonimos_skip_unicidade: number;
+  estoque_por_master_id: number;
+  estoque_por_sku_legado: number;
+  candidatos_migrados: number;
+  precos_migrados: number;
+  atributos_herdados: string[];
+  conflitos: string[];
+  validacao_pre_delete: 'ok' | 'abortado';
+  referencias_remanescentes?: Record<string, number>;
+  log_historico_decisoes: number;
+  estoque_sincronizado: number;
+  erro?: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -19,17 +44,17 @@ serve(async (req) => {
     const { grupos } = await req.json();
 
     if (!grupos || !Array.isArray(grupos)) {
-      throw new Error('Grupos inválidos');
+      throw new Error('Grupos inválidos: esperado array de { manter_id, remover_ids[] }');
     }
 
-    console.log(`⚙️ Iniciando consolidação de ${grupos.length} grupo(s)...`);
+    console.log(`⚙️ Iniciando fusão segura de ${grupos.length} grupo(s)...`);
 
     let totalMastersRemovidos = 0;
     let totalSinonimosGerados = 0;
     let totalReferenciasAtualizadas = 0;
-    const detalhes: any[] = [];
+    const detalhes: DetalheGrupo[] = [];
 
-    for (const grupo of grupos) {
+    for (const grupo of grupos as GrupoInput[]) {
       const { manter_id, remover_ids } = grupo;
 
       if (!manter_id || !Array.isArray(remover_ids) || remover_ids.length === 0) {
@@ -37,11 +62,7 @@ serve(async (req) => {
         continue;
       }
 
-      console.log(`\n🔄 Processando grupo:`);
-      console.log(`   - Manter: ${manter_id}`);
-      console.log(`   - Remover: ${remover_ids.length} produto(s)`);
-
-      // Buscar dados do produto mantido
+      // ── Passo 1: Buscar master preservado e removidos ──
       const { data: produtoMantido, error: mantidoError } = await supabase
         .from('produtos_master_global')
         .select('*')
@@ -53,62 +74,142 @@ serve(async (req) => {
         continue;
       }
 
-      // Buscar produtos a remover
       const { data: produtosRemover, error: removerError } = await supabase
         .from('produtos_master_global')
         .select('*')
         .in('id', remover_ids);
 
-      if (removerError || !produtosRemover) {
+      if (removerError || !produtosRemover || produtosRemover.length === 0) {
         console.error('❌ Erro ao buscar produtos a remover');
         continue;
       }
 
-      let sinonimosGrupo = 0;
-      let referenciasGrupo = 0;
+      console.log(`\n🔄 Grupo: manter "${produtoMantido.nome_padrao}" (${produtoMantido.sku_global})`);
+      console.log(`   Remover: ${produtosRemover.length} produto(s)`);
 
-      // Para cada produto removido
+      let sinonimosCriados = 0;
+      let sinonimosMigrados = 0;
+      let sinonimosSkipUnicidade = 0;
+      let estoquePorMasterId = 0;
+      let estoquePorSkuLegado = 0;
+      let candidatosMigrados = 0;
+      let precosMigrados = 0;
+      const atributosHerdados: string[] = [];
+      const conflitos: string[] = [];
+
+      // Acumular valores para enriquecimento (primeiro removido com valor ganha)
+      const heranca: Record<string, any> = {};
+
+      // ── Passo 2: Para cada master removido ──
       for (const produtoRemover of produtosRemover) {
-        console.log(`\n   📦 Processando: ${produtoRemover.nome_padrao}`);
+        console.log(`\n   📦 Processando removido: "${produtoRemover.nome_padrao}" (${produtoRemover.sku_global})`);
 
-        // 1. Criar sinônimo do SKU removido -> SKU mantido
-        const { error: sinonimoError } = await supabase
+        // 2a. Criar sinônimo do SKU removido
+        const { data: sinExistente } = await supabase
           .from('produtos_sinonimos_globais')
-          .insert({
-            produto_master_id: produtoMantido.id,
-            texto_variacao: produtoRemover.sku_global,
-            confianca: 1.0,
-            total_ocorrencias: produtoRemover.total_notas || 1,
-            fonte: 'consolidacao_manual',
-            aprovado_em: new Date().toISOString()
-          });
+          .select('id')
+          .eq('produto_master_id', produtoMantido.id)
+          .eq('texto_variacao', produtoRemover.sku_global)
+          .maybeSingle();
 
-        if (sinonimoError) {
-          console.error('❌ Erro ao criar sinônimo:', sinonimoError);
+        if (!sinExistente) {
+          const { error: sinError } = await supabase
+            .from('produtos_sinonimos_globais')
+            .insert({
+              produto_master_id: produtoMantido.id,
+              texto_variacao: produtoRemover.sku_global,
+              confianca: 1.0,
+              total_ocorrencias: produtoRemover.total_notas || 1,
+              fonte: 'consolidacao_manual',
+              aprovado_em: new Date().toISOString()
+            });
+
+          if (!sinError) {
+            sinonimosCriados++;
+            console.log(`      ✅ Sinônimo criado: ${produtoRemover.sku_global} → ${produtoMantido.sku_global}`);
+          } else {
+            console.error(`      ⚠️ Erro ao criar sinônimo: ${sinError.message}`);
+          }
         } else {
-          sinonimosGrupo++;
-          console.log(`      ✅ Sinônimo criado: ${produtoRemover.sku_global} → ${produtoMantido.sku_global}`);
+          sinonimosSkipUnicidade++;
+          console.log(`      ⏭️ Sinônimo SKU já existe, skip`);
         }
 
-        // 2. Atualizar referências em estoque_app
-        const { count: countEstoque, error: estoqueError } = await supabase
+        // 2b. Migrar sinônimos existentes do removido para o preservado
+        const { data: sinonimosDoRemovido } = await supabase
+          .from('produtos_sinonimos_globais')
+          .select('id, texto_variacao')
+          .eq('produto_master_id', produtoRemover.id);
+
+        if (sinonimosDoRemovido && sinonimosDoRemovido.length > 0) {
+          for (const sin of sinonimosDoRemovido) {
+            // Checar se já existe no preservado
+            const { data: jaExiste } = await supabase
+              .from('produtos_sinonimos_globais')
+              .select('id')
+              .eq('produto_master_id', produtoMantido.id)
+              .eq('texto_variacao', sin.texto_variacao)
+              .maybeSingle();
+
+            if (jaExiste) {
+              sinonimosSkipUnicidade++;
+              console.log(`      ⏭️ Sinônimo "${sin.texto_variacao}" já existe no preservado, skip`);
+              // Deletar o do removido pois já existe no preservado
+              await supabase
+                .from('produtos_sinonimos_globais')
+                .delete()
+                .eq('id', sin.id);
+            } else {
+              const { error: migError } = await supabase
+                .from('produtos_sinonimos_globais')
+                .update({ produto_master_id: produtoMantido.id })
+                .eq('id', sin.id);
+
+              if (!migError) {
+                sinonimosMigrados++;
+                console.log(`      ✅ Sinônimo migrado: "${sin.texto_variacao}"`);
+              } else {
+                console.error(`      ⚠️ Erro ao migrar sinônimo: ${migError.message}`);
+              }
+            }
+          }
+        }
+
+        // 2c. Migrar estoque por produto_master_id (principal)
+        const { count: countEstoqueMaster, error: estMasterErr } = await supabase
           .from('estoque_app')
           .update({
-            sku_global: produtoMantido.sku_global,
-            produto_master_id: produtoMantido.id
+            produto_master_id: produtoMantido.id,
+            sku_global: produtoMantido.sku_global
           })
-          .eq('sku_global', produtoRemover.sku_global)
+          .eq('produto_master_id', produtoRemover.id)
           .select('*', { count: 'exact', head: true });
 
-        if (estoqueError) {
-          console.error('❌ Erro ao atualizar estoque:', estoqueError);
+        if (!estMasterErr) {
+          estoquePorMasterId += countEstoqueMaster || 0;
+          console.log(`      ✅ Estoque migrado por master_id: ${countEstoqueMaster || 0}`);
         } else {
-          referenciasGrupo += countEstoque || 0;
-          console.log(`      ✅ ${countEstoque || 0} referência(s) em estoque_app`);
+          console.error(`      ⚠️ Erro estoque por master_id: ${estMasterErr.message}`);
         }
 
-        // 3. Atualizar referências em produtos_candidatos_normalizacao
-        const { count: countCandidatos, error: candidatosError } = await supabase
+        // 2d. Migrar estoque por sku_global sem master_id (apoio legado)
+        const { count: countEstoqueSku, error: estSkuErr } = await supabase
+          .from('estoque_app')
+          .update({
+            produto_master_id: produtoMantido.id,
+            sku_global: produtoMantido.sku_global
+          })
+          .eq('sku_global', produtoRemover.sku_global)
+          .is('produto_master_id', null)
+          .select('*', { count: 'exact', head: true });
+
+        if (!estSkuErr) {
+          estoquePorSkuLegado += countEstoqueSku || 0;
+          if (countEstoqueSku) console.log(`      ✅ Estoque legado migrado por SKU: ${countEstoqueSku}`);
+        }
+
+        // 2e. Migrar candidatos de normalização
+        const { count: countCandidatos, error: candErr } = await supabase
           .from('produtos_candidatos_normalizacao')
           .update({
             sugestao_produto_master: produtoMantido.id,
@@ -117,100 +218,230 @@ serve(async (req) => {
           .eq('sugestao_produto_master', produtoRemover.id)
           .select('*', { count: 'exact', head: true });
 
-        if (candidatosError) {
-          console.error('❌ Erro ao atualizar candidatos:', candidatosError);
-        } else {
-          referenciasGrupo += countCandidatos || 0;
-          console.log(`      ✅ ${countCandidatos || 0} referência(s) em candidatos`);
+        if (!candErr) {
+          candidatosMigrados += countCandidatos || 0;
+          console.log(`      ✅ Candidatos migrados: ${countCandidatos || 0}`);
         }
 
-        // 3.5 Atualizar referências em precos_atuais
-        const { count: countPrecos, error: precosError } = await supabase
+        // 2f. Migrar preços atuais
+        const { count: countPrecos, error: precosErr } = await supabase
           .from('precos_atuais')
           .update({ produto_master_id: produtoMantido.id })
           .eq('produto_master_id', produtoRemover.id)
           .select('*', { count: 'exact', head: true });
 
-        if (precosError) {
-          console.error('❌ Erro ao atualizar precos_atuais:', precosError);
-        } else {
-          referenciasGrupo += countPrecos || 0;
-          console.log(`      ✅ ${countPrecos || 0} referência(s) em precos_atuais`);
+        if (!precosErr) {
+          precosMigrados += countPrecos || 0;
+          console.log(`      ✅ Preços migrados: ${countPrecos || 0}`);
+        }
+
+        // ── Coletar dados para enriquecimento (primeiro removido com valor vence) ──
+
+        // codigo_barras
+        if (!heranca.codigo_barras && produtoRemover.codigo_barras) {
+          if (!produtoMantido.codigo_barras) {
+            heranca.codigo_barras = produtoRemover.codigo_barras;
+          } else if (produtoMantido.codigo_barras !== produtoRemover.codigo_barras) {
+            conflitos.push(`codigo_barras: removido=${produtoRemover.codigo_barras}, preservado=${produtoMantido.codigo_barras}`);
+          }
+        }
+
+        // imagem_url + imagem_path (bloco)
+        if (!heranca.imagem_url && produtoRemover.imagem_url) {
+          if (!produtoMantido.imagem_url) {
+            heranca.imagem_url = produtoRemover.imagem_url;
+            heranca.imagem_path = produtoRemover.imagem_path || null;
+          }
+        }
+
+        // marca
+        if (!heranca.marca && produtoRemover.marca) {
+          if (!produtoMantido.marca) {
+            heranca.marca = produtoRemover.marca;
+          } else if (produtoMantido.marca !== produtoRemover.marca) {
+            conflitos.push(`marca: removido=${produtoRemover.marca}, preservado=${produtoMantido.marca}`);
+          }
+        }
+
+        // bloco quantidade (só se completo e coerente)
+        if (!heranca.qtd_valor && produtoRemover.qtd_valor != null && produtoRemover.qtd_unidade != null) {
+          if (produtoMantido.qtd_valor == null) {
+            heranca.qtd_valor = produtoRemover.qtd_valor;
+            heranca.qtd_unidade = produtoRemover.qtd_unidade;
+            heranca.qtd_base = produtoRemover.qtd_base ?? null;
+            heranca.unidade_base = produtoRemover.unidade_base ?? null;
+          }
+        }
+
+        // tipo_embalagem
+        if (!heranca.tipo_embalagem && produtoRemover.tipo_embalagem) {
+          if (!produtoMantido.tipo_embalagem) {
+            heranca.tipo_embalagem = produtoRemover.tipo_embalagem;
+          }
+        }
+
+        // categoria (herdar se NULL ou 'OUTROS')
+        if (!heranca.categoria && produtoRemover.categoria) {
+          if (!produtoMantido.categoria || produtoMantido.categoria === 'OUTROS') {
+            if (produtoRemover.categoria !== 'OUTROS') {
+              heranca.categoria = produtoRemover.categoria;
+            }
+          }
+        }
+
+        // categoria_unidade
+        if (!heranca.categoria_unidade && produtoRemover.categoria_unidade) {
+          if (!produtoMantido.categoria_unidade) {
+            heranca.categoria_unidade = produtoRemover.categoria_unidade;
+          }
         }
       }
 
-      // 4. Somar estatísticas no produto mantido
+      // ── Passo 3: Enriquecimento do master preservado ──
       const totalNotasRemovidas = produtosRemover.reduce((acc, p) => acc + (p.total_notas || 0), 0);
       const totalUsuariosRemovidos = produtosRemover.reduce((acc, p) => acc + (p.total_usuarios || 0), 0);
 
-      const { error: updateError } = await supabase
-        .from('produtos_master_global')
-        .update({
-          total_notas: (produtoMantido.total_notas || 0) + totalNotasRemovidas,
-          total_usuarios: (produtoMantido.total_usuarios || 0) + totalUsuariosRemovidos
-        })
-        .eq('id', produtoMantido.id);
+      const updatePayload: Record<string, any> = {
+        total_notas: (produtoMantido.total_notas || 0) + totalNotasRemovidas,
+        total_usuarios: (produtoMantido.total_usuarios || 0) + totalUsuariosRemovidos
+      };
 
-      if (updateError) {
-        console.error('❌ Erro ao atualizar estatísticas:', updateError);
-      } else {
-        console.log(`   ✅ Estatísticas atualizadas: +${totalNotasRemovidas} notas, +${totalUsuariosRemovidos} usuários`);
+      // Aplicar herança
+      for (const [campo, valor] of Object.entries(heranca)) {
+        if (valor != null) {
+          updatePayload[campo] = valor;
+          atributosHerdados.push(campo);
+        }
       }
 
-      // 5. Deletar produtos duplicados
+      const { error: updateMasterErr } = await supabase
+        .from('produtos_master_global')
+        .update(updatePayload)
+        .eq('id', produtoMantido.id);
+
+      if (updateMasterErr) {
+        console.error('❌ Erro ao enriquecer master:', updateMasterErr.message);
+      } else {
+        console.log(`   ✅ Master enriquecido: contadores somados, atributos herdados: [${atributosHerdados.join(', ')}]`);
+        if (conflitos.length > 0) {
+          console.log(`   ⚠️ Conflitos registrados: ${conflitos.length}`);
+        }
+      }
+
+      // ── Passo 4: Validação pré-delete ──
+      console.log('   🔍 Validação pré-delete...');
+      const remanescentes: Record<string, number> = {};
+      let bloqueado = false;
+
+      for (const removido of produtosRemover) {
+        // Tabelas bloqueantes
+        const checks = [
+          { tabela: 'estoque_app', coluna: 'produto_master_id' },
+          { tabela: 'precos_atuais', coluna: 'produto_master_id' },
+          { tabela: 'produtos_candidatos_normalizacao', coluna: 'sugestao_produto_master' },
+          { tabela: 'produtos_sinonimos_globais', coluna: 'produto_master_id' },
+        ];
+
+        for (const check of checks) {
+          const { count, error: checkErr } = await supabase
+            .from(check.tabela)
+            .select('*', { count: 'exact', head: true })
+            .eq(check.coluna, removido.id);
+
+          if (!checkErr && count && count > 0) {
+            const key = `${check.tabela}`;
+            remanescentes[key] = (remanescentes[key] || 0) + count;
+            bloqueado = true;
+            console.error(`      ❌ Referência remanescente: ${check.tabela} tem ${count} registro(s) apontando para ${removido.id}`);
+          }
+        }
+      }
+
+      // normalizacao_decisoes_log (informativo, não bloqueia)
+      let logHistoricoDecisoes = 0;
+      for (const removido of produtosRemover) {
+        const { count } = await supabase
+          .from('normalizacao_decisoes_log')
+          .select('*', { count: 'exact', head: true })
+          .eq('produto_master_final', removido.id);
+        logHistoricoDecisoes += count || 0;
+      }
+      if (logHistoricoDecisoes > 0) {
+        console.log(`   ℹ️ normalizacao_decisoes_log: ${logHistoricoDecisoes} referência(s) histórica(s) (não bloqueia)`);
+      }
+
+      // ── Passo 5 ou Abort ──
+      const detalheGrupo: DetalheGrupo = {
+        mantido: produtoMantido.nome_padrao,
+        mantido_sku: produtoMantido.sku_global,
+        removidos: produtosRemover.map(p => p.nome_padrao),
+        sinonimos_criados: sinonimosCriados,
+        sinonimos_migrados: sinonimosMigrados,
+        sinonimos_skip_unicidade: sinonimosSkipUnicidade,
+        estoque_por_master_id: estoquePorMasterId,
+        estoque_por_sku_legado: estoquePorSkuLegado,
+        candidatos_migrados: candidatosMigrados,
+        precos_migrados: precosMigrados,
+        atributos_herdados: atributosHerdados,
+        conflitos,
+        validacao_pre_delete: bloqueado ? 'abortado' : 'ok',
+        log_historico_decisoes: logHistoricoDecisoes,
+        estoque_sincronizado: 0,
+      };
+
+      if (bloqueado) {
+        detalheGrupo.referencias_remanescentes = remanescentes;
+        console.error(`   ❌ ABORT: grupo "${produtoMantido.nome_padrao}" — referências remanescentes impediram delete`);
+        detalhes.push(detalheGrupo);
+        continue;
+      }
+
+      // Delete dos masters removidos
       const { error: deleteError } = await supabase
         .from('produtos_master_global')
         .delete()
         .in('id', remover_ids);
 
       if (deleteError) {
-        console.error('❌ FALHA CRÍTICA ao deletar duplicados:', deleteError);
-        detalhes.push({
-          mantido: produtoMantido.nome_padrao,
-          erro: `Falha ao deletar: ${deleteError.message}`,
-          remover_ids
-        });
+        console.error(`   ❌ FALHA CRÍTICA ao deletar duplicados: ${deleteError.message}`);
+        detalheGrupo.validacao_pre_delete = 'abortado';
+        detalheGrupo.erro = `Falha ao deletar: ${deleteError.message}`;
+        detalhes.push(detalheGrupo);
         continue;
-      } else {
-        totalMastersRemovidos += remover_ids.length;
-        console.log(`   ✅ ${remover_ids.length} produto(s) removido(s)`);
       }
 
-      // 6. Sincronizar estoque_app com o master mantido (via função centralizada)
+      totalMastersRemovidos += remover_ids.length;
+      console.log(`   ✅ ${remover_ids.length} master(s) removido(s)`);
+
+      // Sync estoque (apenas metadados do catálogo)
       const { data: syncResult, error: syncError } = await supabase
         .rpc('sync_estoque_from_master', { p_master_id: manter_id });
 
       if (syncError) {
-        console.error('❌ Erro ao sincronizar estoque:', syncError);
+        console.error(`   ⚠️ Erro ao sincronizar estoque: ${syncError.message}`);
       } else {
-        console.log(`   ✅ ${syncResult || 0} registro(s) de estoque sincronizado(s)`);
+        detalheGrupo.estoque_sincronizado = syncResult || 0;
+        console.log(`   ✅ ${syncResult || 0} registro(s) de estoque sincronizado(s) (apenas metadados)`);
       }
 
-      totalSinonimosGerados += sinonimosGrupo;
-      totalReferenciasAtualizadas += referenciasGrupo;
+      totalSinonimosGerados += sinonimosCriados + sinonimosMigrados;
+      totalReferenciasAtualizadas += estoquePorMasterId + estoquePorSkuLegado + candidatosMigrados + precosMigrados;
 
-      detalhes.push({
-        mantido: produtoMantido.nome_padrao,
-        mantido_sku: produtoMantido.sku_global,
-        removidos: produtosRemover.map(p => p.nome_padrao),
-        sinonimos_criados: sinonimosGrupo,
-        referencias_atualizadas: referenciasGrupo,
-        estoque_sincronizado: syncResult || 0
-      });
+      detalhes.push(detalheGrupo);
     }
 
-    console.log(`\n✅ Consolidação concluída:`);
+    console.log(`\n✅ Fusão concluída:`);
     console.log(`   - ${grupos.length} grupo(s) processado(s)`);
     console.log(`   - ${totalMastersRemovidos} master(s) removido(s)`);
-    console.log(`   - ${totalSinonimosGerados} sinônimo(s) criado(s)`);
+    console.log(`   - ${totalSinonimosGerados} sinônimo(s) criado(s)/migrado(s)`);
     console.log(`   - ${totalReferenciasAtualizadas} referência(s) atualizada(s)`);
 
     return new Response(
       JSON.stringify({
         sucesso: true,
-        total_grupos_consolidados: grupos.length,
+        total_grupos_processados: grupos.length,
         total_masters_removidos: totalMastersRemovidos,
-        total_sinonimos_criados: totalSinonimosGerados,
+        total_sinonimos: totalSinonimosGerados,
         total_referencias_atualizadas: totalReferenciasAtualizadas,
         detalhes
       }),
@@ -220,7 +451,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro geral:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message, sucesso: false }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
