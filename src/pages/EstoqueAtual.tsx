@@ -759,7 +759,8 @@ const EstoqueAtual = () => {
           *,
           produto_master:produtos_master_global(
             imagem_url,
-            imagem_path
+            imagem_path,
+            nome_padrao
           )
         `)
         .eq('user_id', user.id)
@@ -859,7 +860,7 @@ const EstoqueAtual = () => {
           produtosMap.set(chave, {
             ...item,
             produto_nome: chave, // Usar nome normalizado consistente
-            produto_nome_exibicao: item.produto_nome, // Manter nome original para exibição
+            produto_nome_exibicao: item.produto_master?.[0]?.nome_padrao || item.produto_nome, // Master como fonte de verdade
             hash_agrupamento: chave,
             quantidade_total: item.quantidade,
             preco_unitario_mais_recente: item.preco_unitario_ultimo,
