@@ -8,14 +8,11 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { APP_VERSION } from "@/lib/constants";
-import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
-import { ProcessingBadge } from "@/components/ProcessingBadge";
 
 const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [userNickname, setUserNickname] = useState<string>('');
-  const { processingCount, processingStartTimes } = useProcessingNotes();
 
   // Carregar apelido quando usuário faz login
   useEffect(() => {
@@ -36,7 +33,6 @@ const Index = () => {
 
       if (error) {
         console.error('Erro ao carregar apelido:', error);
-        // Se não encontrou o perfil, redirecionar para cadastro
         toast.error('Complete seu cadastro para continuar');
         setUserNickname('Visitante');
         navigate('/cadastro-usuario');
@@ -44,14 +40,12 @@ const Index = () => {
       }
 
       if (!profileData?.apelido || profileData.apelido.trim() === '') {
-        // Usuário sem apelido - redirecionar para cadastro
         toast.error('Complete seu cadastro para continuar');
         setUserNickname('Visitante');
         navigate('/cadastro-usuario');
         return;
       }
 
-      // Usuário com apelido válido
       setUserNickname(profileData.apelido);
       
     } catch (error) {
@@ -76,8 +70,7 @@ const Index = () => {
       {/* Header com logo e botão de login/logout */}
       <div className="flex justify-between items-center p-4 relative">
         <PicotinhoLogo />
-        <div className="flex-1"></div> {/* Spacer */}
-        {/* Badge de versão APK */}
+        <div className="flex-1"></div>
         <div className="absolute top-2 right-2 text-[10px] text-muted-foreground/60 font-mono">
           V {APP_VERSION}
         </div>
@@ -106,18 +99,9 @@ const Index = () => {
         )}
       </div>
 
-      {/* Badge discreto de processamento */}
-      {processingCount > 0 && processingStartTimes.size > 0 && (
-        <ProcessingBadge 
-          noteCount={processingCount}
-          startTime={Math.min(...Array.from(processingStartTimes.values()))}
-        />
-      )}
-
       {/* Main content area */}
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="text-center max-w-md mx-auto space-y-8">
-          {/* Mascote do Picotinho */}
           <div className="flex justify-center">
             <img 
               src="/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png" 
@@ -129,7 +113,6 @@ const Index = () => {
           <h1 className="text-2xl font-bold text-foreground leading-tight">
             Bem-vindo ao Picotinho, gerencie suas compras de supermercado
           </h1>
-
 
           {!user && (
             <div className="text-center space-y-2">

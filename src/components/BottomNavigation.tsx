@@ -9,11 +9,13 @@
  * 🔄 FLUXO AUTOMÁTICO DE PROCESSAMENTO (REALTIME):
  * 
  * 1. Usuário escaneia QR Code → handleQRScanSuccess()
- * 2. → Chama process-url-nota (edge function)
- * 3. → Extração automática via InfoSimples/Serpro
- * 4. → Realtime listener detecta dados_extraidos preenchido
- * 5. → processarNotaAutomaticamente() AUTOMÁTICO
- * 6. → Gera PDF → valida → processa estoque
+ * 2. → Enfileira na fila (useNoteQueue)
+ * 3. → Fila dispara executeNoteProcessing() (1 por vez)
+ * 4. → Chama process-url-nota (edge function)
+ * 5. → Extração automática via InfoSimples/Serpro
+ * 6. → Realtime listener detecta dados_extraidos preenchido
+ * 7. → processarNotaAutomaticamente() AUTOMÁTICO
+ * 8. → Gera PDF → valida → processa estoque
  * 
  * ⚠️ NÃO HÁ CONFIRMAÇÃO MANUAL
  * Todo o pipeline é 100% automático após scan do QR Code.
@@ -26,7 +28,8 @@ import QRCodeScanner from "./QRCodeScanner";
 import QRCodeScannerWeb from "./QRCodeScannerWeb";
 import InternalWebViewer from "./InternalWebViewer";
 import CupomFiscalViewer from "./CupomFiscalViewer";
-import { useState, useEffect, useRef } from "react";
+import { ProcessingBadge } from "./ProcessingBadge";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
@@ -36,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
+import { useNoteQueue } from "@/hooks/useNoteQueue";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -68,6 +72,11 @@ const BottomNavigation = () => {
   const [processingTimers, setProcessingTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [confirmedNotes, setConfirmedNotes] = useState<Set<string>>(new Set());
   const activelyProcessingRef = useRef<Set<string>>(new Set());
+  
+  // 🔵 Map queueItemId → notaId real para markDone/markError
+  const queueToNotaIdRef = useRef<Map<string, string>>(new Map());
+  // Map notaId → queueItemId para lookup reverso (Realtime/polling)
+  const notaIdToQueueRef = useRef<Map<string, string>>(new Map());
   
   // Refs para evitar reconexão do Realtime quando esses states mudam
   const processingNotesDataRef = useRef(processingNotesData);
@@ -119,66 +128,43 @@ const BottomNavigation = () => {
     setPendingDocType(null);
   };
 
+  // 🔵 Refs para queue callbacks (evita dependência circular)
+  const queueMarkDoneRef = useRef<(id: string) => void>(() => {});
+  const queueMarkErrorRef = useRef<(id: string, msg?: string) => void>(() => {});
 
-  const handleQRScanSuccess = async (data: string) => {
-    console.log("QR Code escaneado:", data);
+  /**
+   * 🔵 EXECUTOR REAL DE PROCESSAMENTO DE NOTA
+   * Esta é a função original handleQRScanSuccess, agora chamada pela fila.
+   * Toda a lógica interna permanece INTACTA.
+   */
+  const executeNoteProcessing = useCallback(async (urlParaProcessar: string, chaveAcesso: string, tipoDocumento: TipoDocumento, queueItemId: string) => {
+    console.log("🔵 [QUEUE] Executando processamento para:", queueItemId);
     
     // Validação de autenticação
     if (!user?.id) {
-      console.error('❌ [AUTH] Usuário não identificado ao escanear QR');
+      console.error('❌ [AUTH] Usuário não identificado ao processar nota');
       toast({
         title: "❌ Usuário não identificado",
         description: "Faça login para escanear notas fiscais",
         variant: "destructive",
       });
-      setShowQRScanner(false);
+      queueMarkErrorRef.current(queueItemId, 'Usuário não autenticado');
       return;
     }
     
     console.log('👤 [AUTH] Usuário autenticado:', user.id);
     
-    // Normalizar dados do QR Code: aceitar URL ou extrair chave de formatos não-URL
-    let urlParaProcessar = data;
-    const urlPattern = /^https?:\/\/.+/i;
-    
-    if (!urlPattern.test(data)) {
-      // QR code não é URL — tentar extrair chave de acesso diretamente
-      const chaveExtraida = extrairChaveNFe(data);
-      if (chaveExtraida) {
-        urlParaProcessar = construirUrlConsulta(chaveExtraida);
-        console.log('🔑 Chave extraída de QR Code não-URL:', chaveExtraida, '→', urlParaProcessar);
-      } else {
-        toast({
-          title: "QR Code inválido",
-          description: "Não foi possível identificar uma nota fiscal neste QR Code.",
-          variant: "destructive",
-        });
-        setShowQRScanner(false);
-        return;
-      }
-    }
-    
-    // Detectar tipo de documento (NFe vs NFCe)
-    const tipoDocumento = detectarTipoDocumento(urlParaProcessar);
-    console.log(`🔍 Tipo de documento: ${tipoDocumento || 'DESCONHECIDO'}`);
-    
-    // Fechar scanner imediatamente
-    setShowQRScanner(false);
-    
     try {
-      const chaveAcesso = extrairChaveNFe(urlParaProcessar);
-      
-      if (!chaveAcesso) {
-        throw new Error('Não foi possível extrair a chave de acesso da URL');
-      }
-      
-      console.log('🔑 Chave extraída:', chaveAcesso);
+      console.log('🔑 Chave:', chaveAcesso);
       
       // 🆕 GERAR ID TEMPORÁRIO IMEDIATAMENTE
       const tempId = `temp-${Date.now()}`;
       console.log('🔵 [BADGE] Adicionando nota temporária:', tempId);
       addProcessingNote(tempId);
       setProcessingNotesData(prev => new Map(prev).set(tempId, { url: urlParaProcessar, tipoDocumento }));
+      
+      // Registrar vínculo queueItemId para este processamento
+      queueToNotaIdRef.current.set(queueItemId, tempId);
       
       // Chamar process-url-nota SEM AGUARDAR (processamento em background)
       const functionCall = supabase.functions.invoke('process-url-nota', {
@@ -208,6 +194,8 @@ const BottomNavigation = () => {
             description: processError.message || "Tente novamente",
             variant: "destructive",
           });
+          // 🔵 Marcar erro na fila → libera a próxima
+          queueMarkErrorRef.current(queueItemId, processError.message);
           return;
         }
         
@@ -227,7 +215,11 @@ const BottomNavigation = () => {
           
           // Adicionar ID real
           addProcessingNote(noteId);
-          setProcessingNotesData(prev => new Map(prev).set(noteId, { url: data, tipoDocumento }));
+          setProcessingNotesData(prev => new Map(prev).set(noteId, { url: urlParaProcessar, tipoDocumento }));
+          
+          // 🔵 Atualizar vínculos com o notaId real
+          queueToNotaIdRef.current.set(queueItemId, noteId);
+          notaIdToQueueRef.current.set(noteId, queueItemId);
           
           // Timeout de 2 minutos
           const timeoutId = setTimeout(() => {
@@ -242,6 +234,8 @@ const BottomNavigation = () => {
               newMap.delete(noteId);
               return newMap;
             });
+            // 🔵 Marcar erro na fila por timeout
+            queueMarkErrorRef.current(queueItemId, 'Timeout');
           }, 120000); // 2 minutos
           
           setProcessingTimers(prev => new Map(prev).set(noteId, timeoutId));
@@ -254,6 +248,8 @@ const BottomNavigation = () => {
             newMap.delete(tempId);
             return newMap;
           });
+          // 🔵 Marcar erro na fila
+          queueMarkErrorRef.current(queueItemId, 'notaId não retornado');
         }
       });
 
@@ -270,8 +266,103 @@ const BottomNavigation = () => {
         description: error.message || "Tente novamente",
         variant: "destructive",
       });
+      // 🔵 Marcar erro na fila → libera a próxima
+      queueMarkErrorRef.current(queueItemId, error.message);
+    }
+  }, [user?.id, addProcessingNote, removeProcessingNote]);
+
+  // 🔵 HOOK DE FILA - wrapper sobre executeNoteProcessing
+  const noteQueue = useNoteQueue({
+    processNote: executeNoteProcessing,
+  });
+
+  // Sincronizar refs com callbacks reais do hook
+  useEffect(() => {
+    queueMarkDoneRef.current = noteQueue.markDone;
+    queueMarkErrorRef.current = noteQueue.markError;
+  }, [noteQueue.markDone, noteQueue.markError]);
+
+  /**
+   * 🔵 Handler de scan do QR Code - agora enfileira em vez de executar direto
+   */
+  const handleQRScanSuccess = async (data: string) => {
+    console.log("QR Code escaneado:", data);
+    
+    // Validação de autenticação
+    if (!user?.id) {
+      toast({
+        title: "❌ Usuário não identificado",
+        description: "Faça login para escanear notas fiscais",
+        variant: "destructive",
+      });
+      setShowQRScanner(false);
+      return;
+    }
+    
+    // Normalizar dados do QR Code: aceitar URL ou extrair chave de formatos não-URL
+    let urlParaProcessar = data;
+    const urlPattern = /^https?:\/\/.+/i;
+    
+    if (!urlPattern.test(data)) {
+      const chaveExtraida = extrairChaveNFe(data);
+      if (chaveExtraida) {
+        urlParaProcessar = construirUrlConsulta(chaveExtraida);
+        console.log('🔑 Chave extraída de QR Code não-URL:', chaveExtraida, '→', urlParaProcessar);
+      } else {
+        toast({
+          title: "QR Code inválido",
+          description: "Não foi possível identificar uma nota fiscal neste QR Code.",
+          variant: "destructive",
+        });
+        setShowQRScanner(false);
+        return;
+      }
+    }
+    
+    // Detectar tipo de documento (NFe vs NFCe)
+    const tipoDocumento = detectarTipoDocumento(urlParaProcessar);
+    console.log(`🔍 Tipo de documento: ${tipoDocumento || 'DESCONHECIDO'}`);
+    
+    // Fechar scanner imediatamente
+    setShowQRScanner(false);
+    
+    // Extrair chave
+    const chaveAcesso = extrairChaveNFe(urlParaProcessar);
+    if (!chaveAcesso) {
+      toast({
+        title: "❌ Erro",
+        description: "Não foi possível extrair a chave de acesso da URL",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // 🔵 ENFILEIRAR em vez de executar diretamente
+    noteQueue.enqueue(urlParaProcessar, chaveAcesso, tipoDocumento);
+  };
+
+  /**
+   * 🔵 Helper: marcar conclusão na fila a partir de um notaId real
+   */
+  const markQueueDoneByNotaId = (notaId: string) => {
+    const queueItemId = notaIdToQueueRef.current.get(notaId);
+    if (queueItemId) {
+      queueMarkDoneRef.current(queueItemId);
+      // Cleanup refs
+      notaIdToQueueRef.current.delete(notaId);
+      queueToNotaIdRef.current.delete(queueItemId);
     }
   };
+
+  const markQueueErrorByNotaId = (notaId: string, msg?: string) => {
+    const queueItemId = notaIdToQueueRef.current.get(notaId);
+    if (queueItemId) {
+      queueMarkErrorRef.current(queueItemId, msg);
+      notaIdToQueueRef.current.delete(notaId);
+      queueToNotaIdRef.current.delete(queueItemId);
+    }
+  };
+
 
   /**
    * 🤖 PROCESSAMENTO AUTOMÁTICO DE NOTAS FISCAIS (SEM CONFIRMAÇÃO MANUAL)
@@ -382,6 +473,8 @@ const BottomNavigation = () => {
       await supabase.storage.from('receipts').remove([fileName]);
       
       console.log('✅ [AUTO] Nota rejeitada deletada');
+      // 🔵 Marcar erro na fila (rejeitada)
+      markQueueErrorByNotaId(notaId, validationData?.reason || 'rejeitada');
       return;
       }
       
@@ -402,6 +495,8 @@ const BottomNavigation = () => {
           description: 'Esta nota já foi adicionada ao estoque.',
         });
         navigate('/screenshots');
+        // 🔵 Marcar como concluída na fila
+        markQueueDoneByNotaId(notaId);
         return;
       }
       
@@ -418,6 +513,8 @@ const BottomNavigation = () => {
           description: processError.message || 'Tente novamente',
           variant: 'destructive',
         });
+        // 🔵 Marcar erro na fila
+        markQueueErrorByNotaId(notaId, processError.message);
         return;
       }
       
@@ -435,6 +532,8 @@ const BottomNavigation = () => {
           description: `${processData.itens_inseridos || 0} produtos já estão no estoque`,
         });
         navigate('/screenshots');
+        // 🔵 Marcar como concluída na fila
+        markQueueDoneByNotaId(notaId);
         return;
       }
       
@@ -455,6 +554,8 @@ const BottomNavigation = () => {
       await supabase.from('notas_imagens').update({ pdf_url: null }).eq('id', notaId);
       
       console.log('🎉 [AUTO] Processamento automático concluído!');
+      // 🔵 Marcar como concluída na fila
+      markQueueDoneByNotaId(notaId);
       
     } catch (error: any) {
       console.error('❌ [AUTO] Erro no processamento automático:', error);
@@ -471,6 +572,8 @@ const BottomNavigation = () => {
       } catch (deleteError) {
         console.error('❌ [AUTO] Erro ao deletar nota com erro:', deleteError);
       }
+      // 🔵 Marcar erro na fila
+      markQueueErrorByNotaId(notaId, error.message);
     } finally {
       // ✅ SEMPRE remover do Set ao finalizar
       activelyProcessingRef.current.delete(notaId);
@@ -652,7 +755,6 @@ const BottomNavigation = () => {
           }
           
           // ✅ VALIDAÇÃO 3: Se a nota já tem itens no estoque, ignorar
-          // (isso significa que process-receipt-full já foi executado)
           const { count: estoqueCount } = await supabase
             .from('estoque_app')
             .select('id', { count: 'exact', head: true })
@@ -661,7 +763,6 @@ const BottomNavigation = () => {
 
           if (estoqueCount && estoqueCount > 0) {
             console.log('⚠️ [REALTIME] Nota já tem itens no estoque, ignorando:', estoqueCount);
-            // Limpar do mapa de processamento se existir
             if (processingNotesDataRef.current.has(notaAtualizada.id)) {
               removeProcessingNote(notaAtualizada.id);
               setProcessingNotesData(prev => {
@@ -670,10 +771,12 @@ const BottomNavigation = () => {
                 return newMap;
               });
             }
+            // 🔵 Marcar como concluída na fila se já tem estoque
+            markQueueDoneByNotaId(notaAtualizada.id);
             return;
           }
           
-          // Verificar se a nota tem dados REAIS extraídos (não apenas metadados iniciais)
+          // Verificar se a nota tem dados REAIS extraídos
           if (temDadosReaisExtraidos(notaAtualizada.dados_extraidos)) {
             console.log('✅ [REALTIME] Nota com dados reais pronta para processamento:', notaAtualizada.id);
             
@@ -687,7 +790,7 @@ const BottomNavigation = () => {
             const newTimer = setTimeout(async () => {
               console.log('🚀 [REALTIME] Debounce concluído, processando nota');
               
-              // Verificar NOVAMENTE se já tem estoque (pode ter sido processado durante debounce)
+              // Verificar NOVAMENTE se já tem estoque
               const { count: estoqueCheck } = await supabase
                 .from('estoque_app')
                 .select('id', { count: 'exact', head: true })
@@ -697,6 +800,7 @@ const BottomNavigation = () => {
               if (estoqueCheck && estoqueCheck > 0) {
                 console.log('⚠️ [REALTIME] Nota já processada durante debounce, ignorando');
                 debounceTimerRef.current.delete(notaAtualizada.id);
+                markQueueDoneByNotaId(notaAtualizada.id);
                 return;
               }
               
@@ -712,6 +816,7 @@ const BottomNavigation = () => {
 
               if (notaError) {
                 console.error('❌ Erro ao buscar dados da nota:', notaError);
+                markQueueErrorByNotaId(notaAtualizada.id, 'Erro ao buscar dados');
                 return;
               }
 
@@ -761,7 +866,7 @@ const BottomNavigation = () => {
             
             debounceTimerRef.current.set(notaAtualizada.id, newTimer);
             console.log('⏱️ [REALTIME] Debounce iniciado (300ms)');
-            return; // Não executar o resto até o debounce completar
+            return;
           }
         }
       )
@@ -835,7 +940,7 @@ const BottomNavigation = () => {
           // Se chegou aqui, Real-time não processou, polling assume
           console.log('🟢 [POLLING] Real-time não processou, polling assumindo responsabilidade');
           
-          // Processar automaticamente via polling (sem toast duplicado)
+          // Processar automaticamente via polling
           await processarNotaAutomaticamente(noteId, user.id, data);
           removeProcessingNote(noteId);
           
@@ -870,12 +975,10 @@ const BottomNavigation = () => {
   }, [user?.id, processingNotesData, processingTimers, removeProcessingNote, showCupomViewer, showInternalWebViewer, confirmedNotes]);
 
   // 🔄 POLLING PARA NOTAS ÓRFÃS (notas processadas mas sem estoque)
-  // Este useEffect detecta notas que ficaram "perdidas" por race condition
   useEffect(() => {
     if (!user?.id) return;
     
     const checkOrphanNotes = async () => {
-      // Buscar notas recentes (últimos 5 min) que foram processadas mas não têm estoque
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       
       const { data: orphanNotes, error } = await supabase
@@ -898,13 +1001,11 @@ const BottomNavigation = () => {
       console.log('🔍 [ORPHAN] Encontradas', orphanNotes.length, 'notas potencialmente órfãs');
       
       for (const nota of orphanNotes) {
-        // Verificar se a nota tem dados reais extraídos (não apenas metadados iniciais)
         if (!temDadosReaisExtraidos(nota.dados_extraidos)) {
           console.log('⏳ [ORPHAN] Nota ainda em extração, aguardando:', nota.id);
           continue;
         }
         
-        // Verificar se realmente não tem estoque
         const { count } = await supabase
           .from('estoque_app')
           .select('id', { count: 'exact', head: true })
@@ -912,10 +1013,8 @@ const BottomNavigation = () => {
           .eq('user_id', user.id);
         
         if (!count || count === 0) {
-          // ✅ Esta é uma nota órfã - processar automaticamente
           console.log('🔄 [ORPHAN] Processando nota órfã:', nota.id);
           
-          // Verificar se já não está sendo processada
           if (activelyProcessingRef.current.has(nota.id)) {
             console.log('⚠️ [ORPHAN] Nota já em processamento, ignorando');
             continue;
@@ -931,10 +1030,7 @@ const BottomNavigation = () => {
       }
     };
     
-    // Verificar a cada 10 segundos
     const interval = setInterval(checkOrphanNotes, 10000);
-    
-    // Verificar imediatamente ao montar
     checkOrphanNotes();
     
     return () => clearInterval(interval);
@@ -949,6 +1045,14 @@ const BottomNavigation = () => {
 
   return (
     <>
+      {/* 🔵 Badge de processamento da fila */}
+      {noteQueue.visible && noteQueue.stats.total > 0 && (
+        <ProcessingBadge
+          stats={noteQueue.stats}
+          startTime={noteQueue.queue.length > 0 ? noteQueue.queue[0].addedAt : Date.now()}
+        />
+      )}
+
       {/* Botões flutuantes fixos */}
       <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
         <div className="flex justify-between items-end w-full max-w-screen-lg mx-auto p-4 safe-area-inset-bottom">
