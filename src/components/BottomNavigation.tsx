@@ -148,7 +148,7 @@ const BottomNavigation = () => {
         description: "Faça login para escanear notas fiscais",
         variant: "destructive",
       });
-      noteQueue.markError(queueItemId, 'Usuário não autenticado');
+      queueMarkErrorRef.current(queueItemId, 'Usuário não autenticado');
       return;
     }
     
@@ -195,7 +195,7 @@ const BottomNavigation = () => {
             variant: "destructive",
           });
           // 🔵 Marcar erro na fila → libera a próxima
-          noteQueue.markError(queueItemId, processError.message);
+          queueMarkErrorRef.current(queueItemId, processError.message);
           return;
         }
         
@@ -235,7 +235,7 @@ const BottomNavigation = () => {
               return newMap;
             });
             // 🔵 Marcar erro na fila por timeout
-            noteQueue.markError(queueItemId, 'Timeout');
+            queueMarkErrorRef.current(queueItemId, 'Timeout');
           }, 120000); // 2 minutos
           
           setProcessingTimers(prev => new Map(prev).set(noteId, timeoutId));
@@ -249,7 +249,7 @@ const BottomNavigation = () => {
             return newMap;
           });
           // 🔵 Marcar erro na fila
-          noteQueue.markError(queueItemId, 'notaId não retornado');
+          queueMarkErrorRef.current(queueItemId, 'notaId não retornado');
         }
       });
 
@@ -267,7 +267,7 @@ const BottomNavigation = () => {
         variant: "destructive",
       });
       // 🔵 Marcar erro na fila → libera a próxima
-      noteQueue.markError(queueItemId, error.message);
+      queueMarkErrorRef.current(queueItemId, error.message);
     }
   }, [user?.id, addProcessingNote, removeProcessingNote]);
 
@@ -341,7 +341,7 @@ const BottomNavigation = () => {
   const markQueueDoneByNotaId = (notaId: string) => {
     const queueItemId = notaIdToQueueRef.current.get(notaId);
     if (queueItemId) {
-      noteQueue.markDone(queueItemId);
+      queueMarkDoneRef.current(queueItemId);
       // Cleanup refs
       notaIdToQueueRef.current.delete(notaId);
       queueToNotaIdRef.current.delete(queueItemId);
@@ -351,7 +351,7 @@ const BottomNavigation = () => {
   const markQueueErrorByNotaId = (notaId: string, msg?: string) => {
     const queueItemId = notaIdToQueueRef.current.get(notaId);
     if (queueItemId) {
-      noteQueue.markError(queueItemId, msg);
+      queueMarkErrorRef.current(queueItemId, msg);
       notaIdToQueueRef.current.delete(notaId);
       queueToNotaIdRef.current.delete(queueItemId);
     }
