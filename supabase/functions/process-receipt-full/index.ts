@@ -1156,11 +1156,12 @@ serve(async (req) => {
         console.log(`🔒 Nota em processamento há ${(lockAge/1000).toFixed(0)}s. Aguardando...`);
         return new Response(
           JSON.stringify({ 
-            success: false, 
-            message: "Nota já está sendo processada",
-            already_processing: true 
+            success: true, 
+            message: "Nota já está sendo processada por outra instância",
+            already_processing: true,
+            itens_inseridos: 0
           }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
@@ -1182,11 +1183,12 @@ serve(async (req) => {
       console.log(`🔒 Nota ${finalNotaId} já está sendo processada por outra execução. Abortando...`);
       return new Response(
         JSON.stringify({ 
-          success: false, 
-          message: "Nota já está sendo processada",
-          already_processing: true 
+          success: true, 
+          message: "Nota já está sendo processada por outra instância",
+          already_processing: true,
+          itens_inseridos: 0
         }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
