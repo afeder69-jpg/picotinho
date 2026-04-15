@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { normalizarParaBusca } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, Settings, Image, ImageOff, Sparkles, DollarSign, Eye, EyeOff } from 'lucide-react';
+import { Package, Calendar, Trash2, ArrowUp, ArrowDown, Minus, Edit3, Plus, Search, Settings, Image, ImageOff, Sparkles, DollarSign, Eye, EyeOff, ShoppingCart, Undo2, X } from 'lucide-react';
+import { toast as sonnerToast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1350,7 +1351,7 @@ const EstoqueAtual = () => {
 
   // Função central reutilizável de ajuste de estoque
   // Extraída de salvarAjuste para ser chamada tanto pelo modal quanto pelo swipe
-  const executarAjusteEstoque = async (item: EstoqueItem, novaQtd: number) => {
+  const executarAjusteEstoque = async (item: EstoqueItem, novaQtd: number, silencioso?: boolean) => {
     try {
       const quantidadeAnterior = item.quantidade;
       const idsOriginais = item.ids_originais || [item.id];
@@ -1400,7 +1401,6 @@ const EstoqueAtual = () => {
 
         if (consumoError) {
           console.error('Erro ao registrar consumo:', consumoError);
-          // Não bloquear a operação principal mesmo se o registro de consumo falhar
         }
       }
 
@@ -1408,10 +1408,12 @@ const EstoqueAtual = () => {
       await loadEstoque();
       requestAnimationFrame(() => window.scrollTo(0, scrollY));
       
-      toast({
-        title: "Quantidade atualizada",
-        description: `${item.produto_nome}: ${formatarQuantidade(novaQtd)} ${item.unidade_medida}`,
-      });
+      if (!silencioso) {
+        toast({
+          title: "Quantidade atualizada",
+          description: `${item.produto_nome}: ${formatarQuantidade(novaQtd)} ${item.unidade_medida}`,
+        });
+      }
     } catch (error) {
       console.error('Erro ao salvar ajuste:', error);
       toast({
@@ -1421,6 +1423,167 @@ const EstoqueAtual = () => {
       });
     }
   };
+
+  // === Caixa de Entrada: adicionar item à lista de compras temporária ===
+  const adicionarCaixaEntrada = useCallback(async (item: EstoqueItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Buscar ou criar a Caixa de Entrada
+      let { data: lista } = await supabase
+        .from('listas_compras')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('origem', 'estoque')
+        .maybeSingle();
+
+      if (!lista) {
+        const { data: novaLista, error: erroCriar } = await supabase
+          .from('listas_compras')
+          .insert({
+            user_id: user.id,
+            titulo: 'Itens para comprar',
+            origem: 'estoque',
+          })
+          .select('id')
+          .single();
+        if (erroCriar) throw erroCriar;
+        lista = novaLista;
+      }
+
+      const listaId = lista!.id;
+
+      // Deduplicação: verificar se item já existe
+      const nomeBusca = (item.produto_nome_exibicao || item.produto_nome || '').toUpperCase().trim();
+
+      let itemExistente: any = null;
+
+      if (item.produto_master_id) {
+        const { data } = await supabase
+          .from('listas_compras_itens')
+          .select('id, quantidade')
+          .eq('lista_id', listaId)
+          .eq('produto_id', item.produto_master_id)
+          .maybeSingle();
+        itemExistente = data;
+      }
+
+      if (!itemExistente && nomeBusca) {
+        const { data: itensLista } = await supabase
+          .from('listas_compras_itens')
+          .select('id, quantidade, produto_nome')
+          .eq('lista_id', listaId)
+          .is('produto_id', null);
+
+        if (itensLista) {
+          itemExistente = itensLista.find(
+            (i) => (i.produto_nome || '').toUpperCase().trim() === nomeBusca
+          );
+        }
+      }
+
+      if (itemExistente) {
+        await supabase
+          .from('listas_compras_itens')
+          .update({ quantidade: (itemExistente.quantidade || 0) + 1 })
+          .eq('id', itemExistente.id);
+      } else {
+        await supabase
+          .from('listas_compras_itens')
+          .insert({
+            lista_id: listaId,
+            produto_id: item.produto_master_id || null,
+            produto_nome: item.produto_nome_exibicao || item.produto_nome || 'Produto',
+            quantidade: 1,
+            unidade_medida: item.unidade_medida || 'UN',
+            item_livre: !item.produto_master_id,
+          });
+      }
+
+      sonnerToast.success('👍 Na lista');
+    } catch (error) {
+      console.error('Erro ao adicionar à Caixa de Entrada:', error);
+      sonnerToast.error('Erro ao adicionar à lista');
+    }
+  }, []);
+
+  // === Restaurar item após undo ===
+  const restaurarItem = useCallback(async (dadosUndo: { idPrincipal: string; quantidadeAnterior: number }) => {
+    try {
+      const { error } = await supabase
+        .from('estoque_app')
+        .update({
+          quantidade: dadosUndo.quantidadeAnterior,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dadosUndo.idPrincipal);
+
+      if (error) throw error;
+
+      const scrollY = window.scrollY;
+      await loadEstoque();
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
+
+      sonnerToast.success('Item restaurado');
+    } catch (error) {
+      console.error('Erro ao restaurar item:', error);
+      sonnerToast.error('Erro ao restaurar');
+    }
+  }, []);
+
+  // === Wrapper para swipe de zerar com toast customizado ===
+  const zerarViaSwipe = useCallback(async (item: EstoqueItem) => {
+    const idsOriginais = item.ids_originais || [item.id];
+    const dadosUndo = {
+      idPrincipal: idsOriginais[0]!,
+      quantidadeAnterior: item.quantidade,
+    };
+
+    await executarAjusteEstoque(item, 0, true);
+
+    const nomeExibicao = item.produto_nome_exibicao || item.produto_nome || 'Produto';
+
+    sonnerToast.custom(
+      (id) => (
+        <div className="flex items-center gap-3 w-full bg-background border border-border rounded-lg px-4 py-3 shadow-lg">
+          <span className="text-sm text-foreground flex-1 truncate font-medium">
+            {nomeExibicao} zerado
+          </span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              className="p-1.5 rounded-md hover:bg-accent transition-colors"
+              onClick={() => {
+                adicionarCaixaEntrada(item);
+                sonnerToast.dismiss(id);
+              }}
+              title="Adicionar à lista"
+            >
+              <ShoppingCart className="h-4 w-4 text-primary" />
+            </button>
+            <button
+              className="p-1.5 rounded-md hover:bg-accent transition-colors"
+              onClick={() => {
+                restaurarItem(dadosUndo);
+                sonnerToast.dismiss(id);
+              }}
+              title="Desfazer"
+            >
+              <Undo2 className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <button
+              className="p-1.5 rounded-md hover:bg-accent transition-colors"
+              onClick={() => sonnerToast.dismiss(id)}
+              title="Fechar"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+      ),
+      { duration: 7000 }
+    );
+  }, [adicionarCaixaEntrada, restaurarItem]);
 
   const salvarAjuste = async () => {
     if (!itemEditando) return;
@@ -2276,7 +2439,7 @@ const EstoqueAtual = () => {
                             return (
                               <SwipeableEstoqueItem
                                 key={item.id}
-                                onSwipeRight={() => executarAjusteEstoque(item, 0)}
+                                onSwipeRight={() => zerarViaSwipe(item)}
                                 onSwipeLeft={() => abrirModalEdicao(item)}
                               >
                                 {itemContent}

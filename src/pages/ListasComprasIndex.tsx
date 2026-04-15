@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Plus, ShoppingCart, Calendar, User } from "lucide-react";
+import { Plus, ShoppingCart, Calendar, User, Inbox } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import PageHeader from "@/components/PageHeader";
@@ -59,13 +59,15 @@ export default function ListasComprasIndex() {
   const origemLabel: Record<string, string> = {
     manual: 'Manual',
     receita: 'Receita',
-    cardapio: 'Cardápio'
+    cardapio: 'Cardápio',
+    estoque: 'Caixa de Entrada',
   };
 
   const origemIcon: Record<string, any> = {
     manual: User,
     receita: ShoppingCart,
-    cardapio: Calendar
+    cardapio: Calendar,
+    estoque: Inbox,
   };
 
   if (isLoading) {
