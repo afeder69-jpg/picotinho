@@ -90,6 +90,7 @@ SETORES ACEITOS NO PICOTINHO:
 - Farmácias e drogarias (produtos de higiene/limpeza/medicamentos)
 - Pet shops, agropecuárias (produtos para pets/animais)
 - Atacadões, lojas de conveniência
+- Cosméticos, perfumarias, lojas de beleza e higiene pessoal
 
 SETORES QUE DEVEM SER REJEITADOS:
 - Indústrias, fábricas, biorrefinarias, refinarias
@@ -438,7 +439,8 @@ Responda APENAS o JSON:
       'mercearia', 'hipermercado', 'minimercado', 'atacadao',
       'varejo_alimentar', 'loja_conveniencia',
       'farmacia', 'drogaria',
-      'pet_shop', 'agropecuaria', 'petshop'
+      'pet_shop', 'agropecuaria', 'petshop',
+      'cosmeticos', 'perfumaria', 'beleza', 'loja_cosmeticos', 'higiene_pessoal', 'loja_beleza'
     ];
 
     const setorNormalizado = (analysis.setor_inferido || '')
@@ -468,7 +470,7 @@ Responda APENAS o JSON:
         approved: false,
         reason: 'setor_invalido',
         shouldDelete: true,
-        message: `❌ Esta nota fiscal não é de um supermercado, mercado, padaria, açougue ou farmácia.\n\nO Picotinho aceita apenas notas de estabelecimentos do varejo alimentar e farmacêutico.\n\nTipo identificado: ${analysis.setor_inferido}`
+        message: `Este tipo de estabelecimento (${analysis.setor_inferido}) ainda não é aceito pelo Picotinho.\n\nHoje o Picotinho aceita notas de: supermercados, mercados, padarias, açougues, farmácias, pet shops, perfumarias e lojas de cosméticos/beleza.\n\nEstamos sempre ampliando os tipos aceitos! 😊`
       };
     } else if (isDuplicate) {
       result = {

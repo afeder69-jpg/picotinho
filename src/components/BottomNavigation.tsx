@@ -39,6 +39,21 @@ import { useProcessingNotes } from "@/contexts/ProcessingNotesContext";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
+/**
+ * Verifica se dados_extraidos contém dados REAIS de extração (itens, estabelecimento, valor),
+ * e não apenas metadados iniciais inseridos pelo process-url-nota (chave_acesso, uf, modelo).
+ * Critério: itens/produtos com length > 0 E (nome do estabelecimento OU valor total > 0).
+ */
+const temDadosReaisExtraidos = (dados: any): boolean => {
+  if (!dados) return false;
+  const temItens = (Array.isArray(dados.itens) && dados.itens.length > 0) ||
+                   (Array.isArray(dados.produtos) && dados.produtos.length > 0);
+  if (!temItens) return false;
+  const temEstabelecimento = !!(dados.estabelecimento?.nome || dados.emitente?.nome);
+  const temValor = (dados.compra?.valor_total > 0) || (dados.valor_total > 0);
+  return temEstabelecimento || temValor;
+};
+
 const BottomNavigation = () => {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -335,17 +350,24 @@ const BottomNavigation = () => {
       if (!validationData?.approved) {
         console.warn('⚠️ [AUTO] Nota REJEITADA:', validationData?.reason);
         
-        const toastTitle = validationData?.reason === 'duplicada' 
-          ? '⚠️ Nota Duplicada' 
-          : '❌ Nota inválida';
+        let toastTitle = '❌ Nota inválida';
+        let toastDescription = validationData?.message || 'A nota não passou na validação.';
+        let toastDuration = 8000;
         
-        const toastDescription = validationData?.message || 'A nota não passou na validação';
+        if (validationData?.reason === 'duplicada') {
+          toastTitle = '⚠️ Nota Duplicada';
+        } else if (validationData?.reason === 'dados_incompletos') {
+          toastTitle = '📄 Não foi possível ler a nota';
+          toastDescription = 'Os dados desta nota fiscal não puderam ser lidos corretamente. Tente escanear novamente com boa iluminação e a nota bem enquadrada.';
+        } else if (validationData?.reason === 'setor_invalido') {
+          toastTitle = '🏪 Estabelecimento não aceito';
+        }
         
         toast({
           title: toastTitle,
           description: toastDescription,
           variant: 'destructive',
-          duration: 5000,
+          duration: toastDuration,
         });
         
       // 🗑️ Deletar nota rejeitada
@@ -617,9 +639,9 @@ const BottomNavigation = () => {
             return;
           }
           
-          // Verificar se a nota tem dados_extraidos (necessário para processamento)
-          if (notaAtualizada.dados_extraidos) {
-            console.log('✅ [REALTIME] Nota pronta para processamento:', notaAtualizada.id);
+          // Verificar se a nota tem dados REAIS extraídos (não apenas metadados iniciais)
+          if (temDadosReaisExtraidos(notaAtualizada.dados_extraidos)) {
+            console.log('✅ [REALTIME] Nota com dados reais pronta para processamento:', notaAtualizada.id);
             
             // 🔥 DEBOUNCE: Consolidar múltiplos eventos (300ms)
             const existingTimer = debounceTimerRef.current.get(notaAtualizada.id);
@@ -748,8 +770,8 @@ const BottomNavigation = () => {
           continue;
         }
 
-        if (!data?.processada && data?.dados_extraidos) {
-          console.log('✅ [POLLING] Nota processada detectada via polling!', noteId);
+        if (!data?.processada && temDadosReaisExtraidos(data?.dados_extraidos)) {
+          console.log('✅ [POLLING] Nota com dados reais detectada via polling!', noteId);
           
           // ✅ Verificar se já foi confirmada
           if (confirmedNotes.has(noteId)) {
@@ -842,6 +864,12 @@ const BottomNavigation = () => {
       console.log('🔍 [ORPHAN] Encontradas', orphanNotes.length, 'notas potencialmente órfãs');
       
       for (const nota of orphanNotes) {
+        // Verificar se a nota tem dados reais extraídos (não apenas metadados iniciais)
+        if (!temDadosReaisExtraidos(nota.dados_extraidos)) {
+          console.log('⏳ [ORPHAN] Nota ainda em extração, aguardando:', nota.id);
+          continue;
+        }
+        
         // Verificar se realmente não tem estoque
         const { count } = await supabase
           .from('estoque_app')
