@@ -241,6 +241,15 @@ serve(async (req) => {
 
     console.log(`📍 Encontrados ${supermercadosComNotasAtivas.length} supermercados com notas fiscais ativas (antes da deduplicação)`);
 
+    // Construir mapeamento ID→CNPJ ANTES da deduplicação (necessário para resolver CNPJs de supermercados cadastrados)
+    const idParaCnpj = new Map();
+    supermercadosCompletos?.forEach(s => {
+      const cnpjLimpo = s.cnpj?.replace(/[^\d]/g, '');
+      if (cnpjLimpo) {
+        idParaCnpj.set(s.id, cnpjLimpo);
+      }
+    });
+
     // 🔄 DEDUPLICAÇÃO POR CNPJ — garantir no máximo 1 entrada por supermercado real
     const deduplicadosPorCnpj = new Map<string, any>();
     
