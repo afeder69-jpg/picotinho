@@ -177,14 +177,34 @@ const BottomNavigation = () => {
       });
 
       // Quando resposta chegar, substituir ID temporário pelo real
-      functionCall.then(({ data: processData, error: processError }) => {
-        console.log('🔍 [DEBUG] Resposta da edge function:', processData);
+      functionCall.then(async ({ data: processData, error: processError }) => {
+        console.log('🔍 [DEBUG] Resposta da edge function:', processData, 'erro:', processError);
         
-        // 🔒 Verificar nota duplicada (HTTP 409 retorna em processData quando FunctionsHttpError)
-        const isDuplicada = processData?.error === 'NOTA_DUPLICADA';
+        // 🔒 Verificar nota duplicada — pode vir em processData (body parseado) ou processError (FunctionsHttpError)
+        let isDuplicada = processData?.error === 'NOTA_DUPLICADA';
+        let duplicadaMessage = processData?.message;
+        
+        if (!isDuplicada && processError) {
+          // O SDK Supabase coloca 4xx/5xx como FunctionsHttpError — tentar extrair o body
+          try {
+            const errorContext = (processError as any)?.context;
+            if (errorContext?.body) {
+              const parsed = typeof errorContext.body === 'string' ? JSON.parse(errorContext.body) : errorContext.body;
+              if (parsed?.error === 'NOTA_DUPLICADA') {
+                isDuplicada = true;
+                duplicadaMessage = parsed?.message;
+              }
+            }
+          } catch (_) {
+            // Se não conseguir parsear, verificar a mensagem
+            if (processError.message?.includes('NOTA_DUPLICADA')) {
+              isDuplicada = true;
+            }
+          }
+        }
         
         if (isDuplicada) {
-          console.log('🚫 Nota duplicada detectada:', processData?.message);
+          console.log('🚫 Nota duplicada detectada');
           removeProcessingNote(tempId);
           setProcessingNotesData(prev => {
             const newMap = new Map(prev);
@@ -193,7 +213,7 @@ const BottomNavigation = () => {
           });
           toast({
             title: "🚫 Nota já lançada",
-            description: processData?.message || "Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.",
+            description: duplicadaMessage || "Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.",
             variant: "destructive",
           });
           queueMarkErrorRef.current(queueItemId, 'Nota já lançada no Picotinho');
@@ -202,7 +222,6 @@ const BottomNavigation = () => {
         
         if (processError) {
           console.error('❌ Erro ao iniciar processamento:', processError);
-          // Remover ID temporário em caso de erro
           removeProcessingNote(tempId);
           setProcessingNotesData(prev => {
             const newMap = new Map(prev);
@@ -214,7 +233,6 @@ const BottomNavigation = () => {
             description: processError.message || "Tente novamente",
             variant: "destructive",
           });
-          // 🔵 Marcar erro na fila → libera a próxima
           queueMarkErrorRef.current(queueItemId, processError.message);
           return;
         }
