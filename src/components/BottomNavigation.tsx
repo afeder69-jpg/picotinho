@@ -239,12 +239,18 @@ const BottomNavigation = () => {
             newMap.delete(tempId);
             return newMap;
           });
+          // Nunca exibir mensagem genérica do SDK em inglês para o usuário
+          const rawMsg = processError.message || '';
+          const isGenericSdkError = rawMsg.includes('non-2xx') || rawMsg.includes('Edge Function') || rawMsg.includes('FunctionsHttpError');
+          const userMessage = isGenericSdkError 
+            ? 'Erro ao processar nota fiscal. Tente novamente.' 
+            : rawMsg || 'Tente novamente';
           toast({
             title: "❌ Erro ao processar nota",
-            description: processError.message || "Tente novamente",
+            description: userMessage,
             variant: "destructive",
           });
-          queueMarkErrorRef.current(queueItemId, processError.message);
+          queueMarkErrorRef.current(queueItemId, userMessage);
           return;
         }
         
