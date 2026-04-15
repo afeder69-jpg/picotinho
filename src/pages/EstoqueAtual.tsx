@@ -1625,13 +1625,6 @@ const EstoqueAtual = () => {
             >
               <Undo2 className="h-4 w-4 text-muted-foreground" />
             </button>
-            <button
-              className="p-1.5 rounded-md hover:bg-accent transition-colors"
-              onClick={() => sonnerToast.dismiss(id)}
-              title="Fechar"
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
           </div>
         </div>
       ),
