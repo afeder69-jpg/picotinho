@@ -315,14 +315,7 @@ serve(async (req) => {
     console.log(`✅ Encontrados ${supermercadosNoRaio.length} supermercados dentro de ${raio}km`);
 
     // Contar produtos únicos de cada supermercado baseado nas notas fiscais reais
-    // IMPORTANTE: Reconstruir mapeamento CNPJ->ID para não expor CNPJs na resposta
-    const idParaCnpj = new Map();
-    supermercadosCompletos?.forEach(s => {
-      const cnpjLimpo = s.cnpj?.replace(/[^\d]/g, '');
-      if (cnpjLimpo) {
-        idParaCnpj.set(s.id, cnpjLimpo);
-      }
-    });
+    // idParaCnpj já foi construído antes da deduplicação (reutilizado aqui)
 
     const supermercadosComDados = await Promise.all(
       supermercadosNoRaio.map(async (supermercado) => {
