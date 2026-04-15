@@ -180,6 +180,26 @@ const BottomNavigation = () => {
       functionCall.then(({ data: processData, error: processError }) => {
         console.log('🔍 [DEBUG] Resposta da edge function:', processData);
         
+        // 🔒 Verificar nota duplicada (HTTP 409 retorna em processData quando FunctionsHttpError)
+        const isDuplicada = processData?.error === 'NOTA_DUPLICADA';
+        
+        if (isDuplicada) {
+          console.log('🚫 Nota duplicada detectada:', processData?.message);
+          removeProcessingNote(tempId);
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(tempId);
+            return newMap;
+          });
+          toast({
+            title: "🚫 Nota já lançada",
+            description: processData?.message || "Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.",
+            variant: "destructive",
+          });
+          queueMarkErrorRef.current(queueItemId, 'Nota já lançada no Picotinho');
+          return;
+        }
+        
         if (processError) {
           console.error('❌ Erro ao iniciar processamento:', processError);
           // Remover ID temporário em caso de erro

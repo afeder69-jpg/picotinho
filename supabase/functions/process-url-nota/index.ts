@@ -81,6 +81,31 @@ serve(async (req) => {
     console.log('🔑 Chave de acesso extraída:', `${chave.substring(0, 4)}...${chave.substring(40)}`);
     console.log(`📍 UF: ${uf}, Modelo: ${modelo} (${tipoDetectado})`);
 
+    // 🔒 VERIFICAÇÃO ANTECIPADA: chave já existe em nota ativa?
+    const { data: existing, error: checkError } = await supabase
+      .from('notas_imagens')
+      .select('id, usuario_id')
+      .eq('chave_acesso', chave)
+      .neq('excluida', true)
+      .limit(1);
+
+    if (checkError) {
+      console.error('⚠️ Erro ao verificar duplicidade:', checkError);
+      // Em caso de erro na verificação, segue o fluxo normal (o índice único protege)
+    } else if (existing && existing.length > 0) {
+      console.log('🚫 Chave de acesso já existe no sistema:', chave.substring(0, 4) + '...');
+      return new Response(
+        JSON.stringify({ 
+          error: 'NOTA_DUPLICADA',
+          message: 'Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409 
+        }
+      );
+    }
+
     const notaId = crypto.randomUUID();
 
     const { error: insertError } = await supabase
@@ -91,6 +116,7 @@ serve(async (req) => {
         imagem_path: 'qrcode://url',
         imagem_url: url,
         processada: false,
+        chave_acesso: chave,
         dados_extraidos: {
           chave_acesso: chave,
           uf_emitente: uf,
@@ -104,6 +130,21 @@ serve(async (req) => {
 
     if (insertError) {
       console.error('❌ Erro ao criar nota:', insertError);
+      // Tratar race condition: se o erro for de constraint unique, retornar 409
+      if (insertError.message?.includes('idx_notas_imagens_chave_acesso_unique') || 
+          insertError.code === '23505') {
+        console.log('🚫 Race condition detectada - chave duplicada no INSERT');
+        return new Response(
+          JSON.stringify({ 
+            error: 'NOTA_DUPLICADA',
+            message: 'Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.'
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 409 
+          }
+        );
+      }
       throw insertError;
     }
 
