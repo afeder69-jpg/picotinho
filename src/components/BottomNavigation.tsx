@@ -276,6 +276,12 @@ const BottomNavigation = () => {
     processNote: executeNoteProcessing,
   });
 
+  // Sincronizar refs com callbacks reais do hook
+  useEffect(() => {
+    queueMarkDoneRef.current = noteQueue.markDone;
+    queueMarkErrorRef.current = noteQueue.markError;
+  }, [noteQueue.markDone, noteQueue.markError]);
+
   /**
    * 🔵 Handler de scan do QR Code - agora enfileira em vez de executar direto
    */
