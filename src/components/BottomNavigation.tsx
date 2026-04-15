@@ -187,6 +187,7 @@ const BottomNavigation = () => {
         if (!isDuplicada && processError) {
           // O SDK Supabase coloca 4xx/5xx como FunctionsHttpError — tentar extrair o body
           try {
+            // Tentativa 1: context.body (string ou objeto)
             const errorContext = (processError as any)?.context;
             if (errorContext?.body) {
               const parsed = typeof errorContext.body === 'string' ? JSON.parse(errorContext.body) : errorContext.body;
@@ -195,8 +196,18 @@ const BottomNavigation = () => {
                 duplicadaMessage = parsed?.message;
               }
             }
+            // Tentativa 2: context.json() (algumas versões do SDK)
+            if (!isDuplicada && errorContext?.json) {
+              try {
+                const jsonBody = await errorContext.json();
+                if (jsonBody?.error === 'NOTA_DUPLICADA') {
+                  isDuplicada = true;
+                  duplicadaMessage = jsonBody?.message;
+                }
+              } catch (_inner) { /* ignorar */ }
+            }
           } catch (_) {
-            // Se não conseguir parsear, verificar a mensagem
+            // Tentativa 3: verificar a mensagem crua
             if (processError.message?.includes('NOTA_DUPLICADA')) {
               isDuplicada = true;
             }

@@ -24,8 +24,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * Verifica se um registro existente é um "fantasma" reaproveitável.
+ * Critérios cumulativos (TODOS devem ser atendidos):
+ * 1. Mesmo usuario_id
+ * 2. processada = false
+ * 3. Sem itens em dados_extraidos (array vazio ou inexistente)
+ * 4. Sem valor_total em dados_extraidos
+ * 5. Sem estabelecimento em dados_extraidos
+ * 6. Sem processing_started_at ativo
+ * 7. updated_at mais antigo que 5 minutos
+ */
+function isGhostRecord(record: any, currentUserId: string): boolean {
+  if (record.usuario_id !== currentUserId) return false;
+  if (record.processada !== false) return false;
+
+  const dados = record.dados_extraidos;
+
+  // Verificar itens
+  const itens = dados?.itens;
+  if (itens && Array.isArray(itens) && itens.length > 0) return false;
+
+  // Verificar valor_total
+  if (dados?.valor_total != null) return false;
+
+  // Verificar estabelecimento (é um objeto na estrutura real)
+  if (dados?.estabelecimento != null) return false;
+
+  // Verificar se está em processamento ativo
+  if (record.processing_started_at != null) return false;
+
+  // Verificar idade: updated_at deve ter mais de 5 minutos
+  const updatedAt = new Date(record.updated_at);
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  if (updatedAt > fiveMinutesAgo) return false;
+
+  return true;
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -84,7 +121,7 @@ serve(async (req) => {
     // 🔒 VERIFICAÇÃO ANTECIPADA: chave já existe em nota ativa?
     const { data: existing, error: checkError } = await supabase
       .from('notas_imagens')
-      .select('id, usuario_id')
+      .select('id, usuario_id, processada, dados_extraidos, processing_started_at, updated_at')
       .eq('chave_acesso', chave)
       .neq('excluida', true)
       .limit(1);
@@ -93,17 +130,45 @@ serve(async (req) => {
       console.error('⚠️ Erro ao verificar duplicidade:', checkError);
       // Em caso de erro na verificação, segue o fluxo normal (o índice único protege)
     } else if (existing && existing.length > 0) {
-      console.log('🚫 Chave de acesso já existe no sistema:', chave.substring(0, 4) + '...');
-      return new Response(
-        JSON.stringify({ 
-          error: 'NOTA_DUPLICADA',
-          message: 'Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.'
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 409 
+      const existingRecord = existing[0];
+
+      // Verificar se é um fantasma reaproveitável
+      if (isGhostRecord(existingRecord, userId)) {
+        console.log('👻 Registro fantasma detectado, removendo para reprocessamento:', existingRecord.id);
+        const { error: deleteError } = await supabase
+          .from('notas_imagens')
+          .delete()
+          .eq('id', existingRecord.id);
+        
+        if (deleteError) {
+          console.error('⚠️ Erro ao remover fantasma:', deleteError);
+          // Se não conseguiu deletar, bloqueia como duplicata
+          return new Response(
+            JSON.stringify({ 
+              error: 'NOTA_DUPLICADA',
+              message: 'Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.'
+            }),
+            { 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 409 
+            }
+          );
         }
-      );
+        console.log('✅ Fantasma removido, prosseguindo com novo processamento');
+      } else {
+        // Nota legítima — bloquear
+        console.log('🚫 Chave de acesso já existe no sistema:', chave.substring(0, 4) + '...');
+        return new Response(
+          JSON.stringify({ 
+            error: 'NOTA_DUPLICADA',
+            message: 'Essa nota fiscal já foi lançada no Picotinho e não pode ser enviada novamente.'
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 409 
+          }
+        );
+      }
     }
 
     const notaId = crypto.randomUUID();
@@ -130,7 +195,6 @@ serve(async (req) => {
 
     if (insertError) {
       console.error('❌ Erro ao criar nota:', insertError);
-      // Tratar race condition: se o erro for de constraint unique, retornar 409
       if (insertError.message?.includes('idx_notas_imagens_chave_acesso_unique') || 
           insertError.code === '23505') {
         console.log('🚫 Race condition detectada - chave duplicada no INSERT');
@@ -149,7 +213,6 @@ serve(async (req) => {
     }
 
     console.log('✅ Nota criada com sucesso:', notaId);
-    console.log('🔍 [DEBUG] notaId que será retornado:', notaId);
 
     if (modelo === '55') {
       console.log('📄 [NFE] Processando via InfoSimples...');
@@ -214,8 +277,6 @@ serve(async (req) => {
         console.log('✅ NFCe extraída:', extractData);
       }
     }
-
-    console.log('✅ [DEBUG] Retornando notaId:', notaId);
     
     return new Response(
       JSON.stringify({ 
