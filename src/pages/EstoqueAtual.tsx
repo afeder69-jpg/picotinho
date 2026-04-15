@@ -1427,18 +1427,31 @@ const EstoqueAtual = () => {
   // === Caixa de Entrada: adicionar item à lista de compras temporária ===
   const adicionarCaixaEntrada = useCallback(async (item: EstoqueItem) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // ETAPA 1: Autenticação
+      const { data: { user }, error: erroUser } = await supabase.auth.getUser();
+      console.log('[CaixaEntrada] ETAPA 1 - getUser:', { userId: user?.id, erro: erroUser });
+      if (!user || erroUser) {
+        sonnerToast.error('Erro: usuário não autenticado');
+        return;
+      }
 
-      // Buscar ou criar a Caixa de Entrada
-      let { data: lista } = await supabase
+      // ETAPA 2: Buscar lista existente
+      const { data: lista, error: erroBusca } = await supabase
         .from('listas_compras')
         .select('id')
         .eq('user_id', user.id)
         .eq('origem', 'estoque')
         .maybeSingle();
+      console.log('[CaixaEntrada] ETAPA 2 - buscar lista:', { lista, erro: erroBusca });
+      if (erroBusca) {
+        sonnerToast.error('Erro ao buscar lista');
+        console.error('[CaixaEntrada] Erro busca lista:', erroBusca);
+        return;
+      }
 
-      if (!lista) {
+      // ETAPA 3: Criar lista se não existe
+      let listaId = lista?.id;
+      if (!listaId) {
         const { data: novaLista, error: erroCriar } = await supabase
           .from('listas_compras')
           .insert({
@@ -1448,62 +1461,103 @@ const EstoqueAtual = () => {
           })
           .select('id')
           .single();
-        if (erroCriar) throw erroCriar;
-        lista = novaLista;
+        console.log('[CaixaEntrada] ETAPA 3 - criar lista:', { novaLista, erro: erroCriar });
+        if (erroCriar || !novaLista) {
+          sonnerToast.error('Erro ao criar lista');
+          console.error('[CaixaEntrada] Erro criar lista:', erroCriar);
+          return;
+        }
+        listaId = novaLista.id;
       }
 
-      const listaId = lista!.id;
-
-      // Deduplicação: verificar se item já existe
+      // ETAPA 4: Deduplicação
       const nomeBusca = (item.produto_nome_exibicao || item.produto_nome || '').toUpperCase().trim();
+      const produtoMasterId = item.produto_master_id || null;
+      console.log('[CaixaEntrada] ETAPA 4 - dedup params:', { listaId, produtoMasterId, nomeBusca });
 
       let itemExistente: any = null;
 
-      if (item.produto_master_id) {
-        const { data } = await supabase
+      if (produtoMasterId) {
+        const { data, error: erroBuscaItem } = await supabase
           .from('listas_compras_itens')
           .select('id, quantidade')
           .eq('lista_id', listaId)
-          .eq('produto_id', item.produto_master_id)
+          .eq('produto_id', produtoMasterId)
           .maybeSingle();
+        console.log('[CaixaEntrada] ETAPA 4a - busca por master_id:', { data, erro: erroBuscaItem });
+        if (erroBuscaItem) {
+          console.error('[CaixaEntrada] Erro busca item por master_id:', erroBuscaItem);
+        }
         itemExistente = data;
       }
 
       if (!itemExistente && nomeBusca) {
-        const { data: itensLista } = await supabase
+        const { data: itensLista, error: erroBuscaNome } = await supabase
           .from('listas_compras_itens')
           .select('id, quantidade, produto_nome')
           .eq('lista_id', listaId)
           .is('produto_id', null);
-
-        if (itensLista) {
+        console.log('[CaixaEntrada] ETAPA 4b - busca por nome:', { total: itensLista?.length, erro: erroBuscaNome });
+        if (!erroBuscaNome && itensLista) {
           itemExistente = itensLista.find(
             (i) => (i.produto_nome || '').toUpperCase().trim() === nomeBusca
           );
         }
       }
 
+      // ETAPA 5: Insert ou Update
       if (itemExistente) {
-        await supabase
+        const novaQtd = (itemExistente.quantidade || 0) + 1;
+        const { error: erroUpdate } = await supabase
           .from('listas_compras_itens')
-          .update({ quantidade: (itemExistente.quantidade || 0) + 1 })
+          .update({ quantidade: novaQtd })
           .eq('id', itemExistente.id);
+        console.log('[CaixaEntrada] ETAPA 5 - update qty:', { itemId: itemExistente.id, novaQtd, erro: erroUpdate });
+        if (erroUpdate) {
+          sonnerToast.error('Erro ao atualizar quantidade');
+          console.error('[CaixaEntrada] Erro update:', erroUpdate);
+          return;
+        }
       } else {
-        await supabase
+        const payload = {
+          lista_id: listaId,
+          produto_id: produtoMasterId,
+          produto_nome: item.produto_nome_exibicao || item.produto_nome || 'Produto',
+          quantidade: 1,
+          unidade_medida: item.unidade_medida || 'UN',
+          item_livre: !produtoMasterId,
+        };
+        console.log('[CaixaEntrada] ETAPA 5 - insert payload:', payload);
+        const { error: erroInsert } = await supabase
           .from('listas_compras_itens')
-          .insert({
-            lista_id: listaId,
-            produto_id: item.produto_master_id || null,
-            produto_nome: item.produto_nome_exibicao || item.produto_nome || 'Produto',
-            quantidade: 1,
-            unidade_medida: item.unidade_medida || 'UN',
-            item_livre: !item.produto_master_id,
-          });
+          .insert(payload);
+        console.log('[CaixaEntrada] ETAPA 5 - insert result:', { erro: erroInsert });
+        if (erroInsert) {
+          console.error('[CaixaEntrada] Erro insert item:', erroInsert);
+          // Fallback: tentar sem produto_id (FK pode ser inválida)
+          if (produtoMasterId) {
+            console.warn('[CaixaEntrada] FALLBACK: tentando insert como item_livre');
+            const payloadFallback = { ...payload, produto_id: null, item_livre: true };
+            const { error: erroFallback } = await supabase
+              .from('listas_compras_itens')
+              .insert(payloadFallback);
+            console.log('[CaixaEntrada] FALLBACK result:', { erro: erroFallback });
+            if (erroFallback) {
+              sonnerToast.error('Erro ao adicionar à lista');
+              console.error('[CaixaEntrada] Erro fallback:', erroFallback);
+              return;
+            }
+            sonnerToast.success('👍 Na lista');
+            return;
+          }
+          sonnerToast.error('Erro ao adicionar à lista');
+          return;
+        }
       }
 
       sonnerToast.success('👍 Na lista');
     } catch (error) {
-      console.error('Erro ao adicionar à Caixa de Entrada:', error);
+      console.error('[CaixaEntrada] ERRO NÃO TRATADO:', error);
       sonnerToast.error('Erro ao adicionar à lista');
     }
   }, []);
