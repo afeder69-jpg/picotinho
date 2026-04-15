@@ -133,7 +133,7 @@ const BottomNavigation = () => {
    * Esta é a função original handleQRScanSuccess, agora chamada pela fila.
    * Toda a lógica interna permanece INTACTA.
    */
-  const executeNoteProcessing = useCallback(async (urlParaProcessar: string, chaveAcesso: string, tipoDocumento: string | null, queueItemId: string) => {
+  const executeNoteProcessing = useCallback(async (urlParaProcessar: string, chaveAcesso: string, tipoDocumento: TipoDocumento, queueItemId: string) => {
     console.log("🔵 [QUEUE] Executando processamento para:", queueItemId);
     
     // Validação de autenticação

@@ -22,7 +22,7 @@ export interface QueueStats {
 }
 
 interface UseNoteQueueOptions {
-  processNote: (url: string, chaveAcesso: string, tipoDocumento: string | null, queueItemId: string) => void;
+  processNote: (url: string, chaveAcesso: string, tipoDocumento: any, queueItemId: string) => void;
   autoDismissMs?: number;
 }
 
