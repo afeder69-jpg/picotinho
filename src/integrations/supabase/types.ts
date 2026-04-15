@@ -1351,6 +1351,7 @@ export type Database = {
       }
       notas_imagens: {
         Row: {
+          chave_acesso: string | null
           compra_id: string | null
           created_at: string | null
           dados_extraidos: Json | null
@@ -1375,6 +1376,7 @@ export type Database = {
           usuario_id: string
         }
         Insert: {
+          chave_acesso?: string | null
           compra_id?: string | null
           created_at?: string | null
           dados_extraidos?: Json | null
@@ -1399,6 +1401,7 @@ export type Database = {
           usuario_id: string
         }
         Update: {
+          chave_acesso?: string | null
           compra_id?: string | null
           created_at?: string | null
           dados_extraidos?: Json | null
