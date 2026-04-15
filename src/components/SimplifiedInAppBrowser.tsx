@@ -103,9 +103,26 @@ export const SimplifiedInAppBrowser = ({
 
       console.log('✅ Nota processada com sucesso:', processResult);
 
+      // Tratar concorrência
+      if (processResult?.already_processing) {
+        console.log('⏳ Nota já sendo processada por outra instância');
+        // Discreto: não alarmar
+        setIsProcessing(false);
+        return;
+      }
+
+      if (processResult?.already_processed) {
+        toast({
+          title: "✅ Nota já processada!",
+          description: `${processResult.itens_inseridos || 0} produtos já estão no estoque`,
+        });
+        onConfirm();
+        return;
+      }
+
       toast({
         title: "✅ Nota adicionada ao estoque",
-        description: `${processResult.itens_inseridos} produtos adicionados`,
+        description: `${processResult.itens_inseridos || 0} produtos adicionados`,
       });
 
       onConfirm();

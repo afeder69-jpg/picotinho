@@ -388,7 +388,24 @@ const BottomNavigation = () => {
       // 4. ✅ Nota APROVADA - Processar estoque
       console.log('✅ [AUTO] Nota APROVADA - processando estoque...');
       
-      // 5. Processar estoque em background
+      // Guard: verificar se já foi processada antes de chamar
+      const { data: notaAtual } = await supabase
+        .from('notas_imagens')
+        .select('processada')
+        .eq('id', notaId)
+        .single();
+
+      if (notaAtual?.processada) {
+        console.log('✅ [AUTO] Nota já processada, pulando chamada');
+        toast({
+          title: '✅ Nota já processada!',
+          description: 'Esta nota já foi adicionada ao estoque.',
+        });
+        navigate('/screenshots');
+        return;
+      }
+      
+      // 5. Processar estoque
       const { data: processData, error: processError } = await supabase.functions.invoke(
         'process-receipt-full',
         { body: { notaId, userId } }
@@ -401,6 +418,23 @@ const BottomNavigation = () => {
           description: processError.message || 'Tente novamente',
           variant: 'destructive',
         });
+        return;
+      }
+      
+      // Tratar concorrência: already_processing ou already_processed
+      if (processData?.already_processing) {
+        console.log('⏳ [AUTO] Nota já sendo processada por outra instância');
+        // Discreto: não alarmar o usuário, apenas logar
+        return;
+      }
+
+      if (processData?.already_processed) {
+        console.log('✅ [AUTO] Nota já processada por outra instância');
+        toast({
+          title: '✅ Nota já processada!',
+          description: `${processData.itens_inseridos || 0} produtos já estão no estoque`,
+        });
+        navigate('/screenshots');
         return;
       }
       
