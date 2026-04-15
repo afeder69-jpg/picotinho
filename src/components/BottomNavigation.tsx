@@ -128,6 +128,10 @@ const BottomNavigation = () => {
     setPendingDocType(null);
   };
 
+  // 🔵 Refs para queue callbacks (evita dependência circular)
+  const queueMarkDoneRef = useRef<(id: string) => void>(() => {});
+  const queueMarkErrorRef = useRef<(id: string, msg?: string) => void>(() => {});
+
   /**
    * 🔵 EXECUTOR REAL DE PROCESSAMENTO DE NOTA
    * Esta é a função original handleQRScanSuccess, agora chamada pela fila.
