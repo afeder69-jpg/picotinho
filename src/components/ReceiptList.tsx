@@ -306,7 +306,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
 
       const [receiptsResult, notasImagensResult] = await Promise.all([
         supabase.from('receipts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('notas_imagens').select('*, debug_texto').eq('usuario_id', user.id).order('created_at', { ascending: false })
+        supabase.from('notas_imagens').select('*, debug_texto').eq('usuario_id', user.id).neq('excluida', true).order('created_at', { ascending: false })
       ]);
 
       if (receiptsResult.error) throw receiptsResult.error;

@@ -214,6 +214,8 @@ serve(async (req) => {
 
     console.log('✅ Nota criada com sucesso:', notaId);
 
+    let extracaoSucesso = false;
+
     if (modelo === '55') {
       console.log('📄 [NFE] Processando via InfoSimples...');
 
@@ -226,11 +228,11 @@ serve(async (req) => {
       });
 
       if (nfeError) {
-        console.error('⚠️ Erro ao processar NFe via InfoSimples:', nfeError);
-        throw nfeError;
+        console.error('⚠️ Erro ao processar NFe via InfoSimples (falha definitiva - única via):', nfeError);
+      } else {
+        console.log('✅ NFe processada via InfoSimples:', nfeData);
+        extracaoSucesso = true;
       }
-
-      console.log('✅ NFe processada via InfoSimples:', nfeData);
     } else if (modelo === '65' && uf === '33') {
       console.log('🎫 [NFCE-RJ] Processando via InfoSimples...');
 
@@ -254,12 +256,14 @@ serve(async (req) => {
         });
 
         if (extractError) {
-          console.error('⚠️ Erro no fallback HTML:', extractError);
+          console.error('⚠️ Erro no fallback HTML (falha definitiva - ambas vias falharam):', extractError);
         } else {
           console.log('✅ Fallback concluído:', extractData);
+          extracaoSucesso = true;
         }
       } else {
         console.log('✅ NFCe-RJ processada via InfoSimples:', nfceData);
+        extracaoSucesso = true;
       }
     } else if (modelo === '65') {
       console.log(`🎫 [NFCE-${uf}] Processando via extração HTML (UF não suportada pelo InfoSimples)...`);
@@ -272,10 +276,35 @@ serve(async (req) => {
       });
 
       if (extractError) {
-        console.error('⚠️ Erro ao extrair NFCe:', extractError);
+        console.error('⚠️ Erro ao extrair NFCe (falha definitiva - única via):', extractError);
       } else {
         console.log('✅ NFCe extraída:', extractData);
+        extracaoSucesso = true;
       }
+    }
+
+    // Se TODAS as vias de extração falharam: marcar como excluída e retornar erro
+    if (!extracaoSucesso) {
+      console.log('🧹 Falha definitiva de extração. Marcando nota como excluída para não poluir a tela:', notaId);
+      const { error: cleanupError } = await supabase
+        .from('notas_imagens')
+        .update({ excluida: true, updated_at: new Date().toISOString() })
+        .eq('id', notaId);
+
+      if (cleanupError) {
+        console.error('⚠️ Erro ao marcar nota como excluída no cleanup:', cleanupError);
+      }
+
+      return new Response(
+        JSON.stringify({
+          error: 'EXTRACAO_FALHOU',
+          message: 'Não foi possível extrair os dados desta nota fiscal. Tente novamente.'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500
+        }
+      );
     }
     
     return new Response(

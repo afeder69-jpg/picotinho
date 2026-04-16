@@ -239,6 +239,33 @@ const BottomNavigation = () => {
             newMap.delete(tempId);
             return newMap;
           });
+
+          // Tentar extrair body estruturado do erro (FunctionsHttpError)
+          let errorCode = '';
+          let errorMessage = '';
+          try {
+            const ctx = (processError as any).context;
+            if (ctx) {
+              const body = typeof ctx.body === 'string' ? JSON.parse(ctx.body) : (typeof ctx.json === 'function' ? await ctx.json() : null);
+              if (body) {
+                errorCode = body.error || '';
+                errorMessage = body.message || '';
+              }
+            }
+          } catch (_) { /* ignore parse errors */ }
+
+          // Mensagem específica para falha definitiva de extração
+          if (errorCode === 'EXTRACAO_FALHOU') {
+            const msg = errorMessage || 'Não foi possível extrair os dados desta nota fiscal. Tente novamente.';
+            toast({
+              title: "❌ Falha na extração",
+              description: msg,
+              variant: "destructive",
+            });
+            queueMarkErrorRef.current(queueItemId, msg);
+            return;
+          }
+
           // Nunca exibir mensagem genérica do SDK em inglês para o usuário
           const rawMsg = processError.message || '';
           const isGenericSdkError = rawMsg.includes('non-2xx') || rawMsg.includes('Edge Function') || rawMsg.includes('FunctionsHttpError');
