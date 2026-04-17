@@ -1,66 +1,60 @@
 
-Objetivo: corrigir a falha global de login no Picotinho para web e APK, cobrindo e-mail/senha e Google, sem assumir que o problema é de uma conta específica.
+Objetivo: confirmar e corrigir a falha global de login com base em evidência, não em hipótese.
 
-1. Confirmar a causa real antes de mexer
-- Verificar os logs/autenticação no Supabase para separar dois cenários:
-  - backend rejeitando todo mundo;
-  - frontend quebrando o fluxo antes/depois do auth.
-- Conferir a configuração de Auth no Supabase:
+Diagnóstico já confirmado
+- `src/integrations/supabase/client.ts` aponta para a URL correta do projeto: `https://mjsbwrtegorjxcepvrik.supabase.co`.
+- As páginas publicadas `/auth` em `picotinho.com.br` e `picotinho.lovable.app` carregam normalmente.
+- Os auth logs do Supabase vieram vazios nas últimas 24h e também em 7 dias.
+- Isso indica que as tentativas de login não estão chegando ao backend de Auth. A quebra está antes do Supabase processar a requisição, na camada de conexão/rede/DNS do cliente para `mjsbwrtegorjxcepvrik.supabase.co`.
+
+Plano de implementação
+1. Instrumentar o fluxo de login
+- Adicionar um diagnóstico explícito antes de `signInWithPassword` e `signInWithOAuth`.
+- Testar conectividade real com o Auth do Supabase e capturar:
+  - status HTTP
+  - erro de DNS/fetch
+  - `navigator.onLine`
+  - origin atual
+  - plataforma web/nativa
+- Exibir mensagem técnica clara em vez de erro genérico.
+
+2. Criar telemetria de diagnóstico no frontend
+- Centralizar isso num helper de auth/rede.
+- Registrar no console detalhes suficientes para distinguir:
+  - DNS não resolve
+  - timeout
+  - CORS
+  - provider OAuth inválido
+  - redirect inválido
+  - backend respondeu com erro funcional
+
+3. Revisar o bootstrap de auth
+- Confirmar que `AuthProvider` continua como fonte principal da sessão.
+- Remover redundâncias que possam mascarar erro de rede como erro de login.
+- Garantir que o loading do Google volte ao normal se a abertura do OAuth falhar antes do redirect.
+
+4. Validar configuração externa do Supabase
+- Conferir no dashboard:
   - Site URL
-  - Redirect URLs
-  - provider Google
-  - callback do APK (`picotinho://auth/callback`)
+  - Redirect URLs web
+  - deep link `picotinho://auth/callback`
+  - provider Google habilitado
+- Isso não explica o DNS por si só, mas elimina causas paralelas.
 
-2. Corrigir a fragilidade principal encontrada no código
-- Remover a limpeza agressiva de `localStorage` e `sessionStorage` em `src/App.tsx`.
-- Substituir por invalidação cirúrgica só de cache da aplicação, preservando as chaves de autenticação do Supabase e o estado PKCE do OAuth.
-- Isso é hoje o maior suspeito para quebrar login/retorno do Google de forma ampla após deploy.
+5. Teste final em ambiente publicado
+- Validar em `picotinho.com.br` e `picotinho.lovable.app`:
+  - e-mail/senha
+  - Google
+  - mensagem de erro detalhada quando houver falha
+- Se o diagnóstico continuar acusando DNS, a conclusão fica fechada: problema externo de resolução/conectividade com o domínio `*.supabase.co`, não de credenciais nem de RLS.
 
-3. Unificar o bootstrap de autenticação
-- Deixar `AuthProvider` como única fonte de verdade para sessão.
-- Parar de duplicar `getSession()` + `onAuthStateChange()` na página `Auth.tsx`.
-- Adicionar um estado explícito de “auth pronto” para a UI só agir depois da restauração da sessão terminar.
-- Evitar redirecionamentos prematuros e condições de corrida entre `AuthProvider` e `Auth.tsx`.
+Arquivos envolvidos
+- `src/pages/Auth.tsx`
+- `src/components/auth/AuthProvider.tsx`
+- `src/integrations/supabase/client.ts`
+- novo helper de diagnóstico em `src/lib/*`
 
-4. Endurecer o login por Google
-- Ajustar o botão para não “parecer inabilitado” por estado global único de loading.
-- Separar loading de login por senha e loading de OAuth.
-- Garantir que o fluxo web use redirect consistente com o domínio atual e que o fluxo nativo mantenha o deep link correto.
-
-5. Validar o login por e-mail/senha
-- Capturar a resposta exata do Supabase no fluxo real.
-- Se o backend estiver devolvendo erro global por configuração, corrigir no painel do Supabase.
-- Se o frontend estiver mascarando o erro, ajustar os toasts/mensagens para expor corretamente a falha real.
-
-6. Teste final obrigatório
-- Testar ponta a ponta:
-  - web em `picotinho.com.br`
-  - URL publicada `picotinho.lovable.app`
-  - APK
-- Validar:
-  - login com e-mail/senha
-  - login com Google
-  - restauração de sessão após recarregar
-  - logout e novo login
-  - retorno do Google para a home sem travar
-
-Se os logs confirmarem problema de configuração no Supabase:
-- aplico a correção no painel/configuração;
-- mantenho no código apenas o hardening do auth para evitar recorrência.
-
-Detalhes técnicos
-- Arquivos mais críticos:
-  - `src/App.tsx`
-  - `src/components/auth/AuthProvider.tsx`
-  - `src/pages/Auth.tsx`
-  - configuração Auth/Google no Supabase
-- Hipótese principal encontrada no código:
-  - `src/App.tsx` limpa todo o storage e recarrega a app no bootstrap;
-  - o cliente Supabase usa `localStorage` para sessão e PKCE;
-  - isso pode quebrar restauração de sessão e retorno do OAuth.
-- Fragilidade adicional:
-  - o app inicializa auth em dois lugares diferentes (`AuthProvider` e `Auth.tsx`), aumentando risco de corrida e redirecionamento inconsistente.
-
-Escopo esperado da implementação
-- Sem mudança de banco, salvo se os logs revelarem algum problema estrutural fora do frontend.
-- Foco em causa raiz, não em contorno temporário.
+Resultado esperado
+- Saber com precisão absoluta em qual camada quebra.
+- Parar de tratar um erro de rede/DNS como se fosse “erro de login”.
+- Ter evidência objetiva para corrigir o app ou, se confirmado, agir na infraestrutura/configuração externa.
