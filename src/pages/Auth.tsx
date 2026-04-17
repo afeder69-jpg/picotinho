@@ -44,6 +44,7 @@ const useCooldown = () => {
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isOAuthLoading, setIsOAuthLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -57,31 +58,31 @@ const AuthPage = () => {
   const resetCooldown = useCooldown();
   const signupCooldown = useCooldown();
 
-  // Auto-redirect após login com Google
+  // Redirect quando sessão já existe (única fonte: AuthProvider via supabase listener)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        console.log('✅ Usuário já logado, redirecionando...');
-        navigate('/');
-      }
-    });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('🔄 Auth state changed:', event);
+        console.log('🔄 [Auth.tsx] state changed:', event, !!session);
         if (event === 'SIGNED_IN' && session?.user) {
-          // Não redirecionar se recovery está ativo (flag + pathname)
           const isRecoveryFlow = window.location.pathname === '/reset-password'
             || sessionStorage.getItem('picotinho_recovery_active') === 'true';
           if (isRecoveryFlow) {
             console.log('⏳ Recovery flow ativo, não redirecionar');
             return;
           }
-          console.log('✅ Login detectado! Redirecionando para home...');
-          navigate('/');
+          navigate('/', { replace: true });
         }
       }
     );
+
+    // Check inicial (não bloqueante)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const isRecoveryFlow = window.location.pathname === '/reset-password'
+          || sessionStorage.getItem('picotinho_recovery_active') === 'true';
+        if (!isRecoveryFlow) navigate('/', { replace: true });
+      }
+    });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -184,7 +185,7 @@ const AuthPage = () => {
 
   const handleGoogleSignIn = async () => {
     try {
-      setIsLoading(true);
+      setIsOAuthLoading(true);
       console.log('🚀 Iniciando login com Google...');
 
       if (isNative) {
@@ -206,14 +207,13 @@ const AuthPage = () => {
     } catch (error: any) {
       console.error('❌ Erro no login com Google:', error);
       toast({ title: "Erro no login com Google", description: error.message || "Tente novamente.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
+      setIsOAuthLoading(false);
     }
   };
 
   const handleFacebookSignIn = async () => {
     try {
-      setIsLoading(true);
+      setIsOAuthLoading(true);
       console.log('🚀 Iniciando login com Facebook...');
 
       if (isNative) {
@@ -235,8 +235,7 @@ const AuthPage = () => {
     } catch (error: any) {
       console.error('❌ Erro no login com Facebook:', error);
       toast({ title: "Erro no login com Facebook", description: error.message || "Tente novamente.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
+      setIsOAuthLoading(false);
     }
   };
 
