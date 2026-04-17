@@ -1,33 +1,43 @@
 
 
-## Plano: Corrigir constraint `listas_compras_origem_check`
+## Diagnóstico: erro de DNS no Supabase
 
-### Causa raiz confirmada
-O constraint `listas_compras_origem_check` restringe `origem` a `['manual', 'receita', 'cardapio', 'whatsapp']`. O valor `'estoque'` é rejeitado pelo banco.
+A mensagem "Não foi possível encontrar o endereço IP do servidor de mjsbwrtegorjxcepvrik.supabase.co" é um **erro de DNS no domínio do Supabase**, não no Picotinho.
 
-### Alteração necessária
+### O que está acontecendo
 
-**1 migration SQL:**
+O navegador está tentando resolver o domínio `mjsbwrtegorjxcepvrik.supabase.co` e falhando. Isso significa que a requisição **nem chega ao Supabase** — para antes, na resolução de nome.
 
-```sql
-ALTER TABLE public.listas_compras
-  DROP CONSTRAINT listas_compras_origem_check;
+### Causas possíveis (em ordem de probabilidade)
 
-ALTER TABLE public.listas_compras
-  ADD CONSTRAINT listas_compras_origem_check
-  CHECK (origem IN ('manual', 'receita', 'cardapio', 'whatsapp', 'estoque'));
-```
+1. **Incidente no Supabase** (DNS/infra do provedor) — afeta todos os usuários do projeto simultaneamente, exatamente como você descreveu.
+2. **Problema no provedor de DNS público** (ex: Google DNS 8.8.8.8, Cloudflare 1.1.1.1) propagando incorretamente o subdomínio.
+3. **Projeto Supabase pausado ou suspenso** — quando isso acontece, o subdomínio pode parar de resolver.
+4. **Problema de rede regional** afetando rotas para `*.supabase.co`.
 
-### O que NÃO muda
-- Nenhum código frontend alterado
-- Toast, desfazer, X, swipe, modal — tudo intacto
-- Logs temporários permanecem para validação do fluxo completo
+### O que NÃO é
 
-### Após a migration
-O fluxo do carrinho deve funcionar de ponta a ponta:
-1. Criar lista com `origem = 'estoque'` ✓
-2. Inserir item ✓
-3. Deduplicar se já existir ✓
-4. Mostrar "👍 Na lista" ✓
-5. Exibir "Caixa de Entrada" com ícone Inbox na tela de listas ✓
+- Não é bug do código do Picotinho (nada mudou no client, na URL ou nas chaves).
+- Não é problema de autenticação (Google ou e-mail/senha) — a falha acontece **antes** de qualquer chamada de auth.
+- Não é problema de RLS, edge function ou banco.
+
+### Verificações que vou fazer (somente leitura)
+
+1. **Status do projeto Supabase** — checar se o projeto está ativo respondendo consultas via `supabase--read_query`. Se o banco responder pelo backend interno, mas o domínio público não resolver, confirma que é DNS/edge do Supabase.
+2. **Status page do Supabase** — verificar https://status.supabase.com para incidentes ativos.
+3. **Logs recentes** — checar se há tráfego chegando ao projeto agora ou se parou completamente.
+4. **Resolução DNS externa** — tentar resolver o domínio via ferramenta externa para confirmar se o problema é global ou local.
+
+### Ações imediatas que o usuário pode tentar (enquanto investigo)
+
+- Trocar de rede (Wi-Fi → 4G ou vice-versa) para descartar DNS local.
+- Limpar cache DNS do navegador / dispositivo.
+- Trocar o DNS do dispositivo para 1.1.1.1 (Cloudflare) ou 8.8.8.8 (Google).
+- Testar em modo anônimo / outro navegador.
+
+### Próximo passo
+
+Após sua aprovação, executo as verificações acima e trago um diagnóstico objetivo: se é incidente do Supabase (e nesse caso só resta aguardar/abrir ticket), se é o projeto suspenso (precisa reativar no painel), ou se é algo mais específico.
+
+**Importante**: nenhuma alteração de código será feita nesta etapa — é puro diagnóstico.
 
