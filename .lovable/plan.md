@@ -1,43 +1,66 @@
 
+Objetivo: corrigir a falha global de login no Picotinho para web e APK, cobrindo e-mail/senha e Google, sem assumir que o problema é de uma conta específica.
 
-## Diagnóstico: erro de DNS no Supabase
+1. Confirmar a causa real antes de mexer
+- Verificar os logs/autenticação no Supabase para separar dois cenários:
+  - backend rejeitando todo mundo;
+  - frontend quebrando o fluxo antes/depois do auth.
+- Conferir a configuração de Auth no Supabase:
+  - Site URL
+  - Redirect URLs
+  - provider Google
+  - callback do APK (`picotinho://auth/callback`)
 
-A mensagem "Não foi possível encontrar o endereço IP do servidor de mjsbwrtegorjxcepvrik.supabase.co" é um **erro de DNS no domínio do Supabase**, não no Picotinho.
+2. Corrigir a fragilidade principal encontrada no código
+- Remover a limpeza agressiva de `localStorage` e `sessionStorage` em `src/App.tsx`.
+- Substituir por invalidação cirúrgica só de cache da aplicação, preservando as chaves de autenticação do Supabase e o estado PKCE do OAuth.
+- Isso é hoje o maior suspeito para quebrar login/retorno do Google de forma ampla após deploy.
 
-### O que está acontecendo
+3. Unificar o bootstrap de autenticação
+- Deixar `AuthProvider` como única fonte de verdade para sessão.
+- Parar de duplicar `getSession()` + `onAuthStateChange()` na página `Auth.tsx`.
+- Adicionar um estado explícito de “auth pronto” para a UI só agir depois da restauração da sessão terminar.
+- Evitar redirecionamentos prematuros e condições de corrida entre `AuthProvider` e `Auth.tsx`.
 
-O navegador está tentando resolver o domínio `mjsbwrtegorjxcepvrik.supabase.co` e falhando. Isso significa que a requisição **nem chega ao Supabase** — para antes, na resolução de nome.
+4. Endurecer o login por Google
+- Ajustar o botão para não “parecer inabilitado” por estado global único de loading.
+- Separar loading de login por senha e loading de OAuth.
+- Garantir que o fluxo web use redirect consistente com o domínio atual e que o fluxo nativo mantenha o deep link correto.
 
-### Causas possíveis (em ordem de probabilidade)
+5. Validar o login por e-mail/senha
+- Capturar a resposta exata do Supabase no fluxo real.
+- Se o backend estiver devolvendo erro global por configuração, corrigir no painel do Supabase.
+- Se o frontend estiver mascarando o erro, ajustar os toasts/mensagens para expor corretamente a falha real.
 
-1. **Incidente no Supabase** (DNS/infra do provedor) — afeta todos os usuários do projeto simultaneamente, exatamente como você descreveu.
-2. **Problema no provedor de DNS público** (ex: Google DNS 8.8.8.8, Cloudflare 1.1.1.1) propagando incorretamente o subdomínio.
-3. **Projeto Supabase pausado ou suspenso** — quando isso acontece, o subdomínio pode parar de resolver.
-4. **Problema de rede regional** afetando rotas para `*.supabase.co`.
+6. Teste final obrigatório
+- Testar ponta a ponta:
+  - web em `picotinho.com.br`
+  - URL publicada `picotinho.lovable.app`
+  - APK
+- Validar:
+  - login com e-mail/senha
+  - login com Google
+  - restauração de sessão após recarregar
+  - logout e novo login
+  - retorno do Google para a home sem travar
 
-### O que NÃO é
+Se os logs confirmarem problema de configuração no Supabase:
+- aplico a correção no painel/configuração;
+- mantenho no código apenas o hardening do auth para evitar recorrência.
 
-- Não é bug do código do Picotinho (nada mudou no client, na URL ou nas chaves).
-- Não é problema de autenticação (Google ou e-mail/senha) — a falha acontece **antes** de qualquer chamada de auth.
-- Não é problema de RLS, edge function ou banco.
+Detalhes técnicos
+- Arquivos mais críticos:
+  - `src/App.tsx`
+  - `src/components/auth/AuthProvider.tsx`
+  - `src/pages/Auth.tsx`
+  - configuração Auth/Google no Supabase
+- Hipótese principal encontrada no código:
+  - `src/App.tsx` limpa todo o storage e recarrega a app no bootstrap;
+  - o cliente Supabase usa `localStorage` para sessão e PKCE;
+  - isso pode quebrar restauração de sessão e retorno do OAuth.
+- Fragilidade adicional:
+  - o app inicializa auth em dois lugares diferentes (`AuthProvider` e `Auth.tsx`), aumentando risco de corrida e redirecionamento inconsistente.
 
-### Verificações que vou fazer (somente leitura)
-
-1. **Status do projeto Supabase** — checar se o projeto está ativo respondendo consultas via `supabase--read_query`. Se o banco responder pelo backend interno, mas o domínio público não resolver, confirma que é DNS/edge do Supabase.
-2. **Status page do Supabase** — verificar https://status.supabase.com para incidentes ativos.
-3. **Logs recentes** — checar se há tráfego chegando ao projeto agora ou se parou completamente.
-4. **Resolução DNS externa** — tentar resolver o domínio via ferramenta externa para confirmar se o problema é global ou local.
-
-### Ações imediatas que o usuário pode tentar (enquanto investigo)
-
-- Trocar de rede (Wi-Fi → 4G ou vice-versa) para descartar DNS local.
-- Limpar cache DNS do navegador / dispositivo.
-- Trocar o DNS do dispositivo para 1.1.1.1 (Cloudflare) ou 8.8.8.8 (Google).
-- Testar em modo anônimo / outro navegador.
-
-### Próximo passo
-
-Após sua aprovação, executo as verificações acima e trago um diagnóstico objetivo: se é incidente do Supabase (e nesse caso só resta aguardar/abrir ticket), se é o projeto suspenso (precisa reativar no painel), ou se é algo mais específico.
-
-**Importante**: nenhuma alteração de código será feita nesta etapa — é puro diagnóstico.
-
+Escopo esperado da implementação
+- Sem mudança de banco, salvo se os logs revelarem algum problema estrutural fora do frontend.
+- Foco em causa raiz, não em contorno temporário.
