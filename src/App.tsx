@@ -41,28 +41,43 @@ console.log("App.tsx carregando...");
 console.log(`🚀 Picotinho versionName: ${APP_VERSION}`);
 console.log(`⏰ Build Timestamp: ${new Date().toISOString()}`);
 
-// Limpeza agressiva de cache
+// Invalidação cirúrgica de cache (preserva auth/PKCE do Supabase)
 const STORED_VERSION = localStorage.getItem("app_version");
 
 if (STORED_VERSION !== APP_VERSION) {
-  console.log(`🔄 Versão mudou de ${STORED_VERSION} para ${APP_VERSION} - limpando cache`);
-  
-  // Desregistrar service workers
+  console.log(`🔄 Versão mudou de ${STORED_VERSION} para ${APP_VERSION} - limpando cache da aplicação`);
+
+  // Desregistrar service workers (não bloqueante)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(registrations => {
       registrations.forEach(registration => registration.unregister());
-    });
+    }).catch(() => {});
   }
-  
-  // Limpar storage
-  localStorage.clear();
-  sessionStorage.clear();
-  
-  // Salvar nova versão
+
+  // Limpar APENAS chaves da aplicação. Preservar:
+  // - chaves do Supabase (sb-*, supabase.auth.*) → sessão e PKCE
+  // - app_version
+  const preserveKey = (key: string) =>
+    key === 'app_version' ||
+    key.startsWith('sb-') ||
+    key.startsWith('supabase.') ||
+    key.includes('-auth-token');
+
+  try {
+    const lsKeys = Object.keys(localStorage);
+    lsKeys.forEach((key) => {
+      if (!preserveKey(key)) localStorage.removeItem(key);
+    });
+    const ssKeys = Object.keys(sessionStorage);
+    ssKeys.forEach((key) => {
+      if (!preserveKey(key)) sessionStorage.removeItem(key);
+    });
+  } catch (e) {
+    console.warn('Falha ao limpar cache seletivo:', e);
+  }
+
   localStorage.setItem("app_version", APP_VERSION);
-  
-  // Force reload sem cache
-  window.location.reload();
+  // NÃO recarregar — recarregar destrói o fluxo de OAuth retornando à app
 }
 
 const queryClient = new QueryClient({
