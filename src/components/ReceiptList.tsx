@@ -870,6 +870,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
     }
   };
 
+  const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'processed': return <Badge variant="default">Processada</Badge>;
       case 'processing': return <Badge variant="secondary">Processando</Badge>;
