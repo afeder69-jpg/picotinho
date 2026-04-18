@@ -808,6 +808,106 @@ const BottomNavigation = () => {
     };
   }, [user?.id, removeProcessingNote, toast, navigate]);
 
+  // 🆕 Sub-fase C: Realtime listener dedicado a `status_processamento`
+  // Observa transições de status do servidor (finalize-nota-estoque) e
+  // atualiza fila local + toasts + navegação conservadora.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    console.log('🔔 [STATUS-OBSERVER] Configurando listener para status_processamento');
+
+    const channel = supabase
+      .channel('notas-status-processamento')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notas_imagens',
+          filter: `usuario_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const novo = payload.new as any;
+          const antigo = payload.old as any;
+          if (!novo?.id) return;
+
+          const statusNovo = novo.status_processamento;
+          const statusAntigo = antigo?.status_processamento;
+          if (statusNovo === statusAntigo) return;
+
+          console.log(`📡 [STATUS-OBSERVER] ${novo.id}: ${statusAntigo} → ${statusNovo}`);
+
+          // Só reagimos se a nota está sob observação local
+          if (!activelyProcessingRef.current.has(novo.id) &&
+              !notaIdToQueueRef.current.has(novo.id)) {
+            return;
+          }
+
+          if (statusNovo === 'processada') {
+            const itensCount = Array.isArray(novo.dados_extraidos?.itens)
+              ? novo.dados_extraidos.itens.length
+              : (Array.isArray(novo.dados_extraidos?.produtos)
+                  ? novo.dados_extraidos.produtos.length
+                  : 0);
+
+            toast({
+              title: '✅ Nota processada!',
+              description: itensCount > 0
+                ? `${itensCount} produtos adicionados ao estoque`
+                : 'Estoque atualizado.',
+            });
+
+            markQueueDoneByNotaId(novo.id);
+            removeProcessingNote(novo.id);
+            activelyProcessingRef.current.delete(novo.id);
+
+            // Navegação conservadora — 3 condições obrigatórias
+            const rotaAtual = location.pathname;
+            const rotasPermitidas = rotaAtual === '/' || rotaAtual === '/screenshots';
+            const semInteracaoRecente = (Date.now() - lastUserNavigationAt.current) > 10000;
+            // OBS: lastUserNavigationAt é atualizado a cada mudança de rota,
+            // então "sem interação recente" = usuário ficou parado na rota
+            // de captura por > 10s (caso típico do fluxo feliz: scan → espera).
+            // Se ele acabou de chegar nessa rota (< 10s), é um sinal claro
+            // de jornada ativa de captura — também navegamos.
+            const jornadaAtivaDeCaptura = (Date.now() - lastUserNavigationAt.current) < 30000;
+
+            if (rotasPermitidas && (semInteracaoRecente || jornadaAtivaDeCaptura)) {
+              console.log('🧭 [STATUS-OBSERVER] Navegando para /screenshots (condições OK)');
+              navigate('/screenshots');
+            } else {
+              console.log('🚫 [STATUS-OBSERVER] Navegação suprimida — usuário em outra jornada');
+            }
+            return;
+          }
+
+          if (statusNovo === 'erro') {
+            const msg = novo.erro_mensagem || 'Falha ao processar a nota';
+            toast({
+              title: '❌ Erro ao processar nota',
+              description: msg,
+              variant: 'destructive',
+              duration: 8000,
+            });
+            markQueueErrorByNotaId(novo.id, msg);
+            removeProcessingNote(novo.id);
+            activelyProcessingRef.current.delete(novo.id);
+            return;
+          }
+
+          // Status intermediários (aguardando_estoque, processando) — só log.
+        }
+      )
+      .subscribe((s) => {
+        console.log('📡 [STATUS-OBSERVER] Status:', s);
+      });
+
+    return () => {
+      console.log('🔌 [STATUS-OBSERVER] Desconectando');
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, removeProcessingNote, toast, navigate, location.pathname]);
+
   // useEffect para polling de fallback (verifica a cada 3 segundos)
   useEffect(() => {
     if (!user?.id) return;
