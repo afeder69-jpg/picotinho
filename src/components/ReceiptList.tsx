@@ -1263,25 +1263,77 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                           </div>
                           
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <Badge 
-                              variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
-                              className="badge"
-                            >
-                              {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
-                            </Badge>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => viewReceipt(receipt)} 
+                            {(() => {
+                              // 🆕 Sub-fase C: badge baseado em status_processamento
+                              const sp = receipt.status_processamento;
+                              const tent = receipt.tentativas_finalizacao ?? 0;
+                              const errMsg = receipt.erro_mensagem || '';
+                              const isRetrying = retryingIds.has(receipt.id);
+
+                              if (sp === 'aguardando_estoque') {
+                                return (
+                                  <Badge variant="secondary" className="badge gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Na fila
+                                  </Badge>
+                                );
+                              }
+                              if (sp === 'processando' || isRetrying) {
+                                return (
+                                  <Badge variant="default" className="badge gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Processando
+                                  </Badge>
+                                );
+                              }
+                              if (sp === 'erro') {
+                                const limiteAtingido = tent >= 5;
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <Badge
+                                      variant="destructive"
+                                      className="badge"
+                                      title={errMsg}
+                                    >
+                                      {limiteAtingido ? 'Limite atingido' : 'Erro'}
+                                    </Badge>
+                                    {!limiteAtingido && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRetry(receipt.id)}
+                                        disabled={isRetrying}
+                                        className="detalhes"
+                                      >
+                                        Tentar de novo
+                                      </Button>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              // Default: comportamento atual (processada / pendente)
+                              return (
+                                <Badge
+                                  variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
+                                  className="badge"
+                                >
+                                  {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
+                                </Badge>
+                              );
+                            })()}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => viewReceipt(receipt)}
                               className="detalhes"
                             >
                               <Eye className="w-3 h-3 mr-1" />
                               Ver Detalhes
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => setDeleteConfirmId(receipt.id)} 
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleteConfirmId(receipt.id)}
                               className="text-destructive hover:text-destructive delete-btn"
                             >
                               <Trash2 className="w-3 h-3" />
