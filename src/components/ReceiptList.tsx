@@ -811,7 +811,65 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
     }
   };
 
-  const getStatusBadge = (status: string | null) => {
+  // 🆕 Sub-fase C: handler do botão "Tentar de novo"
+  const handleRetry = async (notaId: string) => {
+    // Throttle 10s por nota
+    const last = lastRetryAtRef.current.get(notaId) || 0;
+    if (Date.now() - last < 10000) {
+      console.log('⏱️ [RETRY] Throttle ativo, ignorando clique');
+      return;
+    }
+    if (retryingIds.has(notaId)) return;
+
+    lastRetryAtRef.current.set(notaId, Date.now());
+    setRetryingIds(prev => new Set(prev).add(notaId));
+
+    try {
+      console.log('🔁 [RETRY] Disparando finalize-nota-estoque para', notaId);
+      const { data, error } = await supabase.functions.invoke('finalize-nota-estoque', {
+        body: { notaImagemId: notaId },
+      });
+
+      if (error) {
+        console.error('❌ [RETRY] Erro ao invocar:', error);
+        toast({
+          title: 'Erro ao reprocessar',
+          description: error.message || 'Tente novamente em instantes.',
+          variant: 'destructive',
+        });
+      } else if (data?.skipped) {
+        toast({
+          title: 'Nota já está sendo processada',
+          description: 'Aguarde alguns segundos.',
+        });
+      } else {
+        toast({
+          title: 'Reprocessamento solicitado',
+          description: 'O servidor vai finalizar a nota em instantes.',
+        });
+      }
+    } catch (e: any) {
+      console.error('❌ [RETRY] Falha:', e);
+      toast({
+        title: 'Erro ao reprocessar',
+        description: e?.message || 'Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      // Manter no Set por mais alguns segundos para evitar spam visual,
+      // o polling/realtime atualizará o status real.
+      setTimeout(() => {
+        setRetryingIds(prev => {
+          const next = new Set(prev);
+          next.delete(notaId);
+          return next;
+        });
+      }, 3000);
+      // Recarrega para refletir mudança de status
+      loadReceipts();
+    }
+  };
+
     switch (status) {
       case 'processed': return <Badge variant="default">Processada</Badge>;
       case 'processing': return <Badge variant="secondary">Processando</Badge>;
