@@ -134,6 +134,13 @@ Deno.serve(async (req) => {
     }
 
     // 3. PROCESS-RECEIPT-FULL (já idempotente por nota_id)
+    // Liberar processing_started_at antes de invocar — process-receipt-full
+    // adquire seu próprio lock atômico via UPDATE ... WHERE processing_started_at IS NULL.
+    await supabase
+      .from('notas_imagens')
+      .update({ processing_started_at: null })
+      .eq('id', notaImagemId);
+
     console.log(`📦 [FINALIZE] Invocando process-receipt-full...`);
     const { data: processResp, error: processErr } = await supabase.functions.invoke(
       'process-receipt-full',
