@@ -1,0 +1,1 @@
+UPDATE notas_imagens SET status_processamento='aguardando_estoque', processing_started_at=NULL, tentativas_finalizacao=0, processada=false, erro_mensagem=NULL WHERE id='a74388bf-f652-496f-afe6-e4a052950302';
