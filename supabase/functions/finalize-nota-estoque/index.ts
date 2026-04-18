@@ -139,8 +139,8 @@ Deno.serve(async (req) => {
       'process-receipt-full',
       {
         body: {
-          notaImagemId,
-          userId,
+          notaId: notaImagemId,
+          force: true,
         },
       }
     );
