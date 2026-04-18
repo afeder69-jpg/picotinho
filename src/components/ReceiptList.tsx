@@ -29,6 +29,10 @@ interface Receipt {
   file_name?: string;
   file_type?: string;
   debug_texto?: string;
+  // 🆕 Sub-fase C: campos de observação do pipeline server-side
+  status_processamento?: string | null;
+  tentativas_finalizacao?: number | null;
+  erro_mensagem?: string | null;
 }
 
 // Helper para extrair bairro de um endereço brasileiro em formatos variados
@@ -275,6 +279,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(highlightNotaId || null);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  // 🆕 Sub-fase C: controle de "Tentar de novo"
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+  const lastRetryAtRef = React.useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
   
 
