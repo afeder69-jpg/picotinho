@@ -1357,6 +1357,7 @@ export type Database = {
           dados_extraidos: Json | null
           data_criacao: string
           debug_texto: string | null
+          erro_mensagem: string | null
           excluida: boolean | null
           id: string
           imagem_path: string
@@ -1371,6 +1372,8 @@ export type Database = {
           processing_started_at: string | null
           produtos_normalizados: number | null
           status_aprovacao: string | null
+          status_processamento: string | null
+          tentativas_finalizacao: number
           tentativas_normalizacao: number | null
           updated_at: string | null
           usuario_id: string
@@ -1382,6 +1385,7 @@ export type Database = {
           dados_extraidos?: Json | null
           data_criacao?: string
           debug_texto?: string | null
+          erro_mensagem?: string | null
           excluida?: boolean | null
           id?: string
           imagem_path: string
@@ -1396,6 +1400,8 @@ export type Database = {
           processing_started_at?: string | null
           produtos_normalizados?: number | null
           status_aprovacao?: string | null
+          status_processamento?: string | null
+          tentativas_finalizacao?: number
           tentativas_normalizacao?: number | null
           updated_at?: string | null
           usuario_id: string
@@ -1407,6 +1413,7 @@ export type Database = {
           dados_extraidos?: Json | null
           data_criacao?: string
           debug_texto?: string | null
+          erro_mensagem?: string | null
           excluida?: boolean | null
           id?: string
           imagem_path?: string
@@ -1421,6 +1428,8 @@ export type Database = {
           processing_started_at?: string | null
           produtos_normalizados?: number | null
           status_aprovacao?: string | null
+          status_processamento?: string | null
+          tentativas_finalizacao?: number
           tentativas_normalizacao?: number | null
           updated_at?: string | null
           usuario_id?: string
