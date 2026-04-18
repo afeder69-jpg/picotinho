@@ -369,7 +369,10 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
               processada: nota.processada,
               file_name: fileName,
               file_type: 'PDF',
-              debug_texto: (nota as any).debug_texto
+              debug_texto: (nota as any).debug_texto,
+              status_processamento: (nota as any).status_processamento ?? null,
+              tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
+              erro_mensagem: (nota as any).erro_mensagem ?? null,
             };
           }
           
@@ -400,7 +403,10 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             processada: nota.processada,
             file_name: fileName,
             file_type: isPdfWithConversion ? 'PDF (convertido)' : (nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem'),
-            debug_texto: (nota as any).debug_texto
+            debug_texto: (nota as any).debug_texto,
+            status_processamento: (nota as any).status_processamento ?? null,
+            tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
+            erro_mensagem: (nota as any).erro_mensagem ?? null,
           };
         })
         .filter(nota => nota !== null);
