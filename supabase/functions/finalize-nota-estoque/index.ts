@@ -160,6 +160,10 @@ Deno.serve(async (req) => {
       throw new Error(`process-receipt-full retornou erro: ${processResp.error}`);
     }
 
+    if (processResp?.already_processing) {
+      throw new Error('process-receipt-full não conseguiu adquirir lock (already_processing)');
+    }
+
     // 4. SUCESSO
     await supabase
       .from('notas_imagens')
