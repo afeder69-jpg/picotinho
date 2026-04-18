@@ -104,6 +104,13 @@ const BottomNavigation = () => {
   const location = useLocation();
   const { user } = useAuth();
 
+  // Sub-fase C: rastrear última navegação manual do usuário
+  // (usado para guardar a navegação automática para /screenshots)
+  const lastUserNavigationAt = useRef<number>(Date.now());
+  useEffect(() => {
+    lastUserNavigationAt.current = Date.now();
+  }, [location.pathname]);
+
   const handleNoteConfirm = async () => {
     console.log('✅ [VIEWER] Nota confirmada, navegando para screenshots');
     
