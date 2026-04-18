@@ -359,6 +359,7 @@ async function processarNFe(supabase: any, userId: string, notaImagemId: string,
       processada: false, // CORRIGIDO: somente process-receipt-full pode marcar como true
       pdf_gerado: false,
       dados_extraidos: dadosExtraidos,
+      status_processamento: 'aguardando_estoque', // 🆕 server-side finalization
       updated_at: new Date().toISOString(),
     })
     .eq('id', notaImagemId)
@@ -367,6 +368,20 @@ async function processarNFe(supabase: any, userId: string, notaImagemId: string,
   if (updateError) {
     throw updateError;
   }
+
+  // 🆕 Dispara finalização server-side (não bloqueia resposta — fire-and-forget)
+  // Erros não interrompem este fluxo: cron retry-notas-pendentes pegará a nota.
+  supabase.functions.invoke('finalize-nota-estoque', {
+    body: { notaImagemId },
+  }).then(({ error }) => {
+    if (error) {
+      console.warn('⚠️ [NFE-INFOSIMPLES] finalize-nota-estoque falhou (cron retomará):', error.message);
+    } else {
+      console.log('✅ [NFE-INFOSIMPLES] finalize-nota-estoque disparado');
+    }
+  }).catch((e) => {
+    console.warn('⚠️ [NFE-INFOSIMPLES] erro ao disparar finalize:', e?.message);
+  });
 }
 
 serve(async (req) => {

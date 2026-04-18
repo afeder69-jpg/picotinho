@@ -604,6 +604,7 @@ async function processarNFCe(
       pdf_gerado: false, // 🔥 Novo: flag para controlar geração de PDF
       dados_extraidos: dadosExtraidos,
       imagem_url: nfceData.site_receipt, // HTML da nota fiscal
+      status_processamento: 'aguardando_estoque', // 🆕 server-side finalization
       updated_at: new Date().toISOString()
     })
     .eq('id', notaImagemId);
@@ -614,6 +615,19 @@ async function processarNFCe(
   }
 
   console.log('✅ [PROCESSAR] Nota atualizada com sucesso');
+
+  // 🆕 Dispara finalização server-side (fire-and-forget — cron retoma se falhar)
+  supabase.functions.invoke('finalize-nota-estoque', {
+    body: { notaImagemId },
+  }).then(({ error }) => {
+    if (error) {
+      console.warn('⚠️ [NFCE-INFOSIMPLES] finalize-nota-estoque falhou (cron retomará):', error.message);
+    } else {
+      console.log('✅ [NFCE-INFOSIMPLES] finalize-nota-estoque disparado');
+    }
+  }).catch((e) => {
+    console.warn('⚠️ [NFCE-INFOSIMPLES] erro ao disparar finalize:', e?.message);
+  });
 }
 
 serve(async (req) => {
