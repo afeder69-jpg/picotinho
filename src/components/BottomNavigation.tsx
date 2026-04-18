@@ -104,6 +104,13 @@ const BottomNavigation = () => {
   const location = useLocation();
   const { user } = useAuth();
 
+  // Sub-fase C: rastrear última navegação manual do usuário
+  // (usado para guardar a navegação automática para /screenshots)
+  const lastUserNavigationAt = useRef<number>(Date.now());
+  useEffect(() => {
+    lastUserNavigationAt.current = Date.now();
+  }, [location.pathname]);
+
   const handleNoteConfirm = async () => {
     console.log('✅ [VIEWER] Nota confirmada, navegando para screenshots');
     
@@ -447,220 +454,59 @@ const BottomNavigation = () => {
 
 
   /**
-   * 🤖 PROCESSAMENTO AUTOMÁTICO DE NOTAS FISCAIS (SEM CONFIRMAÇÃO MANUAL)
-   * 
-   * Esta função é chamada automaticamente quando o realtime detecta que
-   * dados_extraidos foi preenchido em notas_imagens.
-   * 
-   * FLUXO:
-   * 1. Gera PDF temporário (necessário para validate-receipt)
-   * 2. Chama validate-receipt para verificar duplicatas
-   * 3. Se aprovada → chama process-receipt-full (normalização + estoque)
-   * 4. Se rejeitada → deleta a nota e notifica usuário
-   * 
-   * ⚠️ NÃO REQUER CONFIRMAÇÃO DO USUÁRIO
-   * Todo o processo é automático após extração dos dados.
+   * 🤖 PROCESSAMENTO AUTOMÁTICO DE NOTAS FISCAIS — MODO OBSERVADOR (Sub-fase C)
+   *
+   * MUDANÇA Sub-fase C: O frontend NÃO dispara mais `validate-receipt` nem
+   * `process-receipt-full` no caminho automático. A finalização agora roda
+   * 100% no servidor via `finalize-nota-estoque` (acionado por
+   * `process-nfe-infosimples` / `process-nfce-infosimples` ou pelo cron
+   * `retry-notas-pendentes`).
+   *
+   * O frontend apenas:
+   *  - Marca a nota como "em observação" (guards anti-duplicação preservados).
+   *  - Aguarda o realtime/polling entregar `status_processamento = 'processada'`
+   *    para então fazer markQueueDoneByNotaId + toast + navegação conservadora.
+   *  - Em caso de `status_processamento = 'erro'`, marca a fila com erro.
+   *
+   * Os caminhos legados (gerarPDFBackground, validate-receipt invoke,
+   * process-receipt-full invoke, delete de rejeitada) NÃO foram removidos do
+   * arquivo nesta sub-fase — ficam para uma limpeza posterior (Sub-fase D).
    */
   const processarNotaAutomaticamente = async (
-    notaId: string, 
-    userId: string, 
-    notaData: any
+    notaId: string,
+    _userId: string,
+    _notaData: any
   ) => {
-    // ✅ GUARD 1: Evitar processamento duplicado usando ref síncrona
+    // ✅ GUARD 1: Evitar registro duplicado na observação
     if (activelyProcessingRef.current.has(notaId)) {
-      console.log(`⚠️ [AUTO] Nota ${notaId} já está sendo processada, ignorando...`);
+      console.log(`⚠️ [AUTO-OBSERVER] Nota ${notaId} já está sob observação, ignorando...`);
       return;
     }
-    
-    // ✅ GUARD 2: Verificar timestamp para evitar race conditions (30s de bloqueio)
+
+    // ✅ GUARD 2: Throttle 30s
     const lastProcessing = lastProcessingTimestamp.current.get(notaId) || 0;
     const agora = Date.now();
     if (agora - lastProcessing < 30000) {
-      console.log(`⚠️ [AUTO] Nota ${notaId} processada recentemente (${((agora - lastProcessing) / 1000).toFixed(0)}s atrás), ignorando...`);
+      console.log(`⚠️ [AUTO-OBSERVER] Nota ${notaId} observada recentemente, ignorando...`);
       return;
     }
-    
-    // Marcar como em processamento INSTANTANEAMENTE
+
     activelyProcessingRef.current.add(notaId);
     lastProcessingTimestamp.current.set(notaId, agora);
-    console.log(`🔒 [AUTO] Nota ${notaId} BLOQUEADA para processamento`);
-    
-    try {
-      console.log('🤖 [AUTO] Iniciando processamento automático da nota:', notaId);
-      
-      // 1. Gerar PDF temporário (necessário para validação)
-      console.log('📄 [AUTO] Gerando PDF temporário...');
-      const pdfUrl = await gerarPDFBackground(notaId, userId, notaData.dados_extraidos);
-      
-      if (!pdfUrl) {
-        throw new Error('Falha ao gerar PDF temporário');
-      }
-      
-      console.log('✅ [AUTO] PDF gerado:', pdfUrl);
-      
-    // 2. Validar nota
-    console.log('🔍 [AUTO] Validando nota...');
-    const { data: validationData, error: validationError } = await supabase.functions.invoke(
-      'validate-receipt',
-      {
-        body: {
-          notaImagemId: notaId,
-          userId: userId,
-          pdfUrl: pdfUrl,
-          fromInfoSimples: true,
-        },
-      }
-    );
-      
-      if (validationError) {
-        console.error('❌ [AUTO] Erro na validação:', validationError);
-        throw validationError;
-      }
-      
-      console.log('📋 [AUTO] Resultado da validação:', validationData);
-      
-      // 3. Verificar se foi aprovada
-      if (!validationData?.approved) {
-        console.warn('⚠️ [AUTO] Nota REJEITADA:', validationData?.reason);
-        
-        let toastTitle = '❌ Nota inválida';
-        let toastDescription = validationData?.message || 'A nota não passou na validação.';
-        let toastDuration = 8000;
-        
-        if (validationData?.reason === 'duplicada') {
-          toastTitle = '⚠️ Nota Duplicada';
-        } else if (validationData?.reason === 'dados_incompletos') {
-          toastTitle = '📄 Não foi possível ler a nota';
-          toastDescription = 'Os dados desta nota fiscal não puderam ser lidos corretamente. Tente escanear novamente com boa iluminação e a nota bem enquadrada.';
-        } else if (validationData?.reason === 'setor_invalido') {
-          toastTitle = '🏪 Estabelecimento não aceito';
-        }
-        
-        toast({
-          title: toastTitle,
-          description: toastDescription,
-          variant: 'destructive',
-          duration: toastDuration,
-        });
-        
-      // 🗑️ Deletar nota rejeitada
-      console.log('🗑️ [AUTO] Deletando nota rejeitada...');
-      await supabase.from('notas_imagens').delete().eq('id', notaId);
-      
-      // Remover do array de processamento para evitar loop
-      removeProcessingNote(notaId);
-      
-      // Limpar PDF temporário
-      const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
-      await supabase.storage.from('receipts').remove([fileName]);
-      
-      console.log('✅ [AUTO] Nota rejeitada deletada');
-      // 🔵 Marcar erro na fila (rejeitada)
-      markQueueErrorByNotaId(notaId, validationData?.reason || 'rejeitada');
-      return;
-      }
-      
-      // 4. ✅ Nota APROVADA - Processar estoque
-      console.log('✅ [AUTO] Nota APROVADA - processando estoque...');
-      
-      // Guard: verificar se já foi processada antes de chamar
-      const { data: notaAtual } = await supabase
-        .from('notas_imagens')
-        .select('processada')
-        .eq('id', notaId)
-        .single();
+    console.log(`👁️ [AUTO-OBSERVER] Nota ${notaId} sob observação — aguardando finalize-nota-estoque no servidor`);
 
-      if (notaAtual?.processada) {
-        console.log('✅ [AUTO] Nota já processada, pulando chamada');
-        toast({
-          title: '✅ Nota já processada!',
-          description: 'Esta nota já foi adicionada ao estoque.',
-        });
-        navigate('/screenshots');
-        // 🔵 Marcar como concluída na fila
-        markQueueDoneByNotaId(notaId);
-        return;
-      }
-      
-      // 5. Processar estoque
-      const { data: processData, error: processError } = await supabase.functions.invoke(
-        'process-receipt-full',
-        { body: { notaId, userId } }
-      );
-      
-      if (processError) {
-        console.error('❌ [AUTO] Erro ao processar estoque:', processError);
-        toast({
-          title: 'Erro ao processar estoque',
-          description: processError.message || 'Tente novamente',
-          variant: 'destructive',
-        });
-        // 🔵 Marcar erro na fila
-        markQueueErrorByNotaId(notaId, processError.message);
-        return;
-      }
-      
-      // Tratar concorrência: already_processing ou already_processed
-      if (processData?.already_processing) {
-        console.log('⏳ [AUTO] Nota já sendo processada por outra instância');
-        // Discreto: não alarmar o usuário, apenas logar
-        return;
-      }
+    // Toast informativo discreto — confirmação real virá pelo realtime
+    toast({
+      title: '📋 Processando no servidor...',
+      description: 'A nota está sendo finalizada automaticamente.',
+    });
 
-      if (processData?.already_processed) {
-        console.log('✅ [AUTO] Nota já processada por outra instância');
-        toast({
-          title: '✅ Nota já processada!',
-          description: `${processData.itens_inseridos || 0} produtos já estão no estoque`,
-        });
-        navigate('/screenshots');
-        // 🔵 Marcar como concluída na fila
-        markQueueDoneByNotaId(notaId);
-        return;
-      }
-      
-      console.log('✅ [AUTO] Estoque processado:', processData);
-      
-      // Toast final consolidado
-      toast({
-        title: '✅ Nota processada!',
-        description: `${processData?.itens_inseridos || 0} produtos adicionados ao estoque`,
-      });
-      
-      // Navegar para "Minhas Notas" após processamento
-      navigate('/screenshots');
-      
-      // 6. Limpar PDF temporário
-      const fileName = `${userId}/temp_nfce_${notaId}.pdf`;
-      await supabase.storage.from('receipts').remove([fileName]);
-      await supabase.from('notas_imagens').update({ pdf_url: null }).eq('id', notaId);
-      
-      console.log('🎉 [AUTO] Processamento automático concluído!');
-      // 🔵 Marcar como concluída na fila
-      markQueueDoneByNotaId(notaId);
-      
-    } catch (error: any) {
-      console.error('❌ [AUTO] Erro no processamento automático:', error);
-      toast({
-        title: 'Erro ao processar nota',
-        description: error.message || 'Tente novamente',
-        variant: 'destructive',
-      });
-      
-      // Tentar deletar nota com erro
-      try {
-        await supabase.from('notas_imagens').delete().eq('id', notaId);
-        removeProcessingNote(notaId);
-      } catch (deleteError) {
-        console.error('❌ [AUTO] Erro ao deletar nota com erro:', deleteError);
-      }
-      // 🔵 Marcar erro na fila
-      markQueueErrorByNotaId(notaId, error.message);
-    } finally {
-      // ✅ SEMPRE remover do Set ao finalizar
-      activelyProcessingRef.current.delete(notaId);
-      console.log(`🔓 [AUTO] Nota ${notaId} DESBLOQUEADA`);
+    if ('vibrate' in navigator) {
+      navigator.vibrate([100, 50, 100]);
     }
+
+    // Conclusão / erro virão pelo listener realtime (status_processamento)
+    // — ver useEffect abaixo. Não há mais await aqui.
   };
 
   /**
@@ -961,6 +807,106 @@ const BottomNavigation = () => {
       supabase.removeChannel(channel);
     };
   }, [user?.id, removeProcessingNote, toast, navigate]);
+
+  // 🆕 Sub-fase C: Realtime listener dedicado a `status_processamento`
+  // Observa transições de status do servidor (finalize-nota-estoque) e
+  // atualiza fila local + toasts + navegação conservadora.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    console.log('🔔 [STATUS-OBSERVER] Configurando listener para status_processamento');
+
+    const channel = supabase
+      .channel('notas-status-processamento')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notas_imagens',
+          filter: `usuario_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const novo = payload.new as any;
+          const antigo = payload.old as any;
+          if (!novo?.id) return;
+
+          const statusNovo = novo.status_processamento;
+          const statusAntigo = antigo?.status_processamento;
+          if (statusNovo === statusAntigo) return;
+
+          console.log(`📡 [STATUS-OBSERVER] ${novo.id}: ${statusAntigo} → ${statusNovo}`);
+
+          // Só reagimos se a nota está sob observação local
+          if (!activelyProcessingRef.current.has(novo.id) &&
+              !notaIdToQueueRef.current.has(novo.id)) {
+            return;
+          }
+
+          if (statusNovo === 'processada') {
+            const itensCount = Array.isArray(novo.dados_extraidos?.itens)
+              ? novo.dados_extraidos.itens.length
+              : (Array.isArray(novo.dados_extraidos?.produtos)
+                  ? novo.dados_extraidos.produtos.length
+                  : 0);
+
+            toast({
+              title: '✅ Nota processada!',
+              description: itensCount > 0
+                ? `${itensCount} produtos adicionados ao estoque`
+                : 'Estoque atualizado.',
+            });
+
+            markQueueDoneByNotaId(novo.id);
+            removeProcessingNote(novo.id);
+            activelyProcessingRef.current.delete(novo.id);
+
+            // Navegação conservadora — 3 condições obrigatórias
+            const rotaAtual = location.pathname;
+            const rotasPermitidas = rotaAtual === '/' || rotaAtual === '/screenshots';
+            const semInteracaoRecente = (Date.now() - lastUserNavigationAt.current) > 10000;
+            // OBS: lastUserNavigationAt é atualizado a cada mudança de rota,
+            // então "sem interação recente" = usuário ficou parado na rota
+            // de captura por > 10s (caso típico do fluxo feliz: scan → espera).
+            // Se ele acabou de chegar nessa rota (< 10s), é um sinal claro
+            // de jornada ativa de captura — também navegamos.
+            const jornadaAtivaDeCaptura = (Date.now() - lastUserNavigationAt.current) < 30000;
+
+            if (rotasPermitidas && (semInteracaoRecente || jornadaAtivaDeCaptura)) {
+              console.log('🧭 [STATUS-OBSERVER] Navegando para /screenshots (condições OK)');
+              navigate('/screenshots');
+            } else {
+              console.log('🚫 [STATUS-OBSERVER] Navegação suprimida — usuário em outra jornada');
+            }
+            return;
+          }
+
+          if (statusNovo === 'erro') {
+            const msg = novo.erro_mensagem || 'Falha ao processar a nota';
+            toast({
+              title: '❌ Erro ao processar nota',
+              description: msg,
+              variant: 'destructive',
+              duration: 8000,
+            });
+            markQueueErrorByNotaId(novo.id, msg);
+            removeProcessingNote(novo.id);
+            activelyProcessingRef.current.delete(novo.id);
+            return;
+          }
+
+          // Status intermediários (aguardando_estoque, processando) — só log.
+        }
+      )
+      .subscribe((s) => {
+        console.log('📡 [STATUS-OBSERVER] Status:', s);
+      });
+
+    return () => {
+      console.log('🔌 [STATUS-OBSERVER] Desconectando');
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, removeProcessingNote, toast, navigate, location.pathname]);
 
   // useEffect para polling de fallback (verifica a cada 3 segundos)
   useEffect(() => {

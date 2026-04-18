@@ -29,6 +29,10 @@ interface Receipt {
   file_name?: string;
   file_type?: string;
   debug_texto?: string;
+  // 🆕 Sub-fase C: campos de observação do pipeline server-side
+  status_processamento?: string | null;
+  tentativas_finalizacao?: number | null;
+  erro_mensagem?: string | null;
 }
 
 // Helper para extrair bairro de um endereço brasileiro em formatos variados
@@ -275,6 +279,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(highlightNotaId || null);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  // 🆕 Sub-fase C: controle de "Tentar de novo"
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+  const lastRetryAtRef = React.useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
   
 
@@ -362,7 +369,10 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
               processada: nota.processada,
               file_name: fileName,
               file_type: 'PDF',
-              debug_texto: (nota as any).debug_texto
+              debug_texto: (nota as any).debug_texto,
+              status_processamento: (nota as any).status_processamento ?? null,
+              tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
+              erro_mensagem: (nota as any).erro_mensagem ?? null,
             };
           }
           
@@ -393,7 +403,10 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             processada: nota.processada,
             file_name: fileName,
             file_type: isPdfWithConversion ? 'PDF (convertido)' : (nota.imagem_path?.toLowerCase().includes('.pdf') ? 'PDF' : 'Imagem'),
-            debug_texto: (nota as any).debug_texto
+            debug_texto: (nota as any).debug_texto,
+            status_processamento: (nota as any).status_processamento ?? null,
+            tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
+            erro_mensagem: (nota as any).erro_mensagem ?? null,
           };
         })
         .filter(nota => nota !== null);
@@ -798,6 +811,65 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
     }
   };
 
+  // 🆕 Sub-fase C: handler do botão "Tentar de novo"
+  const handleRetry = async (notaId: string) => {
+    // Throttle 10s por nota
+    const last = lastRetryAtRef.current.get(notaId) || 0;
+    if (Date.now() - last < 10000) {
+      console.log('⏱️ [RETRY] Throttle ativo, ignorando clique');
+      return;
+    }
+    if (retryingIds.has(notaId)) return;
+
+    lastRetryAtRef.current.set(notaId, Date.now());
+    setRetryingIds(prev => new Set(prev).add(notaId));
+
+    try {
+      console.log('🔁 [RETRY] Disparando finalize-nota-estoque para', notaId);
+      const { data, error } = await supabase.functions.invoke('finalize-nota-estoque', {
+        body: { notaImagemId: notaId },
+      });
+
+      if (error) {
+        console.error('❌ [RETRY] Erro ao invocar:', error);
+        toast({
+          title: 'Erro ao reprocessar',
+          description: error.message || 'Tente novamente em instantes.',
+          variant: 'destructive',
+        });
+      } else if (data?.skipped) {
+        toast({
+          title: 'Nota já está sendo processada',
+          description: 'Aguarde alguns segundos.',
+        });
+      } else {
+        toast({
+          title: 'Reprocessamento solicitado',
+          description: 'O servidor vai finalizar a nota em instantes.',
+        });
+      }
+    } catch (e: any) {
+      console.error('❌ [RETRY] Falha:', e);
+      toast({
+        title: 'Erro ao reprocessar',
+        description: e?.message || 'Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      // Manter no Set por mais alguns segundos para evitar spam visual,
+      // o polling/realtime atualizará o status real.
+      setTimeout(() => {
+        setRetryingIds(prev => {
+          const next = new Set(prev);
+          next.delete(notaId);
+          return next;
+        });
+      }, 3000);
+      // Recarrega para refletir mudança de status
+      loadReceipts();
+    }
+  };
+
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'processed': return <Badge variant="default">Processada</Badge>;
@@ -1191,25 +1263,77 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                           </div>
                           
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <Badge 
-                              variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
-                              className="badge"
-                            >
-                              {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
-                            </Badge>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => viewReceipt(receipt)} 
+                            {(() => {
+                              // 🆕 Sub-fase C: badge baseado em status_processamento
+                              const sp = receipt.status_processamento;
+                              const tent = receipt.tentativas_finalizacao ?? 0;
+                              const errMsg = receipt.erro_mensagem || '';
+                              const isRetrying = retryingIds.has(receipt.id);
+
+                              if (sp === 'aguardando_estoque') {
+                                return (
+                                  <Badge variant="secondary" className="badge gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Na fila
+                                  </Badge>
+                                );
+                              }
+                              if (sp === 'processando' || isRetrying) {
+                                return (
+                                  <Badge variant="default" className="badge gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Processando
+                                  </Badge>
+                                );
+                              }
+                              if (sp === 'erro') {
+                                const limiteAtingido = tent >= 5;
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <Badge
+                                      variant="destructive"
+                                      className="badge"
+                                      title={errMsg}
+                                    >
+                                      {limiteAtingido ? 'Limite atingido' : 'Erro'}
+                                    </Badge>
+                                    {!limiteAtingido && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRetry(receipt.id)}
+                                        disabled={isRetrying}
+                                        className="detalhes"
+                                      >
+                                        Tentar de novo
+                                      </Button>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              // Default: comportamento atual (processada / pendente)
+                              return (
+                                <Badge
+                                  variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
+                                  className="badge"
+                                >
+                                  {(receipt.status === 'processed' || receipt.processada) ? 'Processada' : 'Pendente'}
+                                </Badge>
+                              );
+                            })()}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => viewReceipt(receipt)}
                               className="detalhes"
                             >
                               <Eye className="w-3 h-3 mr-1" />
                               Ver Detalhes
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => setDeleteConfirmId(receipt.id)} 
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleteConfirmId(receipt.id)}
                               className="text-destructive hover:text-destructive delete-btn"
                             >
                               <Trash2 className="w-3 h-3" />
