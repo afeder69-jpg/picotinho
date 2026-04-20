@@ -69,6 +69,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col pb-32">
+      <HomeScanBeam targetRef={mascotRef} />
       {/* Header com logo e botão de login/logout */}
       <div className="flex justify-between items-center p-4 relative">
         <PicotinhoLogo />
