@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 import PicotinhoLogo from "@/components/PicotinhoLogo";
@@ -8,11 +8,13 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { APP_VERSION } from "@/lib/constants";
+import HomeScanBeam from "@/components/HomeScanBeam";
 
 const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [userNickname, setUserNickname] = useState<string>('');
+  const mascotRef = useRef<HTMLImageElement>(null);
 
   // Carregar apelido quando usuário faz login
   useEffect(() => {
@@ -67,6 +69,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex flex-col pb-32">
+      <HomeScanBeam targetRef={mascotRef} />
       {/* Header com logo e botão de login/logout */}
       <div className="flex justify-between items-center p-4 relative">
         <PicotinhoLogo />
@@ -104,6 +107,8 @@ const Index = () => {
         <div className="text-center max-w-md mx-auto space-y-8">
           <div className="flex justify-center">
             <img 
+              ref={mascotRef}
+              id="home-mascot-img"
               src="/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png" 
               alt="Mascote Picotinho" 
               className="w-32 h-32 object-contain mix-blend-multiply"
