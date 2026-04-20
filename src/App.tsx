@@ -34,6 +34,7 @@ import Terms from "./pages/Terms";
 import ResetPassword from "./pages/ResetPassword";
 
 import BottomNavigation from "./components/BottomNavigation";
+import { GlobalProcessingIndicator } from "./components/GlobalProcessingIndicator";
 import NotFound from "./pages/NotFound";
 import { APP_VERSION } from "./lib/constants";
 
@@ -134,6 +135,7 @@ const App = () => {
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              <GlobalProcessingIndicator />
               <BottomNavigation />
             </BrowserRouter>
           </TooltipProvider>

@@ -98,6 +98,12 @@ const BottomNavigation = () => {
     window.addEventListener('open-scanner', handleOpenScanner);
     return () => window.removeEventListener('open-scanner', handleOpenScanner);
   }, []);
+
+  // 🔵 Sub-fase D: notifica o GlobalProcessingIndicator quando o scanner está ATIVO
+  // (única exceção em que o indicador global é ocultado).
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('scanner-active', { detail: showQRScanner }));
+  }, [showQRScanner]);
   const debounceTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const lastProcessingTimestamp = useRef<Map<string, number>>(new Map());
   const navigate = useNavigate();
@@ -1073,13 +1079,16 @@ const BottomNavigation = () => {
 
   return (
     <>
-      {/* 🔵 Badge de processamento da fila */}
-      {noteQueue.visible && noteQueue.stats.total > 0 && (
+      {/* 🔵 Badge de processamento da fila local — DESATIVADO na Sub-fase D.
+          O indicador global agora vive em <GlobalProcessingIndicator /> (App.tsx)
+          e é alimentado pelo servidor (notas_imagens) via realtime + polling.
+          A fila local (useNoteQueue) permanece ativa para orquestrar o pipeline de scan. */}
+      {/* {noteQueue.visible && noteQueue.stats.total > 0 && (
         <ProcessingBadge
           stats={noteQueue.stats}
           startTime={noteQueue.queue.length > 0 ? noteQueue.queue[0].addedAt : Date.now()}
         />
-      )}
+      )} */}
 
       {/* Botões flutuantes fixos */}
       <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
