@@ -14,6 +14,7 @@ const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [userNickname, setUserNickname] = useState<string>('');
+  const mascotRef = useRef<HTMLImageElement>(null);
 
   // Carregar apelido quando usuário faz login
   useEffect(() => {
