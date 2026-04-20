@@ -11,21 +11,18 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 // 🎯 Ajuste fino do ponto de chegada sobre o QR do mascote.
 // Valores em fração (0..1) relativos à imagem do Picotini.
 // Diminua QR_TARGET_X para mover à esquerda; aumente QR_TARGET_Y para descer.
-const QR_TARGET_X = 0.58; // fração horizontal da imagem (QR fica à esq. do %)
+const QR_TARGET_X = 0.48; // fração horizontal da imagem (QR fica à esq. do %)
 const QR_TARGET_Y = 0.70; // fração vertical da imagem
 // Tamanho do quadrado de varredura sobre o QR
 const SCAN_BOX_SIZE = 36; // px
 
-// 🔁 Repetições da animação na entrada da Home
-const REPEAT_COUNT = 2; // número de passadas
-const REPEAT_GAP_MS = 350; // intervalo entre passadas
+// 🔁 Segunda passada (somente se o usuário permanecer na Home)
+const SECOND_PASS_DELAY_MS = 5000; // ~5s após a 1ª animação terminar
 
 // 🎨 Cor do feixe (laser vermelho) — tokens HSL
 const LASER_CORE = "0 100% 60%"; // vermelho vivo
 const LASER_GLOW = "0 100% 50%";
 
-// Chave de sessão para garantir execução única por sessão
-const SESSION_KEY = "home-beam-played";
 
 interface HomeScanBeamProps {
   targetRef: RefObject<HTMLImageElement>;
@@ -51,7 +48,6 @@ const HomeScanBeam = ({ targetRef }: HomeScanBeamProps) => {
     ) {
       return;
     }
-    if (sessionStorage.getItem(SESSION_KEY) === "1") return;
 
     const SINGLE_BEAM_MS = 700;
     const SINGLE_SCAN_MS = 1000;
@@ -96,17 +92,15 @@ const HomeScanBeam = ({ targetRef }: HomeScanBeamProps) => {
       }
     };
 
-    const startTimer = window.setTimeout(() => {
-      sessionStorage.setItem(SESSION_KEY, "1");
-      // Disparar N repetições com intervalo
-      for (let i = 0; i < REPEAT_COUNT; i++) {
-        const delay = i * (SINGLE_TOTAL + REPEAT_GAP_MS);
-        const tid = window.setTimeout(() => runOnce(i), delay);
-        cleanupRef.current.push(tid);
-      }
-    }, 250);
+    // 1ª passada logo na entrada
+    const t0 = window.setTimeout(() => runOnce(0), 250);
+    // 2ª passada ~5s depois (somente se o componente ainda estiver montado/Home ativa)
+    const t1 = window.setTimeout(
+      () => runOnce(1),
+      250 + SINGLE_TOTAL + SECOND_PASS_DELAY_MS
+    );
+    cleanupRef.current.push(t0, t1);
 
-    cleanupRef.current.push(startTimer);
     return () => {
       cleanupRef.current.forEach((id) => clearTimeout(id));
       cleanupRef.current = [];
