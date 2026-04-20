@@ -1108,6 +1108,7 @@ const BottomNavigation = () => {
             <Button
               variant="default"
               size="lg"
+              data-qr-scan-button="true"
               className="flex-col h-20 w-20 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg pointer-events-auto"
               onClick={handleQRButtonClick}
             >
