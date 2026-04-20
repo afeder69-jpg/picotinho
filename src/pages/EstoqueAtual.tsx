@@ -1604,31 +1604,33 @@ const EstoqueAtual = () => {
           <span className="text-sm text-foreground flex-1 truncate font-medium">
             {nomeExibicao} zerado
           </span>
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              className="p-1.5 rounded-md hover:bg-accent transition-colors"
+              className="p-3 rounded-md hover:bg-accent transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               onClick={() => {
                 adicionarCaixaEntrada(item);
                 sonnerToast.dismiss(id);
               }}
               title="Adicionar à lista"
+              aria-label="Adicionar à lista"
             >
-              <ShoppingCart className="h-4 w-4 text-primary" />
+              <ShoppingCart className="h-6 w-6 text-primary" />
             </button>
             <button
-              className="p-1.5 rounded-md hover:bg-accent transition-colors"
+              className="p-3 rounded-md hover:bg-accent transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               onClick={() => {
                 restaurarItem(dadosUndo);
                 sonnerToast.dismiss(id);
               }}
               title="Desfazer"
+              aria-label="Desfazer"
             >
-              <Undo2 className="h-4 w-4 text-muted-foreground" />
+              <Undo2 className="h-6 w-6 text-muted-foreground" />
             </button>
           </div>
         </div>
       ),
-      { duration: 7000 }
+      { duration: 10000 }
     );
   }, [adicionarCaixaEntrada, restaurarItem]);
 
