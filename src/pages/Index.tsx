@@ -106,6 +106,8 @@ const Index = () => {
         <div className="text-center max-w-md mx-auto space-y-8">
           <div className="flex justify-center">
             <img 
+              ref={mascotRef}
+              id="home-mascot-img"
               src="/lovable-uploads/62443b56-2f57-4ca1-8797-db67febf5108.png" 
               alt="Mascote Picotinho" 
               className="w-32 h-32 object-contain mix-blend-multiply"
