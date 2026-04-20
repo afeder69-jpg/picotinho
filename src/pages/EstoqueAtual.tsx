@@ -2573,7 +2573,11 @@ const EstoqueAtual = () => {
                 <Button 
                   variant="destructive" 
                   size="sm"
-                  onClick={() => abrirModalExclusao(itemEditando)}
+                  onClick={() => {
+                    const item = itemEditando;
+                    fecharModalEdicao();
+                    if (item) zerarViaSwipe(item);
+                  }}
                   className="w-full text-xs h-8"
                 >
                   <Trash2 className="w-3 h-3 mr-1" />
