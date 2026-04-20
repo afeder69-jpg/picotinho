@@ -48,7 +48,6 @@ const HomeScanBeam = ({ targetRef }: HomeScanBeamProps) => {
     ) {
       return;
     }
-    if (sessionStorage.getItem(SESSION_KEY) === "1") return;
 
     const SINGLE_BEAM_MS = 700;
     const SINGLE_SCAN_MS = 1000;
@@ -93,17 +92,15 @@ const HomeScanBeam = ({ targetRef }: HomeScanBeamProps) => {
       }
     };
 
-    const startTimer = window.setTimeout(() => {
-      sessionStorage.setItem(SESSION_KEY, "1");
-      // Disparar N repetições com intervalo
-      for (let i = 0; i < REPEAT_COUNT; i++) {
-        const delay = i * (SINGLE_TOTAL + REPEAT_GAP_MS);
-        const tid = window.setTimeout(() => runOnce(i), delay);
-        cleanupRef.current.push(tid);
-      }
-    }, 250);
+    // 1ª passada logo na entrada
+    const t0 = window.setTimeout(() => runOnce(0), 250);
+    // 2ª passada ~5s depois (somente se o componente ainda estiver montado/Home ativa)
+    const t1 = window.setTimeout(
+      () => runOnce(1),
+      250 + SINGLE_TOTAL + SECOND_PASS_DELAY_MS
+    );
+    cleanupRef.current.push(t0, t1);
 
-    cleanupRef.current.push(startTimer);
     return () => {
       cleanupRef.current.forEach((id) => clearTimeout(id));
       cleanupRef.current = [];
