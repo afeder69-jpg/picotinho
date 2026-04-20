@@ -23,8 +23,6 @@ const SECOND_PASS_DELAY_MS = 5000; // ~5s após a 1ª animação terminar
 const LASER_CORE = "0 100% 60%"; // vermelho vivo
 const LASER_GLOW = "0 100% 50%";
 
-// Chave de sessão para garantir execução única por sessão
-const SESSION_KEY = "home-beam-played";
 
 interface HomeScanBeamProps {
   targetRef: RefObject<HTMLImageElement>;
