@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 import PicotinhoLogo from "@/components/PicotinhoLogo";
@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { APP_VERSION } from "@/lib/constants";
+import HomeScanBeam from "@/components/HomeScanBeam";
 
 const Index = () => {
   const { user, signOut } = useAuth();
