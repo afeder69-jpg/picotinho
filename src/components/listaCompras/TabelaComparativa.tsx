@@ -43,11 +43,12 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
     });
   });
 
-  // Adicionar preços de mercados individuais
+  // Adicionar preços de mercados individuais (IGNORANDO itens históricos — Fase 1.1)
   const allMercadosKeys = Object.keys(comparacao.comparacao || {});
   allMercadosKeys.forEach(key => {
     const mercadoData = comparacao.comparacao[key];
     mercadoData.produtos?.forEach((p: any) => {
+      if (p.historico === true) return; // não vaza histórico para comparação cruzada
       const produto = todosProdutos.get(p.produto_nome);
       if (produto) {
         produto[key] = p.preco_unitario;
