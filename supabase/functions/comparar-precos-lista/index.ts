@@ -363,6 +363,15 @@ serve(async (req) => {
 
       const precosMap = new Map();
 
+      // PROTEÇÃO ANTI-FALSO-POSITIVO (Fase 1):
+      // Pendente real (sem master e sem master resolvido por nome) NÃO participa
+      // de comparação cruzada entre mercados. Vai direto para "produtosSemPreco"
+      // e exibirá apenas o histórico restrito ao próprio usuário.
+      if (!produtoMasterId) {
+        console.log(`  🛡️ Pendente sem master — fora da comparação cruzada (apenas histórico do usuário)`);
+        return { item, precos: precosMap };
+      }
+
       for (const mercado of mercados) {
         const nomeNormalizado = mercado.nome?.toUpperCase().trim() || '';
         console.log(`\n🏪 Mercado: ${nomeNormalizado}`);
