@@ -32,6 +32,7 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
   
   comparacao.otimizado.mercados?.forEach((mercado: any) => {
     mercado.produtos.forEach((p: any) => {
+      if (p.historico === true) return; // Fase 1.1: histórico não compete na tabela cruzada
       if (!todosProdutos.has(p.produto_nome)) {
         todosProdutos.set(p.produto_nome, {
           nome: p.produto_nome,
