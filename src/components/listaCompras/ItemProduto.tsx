@@ -18,6 +18,8 @@ interface ItemProdutoProps {
     melhor_preco: boolean;
     economia?: number;
     comprado: boolean;
+    historico?: boolean;
+    aguardando_normalizacao?: boolean;
   };
   onToggleComprado: (id: string) => void;
   onQuantidadeChange: (id: string, qtd: number) => void;
