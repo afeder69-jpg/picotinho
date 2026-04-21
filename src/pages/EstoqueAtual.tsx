@@ -1525,7 +1525,8 @@ const EstoqueAtual = () => {
           produto_nome: (item.produto_nome_exibicao || item.produto_nome || 'Produto').toUpperCase().trim(),
           quantidade: 1,
           unidade_medida: item.unidade_medida || 'UN',
-          item_livre: !produtoMasterId,
+          // Item vindo do estoque é sempre produto real (origem fiscal), nunca item livre
+          item_livre: false,
         };
         console.log('[CaixaEntrada] ETAPA 5 - insert payload:', payload);
         const { error: erroInsert } = await supabase
@@ -1537,7 +1538,8 @@ const EstoqueAtual = () => {
           // Fallback: tentar sem produto_id (FK pode ser inválida)
           if (produtoMasterId) {
             console.warn('[CaixaEntrada] FALLBACK: tentando insert como item_livre');
-            const payloadFallback = { ...payload, produto_id: null, item_livre: true };
+            // Fallback de FK: insere sem master_id, mas mantém como produto real (origem estoque)
+            const payloadFallback = { ...payload, produto_id: null, item_livre: false };
             const { error: erroFallback } = await supabase
               .from('listas_compras_itens')
               .insert(payloadFallback);
