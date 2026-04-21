@@ -680,20 +680,73 @@ serve(async (req) => {
     };
 
     // Helper: casar nome de estabelecimento histórico com mercado da área de atuação
-    const matchEstabelecimentoComMercado = (estNome: string | null, estCnpj: string | null) => {
+    const matchEstabelecimentoComMercado = async (estNome: string | null, estCnpj: string | null) => {
+      // 1) CNPJ direto
       if (estCnpj) {
-        const porCnpj = mercados.find(m => m.cnpj && m.cnpj.replace(/\D/g, '') === estCnpj.replace(/\D/g, ''));
+        const cnpjLimpo = estCnpj.replace(/\D/g, '');
+        const porCnpj = mercados.find(m => m.cnpj && m.cnpj.replace(/\D/g, '') === cnpjLimpo);
         if (porCnpj) return porCnpj;
       }
-      if (!estNome) return null;
-      const alvo = normalizarTexto(estNome);
-      if (!alvo) return null;
-      // match por contains em ambas as direções (cobre "PREZUNIC" vs "PREZUNIC SUPERMERCADOS LTDA")
-      return mercados.find(m => {
-        const nomeM = normalizarTexto(m.nome || '');
-        if (!nomeM) return false;
-        return nomeM.includes(alvo) || alvo.includes(nomeM);
-      }) || null;
+      // 2) Nome — contains bidirecional
+      if (estNome) {
+        const alvo = normalizarTexto(estNome);
+        if (alvo) {
+          const porNome = mercados.find(m => {
+            const nomeM = normalizarTexto(m.nome || '');
+            if (!nomeM) return false;
+            return nomeM.includes(alvo) || alvo.includes(nomeM);
+          });
+          if (porNome) return porNome;
+        }
+      }
+      // 3) Fallback: consultar normalizacoes_estabelecimentos para resolver razão social ↔ fantasia
+      try {
+        const alvoNorm = estNome ? normalizarTexto(estNome) : '';
+        const cnpjLimpo = estCnpj ? estCnpj.replace(/\D/g, '') : '';
+        if (!alvoNorm && !cnpjLimpo) return null;
+
+        const { data: normRows } = await supabaseAdmin
+          .from('normalizacoes_estabelecimentos')
+          .select('nome_original, nome_normalizado, cnpj_original')
+          .eq('ativo', true)
+          .limit(500);
+
+        if (normRows && normRows.length > 0) {
+          // Procura linha de normalização que case com o estabelecimento histórico
+          const matched = normRows.find(r => {
+            const orig = normalizarTexto(r.nome_original || '');
+            const norm = normalizarTexto(r.nome_normalizado || '');
+            const cnpjR = (r.cnpj_original || '').replace(/\D/g, '');
+            if (cnpjLimpo && cnpjR && cnpjR === cnpjLimpo) return true;
+            if (alvoNorm && orig && (orig.includes(alvoNorm) || alvoNorm.includes(orig))) return true;
+            if (alvoNorm && norm && (norm.includes(alvoNorm) || alvoNorm.includes(norm))) return true;
+            return false;
+          });
+
+          if (matched) {
+            const matchedCnpj = (matched.cnpj_original || '').replace(/\D/g, '');
+            const matchedNomeNorm = normalizarTexto(matched.nome_normalizado || '');
+            const matchedNomeOrig = normalizarTexto(matched.nome_original || '');
+            const mercadoFinal = mercados.find(m => {
+              const mc = (m.cnpj || '').replace(/\D/g, '');
+              const mn = normalizarTexto(m.nome || '');
+              if (matchedCnpj && mc && mc === matchedCnpj) return true;
+              if (mn && matchedNomeNorm && (mn.includes(matchedNomeNorm) || matchedNomeNorm.includes(mn))) return true;
+              if (mn && matchedNomeOrig && (mn.includes(matchedNomeOrig) || matchedNomeOrig.includes(mn))) return true;
+              return false;
+            });
+            if (mercadoFinal) {
+              console.log(`  🔗 [REDIST-NORM] estab="${estNome}" cnpj="${estCnpj}" → mercado "${mercadoFinal.nome}" via normalizacoes_estabelecimentos`);
+              return mercadoFinal;
+            }
+          }
+        }
+      } catch (errNorm) {
+        console.warn('  ⚠️ Falha ao consultar normalizacoes_estabelecimentos:', errNorm);
+      }
+
+      console.log(`  ❌ [REDIST-FALHOU] estab="${estNome}" cnpj="${estCnpj}" — mercado não está na área`);
+      return null;
     };
 
     // CENÁRIO OTIMIZADO
