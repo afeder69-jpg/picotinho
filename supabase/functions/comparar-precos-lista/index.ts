@@ -756,8 +756,89 @@ serve(async (req) => {
       };
     });
 
+    // ===== FASE 1.1: Redistribuir itens com histórico para o mercado correspondente =====
+    // Itens em produtosSemPreco com ultimo_preco.estabelecimento_* casado a um mercado da área
+    // são INJETADOS no mercado (otimizado + comparação) com flag historico=true e
+    // aguardando_normalizacao=true. NÃO entram em melhor_preco/economia.
+    const produtosSemPrecoFinal: any[] = [];
+    for (const itemSP of produtosSemPreco) {
+      const up = itemSP.ultimo_preco;
+      if (!up || !up.valor_unitario) {
+        produtosSemPrecoFinal.push(itemSP);
+        continue;
+      }
+      const mercadoMatch = matchEstabelecimentoComMercado(
+        up.estabelecimento_nome || null,
+        up.estabelecimento_cnpj || null
+      );
+      if (!mercadoMatch) {
+        produtosSemPrecoFinal.push(itemSP);
+        continue;
+      }
+
+      const valor = Number(up.valor_unitario);
+      const qtd = Number(itemSP.quantidade) || 1;
+      const precoTotal = valor * qtd;
+      const dataAtu = up.data_atualizacao || new Date().toISOString();
+
+      const produtoInjetado = {
+        id: itemSP.id,
+        produto_nome: itemSP.produto_nome,
+        quantidade: itemSP.quantidade,
+        unidade_medida: itemSP.unidade_medida,
+        preco_unitario: valor,
+        preco_total: precoTotal,
+        melhor_preco: false,
+        economia: 0,
+        comprado: itemSP.comprado,
+        data_atualizacao: dataAtu,
+        historico: true,
+        aguardando_normalizacao: true,
+      };
+
+      // Injeta no OTIMIZADO
+      if (!mercadosOtimizado.has(mercadoMatch.id)) {
+        mercadosOtimizado.set(mercadoMatch.id, {
+          id: mercadoMatch.id,
+          nome: mercadoMatch.nome,
+          cnpj: mercadoMatch.cnpj,
+          distancia: mercadoMatch.distancia,
+          total: 0,
+          produtos: [],
+        });
+      }
+      const mercadoOtim = mercadosOtimizado.get(mercadoMatch.id);
+      mercadoOtim.produtos.push(produtoInjetado);
+      mercadoOtim.total += precoTotal;
+      totalOtimizado += precoTotal;
+
+      // Injeta na COMPARAÇÃO
+      const chaveComparacao = Object.keys(comparacao).find(
+        k => comparacao[k].id === mercadoMatch.id
+      );
+      if (chaveComparacao) {
+        comparacao[chaveComparacao].produtos.push(produtoInjetado);
+        comparacao[chaveComparacao].total += precoTotal;
+        const idxMercado = mercados.findIndex(m => m.id === mercadoMatch.id);
+        if (idxMercado >= 0 && totaisPorMercado[idxMercado] !== undefined) {
+          totaisPorMercado[idxMercado] += precoTotal;
+        }
+      }
+
+      console.log(`  🎯 [INJETADO] "${itemSP.produto_nome}" no mercado "${mercadoMatch.nome}" R$ ${valor} (histórico)`);
+    }
+
+    // Recalcular diferenças de todos os mercados após injeção
+    Object.keys(comparacao).forEach(k => {
+      comparacao[k].diferenca = comparacao[k].total - totalOtimizado;
+    });
+
+    // Substituir lista original pela final (somente itens sem mercado correspondente)
+    produtosSemPreco.length = 0;
+    produtosSemPreco.push(...produtosSemPrecoFinal);
+
     // Calcular economia
-    const maiorTotal = Math.max(...totaisPorMercado);
+    const maiorTotal = totaisPorMercado.length > 0 ? Math.max(...totaisPorMercado) : 0;
     const economia = maiorTotal - totalOtimizado;
     const percentualEconomia = maiorTotal > 0 ? (economia / maiorTotal) * 100 : 0;
 
