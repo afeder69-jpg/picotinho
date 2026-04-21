@@ -1,60 +1,82 @@
 
-Objetivo: confirmar e corrigir a falha global de login com base em evidência, não em hipótese.
 
-Diagnóstico já confirmado
-- `src/integrations/supabase/client.ts` aponta para a URL correta do projeto: `https://mjsbwrtegorjxcepvrik.supabase.co`.
-- As páginas publicadas `/auth` em `picotinho.com.br` e `picotinho.lovable.app` carregam normalmente.
-- Os auth logs do Supabase vieram vazios nas últimas 24h e também em 7 dias.
-- Isso indica que as tentativas de login não estão chegando ao backend de Auth. A quebra está antes do Supabase processar a requisição, na camada de conexão/rede/DNS do cliente para `mjsbwrtegorjxcepvrik.supabase.co`.
+# Plano revisado e enxuto: nomes em CAIXA ALTA na Lista de Compras
 
-Plano de implementação
-1. Instrumentar o fluxo de login
-- Adicionar um diagnóstico explícito antes de `signInWithPassword` e `signInWithOAuth`.
-- Testar conectividade real com o Auth do Supabase e capturar:
-  - status HTTP
-  - erro de DNS/fetch
-  - `navigator.onLine`
-  - origin atual
-  - plataforma web/nativa
-- Exibir mensagem técnica clara em vez de erro genérico.
+## Componentes realmente usados na renderização da Lista de Compras
 
-2. Criar telemetria de diagnóstico no frontend
-- Centralizar isso num helper de auth/rede.
-- Registrar no console detalhes suficientes para distinguir:
-  - DNS não resolve
-  - timeout
-  - CORS
-  - provider OAuth inválido
-  - redirect inválido
-  - backend respondeu com erro funcional
+Confirmado por inspeção dos imports em `ListaCompras.tsx` e `ListaComprasComprar.tsx`:
 
-3. Revisar o bootstrap de auth
-- Confirmar que `AuthProvider` continua como fonte principal da sessão.
-- Remover redundâncias que possam mascarar erro de rede como erro de login.
-- Garantir que o loading do Google volte ao normal se a abertura do OAuth falhar antes do redirect.
+| Componente | Onde é usado | Exibe `produto_nome`? |
+|---|---|---|
+| `ItemProdutoLista.tsx` | `ListaCompras.tsx` (lista principal) | ✅ |
+| `ItemProdutoSemPreco.tsx` | `ListaCompras.tsx` (sem preço / livres) | ✅ |
+| `ItemProduto.tsx` | `GrupoMercado.tsx` (modo comparação por mercado) | ✅ |
+| `ItemProdutoInterativo.tsx` | `ListaComprasComprar.tsx` (modo comprar) | ✅ |
 
-4. Validar configuração externa do Supabase
-- Conferir no dashboard:
-  - Site URL
-  - Redirect URLs web
-  - deep link `picotinho://auth/callback`
-  - provider Google habilitado
-- Isso não explica o DNS por si só, mas elimina causas paralelas.
+## Arquivos que serão alterados (mínimo necessário)
 
-5. Teste final em ambiente publicado
-- Validar em `picotinho.com.br` e `picotinho.lovable.app`:
-  - e-mail/senha
-  - Google
-  - mensagem de erro detalhada quando houver falha
-- Se o diagnóstico continuar acusando DNS, a conclusão fica fechada: problema externo de resolução/conectividade com o domínio `*.supabase.co`, não de credenciais nem de RLS.
+### Camada 1 — Exibição (4 arquivos, 1 linha cada)
 
-Arquivos envolvidos
-- `src/pages/Auth.tsx`
-- `src/components/auth/AuthProvider.tsx`
-- `src/integrations/supabase/client.ts`
-- novo helper de diagnóstico em `src/lib/*`
+Alteração trivial: `{item.produto_nome}` → `{(item.produto_nome ?? '').toUpperCase()}`.
 
-Resultado esperado
-- Saber com precisão absoluta em qual camada quebra.
-- Parar de tratar um erro de rede/DNS como se fosse “erro de login”.
-- Ter evidência objetiva para corrigir o app ou, se confirmado, agir na infraestrutura/configuração externa.
+1. `src/components/listaCompras/ItemProdutoLista.tsx` (linha 40)
+2. `src/components/listaCompras/ItemProdutoSemPreco.tsx` (linha 45)
+3. `src/components/listaCompras/ItemProduto.tsx` (linha ~58)
+4. `src/components/listaCompras/ItemProdutoInterativo.tsx` (linha 39)
+
+Esses 4 cobrem 100% do que o usuário vê na tela de Lista de Compras (incluindo a "Itens para comprar").
+
+### Camada 2 — Entrada (2 arquivos, ajuste mínimo)
+
+5. `src/pages/EstoqueAtual.tsx` (linha 1525) — único ponto que insere na lista automática "Itens para comprar":
+   ```ts
+   produto_nome: (item.produto_nome_exibicao || item.produto_nome || 'Produto').toUpperCase().trim()
+   ```
+
+6. `src/components/listaCompras/EditarListaDialog.tsx` (linha 156) — único ponto de inserção de **item livre** digitado manualmente:
+   ```ts
+   produto_nome: texto.toUpperCase().trim()
+   ```
+
+   Obs.: a renderização do nome do produto **dentro do EditarListaDialog** (linha 360) **não será alterada** — é uma lista de seleção de produtos master, que já vêm em CAIXA ALTA do catálogo. Manter conservador.
+
+## Arquivos que ficam de fora (justificativa)
+
+| Arquivo do plano anterior | Por que NÃO alterar agora |
+|---|---|
+| `ExportarListaDialog.tsx` | É exportação PDF/texto, fluxo secundário. Não é a tela de Lista de Compras. Se o usuário quiser depois, tratamos isolado. |
+| `TabelaComparativa.tsx` | Comparação cruzada entre mercados, fluxo secundário. A correção de exibição em `ItemProduto` já cobre o GrupoMercado. |
+| Linha 360 do `EditarListaDialog.tsx` (renderização) | Lista produtos master que já são ALL CAPS pelo padrão do catálogo. Mexer seria redundante e aumenta risco. |
+| `AdicionarListaDialog.tsx` | Insere via `produto.nome_padrao` (master, já ALL CAPS). Sem necessidade. |
+
+## Total de arquivos alterados
+
+**6 arquivos**, todos com mudança de 1 linha (ou expressão):
+- 4 componentes de exibição (toUpperCase no render)
+- 2 pontos de entrada (toUpperCase no insert)
+
+## O que NÃO é tocado
+
+- Lógica de preços, comparação, swipe, undo, exclusão, edição de quantidade, realtime, lazy loading.
+- Estoque, catálogo master, normalização, notas fiscais.
+- Banco: nenhum migration, nenhum backfill.
+- Buscas e dedup (já são case-insensitive nos pontos relevantes).
+
+## Resultado garantido
+
+| Cenário | Resultado |
+|---|---|
+| Itens antigos em minúsculo na lista "Itens para comprar" | Aparecem em MAIÚSCULO (Camada 1) |
+| Novo item via carrinho do estoque | Salvo e exibido em MAIÚSCULO (Camadas 1+2) |
+| Item livre digitado manualmente | Salvo e exibido em MAIÚSCULO (Camadas 1+2) |
+| Item via produto master | Já era MAIÚSCULO, continua igual |
+| Modo "Comprar" e modo "Por mercado" | Exibem em MAIÚSCULO |
+
+## Validação
+
+1. Abrir lista "Itens para comprar" com itens antigos → todos em CAIXA ALTA.
+2. Zerar produto no estoque + carrinho → item entra em MAIÚSCULO no banco e na tela.
+3. Adicionar item livre via "Editar Lista" digitando minúsculo → salvo e exibido em MAIÚSCULO.
+4. Modo Comprar e GrupoMercado → nomes em MAIÚSCULO.
+5. Swipe, comprado, editar quantidade, comparação de preços, undo → comportamento inalterado.
+
