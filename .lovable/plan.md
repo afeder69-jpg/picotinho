@@ -1,166 +1,88 @@
 
 
-# Plano revisado: Pendentes como produtos reais + Reconciliação GLOBAL pós-normalização (em 2 fases)
+# Fase 1.1 — Histórico mais robusto + pendentes integrados ao agrupamento por mercado
 
-## Diretriz de negócio reafirmada
+## Causa raiz confirmada (lista `3c75022d…` do usuário `ae5b5501…`)
 
-Quando um master normaliza um produto pendente, **todas as listas de todos os usuários** que tenham aquele item pendente devem ser reconciliadas — não só as do mesmo `user_id`. O plano abaixo entrega isso, mas em **duas fases** porque o match global exige salvaguardas que não cabem na mesma janela da Fase 1 sem aumentar risco.
+| Item | `produto_id` na lista | Existe no estoque do usuário? | Por que o histórico não aparece hoje |
+|---|---|---|---|
+| MACARRÃO FETUCCINE SANTA AMÁLIA 500G | `9e39dcb9` | Sim, mas com master `622113f0` (variante "SÊMOLA") e nome levemente diferente | `buscarUltimoPrecoConhecido` consulta `precos_atuais` por master `9e39dcb9` (sem registros) e `estoque_app` por `ilike(nome exato)` — não casa o nome com "SÊMOLA" |
+| ISOTÔNICO POWER 500ML | `7174e12e` | Sim, mesmo master. Tem `precos_atuais` em CNPJ PREZUNIC | PREZUNIC não está na área de atuação. `precos_atuais` retorna ele como histórico, mas o item ainda foi para "Sem preço" e o usuário quer ver dentro de PREZUNIC |
+| PAPEL HIGIÊNICO DELUXE COTTON FOLD 30M 24 UN | `2c26d9f4` | Sim, com master `eae43acf` (mesmo produto, master duplicado "COTT N FD") | Master diferente; busca por nome exato falha por causa de "COTT N FD" vs "COTTON FOLD" |
+| ESPONJA DE AÇO BOMBRIL 45G | `c7592206` | Não exatamente — usuário tem "ESPONJA MULTIUSO BOMBRIL 4 UN" e "ESPONJA BOMBRIL LV4P3" | Produtos diferentes; histórico legítimo só existe para variantes |
 
----
+## Duas correções, ambas cirúrgicas
 
-## FASE 1 — Tratar pendentes como produtos reais (entrega imediata)
+### Correção A — Backend: histórico por **token-cover**, não por igualdade
 
-Idêntica ao plano anterior, sem mudança no escopo.
+`supabase/functions/comparar-precos-lista/index.ts` → `buscarUltimoPrecoConhecido`
 
-### 1.1 Definição dos três estados
+Manter as 3 fontes (precos_atuais por master / estoque_app do usuário / notas_imagens JSONB) mas trocar o critério de match nas fontes 2 e 3:
 
-| Estado | Critério em `listas_compras_itens` | Comparação cruzada |
-|---|---|---|
-| Livre manual | `item_livre = true` | Não |
-| Pendente | `item_livre = false` E `produto_id IS NULL` | **Não** (proteção contra falso positivo) |
-| Normalizado | `item_livre = false` E `produto_id IS NOT NULL` | Sim, via `produto_master_id` |
+1. Tokenizar o nome do item: UPPER + remover acentos + remover pontuação + dividir por espaço + descartar tokens ≤2 caracteres e tokens puramente numéricos sem unidade.
+2. Calcular cobertura: `score = tokens_do_item ∩ tokens_do_candidato`. Aceitar se cobertura ≥ 80% dos tokens do item OU se ≥ 3 tokens fortes baterem (incluindo a marca).
+3. Para fonte 2 (`estoque_app`), trocar `ilike(nome_exato)` por `select` filtrado por `user_id` + `not preco_unitario_ultimo is null`, ordenar por `updated_at desc`, **pegar últimos 50** e filtrar em memória aplicando o token-cover. Devolve o de maior score (em empate, mais recente).
+4. Para fonte 3 (`notas_imagens` JSONB), fazer o mesmo: já lê 50 notas; em vez de `===`, aplicar token-cover sobre `descricao`/`nome` de cada produto da nota.
+5. **Salvaguarda anti-falso-positivo**: se o item tem token de variante (ex: "SÊMOLA", "ZERO", "INTEGRAL", "DIET", "LIGHT", "DE AÇO", "MULTIUSO") e esse token não bate, rejeita o candidato. Reaproveita a lista de variantes da memória `product-variant-keyword-validation`. Resultado: para o usuário, "ESPONJA DE AÇO BOMBRIL 45G" continua sem histórico (não é a esponja multiuso), mas "MACARRÃO FETUCCINE SANTA AMÁLIA 500G" passa a casar com "MACARRÃO FETUCCINE SÊMOLA SANTA AMÁLIA 500G" se você decidir tratar SÊMOLA como token neutro — vamos manter SÊMOLA como **neutro** para tipo de massa de mesma família e adicionar uma whitelist curta de tokens neutros (`SÊMOLA`, `TRADICIONAL`, `CLÁSSICO`).
 
-### 1.2 Histórico do pendente (`comparar-precos-lista`)
+Resultado esperado dos 4 itens problemáticos:
+- Macarrão Fetuccine: passa a recuperar o último preço (R$ 5,20) com o estabelecimento da nota.
+- Papel Higiênico Deluxe: recupera R$ 29,98.
+- Isotônico Power: recupera o último preço local do usuário (estoque) ou o `precos_atuais` PREZUNIC.
+- Esponja de Aço Bombril 45g: continua sem histórico (correto — produto diferente).
 
-Para cada pendente, buscar último preço **restrito ao próprio usuário**:
-1. `estoque_app` do usuário, match por nome normalizado (UPPER + TRIM) → `preco_unitario_ultimo`, `updated_at`, último estabelecimento da nota mais recente.
-2. Fallback: JSONB `produtos` em `notas_imagens` (`processada=true`) do mesmo usuário.
+### Correção B — Backend + Frontend: pendentes/sem-preço com histórico **entram no mercado**
 
-Devolve `ultimo_preco = {valor, data, estabelecimento_nome}` ou `null`. Sem cruzar dados de outros usuários (privacidade + anti-falso-positivo).
+Ajustar a saída de `comparar-precos-lista` para que itens com histórico (`ultimo_preco != null`) sejam injetados no agrupamento do mercado correspondente, em vez de irem para `produtosSemPreco`.
 
-### 1.3 Renderização
+**Backend**:
+- Após calcular `produtosSemPreco`, para cada item com `ultimo_preco.estabelecimento_nome` preenchido:
+  1. Tentar casar esse nome de estabelecimento com algum mercado da área (normalização UPPER+trim+sem-acento; usar `normalizacoes_estabelecimentos` quando disponível).
+  2. Se casou: injetar o item no `mercadosOtimizado` correspondente (cria a entrada se não existir) e em `comparacao[mercadoX].produtos`, marcando `aguardando_normalizacao: true` e `historico: true`. Atualizar `mercado.total` somando `ultimo_preco.valor * quantidade`. **Não** entra em `melhor_preco` nem em `economia` (não vai para comparação cruzada).
+  3. Se NÃO casou (mercado fora da área ou desconhecido): cria/usa um grupo especial `mercadoHistorico_<cnpj-ou-nome>` em `comparacao` (não na otimizada) ou mantém em `produtosSemPreco` apenas como último recurso.
+- Itens sem `ultimo_preco` continuam em `produtosSemPreco`.
 
-- Pendente com histórico → seção "📋 Sem preço nos mercados próximos" exibindo "Último preço em <mercado>: R$ X,XX (data)" + bolinha vermelha + badge "Aguardando normalização".
-- Pendente sem histórico → mesma seção, sem preço.
-- Livre manual → seção "💬 Lembretes", sem busca.
+**Frontend** (`src/pages/ListaCompras.tsx` + `GrupoMercado.tsx` + `ItemProduto.tsx`):
+- `GrupoMercado` continua igual; `ItemProduto` recebe novas props opcionais `aguardandoNormalizacao` e `historico`. Quando ambas verdadeiras, exibe um badge discreto "Aguardando normalização" e uma marca visual sutil (ex: bolinha vermelha pequena ao lado do preço) indicando "preço histórico". Sem mudar layout, sem afetar swipe/checkbox/quantidade.
+- `ListaCompras.tsx` não precisa de filtro novo — o backend já entrega esses itens dentro de `dadosAtivos.mercados[].produtos`. A seção "📋 Produtos sem preço" só renderiza o que sobrar (pendentes sem nenhum histórico recuperável).
+- `CardResumoOtimizado` e a soma do mercado naturalmente já incluem esses itens porque vêm dentro de `mercado.produtos` e `mercado.total` já considera o valor.
 
-### 1.4 Comparação cruzada
+### Comparação cruzada protegida
 
-Filtro duro: somente `produto_master_id IS NOT NULL` entra em `produtosPorMercado` e na `TabelaComparativa`. Pendente nunca vaza para comparação cruzada.
+A `TabelaComparativa` e o cálculo de `melhor_preco`/`economia` continuam usando apenas itens com preço **atual** (resultado de `buscarPrecoInteligente`). Os injetados via histórico ficam marcados com `historico: true` e são ignorados nesses cálculos:
 
-### Arquivos da Fase 1
-- `supabase/functions/comparar-precos-lista/index.ts` — popular `ultimo_preco` para pendentes (escopo do usuário) e blindar `produtosPorMercado`.
-- `src/components/listaCompras/ItemProdutoSemPreco.tsx` — exibir mercado/data/badge.
-- `src/pages/ListaCompras.tsx` — propagar `ultimo_preco` no mapeamento (se ainda não passa).
+- Em `comparacao[mercadoX].produtos`: o item histórico aparece com `melhor_preco: false`, `economia: 0`, `historico: true`. A `TabelaComparativa` filtra `historico !== true` ao montar a comparação cruzada.
+- Em `mercadosOtimizado`: o item histórico não disputa "melhor preço entre mercados". É exibido no mercado de origem porque o preço é real, mas não conta como vencedor.
 
-Sem migration, sem trigger, sem backfill. **Não toca em listas de outros usuários.**
+## Arquivos alterados (3)
 
----
+1. `supabase/functions/comparar-precos-lista/index.ts`
+   - Reescrever `buscarUltimoPrecoConhecido` com token-cover + lock de variante + whitelist de neutros.
+   - Após o loop, redistribuir os itens com `ultimo_preco` para o mercado correspondente em `mercadosOtimizado` e `comparacao`, marcando `historico: true` e `aguardando_normalizacao: true`. Pendentes sem histórico permanecem em `produtosSemPreco`.
 
-## FASE 2 — Reconciliação GLOBAL pós-normalização
+2. `src/components/listaCompras/ItemProduto.tsx`
+   - Aceitar e renderizar `aguardando_normalizacao` (badge "Aguardando normalização", discreto, abaixo do nome) e `historico` (bolinha vermelha pequena ao lado do preço).
 
-Entra **depois** que a Fase 1 estiver validada em produção. Aqui mora a regra de negócio "atualizar listas de todos os usuários".
+3. `src/components/listaCompras/TabelaComparativa.tsx`
+   - Ao montar o cruzamento entre mercados, ignorar produtos com `historico: true`.
 
-### 2.1 Gatilho
+Sem mudança em `ListaCompras.tsx`, `GrupoMercado.tsx`, `EstoqueAtual.tsx`, `ItemProdutoSemPreco.tsx` (este último continua existindo só para o resíduo). Sem migration, sem trigger, sem backfill.
 
-Trigger AFTER UPDATE em `produtos_master_global` (não em `estoque_app`, porque master é o evento global real). Dispara quando:
-- master é criado novo, OU
-- master ganha/troca `nome_padrao`, `marca`, `ean` ou `sku_global`, OU
-- master é absorvido por outro (consolidação) — propaga para o master destino.
+## O que NÃO é tocado
 
-A trigger chama `reconciliar_listas_globalmente(p_master_id, p_nomes_origem text[])`, onde `p_nomes_origem` é a lista de nomes/sinônimos conhecidos que devem casar com o master.
-
-### 2.2 Critério de match GLOBAL (multicamadas)
-
-Um item pendente em **qualquer** lista é vinculado ao master se passar em **pelo menos uma** das camadas — em ordem de confiança:
-
-| Camada | Regra | Confiança |
-|---|---|---|
-| **A. EAN exato** | `item.ean_comercial` (quando existir no payload futuro) = `master.ean` | Máxima |
-| **B. Nome igual ao `nome_padrao`** | UPPER+TRIM+sem-acento(`item.produto_nome`) == UPPER+TRIM+sem-acento(`master.nome_padrao`) | Alta |
-| **C. Nome em `produtos_candidatos_normalizacao` aprovado** | Existe linha com `texto_original` = nome do item E `produto_master_id` = master destino E `status = 'aprovado'` | Alta (decisão humana) |
-| **D. Nome em `normalizacoes_log` com `acao='vinculado'`** | Mesmo princípio, baseado em decisão registrada | Alta |
-| **E. Match em `estoque_app` de qualquer usuário** | Existe `estoque_app` com aquele `produto_nome` e `produto_master_id` = master destino | Média-alta (alguém já confirmou o vínculo via fluxo normal de nota) |
-
-Camadas A–D são suficientes sozinhas. Camada E é a ponte que captura os casos do usuário relatado: a Lasanha foi vinculada no estoque do João, então qualquer item pendente "Lasanha Sadia Peito de Peru 600g" em listas de outros usuários reconcilia com o mesmo master.
-
-**Fora dessas cinco camadas: não reconcilia.** Sem fuzzy match global, sem similaridade probabilística, sem IA na hora — fuzzy/IA só roda no fluxo de criação/aprovação de master, que é o lugar onde já existe revisão humana.
-
-### 2.3 Salvaguardas anti-falso-positivo
-
-Aplicadas em todas as camadas:
-
-1. `produto_id IS NULL` no item da lista (nunca sobrescreve vínculo existente).
-2. `comprado = false` (não toca item já marcado como comprado — preserva histórico do usuário).
-3. `item_livre = false` (livre manual nunca é tocado, mesmo que o nome bata).
-4. Match de nome **normalizado**: UPPER + TRIM + remoção de acentos + colapso de espaços. Sem `ilike '%x%'`, sem substring — só igualdade exata após normalização.
-5. **Lock de variante**: se o nome do item contém token de variante (sabor, peso, tipo) ausente no `nome_padrao` do master, não reconcilia. Reaproveita a lógica já existente de `product-variant-keyword-validation` da memória do projeto.
-6. **Auditoria obrigatória**: cada update em `listas_compras_itens` por essa rotina insere uma linha em nova tabela `reconciliacao_listas_log` com `(item_id, lista_id, user_id, master_id, camada, nome_antes, nome_depois, executado_em)`. Permite rollback dirigido se algo der errado.
-7. **Limite por execução**: a função processa no máximo N itens por chamada (ex: 5000) e loga overflow — evita lock prolongado em tabelas grandes.
-
-### 2.4 Campos atualizados em `listas_compras_itens`
-
-```sql
-UPDATE listas_compras_itens SET
-  produto_id   = <master_id>,
-  item_livre   = false,
-  produto_nome = <master.nome_padrao>
-WHERE <salvaguardas 1–6 satisfeitas>;
-```
-
-Preservados: `quantidade`, `unidade_medida`, `comprado`, `lista_id`, `created_at`.
-
-### 2.5 Diferença entre reconciliação global e comparação cruzada
-
-| Aspecto | Reconciliação global | Comparação cruzada de mercados |
-|---|---|---|
-| Objetivo | Vincular item ao master | Decidir qual mercado tem melhor preço |
-| Quando | Trigger pós-normalização | Cada abertura de "Preços" da lista |
-| Quem dispara | Master ou fluxo de normalização automática | Usuário final |
-| Critério | 5 camadas determinísticas com salvaguardas | Apenas itens já com `produto_master_id` |
-| Risco | Vincular produto errado em escala | Sugerir preço errado |
-| Mitigação | Camadas + lock de variante + auditoria | Filtro de `produto_master_id IS NOT NULL` (Fase 1 já garante) |
-
-### 2.6 Backfill único (controlado)
-
-Edge Function admin `reconciliar-listas-pendentes-global-backfill` (JWT + role master), que percorre `produtos_master_global` e dispara `reconciliar_listas_globalmente` para cada master existente. Roda **manual**, com dry-run primeiro (apenas lê e relata o que faria, sem escrever) e depois execução real. Resolve os 4 itens legados desta lista e equivalentes em todo o sistema.
-
-### Arquivos da Fase 2
-
-- Migration: tabela `reconciliacao_listas_log`, função `reconciliar_listas_globalmente`, função auxiliar `normalizar_nome_match`, trigger AFTER UPDATE em `produtos_master_global`.
-- `supabase/functions/reconciliar-listas-pendentes-global-backfill/index.ts` (admin, dry-run + apply).
-- Página admin opcional para visualizar `reconciliacao_listas_log` e desfazer entradas erradas (item-a-item) — pode ficar para iteração seguinte.
-
-### O que NÃO é tocado em nenhuma fase
-
-- Lógica de comparação de preços por mercado, área de atuação, agrupamento, otimizado.
-- Swipe, undo, edição de quantidade, marcar comprado, exclusão, realtime, lazy loading.
-- Fluxo de criação/aprovação de master, normalização automática na ingestão de notas.
-- `EstoqueAtual.tsx` (origem já corrigida em iteração anterior).
-- Listas de outros usuários **na Fase 1**.
-
----
-
-## Matriz final
-
-| Cenário | Fase 1 | Fase 2 |
-|---|---|---|
-| Item livre manual | Lembretes | Nunca tocado |
-| Pendente sem histórico | Sem preço, sem valor | Reconcilia se master surgir |
-| Pendente com histórico do próprio usuário | Sem preço, exibe último preço pessoal | Reconcilia se master surgir |
-| Pendente equivalente em lista de outro usuário, master criado | Continua pendente | **Reconciliado automaticamente** se passar em A–E |
-| Item já comprado | Não tocado | Não tocado |
-| Item com vínculo já existente | Não tocado | Não tocado |
-| Variante divergente (ex: sabor, peso) | — | Bloqueado pela salvaguarda 5 |
+- Lógica de área de atuação, busca de mercados próximos, raio.
+- Cálculo de `precos_atuais` por mercado para itens normalizados.
+- Swipe, undo, lazy loading, edição de quantidade, marcar comprado, exclusão, realtime.
+- Itens livres manuais (`item_livre = true`) continuam em "💬 Lembretes".
+- Fase 2 (reconciliação global pós-normalização) — segue separada.
 
 ## Validação
 
-**Fase 1**
-1. Pendente com histórico aparece em "Sem preço" com último preço + badge "Aguardando normalização".
-2. Pendente sem histórico aparece sem preço.
-3. Livre manual continua em Lembretes.
-4. Comparação por mercado não inclui pendentes.
-5. Swipe, undo, comprado, edição: comportamento idêntico.
-
-**Fase 2**
-1. Master cria/normaliza produto → trigger reconcilia listas de todos os usuários que tenham pendentes equivalentes (camadas A–E).
-2. Item com nome de variante divergente não é tocado (salvaguarda 5).
-3. Item já comprado ou já vinculado não é tocado (salvaguardas 1–3).
-4. `reconciliacao_listas_log` registra cada update com camada usada.
-5. Backfill rodado em dry-run mostra prévia exata; rodado de verdade aplica e os 4 itens legados desta lista deixam de aparecer como livres.
-
-## Resumo da divisão
-
-- **Fase 1**: aprovar e implementar agora. Sem risco de afetar outros usuários. Resolve o problema visual imediato.
-- **Fase 2**: aprovar separadamente após validar Fase 1. Entrega a regra de negócio global com salvaguardas explícitas e auditoria.
+1. Lista `3c75022d…`: Macarrão Fetuccine, Papel Higiênico Deluxe, Isotônico Power passam a aparecer **dentro do mercado de origem** (PREZUNIC ou supermercado da última nota) com preço, data e badge "Aguardando normalização". Compõem o total daquele mercado.
+2. Esponja de Aço Bombril 45g (variante real diferente): permanece em "📋 Produtos sem preço" sem valor — comportamento correto.
+3. `TabelaComparativa`: itens históricos não aparecem como "vencedor" em outros mercados; só ficam visíveis no mercado de origem.
+4. Itens normalizados com preço atual na área: comportamento idêntico ao de hoje.
+5. Itens livres manuais: permanecem em "💬 Lembretes".
+6. Swipe, undo, comprado, edição de quantidade, lazy loading: inalterados.
+7. Comparação cruzada não vaza pendentes ainda não normalizados (proteção da Fase 1 mantida via flag `historico`).
 
