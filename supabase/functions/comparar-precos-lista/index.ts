@@ -394,14 +394,69 @@ serve(async (req) => {
     // Calcular cenários
     const produtosSemPreco: any[] = [];
 
+    // Helper: buscar último preço conhecido (fallback histórico) para item sem preço atual na área
+    const buscarUltimoPrecoConhecido = async (item: any, masterId: string | null) => {
+      try {
+        // 1. precos_atuais (qualquer estabelecimento, sem filtro de CNPJ)
+        if (masterId) {
+          const { data } = await supabaseAdmin
+            .from('precos_atuais')
+            .select('valor_unitario, data_atualizacao, estabelecimento_nome')
+            .eq('produto_master_id', masterId)
+            .order('data_atualizacao', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (data?.valor_unitario) {
+            return {
+              valor_unitario: Number(data.valor_unitario),
+              data_atualizacao: data.data_atualizacao,
+              estabelecimento_nome: data.estabelecimento_nome || null,
+            };
+          }
+        }
+        // 2. Fallback adicional: estoque do próprio usuário (preco_unitario_ultimo)
+        const nome = (item.produto_nome || '').trim();
+        if (nome) {
+          const { data } = await supabaseAdmin
+            .from('estoque_app')
+            .select('preco_unitario_ultimo, updated_at')
+            .eq('user_id', userId)
+            .ilike('produto_nome', nome)
+            .not('preco_unitario_ultimo', 'is', null)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (data?.preco_unitario_ultimo) {
+            return {
+              valor_unitario: Number(data.preco_unitario_ultimo),
+              data_atualizacao: data.updated_at,
+              estabelecimento_nome: null,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('  ⚠️ Falha ao buscar último preço conhecido:', err);
+      }
+      return null;
+    };
+
     // CENÁRIO OTIMIZADO
     const mercadosOtimizado = new Map();
     let totalOtimizado = 0;
 
-    precosData.forEach(({ item, precos }) => {
+    // Map auxiliar: itemId -> produto_master_id resolvido (para usar no fallback)
+    const masterIdPorItem = new Map<string, string | null>();
+    precosData.forEach(({ item, precos }: any) => {
+      // armazenar master resolvido (item.produto_id pode ter sido resolvido por nome internamente,
+      // mas só temos acesso aqui ao item original; o fallback usa produto_id se existir)
+      masterIdPorItem.set(item.id, item.produto_id || null);
+    });
+
+    for (const { item, precos } of precosData) {
       if (precos.size === 0) {
-        produtosSemPreco.push(item);
-        return;
+        const ultimoPreco = await buscarUltimoPrecoConhecido(item, masterIdPorItem.get(item.id) || null);
+        produtosSemPreco.push({ ...item, ultimo_preco: ultimoPreco });
+        continue;
       }
 
       let melhorPreco = Infinity;
@@ -447,7 +502,7 @@ serve(async (req) => {
         mercadoData.total += precoTotal;
         totalOtimizado += precoTotal;
       }
-    });
+    }
 
     // CENÁRIOS POR MERCADO INDIVIDUAL
     const comparacao: any = {};
