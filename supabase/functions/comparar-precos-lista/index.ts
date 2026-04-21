@@ -875,7 +875,7 @@ serve(async (req) => {
         produtosSemPrecoFinal.push(itemSP);
         continue;
       }
-      const mercadoMatch = matchEstabelecimentoComMercado(
+      const mercadoMatch = await matchEstabelecimentoComMercado(
         up.estabelecimento_nome || null,
         up.estabelecimento_cnpj || null
       );
