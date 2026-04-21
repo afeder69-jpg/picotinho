@@ -480,6 +480,28 @@ export default function ListaCompras() {
                   />
                 ))}
 
+                {comparacao?.mercadosHistorico && comparacao.mercadosHistorico.length > 0 && (
+                  <>
+                    <div className="mt-6 mb-2 px-1">
+                      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                        🗂️ Histórico fiscal por mercado
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        Itens com último preço conhecido em mercados fora da sua área de atuação
+                      </p>
+                    </div>
+                    {comparacao.mercadosHistorico.map((mercado: any) => (
+                      <GrupoMercado
+                        key={mercado.id}
+                        mercado={mercado}
+                        produtos={mercado.produtos}
+                        onToggleComprado={handleToggleComprado}
+                        onQuantidadeChange={handleQuantidadeChange}
+                      />
+                    ))}
+                  </>
+                )}
+
                 {produtosSemPreco.length > 0 && (
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-3 p-3 bg-muted/50 rounded-t border border-border">
@@ -569,6 +591,28 @@ export default function ListaCompras() {
                     </div>
                   ))}
                 </div>
+
+                {comparacao?.mercadosHistorico && comparacao.mercadosHistorico.length > 0 && (
+                  <>
+                    <div className="mt-6 mb-2 px-1">
+                      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                        🗂️ Histórico fiscal por mercado
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        Itens com último preço conhecido em mercados fora da sua área de atuação
+                      </p>
+                    </div>
+                    {comparacao.mercadosHistorico.map((mercado: any) => (
+                      <GrupoMercado
+                        key={mercado.id}
+                        mercado={mercado}
+                        produtos={mercado.produtos}
+                        onToggleComprado={handleToggleComprado}
+                        onQuantidadeChange={handleQuantidadeChange}
+                      />
+                    ))}
+                  </>
+                )}
 
                 {produtosSemPreco.length > 0 && (
                   <div className="mb-6 mt-4">

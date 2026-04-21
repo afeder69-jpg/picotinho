@@ -373,24 +373,49 @@ serve(async (req) => {
 
         console.log(`🛒 ${supermercado.nome}: ${produtosUnicos.size} produtos únicos de ${notasDoSupermercado.length} notas`);
 
-        // Normalizar o nome do supermercado usando a função do banco
+        // Normalizar o nome do supermercado seguindo a hierarquia:
+        // 1) normalizacoes_estabelecimentos (por CNPJ) → 2) RPC normalizar_nome_estabelecimento → 3) nome original
+        const cnpjParaNorm = idParaCnpj.get(supermercado.id) || supermercado.cnpj || null;
         let nomeNormalizado = supermercado.nome;
-        try {
-          const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
-            nome_input: supermercado.nome,
-            cnpj_input: idParaCnpj.get(supermercado.id) || supermercado.cnpj || null
-          });
-          if (nomeNormalizadoResult) {
-            nomeNormalizado = nomeNormalizadoResult;
+
+        if (cnpjParaNorm) {
+          try {
+            const cnpjLimpoNorm = String(cnpjParaNorm).replace(/\D/g, '');
+            const { data: normRow } = await supabase
+              .from('normalizacoes_estabelecimentos')
+              .select('nome_normalizado')
+              .eq('ativo', true)
+              .eq('cnpj_original', cnpjLimpoNorm)
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (normRow?.nome_normalizado) {
+              nomeNormalizado = normRow.nome_normalizado;
+            }
+          } catch (errNormCnpj) {
+            console.log(`⚠️ Falha na normalização por CNPJ (${cnpjParaNorm}): ${errNormCnpj.message}`);
           }
-        } catch (error) {
-          console.log(`Erro ao normalizar nome do supermercado ${supermercado.nome}: ${error.message}`);
-          // Manter nome original em caso de erro
+        }
+
+        // Fallback final: RPC do banco se ainda não houve normalização explícita
+        if (nomeNormalizado === supermercado.nome) {
+          try {
+            const { data: nomeNormalizadoResult } = await supabase.rpc('normalizar_nome_estabelecimento', {
+              nome_input: supermercado.nome,
+              cnpj_input: cnpjParaNorm
+            });
+            if (nomeNormalizadoResult) {
+              nomeNormalizado = nomeNormalizadoResult;
+            }
+          } catch (error) {
+            console.log(`Erro ao normalizar nome do supermercado ${supermercado.nome}: ${error.message}`);
+          }
         }
 
         return {
           ...supermercado,
           nome: nomeNormalizado,
+          cnpj: cnpjParaNorm,
           produtos_disponiveis: produtosUnicos.size
         };
       })

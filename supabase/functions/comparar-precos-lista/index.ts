@@ -566,14 +566,39 @@ serve(async (req) => {
           }
         }
 
-        // 2. Estoque do próprio usuário (PENDENTES + fallback) — token-cover
-        const { data: estoqueRows } = await supabaseAdmin
-          .from('estoque_app')
-          .select('produto_nome, preco_unitario_ultimo, updated_at, nota_id')
-          .eq('user_id', userId)
-          .not('preco_unitario_ultimo', 'is', null)
-          .order('updated_at', { ascending: false })
-          .limit(50);
+        // 2. Estoque do próprio usuário (PENDENTES + fallback) — token-cover dirigido por tokens fortes
+        // Usar OR por tokens significativos do item para garantir que candidatos relevantes
+        // entrem na amostra, mesmo em usuários com centenas de registros.
+        const tokensFortes = tokensItem
+          .filter(t => !TOKENS_NEUTROS.has(t) && !TOKENS_VARIANTE.has(t))
+          .slice(0, 4);
+        const tokensBusca = tokensFortes.length > 0 ? tokensFortes : tokensItem.slice(0, 4);
+        const orFiltroEstoque = tokensBusca.map(t => `produto_nome.ilike.%${t}%`).join(',');
+
+        let estoqueRows: any[] | null = null;
+        if (orFiltroEstoque) {
+          const { data: estoqueDirigido } = await supabaseAdmin
+            .from('estoque_app')
+            .select('produto_nome, preco_unitario_ultimo, updated_at, nota_id')
+            .eq('user_id', userId)
+            .not('preco_unitario_ultimo', 'is', null)
+            .or(orFiltroEstoque)
+            .order('updated_at', { ascending: false })
+            .limit(200);
+          estoqueRows = estoqueDirigido || null;
+        }
+        // Fallback: se a busca dirigida não trouxe nada, manter a janela ampla anterior
+        if (!estoqueRows || estoqueRows.length === 0) {
+          const { data: estoqueAmplo } = await supabaseAdmin
+            .from('estoque_app')
+            .select('produto_nome, preco_unitario_ultimo, updated_at, nota_id')
+            .eq('user_id', userId)
+            .not('preco_unitario_ultimo', 'is', null)
+            .order('updated_at', { ascending: false })
+            .limit(200);
+          estoqueRows = estoqueAmplo || null;
+        }
+        console.log(`  📊 [HIST-CANDIDATOS] estoque_app: ${estoqueRows?.length || 0} candidatos (tokens=[${tokensBusca.join(', ')}])`);
 
         if (estoqueRows && estoqueRows.length > 0) {
           const candidatos = estoqueRows
@@ -621,14 +646,15 @@ serve(async (req) => {
           }
         }
 
-        // 3. Fallback: varrer JSONB de notas_imagens do próprio usuário — token-cover
+        // 3. Fallback: varrer JSONB de notas_imagens do próprio usuário — janela ampliada
         const { data: notas } = await supabaseAdmin
           .from('notas_imagens')
           .select('dados_extraidos, data_criacao')
           .eq('usuario_id', userId)
           .eq('processada', true)
           .order('data_criacao', { ascending: false })
-          .limit(50);
+          .limit(200);
+        console.log(`  📊 [HIST-CANDIDATOS] notas_imagens: ${notas?.length || 0} notas analisadas`);
 
         if (notas && notas.length > 0) {
           for (const nota of notas) {
@@ -864,22 +890,18 @@ serve(async (req) => {
       };
     });
 
-    // ===== FASE 1.1: Redistribuir itens com histórico para o mercado correspondente =====
-    // Itens em produtosSemPreco com ultimo_preco.estabelecimento_* casado a um mercado da área
-    // são INJETADOS no mercado (otimizado + comparação) com flag historico=true e
-    // aguardando_normalizacao=true. NÃO entram em melhor_preco/economia.
+    // ===== FASE 1.3: Classificação final em 3 destinos =====
+    // - otimizado.mercados / comparacao → histórico casa com mercado da área
+    // - mercadosHistorico → histórico válido fora da área
+    // - produtosSemPreco → somente itens realmente sem histórico recuperável
     const produtosSemPrecoFinal: any[] = [];
+    const mercadosHistoricoMap = new Map<string, any>();
+
     for (const itemSP of produtosSemPreco) {
       const up = itemSP.ultimo_preco;
+      // Sem histórico recuperável → permanece em produtosSemPreco
       if (!up || !up.valor_unitario) {
-        produtosSemPrecoFinal.push(itemSP);
-        continue;
-      }
-      const mercadoMatch = await matchEstabelecimentoComMercado(
-        up.estabelecimento_nome || null,
-        up.estabelecimento_cnpj || null
-      );
-      if (!mercadoMatch) {
+        console.log(`  📭 [HIST-SEM-DADOS] "${itemSP.produto_nome}" — nenhum histórico recuperável`);
         produtosSemPrecoFinal.push(itemSP);
         continue;
       }
@@ -904,48 +926,76 @@ serve(async (req) => {
         aguardando_normalizacao: true,
       };
 
-      // Injeta no OTIMIZADO
-      if (!mercadosOtimizado.has(mercadoMatch.id)) {
-        mercadosOtimizado.set(mercadoMatch.id, {
-          id: mercadoMatch.id,
-          nome: mercadoMatch.nome,
-          cnpj: mercadoMatch.cnpj,
-          distancia: mercadoMatch.distancia,
-          total: 0,
-          produtos: [],
-        });
-      }
-      const mercadoOtim = mercadosOtimizado.get(mercadoMatch.id);
-      mercadoOtim.produtos.push(produtoInjetado);
-      mercadoOtim.total += precoTotal;
-      totalOtimizado += precoTotal;
-
-      // Injeta na COMPARAÇÃO
-      const chaveComparacao = Object.keys(comparacao).find(
-        k => comparacao[k].id === mercadoMatch.id
+      const mercadoMatch = await matchEstabelecimentoComMercado(
+        up.estabelecimento_nome || null,
+        up.estabelecimento_cnpj || null
       );
-      if (chaveComparacao) {
-        comparacao[chaveComparacao].produtos.push(produtoInjetado);
-        comparacao[chaveComparacao].total += precoTotal;
-        const idxMercado = mercados.findIndex(m => m.id === mercadoMatch.id);
-        if (idxMercado >= 0 && totaisPorMercado[idxMercado] !== undefined) {
-          totaisPorMercado[idxMercado] += precoTotal;
-        }
-      }
 
-      console.log(`  🎯 [INJETADO] "${itemSP.produto_nome}" no mercado "${mercadoMatch.nome}" R$ ${valor} (histórico)`);
+      if (mercadoMatch) {
+        // CASO A — histórico casa com mercado da ÁREA → injeta em otimizado + comparação
+        if (!mercadosOtimizado.has(mercadoMatch.id)) {
+          mercadosOtimizado.set(mercadoMatch.id, {
+            id: mercadoMatch.id,
+            nome: mercadoMatch.nome,
+            cnpj: mercadoMatch.cnpj,
+            distancia: mercadoMatch.distancia,
+            total: 0,
+            produtos: [],
+          });
+        }
+        const mercadoOtim = mercadosOtimizado.get(mercadoMatch.id);
+        mercadoOtim.produtos.push(produtoInjetado);
+        mercadoOtim.total += precoTotal;
+        totalOtimizado += precoTotal;
+
+        const chaveComparacao = Object.keys(comparacao).find(
+          k => comparacao[k].id === mercadoMatch.id
+        );
+        if (chaveComparacao) {
+          comparacao[chaveComparacao].produtos.push(produtoInjetado);
+          comparacao[chaveComparacao].total += precoTotal;
+          const idxMercado = mercados.findIndex(m => m.id === mercadoMatch.id);
+          if (idxMercado >= 0 && totaisPorMercado[idxMercado] !== undefined) {
+            totaisPorMercado[idxMercado] += precoTotal;
+          }
+        }
+        console.log(`  🎯 [HIST-AREA] "${itemSP.produto_nome}" no mercado "${mercadoMatch.nome}" R$ ${valor}`);
+      } else {
+        // CASO B — histórico FORA da área → grupo mercadosHistorico (não polui comparação da área)
+        const estNome = up.estabelecimento_nome || 'Mercado histórico';
+        const estCnpj = (up.estabelecimento_cnpj || '').replace(/\D/g, '') || null;
+        const chaveMercado = estCnpj || `nome:${normalizarTexto(estNome)}`;
+
+        if (!mercadosHistoricoMap.has(chaveMercado)) {
+          mercadosHistoricoMap.set(chaveMercado, {
+            id: `hist_${chaveMercado}`,
+            nome: estNome,
+            cnpj: estCnpj,
+            distancia: null,
+            historico_fora_area: true,
+            total: 0,
+            produtos: [],
+          });
+        }
+        const grupoHist = mercadosHistoricoMap.get(chaveMercado);
+        grupoHist.produtos.push(produtoInjetado);
+        grupoHist.total += precoTotal;
+        console.log(`  🗂️ [HIST-FORA-AREA] "${itemSP.produto_nome}" → "${estNome}" R$ ${valor}`);
+      }
     }
 
-    // Recalcular diferenças de todos os mercados após injeção
+    // Recalcular diferenças de todos os mercados após injeção da área
     Object.keys(comparacao).forEach(k => {
       comparacao[k].diferenca = comparacao[k].total - totalOtimizado;
     });
 
-    // Substituir lista original pela final (somente itens sem mercado correspondente)
+    // Substituir lista original pela final (somente itens sem histórico recuperável)
     produtosSemPreco.length = 0;
     produtosSemPreco.push(...produtosSemPrecoFinal);
 
-    // Calcular economia
+    const mercadosHistorico = Array.from(mercadosHistoricoMap.values());
+
+    // Calcular economia (mantém apenas mercados da área)
     const maiorTotal = totaisPorMercado.length > 0 ? Math.max(...totaisPorMercado) : 0;
     const economia = maiorTotal - totalOtimizado;
     const percentualEconomia = maiorTotal > 0 ? (economia / maiorTotal) * 100 : 0;
@@ -961,6 +1011,7 @@ serve(async (req) => {
           mercados: Array.from(mercadosOtimizado.values())
         },
         comparacao,
+        mercadosHistorico,
         produtosSemPreco
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
