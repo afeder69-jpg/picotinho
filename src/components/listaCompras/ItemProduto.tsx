@@ -44,7 +44,7 @@ export function ItemProduto({ item, onToggleComprado, onQuantidadeChange }: Item
           <div className="flex-1 space-y-2">
             <div className="flex items-center justify-between">
               <h4 className={`font-medium ${item.comprado ? 'line-through' : ''}`}>
-                {item.produto_nome}
+                {(item.produto_nome ?? '').toUpperCase()}
               </h4>
               <div className="flex items-center gap-2">
                 <span className="font-bold">R$ {item.preco_unitario.toFixed(2)}</span>

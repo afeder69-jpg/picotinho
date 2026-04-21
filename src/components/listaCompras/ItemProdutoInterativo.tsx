@@ -36,7 +36,7 @@ export function ItemProdutoInterativo({ produto, onToggle }: ItemProdutoInterati
               ? 'line-through text-muted-foreground opacity-60' 
               : 'text-foreground'
           }`}>
-            {produto.produto_nome}
+            {(produto.produto_nome ?? '').toUpperCase()}
           </div>
           
           <div className="flex items-center justify-between mt-2 text-sm">
