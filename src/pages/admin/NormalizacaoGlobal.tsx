@@ -1685,8 +1685,16 @@ export default function NormalizacaoGlobal() {
         description: "Produto adicionado ao catálogo master com suas edições",
       });
 
+      // Atualização otimista: remover candidato aprovado da lista filtrada de pendentes
+      setResultadosBuscaPendentes(prev =>
+        prev.filter((c: any) => c.id !== candidatoAtual.id)
+      );
+
       setEditModalOpen(false);
       await carregarDados();
+      if (filtroPendentes.trim()) {
+        await buscarCandidatosPendentes(filtroPendentes.trim());
+      }
 
     } catch (error: any) {
       toast({
@@ -2072,6 +2080,14 @@ export default function NormalizacaoGlobal() {
         }
       }
 
+      // Atualização otimista: refletir mudanças na hora nas listas visíveis
+      // (feedback imediato; fonte de verdade final é o refetch abaixo)
+      const idEditado = produtoMasterEditando;
+      const aplicarPatch = (item: any) =>
+        item && item.id === idEditado ? { ...item, ...updateData } : item;
+      setProdutosMaster(prev => prev.map(aplicarPatch));
+      setResultadosBusca(prev => prev.map(aplicarPatch));
+
       toast({
         title: "Produto atualizado",
         description: "As alterações foram salvas com sucesso",
@@ -2083,7 +2099,12 @@ export default function NormalizacaoGlobal() {
       setImagemPathOriginal(null);
       setImagemFile(null);
       setImagemPreview(null);
+
+      // Refetch: garantir consistência final com o banco (campos derivados/normalizados)
       await carregarDados();
+      if (filtroMaster.trim()) {
+        await buscarProdutosMaster(filtroMaster.trim());
+      }
 
     } catch (error: any) {
       toast({
