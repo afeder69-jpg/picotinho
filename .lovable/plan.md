@@ -1,72 +1,282 @@
 
+# Correção revisada — unificar itens com histórico em grupos de mercado e esvaziar corretamente “Produtos sem preço”
 
-# Fase 1.2 — Diagnóstico final + correções cirúrgicas
+## Diagnóstico confirmado
 
-## Diagnóstico real (com base no banco)
+O problema atual está majoritariamente no backend, não no frontend nem em cache:
 
-Os 4 itens problemáticos da lista de teste do usuário **não são pendentes** — todos têm `produto_master_id` preenchido. O que acontece:
+1. **O frontend não está reclassificando nada sozinho.**
+   `ListaCompras.tsx` renderiza diretamente:
+   - `comparacao.otimizado.mercados`
+   - `comparacao.produtosSemPreco`
 
-| Item lista | Master da lista | Master do estoque do usuário | Causa |
-|---|---|---|---|
-| ISOTÔNICO POWER 500ML | `7174e12e-3b67…` | `7174e12e-f487…` (duplicado) | Master da lista está sem registros em `precos_atuais`. Histórico **é encontrado** via `estoque_app` e exibido, mas a redistribuição para mercado **não acontece** |
-| MACARRÃO FETUCCINE SANTA AMÁLIA 500G | `9e39dcb9…` (sem SÊMOLA) | `622113f0…` (com SÊMOLA) | Mesmo padrão, mas o token-cover deveria casar (SÊMOLA é neutro) |
-| PAPEL HIGIÊNICO DELUXE COTTON FOLD 30M 24 UN | `2c26d9f4…` (COTTON FOLD) | `eae43acf…` (COTT N FD) | Mesmo padrão, deveria casar (5 tokens em comum) |
-| ARROZ COPARROZ PARBOILIZADO T1 5KG | `568976d1…` (COPARROZ) | `b97ccfaa…` (CAMIL) | **Produtos realmente diferentes** (marcas distintas). Não casar é o comportamento correto |
+   Portanto, se um item continua em “Produtos sem preço”, ele já veio assim da Edge Function.
 
-A causa central é **dupla**: (a) mesmo quando o histórico é encontrado, vários itens não estão sendo **redistribuídos** para dentro do mercado, e (b) parte dos itens nem chega no fallback de histórico porque trafegam pelo caminho de "tem master, mas mercado não tem preço" e seu master é duplicata órfã.
+2. **A redistribuição já existe, mas falha em dois pontos reais:**
+   - **ISOTÔNICO POWER 500ML**: o histórico é encontrado, porém o match com mercado falha porque `PREZUNIC BARRA` não casa com os mercados retornados pela área. Hoje o mercado próximo sai como razão social crua (`CENCOSUD BRASIL COMERCIAL SA`) e, além disso, esse CNPJ pode estar fora do raio. Resultado: o item volta para `produtosSemPreco`.
+   - **MACARRÃO / PAPEL HIGIÊNICO**: o histórico ainda não está sendo recuperado com consistência porque a busca em `estoque_app` e `notas_imagens` usa janela curta (`limit 50`). Para um usuário com centenas de registros, os candidatos certos podem simplesmente não entrar na amostra.
 
-## Correções (3 arquivos, surgicais)
+3. **Não há evidência de descarte posterior no frontend.**
+   Se a Edge Function injetar corretamente, a UI principal já mostra os itens no padrão de mercado.
 
-### Correção 1 — Master órfão da lista deve cair no histórico via estoque
+---
 
-`supabase/functions/comparar-precos-lista/index.ts` → função `buscarUltimoPrecoConhecido`
+## Regra de negócio que será aplicada
 
-Quando o item tem `produto_master_id` mas a tabela `precos_atuais` não tem nenhum registro para esse master (caso de master duplicado da lista), a função hoje retorna `null` e nem tenta o estoque. Corrigir:
+### Classificação final
+- **Item livre manual** → continua em “Lembretes / Itens livres”.
+- **Item sem nenhum histórico recuperável** → continua em “Produtos sem preço”.
+- **Item com histórico válido (mercado + preço + data)** → **nunca mais fica em “Produtos sem preço”**.
 
-- A consulta a `precos_atuais` por `masterId` (linha 491) só dispara se houver registros. Se não houver, **continuar para o passo 2 (estoque do usuário por token-cover)** em vez de aceitar o resultado vazio. Isso já é o comportamento correto do código (`if (data?.valor_unitario)` segue para o passo 2 quando não acha), então confirmar o fluxo e adicionar log explícito `[HIST] Master sem precos_atuais — caindo para estoque do usuário`.
-- **Adicionar Passo 1.5**: se o item tem `produto_master_id`, tentar achar **o master "irmão"** no estoque do usuário (case: master da lista é `7174e12e-3b67…`, master do estoque é `7174e12e-f487…`). Buscar `estoque_app` do usuário por `produto_nome` com token-cover + lock de variante; se achar com `produto_master_id` distinto e não-nulo, usar esse master para uma segunda tentativa em `precos_atuais` (mesmas regras do Passo 1). Isso resolve casos de master duplicado sem precisar consolidar agora.
+### Exibição do item com histórico válido
+Ele deve aparecer em um agrupamento de mercado, com:
+- nome do mercado
+- preço
+- data
+- composição do total daquele grupo
+- badge discreto “Aguardando normalização”
 
-### Correção 2 — Redistribuição pra mercado: cobrir mais cenários de match de estabelecimento
+### Proteção da comparação cruzada
+Mesmo aparecendo dentro de um mercado:
+- **não participa** de equivalência inteligente entre mercados
+- **não entra** em `melhor_preco`
+- **não entra** em `economia`
+- **não entra** na `TabelaComparativa`
 
-`supabase/functions/comparar-precos-lista/index.ts` → função `matchEstabelecimentoComMercado`
+---
 
-Hoje o match faz CNPJ exato + nome com `includes` bidirecional. Está **correto para PREZUNIC** (CNPJ bate). Adicionar duas defesas:
+## Implementação proposta
 
-1. Antes de declarar "sem mercado", também consultar `normalizacoes_estabelecimentos` por `nome_original` ou `nome_normalizado` casando com `estNome` para resolver casos onde a nota traz "PREZUNIC BARRA" mas o supermercado da área foi cadastrado com a razão social "CENCOSUD BRASIL". Se achar o registro normalizado, usar o `cnpj` dele para buscar em `mercados`.
-2. Loggar com clareza quando o match falha: `[REDIST-FALHOU] item=X, estab=Y, cnpj=Z — mercado não está na área` para ficar fácil de diagnosticar.
+## 1) Corrigir a busca de histórico para não perder candidatos reais
 
-### Correção 3 — Item injetado no mercado precisa de `unidade_medida` correta
+### Arquivo
+- `supabase/functions/comparar-precos-lista/index.ts`
 
-`supabase/functions/comparar-precos-lista/index.ts` → bloco de injeção (linhas 784-797)
+### Mudança
+Substituir a busca histórica baseada em “últimos 50 registros” por busca **direcionada por tokens do item**.
 
-O `produtoInjetado` já carrega `unidade_medida: itemSP.unidade_medida` — confirmar que sobreviveu na propagação do `itemSP` (vem do spread `...item` no push original em produtosSemPreco linha 659). **Sem mudança extra além de validar.**
+### Ajuste no `estoque_app`
+Em vez de:
+- pegar só os 50 mais recentes do usuário
+- filtrar em memória
 
-### Correção 4 — Frontend: garantir que `ItemProduto` exibe pendentes injetados igual aos demais
+Passar a:
+- extrair 2–4 tokens fortes do nome do item
+- consultar `estoque_app` do usuário com `or(...)` por esses tokens
+- trazer um conjunto maior e relevante (ex.: até 150/200 candidatos)
+- aplicar o `token-cover + lock de variante` em memória
+- desempatar por score e recência
 
-`src/components/listaCompras/ItemProduto.tsx` já recebe `historico` e `aguardando_normalizacao` (Fase 1.1). Não muda. Validar apenas que `ListaCompras.tsx` passa essas flags ao percorrer `mercado.produtos` (já passa via spread).
+Isso corrige os casos em que:
+- o produto existe no estoque do usuário
+- mas não está entre os 50 registros mais recentes
 
-## Salvaguardas que NÃO mudam
+### Ajuste no fallback de `notas_imagens`
+Mesma estratégia:
+- ampliar a janela de notas analisadas
+- priorizar notas que contenham tokens do item
+- aplicar o mesmo match conservador em memória
 
-- Comparação cruzada entre mercados continua filtrando `historico !== true`.
-- Itens livres manuais permanecem em "💬 Lembretes".
-- Pendente real (sem master nenhum) continua bloqueado da comparação cruzada.
-- Lock de variante e whitelist de neutros mantidos.
-- Sem migration, sem trigger, sem backfill.
+### Salvaguardas mantidas
+- lock de variante
+- tokens neutros
+- sem fuzzy global agressivo
+- sem cruzar histórico entre usuários
 
-## Resultado esperado
+---
 
-- **ISOTÔNICO POWER**: já encontra histórico → após correção, é redistribuído para PREZUNIC BARRA dentro da área (CNPJ casa direto).
-- **MACARRÃO FETUCCINE**: encontra histórico via master irmão (Correção 1) → redistribuído para o mercado da última compra.
-- **PAPEL HIGIÊNICO DELUXE**: idem.
-- **ARROZ COPARROZ**: continua sem histórico (variante/marca diferente do estoque) → permanece em "Sem preço" — comportamento correto.
-- Itens livres manuais (Lasanha, Picanha, Laranja, Alface) na outra lista: continuam em "Lembretes".
+## 2) Separar dois destinos para itens com histórico
 
-## Validação
+### Arquivo
+- `supabase/functions/comparar-precos-lista/index.ts`
 
-1. ISOTÔNICO POWER aparece **dentro de PREZUNIC BARRA** com R$ 5,19, data 15/04/2026, badge "Aguardando normalização".
-2. MACARRÃO FETUCCINE e PAPEL HIGIÊNICO aparecem dentro do mercado da última compra com badge.
-3. ARROZ COPARROZ permanece em "📋 Produtos sem preço" (correto — produto diferente).
-4. Logs novos `[HIST] Master sem precos_atuais` e `[REDIST-FALHOU]` permitem diagnóstico futuro.
-5. Comparação cruzada, swipe, undo, edição, lazy loading, área de atuação: inalterados.
-6. Cenário oposto (item normalizado com preço atual): continua exatamente como hoje.
+Hoje existe só este comportamento:
+- se o estabelecimento casa com mercado da área → injeta
+- se não casa → volta para `produtosSemPreco`
 
+Isso não atende mais a regra.
+
+### Novo comportamento
+Após `buscarUltimoPrecoConhecido`:
+
+#### Caso A — histórico casa com um mercado da área
+Injetar em:
+- `otimizado.mercados`
+- `comparacao[mercadoX].produtos`
+
+com:
+- `historico: true`
+- `aguardando_normalizacao: true`
+
+e somar no total desse mercado.
+
+#### Caso B — histórico existe, mas o mercado **não está na área**
+**Não** mandar para `produtosSemPreco`.
+
+Criar novo agrupamento de resposta:
+- `mercadosHistorico`
+
+Estrutura igual à de mercado:
+- `id`
+- `nome`
+- `cnpj`
+- `distancia` opcional/null
+- `historico_fora_area: true`
+- `total`
+- `produtos`
+
+Assim, o item continua no padrão visual de mercado, sem poluir a comparação da área.
+
+### Resultado esperado
+- `ISOTÔNICO POWER 500ML` sai de “Produtos sem preço”
+- aparece em um grupo de mercado histórico (`PREZUNIC BARRA`)
+- com preço, data e badge
+- sem entrar na otimização da área
+
+---
+
+## 3) Normalizar corretamente o nome do estabelecimento da área
+
+### Arquivo
+- `supabase/functions/buscar-supermercados-area/index.ts`
+
+### Problema atual
+A lista de mercados da área está retornando nome bruto de `supermercados.nome`, enquanto a memória do projeto define a hierarquia:
+1. `normalizacoes_estabelecimentos`
+2. `supermercados`
+3. nome original da nota
+
+### Correção
+Ao montar o payload de mercados:
+- resolver o nome de exibição por CNPJ usando `normalizacoes_estabelecimentos`
+- usar o nome normalizado quando existir
+- manter o CNPJ no payload como identificador estável
+
+### Efeito
+Quando o mercado da área e o histórico forem o mesmo estabelecimento real, o match melhora muito:
+- `PREZUNIC BARRA` deixa de competir contra `CENCOSUD BRASIL COMERCIAL SA`
+- outros casos de fantasia vs razão social também passam a casar corretamente
+
+---
+
+## 4) Ajustar a montagem final da resposta para não reter itens históricos em `produtosSemPreco`
+
+### Arquivo
+- `supabase/functions/comparar-precos-lista/index.ts`
+
+### Mudança
+A classificação final precisa ficar explícita em 3 saídas:
+
+- `otimizado.mercados` → mercados da área com preços atuais + históricos casados à área
+- `mercadosHistorico` → mercados históricos válidos fora da área
+- `produtosSemPreco` → somente itens realmente sem histórico recuperável
+
+### Regra de consistência
+Se `ultimo_preco` existir e tiver `valor + data + estabelecimento`, o item:
+- sai de `produtosSemPreco`
+- entra em um dos dois grupos acima
+
+---
+
+## 5) Renderizar `mercadosHistorico` no mesmo padrão visual dos mercados
+
+### Arquivo
+- `src/pages/ListaCompras.tsx`
+
+### Mudança
+Manter os grupos de mercado atuais como estão.
+
+Depois deles, renderizar uma nova seção com o mesmo padrão de cards de mercado usando `GrupoMercado`, por exemplo:
+- “Histórico fiscal por mercado”
+
+Cada grupo dessa seção virá de `comparacao.mercadosHistorico`.
+
+### Importante
+Isso preserva:
+- leitura unificada por mercado
+- total por mercado
+- badge visual no item
+- separação semântica da comparação da área
+
+### O que sai da tela
+A seção “Produtos sem preço nos mercados próximos” passa a mostrar apenas o resíduo real:
+- itens sem qualquer histórico recuperável
+
+---
+
+## 6) Não contaminar tabs, resumo otimizado e tabela comparativa
+
+### Arquivos
+- `src/components/listaCompras/TabelaComparativa.tsx`
+- opcionalmente `src/components/listaCompras/CardResumoOtimizado.tsx`
+- opcionalmente `src/components/listaCompras/ComparacaoTabs.tsx`
+
+### Regra
+`mercadosHistorico`:
+- não entra nas tabs da comparação
+- não entra no resumo “otimizado”
+- não entra na tabela cruzada
+- não altera economia entre mercados da área
+
+Os itens históricos fora da área aparecem só como agrupamento visual de mercado, não como candidatos da comparação.
+
+---
+
+## 7) Logs e validação dirigidos
+
+### Arquivo
+- `supabase/functions/comparar-precos-lista/index.ts`
+
+Adicionar logs claros por item:
+- `[HIST-AREA]` → histórico encontrado e injetado em mercado da área
+- `[HIST-FORA-AREA]` → histórico encontrado e enviado para `mercadosHistorico`
+- `[HIST-SEM-DADOS]` → sem histórico recuperável
+- `[HIST-CANDIDATOS]` → quantidade de candidatos consultados no estoque/notas
+
+Isso permite validar rapidamente:
+- por que o isotônico não entrou antes
+- se macarrão e papel agora foram encontrados
+- se arroz continua corretamente como sem histórico
+
+---
+
+## Arquivos a alterar
+
+1. `supabase/functions/comparar-precos-lista/index.ts`
+   - busca histórica direcionada por tokens
+   - nova classificação final
+   - novo payload `mercadosHistorico`
+   - logs de rastreabilidade
+
+2. `supabase/functions/buscar-supermercados-area/index.ts`
+   - normalizar nome exibido do mercado por CNPJ via `normalizacoes_estabelecimentos`
+
+3. `src/pages/ListaCompras.tsx`
+   - renderizar `mercadosHistorico` com o mesmo componente de mercado
+   - deixar `produtosSemPreco` só para casos sem histórico real
+
+Sem migration, sem backfill, sem alteração em swipe, undo, edição, realtime, lazy loading, comparação cruzada ou área de atuação.
+
+---
+
+## Resultado esperado após a correção
+
+### Deve sair de “Produtos sem preço”
+- ISOTÔNICO POWER 500ML → grupo de mercado histórico `PREZUNIC BARRA`
+- MACARRÃO FETUCCINE SANTA AMÁLIA 500G → grupo do mercado recuperado do histórico
+- PAPEL HIGIÊNICO DELUXE COTTON FOLD 30M 24 UNIDADES → grupo do mercado recuperado do histórico
+
+### Deve permanecer em “Produtos sem preço”
+- somente itens sem histórico realmente recuperável
+- ex.: ARROZ COPARROZ, se continuar sem match seguro
+
+---
+
+## Critérios de aceite
+
+1. Nenhum item com `ultimo_preco + estabelecimento_nome + data` permanece em “Produtos sem preço”.
+2. Itens históricos aparecem em grupos de mercado com total correto.
+3. Itens históricos continuam marcados com badge discreto “Aguardando normalização”.
+4. `TabelaComparativa` continua ignorando `historico === true`.
+5. Resumo otimizado e economia continuam representando apenas mercados da área com comparação válida.
+6. Swipe, undo, edição, marcar comprado, realtime e lazy loading permanecem inalterados.
