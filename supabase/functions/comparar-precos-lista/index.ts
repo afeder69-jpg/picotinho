@@ -502,7 +502,7 @@ serve(async (req) => {
         mercadoData.total += precoTotal;
         totalOtimizado += precoTotal;
       }
-    });
+    }
 
     // CENÁRIOS POR MERCADO INDIVIDUAL
     const comparacao: any = {};
