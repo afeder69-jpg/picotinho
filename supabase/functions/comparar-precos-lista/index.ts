@@ -646,14 +646,15 @@ serve(async (req) => {
           }
         }
 
-        // 3. Fallback: varrer JSONB de notas_imagens do próprio usuário — token-cover
+        // 3. Fallback: varrer JSONB de notas_imagens do próprio usuário — janela ampliada
         const { data: notas } = await supabaseAdmin
           .from('notas_imagens')
           .select('dados_extraidos, data_criacao')
           .eq('usuario_id', userId)
           .eq('processada', true)
           .order('data_criacao', { ascending: false })
-          .limit(50);
+          .limit(200);
+        console.log(`  📊 [HIST-CANDIDATOS] notas_imagens: ${notas?.length || 0} notas analisadas`);
 
         if (notas && notas.length > 0) {
           for (const nota of notas) {
