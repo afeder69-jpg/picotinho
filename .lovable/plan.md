@@ -1,88 +1,72 @@
 
 
-# Fase 1.1 — Histórico mais robusto + pendentes integrados ao agrupamento por mercado
+# Fase 1.2 — Diagnóstico final + correções cirúrgicas
 
-## Causa raiz confirmada (lista `3c75022d…` do usuário `ae5b5501…`)
+## Diagnóstico real (com base no banco)
 
-| Item | `produto_id` na lista | Existe no estoque do usuário? | Por que o histórico não aparece hoje |
+Os 4 itens problemáticos da lista de teste do usuário **não são pendentes** — todos têm `produto_master_id` preenchido. O que acontece:
+
+| Item lista | Master da lista | Master do estoque do usuário | Causa |
 |---|---|---|---|
-| MACARRÃO FETUCCINE SANTA AMÁLIA 500G | `9e39dcb9` | Sim, mas com master `622113f0` (variante "SÊMOLA") e nome levemente diferente | `buscarUltimoPrecoConhecido` consulta `precos_atuais` por master `9e39dcb9` (sem registros) e `estoque_app` por `ilike(nome exato)` — não casa o nome com "SÊMOLA" |
-| ISOTÔNICO POWER 500ML | `7174e12e` | Sim, mesmo master. Tem `precos_atuais` em CNPJ PREZUNIC | PREZUNIC não está na área de atuação. `precos_atuais` retorna ele como histórico, mas o item ainda foi para "Sem preço" e o usuário quer ver dentro de PREZUNIC |
-| PAPEL HIGIÊNICO DELUXE COTTON FOLD 30M 24 UN | `2c26d9f4` | Sim, com master `eae43acf` (mesmo produto, master duplicado "COTT N FD") | Master diferente; busca por nome exato falha por causa de "COTT N FD" vs "COTTON FOLD" |
-| ESPONJA DE AÇO BOMBRIL 45G | `c7592206` | Não exatamente — usuário tem "ESPONJA MULTIUSO BOMBRIL 4 UN" e "ESPONJA BOMBRIL LV4P3" | Produtos diferentes; histórico legítimo só existe para variantes |
+| ISOTÔNICO POWER 500ML | `7174e12e-3b67…` | `7174e12e-f487…` (duplicado) | Master da lista está sem registros em `precos_atuais`. Histórico **é encontrado** via `estoque_app` e exibido, mas a redistribuição para mercado **não acontece** |
+| MACARRÃO FETUCCINE SANTA AMÁLIA 500G | `9e39dcb9…` (sem SÊMOLA) | `622113f0…` (com SÊMOLA) | Mesmo padrão, mas o token-cover deveria casar (SÊMOLA é neutro) |
+| PAPEL HIGIÊNICO DELUXE COTTON FOLD 30M 24 UN | `2c26d9f4…` (COTTON FOLD) | `eae43acf…` (COTT N FD) | Mesmo padrão, deveria casar (5 tokens em comum) |
+| ARROZ COPARROZ PARBOILIZADO T1 5KG | `568976d1…` (COPARROZ) | `b97ccfaa…` (CAMIL) | **Produtos realmente diferentes** (marcas distintas). Não casar é o comportamento correto |
 
-## Duas correções, ambas cirúrgicas
+A causa central é **dupla**: (a) mesmo quando o histórico é encontrado, vários itens não estão sendo **redistribuídos** para dentro do mercado, e (b) parte dos itens nem chega no fallback de histórico porque trafegam pelo caminho de "tem master, mas mercado não tem preço" e seu master é duplicata órfã.
 
-### Correção A — Backend: histórico por **token-cover**, não por igualdade
+## Correções (3 arquivos, surgicais)
 
-`supabase/functions/comparar-precos-lista/index.ts` → `buscarUltimoPrecoConhecido`
+### Correção 1 — Master órfão da lista deve cair no histórico via estoque
 
-Manter as 3 fontes (precos_atuais por master / estoque_app do usuário / notas_imagens JSONB) mas trocar o critério de match nas fontes 2 e 3:
+`supabase/functions/comparar-precos-lista/index.ts` → função `buscarUltimoPrecoConhecido`
 
-1. Tokenizar o nome do item: UPPER + remover acentos + remover pontuação + dividir por espaço + descartar tokens ≤2 caracteres e tokens puramente numéricos sem unidade.
-2. Calcular cobertura: `score = tokens_do_item ∩ tokens_do_candidato`. Aceitar se cobertura ≥ 80% dos tokens do item OU se ≥ 3 tokens fortes baterem (incluindo a marca).
-3. Para fonte 2 (`estoque_app`), trocar `ilike(nome_exato)` por `select` filtrado por `user_id` + `not preco_unitario_ultimo is null`, ordenar por `updated_at desc`, **pegar últimos 50** e filtrar em memória aplicando o token-cover. Devolve o de maior score (em empate, mais recente).
-4. Para fonte 3 (`notas_imagens` JSONB), fazer o mesmo: já lê 50 notas; em vez de `===`, aplicar token-cover sobre `descricao`/`nome` de cada produto da nota.
-5. **Salvaguarda anti-falso-positivo**: se o item tem token de variante (ex: "SÊMOLA", "ZERO", "INTEGRAL", "DIET", "LIGHT", "DE AÇO", "MULTIUSO") e esse token não bate, rejeita o candidato. Reaproveita a lista de variantes da memória `product-variant-keyword-validation`. Resultado: para o usuário, "ESPONJA DE AÇO BOMBRIL 45G" continua sem histórico (não é a esponja multiuso), mas "MACARRÃO FETUCCINE SANTA AMÁLIA 500G" passa a casar com "MACARRÃO FETUCCINE SÊMOLA SANTA AMÁLIA 500G" se você decidir tratar SÊMOLA como token neutro — vamos manter SÊMOLA como **neutro** para tipo de massa de mesma família e adicionar uma whitelist curta de tokens neutros (`SÊMOLA`, `TRADICIONAL`, `CLÁSSICO`).
+Quando o item tem `produto_master_id` mas a tabela `precos_atuais` não tem nenhum registro para esse master (caso de master duplicado da lista), a função hoje retorna `null` e nem tenta o estoque. Corrigir:
 
-Resultado esperado dos 4 itens problemáticos:
-- Macarrão Fetuccine: passa a recuperar o último preço (R$ 5,20) com o estabelecimento da nota.
-- Papel Higiênico Deluxe: recupera R$ 29,98.
-- Isotônico Power: recupera o último preço local do usuário (estoque) ou o `precos_atuais` PREZUNIC.
-- Esponja de Aço Bombril 45g: continua sem histórico (correto — produto diferente).
+- A consulta a `precos_atuais` por `masterId` (linha 491) só dispara se houver registros. Se não houver, **continuar para o passo 2 (estoque do usuário por token-cover)** em vez de aceitar o resultado vazio. Isso já é o comportamento correto do código (`if (data?.valor_unitario)` segue para o passo 2 quando não acha), então confirmar o fluxo e adicionar log explícito `[HIST] Master sem precos_atuais — caindo para estoque do usuário`.
+- **Adicionar Passo 1.5**: se o item tem `produto_master_id`, tentar achar **o master "irmão"** no estoque do usuário (case: master da lista é `7174e12e-3b67…`, master do estoque é `7174e12e-f487…`). Buscar `estoque_app` do usuário por `produto_nome` com token-cover + lock de variante; se achar com `produto_master_id` distinto e não-nulo, usar esse master para uma segunda tentativa em `precos_atuais` (mesmas regras do Passo 1). Isso resolve casos de master duplicado sem precisar consolidar agora.
 
-### Correção B — Backend + Frontend: pendentes/sem-preço com histórico **entram no mercado**
+### Correção 2 — Redistribuição pra mercado: cobrir mais cenários de match de estabelecimento
 
-Ajustar a saída de `comparar-precos-lista` para que itens com histórico (`ultimo_preco != null`) sejam injetados no agrupamento do mercado correspondente, em vez de irem para `produtosSemPreco`.
+`supabase/functions/comparar-precos-lista/index.ts` → função `matchEstabelecimentoComMercado`
 
-**Backend**:
-- Após calcular `produtosSemPreco`, para cada item com `ultimo_preco.estabelecimento_nome` preenchido:
-  1. Tentar casar esse nome de estabelecimento com algum mercado da área (normalização UPPER+trim+sem-acento; usar `normalizacoes_estabelecimentos` quando disponível).
-  2. Se casou: injetar o item no `mercadosOtimizado` correspondente (cria a entrada se não existir) e em `comparacao[mercadoX].produtos`, marcando `aguardando_normalizacao: true` e `historico: true`. Atualizar `mercado.total` somando `ultimo_preco.valor * quantidade`. **Não** entra em `melhor_preco` nem em `economia` (não vai para comparação cruzada).
-  3. Se NÃO casou (mercado fora da área ou desconhecido): cria/usa um grupo especial `mercadoHistorico_<cnpj-ou-nome>` em `comparacao` (não na otimizada) ou mantém em `produtosSemPreco` apenas como último recurso.
-- Itens sem `ultimo_preco` continuam em `produtosSemPreco`.
+Hoje o match faz CNPJ exato + nome com `includes` bidirecional. Está **correto para PREZUNIC** (CNPJ bate). Adicionar duas defesas:
 
-**Frontend** (`src/pages/ListaCompras.tsx` + `GrupoMercado.tsx` + `ItemProduto.tsx`):
-- `GrupoMercado` continua igual; `ItemProduto` recebe novas props opcionais `aguardandoNormalizacao` e `historico`. Quando ambas verdadeiras, exibe um badge discreto "Aguardando normalização" e uma marca visual sutil (ex: bolinha vermelha pequena ao lado do preço) indicando "preço histórico". Sem mudar layout, sem afetar swipe/checkbox/quantidade.
-- `ListaCompras.tsx` não precisa de filtro novo — o backend já entrega esses itens dentro de `dadosAtivos.mercados[].produtos`. A seção "📋 Produtos sem preço" só renderiza o que sobrar (pendentes sem nenhum histórico recuperável).
-- `CardResumoOtimizado` e a soma do mercado naturalmente já incluem esses itens porque vêm dentro de `mercado.produtos` e `mercado.total` já considera o valor.
+1. Antes de declarar "sem mercado", também consultar `normalizacoes_estabelecimentos` por `nome_original` ou `nome_normalizado` casando com `estNome` para resolver casos onde a nota traz "PREZUNIC BARRA" mas o supermercado da área foi cadastrado com a razão social "CENCOSUD BRASIL". Se achar o registro normalizado, usar o `cnpj` dele para buscar em `mercados`.
+2. Loggar com clareza quando o match falha: `[REDIST-FALHOU] item=X, estab=Y, cnpj=Z — mercado não está na área` para ficar fácil de diagnosticar.
 
-### Comparação cruzada protegida
+### Correção 3 — Item injetado no mercado precisa de `unidade_medida` correta
 
-A `TabelaComparativa` e o cálculo de `melhor_preco`/`economia` continuam usando apenas itens com preço **atual** (resultado de `buscarPrecoInteligente`). Os injetados via histórico ficam marcados com `historico: true` e são ignorados nesses cálculos:
+`supabase/functions/comparar-precos-lista/index.ts` → bloco de injeção (linhas 784-797)
 
-- Em `comparacao[mercadoX].produtos`: o item histórico aparece com `melhor_preco: false`, `economia: 0`, `historico: true`. A `TabelaComparativa` filtra `historico !== true` ao montar a comparação cruzada.
-- Em `mercadosOtimizado`: o item histórico não disputa "melhor preço entre mercados". É exibido no mercado de origem porque o preço é real, mas não conta como vencedor.
+O `produtoInjetado` já carrega `unidade_medida: itemSP.unidade_medida` — confirmar que sobreviveu na propagação do `itemSP` (vem do spread `...item` no push original em produtosSemPreco linha 659). **Sem mudança extra além de validar.**
 
-## Arquivos alterados (3)
+### Correção 4 — Frontend: garantir que `ItemProduto` exibe pendentes injetados igual aos demais
 
-1. `supabase/functions/comparar-precos-lista/index.ts`
-   - Reescrever `buscarUltimoPrecoConhecido` com token-cover + lock de variante + whitelist de neutros.
-   - Após o loop, redistribuir os itens com `ultimo_preco` para o mercado correspondente em `mercadosOtimizado` e `comparacao`, marcando `historico: true` e `aguardando_normalizacao: true`. Pendentes sem histórico permanecem em `produtosSemPreco`.
+`src/components/listaCompras/ItemProduto.tsx` já recebe `historico` e `aguardando_normalizacao` (Fase 1.1). Não muda. Validar apenas que `ListaCompras.tsx` passa essas flags ao percorrer `mercado.produtos` (já passa via spread).
 
-2. `src/components/listaCompras/ItemProduto.tsx`
-   - Aceitar e renderizar `aguardando_normalizacao` (badge "Aguardando normalização", discreto, abaixo do nome) e `historico` (bolinha vermelha pequena ao lado do preço).
+## Salvaguardas que NÃO mudam
 
-3. `src/components/listaCompras/TabelaComparativa.tsx`
-   - Ao montar o cruzamento entre mercados, ignorar produtos com `historico: true`.
+- Comparação cruzada entre mercados continua filtrando `historico !== true`.
+- Itens livres manuais permanecem em "💬 Lembretes".
+- Pendente real (sem master nenhum) continua bloqueado da comparação cruzada.
+- Lock de variante e whitelist de neutros mantidos.
+- Sem migration, sem trigger, sem backfill.
 
-Sem mudança em `ListaCompras.tsx`, `GrupoMercado.tsx`, `EstoqueAtual.tsx`, `ItemProdutoSemPreco.tsx` (este último continua existindo só para o resíduo). Sem migration, sem trigger, sem backfill.
+## Resultado esperado
 
-## O que NÃO é tocado
-
-- Lógica de área de atuação, busca de mercados próximos, raio.
-- Cálculo de `precos_atuais` por mercado para itens normalizados.
-- Swipe, undo, lazy loading, edição de quantidade, marcar comprado, exclusão, realtime.
-- Itens livres manuais (`item_livre = true`) continuam em "💬 Lembretes".
-- Fase 2 (reconciliação global pós-normalização) — segue separada.
+- **ISOTÔNICO POWER**: já encontra histórico → após correção, é redistribuído para PREZUNIC BARRA dentro da área (CNPJ casa direto).
+- **MACARRÃO FETUCCINE**: encontra histórico via master irmão (Correção 1) → redistribuído para o mercado da última compra.
+- **PAPEL HIGIÊNICO DELUXE**: idem.
+- **ARROZ COPARROZ**: continua sem histórico (variante/marca diferente do estoque) → permanece em "Sem preço" — comportamento correto.
+- Itens livres manuais (Lasanha, Picanha, Laranja, Alface) na outra lista: continuam em "Lembretes".
 
 ## Validação
 
-1. Lista `3c75022d…`: Macarrão Fetuccine, Papel Higiênico Deluxe, Isotônico Power passam a aparecer **dentro do mercado de origem** (PREZUNIC ou supermercado da última nota) com preço, data e badge "Aguardando normalização". Compõem o total daquele mercado.
-2. Esponja de Aço Bombril 45g (variante real diferente): permanece em "📋 Produtos sem preço" sem valor — comportamento correto.
-3. `TabelaComparativa`: itens históricos não aparecem como "vencedor" em outros mercados; só ficam visíveis no mercado de origem.
-4. Itens normalizados com preço atual na área: comportamento idêntico ao de hoje.
-5. Itens livres manuais: permanecem em "💬 Lembretes".
-6. Swipe, undo, comprado, edição de quantidade, lazy loading: inalterados.
-7. Comparação cruzada não vaza pendentes ainda não normalizados (proteção da Fase 1 mantida via flag `historico`).
+1. ISOTÔNICO POWER aparece **dentro de PREZUNIC BARRA** com R$ 5,19, data 15/04/2026, badge "Aguardando normalização".
+2. MACARRÃO FETUCCINE e PAPEL HIGIÊNICO aparecem dentro do mercado da última compra com badge.
+3. ARROZ COPARROZ permanece em "📋 Produtos sem preço" (correto — produto diferente).
+4. Logs novos `[HIST] Master sem precos_atuais` e `[REDIST-FALHOU]` permitem diagnóstico futuro.
+5. Comparação cruzada, swipe, undo, edição, lazy loading, área de atuação: inalterados.
+6. Cenário oposto (item normalizado com preço atual): continua exatamente como hoje.
 
