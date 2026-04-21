@@ -503,6 +503,7 @@ serve(async (req) => {
               estabelecimento_cnpj: data.estabelecimento_cnpj || null,
             };
           }
+          console.log(`  🔎 [HIST] Master ${masterId} sem precos_atuais — caindo para estoque do usuário`);
         }
 
         const nome = (item.produto_nome || '').trim();
@@ -510,6 +511,60 @@ serve(async (req) => {
 
         const tokensItem = tokenizar(nome);
         if (tokensItem.length === 0) return null;
+
+        // 1.5 Master IRMÃO: se o master da lista é uma duplicata órfã, tentar achar
+        // o master "irmão" no estoque do usuário via token-cover e tentar precos_atuais com ele.
+        if (masterId) {
+          try {
+            const { data: estoqueIrmaos } = await supabaseAdmin
+              .from('estoque_app')
+              .select('produto_nome, produto_master_id, updated_at')
+              .eq('user_id', userId)
+              .not('produto_master_id', 'is', null)
+              .neq('produto_master_id', masterId)
+              .order('updated_at', { ascending: false })
+              .limit(50);
+
+            if (estoqueIrmaos && estoqueIrmaos.length > 0) {
+              const candidatosIrmaos = estoqueIrmaos
+                .map(row => {
+                  const tokensC = tokenizar(row.produto_nome || '');
+                  const { score, ok } = calcularMatch(tokensItem, tokensC);
+                  return { row, score, ok };
+                })
+                .filter(c => c.ok)
+                .sort((a, b) => b.score - a.score);
+
+              const mastersTentados = new Set<string>();
+              for (const cand of candidatosIrmaos) {
+                const irmaoId = cand.row.produto_master_id as string;
+                if (!irmaoId || mastersTentados.has(irmaoId)) continue;
+                mastersTentados.add(irmaoId);
+
+                const { data: precoIrmao } = await supabaseAdmin
+                  .from('precos_atuais')
+                  .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
+                  .eq('produto_master_id', irmaoId)
+                  .order('data_atualizacao', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (precoIrmao?.valor_unitario) {
+                  console.log(`  🤝 [HIST-IRMAO] "${item.produto_nome}" via master irmão ${irmaoId} (lista=${masterId}) ← "${cand.row.produto_nome}" R$ ${precoIrmao.valor_unitario}`);
+                  return {
+                    valor_unitario: Number(precoIrmao.valor_unitario),
+                    data_atualizacao: precoIrmao.data_atualizacao,
+                    estabelecimento_nome: precoIrmao.estabelecimento_nome || null,
+                    estabelecimento_cnpj: precoIrmao.estabelecimento_cnpj || null,
+                  };
+                }
+                if (mastersTentados.size >= 3) break; // limita tentativas
+              }
+            }
+          } catch (errIrmao) {
+            console.warn('  ⚠️ Falha ao buscar master irmão:', errIrmao);
+          }
+        }
 
         // 2. Estoque do próprio usuário (PENDENTES + fallback) — token-cover
         const { data: estoqueRows } = await supabaseAdmin
@@ -625,20 +680,73 @@ serve(async (req) => {
     };
 
     // Helper: casar nome de estabelecimento histórico com mercado da área de atuação
-    const matchEstabelecimentoComMercado = (estNome: string | null, estCnpj: string | null) => {
+    const matchEstabelecimentoComMercado = async (estNome: string | null, estCnpj: string | null) => {
+      // 1) CNPJ direto
       if (estCnpj) {
-        const porCnpj = mercados.find(m => m.cnpj && m.cnpj.replace(/\D/g, '') === estCnpj.replace(/\D/g, ''));
+        const cnpjLimpo = estCnpj.replace(/\D/g, '');
+        const porCnpj = mercados.find(m => m.cnpj && m.cnpj.replace(/\D/g, '') === cnpjLimpo);
         if (porCnpj) return porCnpj;
       }
-      if (!estNome) return null;
-      const alvo = normalizarTexto(estNome);
-      if (!alvo) return null;
-      // match por contains em ambas as direções (cobre "PREZUNIC" vs "PREZUNIC SUPERMERCADOS LTDA")
-      return mercados.find(m => {
-        const nomeM = normalizarTexto(m.nome || '');
-        if (!nomeM) return false;
-        return nomeM.includes(alvo) || alvo.includes(nomeM);
-      }) || null;
+      // 2) Nome — contains bidirecional
+      if (estNome) {
+        const alvo = normalizarTexto(estNome);
+        if (alvo) {
+          const porNome = mercados.find(m => {
+            const nomeM = normalizarTexto(m.nome || '');
+            if (!nomeM) return false;
+            return nomeM.includes(alvo) || alvo.includes(nomeM);
+          });
+          if (porNome) return porNome;
+        }
+      }
+      // 3) Fallback: consultar normalizacoes_estabelecimentos para resolver razão social ↔ fantasia
+      try {
+        const alvoNorm = estNome ? normalizarTexto(estNome) : '';
+        const cnpjLimpo = estCnpj ? estCnpj.replace(/\D/g, '') : '';
+        if (!alvoNorm && !cnpjLimpo) return null;
+
+        const { data: normRows } = await supabaseAdmin
+          .from('normalizacoes_estabelecimentos')
+          .select('nome_original, nome_normalizado, cnpj_original')
+          .eq('ativo', true)
+          .limit(500);
+
+        if (normRows && normRows.length > 0) {
+          // Procura linha de normalização que case com o estabelecimento histórico
+          const matched = normRows.find(r => {
+            const orig = normalizarTexto(r.nome_original || '');
+            const norm = normalizarTexto(r.nome_normalizado || '');
+            const cnpjR = (r.cnpj_original || '').replace(/\D/g, '');
+            if (cnpjLimpo && cnpjR && cnpjR === cnpjLimpo) return true;
+            if (alvoNorm && orig && (orig.includes(alvoNorm) || alvoNorm.includes(orig))) return true;
+            if (alvoNorm && norm && (norm.includes(alvoNorm) || alvoNorm.includes(norm))) return true;
+            return false;
+          });
+
+          if (matched) {
+            const matchedCnpj = (matched.cnpj_original || '').replace(/\D/g, '');
+            const matchedNomeNorm = normalizarTexto(matched.nome_normalizado || '');
+            const matchedNomeOrig = normalizarTexto(matched.nome_original || '');
+            const mercadoFinal = mercados.find(m => {
+              const mc = (m.cnpj || '').replace(/\D/g, '');
+              const mn = normalizarTexto(m.nome || '');
+              if (matchedCnpj && mc && mc === matchedCnpj) return true;
+              if (mn && matchedNomeNorm && (mn.includes(matchedNomeNorm) || matchedNomeNorm.includes(mn))) return true;
+              if (mn && matchedNomeOrig && (mn.includes(matchedNomeOrig) || matchedNomeOrig.includes(mn))) return true;
+              return false;
+            });
+            if (mercadoFinal) {
+              console.log(`  🔗 [REDIST-NORM] estab="${estNome}" cnpj="${estCnpj}" → mercado "${mercadoFinal.nome}" via normalizacoes_estabelecimentos`);
+              return mercadoFinal;
+            }
+          }
+        }
+      } catch (errNorm) {
+        console.warn('  ⚠️ Falha ao consultar normalizacoes_estabelecimentos:', errNorm);
+      }
+
+      console.log(`  ❌ [REDIST-FALHOU] estab="${estNome}" cnpj="${estCnpj}" — mercado não está na área`);
+      return null;
     };
 
     // CENÁRIO OTIMIZADO
@@ -767,7 +875,7 @@ serve(async (req) => {
         produtosSemPrecoFinal.push(itemSP);
         continue;
       }
-      const mercadoMatch = matchEstabelecimentoComMercado(
+      const mercadoMatch = await matchEstabelecimentoComMercado(
         up.estabelecimento_nome || null,
         up.estabelecimento_cnpj || null
       );
