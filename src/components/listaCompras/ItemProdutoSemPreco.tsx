@@ -55,7 +55,7 @@ export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Sem preço disponível
+                  Aguardando normalização
                 </Badge>
               )}
             </div>
@@ -64,7 +64,10 @@ export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-hidden />
                 <span>
-                  Último preço conhecido: R$ {Number(item.ultimo_preco.valor_unitario).toFixed(2).replace('.', ',')}
+                  {item.ultimo_preco.estabelecimento_nome
+                    ? <>Último preço em {item.ultimo_preco.estabelecimento_nome}: </>
+                    : <>Último preço conhecido: </>}
+                  R$ {Number(item.ultimo_preco.valor_unitario).toFixed(2).replace('.', ',')}
                   {item.ultimo_preco.data_atualizacao && (
                     <> · {new Date(item.ultimo_preco.data_atualizacao).toLocaleDateString('pt-BR')}</>
                   )}
