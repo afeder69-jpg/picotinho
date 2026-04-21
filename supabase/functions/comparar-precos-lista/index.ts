@@ -403,6 +403,85 @@ serve(async (req) => {
     // Calcular cenários
     const produtosSemPreco: any[] = [];
 
+    // ===== Helpers de tokenização (Fase 1.1) =====
+    const normalizarTexto = (s: string): string =>
+      (s || '')
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Tokens de variante: se aparecem no item mas não no candidato (ou vice-versa), é falso positivo.
+    // Reaproveita lógica da memória `product-variant-keyword-validation`.
+    const TOKENS_VARIANTE = new Set([
+      'ZERO', 'DIET', 'LIGHT', 'INTEGRAL', 'DESNATADO', 'SEMIDESNATADO',
+      'INTEGRA', 'ORGANICO', 'ORGANICA',
+      'MULTIUSO', 'BACTERICIDA', 'NEUTRO', 'NEUTRA',
+      'AMACIANTE', 'CONCENTRADO',
+      'COCA', 'GUARANA', 'UVA', 'LARANJA', 'LIMAO', 'MORANGO', 'CHOCOLATE',
+      'BAUNILHA', 'COCO', 'AMENDOIM', 'MENTA',
+      'PERU', 'FRANGO', 'BOVINO', 'SUINO', 'PEIXE',
+      'ACO', 'INOX', 'PLASTICO', 'VIDRO',
+      'ROSE', 'ROSA', 'BRANCO', 'TINTO',
+      'CALABRESA', 'PORTUGUESA', 'MUSSARELA', 'MARGUERITA',
+      'PARBOILIZADO', 'AGULHINHA', 'ARBORIO',
+      'EXTRAFORTE', 'TRADICIONAL_CAFE',
+    ]);
+
+    // Tokens neutros — não bloqueiam match mesmo se ausentes do outro lado
+    const TOKENS_NEUTROS = new Set([
+      'SEMOLA', 'TRADICIONAL', 'CLASSICO', 'CLASSICA', 'NORMAL',
+      'TIPO', 'PCT', 'PACOTE', 'EMBALAGEM', 'UNIDADE', 'UN', 'UND',
+      'KG', 'G', 'GR', 'ML', 'L', 'LT', 'LITRO',
+    ]);
+
+    const tokenizar = (s: string): string[] => {
+      const norm = normalizarTexto(s);
+      return norm
+        .split(' ')
+        .filter(t => t.length > 2 && !/^\d+$/.test(t));
+    };
+
+    // Token-cover com lock de variante
+    // Retorna { score, ok } — score = tokens compartilhados; ok = passou nos critérios
+    const calcularMatch = (
+      tokensItem: string[],
+      tokensCandidato: string[]
+    ): { score: number; ok: boolean } => {
+      if (tokensItem.length === 0 || tokensCandidato.length === 0) {
+        return { score: 0, ok: false };
+      }
+
+      const setItem = new Set(tokensItem);
+      const setCand = new Set(tokensCandidato);
+
+      // Lock de variante: se item tem token de variante ausente no candidato, rejeita
+      for (const t of setItem) {
+        if (TOKENS_VARIANTE.has(t) && !setCand.has(t)) {
+          return { score: 0, ok: false };
+        }
+      }
+      for (const t of setCand) {
+        if (TOKENS_VARIANTE.has(t) && !setItem.has(t)) {
+          return { score: 0, ok: false };
+        }
+      }
+
+      // Tokens significativos do item (excluindo neutros) para cálculo de cobertura
+      const tokensItemSig = tokensItem.filter(t => !TOKENS_NEUTROS.has(t));
+      const baseCobertura = tokensItemSig.length > 0 ? tokensItemSig : tokensItem;
+
+      const intersecao = baseCobertura.filter(t => setCand.has(t));
+      const score = intersecao.length;
+      const cobertura = score / baseCobertura.length;
+
+      // Aceita se cobertura ≥ 80% OU se ≥ 3 tokens significativos baterem
+      const ok = cobertura >= 0.8 || score >= 3;
+      return { score, ok };
+    };
+
     // Helper: buscar último preço conhecido (fallback histórico) para item sem preço atual na área
     // Para PENDENTES (sem master), restringe ao próprio usuário e enriquece com estabelecimento da nota mais recente.
     const buscarUltimoPrecoConhecido = async (item: any, masterId: string | null) => {
@@ -411,7 +490,7 @@ serve(async (req) => {
         if (masterId) {
           const { data } = await supabaseAdmin
             .from('precos_atuais')
-            .select('valor_unitario, data_atualizacao, estabelecimento_nome')
+            .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
             .eq('produto_master_id', masterId)
             .order('data_atualizacao', { ascending: false })
             .limit(1)
@@ -421,31 +500,48 @@ serve(async (req) => {
               valor_unitario: Number(data.valor_unitario),
               data_atualizacao: data.data_atualizacao,
               estabelecimento_nome: data.estabelecimento_nome || null,
+              estabelecimento_cnpj: data.estabelecimento_cnpj || null,
             };
           }
         }
 
-        // 2. Estoque do próprio usuário (PENDENTES + fallback)
         const nome = (item.produto_nome || '').trim();
-        if (nome) {
-          const { data: estoqueRow } = await supabaseAdmin
-            .from('estoque_app')
-            .select('preco_unitario_ultimo, updated_at, nota_id')
-            .eq('user_id', userId)
-            .ilike('produto_nome', nome)
-            .not('preco_unitario_ultimo', 'is', null)
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+        if (!nome) return null;
 
-          if (estoqueRow?.preco_unitario_ultimo) {
-            // Tentar enriquecer com nome do estabelecimento da nota associada
+        const tokensItem = tokenizar(nome);
+        if (tokensItem.length === 0) return null;
+
+        // 2. Estoque do próprio usuário (PENDENTES + fallback) — token-cover
+        const { data: estoqueRows } = await supabaseAdmin
+          .from('estoque_app')
+          .select('produto_nome, preco_unitario_ultimo, updated_at, nota_id')
+          .eq('user_id', userId)
+          .not('preco_unitario_ultimo', 'is', null)
+          .order('updated_at', { ascending: false })
+          .limit(50);
+
+        if (estoqueRows && estoqueRows.length > 0) {
+          const candidatos = estoqueRows
+            .map(row => {
+              const tokensC = tokenizar(row.produto_nome || '');
+              const { score, ok } = calcularMatch(tokensItem, tokensC);
+              return { row, score, ok };
+            })
+            .filter(c => c.ok)
+            .sort((a, b) => {
+              if (b.score !== a.score) return b.score - a.score;
+              return new Date(b.row.updated_at).getTime() - new Date(a.row.updated_at).getTime();
+            });
+
+          if (candidatos.length > 0) {
+            const melhor = candidatos[0].row;
             let estabelecimentoNome: string | null = null;
-            if (estoqueRow.nota_id) {
+            let estabelecimentoCnpj: string | null = null;
+            if (melhor.nota_id) {
               const { data: notaRow } = await supabaseAdmin
                 .from('notas_imagens')
                 .select('dados_extraidos')
-                .eq('id', estoqueRow.nota_id)
+                .eq('id', melhor.nota_id)
                 .maybeSingle();
               const dados: any = notaRow?.dados_extraidos || {};
               estabelecimentoNome =
@@ -454,46 +550,70 @@ serve(async (req) => {
                 dados?.mercado?.nome ||
                 dados?.supermercado ||
                 null;
+              estabelecimentoCnpj =
+                dados?.estabelecimento?.cnpj ||
+                dados?.emitente?.cnpj ||
+                dados?.cnpj ||
+                null;
             }
+            console.log(`  📜 [HIST-ESTOQUE] "${item.produto_nome}" ← "${melhor.produto_nome}" R$ ${melhor.preco_unitario_ultimo} @ ${estabelecimentoNome || '?'}`);
             return {
-              valor_unitario: Number(estoqueRow.preco_unitario_ultimo),
-              data_atualizacao: estoqueRow.updated_at,
+              valor_unitario: Number(melhor.preco_unitario_ultimo),
+              data_atualizacao: melhor.updated_at,
               estabelecimento_nome: estabelecimentoNome,
+              estabelecimento_cnpj: estabelecimentoCnpj,
             };
           }
+        }
 
-          // 3. Fallback: varrer JSONB de notas_imagens do próprio usuário
-          const { data: notas } = await supabaseAdmin
-            .from('notas_imagens')
-            .select('dados_extraidos, data_criacao')
-            .eq('usuario_id', userId)
-            .eq('processada', true)
-            .order('data_criacao', { ascending: false })
-            .limit(50);
+        // 3. Fallback: varrer JSONB de notas_imagens do próprio usuário — token-cover
+        const { data: notas } = await supabaseAdmin
+          .from('notas_imagens')
+          .select('dados_extraidos, data_criacao')
+          .eq('usuario_id', userId)
+          .eq('processada', true)
+          .order('data_criacao', { ascending: false })
+          .limit(50);
 
-          if (notas && notas.length > 0) {
-            const nomeUpper = nome.toUpperCase();
-            for (const nota of notas) {
-              const dados: any = nota.dados_extraidos || {};
-              const produtos: any[] = Array.isArray(dados?.produtos) ? dados.produtos : [];
-              const match = produtos.find((p: any) =>
-                String(p?.descricao || p?.nome || '').toUpperCase().trim() === nomeUpper
+        if (notas && notas.length > 0) {
+          for (const nota of notas) {
+            const dados: any = nota.dados_extraidos || {};
+            const produtos: any[] = Array.isArray(dados?.produtos) ? dados.produtos : [];
+
+            const candidatos = produtos
+              .map((p: any) => {
+                const nomeC = String(p?.descricao || p?.nome || '');
+                const tokensC = tokenizar(nomeC);
+                const { score, ok } = calcularMatch(tokensItem, tokensC);
+                return { p, nomeC, score, ok };
+              })
+              .filter(c => c.ok)
+              .sort((a, b) => b.score - a.score);
+
+            if (candidatos.length > 0) {
+              const melhor = candidatos[0];
+              const valor = Number(
+                melhor.p?.valor_unitario ?? melhor.p?.preco_unitario ?? melhor.p?.preco
               );
-              if (match) {
-                const valor = Number(match?.valor_unitario ?? match?.preco_unitario ?? match?.preco);
-                if (valor && !isNaN(valor) && valor > 0) {
-                  const estabelecimentoNome =
-                    dados?.estabelecimento?.nome ||
-                    dados?.emitente?.nome ||
-                    dados?.mercado?.nome ||
-                    dados?.supermercado ||
-                    null;
-                  return {
-                    valor_unitario: valor,
-                    data_atualizacao: nota.data_criacao,
-                    estabelecimento_nome: estabelecimentoNome,
-                  };
-                }
+              if (valor && !isNaN(valor) && valor > 0) {
+                const estabelecimentoNome =
+                  dados?.estabelecimento?.nome ||
+                  dados?.emitente?.nome ||
+                  dados?.mercado?.nome ||
+                  dados?.supermercado ||
+                  null;
+                const estabelecimentoCnpj =
+                  dados?.estabelecimento?.cnpj ||
+                  dados?.emitente?.cnpj ||
+                  dados?.cnpj ||
+                  null;
+                console.log(`  📜 [HIST-NOTA] "${item.produto_nome}" ← "${melhor.nomeC}" R$ ${valor} @ ${estabelecimentoNome || '?'}`);
+                return {
+                  valor_unitario: valor,
+                  data_atualizacao: nota.data_criacao,
+                  estabelecimento_nome: estabelecimentoNome,
+                  estabelecimento_cnpj: estabelecimentoCnpj,
+                };
               }
             }
           }
@@ -502,6 +622,23 @@ serve(async (req) => {
         console.warn('  ⚠️ Falha ao buscar último preço conhecido:', err);
       }
       return null;
+    };
+
+    // Helper: casar nome de estabelecimento histórico com mercado da área de atuação
+    const matchEstabelecimentoComMercado = (estNome: string | null, estCnpj: string | null) => {
+      if (estCnpj) {
+        const porCnpj = mercados.find(m => m.cnpj && m.cnpj.replace(/\D/g, '') === estCnpj.replace(/\D/g, ''));
+        if (porCnpj) return porCnpj;
+      }
+      if (!estNome) return null;
+      const alvo = normalizarTexto(estNome);
+      if (!alvo) return null;
+      // match por contains em ambas as direções (cobre "PREZUNIC" vs "PREZUNIC SUPERMERCADOS LTDA")
+      return mercados.find(m => {
+        const nomeM = normalizarTexto(m.nome || '');
+        if (!nomeM) return false;
+        return nomeM.includes(alvo) || alvo.includes(nomeM);
+      }) || null;
     };
 
     // CENÁRIO OTIMIZADO
