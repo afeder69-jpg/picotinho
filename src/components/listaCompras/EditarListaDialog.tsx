@@ -153,7 +153,7 @@ export function EditarListaDialog({ open, onClose, lista }: EditarListaDialogPro
       const { data, error } = await supabase
         .from('listas_compras_itens')
         .insert({
-          produto_nome: texto,
+          produto_nome: texto.toUpperCase().trim(),
           quantidade: 1,
           unidade_medida: 'UN',
           lista_id: lista.id,

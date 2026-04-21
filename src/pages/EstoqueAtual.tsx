@@ -1522,7 +1522,7 @@ const EstoqueAtual = () => {
         const payload = {
           lista_id: listaId,
           produto_id: produtoMasterId,
-          produto_nome: item.produto_nome_exibicao || item.produto_nome || 'Produto',
+          produto_nome: (item.produto_nome_exibicao || item.produto_nome || 'Produto').toUpperCase().trim(),
           quantidade: 1,
           unidade_medida: item.unidade_medida || 'UN',
           item_livre: !produtoMasterId,

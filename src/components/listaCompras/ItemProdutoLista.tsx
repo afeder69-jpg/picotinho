@@ -37,7 +37,7 @@ export function ItemProdutoLista({ item, onToggleComprado, onRemover, onEditarQu
 
             <div className="flex-1 min-w-0">
               <h4 className={`font-medium text-sm truncate ${item.comprado ? 'line-through text-muted-foreground' : ''}`}>
-                {item.produto_nome}
+                {(item.produto_nome ?? '').toUpperCase()}
               </h4>
             </div>
 

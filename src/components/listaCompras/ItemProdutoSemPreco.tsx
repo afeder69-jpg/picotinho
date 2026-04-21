@@ -42,7 +42,7 @@ export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange
           <div className="flex-1 space-y-2">
             <div className="flex items-center justify-between">
               <h4 className={`font-medium ${item.comprado ? 'line-through' : ''}`}>
-                {item.produto_nome}
+                {(item.produto_nome ?? '').toUpperCase()}
               </h4>
               {isItemLivre ? (
                 <Badge variant="secondary" className="text-xs">
