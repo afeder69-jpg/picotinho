@@ -32,6 +32,7 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
   
   comparacao.otimizado.mercados?.forEach((mercado: any) => {
     mercado.produtos.forEach((p: any) => {
+      if (p.historico === true) return; // Fase 1.1: histórico não compete na tabela cruzada
       if (!todosProdutos.has(p.produto_nome)) {
         todosProdutos.set(p.produto_nome, {
           nome: p.produto_nome,
@@ -43,11 +44,12 @@ export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparati
     });
   });
 
-  // Adicionar preços de mercados individuais
+  // Adicionar preços de mercados individuais (IGNORANDO itens históricos — Fase 1.1)
   const allMercadosKeys = Object.keys(comparacao.comparacao || {});
   allMercadosKeys.forEach(key => {
     const mercadoData = comparacao.comparacao[key];
     mercadoData.produtos?.forEach((p: any) => {
+      if (p.historico === true) return; // não vaza histórico para comparação cruzada
       const produto = todosProdutos.get(p.produto_nome);
       if (produto) {
         produto[key] = p.preco_unitario;

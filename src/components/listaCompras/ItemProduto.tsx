@@ -18,6 +18,8 @@ interface ItemProdutoProps {
     melhor_preco: boolean;
     economia?: number;
     comprado: boolean;
+    historico?: boolean;
+    aguardando_normalizacao?: boolean;
   };
   onToggleComprado: (id: string) => void;
   onQuantidadeChange: (id: string, qtd: number) => void;
@@ -48,17 +50,30 @@ export function ItemProduto({ item, onToggleComprado, onQuantidadeChange }: Item
               </h4>
               <div className="flex items-center gap-2">
                 <span className="font-bold">R$ {item.preco_unitario.toFixed(2)}</span>
-                {item.melhor_preco && <span className="text-green-500">🟢</span>}
+                {item.historico && (
+                  <span
+                    className="inline-block w-2 h-2 rounded-full bg-red-500"
+                    title="Preço histórico (sem cotação atual neste mercado)"
+                    aria-label="Preço histórico"
+                  />
+                )}
+                {item.melhor_preco && !item.historico && <span className="text-green-500">🟢</span>}
               </div>
             </div>
-            
-            {item.melhor_preco && item.economia && item.economia > 0 && (
+
+            {item.aguardando_normalizacao && (
+              <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-muted-foreground border-muted-foreground/30">
+                Aguardando normalização
+              </Badge>
+            )}
+
+            {item.melhor_preco && !item.historico && item.economia && item.economia > 0 && (
               <Badge variant="default" className="text-xs bg-green-600">
                 ✨ Economia de R$ {item.economia.toFixed(2)}
               </Badge>
             )}
             
-            {!item.melhor_preco && item.economia && item.economia > 0 && (
+            {!item.melhor_preco && !item.historico && item.economia && item.economia > 0 && (
               <Badge variant="destructive" className="text-xs">
                 ⚠️ R$ {item.economia.toFixed(2)} mais caro
               </Badge>
