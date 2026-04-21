@@ -172,6 +172,8 @@ export default function NormalizacaoGlobal() {
   const [imagemPreview, setImagemPreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [produtoMasterEditando, setProdutoMasterEditando] = useState<string | null>(null);
+  const [imagemRemovida, setImagemRemovida] = useState(false);
+  const [imagemPathOriginal, setImagemPathOriginal] = useState<string | null>(null);
   
   // Estados para filtro e busca do catálogo master
   const [filtroMaster, setFiltroMaster] = useState('');
@@ -1476,6 +1478,8 @@ export default function NormalizacaoGlobal() {
     // Limpar estados de imagem
     setImagemFile(null);
     setImagemPreview(null);
+    setImagemRemovida(false);
+    setImagemPathOriginal(null);
     
     // Calcular unidade base automaticamente
     const qtdValor = parseFloat(candidato.qtd_valor_sugerido || '0');
@@ -1974,6 +1978,8 @@ export default function NormalizacaoGlobal() {
         setImagemPreview(null);
       }
       setImagemFile(null);
+      setImagemRemovida(false);
+      setImagemPathOriginal(produto.imagem_path || null);
 
       setEditModalOpen(true);
     } catch (error: any) {
@@ -2040,6 +2046,13 @@ export default function NormalizacaoGlobal() {
         updateData.imagem_adicionada_por = user.id;
         updateData.imagem_adicionada_em = new Date().toISOString();
       }
+      // Caso: usuário removeu a imagem e NÃO subiu nova → persistir remoção no banco
+      else if (imagemRemovida && !imagemFile) {
+        updateData.imagem_url = null;
+        updateData.imagem_path = null;
+        updateData.imagem_adicionada_por = null;
+        updateData.imagem_adicionada_em = null;
+      }
 
       const { error } = await supabase
         .from('produtos_master_global')
@@ -2048,6 +2061,17 @@ export default function NormalizacaoGlobal() {
 
       if (error) throw error;
 
+      // Best-effort: remover arquivo do storage após sucesso do update (não bloqueia o save)
+      if (imagemRemovida && !imagemFile && imagemPathOriginal) {
+        try {
+          await supabase.storage
+            .from('produtos-master-fotos')
+            .remove([imagemPathOriginal]);
+        } catch (storageErr) {
+          console.warn('Falha ao remover arquivo do storage (não-bloqueante):', storageErr);
+        }
+      }
+
       toast({
         title: "Produto atualizado",
         description: "As alterações foram salvas com sucesso",
@@ -2055,6 +2079,10 @@ export default function NormalizacaoGlobal() {
 
       setEditModalOpen(false);
       setProdutoMasterEditando(null);
+      setImagemRemovida(false);
+      setImagemPathOriginal(null);
+      setImagemFile(null);
+      setImagemPreview(null);
       await carregarDados();
 
     } catch (error: any) {
@@ -4216,6 +4244,7 @@ export default function NormalizacaoGlobal() {
                     onClick={() => {
                       setImagemPreview(null);
                       setImagemFile(null);
+                      setImagemRemovida(true);
                     }}
                   >
                     Remover
