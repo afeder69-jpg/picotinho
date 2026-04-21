@@ -566,14 +566,39 @@ serve(async (req) => {
           }
         }
 
-        // 2. Estoque do próprio usuário (PENDENTES + fallback) — token-cover
-        const { data: estoqueRows } = await supabaseAdmin
-          .from('estoque_app')
-          .select('produto_nome, preco_unitario_ultimo, updated_at, nota_id')
-          .eq('user_id', userId)
-          .not('preco_unitario_ultimo', 'is', null)
-          .order('updated_at', { ascending: false })
-          .limit(50);
+        // 2. Estoque do próprio usuário (PENDENTES + fallback) — token-cover dirigido por tokens fortes
+        // Usar OR por tokens significativos do item para garantir que candidatos relevantes
+        // entrem na amostra, mesmo em usuários com centenas de registros.
+        const tokensFortes = tokensItem
+          .filter(t => !TOKENS_NEUTROS.has(t) && !TOKENS_VARIANTE.has(t))
+          .slice(0, 4);
+        const tokensBusca = tokensFortes.length > 0 ? tokensFortes : tokensItem.slice(0, 4);
+        const orFiltroEstoque = tokensBusca.map(t => `produto_nome.ilike.%${t}%`).join(',');
+
+        let estoqueRows: any[] | null = null;
+        if (orFiltroEstoque) {
+          const { data: estoqueDirigido } = await supabaseAdmin
+            .from('estoque_app')
+            .select('produto_nome, preco_unitario_ultimo, updated_at, nota_id')
+            .eq('user_id', userId)
+            .not('preco_unitario_ultimo', 'is', null)
+            .or(orFiltroEstoque)
+            .order('updated_at', { ascending: false })
+            .limit(200);
+          estoqueRows = estoqueDirigido || null;
+        }
+        // Fallback: se a busca dirigida não trouxe nada, manter a janela ampla anterior
+        if (!estoqueRows || estoqueRows.length === 0) {
+          const { data: estoqueAmplo } = await supabaseAdmin
+            .from('estoque_app')
+            .select('produto_nome, preco_unitario_ultimo, updated_at, nota_id')
+            .eq('user_id', userId)
+            .not('preco_unitario_ultimo', 'is', null)
+            .order('updated_at', { ascending: false })
+            .limit(200);
+          estoqueRows = estoqueAmplo || null;
+        }
+        console.log(`  📊 [HIST-CANDIDATOS] estoque_app: ${estoqueRows?.length || 0} candidatos (tokens=[${tokensBusca.join(', ')}])`);
 
         if (estoqueRows && estoqueRows.length > 0) {
           const candidatos = estoqueRows
