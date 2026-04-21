@@ -395,9 +395,10 @@ serve(async (req) => {
     const produtosSemPreco: any[] = [];
 
     // Helper: buscar último preço conhecido (fallback histórico) para item sem preço atual na área
+    // Para PENDENTES (sem master), restringe ao próprio usuário e enriquece com estabelecimento da nota mais recente.
     const buscarUltimoPrecoConhecido = async (item: any, masterId: string | null) => {
       try {
-        // 1. precos_atuais (qualquer estabelecimento, sem filtro de CNPJ)
+        // 1. Se houver master, buscar em precos_atuais (qualquer estabelecimento)
         if (masterId) {
           const { data } = await supabaseAdmin
             .from('precos_atuais')
@@ -414,24 +415,78 @@ serve(async (req) => {
             };
           }
         }
-        // 2. Fallback adicional: estoque do próprio usuário (preco_unitario_ultimo)
+
+        // 2. Estoque do próprio usuário (PENDENTES + fallback)
         const nome = (item.produto_nome || '').trim();
         if (nome) {
-          const { data } = await supabaseAdmin
+          const { data: estoqueRow } = await supabaseAdmin
             .from('estoque_app')
-            .select('preco_unitario_ultimo, updated_at')
+            .select('preco_unitario_ultimo, updated_at, nota_id')
             .eq('user_id', userId)
             .ilike('produto_nome', nome)
             .not('preco_unitario_ultimo', 'is', null)
             .order('updated_at', { ascending: false })
             .limit(1)
             .maybeSingle();
-          if (data?.preco_unitario_ultimo) {
+
+          if (estoqueRow?.preco_unitario_ultimo) {
+            // Tentar enriquecer com nome do estabelecimento da nota associada
+            let estabelecimentoNome: string | null = null;
+            if (estoqueRow.nota_id) {
+              const { data: notaRow } = await supabaseAdmin
+                .from('notas_imagens')
+                .select('dados_extraidos')
+                .eq('id', estoqueRow.nota_id)
+                .maybeSingle();
+              const dados: any = notaRow?.dados_extraidos || {};
+              estabelecimentoNome =
+                dados?.estabelecimento?.nome ||
+                dados?.emitente?.nome ||
+                dados?.mercado?.nome ||
+                dados?.supermercado ||
+                null;
+            }
             return {
-              valor_unitario: Number(data.preco_unitario_ultimo),
-              data_atualizacao: data.updated_at,
-              estabelecimento_nome: null,
+              valor_unitario: Number(estoqueRow.preco_unitario_ultimo),
+              data_atualizacao: estoqueRow.updated_at,
+              estabelecimento_nome: estabelecimentoNome,
             };
+          }
+
+          // 3. Fallback: varrer JSONB de notas_imagens do próprio usuário
+          const { data: notas } = await supabaseAdmin
+            .from('notas_imagens')
+            .select('dados_extraidos, data_criacao')
+            .eq('usuario_id', userId)
+            .eq('processada', true)
+            .order('data_criacao', { ascending: false })
+            .limit(50);
+
+          if (notas && notas.length > 0) {
+            const nomeUpper = nome.toUpperCase();
+            for (const nota of notas) {
+              const dados: any = nota.dados_extraidos || {};
+              const produtos: any[] = Array.isArray(dados?.produtos) ? dados.produtos : [];
+              const match = produtos.find((p: any) =>
+                String(p?.descricao || p?.nome || '').toUpperCase().trim() === nomeUpper
+              );
+              if (match) {
+                const valor = Number(match?.valor_unitario ?? match?.preco_unitario ?? match?.preco);
+                if (valor && !isNaN(valor) && valor > 0) {
+                  const estabelecimentoNome =
+                    dados?.estabelecimento?.nome ||
+                    dados?.emitente?.nome ||
+                    dados?.mercado?.nome ||
+                    dados?.supermercado ||
+                    null;
+                  return {
+                    valor_unitario: valor,
+                    data_atualizacao: nota.data_criacao,
+                    estabelecimento_nome: estabelecimentoNome,
+                  };
+                }
+              }
+            }
           }
         }
       } catch (err) {
