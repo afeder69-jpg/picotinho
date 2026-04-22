@@ -4,7 +4,7 @@ interface GrupoMercadoProps {
   mercado: {
     id: string;
     nome: string;
-    distancia: number;
+    distancia?: number | null;
     total: number;
   };
   produtos: Array<{
