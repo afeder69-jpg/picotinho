@@ -216,7 +216,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           const insertData = {
             usuario_id: currentUser.id,
             imagem_path: filePath,
-            imagem_url: urlData.publicUrl,
+            imagem_url: initialUrl,
             processada: false,
             nome_original: file.name // Salvar nome original como metadado
           };
