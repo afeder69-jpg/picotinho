@@ -1,14 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { requireUser, AuthError, authErrorResponse, corsHeaders } from "../_shared/auth.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // 🔐 Wave 1 hotfix: require authenticated user; userId derived from JWT only.
+  let authUserId: string;
+  let authUserEmail: string | null = null;
+  try {
+    const ctx = await requireUser(req);
+    authUserId = ctx.userId;
+    authUserEmail = ctx.email;
+  } catch (authErr) {
+    return authErrorResponse(authErr);
   }
 
   try {
@@ -16,35 +23,10 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { email } = await req.json();
-
-    if (!email || email !== 'a.feder69@gmail.com') {
-      return new Response(
-        JSON.stringify({ error: 'Email não autorizado para limpeza' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`🧹 Iniciando limpeza completa para: ${email}`);
-
-    // 1. Buscar o user_id pelo email
-    const { data: authUser, error: authError } = await supabase.auth.admin.listUsers();
-    
-    if (authError) {
-      throw new Error(`Erro ao buscar usuários: ${authError.message}`);
-    }
-
-    const targetUser = authUser.users.find(user => user.email === email);
-    
-    if (!targetUser) {
-      return new Response(
-        JSON.stringify({ error: 'Usuário não encontrado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const userId = targetUser.id;
-    console.log(`👤 User ID encontrado: ${userId}`);
+    // userId is ALWAYS the authenticated caller. Body is ignored for safety.
+    const userId = authUserId;
+    const email = authUserEmail ?? '(jwt)';
+    console.log(`🧹 Iniciando limpeza completa para: ${email} (${userId})`);
 
     const cleanupResults: any[] = [];
 
