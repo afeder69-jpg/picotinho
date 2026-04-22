@@ -185,14 +185,19 @@ async function uploadImageToStorage(imageData: string, userId: string): Promise<
     
     console.log('Upload realizado com sucesso:', data);
     
-    // Obter URL pública
-    const { data: urlData } = supabase.storage
+    // Bucket `receipts` é privado: gerar Signed URL (TTL 1h) para consumo posterior
+    const { data: signed, error: signedError } = await supabase.storage
       .from('receipts')
-      .getPublicUrl(filePath);
-    
-    console.log('URL pública gerada:', urlData.publicUrl);
-    
-    return { path: filePath, url: urlData.publicUrl };
+      .createSignedUrl(filePath, 3600);
+
+    if (signedError || !signed?.signedUrl) {
+      console.error('Erro ao gerar signed URL:', signedError);
+      throw signedError ?? new Error('Falha ao gerar Signed URL');
+    }
+
+    console.log('Signed URL gerada:', signed.signedUrl);
+
+    return { path: filePath, url: signed.signedUrl };
     
   } catch (error) {
     console.error('Erro ao fazer upload da imagem:', error);
