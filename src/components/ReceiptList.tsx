@@ -24,6 +24,7 @@ interface Receipt {
   screenshot_url: string | null;
   processed_data: any;
   imagem_url?: string | null;
+  imagem_path?: string | null;
   dados_extraidos?: any;
   processada?: boolean;
   file_name?: string;
@@ -283,7 +284,21 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const lastRetryAtRef = React.useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
-  
+  // Bucket `receipts` é privado: signed URL gerada sob demanda a partir de imagem_path
+  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null);
+
+  const getReceiptSignedUrl = async (path?: string | null): Promise<string | null> => {
+    if (!path) return null;
+    const { data, error } = await supabase.storage
+      .from('receipts')
+      .createSignedUrl(path, 3600);
+    if (error) {
+      console.error('❌ Erro ao gerar signed URL do receipt:', error);
+      return null;
+    }
+    return data?.signedUrl ?? null;
+  };
+
 
   useEffect(() => {
     loadReceipts();
@@ -365,6 +380,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
               screenshot_url: nota.imagem_url,
               processed_data: nota.dados_extraidos,
               imagem_url: nota.imagem_url,
+              imagem_path: nota.imagem_path,
               dados_extraidos: nota.dados_extraidos,
               processada: nota.processada,
               file_name: fileName,
@@ -399,6 +415,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             screenshot_url: nota.imagem_url,
             processed_data: nota.dados_extraidos,
             imagem_url: nota.imagem_url,
+            imagem_path: nota.imagem_path,
             dados_extraidos: nota.dados_extraidos,
             processada: nota.processada,
             file_name: fileName,
@@ -618,8 +635,11 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
     }
   };
 
-  const viewReceipt = (receipt: Receipt) => {
-    // Sempre abrir no dialog interno (Web e APK)
+  const viewReceipt = async (receipt: Receipt) => {
+    // Bucket privado: gerar Signed URL a partir de imagem_path para exibição
+    setSignedImageUrl(null);
+    const url = await getReceiptSignedUrl(receipt.imagem_path);
+    setSignedImageUrl(url);
     setSelectedReceipt(receipt);
     setIsDialogOpen(true);
   };
@@ -737,18 +757,22 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
 
       if (isPDF) {
         console.log("📄 PDF detectado - usando process-danfe-pdf");
-        console.log("🔍 Dados enviados:", { 
-          pdfUrl: receipt.imagem_url, 
-          notaImagemId: receipt.id, 
-          userId: (await supabase.auth.getUser()).data.user?.id 
+
+        // Bucket privado: gerar Signed URL a partir de imagem_path para a edge function baixar
+        const signedPdfUrl = await getReceiptSignedUrl(receipt.imagem_path) ?? receipt.imagem_url;
+
+        console.log("🔍 Dados enviados:", {
+          pdfUrl: signedPdfUrl,
+          notaImagemId: receipt.id,
+          userId: (await supabase.auth.getUser()).data.user?.id
         });
-        
+
         // Sempre usar process-danfe-pdf para PDFs
         const pdfResponse = await supabase.functions.invoke('process-danfe-pdf', {
-          body: { 
-            pdfUrl: receipt.imagem_url, 
-            notaImagemId: receipt.id, 
-            userId: (await supabase.auth.getUser()).data.user?.id 
+          body: {
+            pdfUrl: signedPdfUrl,
+            notaImagemId: receipt.id,
+            userId: (await supabase.auth.getUser()).data.user?.id
           }
         });
 
@@ -1509,11 +1533,11 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                         </div>
                       </div>
                     </div>
-                    {selectedReceipt.imagem_url && selectedReceipt.file_type !== 'PDF' && (
+                    {signedImageUrl && selectedReceipt.file_type !== 'PDF' && (
                       <div>
                         <h4 className="font-semibold mb-3">Imagem da Nota</h4>
                         <div className="border rounded-lg overflow-hidden">
-                          <img src={selectedReceipt.imagem_url} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer" onClick={() => window.open(selectedReceipt.imagem_url!, '_blank')} />
+                          <img src={signedImageUrl} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer" onClick={() => window.open(signedImageUrl, '_blank')} />
                         </div>
                       </div>
                     )}

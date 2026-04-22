@@ -189,12 +189,14 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           
           console.log('Upload storage SUCESSO:', uploadData);
 
-          // Obter URL pública do arquivo
-          const { data: urlData } = supabase.storage
+          // Gerar Signed URL (bucket privado). Persistimos como referência inicial,
+          // mas o frontend deve sempre regenerar a partir de imagem_path na exibição.
+          const { data: signed } = await supabase.storage
             .from('receipts')
-            .getPublicUrl(filePath);
-            
-          console.log('URL pública gerada:', urlData.publicUrl);
+            .createSignedUrl(filePath, 3600);
+
+          const initialUrl = signed?.signedUrl ?? null;
+          console.log('Signed URL gerada:', initialUrl);
 
           // Verificar autenticação antes de inserir
           const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -214,7 +216,7 @@ const UploadNoteButton = ({ onUploadSuccess }: UploadNoteButtonProps) => {
           const insertData = {
             usuario_id: currentUser.id,
             imagem_path: filePath,
-            imagem_url: urlData.publicUrl,
+            imagem_url: initialUrl,
             processada: false,
             nome_original: file.name // Salvar nome original como metadado
           };
