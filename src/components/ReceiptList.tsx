@@ -24,6 +24,7 @@ interface Receipt {
   screenshot_url: string | null;
   processed_data: any;
   imagem_url?: string | null;
+  imagem_path?: string | null;
   dados_extraidos?: any;
   processada?: boolean;
   file_name?: string;
@@ -283,7 +284,21 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const lastRetryAtRef = React.useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
-  
+  // Bucket `receipts` é privado: signed URL gerada sob demanda a partir de imagem_path
+  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null);
+
+  const getReceiptSignedUrl = async (path?: string | null): Promise<string | null> => {
+    if (!path) return null;
+    const { data, error } = await supabase.storage
+      .from('receipts')
+      .createSignedUrl(path, 3600);
+    if (error) {
+      console.error('❌ Erro ao gerar signed URL do receipt:', error);
+      return null;
+    }
+    return data?.signedUrl ?? null;
+  };
+
 
   useEffect(() => {
     loadReceipts();
