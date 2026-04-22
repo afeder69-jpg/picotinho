@@ -151,12 +151,16 @@ const CupomFiscalViewer = ({
 
       if (uploadError) throw uploadError;
 
-      // 6. Obter URL pública
-      const { data: urlData } = supabase.storage
+      // 6. Obter Signed URL (bucket privado)
+      const { data: signed, error: signedError } = await supabase.storage
         .from("receipts")
-        .getPublicUrl(fileName);
+        .createSignedUrl(fileName, 3600);
 
-      const pdfUrl = urlData.publicUrl;
+      if (signedError || !signed?.signedUrl) {
+        throw signedError ?? new Error("Falha ao gerar URL assinada do PDF");
+      }
+
+      const pdfUrl = signed.signedUrl;
 
       // 7. Atualizar notas_imagens com a URL do PDF
       const { error: updateError } = await supabase
