@@ -31,7 +31,9 @@ export function GrupoMercado({ mercado, produtos, onToggleComprado, onQuantidade
             🏪 {mercado.nome}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {mercado.distancia.toFixed(1)} km • {produtos.length} produtos
+            {typeof mercado.distancia === 'number'
+              ? `${mercado.distancia.toFixed(1)} km • ${produtos.length} produtos`
+              : `Histórico fiscal • ${produtos.length} produtos`}
           </p>
         </div>
         <div className="text-right">
