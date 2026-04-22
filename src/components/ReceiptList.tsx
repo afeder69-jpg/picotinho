@@ -380,6 +380,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
               screenshot_url: nota.imagem_url,
               processed_data: nota.dados_extraidos,
               imagem_url: nota.imagem_url,
+              imagem_path: nota.imagem_path,
               dados_extraidos: nota.dados_extraidos,
               processada: nota.processada,
               file_name: fileName,
@@ -414,6 +415,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             screenshot_url: nota.imagem_url,
             processed_data: nota.dados_extraidos,
             imagem_url: nota.imagem_url,
+            imagem_path: nota.imagem_path,
             dados_extraidos: nota.dados_extraidos,
             processada: nota.processada,
             file_name: fileName,
@@ -633,8 +635,11 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
     }
   };
 
-  const viewReceipt = (receipt: Receipt) => {
-    // Sempre abrir no dialog interno (Web e APK)
+  const viewReceipt = async (receipt: Receipt) => {
+    // Bucket privado: gerar Signed URL a partir de imagem_path para exibição
+    setSignedImageUrl(null);
+    const url = await getReceiptSignedUrl(receipt.imagem_path);
+    setSignedImageUrl(url);
     setSelectedReceipt(receipt);
     setIsDialogOpen(true);
   };
