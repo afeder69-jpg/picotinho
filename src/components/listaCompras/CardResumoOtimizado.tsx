@@ -71,7 +71,7 @@ export function CardResumoOtimizado({ modo, listaId, tabAtiva, dados }: CardResu
                 <div className="text-right">
                   <div className="font-semibold">R$ {mercado.total.toFixed(2)}</div>
                   <div className="text-xs text-muted-foreground">
-                    {mercado.produtos.length} produtos • {mercado.distancia.toFixed(1)} km
+                    {mercado.produtos.length} produtos{typeof mercado.distancia === 'number' ? ` • ${mercado.distancia.toFixed(1)} km` : ''}
                   </div>
                 </div>
               </div>
