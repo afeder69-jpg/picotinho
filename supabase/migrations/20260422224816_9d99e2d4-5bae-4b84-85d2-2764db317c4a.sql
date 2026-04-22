@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Sistema pode gerenciar pontos" ON public.usuarios_pontos;
