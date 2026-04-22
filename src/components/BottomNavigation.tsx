@@ -611,12 +611,16 @@ const BottomNavigation = () => {
         throw new Error(`Erro no upload: ${uploadError.message}`);
       }
       
-      const { data: urlData } = supabase.storage
+      const { data: signed, error: signedError } = await supabase.storage
         .from('receipts')
-        .getPublicUrl(fileName);
-      
-      console.log('✅ [PDF-BG] PDF gerado e enviado:', urlData.publicUrl);
-      return urlData.publicUrl;
+        .createSignedUrl(fileName, 3600);
+
+      if (signedError || !signed?.signedUrl) {
+        throw new Error(`Falha ao gerar URL assinada: ${signedError?.message ?? 'sem URL'}`);
+      }
+
+      console.log('✅ [PDF-BG] PDF gerado e enviado:', signed.signedUrl);
+      return signed.signedUrl;
       
     } catch (error: any) {
       console.error('❌ [PDF-BG] Erro ao gerar PDF:', error);
