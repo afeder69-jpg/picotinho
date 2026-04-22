@@ -757,18 +757,22 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
 
       if (isPDF) {
         console.log("📄 PDF detectado - usando process-danfe-pdf");
-        console.log("🔍 Dados enviados:", { 
-          pdfUrl: receipt.imagem_url, 
-          notaImagemId: receipt.id, 
-          userId: (await supabase.auth.getUser()).data.user?.id 
+
+        // Bucket privado: gerar Signed URL a partir de imagem_path para a edge function baixar
+        const signedPdfUrl = await getReceiptSignedUrl(receipt.imagem_path) ?? receipt.imagem_url;
+
+        console.log("🔍 Dados enviados:", {
+          pdfUrl: signedPdfUrl,
+          notaImagemId: receipt.id,
+          userId: (await supabase.auth.getUser()).data.user?.id
         });
-        
+
         // Sempre usar process-danfe-pdf para PDFs
         const pdfResponse = await supabase.functions.invoke('process-danfe-pdf', {
-          body: { 
-            pdfUrl: receipt.imagem_url, 
-            notaImagemId: receipt.id, 
-            userId: (await supabase.auth.getUser()).data.user?.id 
+          body: {
+            pdfUrl: signedPdfUrl,
+            notaImagemId: receipt.id,
+            userId: (await supabase.auth.getUser()).data.user?.id
           }
         });
 
@@ -1529,11 +1533,11 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                         </div>
                       </div>
                     </div>
-                    {selectedReceipt.imagem_url && selectedReceipt.file_type !== 'PDF' && (
+                    {signedImageUrl && selectedReceipt.file_type !== 'PDF' && (
                       <div>
                         <h4 className="font-semibold mb-3">Imagem da Nota</h4>
                         <div className="border rounded-lg overflow-hidden">
-                          <img src={selectedReceipt.imagem_url} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer" onClick={() => window.open(selectedReceipt.imagem_url!, '_blank')} />
+                          <img src={signedImageUrl} alt="Imagem da nota fiscal" className="w-full max-h-[500px] object-contain bg-gray-50 dark:bg-gray-900 cursor-pointer" onClick={() => window.open(signedImageUrl, '_blank')} />
                         </div>
                       </div>
                     )}
