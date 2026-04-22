@@ -9,9 +9,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signInAnonymously: () => Promise<void>;
   signOut: () => Promise<void>;
-  isTestMode: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
