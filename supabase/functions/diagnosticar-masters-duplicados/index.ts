@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { requireMaster, authErrorResponse, corsHeaders } from "../_shared/auth.ts";
 
 interface GrupoDuplicata {
   nome_base: string;
@@ -141,6 +137,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // 🔐 Wave 1 hotfix: master-only.
+  try { await requireMaster(req); } catch (e) { return authErrorResponse(e); }
 
   try {
     const supabase = createClient(
