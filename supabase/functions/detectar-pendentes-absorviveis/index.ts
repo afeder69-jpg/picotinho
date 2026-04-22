@@ -148,6 +148,9 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 🔐 Wave 1 hotfix: master-only.
+  try { await requireMaster(req); } catch (e) { return authErrorResponse(e); }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
