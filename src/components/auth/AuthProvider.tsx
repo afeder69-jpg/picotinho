@@ -9,9 +9,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signInAnonymously: () => Promise<void>;
   signOut: () => Promise<void>;
-  isTestMode: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,7 +26,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isTestMode, setIsTestMode] = useState(false);
 
   useEffect(() => {
     console.log('🚨🚨🚨 AUTHPROVIDER: INAPPBROWSER VERSÃO ATIVA 🚨🚨🚨');
@@ -153,45 +150,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signInAnonymously = async () => {
-    // Simula login anônimo para modo de teste
-    setIsTestMode(true);
-    const mockUser = {
-      id: 'ae5b5501-7f8a-46da-9cba-b9955a84e697', // USER ID que tem os dados na base
-      aud: 'authenticated',
-      role: 'authenticated',
-      email: 'teste@picotinho.app',
-      email_confirmed_at: new Date().toISOString(),
-      phone: '',
-      confirmed_at: new Date().toISOString(),
-      last_sign_in_at: new Date().toISOString(),
-      app_metadata: { provider: 'test', providers: ['test'] },
-      user_metadata: { name: 'Usuário de Teste' },
-      identities: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    } as User;
-    setUser(mockUser);
-    setLoading(false);
-  };
-
   const signOut = async () => {
     try {
-      // Se estiver em modo teste, apenas limpar estado local
-      if (isTestMode) {
-        setUser(null);
-        setSession(null);
-        setIsTestMode(false);
-        return;
-      }
-
       // Tentar fazer logout no Supabase
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       
       // Mesmo com erro, limpar estado local para evitar problemas de UI
       setUser(null);
       setSession(null);
-      setIsTestMode(false);
       
       // Só propagar o erro se for algo crítico (não session not found)
       if (error && !error.message.includes('session_not_found') && !error.message.includes('Session not found')) {
@@ -201,7 +167,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Em caso de erro, garantir que o estado local seja limpo
       setUser(null);
       setSession(null);
-      setIsTestMode(false);
       
       // Log do erro para debug, mas não propagar erros de sessão
       console.warn('Erro durante logout (não crítico):', error);
@@ -212,9 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     session,
     loading,
-    signInAnonymously,
     signOut,
-    isTestMode,
   };
 
   return (

@@ -1,19 +1,17 @@
 import React from "react";
+import { Navigate } from "react-router-dom";
 
 import ReceiptList from "@/components/ReceiptList";
 import PageHeader from "@/components/PageHeader";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogIn } from "lucide-react";
+
 const Screenshots = () => {
-  const { user, loading, signInAnonymously } = useAuth();
-  const [refreshKey, setRefreshKey] = React.useState(0);
-  
+  const { user, loading } = useAuth();
+  const [refreshKey] = React.useState(0);
+
   // Detectar parâmetro ?highlight= na URL
   const searchParams = new URLSearchParams(window.location.search);
   const highlightNotaId = searchParams.get('highlight');
-
 
   if (loading) {
     return (
@@ -24,24 +22,7 @@ const Screenshots = () => {
   }
 
   if (!user) {
-    return (
-      <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
-        <Card className="w-full max-w-md mx-4">
-          <CardHeader className="text-center">
-            <CardTitle>Acesso Necessário</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <p className="text-muted-foreground">
-              Para ver suas notas fiscais, você precisa fazer login.
-            </p>
-            <Button onClick={signInAnonymously} className="w-full">
-              <LogIn className="w-4 h-4 mr-2" />
-              Entrar Anonimamente
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <Navigate to="/auth" replace />;
   }
 
   return (
