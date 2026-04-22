@@ -1882,12 +1882,19 @@ async function processarInserirNota(supabase: any, mensagem: any): Promise<strin
     
     console.log('✅ Upload realizado com sucesso:', uploadData);
     
-    // Obter URL pública
-    const { data: { publicUrl } } = supabase.storage
+    // Bucket `receipts` é privado: gerar Signed URL para que IA-1/IA-2 consigam baixar via fetch
+    const { data: signed, error: signedError } = await supabase.storage
       .from('receipts')
-      .getPublicUrl(filePath);
-    
-    console.log('🔗 URL pública gerada:', publicUrl);
+      .createSignedUrl(filePath, 3600);
+
+    if (signedError || !signed?.signedUrl) {
+      console.error('❌ Erro ao gerar signed URL:', signedError);
+      return "❌ Erro ao preparar a nota para processamento. Tente novamente.";
+    }
+
+    const publicUrl = signed.signedUrl;
+
+    console.log('🔗 Signed URL gerada:', publicUrl);
     
     // Criar registro na tabela notas_imagens
     const { data: notaImagem, error: dbError } = await supabase
