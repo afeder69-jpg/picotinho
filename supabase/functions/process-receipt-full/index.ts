@@ -125,6 +125,27 @@ function detectarQuantidadeEmbalagem(
     return limpo;
   }
 
+  // 🔢 Forma canônica de EAN (sem zeros à esquerda) — usada para comparação
+  // Ex.: "07622210878946" → "7622210878946"
+  function canonicalEAN(ean: string | null | undefined): string | null {
+    if (!ean) return null;
+    const limpo = String(ean).replace(/\D/g, '').replace(/^0+/, '');
+    if (!limpo || limpo.length < 7) return null;
+    return limpo;
+  }
+
+  // 🔢 Gera variantes equivalentes para casar EANs gravados em formatos diferentes
+  // Cobre: forma canônica (sem zeros à esquerda) + padding para 8/12/13/14 dígitos
+  function eanVariants(ean: string | null | undefined): string[] {
+    const canon = canonicalEAN(ean);
+    if (!canon) return [];
+    const set = new Set<string>([canon]);
+    for (const len of [8, 12, 13, 14]) {
+      if (canon.length <= len) set.add(canon.padStart(len, '0'));
+    }
+    return Array.from(set);
+  }
+
   // 🧹 Limpar sufixos de GRANEL e unidades do nome antes do matching
   function limparUnidadesMedida(nome: string): string {
     return nome
