@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getRecenciaIndicador } from "@/lib/recencia";
 
 interface TabelaComparativaProps {
   open: boolean;
@@ -9,19 +10,6 @@ interface TabelaComparativaProps {
     otimizado: any;
     comparacao: any;
   };
-}
-
-function getRecenciaIndicador(dataAtualizacao?: string): { cor: string; emoji: string; label: string } {
-  if (!dataAtualizacao) return { cor: 'text-muted-foreground', emoji: '⚪', label: 'Data desconhecida' };
-  
-  const agora = new Date();
-  const dataPreco = new Date(dataAtualizacao);
-  const diffMs = agora.getTime() - dataPreco.getTime();
-  const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
-  if (diffDias <= 3) return { cor: 'text-green-500', emoji: '🟢', label: `Atualizado há ${diffDias} dia(s)` };
-  if (diffDias <= 10) return { cor: 'text-yellow-500', emoji: '🟡', label: `Atualizado há ${diffDias} dias` };
-  return { cor: 'text-red-500', emoji: '🔴', label: `Atualizado há ${diffDias} dias` };
 }
 
 export function TabelaComparativa({ open, onClose, comparacao }: TabelaComparativaProps) {

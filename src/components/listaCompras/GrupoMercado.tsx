@@ -17,6 +17,9 @@ interface GrupoMercadoProps {
     melhor_preco: boolean;
     economia?: number;
     comprado: boolean;
+    historico?: boolean;
+    aguardando_normalizacao?: boolean;
+    data_atualizacao?: string;
   }>;
   onToggleComprado: (itemId: string) => void;
   onQuantidadeChange: (itemId: string, novaQtd: number) => void;
