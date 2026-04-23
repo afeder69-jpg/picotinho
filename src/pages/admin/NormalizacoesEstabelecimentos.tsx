@@ -54,6 +54,7 @@ const NormalizacoesEstabelecimentos = () => {
   const [isAnaliseDialogOpen, setIsAnaliseDialogOpen] = useState(false);
   const [processandoRetroativa, setProcessandoRetroativa] = useState(false);
   const [progressoRetroativa, setProgressoRetroativa] = useState(0);
+  const [analisandoImpacto, setAnalisandoImpacto] = useState(false);
   const [analiseImpacto, setAnaliseImpacto] = useState<any>(null);
   const [relatorioRetroativa, setRelatorioRetroativa] = useState<any>(null);
   const [isRelatorioDialogOpen, setIsRelatorioDialogOpen] = useState(false);
