@@ -162,7 +162,7 @@ serve(async (req) => {
   let masterUserId: string | null = null;
   try {
     const auth = await requireMaster(req);
-    masterUserId = auth?.user?.id ?? null;
+    masterUserId = auth.userId;
   } catch (e) {
     return authErrorResponse(e);
   }
