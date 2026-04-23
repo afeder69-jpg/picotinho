@@ -202,7 +202,9 @@ serve(async (req) => {
     ]);
 
     // 4. Para cada grupo, montar pares (órfão × com-preços) e aplicar regra de bloqueios.
+    // De-duplicação por par: o mesmo (orfao, destino) pode aparecer nas duas camadas.
     const pares: Par[] = [];
+    const paresVistos = new Set<string>();
 
     for (const grupo of gruposCandidatos) {
       const enriched = grupo.map(m => ({
@@ -223,6 +225,11 @@ serve(async (req) => {
       for (const orfao of orfaos) {
         for (const destino of comPrecos) {
           if (orfao.id === destino.id) continue;
+
+          // De-duplicação entre camadas
+          const parKey = `${orfao.id}|${destino.id}`;
+          if (paresVistos.has(parKey)) continue;
+          paresVistos.add(parKey);
 
           // Excluir pares já marcados como ignorados (independente da ordem)
           const chaveIgnorado1 = `${orfao.id}|${destino.id}`;
