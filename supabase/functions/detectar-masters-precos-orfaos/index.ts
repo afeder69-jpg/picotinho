@@ -32,6 +32,21 @@ const TOKENS_VARIANTE = new Set([
   'EXTRAFORTE',
 ]);
 
+// Stopwords gramaticais (preposições/artigos) — sempre removidas dos tokens.
+const STOPWORDS = new Set(['DE', 'DO', 'DA', 'DOS', 'DAS', 'COM', 'SEM', 'EM', 'POR', 'PARA']);
+
+// Tokens absorvíveis — lista MÍNIMA validada caso a caso.
+// Cada entrada precisa ter par real documentado e revisão manual antes de adicionar.
+// NÃO ampliar sem evidência concreta. Variantes reais ficam em TOKENS_VARIANTE.
+//
+// Casos validados:
+//   SEMOLA, NINHO  → MACARRÃO FETUCCINE SANTA AMÁLIA 500G (fragmentação de nome_base)
+//   COTT, FD, N    → PAPEL HIGIÊNICO DELUXE COTTON FOLD 30M 24UN (fragmentação de marca)
+const TOKENS_ABSORVIVEIS = new Set([
+  'SEMOLA', 'NINHO',
+  'COTT', 'FD', 'N',
+]);
+
 function normalizarTexto(s: string): string {
   return (s || '')
     .toUpperCase()
