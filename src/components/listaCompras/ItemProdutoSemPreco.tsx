@@ -15,6 +15,7 @@ interface ItemProdutoSemPrecoProps {
     unidade_medida: string;
     comprado: boolean;
     produto_id?: string | null;
+    masterStatus?: string | null;
     ultimo_preco?: {
       valor_unitario: number;
       data_atualizacao: string;
@@ -28,6 +29,9 @@ interface ItemProdutoSemPrecoProps {
 export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange }: ItemProdutoSemPrecoProps) {
   const [quantidade, setQuantidade] = useState(item.quantidade);
   const isItemLivre = !item.produto_id;
+  // Selo "Aguardando normalização" só aparece se o master estiver explicitamente pendente.
+  // Default seguro: master ativo ou status ausente => sem selo.
+  const isAguardandoNormalizacao = !isItemLivre && item.masterStatus === 'pendente';
 
   const handleQuantidadeChange = (novaQtd: number) => {
     if (novaQtd <= 0) return;
@@ -49,11 +53,12 @@ export function ItemProdutoSemPreco({ item, onToggleComprado, onQuantidadeChange
               <h4 className={`font-medium ${item.comprado ? 'line-through' : ''}`}>
                 {(item.produto_nome ?? '').toUpperCase()}
               </h4>
-              {isItemLivre ? (
+              {isItemLivre && (
                 <Badge variant="secondary" className="text-xs">
                   Item livre
                 </Badge>
-              ) : (
+              )}
+              {isAguardandoNormalizacao && (
                 <Badge variant="outline" className="text-xs text-muted-foreground">
                   Aguardando normalização
                 </Badge>

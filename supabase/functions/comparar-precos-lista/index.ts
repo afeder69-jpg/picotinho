@@ -806,6 +806,136 @@ serve(async (req) => {
           } catch (errIrmao) {
             console.warn('  ⚠️ Falha ao buscar master irmão:', errIrmao);
           }
+
+          // 1.6 Master IRMÃO GLOBAL: caso nenhum irmão tenha sido encontrado no estoque do
+          // usuário (usuário nunca comprou variantes do produto), procurar irmão diretamente
+          // em produtos_master_global aplicando os MESMOS bloqueios fortes da detecção canônica:
+          // EAN, qtd_valor, unidade_base, marca e tokens de variante.
+          // Escopo cirúrgico: só dispara quando há masterId; não relaxa critério.
+          try {
+            const { data: masterRef } = await supabaseAdmin
+              .from('produtos_master_global')
+              .select('id, nome_padrao, nome_base, categoria, marca, codigo_barras, qtd_valor, unidade_base, tipo_embalagem')
+              .eq('id', masterId)
+              .maybeSingle();
+
+            if (masterRef && masterRef.categoria) {
+              // Buscar candidatos da mesma categoria, excluindo o próprio master
+              // Filtragem por tokens fortes do nome para limitar amostra
+              const tokensFortesRef = tokensItem
+                .filter(t => !TOKENS_NEUTROS.has(t) && !TOKENS_VARIANTE.has(t))
+                .slice(0, 3);
+              const orFiltroGlobal = tokensFortesRef.length > 0
+                ? tokensFortesRef.map(t => `nome_padrao.ilike.%${t}%`).join(',')
+                : null;
+
+              let queryGlobal = supabaseAdmin
+                .from('produtos_master_global')
+                .select('id, nome_padrao, nome_base, marca, codigo_barras, qtd_valor, unidade_base, status')
+                .eq('categoria', masterRef.categoria)
+                .neq('id', masterId)
+                .eq('status', 'ativo')
+                .limit(20);
+
+              if (orFiltroGlobal) {
+                queryGlobal = queryGlobal.or(orFiltroGlobal);
+              }
+
+              const { data: irmaosGlobais } = await queryGlobal;
+
+              if (irmaosGlobais && irmaosGlobais.length > 0) {
+                console.log(`  🌐 [HIST-IRMAO-GLOBAL] ${irmaosGlobais.length} candidato(s) global(is) para master=${masterId}`);
+
+                // Aplicar bloqueios fortes (mesma lógica da detecção canônica)
+                const bloqueado = (irmao: any): string | null => {
+                  // EAN: se ambos têm e divergem, bloqueia
+                  if (masterRef.codigo_barras && irmao.codigo_barras &&
+                      masterRef.codigo_barras !== irmao.codigo_barras) {
+                    return 'EAN divergente';
+                  }
+                  // qtd_valor: ambos definidos e diferentes -> bloqueia
+                  if (masterRef.qtd_valor != null && irmao.qtd_valor != null &&
+                      Number(masterRef.qtd_valor) !== Number(irmao.qtd_valor)) {
+                    return `qtd_valor divergente (${masterRef.qtd_valor} vs ${irmao.qtd_valor})`;
+                  }
+                  // unidade_base: ambos definidos e diferentes -> bloqueia
+                  if (masterRef.unidade_base && irmao.unidade_base &&
+                      masterRef.unidade_base !== irmao.unidade_base) {
+                    return `unidade_base divergente (${masterRef.unidade_base} vs ${irmao.unidade_base})`;
+                  }
+                  // marca: ambos definidos -> exigir compatibilidade (uma contém a outra após normalização)
+                  // Isso evita bloquear casos legítimos onde a marca de um master tem sufixo extra
+                  // (ex.: "DELUXE" vs "DELUXE COTT N FD") mas continua bloqueando marcas distintas.
+                  if (masterRef.marca && irmao.marca) {
+                    const mRef = String(masterRef.marca).toUpperCase().trim();
+                    const mIrm = String(irmao.marca).toUpperCase().trim();
+                    if (mRef !== mIrm && !mRef.includes(mIrm) && !mIrm.includes(mRef)) {
+                      return `marca divergente (${masterRef.marca} vs ${irmao.marca})`;
+                    }
+                  }
+                  // tokens de variante: divergência em qualquer direção bloqueia
+                  const tokensRef = tokenizar(masterRef.nome_padrao || '');
+                  const tokensIrmao = tokenizar(irmao.nome_padrao || '');
+                  const setRef = new Set(tokensRef);
+                  const setIrmao = new Set(tokensIrmao);
+                  for (const t of setRef) {
+                    if (TOKENS_VARIANTE.has(t) && !setIrmao.has(t)) {
+                      return `variante divergente (ref tem "${t}", irmão não)`;
+                    }
+                  }
+                  for (const t of setIrmao) {
+                    if (TOKENS_VARIANTE.has(t) && !setRef.has(t)) {
+                      return `variante divergente (irmão tem "${t}", ref não)`;
+                    }
+                  }
+                  return null;
+                };
+
+                // Ranquear por afinidade de nome via tokens
+                const tokensRefStr = tokenizar(masterRef.nome_padrao || '');
+                const candidatosScored = irmaosGlobais
+                  .map((irmao: any) => {
+                    const motivo = bloqueado(irmao);
+                    if (motivo) {
+                      console.log(`    🚫 [HIST-IRMAO-GLOBAL] ${irmao.id} bloqueado: ${motivo}`);
+                      return null;
+                    }
+                    const tokensI = tokenizar(irmao.nome_padrao || '');
+                    const { score, ok } = calcularMatch(tokensRefStr, tokensI);
+                    if (!ok) return null;
+                    return { irmao, score };
+                  })
+                  .filter((c: any): c is { irmao: any; score: number } => c !== null)
+                  .sort((a, b) => b.score - a.score);
+
+                for (const cand of candidatosScored.slice(0, 5)) {
+                  const { data: precoIrmao } = await supabaseAdmin
+                    .from('precos_atuais')
+                    .select('valor_unitario, data_atualizacao, estabelecimento_nome, estabelecimento_cnpj')
+                    .eq('produto_master_id', cand.irmao.id)
+                    .order('data_atualizacao', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (precoIrmao?.valor_unitario) {
+                    console.log(`  🌐 [HIST-IRMAO-GLOBAL] "${item.produto_nome}" via master GLOBAL ${cand.irmao.id} (lista=${masterId}) ← "${cand.irmao.nome_padrao}" R$ ${precoIrmao.valor_unitario} @ ${precoIrmao.estabelecimento_nome || '?'}`);
+                    return {
+                      valor_unitario: Number(precoIrmao.valor_unitario),
+                      data_atualizacao: precoIrmao.data_atualizacao,
+                      estabelecimento_nome: precoIrmao.estabelecimento_nome || null,
+                      estabelecimento_cnpj: precoIrmao.estabelecimento_cnpj || null,
+                    };
+                  }
+                }
+
+                if (candidatosScored.length === 0) {
+                  console.log(`  🌐 [HIST-IRMAO-GLOBAL] Nenhum irmão global passou nos bloqueios fortes`);
+                }
+              }
+            }
+          } catch (errGlobal) {
+            console.warn('  ⚠️ Falha no fallback global de irmão:', errGlobal);
+          }
         }
 
         // 2. Estoque do próprio usuário (PENDENTES + fallback) — token-cover dirigido por tokens fortes
@@ -1029,10 +1159,27 @@ serve(async (req) => {
       masterIdPorItem.set(item.id, item.produto_id || null);
     });
 
+    // Map auxiliar: masterId -> status (para enriquecer payload e governar selo "Aguardando normalização" no frontend)
+    const statusPorMaster = new Map<string, string>();
+    const masterIdsUnicos = Array.from(new Set(
+      Array.from(masterIdPorItem.values()).filter((v): v is string => !!v)
+    ));
+    if (masterIdsUnicos.length > 0) {
+      const { data: mastersStatus } = await supabaseAdmin
+        .from('produtos_master_global')
+        .select('id, status')
+        .in('id', masterIdsUnicos);
+      (mastersStatus || []).forEach((m: any) => {
+        if (m?.id) statusPorMaster.set(m.id, m.status || 'ativo');
+      });
+    }
+
     for (const { item, precos } of precosData) {
       if (precos.size === 0) {
         const ultimoPreco = await buscarUltimoPrecoConhecido(item, masterIdPorItem.get(item.id) || null);
-        produtosSemPreco.push({ ...item, ultimo_preco: ultimoPreco });
+        const masterId = masterIdPorItem.get(item.id) || null;
+        const masterStatus = masterId ? (statusPorMaster.get(masterId) || 'ativo') : null;
+        produtosSemPreco.push({ ...item, ultimo_preco: ultimoPreco, master_status: masterStatus });
         continue;
       }
 

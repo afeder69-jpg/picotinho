@@ -525,6 +525,7 @@ export default function ListaCompras() {
                             unidade_medida: item.unidade_medida || 'un',
                             comprado: item.comprado || false,
                             produto_id: item.produto_id || null,
+                            masterStatus: item.master_status || null,
                             ultimo_preco: item.ultimo_preco || null,
                           }}
                           onToggleComprado={handleToggleComprado}
@@ -637,6 +638,7 @@ export default function ListaCompras() {
                             unidade_medida: item.unidade_medida || 'un',
                             comprado: item.comprado || false,
                             produto_id: item.produto_id || null,
+                            masterStatus: item.master_status || null,
                             ultimo_preco: item.ultimo_preco || null,
                           }}
                           onToggleComprado={handleToggleComprado}
