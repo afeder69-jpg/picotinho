@@ -517,18 +517,8 @@ const NormalizacoesEstabelecimentos = () => {
 
       <div className="container mx-auto p-4 max-w-4xl space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/admin/normalizacao")}
-            className="gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
-          </Button>
-
-          <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
+        <div className="flex justify-end">
+          <div className="flex flex-wrap gap-2 justify-end">
             <Button
               variant="outline"
               size="sm"
