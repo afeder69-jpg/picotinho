@@ -146,25 +146,47 @@ serve(async (req) => {
 
     console.log(`📦 ${masters.length} masters ativos carregados`);
 
-    // 2. Agrupar por chave estrita: marca + nome_base + qtd_valor + unidade_base.
-    // Apenas grupos com 2+ entradas são candidatos a pares órfão↔com-preços.
-    const grupos = new Map<string, Master[]>();
+    // 2. Agrupar em DUAS CAMADAS complementares (sem fundir grupos):
+    //    A) chave estrita: marca + nome_base + qtd_valor + unidade_base
+    //    B) chave canônica: tokens significativos do nome_padrao + qtd + unidade
+    //
+    // Camada B captura masters cujos campos `marca`/`nome_base` foram fragmentados
+    // pela normalização (ex.: "DELUXE" vs "DELUXE COTT N FD"; "MACARRÃO NINHO
+    // FETUCCINE" vs "MACARRÃO FETUCCINE SÊMOLA"). Tokens absorvíveis e variantes
+    // ficam fora da chave; variantes ainda BLOQUEIAM o par adiante.
+    //
+    // Apenas grupos com 2+ entradas são candidatos. A união por id evita duplicar
+    // pares quando o mesmo grupo aparece nas duas camadas.
+    const gruposEstritos = new Map<string, Master[]>();
+    const gruposCanonicos = new Map<string, Master[]>();
+
     for (const m of masters as Master[]) {
+      // Camada A — estrita
       const marca = (m.marca || '').toUpperCase().trim();
       const nomeBase = (m.nome_base || '').toUpperCase().trim();
-      if (!marca || !nomeBase) continue; // grupo só forma com chave consistente
-      const qtd = m.qtd_valor != null ? String(Math.round(m.qtd_valor * 1000)) : 'X';
-      const un = (m.unidade_base || '').toUpperCase().trim() || 'X';
-      const key = `${marca}|${nomeBase}|${qtd}|${un}`;
-      if (!grupos.has(key)) grupos.set(key, []);
-      grupos.get(key)!.push(m);
+      if (marca && nomeBase) {
+        const qtd = m.qtd_valor != null ? String(Math.round(m.qtd_valor * 1000)) : 'X';
+        const un = (m.unidade_base || '').toUpperCase().trim() || 'X';
+        const keyA = `${marca}|${nomeBase}|${qtd}|${un}`;
+        if (!gruposEstritos.has(keyA)) gruposEstritos.set(keyA, []);
+        gruposEstritos.get(keyA)!.push(m);
+      }
+
+      // Camada B — canônica por tokens significativos
+      const keyB = chaveCanonica(m);
+      if (keyB) {
+        if (!gruposCanonicos.has(keyB)) gruposCanonicos.set(keyB, []);
+        gruposCanonicos.get(keyB)!.push(m);
+      }
     }
 
-    const gruposCandidatos = Array.from(grupos.values()).filter(g => g.length >= 2);
-    console.log(`🧩 ${gruposCandidatos.length} grupos com 2+ masters`);
+    const gruposCandidatosA = Array.from(gruposEstritos.values()).filter(g => g.length >= 2);
+    const gruposCandidatosB = Array.from(gruposCanonicos.values()).filter(g => g.length >= 2);
+    const gruposCandidatos = [...gruposCandidatosA, ...gruposCandidatosB];
+    console.log(`🧩 grupos candidatos: ${gruposCandidatosA.length} estritos + ${gruposCandidatosB.length} canônicos`);
 
     if (gruposCandidatos.length === 0) {
-      return new Response(JSON.stringify({ pares: [], total: 0 }), {
+      return new Response(JSON.stringify({ pares: [], total: 0, seguros: 0, bloqueados: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
