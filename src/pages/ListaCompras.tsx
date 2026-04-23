@@ -460,6 +460,7 @@ export default function ListaCompras() {
               tabAtiva={tabAtiva}
               onTabChange={setTabAtiva}
               mercados={comparacao.otimizado.mercados}
+              comparacao={comparacao}
             />
 
             {tabAtiva === 'otimizado' && (
@@ -571,7 +572,18 @@ export default function ListaCompras() {
               </>
             )}
 
-            {tabAtiva !== 'otimizado' && dadosAtivos?.produtos && (
+            {tabAtiva !== 'otimizado' && (!dadosAtivos?.produtos || dadosAtivos.produtos.length === 0) && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Sem itens com preço neste mercado</AlertTitle>
+                <AlertDescription>
+                  Este mercado não tem preço cadastrado para nenhum item desta lista.
+                  Volte para a aba <strong>Otimizado</strong> ou escolha outro mercado.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {tabAtiva !== 'otimizado' && dadosAtivos?.produtos && dadosAtivos.produtos.length > 0 && (
               <>
                 <CardResumoOtimizado 
                   modo="mercado"
