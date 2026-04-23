@@ -345,32 +345,70 @@ serve(async (req) => {
               .eq('id', produtoMasterId)
               .maybeSingle();
 
-            if (masterOrfao?.marca && masterOrfao?.nome_base) {
-              // Buscar candidatos irmãos com mesma chave estrita
-              let queryIrmaos = supabaseAdmin
-                .from('produtos_master_global')
-                .select('id, nome_padrao, codigo_barras')
-                .eq('status', 'ativo')
-                .eq('marca', masterOrfao.marca)
-                .eq('nome_base', masterOrfao.nome_base)
-                .neq('id', masterOrfao.id);
+            if (masterOrfao) {
+              // ----- CAMADA A: chave estrita marca + nome_base + qtd + unidade -----
+              let irmaosEstritos: any[] = [];
+              if (masterOrfao.marca && masterOrfao.nome_base) {
+                let queryIrmaos = supabaseAdmin
+                  .from('produtos_master_global')
+                  .select('id, nome_padrao, qtd_valor, unidade_base, codigo_barras')
+                  .eq('status', 'ativo')
+                  .eq('marca', masterOrfao.marca)
+                  .eq('nome_base', masterOrfao.nome_base)
+                  .neq('id', masterOrfao.id);
 
-              if (masterOrfao.qtd_valor != null) queryIrmaos = queryIrmaos.eq('qtd_valor', masterOrfao.qtd_valor);
-              if (masterOrfao.unidade_base) queryIrmaos = queryIrmaos.eq('unidade_base', masterOrfao.unidade_base);
+                if (masterOrfao.qtd_valor != null) queryIrmaos = queryIrmaos.eq('qtd_valor', masterOrfao.qtd_valor);
+                if (masterOrfao.unidade_base) queryIrmaos = queryIrmaos.eq('unidade_base', masterOrfao.unidade_base);
 
-              const { data: irmaos } = await queryIrmaos.limit(10);
+                const { data } = await queryIrmaos.limit(10);
+                irmaosEstritos = data || [];
+              }
 
-              if (irmaos && irmaos.length > 0) {
-                // Filtrar por tokens de variante idênticos e EAN compatível
+              // ----- CAMADA B: chave canônica por tokens significativos -----
+              // Aplica quando a estrita não retornou nada (fragmentação de marca/nome_base).
+              // Reusa BLOQUEIOS fortes de variante, EAN e qtd/unidade.
+              let irmaosCanonicos: any[] = [];
+              const chaveOrfao = chaveCanonicaFallback(
+                masterOrfao.nome_padrao || '',
+                masterOrfao.qtd_valor,
+                masterOrfao.unidade_base,
+              );
+
+              if (irmaosEstritos.length === 0 && chaveOrfao) {
+                // Buscar candidatos amplos com mesma qtd_valor + unidade_base e calcular chave em memória.
+                let q = supabaseAdmin
+                  .from('produtos_master_global')
+                  .select('id, nome_padrao, qtd_valor, unidade_base, codigo_barras')
+                  .eq('status', 'ativo')
+                  .neq('id', masterOrfao.id);
+                if (masterOrfao.qtd_valor != null) q = q.eq('qtd_valor', masterOrfao.qtd_valor);
+                if (masterOrfao.unidade_base) q = q.eq('unidade_base', masterOrfao.unidade_base);
+
+                const { data: candidatos } = await q.limit(200);
+                for (const c of (candidatos || [])) {
+                  const chaveC = chaveCanonicaFallback(c.nome_padrao || '', c.qtd_valor, c.unidade_base);
+                  if (chaveC && chaveC === chaveOrfao) irmaosCanonicos.push(c);
+                }
+              }
+
+              const candidatosFinais = [
+                ...irmaosEstritos.map(i => ({ ...i, _camada: 'estrita' as const })),
+                ...irmaosCanonicos.map(i => ({ ...i, _camada: 'canonica' as const })),
+              ];
+
+              if (candidatosFinais.length > 0) {
+                // BLOQUEIOS FORTES (idênticos para ambas as camadas):
+                //  - tokens de variante devem coincidir EXATAMENTE
+                //  - se ambos têm EAN, devem coincidir
+                //  - qtd_valor e unidade_base devem coincidir (já garantido pelas queries)
                 const tokensVarOrfao = extrairTokensVariante(masterOrfao.nome_padrao || '');
 
-                const irmaosValidos = irmaos.filter(irmao => {
-                  // Tokens de variante devem coincidir exatamente
+                const irmaosValidos = candidatosFinais.filter(irmao => {
                   const tokensVarIrmao = extrairTokensVariante(irmao.nome_padrao || '');
                   if (!setsIguais(tokensVarOrfao, tokensVarIrmao)) return false;
-                  // Se ambos têm EAN, devem coincidir
                   if (masterOrfao.codigo_barras && irmao.codigo_barras &&
                       masterOrfao.codigo_barras !== irmao.codigo_barras) return false;
+                  if (masterOrfao.qtd_valor !== irmao.qtd_valor) return false;
                   return true;
                 });
 
@@ -385,9 +423,9 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (precoIrmao?.valor_unitario) {
-                    console.log(`  ✅ [FALLBACK-IRMAO-ESTRITO] R$ ${precoIrmao.valor_unitario} - master órfão ${masterOrfao.id} ↔ irmão ${irmao.id} ("${irmao.nome_padrao}") @ CNPJ ${cnpjMercado}`);
+                    const tag = irmao._camada === 'canonica' ? 'FALLBACK-IRMAO-CANONICO' : 'FALLBACK-IRMAO-ESTRITO';
+                    console.log(`  ✅ [${tag}] R$ ${precoIrmao.valor_unitario} - master órfão ${masterOrfao.id} ↔ irmão ${irmao.id} ("${irmao.nome_padrao}") @ CNPJ ${cnpjMercado}`);
 
-                    // Persistência de-duplicada do par para o relatório
                     await persistirParFallback(
                       supabaseAdmin,
                       masterOrfao.id,
@@ -404,7 +442,7 @@ serve(async (req) => {
               }
             }
           } catch (errIrmao) {
-            console.warn('  ⚠️ [FALLBACK-IRMAO-ESTRITO] falha ao buscar/registrar:', errIrmao);
+            console.warn('  ⚠️ [FALLBACK-IRMAO] falha ao buscar/registrar:', errIrmao);
           }
         }
 
