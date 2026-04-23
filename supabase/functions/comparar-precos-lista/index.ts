@@ -375,16 +375,16 @@ serve(async (req) => {
               );
 
               if (irmaosEstritos.length === 0 && chaveOrfao) {
-                // Buscar candidatos amplos com mesma qtd_valor + unidade_base e calcular chave em memória.
+                // Buscar candidatos amplos com mesma qtd_valor (casamento de unidade_base
+                // é feito em memória via chave canônica, que normaliza maiúsculas/minúsculas).
                 let q = supabaseAdmin
                   .from('produtos_master_global')
                   .select('id, nome_padrao, qtd_valor, unidade_base, codigo_barras')
                   .eq('status', 'ativo')
                   .neq('id', masterOrfao.id);
                 if (masterOrfao.qtd_valor != null) q = q.eq('qtd_valor', masterOrfao.qtd_valor);
-                if (masterOrfao.unidade_base) q = q.eq('unidade_base', masterOrfao.unidade_base);
 
-                const { data: candidatos } = await q.limit(200);
+                const { data: candidatos } = await q.limit(500);
                 for (const c of (candidatos || [])) {
                   const chaveC = chaveCanonicaFallback(c.nome_padrao || '', c.qtd_valor, c.unidade_base);
                   if (chaveC && chaveC === chaveOrfao) irmaosCanonicos.push(c);
