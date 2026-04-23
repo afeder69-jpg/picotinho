@@ -823,25 +823,25 @@ const NormalizacoesEstabelecimentos = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Normalizações Ativas</CardDescription>
-              <CardTitle className="text-3xl">{normalizacoes.length}</CardTitle>
+            <CardHeader className="pb-3 px-4 sm:px-6">
+              <CardDescription className="text-xs sm:text-sm leading-tight">Normalizações Ativas</CardDescription>
+              <CardTitle className="text-2xl sm:text-3xl">{normalizacoes.length}</CardTitle>
             </CardHeader>
           </Card>
           <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Pendentes de Normalização</CardDescription>
-              <CardTitle className="text-3xl text-orange-500">
+            <CardHeader className="pb-3 px-4 sm:px-6">
+              <CardDescription className="text-xs sm:text-sm leading-tight">Pendentes de Normalização</CardDescription>
+              <CardTitle className="text-2xl sm:text-3xl text-orange-500">
                 {loadingPendentes ? "..." : pendentes.length}
               </CardTitle>
             </CardHeader>
           </Card>
           <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Total Geral</CardDescription>
-              <CardTitle className="text-3xl">
+            <CardHeader className="pb-3 px-4 sm:px-6">
+              <CardDescription className="text-xs sm:text-sm leading-tight">Total Geral</CardDescription>
+              <CardTitle className="text-2xl sm:text-3xl">
                 {loadingPendentes ? "..." : normalizacoes.length + pendentes.length}
               </CardTitle>
             </CardHeader>
