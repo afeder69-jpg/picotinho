@@ -1116,6 +1116,48 @@ export type Database = {
           },
         ]
       }
+      normalizacao_retroativa_jobs: {
+        Row: {
+          atualizadas: number
+          criado_por: string | null
+          erro: string | null
+          finished_at: string | null
+          id: string
+          normalizacoes_aplicadas: Json
+          processadas: number
+          started_at: string
+          status: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          atualizadas?: number
+          criado_por?: string | null
+          erro?: string | null
+          finished_at?: string | null
+          id?: string
+          normalizacoes_aplicadas?: Json
+          processadas?: number
+          started_at?: string
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          atualizadas?: number
+          criado_por?: string | null
+          erro?: string | null
+          finished_at?: string | null
+          id?: string
+          normalizacoes_aplicadas?: Json
+          processadas?: number
+          started_at?: string
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       normalizacoes_embalagens: {
         Row: {
           ativo: boolean
