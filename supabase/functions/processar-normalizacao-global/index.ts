@@ -315,13 +315,22 @@ Deno.serve(async (req) => {
           if (produto.codigo_barras) {
             const eanLimpo = produto.codigo_barras.replace(/\D/g, '');
             if (eanLimpo.length >= 8) {
-              console.log(`🔍 Estratégia 0: Buscando por EAN ${eanLimpo}...`);
-              const { data: mastersPorEan } = await supabase
+              const eanCanon = eanLimpo.replace(/^0+/, '');
+              const variantesEan = new Set<string>([eanCanon]);
+              for (const len of [8, 12, 13, 14]) {
+                if (eanCanon.length <= len) variantesEan.add(eanCanon.padStart(len, '0'));
+              }
+              console.log(`🔍 Estratégia 0: Buscando por EAN ${eanLimpo} (variantes: ${Array.from(variantesEan).join(',')})...`);
+              const { data: mastersPorEanRaw } = await supabase
                 .from('produtos_master_global')
                 .select('*')
-                .eq('codigo_barras', eanLimpo)
+                .in('codigo_barras', Array.from(variantesEan))
                 .eq('status', 'ativo')
-                .limit(2);
+                .limit(5);
+
+              const mastersPorEan = mastersPorEanRaw
+                ? Array.from(new Map(mastersPorEanRaw.map((m: any) => [m.id, m])).values())
+                : [];
 
               if (mastersPorEan && mastersPorEan.length === 1) {
                 const masterEan = mastersPorEan[0];
