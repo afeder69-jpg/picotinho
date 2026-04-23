@@ -1,34 +1,28 @@
 
 
-# Hotfix de segurança — Remover policies permissivas de `receipts_public` e `receipt_items_public`
+## Correção do Layout dos Botões no Mobile
 
-## Abordagem
+### Problema
+Os botões no header da tela "Normalizações de Estabelecimentos" estão saindo da tela no mobile porque estão em uma única linha horizontal sem quebra.
 
-Apenas remover as policies `USING (true)` existentes. Nenhuma nova policy de SELECT será criada. RLS continua habilitado, então:
-- `anon` e `authenticated` ficam bloqueados por ausência de policy.
-- `service_role` segue funcionando porque ignora RLS por padrão.
+### Solução
+Ajustar o container dos botões para ser responsivo:
 
-## Migration
+1. **Mudar o container principal** de `flex items-center justify-between gap-4` para `flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4` — isso empilha os elementos verticalmente no mobile e os coloca lado a lado no desktop.
 
-```sql
-DROP POLICY IF EXISTS "Allow public read access" ON public.receipts_public;
-DROP POLICY IF EXISTS "Allow public read access" ON public.receipt_items_public;
-```
+2. **Mudar o container dos botões** de `flex gap-2` para `flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end` — permite que os botões quebrem linha no mobile e fiquem alinhados à direita no desktop.
 
-Nenhum `CREATE POLICY` adicional. Sem alterar INSERT/UPDATE/DELETE (que já não têm policies). Sem mexer em outras tabelas.
+3. **Adicionar `size="sm"`** em todos os botões para reduzir o tamanho no mobile.
 
-## O que NÃO muda
+4. **Adicionar labels responsivas**:
+   - Desktop: textos completos ("Limpar Duplicatas", "Aplicar a Notas Antigas", "Nova Normalização")
+   - Mobile: textos curtos ("Limpar", "Aplicar", "Novo") para economizar espaço
 
-- Frontend: zero alteração (nenhum consumo dessas tabelas).
-- Edge functions: zero alteração (nenhum consumo).
-- `types.ts`: regenerado automaticamente pelo Supabase.
-- Outras tabelas: intocadas.
+### Arquivo a ser modificado
+- `src/pages/admin/NormalizacoesEstabelecimentos.tsx` (linhas 519-560 aproximadamente)
 
-## Validação
-
-1. `SELECT` com `anon` (REST + chave anônima) → retorna vazio/bloqueado.
-2. `SELECT` com usuário autenticado comum → retorna vazio/bloqueado.
-3. `SELECT` com `service_role` → preservado (bypass nativo de RLS).
-4. Linter do Supabase deixa de reportar `receipts_public_cnpj_exposure`.
-5. App segue 100% funcional — nenhuma tela depende dessas tabelas.
+### Garantias
+- Nenhuma funcionalidade alterada, apenas layout responsivo
+- Botões continuam funcionando exatamente como antes
+- Visual otimizado para telas pequenas sem quebra de layout
 
