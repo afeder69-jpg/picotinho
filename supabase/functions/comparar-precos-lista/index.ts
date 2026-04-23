@@ -6,6 +6,95 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============================================================
+// Helpers compartilhados — usados pelo Passo 2.5 (fallback irmão)
+// ============================================================
+const TOKENS_VARIANTE_FALLBACK = new Set([
+  'ZERO', 'DIET', 'LIGHT', 'INTEGRAL', 'DESNATADO', 'SEMIDESNATADO',
+  'INTEGRA', 'ORGANICO', 'ORGANICA',
+  'MULTIUSO', 'BACTERICIDA', 'NEUTRO', 'NEUTRA',
+  'AMACIANTE', 'CONCENTRADO',
+  'COCA', 'GUARANA', 'UVA', 'LARANJA', 'LIMAO', 'MORANGO', 'CHOCOLATE',
+  'BAUNILHA', 'COCO', 'AMENDOIM', 'MENTA',
+  'PERU', 'FRANGO', 'BOVINO', 'SUINO', 'PEIXE',
+  'ACO', 'INOX', 'PLASTICO', 'VIDRO',
+  'ROSE', 'ROSA', 'BRANCO', 'TINTO',
+  'CALABRESA', 'PORTUGUESA', 'MUSSARELA', 'MARGUERITA',
+  'PARBOILIZADO', 'AGULHINHA', 'ARBORIO',
+  'EXTRAFORTE',
+]);
+
+function _normalizarFallback(s: string): string {
+  return (s || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extrairTokensVariante(s: string): Set<string> {
+  const out = new Set<string>();
+  const tokens = _normalizarFallback(s).split(' ').filter(t => t.length > 2);
+  for (const t of tokens) if (TOKENS_VARIANTE_FALLBACK.has(t)) out.add(t);
+  return out;
+}
+
+function setsIguais<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+/**
+ * Persiste o par (master_orfao ↔ master_irmao) em normalizacoes_log de forma
+ * de-duplicada — só insere se ainda não existir um registro do mesmo par.
+ * O relatório administrativo de "Masters Órfãos" consome esse log como fonte
+ * adicional de detecção em runtime, garantindo que pares vistos pelo fallback
+ * apareçam na revisão mesmo antes da varredura completa rodar.
+ */
+async function persistirParFallback(
+  supabaseAdmin: any,
+  masterOrfaoId: string,
+  masterIrmaoId: string,
+  nomeOrfao: string,
+  nomeIrmao: string,
+  cnpjAlvo: string,
+  precoEncontrado: number,
+): Promise<void> {
+  try {
+    // De-duplicação: já existe registro deste par?
+    const { data: existente } = await supabaseAdmin
+      .from('normalizacoes_log')
+      .select('id')
+      .eq('acao', 'fallback_irmao_master')
+      .eq('produto_id', masterIrmaoId)
+      .contains('metadata', { master_orfao_id: masterOrfaoId })
+      .limit(1)
+      .maybeSingle();
+
+    if (existente) return; // já registrado, evita poluição
+
+    await supabaseAdmin.from('normalizacoes_log').insert({
+      acao: 'fallback_irmao_master',
+      texto_origem: nomeOrfao,
+      produto_id: masterIrmaoId,
+      metadata: {
+        master_orfao_id: masterOrfaoId,
+        master_irmao_id: masterIrmaoId,
+        nome_orfao: nomeOrfao,
+        nome_irmao: nomeIrmao,
+        cnpj_alvo: cnpjAlvo,
+        preco_encontrado: precoEncontrado,
+        detectado_em: new Date().toISOString(),
+      },
+    });
+  } catch (e) {
+    console.warn('  ⚠️ persistirParFallback falhou (não bloqueia fluxo):', e);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
