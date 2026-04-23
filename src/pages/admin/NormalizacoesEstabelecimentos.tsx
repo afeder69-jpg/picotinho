@@ -355,6 +355,7 @@ const NormalizacoesEstabelecimentos = () => {
   };
 
   const analisarImpacto = async () => {
+    setAnalisandoImpacto(true);
     try {
       setAnaliseImpacto(null);
       const { data, error } = await supabase.functions.invoke(
@@ -362,16 +363,25 @@ const NormalizacoesEstabelecimentos = () => {
       );
 
       if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.error || 'Falha ao analisar impacto');
+      }
 
       setAnaliseImpacto(data);
       setIsAnaliseDialogOpen(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao analisar impacto:', error);
+      const msg =
+        error?.context?.error ||
+        error?.message ||
+        'Não foi possível analisar o impacto das normalizações.';
       toast({
         title: "Erro",
-        description: "Não foi possível analisar o impacto das normalizações.",
+        description: String(msg),
         variant: "destructive",
       });
+    } finally {
+      setAnalisandoImpacto(false);
     }
   };
 
