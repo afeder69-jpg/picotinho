@@ -77,3 +77,7 @@ project_id = "mjsbwrtegorjxcepvrik"
     verify_jwt = false
   [functions.whatsapp-webhook]
     verify_jwt = false
+  [functions.backfill-ean-master]
+    verify_jwt = false
+  [functions.vincular-orfaos-por-ean]
+    verify_jwt = false
