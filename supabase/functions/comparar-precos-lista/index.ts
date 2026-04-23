@@ -863,10 +863,15 @@ serve(async (req) => {
                       masterRef.unidade_base !== irmao.unidade_base) {
                     return `unidade_base divergente (${masterRef.unidade_base} vs ${irmao.unidade_base})`;
                   }
-                  // marca: ambos definidos e diferentes -> bloqueia
-                  if (masterRef.marca && irmao.marca &&
-                      String(masterRef.marca).toUpperCase() !== String(irmao.marca).toUpperCase()) {
-                    return `marca divergente (${masterRef.marca} vs ${irmao.marca})`;
+                  // marca: ambos definidos -> exigir compatibilidade (uma contém a outra após normalização)
+                  // Isso evita bloquear casos legítimos onde a marca de um master tem sufixo extra
+                  // (ex.: "DELUXE" vs "DELUXE COTT N FD") mas continua bloqueando marcas distintas.
+                  if (masterRef.marca && irmao.marca) {
+                    const mRef = String(masterRef.marca).toUpperCase().trim();
+                    const mIrm = String(irmao.marca).toUpperCase().trim();
+                    if (mRef !== mIrm && !mRef.includes(mIrm) && !mIrm.includes(mRef)) {
+                      return `marca divergente (${masterRef.marca} vs ${irmao.marca})`;
+                    }
                   }
                   // tokens de variante: divergência em qualquer direção bloqueia
                   const tokensRef = tokenizar(masterRef.nome_padrao || '');
