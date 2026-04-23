@@ -54,6 +54,7 @@ const NormalizacoesEstabelecimentos = () => {
   const [isAnaliseDialogOpen, setIsAnaliseDialogOpen] = useState(false);
   const [processandoRetroativa, setProcessandoRetroativa] = useState(false);
   const [progressoRetroativa, setProgressoRetroativa] = useState(0);
+  const [analisandoImpacto, setAnalisandoImpacto] = useState(false);
   const [analiseImpacto, setAnaliseImpacto] = useState<any>(null);
   const [relatorioRetroativa, setRelatorioRetroativa] = useState<any>(null);
   const [isRelatorioDialogOpen, setIsRelatorioDialogOpen] = useState(false);
@@ -354,6 +355,7 @@ const NormalizacoesEstabelecimentos = () => {
   };
 
   const analisarImpacto = async () => {
+    setAnalisandoImpacto(true);
     try {
       setAnaliseImpacto(null);
       const { data, error } = await supabase.functions.invoke(
@@ -361,16 +363,25 @@ const NormalizacoesEstabelecimentos = () => {
       );
 
       if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.error || 'Falha ao analisar impacto');
+      }
 
       setAnaliseImpacto(data);
       setIsAnaliseDialogOpen(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao analisar impacto:', error);
+      const msg =
+        error?.context?.error ||
+        error?.message ||
+        'Não foi possível analisar o impacto das normalizações.';
       toast({
         title: "Erro",
-        description: "Não foi possível analisar o impacto das normalizações.",
+        description: String(msg),
         variant: "destructive",
       });
+    } finally {
+      setAnalisandoImpacto(false);
     }
   };
 
@@ -539,11 +550,16 @@ const NormalizacoesEstabelecimentos = () => {
               variant="outline"
               size="sm"
               onClick={analisarImpacto}
+              disabled={analisandoImpacto}
               className="gap-2"
             >
-              <History className="w-4 h-4" />
-              <span className="hidden sm:inline">Aplicar a Notas Antigas</span>
-              <span className="sm:hidden">Aplicar</span>
+              <History className={`w-4 h-4 ${analisandoImpacto ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">
+                {analisandoImpacto ? 'Analisando...' : 'Aplicar a Notas Antigas'}
+              </span>
+              <span className="sm:hidden">
+                {analisandoImpacto ? 'Analisando' : 'Aplicar'}
+              </span>
             </Button>
 
             <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
