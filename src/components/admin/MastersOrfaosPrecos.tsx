@@ -155,7 +155,7 @@ export function MastersOrfaosPrecos() {
       {paresBloqueados.length > 0 && (
         <div className="space-y-3 mt-6">
           <h3 className="text-sm font-semibold flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-destructive" />
+            <ShieldAlert className="w-4 h-4 text-destructive-foreground" />
             Variantes — não fundir ({paresBloqueados.length})
           </h3>
           {paresBloqueados.map(p => (
