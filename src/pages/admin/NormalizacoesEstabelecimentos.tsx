@@ -375,39 +375,89 @@ const NormalizacoesEstabelecimentos = () => {
   };
 
   const aplicarNormalizacaoRetroativa = async () => {
-    try {
-      setProcessandoRetroativa(true);
-      setProgressoRetroativa(10);
-      setIsAnaliseDialogOpen(false);
-      setIsRetroativaDialogOpen(true);
+    setProcessandoRetroativa(true);
+    setProgressoRetroativa(5);
+    setIsAnaliseDialogOpen(false);
+    setIsRetroativaDialogOpen(true);
 
+    const POLL_INTERVAL_MS = 2000;
+    const MAX_DURATION_MS = 5 * 60 * 1000; // 5 min
+    const t0 = Date.now();
+    let jobId: string | null = null;
+    let timedOut = false;
+    let lastJob: any = null;
+
+    try {
       const { data, error } = await supabase.functions.invoke(
         'aplicar-normalizacao-retroativa'
       );
+      if (error) throw error;
+      jobId = data?.job_id ?? null;
+      if (!jobId) throw new Error('Job não foi criado');
+
+      // Polling
+      while (Date.now() - t0 < MAX_DURATION_MS) {
+        const { data: job, error: jobErr } = await supabase
+          .from('normalizacao_retroativa_jobs')
+          .select('*')
+          .eq('id', jobId)
+          .maybeSingle();
+
+        if (jobErr) throw jobErr;
+        if (job) {
+          lastJob = job;
+          const total = Math.max(1, job.total ?? 1);
+          const pct = Math.min(99, Math.round(((job.processadas ?? 0) / total) * 100));
+          setProgressoRetroativa(Math.max(pct, 5));
+
+          if (job.status === 'completed' || job.status === 'failed') break;
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      }
+
+      if (!lastJob || (lastJob.status !== 'completed' && lastJob.status !== 'failed')) {
+        timedOut = true;
+        throw new Error('Tempo limite de acompanhamento excedido (5 min). O processamento pode continuar em segundo plano.');
+      }
 
       setProgressoRetroativa(100);
 
-      if (error) throw error;
-
-      setRelatorioRetroativa(data.estatisticas);
-      setIsRetroativaDialogOpen(false);
+      const estatisticas = {
+        total_notas_analisadas: lastJob.total ?? 0,
+        notas_atualizadas: lastJob.atualizadas ?? 0,
+        normalizacoes_aplicadas: lastJob.normalizacoes_aplicadas ?? [],
+        tempo_processamento_segundos: lastJob.finished_at && lastJob.started_at
+          ? Math.round((new Date(lastJob.finished_at).getTime() - new Date(lastJob.started_at).getTime()) / 1000)
+          : null,
+        status: lastJob.status,
+        erro: lastJob.erro,
+      };
+      setRelatorioRetroativa(estatisticas);
       setIsRelatorioDialogOpen(true);
 
-      toast({
-        title: "Sucesso!",
-        description: `${data.estatisticas.notas_atualizadas} notas foram atualizadas.`,
-      });
-
-    } catch (error) {
+      if (lastJob.status === 'completed') {
+        toast({
+          title: 'Sucesso!',
+          description: `${estatisticas.notas_atualizadas} de ${estatisticas.total_notas_analisadas} notas foram atualizadas.`,
+        });
+      } else {
+        toast({
+          title: 'Concluído com falhas',
+          description: `${estatisticas.notas_atualizadas} atualizadas antes da falha. ${lastJob.erro ?? ''}`.trim(),
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
       console.error('Erro ao aplicar normalizações:', error);
       toast({
-        title: "Erro",
-        description: "Não foi possível aplicar as normalizações retroativas.",
-        variant: "destructive",
+        title: timedOut ? 'Tempo excedido' : 'Erro',
+        description: error?.message ?? 'Não foi possível aplicar as normalizações retroativas.',
+        variant: 'destructive',
       });
     } finally {
       setProcessandoRetroativa(false);
       setProgressoRetroativa(0);
+      setIsRetroativaDialogOpen(false);
     }
   };
 
