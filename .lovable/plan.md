@@ -1,28 +1,23 @@
 
 
-## Correção do Layout dos Botões no Mobile
+## Ajuste dos Cards de Estatísticas no Mobile
 
 ### Problema
-Os botões no header da tela "Normalizações de Estabelecimentos" estão saindo da tela no mobile porque estão em uma única linha horizontal sem quebra.
+Os 3 cards de estatísticas ("Normalizações Ativas", "Pendentes de Normalização", "Total Geral") estão em `grid-cols-3` fixo no mobile, deixando cada card muito estreito. As descrições longas estouram a largura.
 
-### Solução
-Ajustar o container dos botões para ser responsivo:
+### Solução (em `src/pages/admin/NormalizacoesEstabelecimentos.tsx`, linhas 826-849)
 
-1. **Mudar o container principal** de `flex items-center justify-between gap-4` para `flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4` — isso empilha os elementos verticalmente no mobile e os coloca lado a lado no desktop.
+1. **Grid responsivo**: trocar `grid grid-cols-3 gap-4` por `grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4` — empilha verticalmente no mobile, fica em 3 colunas no desktop.
 
-2. **Mudar o container dos botões** de `flex gap-2` para `flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end` — permite que os botões quebrem linha no mobile e fiquem alinhados à direita no desktop.
+2. **Padding e tipografia adaptativos**:
+   - `CardHeader` com `pb-3 px-4 sm:px-6`.
+   - `CardDescription` com `text-xs sm:text-sm` e `leading-tight` para evitar quebra estranha.
+   - `CardTitle` com `text-2xl sm:text-3xl`.
 
-3. **Adicionar `size="sm"`** em todos os botões para reduzir o tamanho no mobile.
-
-4. **Adicionar labels responsivas**:
-   - Desktop: textos completos ("Limpar Duplicatas", "Aplicar a Notas Antigas", "Nova Normalização")
-   - Mobile: textos curtos ("Limpar", "Aplicar", "Novo") para economizar espaço
-
-### Arquivo a ser modificado
-- `src/pages/admin/NormalizacoesEstabelecimentos.tsx` (linhas 519-560 aproximadamente)
+3. **Texto mais curto onde possível**: manter "Normalizações Ativas", "Pendentes de Normalização", "Total Geral", mas garantindo que o container respire com o `grid-cols-1` no mobile, o problema desaparece naturalmente.
 
 ### Garantias
-- Nenhuma funcionalidade alterada, apenas layout responsivo
-- Botões continuam funcionando exatamente como antes
-- Visual otimizado para telas pequenas sem quebra de layout
+- Apenas ajuste visual; nenhum dado, contagem ou lógica alterada.
+- Desktop continua idêntico (3 colunas).
+- Mobile passa a exibir os cards em coluna única, com texto inteiro visível.
 
