@@ -1154,10 +1154,27 @@ serve(async (req) => {
       masterIdPorItem.set(item.id, item.produto_id || null);
     });
 
+    // Map auxiliar: masterId -> status (para enriquecer payload e governar selo "Aguardando normalização" no frontend)
+    const statusPorMaster = new Map<string, string>();
+    const masterIdsUnicos = Array.from(new Set(
+      Array.from(masterIdPorItem.values()).filter((v): v is string => !!v)
+    ));
+    if (masterIdsUnicos.length > 0) {
+      const { data: mastersStatus } = await supabaseAdmin
+        .from('produtos_master_global')
+        .select('id, status')
+        .in('id', masterIdsUnicos);
+      (mastersStatus || []).forEach((m: any) => {
+        if (m?.id) statusPorMaster.set(m.id, m.status || 'ativo');
+      });
+    }
+
     for (const { item, precos } of precosData) {
       if (precos.size === 0) {
         const ultimoPreco = await buscarUltimoPrecoConhecido(item, masterIdPorItem.get(item.id) || null);
-        produtosSemPreco.push({ ...item, ultimo_preco: ultimoPreco });
+        const masterId = masterIdPorItem.get(item.id) || null;
+        const masterStatus = masterId ? (statusPorMaster.get(masterId) || 'ativo') : null;
+        produtosSemPreco.push({ ...item, ultimo_preco: ultimoPreco, master_status: masterStatus });
         continue;
       }
 
