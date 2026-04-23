@@ -10,6 +10,7 @@ import { ListaComprasHeader } from "@/components/listaCompras/ListaComprasHeader
 import { ComparacaoTabs } from "@/components/listaCompras/ComparacaoTabs";
 import { CardResumoOtimizado } from "@/components/listaCompras/CardResumoOtimizado";
 import { GrupoMercado } from "@/components/listaCompras/GrupoMercado";
+import { ItemProduto } from "@/components/listaCompras/ItemProduto";
 import { TabelaComparativa } from "@/components/listaCompras/TabelaComparativa";
 import { ExportarListaDialog } from "@/components/listaCompras/ExportarListaDialog";
 import { EditarListaDialog } from "@/components/listaCompras/EditarListaDialog";
