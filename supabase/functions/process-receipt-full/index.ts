@@ -1566,20 +1566,26 @@ serve(async (req) => {
         // 🔢 ESTRATÉGIA 0: Busca por EAN_Comercial (PRIORIDADE MÁXIMA - antes da IA)
         if (produto.ean_comercial) {
           try {
-            console.log(`🔢 Tentando match por EAN: ${produto.ean_comercial} para "${produto.produto_nome}"`);
+            const variantesEan = eanVariants(produto.ean_comercial);
+            console.log(`🔢 Tentando match por EAN: ${produto.ean_comercial} (variantes: ${variantesEan.join(',')}) para "${produto.produto_nome}"`);
             const { data: masterPorEan, error: eanError } = await supabase
               .from('produtos_master_global')
               .select('*')
-              .eq('codigo_barras', produto.ean_comercial);
-            
-            if (!eanError && masterPorEan && masterPorEan.length === 1) {
-              // ✅ Match único por EAN — confiança total
-              resultado = { found: true, master: masterPorEan[0] };
+              .in('codigo_barras', variantesEan);
+
+            // Deduplicar por id (caso o mesmo master apareça por mais de uma variante)
+            const mastersUnicos = masterPorEan
+              ? Array.from(new Map(masterPorEan.map((m: any) => [m.id, m])).values())
+              : [];
+
+            if (!eanError && mastersUnicos.length === 1) {
+              // ✅ Match único por EAN — confiança total (ignora ordem de palavras)
+              resultado = { found: true, master: mastersUnicos[0] };
               eanNormalizacoes++;
-              console.log(`✅ EAN MATCH: "${produto.produto_nome}" → ${masterPorEan[0].nome_padrao} (EAN: ${produto.ean_comercial})`);
-            } else if (masterPorEan && masterPorEan.length > 1) {
+              console.log(`✅ EAN MATCH: "${produto.produto_nome}" → ${mastersUnicos[0].nome_padrao} (EAN: ${produto.ean_comercial})`);
+            } else if (mastersUnicos.length > 1) {
               // ⚠️ Múltiplos masters com mesmo EAN — inconsistência, seguir para IA
-              console.warn(`⚠️ EAN ${produto.ean_comercial} encontrado em ${masterPorEan.length} masters diferentes — seguindo para IA`);
+              console.warn(`⚠️ EAN ${produto.ean_comercial} encontrado em ${mastersUnicos.length} masters distintos — seguindo para IA (revisão manual recomendada)`);
             } else {
               console.log(`ℹ️ EAN ${produto.ean_comercial} não encontrado no cadastro master — seguindo para IA/fuzzy`);
             }
@@ -1733,22 +1739,24 @@ serve(async (req) => {
           // ✅ Persistência segura do EAN no master (se o master ainda não tem codigo_barras)
           if (produto.ean_comercial && !resultado.master.codigo_barras) {
             try {
-              // Verificar se esse EAN já não está em outro master
+              const eanCanon = canonicalEAN(produto.ean_comercial);
+              const variantesEan = eanVariants(produto.ean_comercial);
+              // Verificar se esse EAN (em qualquer variante) já não está em outro master
               const { data: eanExistente } = await supabase
                 .from('produtos_master_global')
                 .select('id')
-                .eq('codigo_barras', produto.ean_comercial)
+                .in('codigo_barras', variantesEan)
                 .neq('id', resultado.master.id)
                 .limit(1);
-              
-              if (!eanExistente || eanExistente.length === 0) {
-                // Seguro gravar — EAN não existe em outro master
+
+              if (eanCanon && (!eanExistente || eanExistente.length === 0)) {
+                // Seguro gravar — EAN não existe em outro master. Grava forma canônica.
                 await supabase
                   .from('produtos_master_global')
-                  .update({ codigo_barras: produto.ean_comercial })
+                  .update({ codigo_barras: eanCanon })
                   .eq('id', resultado.master.id);
-                console.log(`🔢 EAN ${produto.ean_comercial} salvo no master ${resultado.master.id}`);
-              } else {
+                console.log(`🔢 EAN ${eanCanon} salvo no master ${resultado.master.id}`);
+              } else if (eanExistente && eanExistente.length > 0) {
                 console.warn(`⚠️ EAN ${produto.ean_comercial} já existe em outro master (${eanExistente[0].id}) — não gravado`);
               }
             } catch (eanSaveErr: any) {
