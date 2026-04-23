@@ -581,15 +581,25 @@ export default function ListaCompras() {
                 
                 <div className="space-y-2">
                   {dadosAtivos.produtos.map((produto: any) => (
-                    <div key={produto.id} className="p-3 bg-card rounded border">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{produto.produto_nome}</span>
-                        <div className="flex items-center gap-2">
-                          <span>R$ {produto.preco_unitario.toFixed(2)}</span>
-                          {produto.melhor_preco && <span className="text-green-500">🟢</span>}
-                        </div>
-                      </div>
-                    </div>
+                    <ItemProduto
+                      key={produto.id}
+                      item={{
+                        id: produto.id,
+                        produto_nome: produto.produto_nome,
+                        quantidade: produto.quantidade ?? 1,
+                        unidade_medida: produto.unidade_medida ?? 'un',
+                        preco_unitario: produto.preco_unitario,
+                        preco_total: produto.preco_total ?? produto.preco_unitario,
+                        melhor_preco: !!produto.melhor_preco,
+                        economia: produto.economia,
+                        comprado: produto.comprado || false,
+                        historico: produto.historico,
+                        aguardando_normalizacao: produto.aguardando_normalizacao,
+                        data_atualizacao: produto.data_atualizacao,
+                      }}
+                      onToggleComprado={handleToggleComprado}
+                      onQuantidadeChange={handleQuantidadeChange}
+                    />
                   ))}
                 </div>
 
