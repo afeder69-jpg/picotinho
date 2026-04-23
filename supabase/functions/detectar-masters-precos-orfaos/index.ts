@@ -64,6 +64,30 @@ function tokensVariante(s: string): Set<string> {
   return out;
 }
 
+// Tokens significativos do nome_padrao para chave canônica:
+// remove dígitos puros, stopwords, absorvíveis e variantes (variantes ainda
+// servem para BLOQUEIO posterior — não devem entrar na chave de agrupamento).
+function tokensSignificativos(s: string): string[] {
+  const tokens = normalizarTexto(s).split(' ').filter(t => t.length > 2);
+  return tokens.filter(t =>
+    !/^\d+$/.test(t) &&
+    !STOPWORDS.has(t) &&
+    !TOKENS_ABSORVIVEIS.has(t) &&
+    !TOKENS_VARIANTE.has(t)
+  );
+}
+
+// Chave canônica: tokens significativos ordenados + qtd + unidade.
+// Se não houver tokens significativos, retorna null (não agrupa).
+function chaveCanonica(m: Master): string | null {
+  const tokens = tokensSignificativos(m.nome_padrao || '');
+  if (tokens.length === 0) return null;
+  const tokensOrdenados = Array.from(new Set(tokens)).sort().join(' ');
+  const qtd = m.qtd_valor != null ? String(Math.round(m.qtd_valor * 1000)) : 'X';
+  const un = (m.unidade_base || '').toUpperCase().trim() || 'X';
+  return `${tokensOrdenados}|${qtd}|${un}`;
+}
+
 function setEquals<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
