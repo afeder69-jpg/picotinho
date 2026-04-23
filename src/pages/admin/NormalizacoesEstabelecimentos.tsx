@@ -550,11 +550,16 @@ const NormalizacoesEstabelecimentos = () => {
               variant="outline"
               size="sm"
               onClick={analisarImpacto}
+              disabled={analisandoImpacto}
               className="gap-2"
             >
-              <History className="w-4 h-4" />
-              <span className="hidden sm:inline">Aplicar a Notas Antigas</span>
-              <span className="sm:hidden">Aplicar</span>
+              <History className={`w-4 h-4 ${analisandoImpacto ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">
+                {analisandoImpacto ? 'Analisando...' : 'Aplicar a Notas Antigas'}
+              </span>
+              <span className="sm:hidden">
+                {analisandoImpacto ? 'Analisando' : 'Aplicar'}
+              </span>
             </Button>
 
             <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
