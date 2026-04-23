@@ -1850,11 +1850,158 @@ serve(async (req) => {
     if (candidatosVinculados > 0) {
       console.log(`🔗 ${candidatosVinculados} produtos vinculados a candidatos existentes`);
     }
-    
+
+    // ============================================================
+    // 🛡️ FASE 2.55: BLINDAGEM CONTRA CRIAÇÃO DE MASTERS DUPLICADOS
+    // ------------------------------------------------------------
+    // Antes de criar um novo candidato (que eventualmente pode virar
+    // um master novo), tentamos um último reuso por IRMÃO ESTRITO:
+    // mesma MARCA + mesmo NOME_BASE + mesma QTD_VALOR + mesma UNIDADE_BASE,
+    // com tokens de variante coincidentes.
+    //
+    // Tolerância: TOKENS_DESCRITIVOS_REDUNDANTES (lista MÍNIMA, conservadora)
+    // contém termos descritivos não-discriminantes que NÃO devem quebrar o
+    // reuso quando aparecem em só um dos lados (ex.: "SÊMOLA" em macarrão,
+    // "TRADICIONAL", "COMUM"). Esta lista NÃO inclui tokens de variante real
+    // (ZERO, DIET, FETUCCINE, etc.). Só ampliar após validação manual de
+    // pares concretos no relatório de Masters Órfãos.
+    //
+    // Auditoria: quando o pré-check NÃO reusa mas existe um candidato
+    // similar com score 0.80–0.95 (zona cinzenta), registra em
+    // normalizacoes_log para revisão posterior.
+    // ============================================================
+    const TOKENS_DESCRITIVOS_REDUNDANTES = new Set([
+      // Tokens descritivos puramente redundantes — NÃO discriminam variantes.
+      // Mantenha esta lista MÍNIMA. Só adicione após validação manual.
+      'SEMOLA',       // "macarrão de sêmola" vs "macarrão" = mesmo produto
+      'TRADICIONAL',  // sufixo descritivo padrão
+      'COMUM',        // "arroz comum" vs "arroz" = mesmo produto
+      'ORIGINAL',     // sufixo descritivo padrão
+    ]);
+
+    const _normalizarBlindagem = (s: string): string =>
+      (s || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const _tokensVarianteFortes = (s: string): Set<string> => {
+      // Reaproveita o mesmo set TOKENS_VARIANTE usado no fallback de comparação.
+      // Como esta função é local, redefinimos o set aqui para evitar dependências.
+      const VAR = new Set([
+        'ZERO','DIET','LIGHT','INTEGRAL','DESNATADO','SEMIDESNATADO','INTEGRA',
+        'ORGANICO','ORGANICA','MULTIUSO','BACTERICIDA','NEUTRO','NEUTRA',
+        'AMACIANTE','CONCENTRADO','COCA','GUARANA','UVA','LARANJA','LIMAO',
+        'MORANGO','CHOCOLATE','BAUNILHA','COCO','AMENDOIM','MENTA','PERU',
+        'FRANGO','BOVINO','SUINO','PEIXE','ACO','INOX','PLASTICO','VIDRO',
+        'ROSE','ROSA','BRANCO','TINTO','CALABRESA','PORTUGUESA','MUSSARELA',
+        'MARGUERITA','PARBOILIZADO','AGULHINHA','ARBORIO','EXTRAFORTE',
+      ]);
+      const out = new Set<string>();
+      for (const t of _normalizarBlindagem(s).split(' ')) if (VAR.has(t)) out.add(t);
+      return out;
+    };
+
+    const _setsIguais = <T,>(a: Set<T>, b: Set<T>): boolean => {
+      if (a.size !== b.size) return false;
+      for (const v of a) if (!b.has(v)) return false;
+      return true;
+    };
+
+    let masterReusadoBlindagem = 0;
+    for (const produto of produtosEstoque) {
+      if (produto.produto_master_id || produto.produto_candidato_id) continue;
+      // Só roda se temos pistas suficientes
+      const marca = (produto.marca || '').toString().trim();
+      const nomeBase = (produto.nome_base || '').toString().trim();
+      const qtd = produto.qtd_valor;
+      const un = (produto.unidade_base || '').toString().trim();
+      if (!marca || !nomeBase) continue;
+
+      try {
+        let q = supabase
+          .from('produtos_master_global')
+          .select('id, sku_global, nome_padrao, nome_base, marca, qtd_valor, unidade_base, codigo_barras, categoria, imagem_url')
+          .eq('status', 'ativo')
+          .ilike('marca', marca)
+          .ilike('nome_base', nomeBase);
+        if (qtd != null) q = q.eq('qtd_valor', qtd);
+        if (un) q = q.eq('unidade_base', un);
+
+        const { data: candidatosMaster } = await q.limit(20);
+        if (!candidatosMaster || candidatosMaster.length === 0) continue;
+
+        // Tokens de variante do produto da nota (usa nome do produto)
+        const varProduto = _tokensVarianteFortes(produto.produto_nome || '');
+
+        // Filtro estrito: variantes idênticas + EAN compatível (se ambos têm)
+        let melhor: any = null;
+        let melhorScore = 0;
+        for (const m of candidatosMaster) {
+          const varMaster = _tokensVarianteFortes(m.nome_padrao || '');
+          if (!_setsIguais(varProduto, varMaster)) continue;
+          if (produto.ean_comercial && m.codigo_barras &&
+              produto.ean_comercial !== m.codigo_barras) continue;
+
+          // Score por overlap de tokens não-descritivos
+          const tokA = new Set(_normalizarBlindagem(produto.produto_nome || '').split(' ')
+            .filter(t => t.length > 2 && !TOKENS_DESCRITIVOS_REDUNDANTES.has(t)));
+          const tokB = new Set(_normalizarBlindagem(m.nome_padrao || '').split(' ')
+            .filter(t => t.length > 2 && !TOKENS_DESCRITIVOS_REDUNDANTES.has(t)));
+          let inter = 0;
+          for (const t of tokA) if (tokB.has(t)) inter++;
+          const denom = Math.max(tokA.size, tokB.size, 1);
+          const score = inter / denom;
+
+          if (score > melhorScore) { melhorScore = score; melhor = m; }
+        }
+
+        // Aceita reuso só com score alto (≥ 0.7) — conservador
+        if (melhor && melhorScore >= 0.7) {
+          produto.produto_master_id = melhor.id;
+          produto.sku_global = melhor.sku_global;
+          produto.produto_nome = melhor.nome_padrao;
+          produto.marca = melhor.marca;
+          produto.categoria = (melhor.categoria || produto.categoria || '').toString().toLowerCase();
+          produto.produto_nome_normalizado = melhor.nome_padrao;
+          produto.nome_base = melhor.nome_base;
+          produto.imagem_url = melhor.imagem_url;
+          masterReusadoBlindagem++;
+          masterEncontrados++;
+          masterNaoEncontrados = Math.max(0, masterNaoEncontrados - 1);
+          console.log(`🛡️ [BLINDAGEM] Reuso de master existente: "${produto.produto_nome}" → ${melhor.id} (score=${melhorScore.toFixed(2)})`);
+        } else if (melhor && melhorScore >= 0.4 && melhorScore < 0.7) {
+          // Zona cinzenta: registra para auditoria, NÃO reusa
+          try {
+            await supabase.from('normalizacoes_log').insert({
+              acao: 'master_criado_zona_cinzenta',
+              texto_origem: produto.produto_nome,
+              produto_id: melhor.id,
+              score_agregado: melhorScore,
+              metadata: {
+                candidato_master_id: melhor.id,
+                candidato_nome: melhor.nome_padrao,
+                marca: marca,
+                nome_base: nomeBase,
+                qtd_valor: qtd,
+                unidade_base: un,
+              },
+            });
+          } catch (logErr) {
+            console.warn('⚠️ [BLINDAGEM] falha ao logar zona cinzenta:', logErr);
+          }
+        }
+      } catch (errBlind) {
+        console.warn(`⚠️ [BLINDAGEM] falha no pré-check para "${produto.produto_nome}":`, errBlind);
+      }
+    }
+    if (masterReusadoBlindagem > 0) {
+      console.log(`🛡️ [BLINDAGEM] ${masterReusadoBlindagem} produtos reusaram master existente (evitou candidato novo)`);
+    }
+
     // 🆕 FASE 2.6: CRIAR CANDIDATOS PARA PRODUTOS SEM MASTER E SEM CANDIDATO
     // Para produtos sem master e sem candidato existente, criar novo candidato
     console.log('🤖 Criando candidatos de normalização para produtos sem master...');
     let candidatosCriados = 0;
+
     
     for (const produto of produtosEstoque) {
       // Só processar produtos sem master E sem candidato vinculado

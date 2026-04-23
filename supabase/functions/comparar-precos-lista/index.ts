@@ -6,6 +6,95 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============================================================
+// Helpers compartilhados — usados pelo Passo 2.5 (fallback irmão)
+// ============================================================
+const TOKENS_VARIANTE_FALLBACK = new Set([
+  'ZERO', 'DIET', 'LIGHT', 'INTEGRAL', 'DESNATADO', 'SEMIDESNATADO',
+  'INTEGRA', 'ORGANICO', 'ORGANICA',
+  'MULTIUSO', 'BACTERICIDA', 'NEUTRO', 'NEUTRA',
+  'AMACIANTE', 'CONCENTRADO',
+  'COCA', 'GUARANA', 'UVA', 'LARANJA', 'LIMAO', 'MORANGO', 'CHOCOLATE',
+  'BAUNILHA', 'COCO', 'AMENDOIM', 'MENTA',
+  'PERU', 'FRANGO', 'BOVINO', 'SUINO', 'PEIXE',
+  'ACO', 'INOX', 'PLASTICO', 'VIDRO',
+  'ROSE', 'ROSA', 'BRANCO', 'TINTO',
+  'CALABRESA', 'PORTUGUESA', 'MUSSARELA', 'MARGUERITA',
+  'PARBOILIZADO', 'AGULHINHA', 'ARBORIO',
+  'EXTRAFORTE',
+]);
+
+function _normalizarFallback(s: string): string {
+  return (s || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extrairTokensVariante(s: string): Set<string> {
+  const out = new Set<string>();
+  const tokens = _normalizarFallback(s).split(' ').filter(t => t.length > 2);
+  for (const t of tokens) if (TOKENS_VARIANTE_FALLBACK.has(t)) out.add(t);
+  return out;
+}
+
+function setsIguais<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+/**
+ * Persiste o par (master_orfao ↔ master_irmao) em normalizacoes_log de forma
+ * de-duplicada — só insere se ainda não existir um registro do mesmo par.
+ * O relatório administrativo de "Masters Órfãos" consome esse log como fonte
+ * adicional de detecção em runtime, garantindo que pares vistos pelo fallback
+ * apareçam na revisão mesmo antes da varredura completa rodar.
+ */
+async function persistirParFallback(
+  supabaseAdmin: any,
+  masterOrfaoId: string,
+  masterIrmaoId: string,
+  nomeOrfao: string,
+  nomeIrmao: string,
+  cnpjAlvo: string,
+  precoEncontrado: number,
+): Promise<void> {
+  try {
+    // De-duplicação: já existe registro deste par?
+    const { data: existente } = await supabaseAdmin
+      .from('normalizacoes_log')
+      .select('id')
+      .eq('acao', 'fallback_irmao_master')
+      .eq('produto_id', masterIrmaoId)
+      .contains('metadata', { master_orfao_id: masterOrfaoId })
+      .limit(1)
+      .maybeSingle();
+
+    if (existente) return; // já registrado, evita poluição
+
+    await supabaseAdmin.from('normalizacoes_log').insert({
+      acao: 'fallback_irmao_master',
+      texto_origem: nomeOrfao,
+      produto_id: masterIrmaoId,
+      metadata: {
+        master_orfao_id: masterOrfaoId,
+        master_irmao_id: masterIrmaoId,
+        nome_orfao: nomeOrfao,
+        nome_irmao: nomeIrmao,
+        cnpj_alvo: cnpjAlvo,
+        preco_encontrado: precoEncontrado,
+        detectado_em: new Date().toISOString(),
+      },
+    });
+  } catch (e) {
+    console.warn('  ⚠️ persistirParFallback falhou (não bloqueia fluxo):', e);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -201,6 +290,90 @@ serve(async (req) => {
               console.log(`  ✅ [FALLBACK-NOME-MASTER] R$ ${precoViaMaster.valor_unitario} - "${precoViaMaster.produto_nome}" (master: "${masterInfo.nome_padrao}") @ CNPJ ${cnpjMercado}`);
               return { valor: precoViaMaster.valor_unitario, data_atualizacao: precoViaMaster.data_atualizacao };
             }
+          }
+        }
+
+        // ============================================================
+        // PASSO 2.5: Fallback estrito por master IRMÃO equivalente
+        // (defesa em profundidade contra masters duplicados órfãos de preço)
+        //
+        // Critério ESTRITO — sem fuzzy:
+        // - mesma marca + mesmo nome_base + mesma qtd_valor + mesma unidade_base
+        // - mesmos tokens de variante (TOKENS_VARIANTE)
+        // - se ambos têm EAN, devem coincidir
+        //
+        // Toda vez que encontra um par, persiste em normalizacoes_log
+        // (acao='fallback_irmao_master') de forma DE-DUPLICADA por par,
+        // para alimentar o relatório administrativo "Masters Órfãos".
+        // ============================================================
+        if (produtoMasterId) {
+          try {
+            const { data: masterOrfao } = await supabaseAdmin
+              .from('produtos_master_global')
+              .select('id, nome_padrao, nome_base, marca, qtd_valor, unidade_base, codigo_barras')
+              .eq('id', produtoMasterId)
+              .maybeSingle();
+
+            if (masterOrfao?.marca && masterOrfao?.nome_base) {
+              // Buscar candidatos irmãos com mesma chave estrita
+              let queryIrmaos = supabaseAdmin
+                .from('produtos_master_global')
+                .select('id, nome_padrao, codigo_barras')
+                .eq('status', 'ativo')
+                .eq('marca', masterOrfao.marca)
+                .eq('nome_base', masterOrfao.nome_base)
+                .neq('id', masterOrfao.id);
+
+              if (masterOrfao.qtd_valor != null) queryIrmaos = queryIrmaos.eq('qtd_valor', masterOrfao.qtd_valor);
+              if (masterOrfao.unidade_base) queryIrmaos = queryIrmaos.eq('unidade_base', masterOrfao.unidade_base);
+
+              const { data: irmaos } = await queryIrmaos.limit(10);
+
+              if (irmaos && irmaos.length > 0) {
+                // Filtrar por tokens de variante idênticos e EAN compatível
+                const tokensVarOrfao = extrairTokensVariante(masterOrfao.nome_padrao || '');
+
+                const irmaosValidos = irmaos.filter(irmao => {
+                  // Tokens de variante devem coincidir exatamente
+                  const tokensVarIrmao = extrairTokensVariante(irmao.nome_padrao || '');
+                  if (!setsIguais(tokensVarOrfao, tokensVarIrmao)) return false;
+                  // Se ambos têm EAN, devem coincidir
+                  if (masterOrfao.codigo_barras && irmao.codigo_barras &&
+                      masterOrfao.codigo_barras !== irmao.codigo_barras) return false;
+                  return true;
+                });
+
+                for (const irmao of irmaosValidos) {
+                  const { data: precoIrmao } = await supabaseAdmin
+                    .from('precos_atuais')
+                    .select('valor_unitario, produto_nome, data_atualizacao')
+                    .eq('produto_master_id', irmao.id)
+                    .eq('estabelecimento_cnpj', cnpjMercado)
+                    .order('data_atualizacao', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (precoIrmao?.valor_unitario) {
+                    console.log(`  ✅ [FALLBACK-IRMAO-ESTRITO] R$ ${precoIrmao.valor_unitario} - master órfão ${masterOrfao.id} ↔ irmão ${irmao.id} ("${irmao.nome_padrao}") @ CNPJ ${cnpjMercado}`);
+
+                    // Persistência de-duplicada do par para o relatório
+                    await persistirParFallback(
+                      supabaseAdmin,
+                      masterOrfao.id,
+                      irmao.id,
+                      masterOrfao.nome_padrao || '',
+                      irmao.nome_padrao || '',
+                      cnpjMercado,
+                      Number(precoIrmao.valor_unitario),
+                    );
+
+                    return { valor: precoIrmao.valor_unitario, data_atualizacao: precoIrmao.data_atualizacao };
+                  }
+                }
+              }
+            }
+          } catch (errIrmao) {
+            console.warn('  ⚠️ [FALLBACK-IRMAO-ESTRITO] falha ao buscar/registrar:', errIrmao);
           }
         }
 

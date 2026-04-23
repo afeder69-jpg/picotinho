@@ -85,6 +85,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { ScrapingControls } from "@/components/admin/ImageScraping/ScrapingControls";
 import { ImagePreviewCard } from "@/components/admin/ImageScraping/ImagePreviewCard";
+import { MastersOrfaosPrecos } from "@/components/admin/MastersOrfaosPrecos";
 
 const NOVA_CAMPANHA_INITIAL_STATE = {
   titulo: '',
@@ -2813,7 +2814,15 @@ export default function NormalizacaoGlobal() {
             <Send className="w-4 h-4 hidden md:block" />
             Campanhas {campanhasEmAndamento > 0 && <Badge variant="default" className="ml-1 text-xs">{campanhasEmAndamento}</Badge>}
           </TabsTrigger>
+          <TabsTrigger value="orfaos-precos" className="gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3">
+            <AlertCircle className="w-4 h-4 hidden md:block" />
+            Órfãos de Preço
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="orfaos-precos" className="space-y-4">
+          <MastersOrfaosPrecos />
+        </TabsContent>
 
         {/* Candidatos Pendentes */}
         <TabsContent value="pendentes" className="space-y-4">
