@@ -32,6 +32,21 @@ const TOKENS_VARIANTE = new Set([
   'EXTRAFORTE',
 ]);
 
+// Stopwords gramaticais (preposições/artigos) — sempre removidas dos tokens.
+const STOPWORDS = new Set(['DE', 'DO', 'DA', 'DOS', 'DAS', 'COM', 'SEM', 'EM', 'POR', 'PARA']);
+
+// Tokens absorvíveis — lista MÍNIMA validada caso a caso.
+// Cada entrada precisa ter par real documentado e revisão manual antes de adicionar.
+// NÃO ampliar sem evidência concreta. Variantes reais ficam em TOKENS_VARIANTE.
+//
+// Casos validados:
+//   SEMOLA, NINHO  → MACARRÃO FETUCCINE SANTA AMÁLIA 500G (fragmentação de nome_base)
+//   COTT, FD, N    → PAPEL HIGIÊNICO DELUXE COTTON FOLD 30M 24UN (fragmentação de marca)
+const TOKENS_ABSORVIVEIS = new Set([
+  'SEMOLA', 'NINHO',
+  'COTT', 'FD', 'N',
+]);
+
 function normalizarTexto(s: string): string {
   return (s || '')
     .toUpperCase()
@@ -47,6 +62,30 @@ function tokensVariante(s: string): Set<string> {
   const out = new Set<string>();
   for (const t of tokens) if (TOKENS_VARIANTE.has(t)) out.add(t);
   return out;
+}
+
+// Tokens significativos do nome_padrao para chave canônica:
+// remove dígitos puros, stopwords, absorvíveis e variantes (variantes ainda
+// servem para BLOQUEIO posterior — não devem entrar na chave de agrupamento).
+function tokensSignificativos(s: string): string[] {
+  const tokens = normalizarTexto(s).split(' ').filter(t => t.length > 2);
+  return tokens.filter(t =>
+    !/^\d+$/.test(t) &&
+    !STOPWORDS.has(t) &&
+    !TOKENS_ABSORVIVEIS.has(t) &&
+    !TOKENS_VARIANTE.has(t)
+  );
+}
+
+// Chave canônica: tokens significativos ordenados + qtd + unidade.
+// Se não houver tokens significativos, retorna null (não agrupa).
+function chaveCanonica(m: Master): string | null {
+  const tokens = tokensSignificativos(m.nome_padrao || '');
+  if (tokens.length === 0) return null;
+  const tokensOrdenados = Array.from(new Set(tokens)).sort().join(' ');
+  const qtd = m.qtd_valor != null ? String(Math.round(m.qtd_valor * 1000)) : 'X';
+  const un = (m.unidade_base || '').toUpperCase().trim() || 'X';
+  return `${tokensOrdenados}|${qtd}|${un}`;
 }
 
 function setEquals<T>(a: Set<T>, b: Set<T>): boolean {
@@ -107,25 +146,47 @@ serve(async (req) => {
 
     console.log(`📦 ${masters.length} masters ativos carregados`);
 
-    // 2. Agrupar por chave estrita: marca + nome_base + qtd_valor + unidade_base.
-    // Apenas grupos com 2+ entradas são candidatos a pares órfão↔com-preços.
-    const grupos = new Map<string, Master[]>();
+    // 2. Agrupar em DUAS CAMADAS complementares (sem fundir grupos):
+    //    A) chave estrita: marca + nome_base + qtd_valor + unidade_base
+    //    B) chave canônica: tokens significativos do nome_padrao + qtd + unidade
+    //
+    // Camada B captura masters cujos campos `marca`/`nome_base` foram fragmentados
+    // pela normalização (ex.: "DELUXE" vs "DELUXE COTT N FD"; "MACARRÃO NINHO
+    // FETUCCINE" vs "MACARRÃO FETUCCINE SÊMOLA"). Tokens absorvíveis e variantes
+    // ficam fora da chave; variantes ainda BLOQUEIAM o par adiante.
+    //
+    // Apenas grupos com 2+ entradas são candidatos. A união por id evita duplicar
+    // pares quando o mesmo grupo aparece nas duas camadas.
+    const gruposEstritos = new Map<string, Master[]>();
+    const gruposCanonicos = new Map<string, Master[]>();
+
     for (const m of masters as Master[]) {
+      // Camada A — estrita
       const marca = (m.marca || '').toUpperCase().trim();
       const nomeBase = (m.nome_base || '').toUpperCase().trim();
-      if (!marca || !nomeBase) continue; // grupo só forma com chave consistente
-      const qtd = m.qtd_valor != null ? String(Math.round(m.qtd_valor * 1000)) : 'X';
-      const un = (m.unidade_base || '').toUpperCase().trim() || 'X';
-      const key = `${marca}|${nomeBase}|${qtd}|${un}`;
-      if (!grupos.has(key)) grupos.set(key, []);
-      grupos.get(key)!.push(m);
+      if (marca && nomeBase) {
+        const qtd = m.qtd_valor != null ? String(Math.round(m.qtd_valor * 1000)) : 'X';
+        const un = (m.unidade_base || '').toUpperCase().trim() || 'X';
+        const keyA = `${marca}|${nomeBase}|${qtd}|${un}`;
+        if (!gruposEstritos.has(keyA)) gruposEstritos.set(keyA, []);
+        gruposEstritos.get(keyA)!.push(m);
+      }
+
+      // Camada B — canônica por tokens significativos
+      const keyB = chaveCanonica(m);
+      if (keyB) {
+        if (!gruposCanonicos.has(keyB)) gruposCanonicos.set(keyB, []);
+        gruposCanonicos.get(keyB)!.push(m);
+      }
     }
 
-    const gruposCandidatos = Array.from(grupos.values()).filter(g => g.length >= 2);
-    console.log(`🧩 ${gruposCandidatos.length} grupos com 2+ masters`);
+    const gruposCandidatosA = Array.from(gruposEstritos.values()).filter(g => g.length >= 2);
+    const gruposCandidatosB = Array.from(gruposCanonicos.values()).filter(g => g.length >= 2);
+    const gruposCandidatos = [...gruposCandidatosA, ...gruposCandidatosB];
+    console.log(`🧩 grupos candidatos: ${gruposCandidatosA.length} estritos + ${gruposCandidatosB.length} canônicos`);
 
     if (gruposCandidatos.length === 0) {
-      return new Response(JSON.stringify({ pares: [], total: 0 }), {
+      return new Response(JSON.stringify({ pares: [], total: 0, seguros: 0, bloqueados: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -141,7 +202,9 @@ serve(async (req) => {
     ]);
 
     // 4. Para cada grupo, montar pares (órfão × com-preços) e aplicar regra de bloqueios.
+    // De-duplicação por par: o mesmo (orfao, destino) pode aparecer nas duas camadas.
     const pares: Par[] = [];
+    const paresVistos = new Set<string>();
 
     for (const grupo of gruposCandidatos) {
       const enriched = grupo.map(m => ({
@@ -162,6 +225,11 @@ serve(async (req) => {
       for (const orfao of orfaos) {
         for (const destino of comPrecos) {
           if (orfao.id === destino.id) continue;
+
+          // De-duplicação entre camadas
+          const parKey = `${orfao.id}|${destino.id}`;
+          if (paresVistos.has(parKey)) continue;
+          paresVistos.add(parKey);
 
           // Excluir pares já marcados como ignorados (independente da ordem)
           const chaveIgnorado1 = `${orfao.id}|${destino.id}`;
