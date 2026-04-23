@@ -1968,7 +1968,7 @@ serve(async (req) => {
           const varMaster = _tokensVarianteFortes(m.nome_padrao || '');
           if (!_setsIguais(varProduto, varMaster)) continue;
           if (produto.ean_comercial && m.codigo_barras &&
-              produto.ean_comercial !== m.codigo_barras) continue;
+              canonicalEAN(produto.ean_comercial) !== canonicalEAN(m.codigo_barras)) continue;
 
           // Score por overlap de tokens não-descritivos
           const tokA = new Set(_normalizarBlindagem(produto.produto_nome || '').split(' ')
