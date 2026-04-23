@@ -8,6 +8,7 @@ const corsHeaders = {
 
 // ============================================================
 // Helpers compartilhados — usados pelo Passo 2.5 (fallback irmão)
+// MANTIDOS EM SINCRONIA com supabase/functions/detectar-masters-precos-orfaos
 // ============================================================
 const TOKENS_VARIANTE_FALLBACK = new Set([
   'ZERO', 'DIET', 'LIGHT', 'INTEGRAL', 'DESNATADO', 'SEMIDESNATADO',
@@ -22,6 +23,15 @@ const TOKENS_VARIANTE_FALLBACK = new Set([
   'CALABRESA', 'PORTUGUESA', 'MUSSARELA', 'MARGUERITA',
   'PARBOILIZADO', 'AGULHINHA', 'ARBORIO',
   'EXTRAFORTE',
+]);
+
+const STOPWORDS_FALLBACK = new Set(['DE', 'DO', 'DA', 'DOS', 'DAS', 'COM', 'SEM', 'EM', 'POR', 'PARA']);
+
+// Tokens absorvíveis — lista MÍNIMA validada caso a caso (mesma lista de
+// detectar-masters-precos-orfaos). Não ampliar sem evidência concreta.
+const TOKENS_ABSORVIVEIS_FALLBACK = new Set([
+  'SEMOLA', 'NINHO',
+  'COTT', 'FD', 'N',
 ]);
 
 function _normalizarFallback(s: string): string {
@@ -39,6 +49,27 @@ function extrairTokensVariante(s: string): Set<string> {
   const tokens = _normalizarFallback(s).split(' ').filter(t => t.length > 2);
   for (const t of tokens) if (TOKENS_VARIANTE_FALLBACK.has(t)) out.add(t);
   return out;
+}
+
+// Tokens significativos: remove dígitos, stopwords, absorvíveis e variantes.
+function tokensSignificativosFallback(s: string): string[] {
+  const tokens = _normalizarFallback(s).split(' ').filter(t => t.length > 2);
+  return tokens.filter(t =>
+    !/^\d+$/.test(t) &&
+    !STOPWORDS_FALLBACK.has(t) &&
+    !TOKENS_ABSORVIVEIS_FALLBACK.has(t) &&
+    !TOKENS_VARIANTE_FALLBACK.has(t)
+  );
+}
+
+// Chave canônica do master para casamento amplo. Null se sem tokens.
+function chaveCanonicaFallback(nomePadrao: string, qtdValor: number | null, unidadeBase: string | null): string | null {
+  const tokens = tokensSignificativosFallback(nomePadrao || '');
+  if (tokens.length === 0) return null;
+  const tokensOrdenados = Array.from(new Set(tokens)).sort().join(' ');
+  const qtd = qtdValor != null ? String(Math.round(qtdValor * 1000)) : 'X';
+  const un = (unidadeBase || '').toUpperCase().trim() || 'X';
+  return `${tokensOrdenados}|${qtd}|${un}`;
 }
 
 function setsIguais<T>(a: Set<T>, b: Set<T>): boolean {
