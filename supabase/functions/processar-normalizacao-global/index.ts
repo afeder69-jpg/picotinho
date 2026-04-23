@@ -1295,30 +1295,37 @@ async function criarProdutoMaster(
   codigoBarras?: string
 ): Promise<{ id: string, nome_padrao: string }> {
   // 🛡️ GUARD: Verificar se já existe master com mesmo EAN antes de criar
+  // Considera variantes com/sem zeros à esquerda para evitar duplicatas por formatação
   if (codigoBarras) {
     const eanLimpo = codigoBarras.replace(/\D/g, '');
     if (eanLimpo.length >= 8) {
+      const eanCanon = eanLimpo.replace(/^0+/, '');
+      const variantesEan = new Set<string>([eanCanon]);
+      for (const len of [8, 12, 13, 14]) {
+        if (eanCanon.length <= len) variantesEan.add(eanCanon.padStart(len, '0'));
+      }
       const { data: masterPorEan } = await supabase
         .from('produtos_master_global')
         .select('id, nome_padrao, sku_global')
-        .eq('codigo_barras', eanLimpo)
+        .in('codigo_barras', Array.from(variantesEan))
         .eq('status', 'ativo')
         .limit(1)
         .maybeSingle();
 
       if (masterPorEan) {
-        console.log(`🛡️ EAN Guard: master já existe para EAN ${eanLimpo}: ${masterPorEan.nome_padrao} (${masterPorEan.id})`);
+        console.log(`🛡️ EAN Guard: master já existe para EAN ${eanLimpo} (canon: ${eanCanon}): ${masterPorEan.nome_padrao} (${masterPorEan.id})`);
         return { id: masterPorEan.id, nome_padrao: masterPorEan.nome_padrao };
       }
     }
   }
 
   // 🔥 Usar RPC upsert_produto_master para incrementar contadores corretamente
+  // Grava sempre na forma canônica (sem zeros à esquerda)
   let codigoBarrasLimpo: string | null = null;
   if (codigoBarras) {
     const eanLimpo = codigoBarras.replace(/\D/g, '');
     if (eanLimpo.length >= 8) {
-      codigoBarrasLimpo = eanLimpo;
+      codigoBarrasLimpo = eanLimpo.replace(/^0+/, '') || eanLimpo;
     }
   }
 
