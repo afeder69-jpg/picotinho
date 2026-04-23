@@ -204,6 +204,90 @@ serve(async (req) => {
           }
         }
 
+        // ============================================================
+        // PASSO 2.5: Fallback estrito por master IRMÃO equivalente
+        // (defesa em profundidade contra masters duplicados órfãos de preço)
+        //
+        // Critério ESTRITO — sem fuzzy:
+        // - mesma marca + mesmo nome_base + mesma qtd_valor + mesma unidade_base
+        // - mesmos tokens de variante (TOKENS_VARIANTE)
+        // - se ambos têm EAN, devem coincidir
+        //
+        // Toda vez que encontra um par, persiste em normalizacoes_log
+        // (acao='fallback_irmao_master') de forma DE-DUPLICADA por par,
+        // para alimentar o relatório administrativo "Masters Órfãos".
+        // ============================================================
+        if (produtoMasterId) {
+          try {
+            const { data: masterOrfao } = await supabaseAdmin
+              .from('produtos_master_global')
+              .select('id, nome_padrao, nome_base, marca, qtd_valor, unidade_base, codigo_barras')
+              .eq('id', produtoMasterId)
+              .maybeSingle();
+
+            if (masterOrfao?.marca && masterOrfao?.nome_base) {
+              // Buscar candidatos irmãos com mesma chave estrita
+              let queryIrmaos = supabaseAdmin
+                .from('produtos_master_global')
+                .select('id, nome_padrao, codigo_barras')
+                .eq('status', 'ativo')
+                .eq('marca', masterOrfao.marca)
+                .eq('nome_base', masterOrfao.nome_base)
+                .neq('id', masterOrfao.id);
+
+              if (masterOrfao.qtd_valor != null) queryIrmaos = queryIrmaos.eq('qtd_valor', masterOrfao.qtd_valor);
+              if (masterOrfao.unidade_base) queryIrmaos = queryIrmaos.eq('unidade_base', masterOrfao.unidade_base);
+
+              const { data: irmaos } = await queryIrmaos.limit(10);
+
+              if (irmaos && irmaos.length > 0) {
+                // Filtrar por tokens de variante idênticos e EAN compatível
+                const tokensVarOrfao = extrairTokensVariante(masterOrfao.nome_padrao || '');
+
+                const irmaosValidos = irmaos.filter(irmao => {
+                  // Tokens de variante devem coincidir exatamente
+                  const tokensVarIrmao = extrairTokensVariante(irmao.nome_padrao || '');
+                  if (!setsIguais(tokensVarOrfao, tokensVarIrmao)) return false;
+                  // Se ambos têm EAN, devem coincidir
+                  if (masterOrfao.codigo_barras && irmao.codigo_barras &&
+                      masterOrfao.codigo_barras !== irmao.codigo_barras) return false;
+                  return true;
+                });
+
+                for (const irmao of irmaosValidos) {
+                  const { data: precoIrmao } = await supabaseAdmin
+                    .from('precos_atuais')
+                    .select('valor_unitario, produto_nome, data_atualizacao')
+                    .eq('produto_master_id', irmao.id)
+                    .eq('estabelecimento_cnpj', cnpjMercado)
+                    .order('data_atualizacao', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (precoIrmao?.valor_unitario) {
+                    console.log(`  ✅ [FALLBACK-IRMAO-ESTRITO] R$ ${precoIrmao.valor_unitario} - master órfão ${masterOrfao.id} ↔ irmão ${irmao.id} ("${irmao.nome_padrao}") @ CNPJ ${cnpjMercado}`);
+
+                    // Persistência de-duplicada do par para o relatório
+                    await persistirParFallback(
+                      supabaseAdmin,
+                      masterOrfao.id,
+                      irmao.id,
+                      masterOrfao.nome_padrao || '',
+                      irmao.nome_padrao || '',
+                      cnpjMercado,
+                      Number(precoIrmao.valor_unitario),
+                    );
+
+                    return { valor: precoIrmao.valor_unitario, data_atualizacao: precoIrmao.data_atualizacao };
+                  }
+                }
+              }
+            }
+          } catch (errIrmao) {
+            console.warn('  ⚠️ [FALLBACK-IRMAO-ESTRITO] falha ao buscar/registrar:', errIrmao);
+          }
+        }
+
         // Se veio de vínculo original (não resolvido por nome), parar aqui
         if (!masterResolvidoPorNome) {
           console.log(`  ❌ [MASTER-ID] Sem preço neste mercado (${cnpjMercado}) — vínculo original, sem fallback`);
