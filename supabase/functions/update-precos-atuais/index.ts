@@ -259,7 +259,7 @@ serve(async (req) => {
         throw erroUpdate;
       }
 
-      console.log('✅ Preço atual atualizado:', precoAtualizado);
+      console.log(apenasRefreshData ? '🔄 Apenas data_atualizacao refrescada (mesmo preço):' : '✅ Preço atual atualizado:', precoAtualizado);
 
       // ✅ CONFORME MANUAL DE OPERAÇÕES: Preço Atual é calculado dinamicamente por área
       // Cada usuário terá seu "Preço Atual" baseado nos precos_atuais filtrados por SUA área
