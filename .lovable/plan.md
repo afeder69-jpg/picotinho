@@ -1,36 +1,40 @@
 
 
-# Ordenar notas do mesmo dia também por hora
+# Ajustar parser de data para cobrir todos os formatos já existentes
 
-## Problema
+## Problema confirmado
 
-Em "Minhas Notas Fiscais", a ordenação está correta por **dia**, mas quando há duas ou mais notas no mesmo dia elas aparecem em ordem indefinida. Causa: o sort em `src/components/ReceiptList.tsx` (linha 457-463) faz `dateStr.split(' ')[0]` antes de converter a data, descartando a hora. Resultado: todas as notas do mesmo dia viram `00:00:00` e o `sort` perde a ordem entre elas.
+A correção anterior só cobriu o formato `DD/MM/YYYY HH:MM:SS`. Mas as notas já lançadas no banco têm **três formatos diferentes** em `dados_extraidos.compra.data_emissao`:
 
-A hora **já existe** nos dados (ex.: `compra.data_emissao = "22/04/2026 18:34:12"`), só não está sendo usada na comparação.
+1. `2026-04-22T08:57:18` — ISO sem barra (já funciona, `new Date()` parseia direto).
+2. `22/04/2026 10:52:29-03:00` — BR com timezone colado (**quebra**: a regex de hora não aceita `-03:00` no final, então a hora é descartada).
+3. `DD/MM/YYYY` puro — sem hora alguma (cai no tiebreaker por `created_at`, que é a data de upload e não a da compra).
 
-## Correção (cirúrgica, 1 arquivo)
+Resultado: notas do mesmo dia em formato 2 ou 3 continuam aparecendo fora de ordem por hora.
 
-**Arquivo**: `src/components/ReceiptList.tsx`, função de sort em `getCompraDate` (≈ linhas 435-475).
+## Correção (cirúrgica, mesmo arquivo)
 
-Ajuste mínimo no `formatDate`:
+**Arquivo**: `src/components/ReceiptList.tsx`, função `formatDate` dentro do sort (≈ linhas 457-469).
 
-- Detectar se a string tem hora (após o espaço).
-- Se for `DD/MM/YYYY HH:MM:SS` → converter para `YYYY-MM-DDTHH:MM:SS`.
-- Se for só `DD/MM/YYYY` → manter o comportamento atual (`YYYY-MM-DD`).
-- Manter o fallback para `created_at` (que é `timestamptz` e já tem hora) como desempate final quando a data extraída não tem hora.
+Ajustes mínimos:
 
-Tiebreaker adicional: quando `timestampA === timestampB` (mesma data sem hora disponível em ambos), usar `new Date(a.created_at).getTime()` vs `b.created_at` como critério secundário, mantendo decrescente.
+- **Formato 1 (ISO `YYYY-MM-DDTHH:MM:SS`)**: já funciona, manter.
+- **Formato 2 (`DD/MM/YYYY HH:MM:SS[±HH:MM]`)**: ampliar a regex para aceitar timezone opcional (`-03:00`, `+00:00`, `Z`) e preservá-lo no resultado convertido — `YYYY-MM-DDTHH:MM:SS-03:00` é parseável pelo `new Date()`.
+- **Formato 3 (`DD/MM/YYYY` sem hora)**: como fallback, tentar extrair a hora também do `created_at` da própria nota só para fins de desempate **dentro do mesmo dia** — mas só quando a data da compra (dia) bater com a data do `created_at`. Se não bater (ex.: nota emitida ontem, subida hoje), manter `00:00:00` e deixar o tiebreaker decidir.
+
+Tiebreaker final por `created_at` permanece como está.
 
 ## O que NÃO será mexido
 
-- Query do Supabase (já vem ordenada por `created_at desc`).
-- Nenhum outro componente, página ou edge function.
-- Formato de exibição da data/hora na UI.
-- Lógica de extração de `data_emissao` ou outros campos.
+- Query do Supabase.
+- Estrutura dos dados em `dados_extraidos`.
+- Nenhum outro componente, edge function ou exibição na UI.
+- Notas que já estão em ordem correta (formato 1) continuam idênticas.
 
 ## Validação esperada
 
-- Notas de dias diferentes continuam ordenadas da mais recente para a mais antiga (sem regressão).
-- Notas do mesmo dia passam a aparecer da mais recente para a mais antiga **pela hora**.
-- Notas sem hora extraída continuam ordenadas pelo `created_at` como desempate, sem quebrar.
+- Notas com `DD/MM/YYYY HH:MM:SS-03:00` passam a ser ordenadas pela hora real da compra.
+- Notas só com `DD/MM/YYYY` (sem hora) usam `created_at` apenas quando o dia bate, evitando "falsa hora" de notas emitidas em outro dia.
+- Notas em formato ISO continuam ordenadas como hoje.
+- Sem regressão na ordenação entre dias diferentes.
 
