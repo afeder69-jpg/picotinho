@@ -1,68 +1,36 @@
 
 
-# Diagnóstico: bolinha vermelha indevida no Suco Goiaba Bela Ischia
+# Ordenar notas do mesmo dia também por hora
 
-## O que aconteceu na prática
+## Problema
 
-O produto **SUCO GOIABA BELA ISCHIA CONCENTRADO 1L** existe no master desde 22/03 e tem 3 entradas no estoque do usuário, todas vinculadas corretamente ao master via EAN `7898063761739`:
+Em "Minhas Notas Fiscais", a ordenação está correta por **dia**, mas quando há duas ou mais notas no mesmo dia elas aparecem em ordem indefinida. Causa: o sort em `src/components/ReceiptList.tsx` (linha 457-463) faz `dateStr.split(' ')[0]` antes de converter a data, descartando a hora. Resultado: todas as notas do mesmo dia viram `00:00:00` e o `sort` perde a ordem entre elas.
 
-| Nota emitida em | Estabelecimento | Preço |
-|---|---|---|
-| 22/04/2026 (ontem) | SUPERMARKET A.VASCONCELOS CG | R$ 11,43 |
-| 08/04/2026 | SUPERMARKET A.VASCONCELOS CG | R$ 11,43 |
-| 20/03/2026 | SUPERMARKET A.VASCONCELOS CG | R$ 11,43 |
+A hora **já existe** nos dados (ex.: `compra.data_emissao = "22/04/2026 18:34:12"`), só não está sendo usada na comparação.
 
-Mas em `precos_atuais` há **apenas 1 registro** para o A.VASCONCELOS desse produto, com `data_atualizacao = 08/04/2026`. Hoje é 24/04 → diff = 16 dias → **bolinha vermelha** (a regra é >10 dias = vermelho, conforme `src/lib/recencia.ts`).
+## Correção (cirúrgica, 1 arquivo)
 
-A nota de **22/04** não atualizou `precos_atuais.data_atualizacao` para a data dela, mesmo o item tendo entrado no estoque corretamente. Por isso a "data" exibida pela bolinha ficou congelada em 08/04.
+**Arquivo**: `src/components/ReceiptList.tsx`, função de sort em `getCompraDate` (≈ linhas 435-475).
 
-## Causa raiz
+Ajuste mínimo no `formatDate`:
 
-Quando uma nota nova chega com **mesmo CNPJ + mesmo produto + mesmo preço** que já existe em `precos_atuais`, a edge function que atualiza `precos_atuais` faz `UPDATE` apenas se o **valor mudou**. Como o preço continuou R$ 11,43 (igual), o registro não foi tocado e a `data_atualizacao` permaneceu na data da nota anterior (08/04).
+- Detectar se a string tem hora (após o espaço).
+- Se for `DD/MM/YYYY HH:MM:SS` → converter para `YYYY-MM-DDTHH:MM:SS`.
+- Se for só `DD/MM/YYYY` → manter o comportamento atual (`YYYY-MM-DD`).
+- Manter o fallback para `created_at` (que é `timestamptz` e já tem hora) como desempate final quando a data extraída não tem hora.
 
-A consequência é exatamente o que você viu: o sistema mostra "preço de 16 dias atrás" para um produto que foi comprado ontem ao mesmo preço.
-
-Isso é regra geral, não específica do Bela Ischia. Qualquer produto cujo preço se mantém estável entre notas vai acumular dias de "antiguidade" indevida na bolinha de recência.
-
-## O que precisa ser corrigido
-
-Atualizar `precos_atuais.data_atualizacao` **sempre** que uma nota nova confirma o mesmo CNPJ+produto+preço, mesmo que o valor não tenha mudado. A "data de atualização" deve refletir **a data da última nota que viu aquele preço**, não a data em que o preço mudou pela última vez.
-
-## Plano de correção (mínimo e cirúrgico)
-
-### Passo 1 — Identificar o ponto exato no pipeline
-Verificar nas edge functions que escrevem em `precos_atuais` (provavelmente `process-receipt-full`, `update-precos-atuais` e/ou `recalcular-precos-notas`) o trecho de upsert. Hoje a lógica condicional ignora updates quando preço é igual.
-
-### Passo 2 — Ajuste pontual da regra de upsert
-Mudar a condição para:
-- Se já existe registro para `(produto_master_id OR produto_nome) + estabelecimento_cnpj + user_id`:
-  - Se a `data_atualizacao` da nota nova for **mais recente** que a registrada → atualizar `data_atualizacao` (e valor, se diferente).
-  - Se for igual ou anterior → não tocar.
-- Se não existe → inserir normal.
-
-Sem mudar a chave de unicidade, sem mudar o `valor_unitario` quando ele realmente é o mesmo, sem alterar a lógica de "menor preço da área".
-
-### Passo 3 — Backfill único para os registros já existentes
-Uma query master-only que atualiza `precos_atuais.data_atualizacao` para a maior data de nota confirmada que casa com aquele `(cnpj + produto_master_id)` ou `(cnpj + produto_nome)`. Conservador: nunca decrementa data, só adianta para a data real mais recente.
-
-### Passo 4 — Validação no caso Bela Ischia
-Após o passo 3, o registro do A.VASCONCELOS deve passar a mostrar `data_atualizacao = 22/04`, e a bolinha do produto na sua lista deve voltar para verde (2 dias).
+Tiebreaker adicional: quando `timestampA === timestampB` (mesma data sem hora disponível em ambos), usar `new Date(a.created_at).getTime()` vs `b.created_at` como critério secundário, mantendo decrescente.
 
 ## O que NÃO será mexido
 
-- Lógica de comparação de preços por mercado.
-- Cálculo de "menor preço na área".
-- Regra de cores da bolinha (`src/lib/recencia.ts`).
-- Lógica de matching por EAN ou de normalização (já corrigida nas fases anteriores).
-- Estrutura da tabela `precos_atuais`.
+- Query do Supabase (já vem ordenada por `created_at desc`).
+- Nenhum outro componente, página ou edge function.
+- Formato de exibição da data/hora na UI.
+- Lógica de extração de `data_emissao` ou outros campos.
 
-## Validação final esperada
+## Validação esperada
 
-- Bela Ischia volta para bolinha verde imediatamente após backfill.
-- Próxima nota com preço repetido atualiza `data_atualizacao` corretamente.
-- Nenhum preço é sobrescrito por dado mais antigo.
-- Outros produtos que sofreriam do mesmo problema também são corrigidos pelo backfill.
-- Sem regressão na comparação de mercados nem na lista de compras.
-
-Aprova esse plano para eu aplicar?
+- Notas de dias diferentes continuam ordenadas da mais recente para a mais antiga (sem regressão).
+- Notas do mesmo dia passam a aparecer da mais recente para a mais antiga **pela hora**.
+- Notas sem hora extraída continuam ordenadas pelo `created_at` como desempate, sem quebrar.
 
