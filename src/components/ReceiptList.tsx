@@ -453,10 +453,16 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         let timestampA, timestampB;
         
         try {
-          // Se a data está no formato DD/MM/YYYY, converter para YYYY-MM-DD
+          // Se a data está no formato DD/MM/YYYY [HH:MM:SS], converter para YYYY-MM-DD[THH:MM:SS]
           const formatDate = (dateStr: string) => {
             if (dateStr && dateStr.includes('/')) {
-              const [day, month, year] = dateStr.split(' ')[0].split('/');
+              const parts = dateStr.trim().split(/\s+/);
+              const [day, month, year] = parts[0].split('/');
+              const timePart = parts[1]; // pode ser HH:MM:SS ou HH:MM
+              if (timePart && /^\d{1,2}:\d{2}(:\d{2})?$/.test(timePart)) {
+                const time = timePart.length === 5 ? `${timePart}:00` : timePart;
+                return `${year}-${month}-${day}T${time}`;
+              }
               return `${year}-${month}-${day}`;
             }
             return dateStr;
@@ -471,7 +477,13 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         }
         
         // Ordenar da mais recente para a mais antiga
-        return timestampB - timestampA;
+        if (timestampB !== timestampA) {
+          return timestampB - timestampA;
+        }
+        // Tiebreaker: usar created_at (timestamptz) quando timestamps principais são iguais
+        const createdA = new Date(a.created_at).getTime();
+        const createdB = new Date(b.created_at).getTime();
+        return createdB - createdA;
       });
 
 
