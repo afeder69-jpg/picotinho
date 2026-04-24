@@ -1,85 +1,68 @@
-# Plano — Correção da identificação por EAN no pipeline de normalização
 
-## Status
 
-- ✅ **Fase 2 — Normalização canônica de EAN** (APLICADA)
-- ✅ **Fase 1 — Backfill de EAN no catálogo master** (FUNÇÃO CRIADA — aguardando execução em dry_run)
-- ⏳ **Fase 3 — Vincular órfãos por EAN** (FUNÇÃO CRIADA — aguardando dry_run + revisão antes de aplicar)
+# Diagnóstico: bolinha vermelha indevida no Suco Goiaba Bela Ischia
 
----
+## O que aconteceu na prática
 
-## Fase 2 — Normalização canônica de EAN ✅
+O produto **SUCO GOIABA BELA ISCHIA CONCENTRADO 1L** existe no master desde 22/03 e tem 3 entradas no estoque do usuário, todas vinculadas corretamente ao master via EAN `7898063761739`:
 
-**Causa raiz endereçada:** comparação `.eq('codigo_barras', ean)` falhava por diferença de zeros à esquerda (`07622...` vs `7622...`).
+| Nota emitida em | Estabelecimento | Preço |
+|---|---|---|
+| 22/04/2026 (ontem) | SUPERMARKET A.VASCONCELOS CG | R$ 11,43 |
+| 08/04/2026 | SUPERMARKET A.VASCONCELOS CG | R$ 11,43 |
+| 20/03/2026 | SUPERMARKET A.VASCONCELOS CG | R$ 11,43 |
 
-**Mudanças aplicadas:**
+Mas em `precos_atuais` há **apenas 1 registro** para o A.VASCONCELOS desse produto, com `data_atualizacao = 08/04/2026`. Hoje é 24/04 → diff = 16 dias → **bolinha vermelha** (a regra é >10 dias = vermelho, conforme `src/lib/recencia.ts`).
 
-- `supabase/functions/process-receipt-full/index.ts`
-  - Novas funções utilitárias `canonicalEAN()` e `eanVariants()` (cobrem padding 8/12/13/14 dígitos).
-  - **Estratégia 0 (linhas ~1545)**: agora busca por `.in('codigo_barras', variantesEan)` e deduplica por `id`. Mantida a trava `length === 1` (proteção contra masters duplicados).
-  - **Persistência segura do EAN no master (linhas ~1712)**: passa a verificar conflito por todas as variantes antes de gravar e sempre grava na forma canônica (sem zeros à esquerda).
-  - **Filtro de variante (linhas ~1970)**: comparação de EAN entre nota e master agora usa `canonicalEAN()` em ambos os lados.
+A nota de **22/04** não atualizou `precos_atuais.data_atualizacao` para a data dela, mesmo o item tendo entrado no estoque corretamente. Por isso a "data" exibida pela bolinha ficou congelada em 08/04.
 
-- `supabase/functions/processar-normalizacao-global/index.ts`
-  - **Estratégia 0 (linhas ~314)**: mesma lógica de variantes + deduplicação.
-  - **`criarProdutoMaster()`**: guard agora cobre variantes; gravação sempre na forma canônica.
+## Causa raiz
 
-**Impacto no comportamento existente:**
-- Itens sem EAN: fluxo idêntico (continuam por sinônimos/fuzzy/IA).
-- Match por EAN agora ignora ordem das palavras.
-- EAN duplicado entre masters: continua bloqueando auto-vínculo (segue para IA, recomendação de revisão manual no log).
+Quando uma nota nova chega com **mesmo CNPJ + mesmo produto + mesmo preço** que já existe em `precos_atuais`, a edge function que atualiza `precos_atuais` faz `UPDATE` apenas se o **valor mudou**. Como o preço continuou R$ 11,43 (igual), o registro não foi tocado e a `data_atualizacao` permaneceu na data da nota anterior (08/04).
 
----
+A consequência é exatamente o que você viu: o sistema mostra "preço de 16 dias atrás" para um produto que foi comprado ontem ao mesmo preço.
 
-## Fase 1 — Backfill de EAN no catálogo master
+Isso é regra geral, não específica do Bela Ischia. Qualquer produto cujo preço se mantém estável entre notas vai acumular dias de "antiguidade" indevida na bolinha de recência.
 
-**Função criada:** `supabase/functions/backfill-ean-master/index.ts` (master-only, dry_run por padrão).
+## O que precisa ser corrigido
 
-**Lógica conservadora:**
-- Para cada master ATIVO sem `codigo_barras`:
-  - lê EANs de todos os itens em `estoque_app` já vinculados (`produto_master_id`);
-  - exige no mínimo `min_items=3` itens com EAN válido;
-  - exige concordância `>= min_agreement=0.8` no mesmo EAN canônico;
-  - **NUNCA grava se o EAN canônico já existir em outro master ativo** (verifica todas as variantes).
-- Grava sempre na forma canônica.
+Atualizar `precos_atuais.data_atualizacao` **sempre** que uma nota nova confirma o mesmo CNPJ+produto+preço, mesmo que o valor não tenha mudado. A "data de atualização" deve refletir **a data da última nota que viu aquele preço**, não a data em que o preço mudou pela última vez.
 
-**Como executar (dry_run obrigatório primeiro):**
-```bash
-# Dry-run (não escreve nada, retorna relatório)
-curl -X POST https://mjsbwrtegorjxcepvrik.supabase.co/functions/v1/backfill-ean-master \
-  -H "Authorization: Bearer <JWT_MASTER>" \
-  -H "Content-Type: application/json" \
-  -d '{"dry_run": true}'
+## Plano de correção (mínimo e cirúrgico)
 
-# Aplicar (após revisar o relatório)
-curl ... -d '{"dry_run": false}'
-```
+### Passo 1 — Identificar o ponto exato no pipeline
+Verificar nas edge functions que escrevem em `precos_atuais` (provavelmente `process-receipt-full`, `update-precos-atuais` e/ou `recalcular-precos-notas`) o trecho de upsert. Hoje a lógica condicional ignora updates quando preço é igual.
 
----
+### Passo 2 — Ajuste pontual da regra de upsert
+Mudar a condição para:
+- Se já existe registro para `(produto_master_id OR produto_nome) + estabelecimento_cnpj + user_id`:
+  - Se a `data_atualizacao` da nota nova for **mais recente** que a registrada → atualizar `data_atualizacao` (e valor, se diferente).
+  - Se for igual ou anterior → não tocar.
+- Se não existe → inserir normal.
 
-## Fase 3 — Vincular órfãos por EAN ⏳
+Sem mudar a chave de unicidade, sem mudar o `valor_unitario` quando ele realmente é o mesmo, sem alterar a lógica de "menor preço da área".
 
-**Função criada:** `supabase/functions/vincular-orfaos-por-ean/index.ts` (master-only, dry_run por padrão).
+### Passo 3 — Backfill único para os registros já existentes
+Uma query master-only que atualiza `precos_atuais.data_atualizacao` para a maior data de nota confirmada que casa com aquele `(cnpj + produto_master_id)` ou `(cnpj + produto_nome)`. Conservador: nunca decrementa data, só adianta para a data real mais recente.
 
-**Lógica:**
-- Para cada item de `estoque_app` com `produto_master_id IS NULL` e `ean_comercial` válido:
-  - busca master ATIVO por variantes do EAN canônico;
-  - se match único → propaga `produto_master_id`, `sku_global`, `produto_nome` (= `nome_padrao`), `produto_nome_normalizado`, `nome_base`, `marca`, `categoria` (lowercase) e `imagem_url`;
-  - se 0 ou >1 masters → pula (registra no log).
+### Passo 4 — Validação no caso Bela Ischia
+Após o passo 3, o registro do A.VASCONCELOS deve passar a mostrar `data_atualizacao = 22/04`, e a bolinha do produto na sua lista deve voltar para verde (2 dias).
 
-**Pré-requisito:** Fase 1 deve ter sido aplicada para maximizar a cobertura.
+## O que NÃO será mexido
 
-**Ordem de execução aprovada pelo usuário:**
-1. Aplicar Fase 2 ✅
-2. Rodar Fase 1 em dry_run → revisar → aplicar
-3. Rodar Fase 3 em dry_run → revisar → aplicar
-
----
+- Lógica de comparação de preços por mercado.
+- Cálculo de "menor preço na área".
+- Regra de cores da bolinha (`src/lib/recencia.ts`).
+- Lógica de matching por EAN ou de normalização (já corrigida nas fases anteriores).
+- Estrutura da tabela `precos_atuais`.
 
 ## Validação final esperada
 
-- ✅ Match por EAN funciona mesmo com ordem de palavras diferente (Fase 2).
-- 📈 Cobertura de EAN no catálogo: 354/780 (45%) → esperado >600 após Fase 1.
-- 🎯 Órfãos com EAN existente: 3 → 0 após Fase 3.
-- 🛡️ Os 7 grupos com EAN duplicado em masters distintos permanecem **sem auto-vínculo** (logados para revisão manual).
-- 🟢 Itens sem EAN: fluxo idêntico (sem regressão).
+- Bela Ischia volta para bolinha verde imediatamente após backfill.
+- Próxima nota com preço repetido atualiza `data_atualizacao` corretamente.
+- Nenhum preço é sobrescrito por dado mais antigo.
+- Outros produtos que sofreriam do mesmo problema também são corrigidos pelo backfill.
+- Sem regressão na comparação de mercados nem na lista de compras.
+
+Aprova esse plano para eu aplicar?
+
