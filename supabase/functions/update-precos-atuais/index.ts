@@ -141,6 +141,9 @@ serve(async (req) => {
       dataNovaCompra = new Date(); // Fallback para data atual
     }
     
+    // 🆕 Flag para diferenciar refresh de data vs alteração real de preço
+    let apenasRefreshData = false;
+
     if (precoExistente) {
       const dataExistente = new Date(precoExistente.data_atualizacao);
       const precoExistenteValor = parseFloat(precoExistente.valor_unitario);
@@ -158,12 +161,20 @@ serve(async (req) => {
       });
       
       // ✅ REGRA DO MANUAL: Mais recente + menor valor
+      // 🆕 CORREÇÃO RECÊNCIA: refresh de data_atualizacao quando o MESMO preço é confirmado por nota mais recente
       if (dataNovaCompra > dataExistente) {
-        // Nova compra é mais recente - verificar se também é mais barata
         if (precoNovoValor < precoExistenteValor) {
+          // Nova compra é mais recente E mais barata → atualiza preço + data
           console.log(`✅ Nova compra é MAIS RECENTE e MAIS BARATA - atualizando (${precoNovoValor} < ${precoExistenteValor})`);
           deveAtualizar = true;
+          apenasRefreshData = false;
+        } else if (precoNovoValor === precoExistenteValor) {
+          // 🆕 Mesmo preço confirmado por nota mais recente → só refresca a data
+          console.log(`🔄 Mesmo preço confirmado por nota mais recente - refrescando data_atualizacao (${dataExistente.toISOString()} → ${dataNovaCompra.toISOString()})`);
+          deveAtualizar = true;
+          apenasRefreshData = true;
         } else {
+          // Mais recente mas mais cara → mantém preço E data antigos (preserva "menor preço histórico")
           console.log(`⚠️ Nova compra é mais recente MAS MAIS CARA - mantendo preço anterior (${precoExistenteValor} < ${precoNovoValor})`);
           deveAtualizar = false;
         }
@@ -248,7 +259,7 @@ serve(async (req) => {
         throw erroUpdate;
       }
 
-      console.log('✅ Preço atual atualizado:', precoAtualizado);
+      console.log(apenasRefreshData ? '🔄 Apenas data_atualizacao refrescada (mesmo preço):' : '✅ Preço atual atualizado:', precoAtualizado);
 
       // ✅ CONFORME MANUAL DE OPERAÇÕES: Preço Atual é calculado dinamicamente por área
       // Cada usuário terá seu "Preço Atual" baseado nos precos_atuais filtrados por SUA área
