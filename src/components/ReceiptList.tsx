@@ -453,23 +453,41 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         let timestampA, timestampB;
         
         try {
-          // Se a data está no formato DD/MM/YYYY [HH:MM:SS], converter para YYYY-MM-DD[THH:MM:SS]
-          const formatDate = (dateStr: string) => {
+          // Converter data extraída em timestamp, suportando múltiplos formatos:
+          // 1) ISO: 2026-04-22T08:57:18 (parseável direto)
+          // 2) BR com hora e timezone opcional: DD/MM/YYYY HH:MM[:SS][±HH:MM | Z]
+          // 3) BR sem hora: DD/MM/YYYY  → usa hora do created_at SE o dia bater
+          const formatDate = (dateStr: string, createdAt?: string) => {
             if (dateStr && dateStr.includes('/')) {
               const parts = dateStr.trim().split(/\s+/);
               const [day, month, year] = parts[0].split('/');
-              const timePart = parts[1]; // pode ser HH:MM:SS ou HH:MM
-              if (timePart && /^\d{1,2}:\d{2}(:\d{2})?$/.test(timePart)) {
-                const time = timePart.length === 5 ? `${timePart}:00` : timePart;
-                return `${year}-${month}-${day}T${time}`;
+              const rest = parts.slice(1).join(''); // hora + timezone podem vir colados ou separados
+              // Aceita HH:MM ou HH:MM:SS, com timezone opcional ±HH:MM, ±HHMM ou Z
+              const m = rest.match(/^(\d{1,2}:\d{2}(?::\d{2})?)([+\-]\d{2}:?\d{2}|Z)?$/);
+              if (m) {
+                const time = m[1].length === 5 ? `${m[1]}:00` : m[1];
+                const tz = m[2] || '';
+                return `${year}-${month}-${day}T${time}${tz}`;
+              }
+              // Sem hora: tenta usar hora do created_at quando o dia bate
+              if (createdAt) {
+                const created = new Date(createdAt);
+                if (!isNaN(created.getTime())) {
+                  const cy = created.getFullYear();
+                  const cm = String(created.getMonth() + 1).padStart(2, '0');
+                  const cd = String(created.getDate()).padStart(2, '0');
+                  if (cy === parseInt(year) && cm === month.padStart(2, '0') && cd === day.padStart(2, '0')) {
+                    return createdAt; // usa timestamp completo do created_at
+                  }
+                }
               }
               return `${year}-${month}-${day}`;
             }
             return dateStr;
           };
           
-          timestampA = new Date(formatDate(dateA)).getTime();
-          timestampB = new Date(formatDate(dateB)).getTime();
+          timestampA = new Date(formatDate(dateA, a.created_at)).getTime();
+          timestampB = new Date(formatDate(dateB, b.created_at)).getTime();
         } catch (error) {
           // Em caso de erro na conversão, usar created_at como fallback
           timestampA = new Date(a.created_at).getTime();
