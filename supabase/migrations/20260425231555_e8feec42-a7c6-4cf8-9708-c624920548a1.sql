@@ -1,0 +1,1 @@
+UPDATE notas_imagens SET processada = false, normalizada = false, tentativas_finalizacao = 0, processing_started_at = NULL, erro_mensagem = NULL WHERE id = '5d100c72-f33a-4c23-86f6-41f058fd0c1f';
