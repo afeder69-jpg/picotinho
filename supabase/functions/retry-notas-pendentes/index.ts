@@ -29,6 +29,8 @@ const corsHeaders = {
 
 const MAX_NOTAS_POR_EXECUCAO = 20;
 const MINUTOS_INATIVIDADE = 3;
+// 🛡️ FRENTE A4: alinhado com LOCK_TIMEOUT_MS de process-receipt-full (90s).
+const LOCK_ZOMBIE_MS = 90 * 1000;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -68,6 +70,21 @@ Deno.serve(async (req) => {
     }
 
     console.log(`🔁 [RETRY-CRON] ${notasPendentes.length} notas elegíveis para retry`);
+
+    // 🛡️ FRENTE A4: força liberação de "zombie locks" antes de invocar finalize.
+    // process-receipt-full tem seu próprio guard, mas limpar processing_started_at
+    // aqui evita que um lock antigo (>90s) bloqueie o reentry.
+    const zombieCutoff = new Date(Date.now() - LOCK_ZOMBIE_MS).toISOString();
+    const idsParaLiberar = notasPendentes
+      .filter((n) => n.processing_started_at && n.processing_started_at < zombieCutoff)
+      .map((n) => n.id);
+    if (idsParaLiberar.length > 0) {
+      console.log(`🔓 [RETRY-CRON] Liberando ${idsParaLiberar.length} zombie locks`);
+      await supabase
+        .from('notas_imagens')
+        .update({ processing_started_at: null })
+        .in('id', idsParaLiberar);
+    }
 
     // Invoca finalize-nota-estoque para cada uma (lock atômico interno protege)
     const resultados = await Promise.allSettled(
