@@ -196,11 +196,15 @@ export default function Relatorios() {
         
         const { data: notasData } = await supabase
           .from('notas_imagens')
-          .select('dados_extraidos, created_at')
+          .select('id, dados_extraidos, created_at')
           .eq('usuario_id', user.id)
           .eq('processada', true)
           .not('dados_extraidos', 'is', null);
-        
+
+        // Mapa: nota_id -> { data_iso, valor_total_oficial, mercado }
+        // Usado para reconciliar totais com "Minhas Notas" (valor oficial da NF).
+        var totaisOficiaisPorNota = new Map<string, { data: string; valor: number; mercado: string }>();
+
         if (notasData) {
           notasData.forEach(nota => {
             if (nota.dados_extraidos) {
@@ -208,14 +212,28 @@ export default function Relatorios() {
               const nomeEstabelecimento = dadosExtraidos?.estabelecimento?.nome || 
                                         dadosExtraidos?.supermercado?.nome || 
                                         dadosExtraidos?.emitente?.nome || 'Não identificado';
-              
+
+              // FONTE ÚNICA DE DATA: data oficial da compra/NF (sem fallback para created_at).
+              const dataNota = extrairDataCompraISO(dadosExtraidos);
+              if (!dataNota) return; // sem data oficial, não entra no relatório
+
+              // FONTE ÚNICA DE VALOR: valor total oficial da nota.
+              const valorOficial = extrairValorTotalNota(dadosExtraidos);
+              if (valorOficial != null) {
+                totaisOficiaisPorNota.set(nota.id, {
+                  data: dataNota,
+                  valor: valorOficial,
+                  mercado: nomeEstabelecimento,
+                });
+              }
+
               if (dadosExtraidos.itens) {
                 dadosExtraidos.itens.forEach((item: any) => {
                   const produtoNome = item.descricao || item.nome || '';
                   const quantidade = parseFloat(item.quantidade || 0);
-                  const valorUnitario = parseFloat(item.valor_unitario || 0);
-                  const valorTotal = quantidade * valorUnitario;
-                  
+                  // Item-a-item: prioriza item.valor_total quando existir.
+                  const valorTotal = extrairValorItem(item);
+
                   if (produtoNome && quantidade > 0) {
                     // Buscar categoria do produto
                     const nomeItem = produtoNome.toUpperCase().trim();
@@ -235,7 +253,7 @@ export default function Relatorios() {
                     }
                     
                     todosOsDados.push({
-                      data: converterDataBrasileiraParaISO(dadosExtraidos?.compra?.data_emissao) || nota.created_at?.split('T')[0] || '',
+                      data: dataNota,
                       produto: produtoNome,
                       categoria: categoria,
                       quantidade,
@@ -249,6 +267,8 @@ export default function Relatorios() {
             }
           });
         }
+        // Expor para uso no cálculo de totais abaixo
+        (gerarRelatorio as any)._totaisOficiais = totaisOficiaisPorNota;
       }
       
       // 2. Buscar dados de CONSUMOS (saídas)
@@ -315,28 +335,71 @@ export default function Relatorios() {
       
       // 4. Ordenar por data (mais recente primeiro)
       dadosFiltrados.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-      
+
       // 5. Calcular totais
-      const valorTotal = dadosFiltrados.reduce((sum, item) => sum + item.valor, 0);
+      // Quando NÃO houver filtros de categoria/produto/mercado e o tipo incluir "compras",
+      // usamos o VALOR OFICIAL DA NOTA (fonte única) para casar com "Minhas Notas".
+      // Caso contrário, usamos a soma item-a-item (necessária para refletir o filtro).
+      const semFiltrosDeRecorte = categoria === "todas" && !produto && mercado === "todos";
+      const incluiCompras = tipoRelatorio === "compras" || tipoRelatorio === "todos";
+      const totaisOficiais: Map<string, { data: string; valor: number; mercado: string }> | undefined =
+        (gerarRelatorio as any)._totaisOficiais;
+
+      let valorTotal = 0;
+      let dadosGraficoArray: DadosGrafico[] = [];
+
+      // Filtro de período aplicável às notas oficiais
+      const notasOficiaisFiltradas = totaisOficiais
+        ? Array.from(totaisOficiais.values()).filter(n => {
+            if (dataInicial && n.data < dataInicial) return false;
+            if (dataFinal && n.data > dataFinal) return false;
+            return true;
+          })
+        : [];
+
+      const usarValorOficial = semFiltrosDeRecorte && incluiCompras && notasOficiaisFiltradas.length > 0;
+
+      if (usarValorOficial) {
+        // Total = soma dos valores oficiais das notas + valores de consumos (se houver)
+        const totalNotas = notasOficiaisFiltradas.reduce((s, n) => s + n.valor, 0);
+        const totalConsumos = dadosFiltrados
+          .filter(d => d.tipo === "Consumo")
+          .reduce((s, d) => s + d.valor, 0);
+        valorTotal = totalNotas + totalConsumos;
+
+        // Gráfico mensal pelo valor oficial
+        const dadosAgrupados = new Map<string, number>();
+        notasOficiaisFiltradas.forEach(n => {
+          const mesPeriodo = format(parseISO(n.data), 'MMM/yyyy', { locale: pt });
+          dadosAgrupados.set(mesPeriodo, (dadosAgrupados.get(mesPeriodo) || 0) + n.valor);
+        });
+        dadosFiltrados.filter(d => d.tipo === "Consumo").forEach(item => {
+          const mesPeriodo = format(parseISO(item.data), 'MMM/yyyy', { locale: pt });
+          dadosAgrupados.set(mesPeriodo, (dadosAgrupados.get(mesPeriodo) || 0) + item.valor);
+        });
+
+        const coresMeses = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+        dadosGraficoArray = Array.from(dadosAgrupados.entries())
+          .map(([periodo, valor], index) => ({ periodo, valor, cor: coresMeses[index % coresMeses.length] }))
+          .sort((a, b) => new Date(a.periodo).getTime() - new Date(b.periodo).getTime());
+      } else {
+        // Modo filtrado: soma item-a-item respeita os filtros aplicados.
+        valorTotal = dadosFiltrados.reduce((sum, item) => sum + item.valor, 0);
+
+        const dadosAgrupados = new Map<string, number>();
+        dadosFiltrados.forEach(item => {
+          const mesPeriodo = format(parseISO(item.data), 'MMM/yyyy', { locale: pt });
+          dadosAgrupados.set(mesPeriodo, (dadosAgrupados.get(mesPeriodo) || 0) + item.valor);
+        });
+
+        const coresMeses = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+        dadosGraficoArray = Array.from(dadosAgrupados.entries())
+          .map(([periodo, valor], index) => ({ periodo, valor, cor: coresMeses[index % coresMeses.length] }))
+          .sort((a, b) => new Date(a.periodo).getTime() - new Date(b.periodo).getTime());
+      }
+
       const quantidadeTotal = dadosFiltrados.reduce((sum, item) => sum + item.quantidade, 0);
-      
-      // 6. Preparar dados para o gráfico (agrupado por mês)
-      const dadosAgrupados = new Map<string, number>();
-      dadosFiltrados.forEach(item => {
-        const mesPeriodo = format(parseISO(item.data), 'MMM/yyyy', { locale: pt });
-        dadosAgrupados.set(mesPeriodo, (dadosAgrupados.get(mesPeriodo) || 0) + item.valor);
-      });
-      
-      const coresMeses = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
-      
-      const dadosGraficoArray = Array.from(dadosAgrupados.entries())
-        .map(([periodo, valor], index) => ({ 
-          periodo, 
-          valor,
-          cor: coresMeses[index % coresMeses.length]
-        }))
-        .sort((a, b) => new Date(a.periodo).getTime() - new Date(b.periodo).getTime());
-      
+
       setDados(dadosFiltrados);
       setDadosGrafico(dadosGraficoArray);
       setTotalValor(valorTotal);
