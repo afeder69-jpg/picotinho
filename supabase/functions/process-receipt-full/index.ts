@@ -1376,12 +1376,36 @@ serve(async (req) => {
       });
       console.log(`📦 ${itens.length} produtos carregados do InfoSimples`);
     }
-    // FORMATO 2: WhatsApp/Upload (PDF/Imagem) - dados_extraidos.produtos_consolidados ou itens
+    // FORMATO 2: WhatsApp/Upload (PDF/Imagem) - PRIORIZAR `itens` (fonte original) sobre `produtos_consolidados`
+    // Motivo: produtos_consolidados é gerado pelo próprio pipeline em pass anterior e pode usar chave preco_unitario.
+    // A fonte `itens` preserva os preços originais da nota fiscal.
+    else if (nota.dados_extraidos?.itens && Array.isArray(nota.dados_extraidos.itens) && nota.dados_extraidos.itens.length > 0) {
+      console.log("✅ Usando formato WhatsApp/Upload (itens) — fonte original priorizada");
+      itens = nota.dados_extraidos.itens.map((item: any) => {
+        const quantidade = parseFloat(item.quantidade) || 0;
+        // Aceitar valor_unitario OU preco_unitario (compatibilidade com produtos_consolidados regravados)
+        const valorUnitario = parseFloat(item.valor_unitario ?? item.preco_unitario ?? item.valor_unitario_comercial) || 0;
+        
+        return {
+          descricao: item.descricao || item.nome,
+          categoria: (item.categoria || 'outros').toLowerCase(),
+          quantidade,
+          valor_unitario: valorUnitario,
+          unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
+          data_compra: dataCompra,
+          ean_comercial: limparEAN(item.codigo_barras || item.codigo_barras_comercial || item.ean_comercial) // ✅ EAN
+        };
+      });
+      console.log(`📦 ${itens.length} produtos carregados do WhatsApp/Upload (itens)`);
+    }
+    // FORMATO 3: Fallback — produtos_consolidados (gerado por pass anterior)
     else if (nota.dados_extraidos?.produtos_consolidados && Array.isArray(nota.dados_extraidos.produtos_consolidados)) {
-      console.log("✅ Usando formato InfoSimples (produtos_consolidados)");
+      console.log("✅ Usando formato InfoSimples (produtos_consolidados) — fallback");
       itens = nota.dados_extraidos.produtos_consolidados.map((item: any) => {
         const quantidade = parseFloat(item.quantidade) || 0;
-        const valorUnitario = parseFloat(item.valor_unitario) || 0;
+        // Aceitar AMBAS as chaves: produtos_consolidados grava como `preco_unitario`,
+        // mas formatos antigos podem ter `valor_unitario`.
+        const valorUnitario = parseFloat(item.preco_unitario ?? item.valor_unitario ?? item.valor_unitario_comercial) || 0;
         
         return {
           descricao: item.descricao || item.nome,
@@ -1394,25 +1418,6 @@ serve(async (req) => {
         };
       });
       console.log(`📦 ${itens.length} produtos carregados (consolidados)`);
-    }
-    // FORMATO 3: WhatsApp/Upload (PDF/Imagem) - dados_extraidos.itens
-    else if (nota.dados_extraidos?.itens && Array.isArray(nota.dados_extraidos.itens)) {
-      console.log("✅ Usando formato WhatsApp/Upload (itens)");
-      itens = nota.dados_extraidos.itens.map((item: any) => {
-        const quantidade = parseFloat(item.quantidade) || 0;
-        const valorUnitario = parseFloat(item.valor_unitario) || 0;
-        
-        return {
-          descricao: item.descricao || item.nome,
-          categoria: (item.categoria || 'outros').toLowerCase(),
-          quantidade,
-          valor_unitario: valorUnitario,
-          unidade: normalizarUnidadeMedida(item.unidade || 'UN'),
-          data_compra: dataCompra,
-          ean_comercial: limparEAN(item.codigo_barras || item.codigo_barras_comercial || item.ean_comercial) // ✅ EAN
-        };
-      });
-      console.log(`📦 ${itens.length} produtos carregados do WhatsApp/Upload`);
     }
     else {
       console.error("❌ Nenhum produto encontrado em dados_extraidos");
