@@ -1552,6 +1552,7 @@ serve(async (req) => {
     }
     
     // 🔍 FASE 2: BUSCAR PRODUTO MASTER PARA CADA ITEM
+    // 🛡️ FRENTE A2+A3: paralelização em chunks + heartbeat para evitar timeout em notas grandes.
     console.log('🔍 Iniciando busca de produtos master...');
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     let masterEncontrados = 0;
@@ -1559,9 +1560,9 @@ serve(async (req) => {
     let iaNormalizacoes = 0;
     let fuzzyNormalizacoes = 0;
     let eanNormalizacoes = 0; // ✅ Contador de matches por EAN
-    
-    for (const produto of produtosEstoque) {
-      try {
+
+    // Helper: processa UM produto (extraído do corpo do for original).
+    const processarProdutoNormalizacao = async (produto: any) => {
         // Limpar unidades de medida do nome para melhor matching
         const nomeLimpo = limparUnidadesMedida(produto.produto_nome);
         
