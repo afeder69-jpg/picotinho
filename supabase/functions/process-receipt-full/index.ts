@@ -1162,7 +1162,10 @@ serve(async (req) => {
     }
 
     // 🔒 CORREÇÃO #1: Verificar se há lock expirado (timeout de 5 minutos)
-    const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
+    // 🛡️ FRENTE A1: Reduzido de 5min → 90s.
+    // Notas grandes paralelizam IA em chunks (ver Frente A3) e atualizam heartbeat (A2),
+    // então locks legítimos não passam disso. Acelera recuperação de "zombie locks".
+    const LOCK_TIMEOUT_MS = 90 * 1000; // 90 segundos
     if (nota.processing_started_at) {
       const lockAge = Date.now() - new Date(nota.processing_started_at).getTime();
       
