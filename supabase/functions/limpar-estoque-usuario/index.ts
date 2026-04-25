@@ -1,53 +1,25 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
-import { requireUser, authErrorResponse, corsHeaders } from "../_shared/auth.ts";
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// 🛑 NEUTRALIZADA — Fase 1 trava de segurança.
+// Esta função fazia DELETE FROM estoque_app WHERE user_id = ... (apagava histórico).
+// A regra de ouro do projeto exige UPDATE quantidade=0 (preservar histórico).
+// Use a RPC `limpar_estoque_usuario(uuid)` via supabase.rpc() — é a única forma autorizada.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 🔐 Wave 1 hotfix: require authenticated user; clear ONLY the caller's own stock.
-  let authUserId: string;
-  try {
-    const ctx = await requireUser(req);
-    authUserId = ctx.userId;
-  } catch (authErr) {
-    return authErrorResponse(authErr);
-  }
-
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Limpar TODO o estoque do PRÓPRIO usuário autenticado (nunca de terceiros)
-    const { data, error } = await supabase
-      .from('estoque_app')
-      .delete()
-      .eq('user_id', authUserId);
-
-    if (error) {
-      console.error('❌ Erro ao limpar estoque:', error);
-      throw error;
-    }
-
-    console.log('✅ Estoque completamente limpo!');
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Estoque completamente limpo - todos os produtos deletados',
-        deletedItems: data
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
-  } catch (error) {
-    console.error('❌ Erro geral:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
+  return new Response(
+    JSON.stringify({
+      error: 'Gone',
+      message: 'Esta edge function foi DESATIVADA POR SEGURANÇA. Ela executava DELETE em massa em estoque_app, violando a regra de ouro do projeto. Use a RPC limpar_estoque_usuario(uuid) que apenas zera quantidades preservando o histórico.',
+      replacement: "supabase.rpc('limpar_estoque_usuario', { usuario_uuid: <id> })",
+    }),
+    { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
 });
