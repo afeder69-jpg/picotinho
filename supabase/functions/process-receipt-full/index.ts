@@ -1819,8 +1819,32 @@ serve(async (req) => {
         console.error(`❌ Erro ao buscar master para ${produto.produto_nome}:`, error.message);
         masterNaoEncontrados++;
       }
+    }; // fim do helper processarProdutoNormalizacao
+
+    // 🛡️ FRENTE A3: paralelização em chunks de 5 (reduz tempo total ~5x para notas grandes).
+    // Mantém a lógica intacta — apenas executa N produtos simultaneamente em vez de 1.
+    // 🛡️ FRENTE A2: heartbeat — atualiza processing_started_at a cada chunk, garantindo
+    // que o lock não vença enquanto o trabalho está realmente em andamento.
+    const CHUNK_SIZE_NORMALIZACAO = 5;
+    for (let i = 0; i < produtosEstoque.length; i += CHUNK_SIZE_NORMALIZACAO) {
+      const chunk = produtosEstoque.slice(i, i + CHUNK_SIZE_NORMALIZACAO);
+      const chunkNum = Math.floor(i / CHUNK_SIZE_NORMALIZACAO) + 1;
+      const totalChunks = Math.ceil(produtosEstoque.length / CHUNK_SIZE_NORMALIZACAO);
+      console.log(`🔁 [NORMALIZAÇÃO] Chunk ${chunkNum}/${totalChunks} (${chunk.length} itens)`);
+
+      // Heartbeat: renova o lock antes do chunk (best-effort, não bloqueia se falhar)
+      try {
+        await supabase
+          .from('notas_imagens')
+          .update({ processing_started_at: new Date().toISOString() })
+          .eq('id', finalNotaId);
+      } catch (hbErr) {
+        console.warn('⚠️ [HEARTBEAT] falha (não crítico):', hbErr);
+      }
+
+      await Promise.allSettled(chunk.map((p) => processarProdutoNormalizacao(p)));
     }
-    
+
     console.log(`📊 Busca de master concluída: ${masterEncontrados} normalizados (${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%), ${masterNaoEncontrados} sem master`);
     
     if (masterEncontrados > 0) {
