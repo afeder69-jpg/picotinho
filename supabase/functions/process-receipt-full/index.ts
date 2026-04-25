@@ -1162,7 +1162,10 @@ serve(async (req) => {
     }
 
     // 🔒 CORREÇÃO #1: Verificar se há lock expirado (timeout de 5 minutos)
-    const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
+    // 🛡️ FRENTE A1: Reduzido de 5min → 90s.
+    // Notas grandes paralelizam IA em chunks (ver Frente A3) e atualizam heartbeat (A2),
+    // então locks legítimos não passam disso. Acelera recuperação de "zombie locks".
+    const LOCK_TIMEOUT_MS = 90 * 1000; // 90 segundos
     if (nota.processing_started_at) {
       const lockAge = Date.now() - new Date(nota.processing_started_at).getTime();
       
@@ -1549,6 +1552,7 @@ serve(async (req) => {
     }
     
     // 🔍 FASE 2: BUSCAR PRODUTO MASTER PARA CADA ITEM
+    // 🛡️ FRENTE A2+A3: paralelização em chunks + heartbeat para evitar timeout em notas grandes.
     console.log('🔍 Iniciando busca de produtos master...');
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     let masterEncontrados = 0;
@@ -1556,9 +1560,9 @@ serve(async (req) => {
     let iaNormalizacoes = 0;
     let fuzzyNormalizacoes = 0;
     let eanNormalizacoes = 0; // ✅ Contador de matches por EAN
-    
-    for (const produto of produtosEstoque) {
-      try {
+
+    // Helper: processa UM produto (extraído do corpo do for original).
+    const processarProdutoNormalizacao = async (produto: any) => {
         // Limpar unidades de medida do nome para melhor matching
         const nomeLimpo = limparUnidadesMedida(produto.produto_nome);
         
@@ -1815,8 +1819,32 @@ serve(async (req) => {
         console.error(`❌ Erro ao buscar master para ${produto.produto_nome}:`, error.message);
         masterNaoEncontrados++;
       }
+    }; // fim do helper processarProdutoNormalizacao
+
+    // 🛡️ FRENTE A3: paralelização em chunks de 5 (reduz tempo total ~5x para notas grandes).
+    // Mantém a lógica intacta — apenas executa N produtos simultaneamente em vez de 1.
+    // 🛡️ FRENTE A2: heartbeat — atualiza processing_started_at a cada chunk, garantindo
+    // que o lock não vença enquanto o trabalho está realmente em andamento.
+    const CHUNK_SIZE_NORMALIZACAO = 5;
+    for (let i = 0; i < produtosEstoque.length; i += CHUNK_SIZE_NORMALIZACAO) {
+      const chunk = produtosEstoque.slice(i, i + CHUNK_SIZE_NORMALIZACAO);
+      const chunkNum = Math.floor(i / CHUNK_SIZE_NORMALIZACAO) + 1;
+      const totalChunks = Math.ceil(produtosEstoque.length / CHUNK_SIZE_NORMALIZACAO);
+      console.log(`🔁 [NORMALIZAÇÃO] Chunk ${chunkNum}/${totalChunks} (${chunk.length} itens)`);
+
+      // Heartbeat: renova o lock antes do chunk (best-effort, não bloqueia se falhar)
+      try {
+        await supabase
+          .from('notas_imagens')
+          .update({ processing_started_at: new Date().toISOString() })
+          .eq('id', finalNotaId);
+      } catch (hbErr) {
+        console.warn('⚠️ [HEARTBEAT] falha (não crítico):', hbErr);
+      }
+
+      await Promise.allSettled(chunk.map((p) => processarProdutoNormalizacao(p)));
     }
-    
+
     console.log(`📊 Busca de master concluída: ${masterEncontrados} normalizados (${((masterEncontrados/produtosEstoque.length)*100).toFixed(1)}%), ${masterNaoEncontrados} sem master`);
     
     if (masterEncontrados > 0) {
@@ -2145,15 +2173,32 @@ serve(async (req) => {
     const allInserted: any[] = [];
     
     console.log(`📦 [DEBUG] Iniciando inserção em ${Math.ceil(produtosEstoque.length/BATCH_SIZE)} lotes...`);
-    
+
+    // 🛡️ FRENTE B2: sanitização defensiva — nenhum item pode ter preço negativo,
+    // que violaria o constraint check_preco_positivo e abortaria a nota inteira.
+    // Itens com preço inválido recebem 0 e são logados (não bloqueiam o restante).
+    let itensSanitizadosB2 = 0;
+    for (const p of produtosEstoque) {
+      const preco = Number(p.preco_unitario_ultimo);
+      if (!Number.isFinite(preco) || preco < 0) {
+        console.warn(`⚠️ [B2] Preço inválido para "${p.produto_nome}" (R$ ${p.preco_unitario_ultimo}). Ajustado para 0.`);
+        p.preco_unitario_ultimo = 0;
+        if (p.preco_por_unidade_base != null) p.preco_por_unidade_base = 0;
+        itensSanitizadosB2++;
+      }
+    }
+    if (itensSanitizadosB2 > 0) {
+      console.warn(`🛡️ [B2] ${itensSanitizadosB2} item(ns) tiveram preço sanitizado para 0 antes do INSERT.`);
+    }
+
     for (let i = 0; i < produtosEstoque.length; i += BATCH_SIZE) {
       const batch = produtosEstoque.slice(i, i + BATCH_SIZE);
       const loteNumero = Math.floor(i/BATCH_SIZE) + 1;
       const totalLotes = Math.ceil(produtosEstoque.length/BATCH_SIZE);
-      
+
       console.log(`📦 [LOTE ${loteNumero}/${totalLotes}] Inserindo ${batch.length} itens (${new Date().toISOString().split('T')[1].split('.')[0]})...`);
       console.log(`   Produtos: ${batch.map(p => p.produto_nome).join(', ')}`);
-      
+
       const { data: batchInserted, error: batchError } = await supabase
         .from("estoque_app")
         .insert(batch)

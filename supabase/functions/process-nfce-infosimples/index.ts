@@ -409,11 +409,28 @@ async function processarNFCe(
     // ✅ Aplicar desconto se houver
     const aplicarDesconto = temDesconto;
 
-    // Preço FINAL = preço unitário - desconto
-    const valorUnitarioFinal = aplicarDesconto
-      ? valorUnitarioReal - valorDesconto
+    // 🛡️ FRENTE B1: o InfoSimples às vezes envia 'valor_desconto' como TOTAL da linha
+    // (não unitário). Heurística: se desconto >= valor unitário E quantidade > 1,
+    // assumimos que é desconto TOTAL e dividimos pela quantidade. Caso contrário
+    // tratamos como unitário (comportamento original).
+    let valorDescontoUnitario = valorDesconto;
+    if (aplicarDesconto && quantidade > 1 && valorDesconto >= valorUnitarioReal) {
+      valorDescontoUnitario = valorDesconto / quantidade;
+      console.log(`      - 🛡️ [B1] Desconto interpretado como TOTAL → unitário: R$ ${valorDescontoUnitario.toFixed(4)} (orig: R$ ${valorDesconto.toFixed(2)} ÷ ${quantidade})`);
+    }
+
+    // Preço FINAL = preço unitário - desconto unitário
+    let valorUnitarioFinal = aplicarDesconto
+      ? valorUnitarioReal - valorDescontoUnitario
       : valorUnitarioReal;
 
+    // 🛡️ FRENTE B2 (parser): clamp final defensivo. Se mesmo após a correção B1
+    // o preço resultar negativo (dado corrompido), usa valor unitário sem desconto
+    // como fallback — evita que UM item invalide a nota inteira no INSERT.
+    if (valorUnitarioFinal <= 0) {
+      console.warn(`      - ⚠️ [B2] Preço final <= 0 (R$ ${valorUnitarioFinal.toFixed(4)}). Usando preço SEM desconto como fallback: R$ ${valorUnitarioReal.toFixed(2)}`);
+      valorUnitarioFinal = Math.max(0, valorUnitarioReal);
+    }
 
     if (temDesconto) {
       console.log(`      - ✅ Decisão: ${aplicarDesconto ? 'APLICAR' : 'NÃO APLICAR'} desconto | Valor final: R$ ${valorUnitarioFinal.toFixed(2)}`);
