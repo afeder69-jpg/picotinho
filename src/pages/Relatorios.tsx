@@ -19,27 +19,14 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { carregarCategorias, limparCacheCategories } from "@/lib/categorias";
+import { extrairDataCompraISO, extrairValorTotalNota, extrairValorItem } from "@/lib/notasFiscais";
 
 /**
- * Converte data brasileira (DD/MM/YYYY) para formato ISO (YYYY-MM-DD)
- * @param dataBrasileira - Data no formato DD/MM/YYYY ou DD/MM/YYYY HH:mm:ss
- * @returns Data no formato YYYY-MM-DD ou string vazia se inválido
+ * REGRA: a fonte ÚNICA de DATA é a data oficial da compra/NF
+ * (extrairDataCompraISO) e a fonte ÚNICA de VALOR é o valor total oficial
+ * da nota (extrairValorTotalNota). Soma item-a-item é apenas fallback.
+ * Ver src/lib/notasFiscais.ts.
  */
-function converterDataBrasileiraParaISO(dataBrasileira: string | undefined): string {
-  if (!dataBrasileira) return '';
-  
-  // Remove informações de hora e timezone se existirem
-  const apenasData = dataBrasileira.split(' ')[0];
-  
-  // Converte DD/MM/YYYY para YYYY-MM-DD
-  const partes = apenasData.split('/');
-  if (partes.length === 3) {
-    const [dia, mes, ano] = partes;
-    return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
-  }
-  
-  return '';
-}
 
 type TipoRelatorio = "compras" | "consumos" | "todos";
 
