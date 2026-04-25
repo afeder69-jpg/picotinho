@@ -2173,15 +2173,32 @@ serve(async (req) => {
     const allInserted: any[] = [];
     
     console.log(`📦 [DEBUG] Iniciando inserção em ${Math.ceil(produtosEstoque.length/BATCH_SIZE)} lotes...`);
-    
+
+    // 🛡️ FRENTE B2: sanitização defensiva — nenhum item pode ter preço negativo,
+    // que violaria o constraint check_preco_positivo e abortaria a nota inteira.
+    // Itens com preço inválido recebem 0 e são logados (não bloqueiam o restante).
+    let itensSanitizadosB2 = 0;
+    for (const p of produtosEstoque) {
+      const preco = Number(p.preco_unitario_ultimo);
+      if (!Number.isFinite(preco) || preco < 0) {
+        console.warn(`⚠️ [B2] Preço inválido para "${p.produto_nome}" (R$ ${p.preco_unitario_ultimo}). Ajustado para 0.`);
+        p.preco_unitario_ultimo = 0;
+        if (p.preco_por_unidade_base != null) p.preco_por_unidade_base = 0;
+        itensSanitizadosB2++;
+      }
+    }
+    if (itensSanitizadosB2 > 0) {
+      console.warn(`🛡️ [B2] ${itensSanitizadosB2} item(ns) tiveram preço sanitizado para 0 antes do INSERT.`);
+    }
+
     for (let i = 0; i < produtosEstoque.length; i += BATCH_SIZE) {
       const batch = produtosEstoque.slice(i, i + BATCH_SIZE);
       const loteNumero = Math.floor(i/BATCH_SIZE) + 1;
       const totalLotes = Math.ceil(produtosEstoque.length/BATCH_SIZE);
-      
+
       console.log(`📦 [LOTE ${loteNumero}/${totalLotes}] Inserindo ${batch.length} itens (${new Date().toISOString().split('T')[1].split('.')[0]})...`);
       console.log(`   Produtos: ${batch.map(p => p.produto_nome).join(', ')}`);
-      
+
       const { data: batchInserted, error: batchError } = await supabase
         .from("estoque_app")
         .insert(batch)
