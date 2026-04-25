@@ -1,82 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trash2, AlertTriangle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { AlertTriangle, ShieldOff } from 'lucide-react';
 
+// 🛑 PÁGINA DESATIVADA POR SEGURANÇA — Fase 1 trava de proteção do estoque.
+// A função cleanup-user-data foi neutralizada (HTTP 410) por executar
+// DELETE em massa em estoque_app, notas, receipts, etc.
+// Mantemos a rota apenas como aviso para histórico.
 export default function CleanupUserData() {
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<any>(null);
-  const [error, setError] = useState<string>('');
   const [isPageLoaded, setIsPageLoaded] = useState(false);
-
-  useEffect(() => {
-    console.log('🔧 Página CleanupUserData carregada');
-    setIsPageLoaded(true);
-  }, []);
-
-  const handleCleanup = async () => {
-    if (!email.trim()) {
-      toast.error('Digite o email do usuário');
-      return;
-    }
-
-    console.log('🚀 Iniciando limpeza para:', email.trim());
-    setIsLoading(true);
-    setError('');
-    setResults(null);
-    
-    try {
-      console.log('📡 Invocando edge function...');
-      
-      // Timeout de 60 segundos
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout: operação demorou mais de 60 segundos')), 60000);
-      });
-      
-      const cleanupPromise = supabase.functions.invoke('cleanup-user-data', {
-        body: { email: email.trim() }
-      });
-      
-      const { data, error } = await Promise.race([cleanupPromise, timeoutPromise]) as any;
-
-      console.log('📨 Resposta recebida:', { data, error });
-
-      if (error) {
-        console.error('❌ Erro da edge function:', error);
-        setError(`Erro da Edge Function: ${error.message || 'Erro desconhecido'}`);
-        throw error;
-      }
-
-      if (!data) {
-        console.error('❌ Nenhum dado retornado da edge function');
-        setError('Nenhum dado retornado da função de limpeza');
-        throw new Error('Nenhum dado retornado');
-      }
-
-      console.log('✅ Dados recebidos:', data);
-      setResults(data);
-      toast.success('Limpeza realizada com sucesso!');
-    } catch (error: any) {
-      console.error('🔥 Erro capturado:', error);
-      const errorMessage = error.message || 'Erro desconhecido durante a limpeza';
-      setError(errorMessage);
-      toast.error(`Erro: ${errorMessage}`);
-    } finally {
-      console.log('🏁 Finalizando operação...');
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => { setIsPageLoaded(true); }, []);
 
   if (!isPageLoaded) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Carregando página de limpeza...</p>
+          <p>Carregando...</p>
         </div>
       </div>
     );
@@ -85,99 +24,33 @@ export default function CleanupUserData() {
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-2xl mx-auto space-y-6">
-        <Card className="border-destructive/20">
+        <Card className="border-destructive/40">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Limpeza Completa de Dados
+              <ShieldOff className="h-5 w-5" />
+              Função desativada por segurança
             </CardTitle>
             <CardDescription>
-              Remove TODOS os dados de um usuário específico do banco de dados.
-              Esta ação é irreversível!
+              Esta página executava uma limpeza completa de dados (DELETE em massa em estoque,
+              notas e recibos), violando a regra de ouro do projeto.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Email do usuário:</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="usuario@exemplo.com"
-                className="mt-1"
-              />
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+              <p>
+                A edge function <code className="font-mono">cleanup-user-data</code> foi
+                neutralizada (HTTP 410). Para apenas zerar o estoque preservando o histórico,
+                use o botão <strong>Limpar Estoque</strong> em <code className="font-mono">/estoque</code>,
+                que chama a RPC segura <code className="font-mono">limpar_estoque_usuario</code>.
+              </p>
             </div>
-            
-            <Button 
-              onClick={handleCleanup}
-              disabled={isLoading}
-              variant="destructive"
-              className="w-full"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              {isLoading ? 'Limpando...' : 'Executar Limpeza Completa'}
-            </Button>
+            <p className="text-muted-foreground">
+              Exclusão total de conta deve ser fluxo dedicado, com confirmação forte e
+              ativação explícita da válvula <code className="font-mono">app.allow_bulk_delete</code>.
+            </p>
           </CardContent>
         </Card>
-
-        {error && (
-          <Card className="border-destructive">
-            <CardHeader>
-              <CardTitle className="text-destructive">Erro na Limpeza</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-destructive text-sm">{error}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {isLoading && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-center space-x-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                <span>Executando limpeza... Isso pode levar alguns minutos.</span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {results && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-green-600">Resultados da Limpeza</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <p><strong>Usuário:</strong> {results.userId}</p>
-                <p><strong>Email:</strong> {email}</p>
-                
-                <div className="bg-muted p-3 rounded">
-                  <h4 className="font-medium mb-2">Resumo:</h4>
-                  <ul className="text-sm space-y-1">
-                    <li>Total de tabelas: {results.resumo?.total_tabelas}</li>
-                    <li className="text-green-600">Sucessos: {results.resumo?.sucesso}</li>
-                    <li className="text-red-600">Erros: {results.resumo?.erros}</li>
-                  </ul>
-                </div>
-
-                <div className="bg-muted p-3 rounded">
-                  <h4 className="font-medium mb-2">Detalhes por Tabela:</h4>
-                  <div className="text-sm space-y-1">
-                    {results.resultados?.map((result: any, index: number) => (
-                      <div key={index} className="flex justify-between">
-                        <span>{result.table}</span>
-                        <span className={result.status === 'ok' || result.status === 'resetado' ? 'text-green-600' : 'text-red-600'}>
-                          {result.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
