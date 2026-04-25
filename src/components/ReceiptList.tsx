@@ -8,6 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Capacitor } from '@capacitor/core';
+// FONTE ÚNICA: data oficial da compra/NF + valor total oficial da NF.
+// Ver src/lib/notasFiscais.ts.
+import { extrairDataCompraISO, extrairValorTotalNota } from '@/lib/notasFiscais';
 
 
 interface Receipt {
@@ -344,35 +347,20 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             const estabelecimento = dadosExtraidos.estabelecimento || {};
             const compra = dadosExtraidos.compra || {};
             
-            // ✅ Calcular total com múltiplos fallbacks
-            const calcularTotal = () => {
-              // 1. Tentar compra.valor_total
-              if (compra.valor_total) return compra.valor_total;
-              
-              // 2. Tentar valor_total no root
-              if (dadosExtraidos.valor_total) return dadosExtraidos.valor_total;
-              
-              // 3. Tentar valorTotal (formato antigo)
-              if (dadosExtraidos.valorTotal) return dadosExtraidos.valorTotal;
-              
-              // 4. Calcular somando produtos
-              const itens = dadosExtraidos.itens || dadosExtraidos.produtos || [];
-              if (itens.length > 0) {
-                return itens.reduce((sum: number, item: any) => 
-                  sum + (item.valor_total || 0), 0
-                );
-              }
-              
-              return null;
-            };
-            
+            // ✅ Total: usa fonte única (valor total oficial da NF; fallback soma itens)
+            const calcularTotal = () => extrairValorTotalNota(dadosExtraidos);
+
+            // ✅ Data: usa fonte única (data oficial da compra/NF). Fallback para data_criacao
+            // só ocorre quando o JSON não tem data oficial — caso raro.
+            const dataOficial = extrairDataCompraISO(dadosExtraidos) || nota.data_criacao;
+
             return {
               id: nota.id,
               store_name: estabelecimento.nome || 'Estabelecimento não identificado',
               store_address: estabelecimento.endereco || '',
               store_cnpj: estabelecimento.cnpj || null,
               total_amount: calcularTotal(),
-              purchase_date: compra.data_emissao || dadosExtraidos.dataCompra || compra.data_compra || nota.data_criacao,
+              purchase_date: dataOficial,
               purchase_time: null,
               qr_url: dadosExtraidos?.url_original || '',
               status: 'processed',
