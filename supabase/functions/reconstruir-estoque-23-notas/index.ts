@@ -45,7 +45,7 @@ serve(async (req) => {
           Authorization: `Bearer ${SRK}`,
           apikey: SRK,
         },
-        body: JSON.stringify({ notaImagemId: n.id, forceReprocess: true }),
+        body: JSON.stringify({ notaId: n.id, force: true }),
       });
       const txt = await r.text();
       let j: any = null; try { j = JSON.parse(txt); } catch {}
