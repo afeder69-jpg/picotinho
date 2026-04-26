@@ -2319,21 +2319,19 @@ const EstoqueAtual = () => {
                                       <>
                                         {/* Linha 1: Última compra do usuário - GARANTIR DADOS SEMPRE VISÍVEIS */}
                                         <div className="text-primary font-medium">
-                                           {(() => {
-                                            // FONTE ÚNICA: historicoProduto.ultimaCompraUsuario > estoque (created_at)
-                                            // Nunca misturar data de uma fonte com preço de outra
-                                            const histCompra = historicoProduto?.ultimaCompraUsuario;
-                                            const precoExibir = histCompra?.preco || item.preco_unitario_ultimo || 0;
-                                            const totalExibir = (precoExibir * quantidade).toFixed(2);
-                                            
-                                            // Data: priorizar nota real (via histórico), fallback created_at (nunca updated_at)
-                                            // FONTE ÚNICA de data: histórico (data oficial da nota via RPC) > nota vinculada (mapa nota_id).
-                                            // Nunca usar created_at/updated_at do estoque como data de compra.
-                                            const dataRealCompra = histCompra?.data || encontrarDataPorNotaId(item.nota_id);
-                                            const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
-                                            
-                                            return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
-                                          })()}
+                                            {(() => {
+                                             // FONTE ÚNICA DE DATA (canônica): data oficial da NF vinculada via nota_id.
+                                             // Proibido usar histórico (RPC), created_at, updated_at ou qualquer
+                                             // timestamp de processamento/inserção. Sem data oficial => "Sem data".
+                                             const histCompra = historicoProduto?.ultimaCompraUsuario;
+                                             const precoExibir = histCompra?.preco || item.preco_unitario_ultimo || 0;
+                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
+
+                                             const dataRealCompra = encontrarDataPorNotaId(item.nota_id);
+                                             const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
+
+                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
+                                           })()}
                                         </div>
 
                                          {/* Linha 2: Menor preço na área com fallbacks */}
