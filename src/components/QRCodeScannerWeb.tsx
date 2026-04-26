@@ -43,6 +43,26 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const scanStartTimeRef = useRef<number>(0);
   const decodeFailuresRef = useRef<number>(0);
   const helpBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const torchPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+
+  // iOS Safari não suporta torch via WebRTC
+  const isIOS = typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1));
+
+  // Obtém o MediaStreamTrack ativo diretamente do <video> renderizado pela lib
+  const getActiveVideoTrack = useCallback((): MediaStreamTrack | null => {
+    try {
+      const container = document.getElementById(SCANNER_ID);
+      const video = container?.querySelector('video') as HTMLVideoElement | null;
+      const stream = video?.srcObject as MediaStream | null;
+      const track = stream?.getVideoTracks?.()[0] ?? null;
+      return track ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const processAccessKey = useCallback((chaveAcesso: string, source: 'manual' | 'barcode') => {
     const chaveLimpa = limparChaveAcesso(chaveAcesso);
@@ -72,6 +92,10 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       clearTimeout(helpBannerTimerRef.current);
       helpBannerTimerRef.current = null;
     }
+    if (torchPollTimerRef.current) {
+      clearTimeout(torchPollTimerRef.current);
+      torchPollTimerRef.current = null;
+    }
     if (scannerRef.current) {
       try {
         const state = scannerRef.current.getState();
@@ -84,6 +108,7 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       }
       scannerRef.current = null;
     }
+    videoTrackRef.current = null;
     setIsScanning(false);
     setIsInitializing(false);
     setTorchEnabled(false);
@@ -118,6 +143,37 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     onScanSuccess(decodedText);
   }, [mode, onScanSuccess, processAccessKey, stopScanner]);
 
+  const pollTorchCapability = useCallback((attempt = 0) => {
+    if (isIOS) {
+      console.log('[SCANNER-DIAG-TORCH] iOS detectado — torch indisponível via WebRTC');
+      return;
+    }
+    const maxAttempts = 5;
+    const track = getActiveVideoTrack();
+    if (track) videoTrackRef.current = track;
+
+    let detected = false;
+    try {
+      const caps: any = track?.getCapabilities?.() ?? {};
+      console.log('[SCANNER-DIAG-TORCH] tentativa', attempt + 1, {
+        torch: !!caps.torch,
+        keys: Object.keys(caps),
+      });
+      if (caps.torch) {
+        detected = true;
+        setTorchSupported(true);
+      }
+    } catch (e) {
+      console.log('[SCANNER-DIAG-TORCH] getCapabilities falhou:', e);
+    }
+
+    if (!detected && attempt + 1 < maxAttempts) {
+      torchPollTimerRef.current = setTimeout(() => pollTorchCapability(attempt + 1), 300);
+    } else if (!detected) {
+      console.log('[SCANNER-DIAG-TORCH] torch não detectado após', maxAttempts, 'tentativas');
+    }
+  }, [getActiveVideoTrack, isIOS]);
+
   const applyAdvancedCameraSettings = useCallback(async (scanner: Html5Qrcode) => {
     try {
       const capabilities = scanner.getRunningTrackCapabilities() as any;
@@ -133,24 +189,23 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
         frameRate: settings.frameRate,
       });
 
-      if (capabilities?.torch) setTorchSupported(true);
-
-      const advancedConstraints: any[] = [];
-      if (capabilities?.focusMode?.includes?.('continuous')) {
-        advancedConstraints.push({ focusMode: 'continuous' });
-      }
-      if (capabilities?.exposureMode?.includes?.('continuous')) {
-        advancedConstraints.push({ exposureMode: 'continuous' });
-      }
-      if (advancedConstraints.length > 0) {
-        try {
-          await scanner.applyVideoConstraints({ advanced: advancedConstraints } as any);
-        } catch (e) {
-          console.log('[SCANNER-DIAG] ⚠️ focus/exposure não aplicados:', e);
+      // Foco/exposição contínuos (isolado em try/catch)
+      try {
+        const advancedConstraints: any[] = [];
+        if (capabilities?.focusMode?.includes?.('continuous')) {
+          advancedConstraints.push({ focusMode: 'continuous' });
         }
+        if (capabilities?.exposureMode?.includes?.('continuous')) {
+          advancedConstraints.push({ exposureMode: 'continuous' });
+        }
+        if (advancedConstraints.length > 0) {
+          await scanner.applyVideoConstraints({ advanced: advancedConstraints } as any);
+        }
+      } catch (e) {
+        console.log('[SCANNER-DIAG] ⚠️ focus/exposure não aplicados:', e);
       }
 
-      // Zoom automático ~2x quando suportado (ajuda em QRs pequenos)
+      // Zoom automático ~2x quando suportado (isolado)
       try {
         const zoomCap = capabilities?.zoom;
         if (zoomCap && typeof zoomCap.max === 'number') {
@@ -164,21 +219,20 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
         console.log('[SCANNER-DIAG] ⚠️ Zoom não suportado:', e);
       }
 
-      // Macro: focusDistance perto do mínimo
-      try {
-        const fd = capabilities?.focusDistance;
-        if (fd && typeof fd.min === 'number') {
-          const desired = Math.max(fd.min, Math.min(0.1, fd.max ?? 0.1));
-          await scanner.applyVideoConstraints({ advanced: [{ focusMode: 'manual', focusDistance: desired }] } as any);
-          console.log('[SCANNER-DIAG] 🎯 Macro focus aplicado:', desired);
-        }
-      } catch (e) {
-        console.log('[SCANNER-DIAG] ⚠️ focusDistance não suportado:', e);
-      }
+      // OBS: removido bloco de focusMode:'manual'+focusDistance — em vários
+      // Androids ele bloqueia o torch e desestabiliza o decode. Mantemos
+      // apenas focusMode:'continuous' aplicado acima.
+
+      // Detecção de torch via track direto, com polling (capability pode
+      // demorar a aparecer após o start em alguns Androids).
+      pollTorchCapability(0);
     } catch (e) {
       console.log('[SCANNER-DIAG] ⚠️ Capabilities indisponíveis:', e);
+      // Mesmo se as capabilities da lib falharem, tenta detectar o torch
+      // diretamente do track.
+      pollTorchCapability(0);
     }
-  }, []);
+  }, [pollTorchCapability]);
 
   const startScanner = useCallback(async () => {
     if (scannerRef.current || hasScannedRef.current) return;
@@ -252,19 +306,44 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   }, [applyAdvancedCameraSettings, handleScanSuccess, mode]);
 
   const toggleTorch = useCallback(async () => {
-    if (!scannerRef.current || !torchSupported) {
+    if (!torchSupported) {
       toast({ title: 'Flash não suportado', description: 'Este dispositivo não suporta controle de flash via web', variant: 'destructive' });
       return;
     }
+
+    // Resolve track diretamente do <video>; fallback no ref
+    const track = videoTrackRef.current ?? getActiveVideoTrack();
+    if (!track) {
+      toast({ title: 'Câmera indisponível', description: 'Aguarde a câmera iniciar antes de usar o flash', variant: 'destructive' });
+      return;
+    }
+    videoTrackRef.current = track;
+
+    const newTorchState = !torchEnabled;
     try {
-      const newTorchState = !torchEnabled;
-      await scannerRef.current.applyVideoConstraints({ advanced: [{ torch: newTorchState }] } as any);
+      // Aplica diretamente no track — mais confiável que via lib
+      await track.applyConstraints({ advanced: [{ torch: newTorchState }] as any });
       setTorchEnabled(newTorchState);
       if (navigator.vibrate) navigator.vibrate(30);
-    } catch (e) {
-      toast({ title: 'Erro ao controlar flash', description: 'Não foi possível alternar o flash', variant: 'destructive' });
+      console.log('[SCANNER-DIAG-TORCH] torch =', newTorchState);
+    } catch (eTrack) {
+      console.log('[SCANNER-DIAG-TORCH] track.applyConstraints falhou, tentando via lib:', eTrack);
+      // Fallback: usa a API da lib
+      try {
+        if (scannerRef.current) {
+          await scannerRef.current.applyVideoConstraints({ advanced: [{ torch: newTorchState }] } as any);
+          setTorchEnabled(newTorchState);
+          if (navigator.vibrate) navigator.vibrate(30);
+          console.log('[SCANNER-DIAG-TORCH] torch via lib =', newTorchState);
+          return;
+        }
+        throw eTrack;
+      } catch (eLib) {
+        console.log('[SCANNER-DIAG-TORCH] fallback falhou:', eLib);
+        toast({ title: 'Erro ao controlar flash', description: 'Não foi possível alternar o flash', variant: 'destructive' });
+      }
     }
-  }, [torchEnabled, torchSupported]);
+  }, [getActiveVideoTrack, torchEnabled, torchSupported]);
 
   const handleBackToChoose = useCallback(() => {
     stopScanner();
@@ -334,15 +413,19 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-black">
       <div className="relative z-10 w-full flex justify-between items-center p-4 bg-black/80 backdrop-blur-sm">
-        <Button
-          variant="outline"
-          size="lg"
-          className="rounded-full"
-          onClick={toggleTorch}
-          disabled={!torchSupported && isScanning}
-        >
-          {torchEnabled ? <FlashlightOff className="w-5 h-5" /> : <Flashlight className="w-5 h-5" />}
-        </Button>
+        {!isIOS && (
+          <Button
+            variant={torchEnabled ? 'default' : 'outline'}
+            size="lg"
+            className="rounded-full"
+            onClick={toggleTorch}
+            disabled={isInitializing || !isScanning || !torchSupported}
+            title={!torchSupported ? 'Flash indisponível neste dispositivo' : torchEnabled ? 'Desligar flash' : 'Ligar flash'}
+          >
+            {torchEnabled ? <FlashlightOff className="w-5 h-5" /> : <Flashlight className="w-5 h-5" />}
+          </Button>
+        )}
+        {isIOS && <span />}
         <Button variant="destructive" size="lg" className="rounded-full shadow-lg" onClick={handleBackToChoose}>
           <X className="w-6 h-6" />
           <span className="ml-2">Cancelar</span>
