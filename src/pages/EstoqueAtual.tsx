@@ -2338,11 +2338,10 @@ const EstoqueAtual = () => {
                                         {(() => {
                                           // 🔥 VERIFICAÇÃO ESPECIAL: Produto sem normalização (sem master)
                                           if (!item.produto_master_id) {
-                                            const precoEstoque = item.preco_unitario_ultimo;
                                             return (
                                               <div className="text-amber-600 italic text-sm flex items-center gap-1">
                                                 <Sparkles className="w-3 h-3" />
-                                                ⏳ Aguardando normalização - preço pago: R$ {(precoEstoque || 0).toFixed(2)}/{unidadeFormatada}
+                                                ⏳ Aguardando normalização
                                               </div>
                                             );
                                           }
@@ -2386,11 +2385,7 @@ const EstoqueAtual = () => {
                                             if (precoUltima > 0) {
                                               return (
                                                 <div className="text-blue-600 italic text-sm">
-                                                  ⚠️ Sem preços na área - usando sua última compra: {' '}
-                                                  {(() => {
-                                                    const dataNF = encontrarDataPorNotaId(item.nota_id);
-                                                    return dataNF ? formatDateSafe(dataNF) : 'Sem data';
-                                                  })()} - R$ {precoUltima.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoUltima * quantidade).toFixed(2)}
+                                                  ⚠️ Sem preço na sua área de atuação
                                                 </div>
                                               );
                                             }
