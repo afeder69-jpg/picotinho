@@ -1279,6 +1279,9 @@ serve(async (req) => {
         for (const item of itensDaNota) {
           const produtoNome = item.descricao || item.nome;
           const valorUnitario = parseFloat(item.valor_unitario_comercial || item.valor_unitario) || 0;
+          const itemEan = item.ean || item.codigo_barras || item.codigo || null;
+          const itemQuantidade = parseFloat(item.quantidade || 0) || null;
+          const itemMasterId = item.produto_master_id || null;
           
           if (produtoNome && valorUnitario > 0) {
             try {
@@ -1291,7 +1294,11 @@ serve(async (req) => {
                   estabelecimentoNome,
                   dataCompra: dataCompraAtual,
                   horaCompra,
-                  userId: nota.usuario_id
+                  userId: nota.usuario_id,
+                  notaImagemId: finalNotaId,
+                  ean: itemEan,
+                  itemQuantidade,
+                  produtoMasterId: itemMasterId,
                 }
               });
 

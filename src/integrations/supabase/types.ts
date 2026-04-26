@@ -1677,6 +1677,42 @@ export type Database = {
           },
         ]
       }
+      precos_atuais_contaminados_backup: {
+        Row: {
+          audit_run_id: string | null
+          dados_originais: Json
+          id: string
+          motivo_remocao: string
+          preco_atual_id: string
+          removido_em: string
+          removido_por: string | null
+          restaurado: boolean
+          restaurado_em: string | null
+        }
+        Insert: {
+          audit_run_id?: string | null
+          dados_originais: Json
+          id?: string
+          motivo_remocao: string
+          preco_atual_id: string
+          removido_em?: string
+          removido_por?: string | null
+          restaurado?: boolean
+          restaurado_em?: string | null
+        }
+        Update: {
+          audit_run_id?: string | null
+          dados_originais?: Json
+          id?: string
+          motivo_remocao?: string
+          preco_atual_id?: string
+          removido_em?: string
+          removido_por?: string | null
+          restaurado?: boolean
+          restaurado_em?: string | null
+        }
+        Relationships: []
+      }
       precos_atuais_usuario: {
         Row: {
           created_at: string
