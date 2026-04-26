@@ -158,24 +158,69 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
         frameRate: settings.frameRate,
       });
 
-      if (capabilities?.torch) setTorchSupported(true);
+  const pollTorchCapability = useCallback((attempt = 0) => {
+    if (isIOS) {
+      console.log('[SCANNER-DIAG-TORCH] iOS detectado — torch indisponível via WebRTC');
+      return;
+    }
+    const maxAttempts = 5;
+    const track = getActiveVideoTrack();
+    if (track) videoTrackRef.current = track;
 
-      const advancedConstraints: any[] = [];
-      if (capabilities?.focusMode?.includes?.('continuous')) {
-        advancedConstraints.push({ focusMode: 'continuous' });
+    let detected = false;
+    try {
+      const caps: any = track?.getCapabilities?.() ?? {};
+      console.log('[SCANNER-DIAG-TORCH] tentativa', attempt + 1, {
+        torch: !!caps.torch,
+        keys: Object.keys(caps),
+      });
+      if (caps.torch) {
+        detected = true;
+        setTorchSupported(true);
       }
-      if (capabilities?.exposureMode?.includes?.('continuous')) {
-        advancedConstraints.push({ exposureMode: 'continuous' });
-      }
-      if (advancedConstraints.length > 0) {
-        try {
-          await scanner.applyVideoConstraints({ advanced: advancedConstraints } as any);
-        } catch (e) {
-          console.log('[SCANNER-DIAG] ⚠️ focus/exposure não aplicados:', e);
+    } catch (e) {
+      console.log('[SCANNER-DIAG-TORCH] getCapabilities falhou:', e);
+    }
+
+    if (!detected && attempt + 1 < maxAttempts) {
+      torchPollTimerRef.current = setTimeout(() => pollTorchCapability(attempt + 1), 300);
+    } else if (!detected) {
+      console.log('[SCANNER-DIAG-TORCH] torch não detectado após', maxAttempts, 'tentativas');
+    }
+  }, [getActiveVideoTrack, isIOS]);
+
+  const applyAdvancedCameraSettings = useCallback(async (scanner: Html5Qrcode) => {
+    try {
+      const capabilities = scanner.getRunningTrackCapabilities() as any;
+      const settings = (scanner.getRunningTrackSettings?.() as any) || {};
+
+      console.log('[SCANNER-DIAG] 📷 Camera capabilities', {
+        torch: !!capabilities?.torch,
+        zoom: capabilities?.zoom,
+        focusMode: capabilities?.focusMode,
+        focusDistance: capabilities?.focusDistance,
+        width: settings.width,
+        height: settings.height,
+        frameRate: settings.frameRate,
+      });
+
+      // Foco/exposição contínuos (isolado em try/catch)
+      try {
+        const advancedConstraints: any[] = [];
+        if (capabilities?.focusMode?.includes?.('continuous')) {
+          advancedConstraints.push({ focusMode: 'continuous' });
         }
+        if (capabilities?.exposureMode?.includes?.('continuous')) {
+          advancedConstraints.push({ exposureMode: 'continuous' });
+        }
+        if (advancedConstraints.length > 0) {
+          await scanner.applyVideoConstraints({ advanced: advancedConstraints } as any);
+        }
+      } catch (e) {
+        console.log('[SCANNER-DIAG] ⚠️ focus/exposure não aplicados:', e);
       }
 
-      // Zoom automático ~2x quando suportado (ajuda em QRs pequenos)
+      // Zoom automático ~2x quando suportado (isolado)
       try {
         const zoomCap = capabilities?.zoom;
         if (zoomCap && typeof zoomCap.max === 'number') {
@@ -189,21 +234,20 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
         console.log('[SCANNER-DIAG] ⚠️ Zoom não suportado:', e);
       }
 
-      // Macro: focusDistance perto do mínimo
-      try {
-        const fd = capabilities?.focusDistance;
-        if (fd && typeof fd.min === 'number') {
-          const desired = Math.max(fd.min, Math.min(0.1, fd.max ?? 0.1));
-          await scanner.applyVideoConstraints({ advanced: [{ focusMode: 'manual', focusDistance: desired }] } as any);
-          console.log('[SCANNER-DIAG] 🎯 Macro focus aplicado:', desired);
-        }
-      } catch (e) {
-        console.log('[SCANNER-DIAG] ⚠️ focusDistance não suportado:', e);
-      }
+      // OBS: removido bloco de focusMode:'manual'+focusDistance — em vários
+      // Androids ele bloqueia o torch e desestabiliza o decode. Mantemos
+      // apenas focusMode:'continuous' aplicado acima.
+
+      // Detecção de torch via track direto, com polling (capability pode
+      // demorar a aparecer após o start em alguns Androids).
+      pollTorchCapability(0);
     } catch (e) {
       console.log('[SCANNER-DIAG] ⚠️ Capabilities indisponíveis:', e);
+      // Mesmo se as capabilities da lib falharem, tenta detectar o torch
+      // diretamente do track.
+      pollTorchCapability(0);
     }
-  }, []);
+  }, [pollTorchCapability]);
 
   const startScanner = useCallback(async () => {
     if (scannerRef.current || hasScannedRef.current) return;
