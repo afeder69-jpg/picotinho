@@ -1,6 +1,8 @@
 project_id = "mjsbwrtegorjxcepvrik"
 
 [functions]
+  [functions.auditar-precos-contaminados]
+    verify_jwt = false
   [functions.analisar-impacto-normalizacao]
     verify_jwt = false
   [functions.aplicar-normalizacao-retroativa]
