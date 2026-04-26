@@ -1028,8 +1028,8 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
     if (highlightNotaId && receipts.length > 0) {
       const receipt = receipts.find(r => r.id === highlightNotaId);
       if (receipt) {
-        const date = parsePurchaseDate(receipt);
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const { year, month } = getPurchaseYMD(receipt);
+        const key = `${year}-${String(month).padStart(2, '0')}`;
         setExpandedMonths(prev => new Set(prev).add(key));
       }
     }
