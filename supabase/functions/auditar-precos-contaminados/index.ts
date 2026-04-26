@@ -131,6 +131,7 @@ async function executarAuditoria(
   jobId: string,
   pageSize: number,
   maxPages: number,
+  startOffset: number = 0,
 ) {
   // 1. Pré-computar replicação cruzada (cnpj+valor+data → distintos master_ids)
   const replicacaoMap = new Map<string, Set<string>>();
