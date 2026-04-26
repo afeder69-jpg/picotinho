@@ -793,6 +793,8 @@ const EstoqueAtual = () => {
             imagem_url: imagemAtualizada,
             // Preservar master_id do mais recente
             produto_master_id: itemMaisRecente ? (item.produto_master_id || itemExistente.produto_master_id) : (itemExistente.produto_master_id || item.produto_master_id),
+            // Preservar nota_id do item MAIS RECENTE (fonte única para data oficial da compra)
+            nota_id: itemMaisRecente ? (item.nota_id ?? itemExistente.nota_id) : (itemExistente.nota_id ?? item.nota_id),
           });
         } else {
           // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)
