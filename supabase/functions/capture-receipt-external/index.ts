@@ -86,7 +86,7 @@ async function convertHtmlToImage(html: string, url: string): Promise<string> {
           console.log('API retornou status:', response.status);
         }
       } catch (apiError) {
-        console.log('Erro na API:', apiError.message);
+        console.log('Erro na API:', apiError instanceof Error ? apiError.message : String(apiError));
         continue;
       }
     }
@@ -316,7 +316,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Erro interno do servidor',
-        details: error.message 
+        details: error instanceof Error ? error.message : String(error)
       }),
       { 
         status: 500, 
