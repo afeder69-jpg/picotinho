@@ -327,7 +327,7 @@ Deno.serve(async (req) => {
         }
 
         // Atualizar estoque_app
-        const { count: cEstoque } = await supabase
+        const { data: estoqueRows } = await supabase
           .from('estoque_app')
           .update({
             produto_master_id: principal.id,
@@ -335,19 +335,21 @@ Deno.serve(async (req) => {
             produto_hash_normalizado: principal.sku_global
           })
           .or(`produto_master_id.eq.${dup.id},sku_global.eq.${dup.sku_global}`)
-          .select('*', { count: 'exact', head: true });
-        refEstoque += cEstoque || 0;
+          .select('id');
+        const cEstoque = estoqueRows?.length || 0;
+        refEstoque += cEstoque;
 
         // Atualizar candidatos
-        const { count: cCand } = await supabase
+        const { data: candidatosRows } = await supabase
           .from('produtos_candidatos_normalizacao')
           .update({
             sugestao_produto_master: principal.id,
             sugestao_sku_global: principal.sku_global
           })
           .eq('sugestao_produto_master', dup.id)
-          .select('*', { count: 'exact', head: true });
-        refCandidatos += cCand || 0;
+          .select('id');
+        const cCand = candidatosRows?.length || 0;
+        refCandidatos += cCand;
 
         // Somar estatísticas
         await supabase

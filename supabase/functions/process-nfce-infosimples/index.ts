@@ -636,14 +636,14 @@ async function processarNFCe(
   // 🆕 Dispara finalização server-side (fire-and-forget — cron retoma se falhar)
   supabase.functions.invoke('finalize-nota-estoque', {
     body: { notaImagemId },
-  }).then(({ error }) => {
-    if (error) {
-      console.warn('⚠️ [NFCE-INFOSIMPLES] finalize-nota-estoque falhou (cron retomará):', error.message);
+  }).then((result: { error?: { message?: string } | null }) => {
+    if (result.error) {
+      console.warn('⚠️ [NFCE-INFOSIMPLES] finalize-nota-estoque falhou (cron retomará):', result.error.message);
     } else {
       console.log('✅ [NFCE-INFOSIMPLES] finalize-nota-estoque disparado');
     }
-  }).catch((e) => {
-    console.warn('⚠️ [NFCE-INFOSIMPLES] erro ao disparar finalize:', e?.message);
+  }).catch((e: unknown) => {
+    console.warn('⚠️ [NFCE-INFOSIMPLES] erro ao disparar finalize:', e instanceof Error ? e.message : String(e));
   });
 }
 

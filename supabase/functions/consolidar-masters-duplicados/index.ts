@@ -158,24 +158,26 @@ Deno.serve(async (req) => {
         }
 
         // 4.2 Atualizar referências em estoque_app
-        const { count: estoqueCount, error: estoqueError } = await supabase
+        const { data: estoqueRows, error: estoqueError } = await supabase
           .from('estoque_app')
           .update({ produto_hash_normalizado: masterPrincipal.sku_global })
           .eq('produto_hash_normalizado', duplicado.sku_global)
-          .select('*', { count: 'exact', head: true });
+          .select('id');
 
+        const estoqueCount = estoqueRows?.length || 0;
         if (!estoqueError && estoqueCount) {
           refEstoqueAtualizadas += estoqueCount;
           console.log(`      🔄 Estoque atualizado: ${estoqueCount} registros`);
         }
 
         // 4.3 Atualizar referências em produtos_candidatos_normalizacao
-        const { count: candidatosCount, error: candidatosError } = await supabase
+        const { data: candidatosRows, error: candidatosError } = await supabase
           .from('produtos_candidatos_normalizacao')
           .update({ sugestao_produto_master: masterPrincipal.id })
           .eq('sugestao_produto_master', duplicado.id)
-          .select('*', { count: 'exact', head: true });
+          .select('id');
 
+        const candidatosCount = candidatosRows?.length || 0;
         if (!candidatosError && candidatosCount) {
           refCandidatosAtualizadas += candidatosCount;
           console.log(`      🔄 Candidatos atualizados: ${candidatosCount} registros`);
@@ -230,7 +232,7 @@ Deno.serve(async (req) => {
     console.error('❌ Erro na consolidação:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         sucesso: false
       }),
       { 
