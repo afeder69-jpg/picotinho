@@ -200,7 +200,7 @@ async function executarAuditoria(
     replicacao_cruzada: 0,
   };
 
-  let from = 0;
+  let from = startOffset;
   let page = 0;
   while (page < maxPages) {
     const to = from + pageSize - 1;
