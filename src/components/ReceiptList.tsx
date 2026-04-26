@@ -1003,12 +1003,13 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
     const groups = new Map<string, { label: string; receipts: Receipt[]; totalAmount: number }>();
 
     receipts.forEach((receipt) => {
-      const date = parsePurchaseDate(receipt);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
+      const { year, month } = getPurchaseYMD(receipt);
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+
       if (!groups.has(key)) {
-         const shortMonth = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
-         const capitalizedLabel = shortMonth + '/' + date.getFullYear();
+        // Rótulo "MMM/YYYY" sem instanciar Date para evitar deslocamento de fuso.
+        const MESES_BR = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+        const capitalizedLabel = `${MESES_BR[month - 1]}/${year}`;
         groups.set(key, { label: capitalizedLabel, receipts: [], totalAmount: 0 });
       }
 
