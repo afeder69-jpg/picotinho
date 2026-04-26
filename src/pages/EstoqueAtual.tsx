@@ -427,7 +427,8 @@ const EstoqueAtual = () => {
         if (item.id && item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
           historicoMap[item.id] = {
             ultimaCompraUsuario: {
-              data: item.created_at || item.updated_at, // NUNCA usar updated_at como data de compra; created_at é o fallback seguro
+              // FONTE ÚNICA de data: nota oficial via nota_id. Sem fallback para created_at/updated_at.
+              data: encontrarDataPorNotaId(item.nota_id) || null,
               preco: item.preco_unitario_ultimo,
               quantidade: 1
             },
@@ -2326,7 +2327,9 @@ const EstoqueAtual = () => {
                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
                                             
                                             // Data: priorizar nota real (via histórico), fallback created_at (nunca updated_at)
-                                            const dataRealCompra = histCompra?.data || item.created_at;
+                                            // FONTE ÚNICA de data: histórico (data oficial da nota via RPC) > nota vinculada (mapa nota_id).
+                                            // Nunca usar created_at/updated_at do estoque como data de compra.
+                                            const dataRealCompra = histCompra?.data || encontrarDataPorNotaId(item.nota_id);
                                             const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
                                             
                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
