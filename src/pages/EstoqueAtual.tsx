@@ -2387,10 +2387,10 @@ const EstoqueAtual = () => {
                                               return (
                                                 <div className="text-blue-600 italic text-sm">
                                                   ⚠️ Sem preços na área - usando sua última compra: {' '}
-                                                  {historicoProduto.ultimaCompraUsuario.data ? 
-                                                    formatDateSafe(historicoProduto.ultimaCompraUsuario.data) : 
-                                                    'Sem data'
-                                                  } - R$ {precoUltima.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoUltima * quantidade).toFixed(2)}
+                                                  {(() => {
+                                                    const dataNF = encontrarDataPorNotaId(item.nota_id);
+                                                    return dataNF ? formatDateSafe(dataNF) : 'Sem data';
+                                                  })()} - R$ {precoUltima.toFixed(2)}/{unidadeFormatada} - T: R$ {(precoUltima * quantidade).toFixed(2)}
                                                 </div>
                                               );
                                             }
