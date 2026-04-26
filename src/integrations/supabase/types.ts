@@ -1478,6 +1478,45 @@ export type Database = {
         }
         Relationships: []
       }
+      notificacoes_log: {
+        Row: {
+          canal: string
+          created_at: string
+          erro: string | null
+          id: string
+          nota_id: string
+          payload: Json | null
+          status: string
+          telefone: string | null
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          canal?: string
+          created_at?: string
+          erro?: string | null
+          id?: string
+          nota_id: string
+          payload?: Json | null
+          status: string
+          telefone?: string | null
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          canal?: string
+          created_at?: string
+          erro?: string | null
+          id?: string
+          nota_id?: string
+          payload?: Json | null
+          status?: string
+          telefone?: string | null
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       open_food_facts_controle: {
         Row: {
           com_imagem: boolean
@@ -3453,6 +3492,7 @@ export type Database = {
           pref_dicas: boolean
           pref_novidades: boolean
           pref_promocoes: boolean
+          pref_resumo_notas: boolean
           tipo: string
           updated_at: string
           usuario_id: string
@@ -3471,6 +3511,7 @@ export type Database = {
           pref_dicas?: boolean
           pref_novidades?: boolean
           pref_promocoes?: boolean
+          pref_resumo_notas?: boolean
           tipo?: string
           updated_at?: string
           usuario_id: string
@@ -3489,6 +3530,7 @@ export type Database = {
           pref_dicas?: boolean
           pref_novidades?: boolean
           pref_promocoes?: boolean
+          pref_resumo_notas?: boolean
           tipo?: string
           updated_at?: string
           usuario_id?: string
