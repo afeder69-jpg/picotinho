@@ -9,7 +9,7 @@ declare const EdgeRuntime: any;
 const BATCH_SIZE = 10;
 
 async function processarNotasEmBackground(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   jobId: string,
   notas: Array<{ id: string; usuario_id: string; dados_extraidos: any }>
 ) {

@@ -135,7 +135,7 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Erro ao enviar PDF' 
+        error: error instanceof Error ? error.message : 'Erro ao enviar PDF'
       }),
       {
         status: 400,
