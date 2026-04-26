@@ -159,9 +159,10 @@ serve(async (req) => {
     const seisAtras = new Date();
     seisAtras.setMonth(seisAtras.getMonth() - 6);
     
+    // FONTE ÚNICA de data: data oficial da NF (compra.data_emissao). Nunca usar created_at.
     const { data: notasUsuario, error: notasErr } = await supabase
       .from('notas_imagens')
-      .select('dados_extraidos, created_at')
+      .select('id, dados_extraidos, created_at')
       .eq('usuario_id', userId)
       .eq('processada', true)
       .not('dados_extraidos', 'is', null)
@@ -186,7 +187,8 @@ serve(async (req) => {
     for (const nota of notasUsuario || []) {
       const dados = nota.dados_extraidos as any;
       if (!dados?.itens) continue;
-      const dataCompra = extrairDataCompra(dados) || nota.created_at;
+      // FONTE ÚNICA: data oficial da NF. Sem fallback para nota.created_at.
+      const dataCompra = extrairDataCompra(dados);
       if (!dataCompra) continue;
 
       for (const item of dados.itens) {
