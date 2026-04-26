@@ -175,7 +175,7 @@ serve(async (req) => {
         }
 
         // 2c. Migrar estoque por produto_master_id (principal)
-        const { count: countEstoqueMaster, error: estMasterErr } = await supabase
+        const { data: countEstoqueMasterData, error: estMasterErr } = await supabase
           .from('estoque_app')
           .update({
             produto_master_id: produtoMantido.id,
