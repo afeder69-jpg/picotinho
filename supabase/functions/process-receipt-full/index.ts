@@ -1827,6 +1827,7 @@ serve(async (req) => {
         console.error(`❌ Erro ao buscar master para ${produto.produto_nome}:`, error.message);
         masterNaoEncontrados++;
       }
+    }; // fim do try/catch
     }; // fim do helper processarProdutoNormalizacao
 
     // 🛡️ FRENTE A3: paralelização em chunks de 5 (reduz tempo total ~5x para notas grandes).
