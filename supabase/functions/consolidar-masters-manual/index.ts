@@ -175,14 +175,15 @@ serve(async (req) => {
         }
 
         // 2c. Migrar estoque por produto_master_id (principal)
-        const { count: countEstoqueMaster, error: estMasterErr } = await supabase
+        const { data: countEstoqueMasterData, error: estMasterErr } = await supabase
           .from('estoque_app')
           .update({
             produto_master_id: produtoMantido.id,
             sku_global: produtoMantido.sku_global
           })
           .eq('produto_master_id', produtoRemover.id)
-          .select('*', { count: 'exact', head: true });
+          .select('id');
+        const countEstoqueMaster = countEstoqueMasterData?.length || 0;
 
         if (!estMasterErr) {
           estoquePorMasterId += countEstoqueMaster || 0;
