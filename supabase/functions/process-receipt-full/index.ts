@@ -1570,6 +1570,7 @@ serve(async (req) => {
 
     // Helper: processa UM produto (extraído do corpo do for original).
     const processarProdutoNormalizacao = async (produto: any) => {
+      try {
         // Limpar unidades de medida do nome para melhor matching
         const nomeLimpo = limparUnidadesMedida(produto.produto_nome);
         
