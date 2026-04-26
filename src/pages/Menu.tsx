@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+const RESET_STORAGE_USER_ID = 'ae5b5501-7f8a-46da-9cba-b9955a84e697';
 
 const Menu = () => {
   const navigate = useNavigate();
@@ -31,6 +32,41 @@ const Menu = () => {
   const [isMaster, setIsMaster] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userNickname, setUserNickname] = useState<string>('');
+  const [resettingStorage, setResettingStorage] = useState(false);
+
+  const handleResetStorage = async () => {
+    if (!confirm('Apagar TODOS os seus arquivos nos buckets receipts e receitas-imagens? Esta ação é irreversível.')) return;
+    setResettingStorage(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-meu-storage');
+      if (error) throw error;
+      console.log('reset-meu-storage:', data);
+
+      // Validação: lista os arquivos restantes do usuário em cada bucket
+      const buckets = ['receipts', 'receitas-imagens'];
+      const restantes: Record<string, number> = {};
+      for (const b of buckets) {
+        const { data: list } = await supabase.storage.from(b).list(RESET_STORAGE_USER_ID, { limit: 1000 });
+        restantes[b] = list?.length ?? 0;
+      }
+      const totalRestante = Object.values(restantes).reduce((a, c) => a + c, 0);
+      const removidos = data?.removed ?? {};
+      toast.success(
+        `Storage resetado. Removidos: receipts=${removidos.receipts ?? 0}, receitas-imagens=${removidos['receitas-imagens'] ?? 0}. Restantes: ${totalRestante}`,
+        { duration: 8000 }
+      );
+      if (totalRestante === 0) {
+        toast.success('✅ Validação OK: 0 arquivos seus no Storage.');
+      } else {
+        toast.error(`⚠️ Ainda restam ${totalRestante} arquivos: ${JSON.stringify(restantes)}`);
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Erro ao resetar storage: ${e.message ?? e}`);
+    } finally {
+      setResettingStorage(false);
+    }
+  };
 
   useEffect(() => {
     async function checkRoles() {
@@ -202,6 +238,30 @@ const Menu = () => {
       <div className="flex-1 px-6 pb-8">
         <div className="max-w-md mx-auto">
           
+          {/* Botão temporário: Reset Storage (apenas usuário específico) */}
+          {user?.id === RESET_STORAGE_USER_ID && (
+            <Card className="mb-6 border-2 border-destructive">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-destructive">⚠️ Reset Storage (temporário)</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Apaga seus arquivos em receipts e receitas-imagens. Não toca em produtos-master-fotos.
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleResetStorage}
+                    disabled={resettingStorage}
+                  >
+                    {resettingStorage ? 'Limpando...' : 'Executar'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Painel Master - Exclusivo */}
           {isMaster && (
             <Card 
