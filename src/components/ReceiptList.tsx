@@ -924,116 +924,78 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  // FONTE ÚNICA DE DATA DA NF: parsing textual (sem `new Date` em ISO),
+  // delegando a `extrairDataCompraISO` para evitar deslocamento por fuso.
+  // O input pode vir como ISO completo, "DD/MM/YYYY HH:MM:SS-03:00" ou "DD/MM/YYYY".
+  const isoDateOnlyFromString = (dateString: string): string => {
+    if (!dateString) return '';
+    const s = dateString.trim();
+    // ISO: pega só a parte da data, sem instanciar Date
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    // BR: DD/MM/YYYY[ ...]
+    const brMatch = s.split(/\s+/)[0].match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (brMatch) {
+      const [, d, m, y] = brMatch;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    // Última tentativa via helper canônico (cobre variações)
+    return extrairDataCompraISO({ compra: { data_emissao: s } });
+  };
+
+  // Extrai HH:MM textualmente, sem `new Date` (preserva hora oficial da NF).
+  const extrairHoraBR = (dateString: string): string => {
+    if (!dateString) return '';
+    const s = dateString.trim();
+    // ISO: YYYY-MM-DDTHH:MM[:SS][...]
+    const isoTime = s.match(/T(\d{2}):(\d{2})/);
+    if (isoTime) return `${isoTime[1]}:${isoTime[2]}`;
+    // BR: DD/MM/YYYY HH:MM[:SS][-03:00]
+    const brTime = s.match(/\s(\d{1,2}):(\d{2})/);
+    if (brTime) return `${brTime[1].padStart(2, '0')}:${brTime[2]}`;
+    return '';
+  };
+
+  const formatISODateToBR = (iso: string): string => {
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  };
+
   const formatPurchaseDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
-    
-    // Tenta diferentes formatos de data que podem vir da IA
-    let date: Date;
-    
-    // Se contém "T", é formato ISO
-    if (dateString.includes('T')) {
-      date = new Date(dateString);
-    }
-    // Se está no formato DD/MM/YYYY HH:MM:SS-03:00
-    else if (dateString.includes('/') && dateString.includes(':')) {
-      // Extrai a parte da data e hora
-      const [datePart, timePart] = dateString.split(' ');
-      const [day, month, year] = datePart.split('/');
-      const timeWithOffset = timePart.split('-')[0]; // Remove o offset
-      date = new Date(`${year}-${month}-${day}T${timeWithOffset}-03:00`);
-    }
-    // Se está no formato DD/MM/YYYY
-    else if (dateString.includes('/')) {
-      const [day, month, year] = dateString.split('/');
-      date = new Date(`${year}-${month}-${day}`);
-    }
-    // Fallback para outros formatos
-    else {
-      date = new Date(dateString);
-    }
-    
-    // Verifica se a data é válida
-    if (isNaN(date.getTime())) {
-      return dateString; // Retorna a string original se não conseguir converter
-    }
-    
-    return date.toLocaleDateString('pt-BR', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric' 
-    });
+    const iso = isoDateOnlyFromString(dateString);
+    const br = formatISODateToBR(iso);
+    return br || dateString;
   };
 
   const formatPurchaseDateTime = (dateString: string | null) => {
     if (!dateString) return 'N/A';
-    
-    // Tenta diferentes formatos de data que podem vir da IA
-    let date: Date;
-    
-    // Se contém "T", é formato ISO
-    if (dateString.includes('T')) {
-      date = new Date(dateString);
-    }
-    // Se está no formato DD/MM/YYYY HH:MM:SS-03:00
-    else if (dateString.includes('/') && dateString.includes(':')) {
-      // Extrai a parte da data e hora
-      const [datePart, timePart] = dateString.split(' ');
-      const [day, month, year] = datePart.split('/');
-      const timeWithOffset = timePart.split('-')[0]; // Remove o offset
-      date = new Date(`${year}-${month}-${day}T${timeWithOffset}-03:00`);
-    }
-    // Se está no formato DD/MM/YYYY
-    else if (dateString.includes('/')) {
-      const [day, month, year] = dateString.split('/');
-      date = new Date(`${year}-${month}-${day}`);
-    }
-    // Fallback para outros formatos
-    else {
-      date = new Date(dateString);
-    }
-    
-    // Verifica se a data é válida
-    if (isNaN(date.getTime())) {
-      return dateString; // Retorna a string original se não conseguir converter
-    }
-    
-    const formattedDate = date.toLocaleDateString('pt-BR', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric' 
-    });
-    
-    const formattedTime = date.toLocaleTimeString('pt-BR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-    
-    return `${formattedDate} às ${formattedTime}`;
+    const iso = isoDateOnlyFromString(dateString);
+    const br = formatISODateToBR(iso);
+    if (!br) return dateString;
+    const hora = extrairHoraBR(dateString);
+    return hora ? `${br} às ${hora}` : br;
   };
 
   const formatCurrency = (amount: number | null) =>
     !amount ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
 
-  // Helper: parse data de emissão da nota para um Date válido
-  const parsePurchaseDate = (receipt: Receipt): Date => {
-    const dateStr = receipt.dados_extraidos?.compra?.data_emissao 
-      || receipt.dados_extraidos?.dataCompra 
-      || receipt.purchase_date 
-      || receipt.created_at;
-    
-    if (!dateStr) return new Date(receipt.created_at);
+  // Helper: extrai (ano, mês 1-12, dia) da data oficial da NF — sem instanciar Date.
+  // FONTE ÚNICA: usa `extrairDataCompraISO` sobre os `dados_extraidos`.
+  // NUNCA cai em `created_at` para data da NF (somente como último recurso para não quebrar agrupamento).
+  const getPurchaseYMD = (receipt: Receipt): { year: number; month: number; day: number } => {
+    // 1) Fonte canônica via dados_extraidos
+    let iso = extrairDataCompraISO(receipt.dados_extraidos);
+    // 2) Fallback: purchase_date (já vem da própria data oficial em vários fluxos)
+    if (!iso && receipt.purchase_date) iso = isoDateOnlyFromString(receipt.purchase_date);
+    // 3) Último recurso: created_at (apenas para não quebrar o agrupamento visual)
+    if (!iso && receipt.created_at) iso = isoDateOnlyFromString(receipt.created_at);
 
-    let date: Date;
-    if (dateStr.includes('T')) {
-      date = new Date(dateStr);
-    } else if (dateStr.includes('/')) {
-      const [day, month, year] = dateStr.split(' ')[0].split('/');
-      date = new Date(`${year}-${month}-${day}`);
-    } else {
-      date = new Date(dateStr);
-    }
-
-    return isNaN(date.getTime()) ? new Date(receipt.created_at) : date;
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return { year: +m[1], month: +m[2], day: +m[3] };
+    // Garantia mínima
+    return { year: 1970, month: 1, day: 1 };
   };
 
   // Agrupar notas por mês/ano
