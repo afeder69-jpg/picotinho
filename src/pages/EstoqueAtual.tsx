@@ -1641,42 +1641,39 @@ const EstoqueAtual = () => {
     });
   };
 
-  // Função para formatar data de forma segura
+  // Função para formatar data de forma segura (timezone-neutra)
+  // IMPORTANTE: NÃO usar `new Date("YYYY-MM-DD")` para datas oficiais da NF —
+  // o JS interpreta como UTC e desloca 1 dia em fusos negativos (BR = UTC-3).
+  // A formatação é feita 100% textualmente para preservar a data oficial.
   const formatDateSafe = (dateString: string | null | undefined) => {
     try {
-      // Validar se a data não é nula ou indefinida
       if (!dateString || dateString === 'null' || dateString === 'undefined') {
-        console.warn('Data nula ou indefinida recebida:', dateString);
         return 'Sem data';
       }
 
-      // Converter para string se não for
-      const dateStr = String(dateString);
-      
-      // Log para debug
-      console.log('Formatando data:', dateStr);
+      const dateStr = String(dateString).trim();
+      if (!dateStr) return 'Sem data';
 
-      // Se a data tem formato "DD/MM/YYYY HH:mm:ss-TZ", converter para ISO
-      if (dateStr.includes('/') && dateStr.includes(' ')) {
-        const [datePart, timePart] = dateStr.split(' ');
-        const [day, month, year] = datePart.split('/');
-        const [time] = timePart.split('-'); // Remove timezone
-        const isoString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${time}`;
-        const formattedDate = new Date(isoString).toLocaleDateString('pt-BR');
-        console.log('Data formatada (formato DD/MM/YYYY):', formattedDate);
-        return formattedDate;
+      // 1) ISO: YYYY-MM-DD (com ou sem hora) → extrai partes textualmente
+      const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        const [, y, m, d] = isoMatch;
+        return `${d}/${m}/${y}`;
       }
-      
-      // Caso contrário, usar formato padrão
+
+      // 2) Brasileiro: DD/MM/YYYY (com ou sem hora/timezone) → já está no formato BR
+      const brMatch = dateStr.split(/\s+/)[0].match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (brMatch) {
+        const [, d, m, y] = brMatch;
+        return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+      }
+
+      // 3) Fallback apenas para formatos exóticos não reconhecidos
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) {
-        console.warn('Data inválida:', dateStr);
         return 'Data inválida';
       }
-      
-      const formattedDate = date.toLocaleDateString('pt-BR');
-      console.log('Data formatada (formato padrão):', formattedDate);
-      return formattedDate;
+      return date.toLocaleDateString('pt-BR');
     } catch (error) {
       console.error('Erro ao formatar data:', dateString, error);
       return 'Data inválida';
