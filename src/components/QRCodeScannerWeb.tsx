@@ -68,6 +68,10 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   }, [processAccessKey]);
 
   const stopScanner = useCallback(async () => {
+    if (helpBannerTimerRef.current) {
+      clearTimeout(helpBannerTimerRef.current);
+      helpBannerTimerRef.current = null;
+    }
     if (scannerRef.current) {
       try {
         const state = scannerRef.current.getState();
@@ -84,7 +88,9 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     setIsInitializing(false);
     setTorchEnabled(false);
     setTorchSupported(false);
+    setShowHelpBanner(false);
     hasScannedRef.current = false;
+    decodeFailuresRef.current = 0;
   }, []);
 
   const handleScanSuccess = useCallback((decodedText: string) => {
