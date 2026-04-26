@@ -2339,8 +2339,8 @@ serve(async (req) => {
         total: isFinite(totalNotaResumo) ? totalNotaResumo : null,
         quantidade_itens: inserted.length,
       }
-    }).then(({ error: notifErr }: any) => {
-      if (notifErr) console.error('⚠️ Falha ao notificar (sucesso) WhatsApp:', notifErr);
+    }).then((res: any) => {
+      if (res?.error) console.error('⚠️ Falha ao notificar (sucesso) WhatsApp:', res.error);
     }).catch((e: any) => {
       console.error('⚠️ Exceção ao invocar notificação (sucesso):', e);
     });
