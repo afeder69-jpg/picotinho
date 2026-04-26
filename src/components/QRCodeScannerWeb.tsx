@@ -143,21 +143,6 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     onScanSuccess(decodedText);
   }, [mode, onScanSuccess, processAccessKey, stopScanner]);
 
-  const applyAdvancedCameraSettings = useCallback(async (scanner: Html5Qrcode) => {
-    try {
-      const capabilities = scanner.getRunningTrackCapabilities() as any;
-      const settings = (scanner.getRunningTrackSettings?.() as any) || {};
-
-      console.log('[SCANNER-DIAG] 📷 Camera capabilities', {
-        torch: !!capabilities?.torch,
-        zoom: capabilities?.zoom,
-        focusMode: capabilities?.focusMode,
-        focusDistance: capabilities?.focusDistance,
-        width: settings.width,
-        height: settings.height,
-        frameRate: settings.frameRate,
-      });
-
   const pollTorchCapability = useCallback((attempt = 0) => {
     if (isIOS) {
       console.log('[SCANNER-DIAG-TORCH] iOS detectado — torch indisponível via WebRTC');
