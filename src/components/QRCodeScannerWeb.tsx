@@ -43,6 +43,26 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const scanStartTimeRef = useRef<number>(0);
   const decodeFailuresRef = useRef<number>(0);
   const helpBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const torchPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+
+  // iOS Safari não suporta torch via WebRTC
+  const isIOS = typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1));
+
+  // Obtém o MediaStreamTrack ativo diretamente do <video> renderizado pela lib
+  const getActiveVideoTrack = useCallback((): MediaStreamTrack | null => {
+    try {
+      const container = document.getElementById(SCANNER_ID);
+      const video = container?.querySelector('video') as HTMLVideoElement | null;
+      const stream = video?.srcObject as MediaStream | null;
+      const track = stream?.getVideoTracks?.()[0] ?? null;
+      return track ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const processAccessKey = useCallback((chaveAcesso: string, source: 'manual' | 'barcode') => {
     const chaveLimpa = limparChaveAcesso(chaveAcesso);
