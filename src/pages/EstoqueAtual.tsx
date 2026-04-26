@@ -20,6 +20,7 @@ import PageHeader from '@/components/PageHeader';
 import { normalizarCategoria, categoriasEquivalentes, ordemCategorias, categoriasNormalizadas } from '@/lib/categorias';
 import { useIsMobile } from '@/hooks/use-mobile';
 import SwipeableEstoqueItem from '@/components/estoque/SwipeableEstoqueItem';
+import { extrairDataCompraISO } from '@/lib/notasFiscais';
 
 interface EstoqueItem {
   id?: string;
@@ -53,6 +54,7 @@ interface EstoqueItem {
   imagem_url?: string | null;
   produto_candidato_id?: string | null; // 🔥 NOVO: Link para produto aguardando normalização
   produto_master_id?: string | null; // Para identificar produtos normalizados
+  nota_id?: string | null; // FONTE ÚNICA para data oficial da compra (via mapa datasNotasPorId)
 }
 
 interface ProdutoSugestao {
