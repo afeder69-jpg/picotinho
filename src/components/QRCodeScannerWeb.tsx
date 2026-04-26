@@ -97,6 +97,14 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     if (hasScannedRef.current) return;
     hasScannedRef.current = true;
 
+    const elapsed = scanStartTimeRef.current ? Date.now() - scanStartTimeRef.current : 0;
+    console.log('[SCANNER-DIAG] ✅ Decode OK', {
+      mode,
+      tempo_ate_leitura_ms: elapsed,
+      falhas_silenciosas: decodeFailuresRef.current,
+      tamanho_texto: decodedText?.length ?? 0,
+    });
+
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
     if (mode === 'barcode') {
@@ -113,15 +121,62 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const applyAdvancedCameraSettings = useCallback(async (scanner: Html5Qrcode) => {
     try {
       const capabilities = scanner.getRunningTrackCapabilities() as any;
+      const settings = (scanner.getRunningTrackSettings?.() as any) || {};
+
+      console.log('[SCANNER-DIAG] 📷 Camera capabilities', {
+        torch: !!capabilities?.torch,
+        zoom: capabilities?.zoom,
+        focusMode: capabilities?.focusMode,
+        focusDistance: capabilities?.focusDistance,
+        width: settings.width,
+        height: settings.height,
+        frameRate: settings.frameRate,
+      });
+
       if (capabilities?.torch) setTorchSupported(true);
+
       const advancedConstraints: any[] = [];
-      if (capabilities?.focusMode?.includes('continuous')) advancedConstraints.push({ focusMode: 'continuous' });
-      if (capabilities?.exposureMode?.includes('continuous')) advancedConstraints.push({ exposureMode: 'continuous' });
+      if (capabilities?.focusMode?.includes?.('continuous')) {
+        advancedConstraints.push({ focusMode: 'continuous' });
+      }
+      if (capabilities?.exposureMode?.includes?.('continuous')) {
+        advancedConstraints.push({ exposureMode: 'continuous' });
+      }
       if (advancedConstraints.length > 0) {
-        await scanner.applyVideoConstraints({ advanced: advancedConstraints } as any);
+        try {
+          await scanner.applyVideoConstraints({ advanced: advancedConstraints } as any);
+        } catch (e) {
+          console.log('[SCANNER-DIAG] ⚠️ focus/exposure não aplicados:', e);
+        }
+      }
+
+      // Zoom automático ~2x quando suportado (ajuda em QRs pequenos)
+      try {
+        const zoomCap = capabilities?.zoom;
+        if (zoomCap && typeof zoomCap.max === 'number') {
+          const desired = Math.min(2, zoomCap.max);
+          if (desired >= (zoomCap.min ?? 1)) {
+            await scanner.applyVideoConstraints({ advanced: [{ zoom: desired }] } as any);
+            console.log('[SCANNER-DIAG] 🔍 Zoom aplicado:', desired);
+          }
+        }
+      } catch (e) {
+        console.log('[SCANNER-DIAG] ⚠️ Zoom não suportado:', e);
+      }
+
+      // Macro: focusDistance perto do mínimo
+      try {
+        const fd = capabilities?.focusDistance;
+        if (fd && typeof fd.min === 'number') {
+          const desired = Math.max(fd.min, Math.min(0.1, fd.max ?? 0.1));
+          await scanner.applyVideoConstraints({ advanced: [{ focusMode: 'manual', focusDistance: desired }] } as any);
+          console.log('[SCANNER-DIAG] 🎯 Macro focus aplicado:', desired);
+        }
+      } catch (e) {
+        console.log('[SCANNER-DIAG] ⚠️ focusDistance não suportado:', e);
       }
     } catch (e) {
-      console.log('⚠️ [CAMERA] Configurações avançadas não suportadas:', e);
+      console.log('[SCANNER-DIAG] ⚠️ Capabilities indisponíveis:', e);
     }
   }, []);
 
@@ -129,6 +184,8 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
     if (scannerRef.current || hasScannedRef.current) return;
     try {
       setIsInitializing(true);
+      setShowHelpBanner(false);
+      decodeFailuresRef.current = 0;
       const formatsToSupport = mode === 'barcode' ? BARCODE_FORMATS_TO_SUPPORT : QR_FORMATS_TO_SUPPORT;
       const scanner = new Html5Qrcode(SCANNER_ID, {
         formatsToSupport,
@@ -138,27 +195,48 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       scannerRef.current = scanner;
 
       const config = {
-        fps: 15,
+        fps: 24,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
           const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const boxSize = Math.floor(minEdge * 0.75);
+          const boxSize = Math.floor(minEdge * 0.62);
           return { width: boxSize, height: boxSize };
         },
         aspectRatio: 1.0,
         disableFlip: true,
+        videoConstraints: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          frameRate: { ideal: 30, min: 24 },
+        },
         experimentalFeatures: { useBarCodeDetectorIfSupported: true }
       };
 
+      scanStartTimeRef.current = Date.now();
+
       await scanner.start(
         { facingMode: 'environment' },
-        config,
+        config as any,
         handleScanSuccess,
-        () => {}
+        () => {
+          decodeFailuresRef.current += 1;
+        }
       );
       await applyAdvancedCameraSettings(scanner);
       setIsScanning(true);
       setIsInitializing(false);
       if (navigator.vibrate) navigator.vibrate(50);
+
+      // Banner de ajuda após 8s sem leitura
+      if (helpBannerTimerRef.current) clearTimeout(helpBannerTimerRef.current);
+      helpBannerTimerRef.current = setTimeout(() => {
+        if (!hasScannedRef.current) {
+          setShowHelpBanner(true);
+          console.log('[SCANNER-DIAG] ⏱️ 8s sem leitura', {
+            falhas_silenciosas: decodeFailuresRef.current,
+          });
+        }
+      }, 8000);
     } catch (error) {
       console.error('❌ [SCANNER] Erro ao iniciar:', error);
       setIsInitializing(false);
