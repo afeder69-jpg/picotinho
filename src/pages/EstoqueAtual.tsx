@@ -20,6 +20,7 @@ import PageHeader from '@/components/PageHeader';
 import { normalizarCategoria, categoriasEquivalentes, ordemCategorias, categoriasNormalizadas } from '@/lib/categorias';
 import { useIsMobile } from '@/hooks/use-mobile';
 import SwipeableEstoqueItem from '@/components/estoque/SwipeableEstoqueItem';
+import { extrairDataCompraISO } from '@/lib/notasFiscais';
 
 interface EstoqueItem {
   id?: string;
@@ -53,6 +54,7 @@ interface EstoqueItem {
   imagem_url?: string | null;
   produto_candidato_id?: string | null; // 🔥 NOVO: Link para produto aguardando normalização
   produto_master_id?: string | null; // Para identificar produtos normalizados
+  nota_id?: string | null; // FONTE ÚNICA para data oficial da compra (via mapa datasNotasPorId)
 }
 
 interface ProdutoSugestao {
@@ -65,7 +67,9 @@ interface ProdutoSugestao {
 const EstoqueAtual = () => {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [precosAtuais, setPrecosAtuais] = useState<any[]>([]);
-  const [datasNotasFiscais, setDatasNotasFiscais] = useState<{[key: string]: string}>({});
+  // FONTE ÚNICA de data da compra: mapa nota_id → data oficial (YYYY-MM-DD).
+  // NUNCA usar created_at/updated_at/processing_started_at como data de compra.
+  const [datasNotasPorId, setDatasNotasPorId] = useState<{[notaId: string]: string}>({});
   const [historicoPrecos, setHistoricoPrecos] = useState<{[key: string]: any}>({});
   const [loading, setLoading] = useState(true);
   const [loadingPrecosAtuais, setLoadingPrecosAtuais] = useState(false);
@@ -423,7 +427,8 @@ const EstoqueAtual = () => {
         if (item.id && item.preco_unitario_ultimo && item.preco_unitario_ultimo > 0) {
           historicoMap[item.id] = {
             ultimaCompraUsuario: {
-              data: item.created_at || item.updated_at, // NUNCA usar updated_at como data de compra; created_at é o fallback seguro
+              // FONTE ÚNICA de data: nota oficial via nota_id. Sem fallback para created_at/updated_at.
+              data: encontrarDataPorNotaId(item.nota_id) || null,
               preco: item.preco_unitario_ultimo,
               quantidade: 1
             },
@@ -531,42 +536,25 @@ const EstoqueAtual = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Buscar todas as notas fiscais processadas do usuário
+      // FONTE ÚNICA de data: indexar por nota_id usando a data OFICIAL da NF
+      // (dados_extraidos.compra.data_emissao). NUNCA usar created_at/updated_at.
       const { data: notasImagens, error } = await supabase
         .from('notas_imagens')
-        .select('dados_extraidos')
+        .select('id, dados_extraidos')
         .eq('usuario_id', user.id)
         .eq('processada', true)
         .not('dados_extraidos', 'is', null);
 
       if (error) throw error;
 
-      const datasMap: {[key: string]: string} = {};
-      
+      const datasMap: {[notaId: string]: string} = {};
       notasImagens?.forEach(nota => {
-        const dadosExtraidos = nota.dados_extraidos as any;
-        if (dadosExtraidos?.itens) {
-          // Buscar data da compra em várias estruturas possíveis
-          const dataCompra = dadosExtraidos.compra?.data_emissao || 
-                           dadosExtraidos.compra?.data_compra ||
-                           dadosExtraidos.dataCompra ||
-                           dadosExtraidos.data_emissao;
-          
-          dadosExtraidos.itens.forEach((item: any) => {
-            const nomeProduto = item.descricao || item.nome;
-            if (nomeProduto && dataCompra) {
-              // Manter apenas a data mais recente para cada produto
-              if (!datasMap[nomeProduto] || new Date(dataCompra) > new Date(datasMap[nomeProduto])) {
-                datasMap[nomeProduto] = dataCompra;
-              }
-            }
-          });
-        }
+        const dataOficial = extrairDataCompraISO(nota.dados_extraidos as any);
+        if (dataOficial) datasMap[nota.id] = dataOficial;
       });
 
-      console.log('📅 LOAD DATAS: Datas das notas fiscais carregadas:', datasMap);
-      console.log('📅 LOAD DATAS: Total de produtos com data:', Object.keys(datasMap).length);
-      setDatasNotasFiscais(datasMap);
+      console.log(`📅 Datas oficiais carregadas: ${Object.keys(datasMap).length} notas`);
+      setDatasNotasPorId(datasMap);
     } catch (error) {
       console.error('Erro ao carregar datas das notas fiscais:', error);
     }
@@ -590,55 +578,11 @@ const EstoqueAtual = () => {
     return isManual;
   };
 
-  // Função para encontrar a data da nota fiscal de um produto
-  const encontrarDataNotaFiscal = (nomeProduto: string) => {
-    console.log(`🔍 BUSCA DATA: produto="${nomeProduto}"`);
-    console.log(`📅 BUSCA DATA: datasNotasFiscais disponíveis:`, Object.keys(datasNotasFiscais));
-    console.log(`📅 BUSCA DATA: objeto completo:`, datasNotasFiscais);
-    
-    // Buscar correspondência exata primeiro
-    if (datasNotasFiscais[nomeProduto]) {
-      console.log(`✅ BUSCA DATA: Encontrou data exata para "${nomeProduto}": ${datasNotasFiscais[nomeProduto]}`);
-      return datasNotasFiscais[nomeProduto];
-    }
-    
-    // Normalizar nome do produto para busca
-    const nomeProdutoNormalizado = nomeProduto.toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim()
-      // Remover unidades de medida comuns
-      .replace(/\b(kg|g|ml|l|un|unidade|granel)\b/g, '')
-      .trim();
-    
-    // Buscar por correspondência parcial mais inteligente
-    for (const [produto, data] of Object.entries(datasNotasFiscais)) {
-      const produtoNormalizado = produto.toLowerCase()
-        .replace(/\s+/g, ' ')
-        .trim()
-        // Remover unidades de medida comuns
-        .replace(/\b(kg|g|ml|l|un|unidade|granel)\b/g, '')
-        .trim();
-      
-      // Verificar se as palavras principais coincidem
-      const palavrasProdutoEstoque = nomeProdutoNormalizado.split(' ').filter(p => p.length > 2);
-      const palavrasProdutoNota = produtoNormalizado.split(' ').filter(p => p.length > 2);
-      
-      let coincidencias = 0;
-      palavrasProdutoEstoque.forEach(palavra => {
-        if (palavrasProdutoNota.some(p => p.includes(palavra) || palavra.includes(p))) {
-          coincidencias++;
-        }
-      });
-      
-      // Se pelo menos 60% das palavras coincidem
-      if (coincidencias >= Math.max(1, Math.floor(palavrasProdutoEstoque.length * 0.6))) {
-        console.log(`✅ Encontrou data por similaridade para "${nomeProduto}" -> "${produto}": ${data}`);
-        return data;
-      }
-    }
-    
-    console.log(`❌ Não encontrou data para "${nomeProduto}"`);
-    return null;
+  // FONTE ÚNICA: data oficial da NF via nota_id. Sem fallback para created_at/updated_at.
+  // Retorna null quando não há nota vinculada ou data oficial — chamador exibe "Sem data".
+  const encontrarDataPorNotaId = (notaId: string | null | undefined): string | null => {
+    if (!notaId) return null;
+    return datasNotasPorId[notaId] || null;
   };
 
   // Usa normalizarParaBusca centralizada de utils.ts
@@ -850,6 +794,8 @@ const EstoqueAtual = () => {
             imagem_url: imagemAtualizada,
             // Preservar master_id do mais recente
             produto_master_id: itemMaisRecente ? (item.produto_master_id || itemExistente.produto_master_id) : (itemExistente.produto_master_id || item.produto_master_id),
+            // Preservar nota_id do item MAIS RECENTE (fonte única para data oficial da compra)
+            nota_id: itemMaisRecente ? (item.nota_id ?? itemExistente.nota_id) : (itemExistente.nota_id ?? item.nota_id),
           });
         } else {
           // Produto novo, adicionar (INCLUINDO produtos com quantidade zero)
@@ -2381,7 +2327,9 @@ const EstoqueAtual = () => {
                                             const totalExibir = (precoExibir * quantidade).toFixed(2);
                                             
                                             // Data: priorizar nota real (via histórico), fallback created_at (nunca updated_at)
-                                            const dataRealCompra = histCompra?.data || item.created_at;
+                                            // FONTE ÚNICA de data: histórico (data oficial da nota via RPC) > nota vinculada (mapa nota_id).
+                                            // Nunca usar created_at/updated_at do estoque como data de compra.
+                                            const dataRealCompra = histCompra?.data || encontrarDataPorNotaId(item.nota_id);
                                             const dataExibir = dataRealCompra ? formatDateSafe(dataRealCompra) : 'Sem data';
                                             
                                             return `${dataExibir} - R$ ${precoExibir.toFixed(2)}/${unidadeFormatada} - T: R$ ${totalExibir}`;
