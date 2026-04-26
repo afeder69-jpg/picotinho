@@ -26,7 +26,11 @@ serve(async (req) => {
       estabelecimentoNome, 
       dataCompra, 
       horaCompra,
-      userId 
+      userId,
+      notaImagemId,        // ✅ obrigatório para validação contra dados_extraidos.itens
+      ean,                 // ✅ EAN do item (preferencial para match)
+      itemQuantidade,      // ✅ qtd do item para validação
+      produtoMasterId,     // ✅ se já resolvido pelo chamador
     } = await req.json();
 
     // ✅ Normalizar CNPJ imediatamente (remover formatação)
