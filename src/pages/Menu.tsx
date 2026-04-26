@@ -238,6 +238,30 @@ const Menu = () => {
       <div className="flex-1 px-6 pb-8">
         <div className="max-w-md mx-auto">
           
+          {/* Botão temporário: Reset Storage (apenas usuário específico) */}
+          {user?.id === RESET_STORAGE_USER_ID && (
+            <Card className="mb-6 border-2 border-destructive">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-destructive">⚠️ Reset Storage (temporário)</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Apaga seus arquivos em receipts e receitas-imagens. Não toca em produtos-master-fotos.
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleResetStorage}
+                    disabled={resettingStorage}
+                  >
+                    {resettingStorage ? 'Limpando...' : 'Executar'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Painel Master - Exclusivo */}
           {isMaster && (
             <Card 
