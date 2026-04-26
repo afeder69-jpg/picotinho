@@ -36,9 +36,13 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   const [isInitializing, setIsInitializing] = useState(true);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
-  
+  const [showHelpBanner, setShowHelpBanner] = useState(false);
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScannedRef = useRef(false);
+  const scanStartTimeRef = useRef<number>(0);
+  const decodeFailuresRef = useRef<number>(0);
+  const helpBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const processAccessKey = useCallback((chaveAcesso: string, source: 'manual' | 'barcode') => {
     const chaveLimpa = limparChaveAcesso(chaveAcesso);
