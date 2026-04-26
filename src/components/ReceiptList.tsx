@@ -1505,7 +1505,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                         {selectedReceipt.purchase_date && (
                           <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
                             <span className="text-muted-foreground">Data da compra:</span>
-                            <span>{new Date(selectedReceipt.purchase_date).toLocaleDateString('pt-BR')}</span>
+                            <span>{formatPurchaseDate(selectedReceipt.purchase_date)}</span>
                           </div>
                         )}
                         <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
