@@ -182,7 +182,8 @@ serve(async (req) => {
             sku_global: produtoMantido.sku_global
           })
           .eq('produto_master_id', produtoRemover.id)
-          .select('*', { count: 'exact', head: true });
+          .select('id');
+        const countEstoqueMaster = countEstoqueMasterData?.length || 0;
 
         if (!estMasterErr) {
           estoquePorMasterId += countEstoqueMaster || 0;
