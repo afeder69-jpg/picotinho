@@ -192,90 +192,45 @@ serve(async (req) => {
     }
 
     if (deveAtualizar) {
-      // 4. Atualizar/inserir preço atual (com normalização e user_id)
+      // ✅ Gravação centralizada via gravarPrecoSeguro (NUNCA gravar direto em precos_atuais)
       const produtoNomeNormalizado = normalizarNomeProduto(produtoNome);
-      
-      // Resolve produto_master_id via estoque_app or candidatos
-      let produtoMasterId: string | null = null;
-      
-      // Try via estoque_app first (most reliable)
-      const { data: estoqueMatch } = await supabase
-        .from('estoque_app')
-        .select('produto_master_id')
-        .eq('user_id', userId)
-        .ilike('produto_nome', produtoNomeNormalizado)
-        .not('produto_master_id', 'is', null)
-        .limit(1)
-        .maybeSingle();
-      
-      if (estoqueMatch?.produto_master_id) {
-        produtoMasterId = estoqueMatch.produto_master_id;
-      } else {
-        // Fallback 2: busca direta no catálogo master por nome_padrao (match exato)
-        const { data: masterMatch, count: masterCount } = await supabase
-          .from('produtos_master_global')
-          .select('id', { count: 'exact' })
-          .eq('nome_padrao', produtoNomeNormalizado)
-          .limit(2);
-        
-        if (masterCount === 1 && masterMatch?.[0]?.id) {
-          produtoMasterId = masterMatch[0].id;
-        } else {
-          // Fallback 3: via candidatos normalizacao aprovados
-          const { data: candidatoMatch } = await supabase
-            .from('produtos_candidatos_normalizacao')
-            .select('sugestao_produto_master')
-            .ilike('texto_original', produtoNomeNormalizado)
-            .not('sugestao_produto_master', 'is', null)
-            .in('status', ['auto_aprovado', 'aprovado'])
-            .limit(1)
-            .maybeSingle();
-          
-          if (candidatoMatch?.sugestao_produto_master) {
-            produtoMasterId = candidatoMatch.sugestao_produto_master;
-          }
-        }
-      }
-      
-      console.log(`🔗 produto_master_id resolvido: ${produtoMasterId || 'null'} para "${produtoNomeNormalizado}"`);
-      
-      const upsertData: any = {
-        produto_nome: produtoNomeNormalizado,
-        estabelecimento_cnpj: cnpjNormalizado,
-        estabelecimento_nome: estabelecimentoNome,
-        valor_unitario: precoUnitario,
-        data_atualizacao: dataNovaCompra.toISOString(),
-        user_id: userId
-      };
-      
-      if (produtoMasterId) {
-        upsertData.produto_master_id = produtoMasterId;
-      }
-      
-      const { data: precoAtualizado, error: erroUpdate } = await supabase
-        .from('precos_atuais')
-        .upsert(upsertData, {
-          onConflict: 'produto_nome,estabelecimento_cnpj'
-        })
-        .select();
 
-      if (erroUpdate) {
-        console.error('Erro ao atualizar preço atual:', erroUpdate);
-        throw erroUpdate;
+      const result = await gravarPrecoSeguro(supabase, {
+        produtoMasterId: produtoMasterId ?? null,
+        ean: ean ?? null,
+        produtoNome: produtoNomeNormalizado,
+        produtoNomeNormalizado,
+        valorUnitario: precoUnitario,
+        estabelecimentoCnpj: cnpjNormalizado,
+        estabelecimentoNome,
+        dataAtualizacao: dataNovaCompra.toISOString(),
+        userId,
+        notaImagemId: notaImagemId ?? compraId ?? null,
+        itemDescricao: produtoNome,
+        itemQuantidade: itemQuantidade ?? null,
+      });
+
+      if (!result.ok) {
+        console.warn(`⚠️ gravarPrecoSeguro recusou: ${result.motivo} (produto="${produtoNome}", valor=${precoUnitario})`);
+        return new Response(JSON.stringify({
+          success: false,
+          message: `Preço não gravado: ${result.motivo}`,
+          motivo: result.motivo,
+          compraId,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
-      console.log(apenasRefreshData ? '🔄 Apenas data_atualizacao refrescada (mesmo preço):' : '✅ Preço atual atualizado:', precoAtualizado);
-
-      // ✅ CONFORME MANUAL DE OPERAÇÕES: Preço Atual é calculado dinamicamente por área
-      // Cada usuário terá seu "Preço Atual" baseado nos precos_atuais filtrados por SUA área
-      // Não aplicamos preços globalmente - cada usuário consulta sua área individualmente
-      console.log('✅ Preço atualizado em precos_atuais - será exibido dinamicamente por área');
+      console.log(apenasRefreshData ? '🔄 Apenas data_atualizacao refrescada (mesmo preço)' : '✅ Preço atual atualizado via gravarPrecoSeguro', result);
 
       return new Response(JSON.stringify({
         success: true,
         message: 'Preço atual atualizado com sucesso',
-        precoAtualizado: precoAtualizado?.[0],
-        compraId
+        precoId: result.precoId,
+        produtoMasterId: result.produtoMasterId,
+        compraId,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
