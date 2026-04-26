@@ -1677,6 +1677,134 @@ export type Database = {
           },
         ]
       }
+      precos_atuais_auditoria: {
+        Row: {
+          classificacao: string
+          created_at: string
+          data_atualizacao: string | null
+          estabelecimento_cnpj: string | null
+          estabelecimento_nome: string | null
+          evidencia: Json | null
+          id: string
+          item_match: Json | null
+          job_id: string
+          motivo: string | null
+          nota_imagem_id: string | null
+          preco_atual_id: string
+          produto_master_id: string | null
+          produto_nome: string | null
+          replicacao_count: number | null
+          user_id: string | null
+          valor_unitario: number | null
+        }
+        Insert: {
+          classificacao: string
+          created_at?: string
+          data_atualizacao?: string | null
+          estabelecimento_cnpj?: string | null
+          estabelecimento_nome?: string | null
+          evidencia?: Json | null
+          id?: string
+          item_match?: Json | null
+          job_id: string
+          motivo?: string | null
+          nota_imagem_id?: string | null
+          preco_atual_id: string
+          produto_master_id?: string | null
+          produto_nome?: string | null
+          replicacao_count?: number | null
+          user_id?: string | null
+          valor_unitario?: number | null
+        }
+        Update: {
+          classificacao?: string
+          created_at?: string
+          data_atualizacao?: string | null
+          estabelecimento_cnpj?: string | null
+          estabelecimento_nome?: string | null
+          evidencia?: Json | null
+          id?: string
+          item_match?: Json | null
+          job_id?: string
+          motivo?: string | null
+          nota_imagem_id?: string | null
+          preco_atual_id?: string
+          produto_master_id?: string | null
+          produto_nome?: string | null
+          replicacao_count?: number | null
+          user_id?: string | null
+          valor_unitario?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "precos_atuais_auditoria_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "precos_atuais_auditoria_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      precos_atuais_auditoria_jobs: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          erro: string | null
+          finished_at: string | null
+          id: string
+          parametros: Json | null
+          resumo: Json | null
+          started_at: string
+          status: string
+          total_analisados: number
+          total_legitimos: number
+          total_master_invalido: number
+          total_nota_nao_encontrada: number
+          total_nota_sem_item: number
+          total_replicacao_cruzada: number
+          total_suspeitos: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          erro?: string | null
+          finished_at?: string | null
+          id?: string
+          parametros?: Json | null
+          resumo?: Json | null
+          started_at?: string
+          status?: string
+          total_analisados?: number
+          total_legitimos?: number
+          total_master_invalido?: number
+          total_nota_nao_encontrada?: number
+          total_nota_sem_item?: number
+          total_replicacao_cruzada?: number
+          total_suspeitos?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          erro?: string | null
+          finished_at?: string | null
+          id?: string
+          parametros?: Json | null
+          resumo?: Json | null
+          started_at?: string
+          status?: string
+          total_analisados?: number
+          total_legitimos?: number
+          total_master_invalido?: number
+          total_nota_nao_encontrada?: number
+          total_nota_sem_item?: number
+          total_replicacao_cruzada?: number
+          total_suspeitos?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       precos_atuais_contaminados_backup: {
         Row: {
           audit_run_id: string | null
