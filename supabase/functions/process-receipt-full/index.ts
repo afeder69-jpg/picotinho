@@ -1570,6 +1570,7 @@ serve(async (req) => {
 
     // Helper: processa UM produto (extraído do corpo do for original).
     const processarProdutoNormalizacao = async (produto: any) => {
+      try {
         // Limpar unidades de medida do nome para melhor matching
         const nomeLimpo = limparUnidadesMedida(produto.produto_nome);
         
@@ -1826,6 +1827,7 @@ serve(async (req) => {
         console.error(`❌ Erro ao buscar master para ${produto.produto_nome}:`, error.message);
         masterNaoEncontrados++;
       }
+    } // fim do try/catch
     }; // fim do helper processarProdutoNormalizacao
 
     // 🛡️ FRENTE A3: paralelização em chunks de 5 (reduz tempo total ~5x para notas grandes).
@@ -2315,34 +2317,6 @@ serve(async (req) => {
 
     const totalFinanceiro = inserted.reduce((acc: number, it: any) => acc + it.quantidade * it.preco_unitario_ultimo, 0);
 
-    // 📲 [FIRE-AND-FORGET] Notificar usuário via WhatsApp com resumo da nota processada.
-    // Não usar await: jamais deve atrasar ou bloquear o retorno do processamento.
-    const _de: any = dadosExtraidos || {};
-    const totalNotaResumo = Number(
-      _de?.compra?.valor_total ?? _de?.total ?? _de?.valor_total ?? totalFinanceiro
-    );
-    const mercadoResumo =
-      _de?.estabelecimento?.nome ||
-      _de?.supermercado?.nome ||
-      _de?.emitente?.nome ||
-      _de?.nome_estabelecimento ||
-      null;
-
-    supabase.functions.invoke('enviar-resumo-whatsapp-nota', {
-      body: {
-        nota_id: finalNotaId,
-        user_id: nota.usuario_id,
-        tipo: 'resumo_nota_processada',
-        mercado: mercadoResumo,
-        total: isFinite(totalNotaResumo) ? totalNotaResumo : null,
-        quantidade_itens: inserted.length,
-      }
-    }).then(function (res: any) {
-      if (res && res.error) console.error('⚠️ Falha ao notificar (sucesso) WhatsApp:', res.error);
-    }).catch(function (e: any) {
-      console.error('⚠️ Exceção ao invocar notificação (sucesso):', e);
-    });
-
     return new Response(
       JSON.stringify({
         success: true,
@@ -2353,41 +2327,6 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-    } catch (error: any) {
-      console.error("❌ Erro geral:", error?.message || error);
-      
-      // 🔓 Liberar lock em caso de erro
-      await supabase
-        .from("notas_imagens")
-        .update({ processing_started_at: null })
-        .eq("id", finalNotaId);
-
-      // 📲 [FIRE-AND-FORGET] Notificar usuário sobre falha final no processamento.
-      const { data: notaInfo } = await supabase
-        .from("notas_imagens")
-        .select("usuario_id")
-        .eq("id", finalNotaId)
-        .maybeSingle();
-
-      if (notaInfo && notaInfo.usuario_id) {
-        supabase.functions.invoke('enviar-resumo-whatsapp-nota', {
-          body: {
-            nota_id: finalNotaId,
-            user_id: notaInfo.usuario_id,
-            tipo: 'falha_processamento_nota',
-          }
-        }).then(function (res: any) {
-          if (res && res.error) console.error('⚠️ Falha ao notificar (falha) WhatsApp:', res.error);
-        }).catch(function (e: any) {
-          console.error('⚠️ Exceção ao invocar notificação (falha):', e);
-        });
-      }
-
-      return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
   } catch (error: any) {
     console.error("❌ Erro crítico:", error?.message || error);
     return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
