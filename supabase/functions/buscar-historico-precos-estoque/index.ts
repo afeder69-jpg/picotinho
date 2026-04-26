@@ -321,19 +321,31 @@ serve(async (req) => {
         }
       }
 
-      // Fallback: usar preço do próprio estoque se não encontrou nas notas
-      // CORREÇÃO: usar created_at (data de entrada no estoque), NUNCA updated_at
+      // Fallback: usar preço do próprio estoque se não encontrou nas notas.
+      // FONTE ÚNICA de data: data oficial da NF vinculada (via nota_id). Sem fallback para created_at/updated_at.
       if (!ultimaCompraDoUsuario && estoqueInfo) {
         const { data: estoqueCompleto } = await supabase
           .from('estoque_app')
-          .select('preco_unitario_ultimo, preco_por_unidade_base, created_at')
+          .select('preco_unitario_ultimo, preco_por_unidade_base, nota_id')
           .eq('id', produtoId)
           .maybeSingle();
-        
+
         if (estoqueCompleto) {
           const precoBase = estoqueCompleto.preco_por_unidade_base || estoqueCompleto.preco_unitario_ultimo;
           if (precoBase && precoBase > 0) {
-            ultimaCompraDoUsuario = { data: estoqueCompleto.created_at, preco: precoBase, quantidade: 1 };
+            let dataOficial: string | null = null;
+            if (estoqueCompleto.nota_id) {
+              const { data: notaVinc } = await supabase
+                .from('notas_imagens')
+                .select('dados_extraidos')
+                .eq('id', estoqueCompleto.nota_id)
+                .maybeSingle();
+              if (notaVinc?.dados_extraidos) {
+                dataOficial = extrairDataCompra(notaVinc.dados_extraidos as any);
+              }
+            }
+            // Se não houver data oficial, devolve null — UI exibirá "Sem data".
+            ultimaCompraDoUsuario = { data: dataOficial as any, preco: precoBase, quantidade: 1 };
           }
         }
       }
