@@ -388,6 +388,13 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
               <div className="mt-3 pt-3 border-t border-border/50">
                 <p className="text-xs text-muted-foreground text-center">{scannerTips}</p>
               </div>
+              {showHelpBanner && (
+                <div className="mt-3 pt-3 border-t border-primary/30">
+                  <p className="text-sm font-semibold text-primary text-center">
+                    Aproxime mais o código • aumente a luz • use o flash
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
