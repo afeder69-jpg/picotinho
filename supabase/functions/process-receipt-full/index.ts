@@ -2317,37 +2317,33 @@ serve(async (req) => {
 
     // 📲 [FIRE-AND-FORGET] Notificar usuário via WhatsApp com resumo da nota processada.
     // Não usar await: jamais deve atrasar ou bloquear o retorno do processamento.
-    try {
-      const totalNotaResumo = Number(
-        dadosExtraidos?.compra?.valor_total ??
-        dadosExtraidos?.total ??
-        dadosExtraidos?.valor_total ??
-        totalFinanceiro
-      );
-      const mercadoResumo =
-        dadosExtraidos?.estabelecimento?.nome ||
-        dadosExtraidos?.supermercado?.nome ||
-        dadosExtraidos?.emitente?.nome ||
-        dadosExtraidos?.nome_estabelecimento ||
-        null;
+    const totalNotaResumo = Number(
+      (dadosExtraidos as any)?.compra?.valor_total ??
+      (dadosExtraidos as any)?.total ??
+      (dadosExtraidos as any)?.valor_total ??
+      totalFinanceiro
+    );
+    const mercadoResumo =
+      (dadosExtraidos as any)?.estabelecimento?.nome ||
+      (dadosExtraidos as any)?.supermercado?.nome ||
+      (dadosExtraidos as any)?.emitente?.nome ||
+      (dadosExtraidos as any)?.nome_estabelecimento ||
+      null;
 
-      supabase.functions.invoke('enviar-resumo-whatsapp-nota', {
-        body: {
-          nota_id: finalNotaId,
-          user_id: nota.usuario_id,
-          tipo: 'resumo_nota_processada',
-          mercado: mercadoResumo,
-          total: isFinite(totalNotaResumo) ? totalNotaResumo : null,
-          quantidade_itens: inserted.length,
-        }
-      }).then(({ error }) => {
-        if (error) console.error('⚠️ Falha ao notificar (sucesso) WhatsApp:', error);
-      }).catch((e) => {
-        console.error('⚠️ Exceção ao invocar notificação (sucesso):', e);
-      });
-    } catch (e) {
-      console.error('⚠️ Erro ao preparar notificação (sucesso):', e);
-    }
+    supabase.functions.invoke('enviar-resumo-whatsapp-nota', {
+      body: {
+        nota_id: finalNotaId,
+        user_id: nota.usuario_id,
+        tipo: 'resumo_nota_processada',
+        mercado: mercadoResumo,
+        total: isFinite(totalNotaResumo) ? totalNotaResumo : null,
+        quantidade_itens: inserted.length,
+      }
+    }).then(({ error: notifErr }: any) => {
+      if (notifErr) console.error('⚠️ Falha ao notificar (sucesso) WhatsApp:', notifErr);
+    }).catch((e: any) => {
+      console.error('⚠️ Exceção ao invocar notificação (sucesso):', e);
+    });
 
     return new Response(
       JSON.stringify({
