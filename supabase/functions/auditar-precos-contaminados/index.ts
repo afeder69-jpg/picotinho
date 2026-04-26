@@ -61,25 +61,36 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const pageSize: number = Math.min(Number(body.pageSize) || 500, 1000);
     const maxPages: number = Number(body.maxPages) || 1000;
+    const resumeJobId: string | null = body.resume_job_id || null;
+    const startOffset: number = Number(body.start_offset) || 0;
 
-    const { data: job, error: jobErr } = await supabase
-      .from("precos_atuais_auditoria_jobs")
-      .insert({
-        status: "running",
-        parametros: { pageSize, maxPages, janela_dias: JANELA_DIAS },
-      })
-      .select("id")
-      .single();
+    if (resumeJobId) {
+      jobId = resumeJobId;
+      await supabase
+        .from("precos_atuais_auditoria_jobs")
+        .update({ status: "running", updated_at: new Date().toISOString() })
+        .eq("id", jobId);
+      console.log(`[auditoria] retomando job id=${jobId} offset=${startOffset}`);
+    } else {
+      const { data: job, error: jobErr } = await supabase
+        .from("precos_atuais_auditoria_jobs")
+        .insert({
+          status: "running",
+          parametros: { pageSize, maxPages, janela_dias: JANELA_DIAS },
+        })
+        .select("id")
+        .single();
 
-    if (jobErr || !job) {
-      throw new Error(`falha ao criar job: ${jobErr?.message}`);
+      if (jobErr || !job) {
+        throw new Error(`falha ao criar job: ${jobErr?.message}`);
+      }
+      jobId = job.id as string;
+      console.log(`[auditoria] job iniciado id=${jobId}`);
     }
-    jobId = job.id as string;
-    console.log(`[auditoria] job iniciado id=${jobId}`);
 
     const runBackground = async () => {
       try {
-        await executarAuditoria(supabase, jobId!, pageSize, maxPages);
+        await executarAuditoria(supabase, jobId!, pageSize, maxPages, startOffset);
       } catch (e: any) {
         console.error("[auditoria] erro background:", e?.message || e);
         await supabase
@@ -120,6 +131,7 @@ async function executarAuditoria(
   jobId: string,
   pageSize: number,
   maxPages: number,
+  startOffset: number = 0,
 ) {
   // 1. Pré-computar replicação cruzada (cnpj+valor+data → distintos master_ids)
   const replicacaoMap = new Map<string, Set<string>>();
@@ -188,7 +200,7 @@ async function executarAuditoria(
     replicacao_cruzada: 0,
   };
 
-  let from = 0;
+  let from = startOffset;
   let page = 0;
   while (page < maxPages) {
     const to = from + pageSize - 1;
