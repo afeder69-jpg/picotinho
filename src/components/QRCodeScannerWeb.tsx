@@ -413,15 +413,19 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-black">
       <div className="relative z-10 w-full flex justify-between items-center p-4 bg-black/80 backdrop-blur-sm">
-        <Button
-          variant="outline"
-          size="lg"
-          className="rounded-full"
-          onClick={toggleTorch}
-          disabled={!torchSupported && isScanning}
-        >
-          {torchEnabled ? <FlashlightOff className="w-5 h-5" /> : <Flashlight className="w-5 h-5" />}
-        </Button>
+        {!isIOS && (
+          <Button
+            variant={torchEnabled ? 'default' : 'outline'}
+            size="lg"
+            className="rounded-full"
+            onClick={toggleTorch}
+            disabled={isInitializing || !isScanning || !torchSupported}
+            title={!torchSupported ? 'Flash indisponível neste dispositivo' : torchEnabled ? 'Desligar flash' : 'Ligar flash'}
+          >
+            {torchEnabled ? <FlashlightOff className="w-5 h-5" /> : <Flashlight className="w-5 h-5" />}
+          </Button>
+        )}
+        {isIOS && <span />}
         <Button variant="destructive" size="lg" className="rounded-full shadow-lg" onClick={handleBackToChoose}>
           <X className="w-6 h-6" />
           <span className="ml-2">Cancelar</span>
