@@ -306,19 +306,44 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
   }, [applyAdvancedCameraSettings, handleScanSuccess, mode]);
 
   const toggleTorch = useCallback(async () => {
-    if (!scannerRef.current || !torchSupported) {
+    if (!torchSupported) {
       toast({ title: 'Flash não suportado', description: 'Este dispositivo não suporta controle de flash via web', variant: 'destructive' });
       return;
     }
+
+    // Resolve track diretamente do <video>; fallback no ref
+    const track = videoTrackRef.current ?? getActiveVideoTrack();
+    if (!track) {
+      toast({ title: 'Câmera indisponível', description: 'Aguarde a câmera iniciar antes de usar o flash', variant: 'destructive' });
+      return;
+    }
+    videoTrackRef.current = track;
+
+    const newTorchState = !torchEnabled;
     try {
-      const newTorchState = !torchEnabled;
-      await scannerRef.current.applyVideoConstraints({ advanced: [{ torch: newTorchState }] } as any);
+      // Aplica diretamente no track — mais confiável que via lib
+      await track.applyConstraints({ advanced: [{ torch: newTorchState }] as any });
       setTorchEnabled(newTorchState);
       if (navigator.vibrate) navigator.vibrate(30);
-    } catch (e) {
-      toast({ title: 'Erro ao controlar flash', description: 'Não foi possível alternar o flash', variant: 'destructive' });
+      console.log('[SCANNER-DIAG-TORCH] torch =', newTorchState);
+    } catch (eTrack) {
+      console.log('[SCANNER-DIAG-TORCH] track.applyConstraints falhou, tentando via lib:', eTrack);
+      // Fallback: usa a API da lib
+      try {
+        if (scannerRef.current) {
+          await scannerRef.current.applyVideoConstraints({ advanced: [{ torch: newTorchState }] } as any);
+          setTorchEnabled(newTorchState);
+          if (navigator.vibrate) navigator.vibrate(30);
+          console.log('[SCANNER-DIAG-TORCH] torch via lib =', newTorchState);
+          return;
+        }
+        throw eTrack;
+      } catch (eLib) {
+        console.log('[SCANNER-DIAG-TORCH] fallback falhou:', eLib);
+        toast({ title: 'Erro ao controlar flash', description: 'Não foi possível alternar o flash', variant: 'destructive' });
+      }
     }
-  }, [torchEnabled, torchSupported]);
+  }, [getActiveVideoTrack, torchEnabled, torchSupported]);
 
   const handleBackToChoose = useCallback(() => {
     stopScanner();
