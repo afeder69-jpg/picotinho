@@ -67,7 +67,9 @@ interface ProdutoSugestao {
 const EstoqueAtual = () => {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [precosAtuais, setPrecosAtuais] = useState<any[]>([]);
-  const [datasNotasFiscais, setDatasNotasFiscais] = useState<{[key: string]: string}>({});
+  // FONTE ÚNICA de data da compra: mapa nota_id → data oficial (YYYY-MM-DD).
+  // NUNCA usar created_at/updated_at/processing_started_at como data de compra.
+  const [datasNotasPorId, setDatasNotasPorId] = useState<{[notaId: string]: string}>({});
   const [historicoPrecos, setHistoricoPrecos] = useState<{[key: string]: any}>({});
   const [loading, setLoading] = useState(true);
   const [loadingPrecosAtuais, setLoadingPrecosAtuais] = useState(false);
@@ -533,42 +535,25 @@ const EstoqueAtual = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Buscar todas as notas fiscais processadas do usuário
+      // FONTE ÚNICA de data: indexar por nota_id usando a data OFICIAL da NF
+      // (dados_extraidos.compra.data_emissao). NUNCA usar created_at/updated_at.
       const { data: notasImagens, error } = await supabase
         .from('notas_imagens')
-        .select('dados_extraidos')
+        .select('id, dados_extraidos')
         .eq('usuario_id', user.id)
         .eq('processada', true)
         .not('dados_extraidos', 'is', null);
 
       if (error) throw error;
 
-      const datasMap: {[key: string]: string} = {};
-      
+      const datasMap: {[notaId: string]: string} = {};
       notasImagens?.forEach(nota => {
-        const dadosExtraidos = nota.dados_extraidos as any;
-        if (dadosExtraidos?.itens) {
-          // Buscar data da compra em várias estruturas possíveis
-          const dataCompra = dadosExtraidos.compra?.data_emissao || 
-                           dadosExtraidos.compra?.data_compra ||
-                           dadosExtraidos.dataCompra ||
-                           dadosExtraidos.data_emissao;
-          
-          dadosExtraidos.itens.forEach((item: any) => {
-            const nomeProduto = item.descricao || item.nome;
-            if (nomeProduto && dataCompra) {
-              // Manter apenas a data mais recente para cada produto
-              if (!datasMap[nomeProduto] || new Date(dataCompra) > new Date(datasMap[nomeProduto])) {
-                datasMap[nomeProduto] = dataCompra;
-              }
-            }
-          });
-        }
+        const dataOficial = extrairDataCompraISO(nota.dados_extraidos as any);
+        if (dataOficial) datasMap[nota.id] = dataOficial;
       });
 
-      console.log('📅 LOAD DATAS: Datas das notas fiscais carregadas:', datasMap);
-      console.log('📅 LOAD DATAS: Total de produtos com data:', Object.keys(datasMap).length);
-      setDatasNotasFiscais(datasMap);
+      console.log(`📅 Datas oficiais carregadas: ${Object.keys(datasMap).length} notas`);
+      setDatasNotasPorId(datasMap);
     } catch (error) {
       console.error('Erro ao carregar datas das notas fiscais:', error);
     }
