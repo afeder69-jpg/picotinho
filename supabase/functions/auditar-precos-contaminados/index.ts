@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let jobId: string | null = null;
   try {
     const body = await req.json().catch(() => ({}));
     const pageSize: number = Math.min(Number(body.pageSize) || 500, 1000);
@@ -75,8 +76,54 @@ Deno.serve(async (req) => {
     if (jobErr || !job) {
       throw new Error(`falha ao criar job: ${jobErr?.message}`);
     }
-    const jobId = job.id;
+    jobId = job.id;
     console.log(`[auditoria] job iniciado id=${jobId}`);
+
+    // Processa em background e responde imediatamente
+    const runBackground = async () => {
+      try {
+        await executarAuditoria(supabase, jobId!, pageSize, maxPages);
+      } catch (e: any) {
+        console.error("[auditoria] erro background:", e?.message || e);
+        await supabase
+          .from("precos_atuais_auditoria_jobs")
+          .update({
+            status: "error",
+            erro: String(e?.message || e),
+            finished_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId!);
+      }
+    };
+
+    // @ts-ignore EdgeRuntime is available at runtime
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(runBackground());
+    } else {
+      runBackground();
+    }
+
+    return new Response(
+      JSON.stringify({ ok: true, job_id: jobId, status: "running" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (err: any) {
+    console.error("[auditoria] erro fatal:", err?.message || err);
+    return new Response(
+      JSON.stringify({ ok: false, error: err?.message || String(err), job_id: jobId }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+});
+
+async function executarAuditoria(
+  supabase: any,
+  jobId: string,
+  pageSize: number,
+  maxPages: number,
+) {
 
     // 2. Pré-computar replicação cruzada (cnpj+valor+data → distintos master_ids)
     // Apenas como evidência — não como critério de classificação.
