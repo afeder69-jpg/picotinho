@@ -92,6 +92,10 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       clearTimeout(helpBannerTimerRef.current);
       helpBannerTimerRef.current = null;
     }
+    if (torchPollTimerRef.current) {
+      clearTimeout(torchPollTimerRef.current);
+      torchPollTimerRef.current = null;
+    }
     if (scannerRef.current) {
       try {
         const state = scannerRef.current.getState();
@@ -104,6 +108,7 @@ const QRCodeScannerWeb = ({ onScanSuccess, onClose }: QRCodeScannerWebProps) => 
       }
       scannerRef.current = null;
     }
+    videoTrackRef.current = null;
     setIsScanning(false);
     setIsInitializing(false);
     setTorchEnabled(false);
