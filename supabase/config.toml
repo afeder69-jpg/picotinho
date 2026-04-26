@@ -83,3 +83,5 @@ project_id = "mjsbwrtegorjxcepvrik"
     verify_jwt = false
   [functions.vincular-orfaos-por-ean]
     verify_jwt = false
+  [functions.reset-meu-storage]
+    verify_jwt = false
