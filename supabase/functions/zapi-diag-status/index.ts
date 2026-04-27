@@ -30,14 +30,16 @@ Deno.serve(async (req) => {
     }
   }
 
-  const [status, messageStatus, chatExists] = await Promise.all([
+  const [status, msgStatusV1, msgStatusV2, chatExists, chatMsgs] = await Promise.all([
     getJson(`/status`),
-    getJson(`/message-status/${messageId}`),
+    getJson(`/message-status/${phone}/${messageId}`),
+    getJson(`/chat-messages/${phone}?messageId=${messageId}`),
     getJson(`/phone-exists/${phone}`),
+    getJson(`/chat-messages/${phone}`),
   ]);
 
   return new Response(
-    JSON.stringify({ instancia: status, mensagem: messageStatus, telefone_existe: chatExists }, null, 2),
+    JSON.stringify({ instancia: status, msgStatusV1, msgStatusV2, telefone_existe: chatExists, ultimasMsgs: chatMsgs }, null, 2),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 });
