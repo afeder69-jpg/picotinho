@@ -1827,7 +1827,6 @@ serve(async (req) => {
         console.error(`❌ Erro ao buscar master para ${produto.produto_nome}:`, error.message);
         masterNaoEncontrados++;
       }
-    } // fim do try/catch
     }; // fim do helper processarProdutoNormalizacao
 
     // 🛡️ FRENTE A3: paralelização em chunks de 5 (reduz tempo total ~5x para notas grandes).
@@ -2327,6 +2326,20 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+    } catch (error: any) {
+      console.error("❌ Erro geral:", error?.message || error);
+      
+      // 🔓 Liberar lock em caso de erro
+      await supabase
+        .from("notas_imagens")
+        .update({ processing_started_at: null })
+        .eq("id", finalNotaId);
+      
+      return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   } catch (error: any) {
     console.error("❌ Erro crítico:", error?.message || error);
     return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
