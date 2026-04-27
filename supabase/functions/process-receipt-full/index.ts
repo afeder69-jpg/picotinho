@@ -2326,6 +2326,20 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+    } catch (error: any) {
+      console.error("❌ Erro geral:", error?.message || error);
+      
+      // 🔓 Liberar lock em caso de erro
+      await supabase
+        .from("notas_imagens")
+        .update({ processing_started_at: null })
+        .eq("id", finalNotaId);
+      
+      return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   } catch (error: any) {
     console.error("❌ Erro crítico:", error?.message || error);
     return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
