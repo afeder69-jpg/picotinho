@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
     const { data: telefone, error: telErr } = await supabase
       .from("whatsapp_telefones_autorizados")
       .select("numero_whatsapp, ativo, verificado, pref_resumo_notas")
-      .eq("user_id", user_id)
+      .eq("usuario_id", user_id)
       .eq("ativo", true)
       .eq("verificado", true)
       .order("created_at", { ascending: true })
