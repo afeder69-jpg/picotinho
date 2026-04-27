@@ -4232,6 +4232,11 @@ export type Database = {
       }
       validate_security_setup: { Args: never; Returns: string }
       validate_user_access: { Args: { user_uuid: string }; Returns: boolean }
+      vault_create_cron_secret: { Args: { p_value: string }; Returns: string }
+      vault_update_cron_secret: {
+        Args: { p_value: string }
+        Returns: undefined
+      }
       vector_similarity_search: {
         Args: {
           match_count?: number
