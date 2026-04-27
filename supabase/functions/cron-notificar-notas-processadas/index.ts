@@ -58,7 +58,8 @@ Deno.serve(async (req) => {
   // 2) Buscar notas candidatas (últimas 24h)
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: notas, error: errNotas } = await supabase
+  // 2a) Sucessos: processada = true + status_processamento = 'processada'
+  const { data: notasSucesso, error: errNotas } = await supabase
     .from("notas_imagens")
     .select(
       "id, usuario_id, dados_extraidos, data_criacao, status_processamento, processada, excluida",
@@ -71,39 +72,83 @@ Deno.serve(async (req) => {
     .limit(200);
 
   if (errNotas) {
-    console.error("Erro ao buscar notas candidatas:", errNotas);
+    console.error("Erro ao buscar notas candidatas (sucesso):", errNotas);
     return jsonResponse({ error: errNotas.message }, 500);
   }
 
-  if (!notas || notas.length === 0) {
-    return jsonResponse({ ok: true, candidatas: 0, invocadas: 0 });
+  // 2b) Falhas: status_processamento ∈ {erro, falha, failed, error}
+  // Independente de processada (a maioria das falhas mantém processada=false)
+  const STATUS_FALHA = ["erro", "falha", "failed", "error"];
+  const { data: notasFalha, error: errNotasF } = await supabase
+    .from("notas_imagens")
+    .select(
+      "id, usuario_id, data_criacao, status_processamento, excluida",
+    )
+    .in("status_processamento", STATUS_FALHA)
+    .or("excluida.is.null,excluida.eq.false")
+    .gte("data_criacao", desde)
+    .order("data_criacao", { ascending: false })
+    .limit(200);
+
+  if (errNotasF) {
+    console.error("Erro ao buscar notas candidatas (falha):", errNotasF);
+    return jsonResponse({ error: errNotasF.message }, 500);
   }
 
-  // 3) Filtrar as que ainda não têm log de envio
-  const ids = notas.map((n) => n.id);
+  const totalCandidatas =
+    (notasSucesso?.length || 0) + (notasFalha?.length || 0);
+  if (totalCandidatas === 0) {
+    return jsonResponse({
+      ok: true,
+      candidatas: 0,
+      candidatas_sucesso: 0,
+      candidatas_falha: 0,
+      invocadas: 0,
+    });
+  }
+
+  // 3) Buscar logs existentes por (tipo) para filtrar duplicatas
+  // Idempotência real é garantida no envio (UNIQUE em notificacoes_log).
+  const idsSucesso = (notasSucesso || []).map((n) => n.id);
+  const idsFalha = (notasFalha || []).map((n) => n.id);
+  const todosIds = Array.from(new Set([...idsSucesso, ...idsFalha]));
+
   const { data: logs, error: errLogs } = await supabase
     .from("notificacoes_log")
-    .select("nota_id")
+    .select("nota_id, tipo")
     .eq("canal", "whatsapp")
-    .eq("tipo", "resumo_nota_processada")
-    .in("nota_id", ids);
+    .in("tipo", ["resumo_nota_processada", "falha_processamento_nota"])
+    .in("nota_id", todosIds);
 
   if (errLogs) {
     console.error("Erro ao buscar notificacoes_log:", errLogs);
     return jsonResponse({ error: errLogs.message }, 500);
   }
 
-  const jaNotificadas = new Set((logs || []).map((l) => l.nota_id));
-  const elegiveis = notas.filter((n) => !jaNotificadas.has(n.id));
+  const jaSucesso = new Set(
+    (logs || [])
+      .filter((l) => l.tipo === "resumo_nota_processada")
+      .map((l) => l.nota_id),
+  );
+  const jaFalha = new Set(
+    (logs || [])
+      .filter((l) => l.tipo === "falha_processamento_nota")
+      .map((l) => l.nota_id),
+  );
 
-  // 4) Invocar enviar-resumo-whatsapp-nota para cada elegível
+  const elegiveisSucesso = (notasSucesso || []).filter(
+    (n) => !jaSucesso.has(n.id),
+  );
+  const elegiveisFalha = (notasFalha || []).filter((n) => !jaFalha.has(n.id));
+
+  // 4) Invocar enviar-resumo-whatsapp-nota
   let invocadas = 0;
-  let falhas = 0;
+  let falhasInvoke = 0;
 
-  for (const nota of elegiveis) {
+  // 4a) Sucessos
+  for (const nota of elegiveisSucesso) {
     const dados = (nota.dados_extraidos ?? {}) as Record<string, unknown>;
 
-    // Extrair mercado / total / quantidade_itens do JSONB de forma defensiva
     const mercado =
       (dados as any)?.mercado?.nome ??
       (dados as any)?.estabelecimento?.nome ??
@@ -138,25 +183,56 @@ Deno.serve(async (req) => {
         { body: payload },
       );
       if (errInvoke) {
-        falhas++;
+        falhasInvoke++;
         console.error(
-          `Falha ao invocar enviar-resumo-whatsapp-nota para nota ${nota.id}:`,
+          `Falha ao invocar (sucesso) nota ${nota.id}:`,
           errInvoke,
         );
       } else {
         invocadas++;
       }
     } catch (e) {
-      falhas++;
-      console.error(`Exceção ao invocar para nota ${nota.id}:`, e);
+      falhasInvoke++;
+      console.error(`Exceção ao invocar (sucesso) nota ${nota.id}:`, e);
+    }
+  }
+
+  // 4b) Falhas
+  for (const nota of elegiveisFalha) {
+    const payload = {
+      nota_id: nota.id,
+      user_id: nota.usuario_id,
+      tipo: "falha_processamento_nota" as const,
+    };
+
+    try {
+      const { error: errInvoke } = await supabase.functions.invoke(
+        "enviar-resumo-whatsapp-nota",
+        { body: payload },
+      );
+      if (errInvoke) {
+        falhasInvoke++;
+        console.error(
+          `Falha ao invocar (falha) nota ${nota.id}:`,
+          errInvoke,
+        );
+      } else {
+        invocadas++;
+      }
+    } catch (e) {
+      falhasInvoke++;
+      console.error(`Exceção ao invocar (falha) nota ${nota.id}:`, e);
     }
   }
 
   return jsonResponse({
     ok: true,
-    candidatas: notas.length,
-    elegiveis: elegiveis.length,
+    candidatas: totalCandidatas,
+    candidatas_sucesso: notasSucesso?.length || 0,
+    candidatas_falha: notasFalha?.length || 0,
+    elegiveis_sucesso: elegiveisSucesso.length,
+    elegiveis_falha: elegiveisFalha.length,
     invocadas,
-    falhas,
+    falhas: falhasInvoke,
   });
 });
