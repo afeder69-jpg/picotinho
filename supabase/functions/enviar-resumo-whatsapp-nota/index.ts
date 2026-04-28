@@ -420,11 +420,49 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3) Montar mensagem
-    const mensagem =
+    // 3) Montar mensagem base (template atual — sempre disponível como fallback)
+    const mensagemBase =
       tipo === "resumo_nota_processada"
         ? montarMensagemSucesso(body)
         : montarMensagemFalha();
+
+    // 3.1) Resolver nome do usuário (telefone → profiles)
+    let nomeUsuario = extrairPrimeiroNome(telefone.nome_pessoa);
+    if (!nomeUsuario) {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("nome_completo, apelido, nome")
+          .eq("user_id", user_id)
+          .maybeSingle();
+        nomeUsuario =
+          extrairPrimeiroNome(profile?.apelido) ||
+          extrairPrimeiroNome(profile?.nome_completo) ||
+          extrairPrimeiroNome((profile as any)?.nome);
+      } catch (e) {
+        console.warn("Falha ao buscar profile para nome do usuário:", e);
+      }
+    }
+
+    // 3.2) Camada opcional de humanização via Lovable AI
+    const dadosSucesso: DadosReaisSucesso | null =
+      tipo === "resumo_nota_processada"
+        ? {
+            mercado: ((body.mercado || "—").toString().trim() || "—"),
+            totalFormatado: formatarValorBRL(body.total ?? null),
+            itens: typeof body.quantidade_itens === "number" ? body.quantidade_itens : 0,
+          }
+        : null;
+
+    const humanizacao = await humanizarComIA({
+      base: mensagemBase,
+      tipo,
+      nomeUsuario,
+      dadosSucesso,
+    });
+
+    const mensagem = humanizacao.mensagem ?? mensagemBase;
+    const mensagemOrigem: "ia" | "fallback" = humanizacao.mensagem ? "ia" : "fallback";
 
     // 4) Enviar via Z-API
     const instanceUrl = Deno.env.get("WHATSAPP_INSTANCE_URL");
