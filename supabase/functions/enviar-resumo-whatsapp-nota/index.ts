@@ -68,6 +68,223 @@ function montarMensagemFalha(): string {
   ].join("\n");
 }
 
+// ----------------------------------------------------------------------------
+// Camada opcional de humanização via Lovable AI (Fase 3)
+// - Nunca bloqueia o envio: qualquer erro/timeout/validação inválida → fallback
+// - Não inventa dados: validação obrigatória de presença dos números reais
+// - Estrutura previsível: validação de ordem e elementos obrigatórios
+// ----------------------------------------------------------------------------
+
+interface DadosReaisSucesso {
+  mercado: string;
+  totalFormatado: string;
+  itens: number;
+}
+
+const IA_TIMEOUT_MS = 3500;
+const IA_MODELO = "google/gemini-3-flash-preview";
+
+async function humanizarComIA(params: {
+  base: string;
+  tipo: Tipo;
+  nomeUsuario: string | null;
+  dadosSucesso: DadosReaisSucesso | null;
+}): Promise<{
+  mensagem: string | null;
+  motivo: string | null;
+  latenciaMs: number;
+}> {
+  const inicio = Date.now();
+  const flag = (Deno.env.get("WHATSAPP_HUMANIZACAO_IA") || "on").toLowerCase();
+  if (flag === "off") {
+    return { mensagem: null, motivo: "ia_desabilitada", latenciaMs: 0 };
+  }
+
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    return { mensagem: null, motivo: "lovable_api_key_ausente", latenciaMs: 0 };
+  }
+
+  const systemPrompt = [
+    "Você é o Picotinho, assistente brasileiro masculino, simpático, ágil e direto.",
+    "Reescreva a MENSAGEM BASE deixando-a mais natural e calorosa, mas mantendo:",
+    "- Clareza, objetividade e fácil leitura no WhatsApp.",
+    "- TODAS as informações factuais (mercado, total, quantidade de itens, instruções).",
+    "- A mesma ORDEM lógica de leitura da mensagem base (saudação/status → dados → instruções/fechamento).",
+    "- Quebras de linha entre blocos para leitura confortável no WhatsApp.",
+    "Regras rígidas:",
+    "- NÃO invente dados (não altere mercado, total ou quantidade).",
+    "- NÃO use gírias, emojis em excesso (máx. 2) nem markdown.",
+    "- NÃO use linguagem excessivamente informal; mantenha o tom profissional-amigável do Picotinho.",
+    "- NÃO remova nenhuma informação obrigatória que apareça na mensagem base.",
+    "- Pode usar o primeiro nome do usuário se fornecido, com naturalidade (sem repetir).",
+    "- Máximo 600 caracteres.",
+    "Responda SEMPRE chamando a tool 'mensagem_humanizada' com o campo 'mensagem'.",
+  ].join("\n");
+
+  const userPrompt = [
+    `TIPO: ${params.tipo}`,
+    params.nomeUsuario ? `NOME_USUARIO: ${params.nomeUsuario}` : "NOME_USUARIO: (não informado)",
+    params.dadosSucesso
+      ? `DADOS_REAIS: mercado="${params.dadosSucesso.mercado}", total="${params.dadosSucesso.totalFormatado}", itens=${params.dadosSucesso.itens}`
+      : "DADOS_REAIS: (n/a — mensagem de falha)",
+    "",
+    "MENSAGEM BASE (preserve todas as informações):",
+    params.base,
+  ].join("\n");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IA_TIMEOUT_MS);
+
+  try {
+    const resp = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: IA_MODELO,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "mensagem_humanizada",
+                description:
+                  "Retorna a mensagem WhatsApp humanizada para o usuário.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    mensagem: {
+                      type: "string",
+                      description:
+                        "Texto final em pt-BR pronto para envio no WhatsApp.",
+                    },
+                  },
+                  required: ["mensagem"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          ],
+          tool_choice: {
+            type: "function",
+            function: { name: "mensagem_humanizada" },
+          },
+        }),
+      },
+    );
+
+    if (!resp.ok) {
+      const motivo =
+        resp.status === 429
+          ? "ia_rate_limit_429"
+          : resp.status === 402
+            ? "ia_credito_402"
+            : `http_error_${resp.status}`;
+      return { mensagem: null, motivo, latenciaMs: Date.now() - inicio };
+    }
+
+    const data = await resp.json();
+    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
+    const argsRaw = toolCall?.function?.arguments;
+    if (!argsRaw) {
+      return {
+        mensagem: null,
+        motivo: "tool_call_ausente",
+        latenciaMs: Date.now() - inicio,
+      };
+    }
+
+    let parsed: { mensagem?: unknown };
+    try {
+      parsed = JSON.parse(argsRaw);
+    } catch {
+      return {
+        mensagem: null,
+        motivo: "json_invalido",
+        latenciaMs: Date.now() - inicio,
+      };
+    }
+
+    const mensagem = typeof parsed?.mensagem === "string"
+      ? parsed.mensagem.trim()
+      : "";
+
+    if (!mensagem || mensagem.length < 40 || mensagem.length > 700) {
+      return {
+        mensagem: null,
+        motivo: "tamanho_invalido",
+        latenciaMs: Date.now() - inicio,
+      };
+    }
+
+    // Bloqueio anti-alucinação e estrutura mínima
+    if (params.tipo === "resumo_nota_processada" && params.dadosSucesso) {
+      const { mercado, totalFormatado, itens } = params.dadosSucesso;
+      const contemMercado =
+        !mercado || mercado === "—" ||
+        mensagem.toLowerCase().includes(mercado.toLowerCase());
+      const contemTotal = mensagem.includes(totalFormatado);
+      const contemItens = new RegExp(`\\b${itens}\\b`).test(mensagem);
+      if (!contemMercado || !contemTotal || !contemItens) {
+        return {
+          mensagem: null,
+          motivo: "validacao_dados_reais",
+          latenciaMs: Date.now() - inicio,
+        };
+      }
+    }
+
+    if (params.tipo === "falha_processamento_nota") {
+      // Garante que instruções essenciais permanecem na mensagem
+      const lower = mensagem.toLowerCase();
+      const temInstrucao =
+        lower.includes("picotinho") &&
+        (lower.includes("chave") || lower.includes("qr") ||
+          lower.includes("danfe") || lower.includes("novamente"));
+      if (!temInstrucao) {
+        return {
+          mensagem: null,
+          motivo: "validacao_instrucoes_falha",
+          latenciaMs: Date.now() - inicio,
+        };
+      }
+    }
+
+    // Bloqueia caracteres de controle e URLs
+    if (/[\u0000-\u0008\u000B-\u001F]/.test(mensagem) || /https?:\/\//i.test(mensagem)) {
+      return {
+        mensagem: null,
+        motivo: "conteudo_proibido",
+        latenciaMs: Date.now() - inicio,
+      };
+    }
+
+    return { mensagem, motivo: null, latenciaMs: Date.now() - inicio };
+  } catch (e: any) {
+    const motivo = e?.name === "AbortError" ? "timeout" : `exception:${e?.message || String(e)}`;
+    return { mensagem: null, motivo, latenciaMs: Date.now() - inicio };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extrairPrimeiroNome(nome: string | null | undefined): string | null {
+  if (!nome || typeof nome !== "string") return null;
+  const limpo = nome.trim();
+  if (!limpo) return null;
+  const primeiro = limpo.split(/\s+/)[0];
+  return primeiro && primeiro.length >= 2 ? primeiro : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
