@@ -363,7 +363,7 @@ Deno.serve(async (req) => {
     // 2) Buscar telefone autorizado do usuário (ativo + verificado) e checar preferência
     const { data: telefone, error: telErr } = await supabase
       .from("whatsapp_telefones_autorizados")
-      .select("numero_whatsapp, ativo, verificado, pref_resumo_notas")
+      .select("numero_whatsapp, ativo, verificado, pref_resumo_notas, nome_pessoa")
       .eq("usuario_id", user_id)
       .eq("ativo", true)
       .eq("verificado", true)
