@@ -546,6 +546,10 @@ Deno.serve(async (req) => {
       payload: {
         zapi_status: zapiStatus,
         zapi_body_preview: zapiBody.slice(0, 500),
+        mensagem_origem: mensagemOrigem,
+        ia_motivo_fallback: humanizacao.motivo,
+        ia_modelo: IA_MODELO,
+        ia_latencia_ms: humanizacao.latenciaMs,
       },
     });
 
