@@ -156,12 +156,12 @@ async function humanizarComIA(params: {
   const inicio = Date.now();
   const flag = (Deno.env.get("WHATSAPP_HUMANIZACAO_IA") || "on").toLowerCase();
   if (flag === "off") {
-    return { mensagem: null, motivo: "ia_desabilitada", latenciaMs: 0 };
+    return { mensagem: null, motivo: "ia_desabilitada", latenciaMs: 0, previewBruto: null };
   }
 
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) {
-    return { mensagem: null, motivo: "lovable_api_key_ausente", latenciaMs: 0 };
+    return { mensagem: null, motivo: "lovable_api_key_ausente", latenciaMs: 0, previewBruto: null };
   }
 
   const systemPrompt = [
@@ -248,7 +248,7 @@ async function humanizarComIA(params: {
           : resp.status === 402
             ? "ia_credito_402"
             : `http_error_${resp.status}`;
-      return { mensagem: null, motivo, latenciaMs: Date.now() - inicio };
+      return { mensagem: null, motivo, latenciaMs: Date.now() - inicio, previewBruto: null };
     }
 
     const data = await resp.json();
@@ -259,6 +259,7 @@ async function humanizarComIA(params: {
         mensagem: null,
         motivo: "tool_call_ausente",
         latenciaMs: Date.now() - inicio,
+        previewBruto: null,
       };
     }
 
@@ -270,50 +271,81 @@ async function humanizarComIA(params: {
         mensagem: null,
         motivo: "json_invalido",
         latenciaMs: Date.now() - inicio,
+        previewBruto: typeof argsRaw === "string" ? argsRaw.slice(0, 200) : null,
       };
     }
 
     const mensagem = typeof parsed?.mensagem === "string"
       ? parsed.mensagem.trim()
       : "";
+    const previewBruto = mensagem ? mensagem.slice(0, 200) : null;
 
     if (!mensagem || mensagem.length < 40 || mensagem.length > 700) {
       return {
         mensagem: null,
         motivo: "tamanho_invalido",
         latenciaMs: Date.now() - inicio,
+        previewBruto,
       };
     }
 
-    // Bloqueio anti-alucinação e estrutura mínima
+    const mensagemNorm = normalizar(mensagem);
+
+    // Bloqueio anti-alucinação (flexível porém rigoroso quanto a NÚMEROS)
     if (params.tipo === "resumo_nota_processada" && params.dadosSucesso) {
       const { mercado, totalFormatado, itens } = params.dadosSucesso;
-      const contemMercado =
-        !mercado || mercado === "—" ||
-        mensagem.toLowerCase().includes(mercado.toLowerCase());
-      const contemTotal = mensagem.includes(totalFormatado);
+
+      // Mercado: aceita se contém as 3 primeiras palavras significativas
+      let contemMercado = true;
+      if (mercado && mercado !== "—") {
+        const tokens = tokensMercado(mercado);
+        if (tokens.length === 0) {
+          contemMercado = mensagemNorm.includes(normalizar(mercado));
+        } else {
+          const alvo = tokens.slice(0, 3);
+          const presentes = alvo.filter((t) => mensagemNorm.includes(t)).length;
+          // exige pelo menos min(2, alvo.length) tokens presentes
+          contemMercado = presentes >= Math.min(2, alvo.length);
+        }
+      }
+
+      // Total: valor numérico real precisa estar presente (ponto OU vírgula decimal)
+      const valorNumerico = extrairNumero(totalFormatado);
+      const contemTotal = valorNumerico !== null
+        ? regexParaValor(valorNumerico).test(mensagem)
+        : true;
+
+      // Itens: número exato como palavra
       const contemItens = new RegExp(`\\b${itens}\\b`).test(mensagem);
+
       if (!contemMercado || !contemTotal || !contemItens) {
         return {
           mensagem: null,
-          motivo: "validacao_dados_reais",
+          motivo: `validacao_dados_reais:mercado=${contemMercado},total=${contemTotal},itens=${contemItens}`,
           latenciaMs: Date.now() - inicio,
+          previewBruto,
         };
       }
     }
 
     if (params.tipo === "falha_processamento_nota") {
-      // Garante que instruções essenciais permanecem na mensagem
-      const lower = mensagem.toLowerCase();
-      const temInstrucao =
-        lower.includes("picotinho") &&
-        (lower.includes("chave") || lower.includes("qr") ||
-          lower.includes("danfe") || lower.includes("novamente"));
-      if (!temInstrucao) {
+      // Grupo A: problema/ação | Grupo B: caminho de resolução
+      const grupoA = [
+        "não conseguimos", "nao conseguimos", "falha", "erro",
+        "processar", "processamento", "tente", "novamente", "reenvie",
+      ];
+      const grupoB = [
+        "chave", "qr", "danfe", "código de barras", "codigo de barras",
+        "picotinho", "equipe", "suporte",
+      ];
+      const temA = grupoA.some((k) => mensagemNorm.includes(k));
+      const temB = grupoB.some((k) => mensagemNorm.includes(k));
+      if (!temA || !temB) {
         return {
           mensagem: null,
-          motivo: "validacao_instrucoes_falha",
+          motivo: `validacao_instrucoes_falha:A=${temA},B=${temB}`,
           latenciaMs: Date.now() - inicio,
+          previewBruto,
         };
       }
     }
@@ -324,13 +356,14 @@ async function humanizarComIA(params: {
         mensagem: null,
         motivo: "conteudo_proibido",
         latenciaMs: Date.now() - inicio,
+        previewBruto,
       };
     }
 
-    return { mensagem, motivo: null, latenciaMs: Date.now() - inicio };
+    return { mensagem, motivo: null, latenciaMs: Date.now() - inicio, previewBruto };
   } catch (e: any) {
     const motivo = e?.name === "AbortError" ? "timeout" : `exception:${e?.message || String(e)}`;
-    return { mensagem: null, motivo, latenciaMs: Date.now() - inicio };
+    return { mensagem: null, motivo, latenciaMs: Date.now() - inicio, previewBruto: null };
   } finally {
     clearTimeout(timer);
   }
