@@ -642,6 +642,8 @@ Deno.serve(async (req) => {
         ia_motivo_fallback: humanizacao.motivo,
         ia_modelo: IA_MODELO,
         ia_latencia_ms: humanizacao.latenciaMs,
+        nome_usuario_resolvido: nomeUsuario,
+        mensagem_preview: mensagemOrigem === "fallback" ? humanizacao.previewBruto : null,
       },
     });
 
