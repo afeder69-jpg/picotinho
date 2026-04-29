@@ -84,6 +84,64 @@ interface DadosReaisSucesso {
 const IA_TIMEOUT_MS = 3500;
 const IA_MODELO = "google/gemini-3-flash-preview";
 
+// Normaliza texto para comparação tolerante (NFKC + remove NBSP + colapsa espaços + lowercase)
+function normalizar(s: string): string {
+  return (s || "")
+    .normalize("NFKC")
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+// Extrai número canônico (ex.: "1.234,56" ou "R$ 12,90" → 12.90)
+function extrairNumero(s: string): number | null {
+  if (!s) return null;
+  const limpo = s.replace(/[^\d,.-]/g, "");
+  if (!limpo) return null;
+  // Remove separadores de milhar e converte vírgula decimal para ponto
+  // Heurística: se há ',' use-a como decimal e remova '.'; senão use '.' como decimal
+  let normal: string;
+  if (limpo.includes(",")) {
+    normal = limpo.replace(/\./g, "").replace(",", ".");
+  } else {
+    // possíveis separadores de milhar com '.'; se houver mais de um '.', remove todos exceto o último
+    const partes = limpo.split(".");
+    if (partes.length > 2) {
+      const dec = partes.pop();
+      normal = partes.join("") + "." + dec;
+    } else {
+      normal = limpo;
+    }
+  }
+  const n = parseFloat(normal);
+  return isNaN(n) ? null : n;
+}
+
+// Constrói regex que aceita o número com ponto OU vírgula como decimal e separador de milhar opcional
+function regexParaValor(valor: number): RegExp {
+  const fixed = valor.toFixed(2); // ex.: "12.90" ou "1234.56"
+  const [intPart, decPart] = fixed.split(".");
+  // permite separador de milhar . ou , ou nenhum
+  const intComMilhar = intPart.length > 3
+    ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, "[\\.,]?")
+    : intPart;
+  // decimal aceita . ou ,
+  const pattern = `(?<!\\d)${intComMilhar}[\\.,]${decPart}(?!\\d)`;
+  return new RegExp(pattern);
+}
+
+// Tokens significativos do nome do mercado (≥3 chars, sem stopwords)
+const STOPWORDS_MERCADO = new Set([
+  "de", "da", "do", "das", "dos", "e", "ltda", "me", "sa", "s/a", "s.a",
+  "the", "comercio", "comércio", "mercado", "supermercado", "loja",
+]);
+function tokensMercado(nome: string): string[] {
+  return normalizar(nome)
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3 && !STOPWORDS_MERCADO.has(t));
+}
+
 async function humanizarComIA(params: {
   base: string;
   tipo: Tipo;
@@ -93,6 +151,7 @@ async function humanizarComIA(params: {
   mensagem: string | null;
   motivo: string | null;
   latenciaMs: number;
+  previewBruto: string | null;
 }> {
   const inicio = Date.now();
   const flag = (Deno.env.get("WHATSAPP_HUMANIZACAO_IA") || "on").toLowerCase();
