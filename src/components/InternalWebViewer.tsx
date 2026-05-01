@@ -4,6 +4,7 @@ import { X, CheckCircle2, XCircle, ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { extrairChaveNFe, obterTipoDocumentoPorChave } from "@/lib/documentDetection";
+import { interpretarErroProcessUrlNota, montarToastErroNota } from "@/lib/notasFiscais";
 
 const UF_MAP: Record<string, string> = {
   '11': 'RO', '12': 'AC', '13': 'AM', '14': 'RR', '15': 'PA',
@@ -115,7 +116,13 @@ const InternalWebViewer = ({ url, isOpen, onClose, onConfirm, userId }: Internal
 
       if (error) {
         console.error('❌ [ROTEADOR] Erro ao processar:', error);
-        throw error;
+        const info = await interpretarErroProcessUrlNota(error);
+        const toastConfig = montarToastErroNota(info);
+        if (toastConfig) {
+          toast(toastConfig);
+        }
+        setIsProcessing(false);
+        return;
       }
 
       console.log('✅ [ROTEADOR] Resposta:', data);
@@ -129,12 +136,11 @@ const InternalWebViewer = ({ url, isOpen, onClose, onConfirm, userId }: Internal
       onConfirm();
     } catch (error: any) {
       console.error('❌ [ERROR] Falha no processamento:', error);
-      toast({
-        title: '❌ Erro ao processar nota',
-        description: error.message || 'Não foi possível importar a nota fiscal. Tente novamente.',
-        variant: 'destructive',
-        duration: 6000,
-      });
+      const info = await interpretarErroProcessUrlNota(error);
+      const toastConfig = montarToastErroNota(info);
+      if (toastConfig) {
+        toast(toastConfig);
+      }
     } finally {
       setIsProcessing(false);
     }

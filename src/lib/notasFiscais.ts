@@ -112,3 +112,102 @@ export function extrairValorItem(item: any): number {
   const vu = parseFloat(item?.valor_unitario ?? 0);
   return Math.round(q * vu * 100) / 100;
 }
+
+/* ============================================================
+ * Tratamento padronizado de erros do edge `process-url-nota`
+ * ============================================================
+ * Frontend: extrai body estruturado de erros vindos do SDK Supabase
+ * (FunctionsHttpError) e classifica para exibir toast amigável.
+ * Usado por BottomNavigation, NFCeWebViewer e InternalWebViewer.
+ */
+
+export interface ErroProcessUrlNota {
+  codigo: string;       // ex: 'EXTRACAO_FALHOU', 'NOTA_DUPLICADA', '' (desconhecido)
+  mensagem: string;     // mensagem amigável vinda do backend (ou fallback)
+  reason: string;       // ex: 'SEFAZ_INSTAVEL', '' (não classificado)
+}
+
+/**
+ * Interpreta um erro retornado por `supabase.functions.invoke('process-url-nota', ...)`.
+ * Tenta extrair o body JSON do FunctionsHttpError em três fallbacks:
+ *  1. error.context.body como string → JSON.parse
+ *  2. error.context.body como objeto → uso direto
+ *  3. error.context.json() quando disponível
+ * Sempre retorna um objeto seguro (campos podem ser strings vazias).
+ */
+export async function interpretarErroProcessUrlNota(error: any): Promise<ErroProcessUrlNota> {
+  const resultado: ErroProcessUrlNota = { codigo: '', mensagem: '', reason: '' };
+  if (!error) return resultado;
+
+  try {
+    const ctx = (error as any)?.context;
+    let body: any = null;
+
+    if (ctx?.body != null) {
+      if (typeof ctx.body === 'string') {
+        try { body = JSON.parse(ctx.body); } catch { /* ignore */ }
+      } else if (typeof ctx.body === 'object') {
+        body = ctx.body;
+      }
+    }
+
+    if (!body && ctx && typeof ctx.json === 'function') {
+      try { body = await ctx.json(); } catch { /* ignore */ }
+    }
+
+    if (body && typeof body === 'object') {
+      resultado.codigo = String(body.error || '');
+      resultado.mensagem = String(body.message || '');
+      resultado.reason = String(body.reason || '');
+    }
+  } catch { /* ignore parse errors */ }
+
+  // Fallback de mensagem (nunca expor "non-2xx" para o usuário)
+  if (!resultado.mensagem) {
+    const raw = String((error as any)?.message || '');
+    const isGenericSdk =
+      raw.includes('non-2xx') || raw.includes('Edge Function') || raw.includes('FunctionsHttpError');
+    resultado.mensagem = isGenericSdk
+      ? 'Não foi possível processar a nota fiscal. Tente novamente.'
+      : raw || 'Não foi possível processar a nota fiscal. Tente novamente.';
+  }
+
+  return resultado;
+}
+
+/**
+ * Conteúdo padronizado dos toasts amigáveis para falhas do `process-url-nota`.
+ * Retorna null quando o erro deve ser tratado fora desse fluxo (ex: NOTA_DUPLICADA).
+ */
+export function montarToastErroNota(info: ErroProcessUrlNota): {
+  title: string;
+  description: string;
+  duration: number;
+  variant?: 'default' | 'destructive';
+} | null {
+  if (info.codigo === 'NOTA_DUPLICADA') return null; // tratado em fluxo próprio
+
+  if (info.codigo === 'EXTRACAO_FALHOU') {
+    if (info.reason === 'SEFAZ_INSTAVEL') {
+      return {
+        title: '⏳ Consulta indisponível no momento',
+        description:
+          'Estamos com uma instabilidade na SEFAZ para consultar essa nota agora. Pode aguardar alguns minutos e tentar novamente — normalmente isso se resolve rápido. Se preferir, você pode tentar mais tarde também. Seus dados estão seguros 👍',
+        duration: 9000,
+      };
+    }
+    return {
+      title: '⚠️ Não foi possível ler a nota',
+      description: info.mensagem || 'Não conseguimos ler esta nota agora. Tente novamente em instantes.',
+      duration: 8000,
+    };
+  }
+
+  // Erro inesperado: ainda assim sem vermelho agressivo se for falha de extração mascarada
+  return {
+    title: 'Não foi possível processar a nota',
+    description: info.mensagem,
+    duration: 7000,
+    variant: 'destructive',
+  };
+}
