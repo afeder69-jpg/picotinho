@@ -23,11 +23,14 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppConfig } from "@/hooks/useAppConfig";
 
 
 const Menu = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { acessoRestrito } = useAppConfig();
+  const bloqueado = acessoRestrito && !user;
   const [isMaster, setIsMaster] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userNickname, setUserNickname] = useState<string>('');
