@@ -35,6 +35,42 @@ const corsHeaders = {
  * 6. Sem processing_started_at ativo
  * 7. updated_at mais antigo que 5 minutos
  */
+/**
+ * Extrai o body real do erro retornado por `supabase.functions.invoke()`.
+ * O SDK encapsula respostas não-2xx em FunctionsHttpError, escondendo o body
+ * por trás de `error.context`. Sem isso, `errosCapturados` recebe apenas a
+ * string genérica "Edge Function returned a non-2xx status code", impedindo
+ * a classificação de instabilidade da SEFAZ. Esta função tenta, em ordem:
+ *   1. context.body como string → JSON.parse
+ *   2. context.body como objeto → uso direto (stringify)
+ *   3. context.json() quando disponível
+ * Sempre retorna uma string concatenando a mensagem original + body real.
+ */
+async function extrairBodyErroEdge(err: any): Promise<string> {
+  const baseMsg = String(err?.message || err || '');
+  if (!err) return baseMsg;
+  try {
+    const ctx = (err as any)?.context;
+    let bodyStr = '';
+    if (ctx?.body != null) {
+      if (typeof ctx.body === 'string') {
+        bodyStr = ctx.body;
+      } else if (typeof ctx.body === 'object') {
+        try { bodyStr = JSON.stringify(ctx.body); } catch { /* ignore */ }
+      }
+    }
+    if (!bodyStr && ctx && typeof ctx.json === 'function') {
+      try {
+        const parsed = await ctx.json();
+        bodyStr = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
+      } catch { /* ignore */ }
+    }
+    return bodyStr ? `${baseMsg} | ${bodyStr}` : baseMsg;
+  } catch {
+    return baseMsg;
+  }
+}
+
 function isGhostRecord(record: any, currentUserId: string): boolean {
   if (record.usuario_id !== currentUserId) return false;
   if (record.processada !== false) return false;
