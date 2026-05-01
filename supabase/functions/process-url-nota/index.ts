@@ -157,7 +157,7 @@ serve(async (req) => {
     // 🔒 VERIFICAÇÃO ANTECIPADA: chave já existe em nota ativa?
     const { data: existing, error: checkError } = await supabase
       .from('notas_imagens')
-      .select('id, usuario_id, processada, dados_extraidos, processing_started_at, updated_at')
+      .select('id, usuario_id, processada, dados_extraidos, processing_started_at, updated_at, status_processamento, tentativas_consulta, proxima_tentativa_em, motivo_pendencia')
       .eq('chave_acesso', chave)
       .neq('excluida', true)
       .limit(1);
@@ -167,6 +167,29 @@ serve(async (req) => {
       // Em caso de erro na verificação, segue o fluxo normal (o índice único protege)
     } else if (existing && existing.length > 0) {
       const existingRecord = existing[0];
+
+      // 🟡 IDEMPOTÊNCIA: nota do MESMO usuário em pendente_consulta → resposta amigável,
+      // sem criar registro novo, sem incrementar tentativas, sem disparar processamento.
+      if (
+        existingRecord.usuario_id === userId &&
+        existingRecord.status_processamento === 'pendente_consulta'
+      ) {
+        console.log('🟡 Reescaneamento de nota pendente — retornando resposta idempotente');
+        return new Response(
+          JSON.stringify({
+            success: true,
+            pendente: true,
+            jaRecebida: true,
+            notaId: existingRecord.id,
+            tentativaAtual: existingRecord.tentativas_consulta || 0,
+            maxTentativas: 6,
+            proximaTentativaEm: existingRecord.proxima_tentativa_em || null,
+            motivo: existingRecord.motivo_pendencia || null,
+            message: 'Essa nota já foi recebida e está em processamento automático.'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
 
       // Verificar se é um fantasma reaproveitável
       if (isGhostRecord(existingRecord, userId)) {

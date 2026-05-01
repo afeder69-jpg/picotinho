@@ -2297,6 +2297,38 @@ serve(async (req) => {
     
     console.log(`🔓 Lock de processamento liberado para nota ${finalNotaId}`);
 
+    // 🔔 Notificação de SUCESSO pós-pendência (apenas se a nota passou por pendente_consulta).
+    // Idempotência garantida por UNIQUE (nota_id, tipo) na tabela notificacoes_usuario.
+    try {
+      const { data: notaInfo } = await supabase
+        .from('notas_imagens')
+        .select('usuario_id, tentativas_consulta, dados_extraidos')
+        .eq('id', finalNotaId)
+        .maybeSingle();
+
+      if (notaInfo && (notaInfo.tentativas_consulta || 0) > 0) {
+        const dext: any = notaInfo.dados_extraidos || {};
+        const estabNome = dext?.estabelecimento?.nome
+          || dext?.emitente?.nome
+          || dext?.nome_estabelecimento
+          || 'seu estabelecimento';
+        const { error: notifErr } = await supabase
+          .from('notificacoes_usuario')
+          .insert({
+            usuario_id: notaInfo.usuario_id,
+            tipo: 'nota_processada_sucesso',
+            titulo: 'Nota fiscal processada',
+            mensagem: `Boa notícia! Sua nota fiscal de ${estabNome} foi autorizada pela SEFAZ e já foi processada. Os produtos já estão no seu estoque.`,
+            nota_id: finalNotaId,
+          });
+        if (notifErr && !String(notifErr.message || '').includes('uniq_notificacao_nota_tipo')) {
+          console.warn('⚠️ Falha ao inserir notificação de sucesso:', notifErr.message);
+        }
+      }
+    } catch (e: any) {
+      console.warn('⚠️ Exceção ao inserir notificação de sucesso:', e?.message);
+    }
+
     // 🤖 DISPARAR NORMALIZAÇÃO AUTOMÁTICA EM BACKGROUND
     console.log('🤖 Disparando normalização automática em background...');
     supabase.functions.invoke('processar-normalizacao-global', {

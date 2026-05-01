@@ -130,6 +130,46 @@ const BottomNavigation = () => {
     lastUserNavigationAt.current = Date.now();
   }, [location.pathname]);
 
+  // 🔔 Realtime: notificações finais ao usuário (sucesso pós-pendência ou falha definitiva)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`notif-user-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notificacoes_usuario',
+          filter: `usuario_id=eq.${user.id}`,
+        },
+        async (payload: any) => {
+          const n = payload?.new;
+          if (!n) return;
+          const isSucesso = n.tipo === 'nota_processada_sucesso';
+          toast({
+            title: `${isSucesso ? '✅' : '⚠️'} ${n.titulo}`,
+            description: n.mensagem,
+            duration: 12000,
+          });
+          try {
+            await supabase
+              .from('notificacoes_usuario')
+              .update({ lida: true })
+              .eq('id', n.id);
+          } catch (e) {
+            console.warn('Falha ao marcar notificação como lida:', e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const handleNoteConfirm = async () => {
     console.log('✅ [VIEWER] Nota confirmada, navegando para screenshots');
     
@@ -275,6 +315,42 @@ const BottomNavigation = () => {
             ? 'SEFAZ instável'
             : (info.mensagem || 'Erro ao processar nota');
           queueMarkErrorRef.current(queueItemId, erroLog);
+          return;
+        }
+
+        // 🟡 Reescaneamento de nota já em pendente_consulta (usuário distraído)
+        if (processData?.pendente === true && processData?.jaRecebida === true) {
+          console.log('🟡 Nota já recebida, em retry automático:', processData);
+          removeProcessingNote(tempId);
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(tempId);
+            return newMap;
+          });
+          let descricao = 'Essa nota já foi recebida e está em processamento. Vamos continuar tentando automaticamente.';
+          const tentativa = Number(processData.tentativaAtual || 0);
+          const maxTent = Number(processData.maxTentativas || 6);
+          if (processData.proximaTentativaEm) {
+            const ms = new Date(processData.proximaTentativaEm).getTime() - Date.now();
+            if (Number.isFinite(ms)) {
+              const minutos = Math.max(1, Math.round(ms / 60000));
+              descricao += ms <= 0
+                ? ' Próxima tentativa a qualquer momento.'
+                : ` Próxima tentativa em ~${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}.`;
+            }
+          }
+          if (tentativa > 0 && maxTent > 0) {
+            descricao += ` (tentativa ${tentativa} de ${maxTent})`;
+          }
+          toast({
+            title: '🟡 Essa nota já está sendo processada',
+            description: descricao,
+            duration: 12000,
+          });
+          if (processData?.notaId) {
+            queueToNotaIdRef.current.set(queueItemId, processData.notaId);
+          }
+          queueMarkDoneRef.current(queueItemId);
           return;
         }
 
