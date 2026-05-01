@@ -44,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'SIGNED_IN' && session?.user) {
           setTimeout(() => {
             handleGoogleProfileCreation(session.user);
+            enforceInviteForOAuth(session.user);
           }, 0);
         }
       }
