@@ -35,7 +35,7 @@ import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { detectarTipoDocumento, TipoDocumento, extrairChaveNFe, construirUrlConsulta } from "@/lib/documentDetection";
-import { interpretarErroProcessUrlNota, montarToastErroNota } from "@/lib/notasFiscais";
+import { interpretarErroProcessUrlNota, montarToastErroNota, classificarMensagemErroNota } from "@/lib/notasFiscais";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
