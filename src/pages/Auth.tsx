@@ -506,6 +506,32 @@ const AuthPage = () => {
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4">
+                {acessoRestrito && (
+                  <>
+                    <div className="p-3 rounded-md border border-primary/30 bg-primary/5 text-sm text-foreground">
+                      🔒 <strong>Cadastros são por convite.</strong> Insira o código que você recebeu para criar sua conta.
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-codigo">Código de convite *</Label>
+                      <Input
+                        id="signup-codigo"
+                        type="text"
+                        placeholder="XXXXXXXX"
+                        value={formData.codigoConvite}
+                        onChange={(e) => {
+                          const filtered = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+                          setFormData(prev => ({ ...prev, codigoConvite: filtered }));
+                        }}
+                        disabled={isLoading}
+                        maxLength={8}
+                        className="font-mono tracking-widest text-center"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        8 caracteres (letras maiúsculas e números)
+                      </p>
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">E-mail *</Label>
                   <Input
