@@ -38,11 +38,11 @@ export function NFCeWebViewer({ url, userId, isOpen, onClose, onConfirm }: NFCeW
 
   const handleConfirm = async () => {
     setIsProcessing(true);
-    
+
     try {
       console.log('✅ [WEBVIEW] Usuário confirmou processamento');
       console.log('📡 [API] Chamando process-url-nota...');
-      
+
       // Processar a nota fiscal via Edge Function
       const { data, error } = await supabase.functions.invoke('process-url-nota', {
         body: {
@@ -53,11 +53,17 @@ export function NFCeWebViewer({ url, userId, isOpen, onClose, onConfirm }: NFCeW
 
       if (error) {
         console.error('❌ [SERPRO] Erro ao processar:', error);
-        throw error;
+        const info = await interpretarErroProcessUrlNota(error);
+        const toastConfig = montarToastErroNota(info);
+        if (toastConfig) {
+          toast(toastConfig);
+        }
+        setIsProcessing(false);
+        return;
       }
 
       console.log('✅ [SUCESSO] Nota processada:', data);
-      
+
       toast({
         title: "✅ Nota fiscal processada!",
         description: "Produtos adicionados ao estoque",
@@ -67,16 +73,15 @@ export function NFCeWebViewer({ url, userId, isOpen, onClose, onConfirm }: NFCeW
       if (onConfirm) {
         onConfirm();
       }
-      
+
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [ERROR] Falha no processamento:', error);
-      
-      toast({
-        title: "❌ Erro ao processar nota",
-        description: "Não foi possível processar a nota fiscal. Tente novamente.",
-        variant: "destructive"
-      });
+      const info = await interpretarErroProcessUrlNota(error);
+      const toastConfig = montarToastErroNota(info);
+      if (toastConfig) {
+        toast(toastConfig);
+      }
     } finally {
       setIsProcessing(false);
     }
