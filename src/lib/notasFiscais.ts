@@ -249,10 +249,9 @@ export function montarToastErroNota(info: ErroProcessUrlNota): {
 
   // Fallback neutro: nunca usar variant destrutivo nesse fluxo
   return {
-    title: '⚠️ Não foi possível processar a nota',
+    title: '⚠️ Não conseguimos processar essa nota agora',
     description:
-      info.mensagem ||
-      'Não conseguimos processar essa nota agora. Tente novamente em alguns instantes.',
+      'Pode ter sido uma instabilidade momentânea. Tente novamente em alguns instantes 👍',
     duration: 7000,
   };
 }
