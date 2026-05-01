@@ -1326,8 +1326,33 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                                     )}
                                   </div>
                                 );
+                              if (sp === 'pendente_consulta') {
+                                const tent = receipt.tentativas_consulta ?? 0;
+                                const prox = receipt.proxima_tentativa_em
+                                  ? new Date(receipt.proxima_tentativa_em).toLocaleString('pt-BR')
+                                  : null;
+                                return (
+                                  <Badge
+                                    variant="secondary"
+                                    className="badge gap-1"
+                                    title={`Aguardando autorização da SEFAZ (provavelmente em contingência). Tentativas: ${tent}/6.${prox ? ` Próxima tentativa: ${prox}.` : ''}`}
+                                  >
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Aguardando autorização SEFAZ
+                                  </Badge>
+                                );
                               }
-                              // Default: comportamento atual (processada / pendente)
+                              if (sp === 'falha_definitiva_consulta') {
+                                return (
+                                  <Badge
+                                    variant="destructive"
+                                    className="badge"
+                                    title="Não foi possível confirmar esta nota fiscal. Ela pode não ter sido autorizada pela SEFAZ ou pode haver problema no emissor."
+                                  >
+                                    Não confirmada pela SEFAZ
+                                  </Badge>
+                                );
+                              }
                               return (
                                 <Badge
                                   variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
