@@ -235,6 +235,35 @@ const Menu = () => {
             </Card>
           )}
 
+          {isMaster && (
+            <Card 
+              className="mb-6 border-2 border-primary cursor-pointer transition-all duration-200 hover:shadow-lg bg-gradient-to-r from-primary/5 to-primary/10"
+              onClick={() => navigate('/admin/convites')}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-full bg-primary/20">
+                      <Shield className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-primary flex items-center gap-2">
+                        Convites de Acesso
+                        <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
+                          MASTER
+                        </span>
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Gerar e gerenciar códigos de convite
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-primary" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {bloqueado && (
             <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5 text-center">
               <p className="text-sm text-foreground">
