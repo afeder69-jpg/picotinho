@@ -23,11 +23,14 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppConfig } from "@/hooks/useAppConfig";
 
 
 const Menu = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { acessoRestrito } = useAppConfig();
+  const bloqueado = acessoRestrito && !user;
   const [isMaster, setIsMaster] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userNickname, setUserNickname] = useState<string>('');
@@ -232,49 +235,66 @@ const Menu = () => {
             </Card>
           )}
 
-          
+          {bloqueado && (
+            <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5 text-center">
+              <p className="text-sm text-foreground">
+                🔒 Acesso restrito. Faça login para usar as funcionalidades.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-3">
-            {menuOptions.map((option) => (
-              <Card 
-                key={option.id}
-                className={`transition-all duration-200 hover:shadow-md ${
-                  option.isActive ? 'cursor-pointer' : 'cursor-default opacity-75'
-                }`}
-                onClick={option.isActive ? option.onClick : undefined}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-full ${
-                        option.isActive ? 'bg-primary/10' : 'bg-muted'
-                      }`}>
-                        <option.icon className={`w-6 h-6 ${
-                          option.isActive ? 'text-primary' : 'text-muted-foreground'
-                        }`} />
-                      </div>
-                      <div>
-                        <h3 className={`font-semibold ${
-                          option.isActive ? 'text-foreground' : 'text-muted-foreground'
+            {menuOptions.map((option) => {
+              const desabilitado = bloqueado || !option.isActive;
+              const handleClick = () => {
+                if (bloqueado) {
+                  toast.info("Você precisa estar logado para acessar");
+                  return;
+                }
+                if (option.isActive) option.onClick();
+              };
+              return (
+                <Card
+                  key={option.id}
+                  className={`transition-all duration-200 hover:shadow-md ${
+                    desabilitado ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                  }`}
+                  onClick={handleClick}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-full ${
+                          desabilitado ? 'bg-muted' : 'bg-primary/10'
                         }`}>
-                          {option.title}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {option.description}
-                        </p>
-                        {!option.isActive && (
-                          <p className="text-xs text-muted-foreground/70 mt-1">
-                            Em breve
+                          <option.icon className={`w-6 h-6 ${
+                            desabilitado ? 'text-muted-foreground' : 'text-primary'
+                          }`} />
+                        </div>
+                        <div>
+                          <h3 className={`font-semibold ${
+                            desabilitado ? 'text-muted-foreground' : 'text-foreground'
+                          }`}>
+                            {option.title}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {option.description}
                           </p>
-                        )}
+                          {!option.isActive && (
+                            <p className="text-xs text-muted-foreground/70 mt-1">
+                              Em breve
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      {!desabilitado && (
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      )}
                     </div>
-                    {option.isActive && (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
           
           

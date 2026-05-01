@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/inappbrowser';
+import { useAppConfig } from '@/hooks/useAppConfig';
 
 const COOLDOWN_SECONDS = 60;
 
@@ -49,11 +50,13 @@ const AuthPage = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    telefone: ''
+    telefone: '',
+    codigoConvite: ''
   });
   const { toast } = useToast();
   const navigate = useNavigate();
   const isNative = Capacitor.isNativePlatform();
+  const { acessoRestrito } = useAppConfig();
 
   const resetCooldown = useCooldown();
   const signupCooldown = useCooldown();
@@ -132,9 +135,53 @@ const AuthPage = () => {
       return;
     }
 
+    // Validação de código de convite (somente em modo restrito)
+    const codigoNorm = formData.codigoConvite.toUpperCase().trim();
+    if (acessoRestrito) {
+      if (!/^[A-Z0-9]{8}$/.test(codigoNorm)) {
+        toast({
+          title: "Código de convite obrigatório",
+          description: "Informe um código de 8 caracteres (letras e números).",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
+      // 1) Em modo restrito: reservar convite ANTES do signUp
+      let tokenTemp: string | null = null;
+      if (acessoRestrito) {
+        const { data: consumirData, error: consumirErr } = await supabase.functions.invoke(
+          'consumir-convite',
+          { body: { codigo: codigoNorm, email: formData.email.toLowerCase().trim() } }
+        );
+
+        if (consumirErr || !consumirData?.ok) {
+          const motivo = consumirData?.motivo;
+          const mensagens: Record<string, string> = {
+            formato_invalido: "Código inválido. Use 8 caracteres (letras e números).",
+            email_invalido: "Informe um e-mail válido.",
+            inexistente: "Código de convite não encontrado.",
+            usado: "Este código já foi utilizado.",
+            expirado: "Este código de convite expirou.",
+            reservado: "Este código está em uso. Tente novamente em alguns minutos.",
+            email_nao_corresponde: "Este código foi gerado para outro e-mail.",
+            rate_limit: "Muitas tentativas. Aguarde um instante e tente novamente.",
+          };
+          toast({
+            title: "Não foi possível usar o convite",
+            description: mensagens[motivo as string] || consumirData?.mensagem || "Convite inválido.",
+            variant: "destructive",
+          });
+          return;
+        }
+        tokenTemp = consumirData.token_temp;
+      }
+
+      // 2) signUp normal
       const cleanPhone = formData.telefone.replace(/\D/g, '');
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -167,13 +214,28 @@ const AuthPage = () => {
           return;
         }
 
+        // 3) Confirmar convite (best-effort — só após confirmar e-mail e logar é que o JWT estará ativo).
+        // Como Supabase exige confirmação por e-mail, o token_temp (10min) será usado pelo
+        // próprio confirmar-convite no primeiro login. Disparamos aqui caso já haja sessão (auto-confirm habilitado).
+        if (tokenTemp && data.session) {
+          try {
+            await supabase.functions.invoke('confirmar-convite', { body: { token_temp: tokenTemp } });
+          } catch (e) {
+            console.warn('confirmar-convite falhou (best-effort):', e);
+          }
+        }
+        // Guarda o token para confirmação posterior, no primeiro login
+        if (tokenTemp) {
+          try { localStorage.setItem('picotinho_convite_token', tokenTemp); } catch {}
+        }
+
         signupCooldown.startCooldown();
         toast({
           title: "Cadastro realizado com sucesso! ✅",
           description: "Enviamos um e-mail de confirmação para sua caixa de entrada. Acesse seu e-mail e clique no link para ativar sua conta.",
           variant: "default",
         });
-        setFormData({ email: '', password: '', telefone: '' });
+        setFormData({ email: '', password: '', telefone: '', codigoConvite: '' });
       }
     } catch (error) {
       console.error('Erro no cadastro:', error);
@@ -270,6 +332,18 @@ const AuthPage = () => {
       }
 
       toast({ title: "Login realizado!", description: "Bem-vindo de volta!" });
+
+      // Best-effort: confirma convite pendente após primeiro login
+      try {
+        const tokenPendente = localStorage.getItem('picotinho_convite_token');
+        if (tokenPendente) {
+          await supabase.functions.invoke('confirmar-convite', { body: { token_temp: tokenPendente } });
+          localStorage.removeItem('picotinho_convite_token');
+        }
+      } catch (e) {
+        console.warn('confirmar-convite pós-login falhou:', e);
+      }
+
       navigate('/');
     } catch (error) {
       console.error('Erro no login:', error);
@@ -432,6 +506,32 @@ const AuthPage = () => {
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4">
+                {acessoRestrito && (
+                  <>
+                    <div className="p-3 rounded-md border border-primary/30 bg-primary/5 text-sm text-foreground">
+                      🔒 <strong>Cadastros são por convite.</strong> Insira o código que você recebeu para criar sua conta.
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-codigo">Código de convite *</Label>
+                      <Input
+                        id="signup-codigo"
+                        type="text"
+                        placeholder="XXXXXXXX"
+                        value={formData.codigoConvite}
+                        onChange={(e) => {
+                          const filtered = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+                          setFormData(prev => ({ ...prev, codigoConvite: filtered }));
+                        }}
+                        disabled={isLoading}
+                        maxLength={8}
+                        className="font-mono tracking-widest text-center"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        8 caracteres (letras maiúsculas e números)
+                      </p>
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">E-mail *</Label>
                   <Input
