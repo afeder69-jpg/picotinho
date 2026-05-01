@@ -865,12 +865,18 @@ const BottomNavigation = () => {
 
           if (statusNovo === 'erro') {
             const msg = novo.erro_mensagem || 'Falha ao processar a nota';
-            toast({
-              title: '❌ Erro ao processar nota',
-              description: msg,
-              variant: 'destructive',
-              duration: 8000,
-            });
+            // Usa o mesmo helper padronizado dos demais caminhos
+            // (BottomNavigation inicial, NFCeWebViewer, InternalWebViewer).
+            // Aqui só temos a string `erro_mensagem` (sem objeto SDK),
+            // então classificamos por padrões via classificarMensagemErroNota.
+            const info = classificarMensagemErroNota(msg);
+            const toastConfig = montarToastErroNota(info);
+            if (toastConfig) {
+              // Nunca usar vermelho neste listener — falhas de extração
+              // devem aparecer com tom neutro/amigável.
+              const { variant, ...rest } = toastConfig;
+              toast(rest);
+            }
             markQueueErrorByNotaId(novo.id, msg);
             removeProcessingNote(novo.id);
             activelyProcessingRef.current.delete(novo.id);
