@@ -1,148 +1,126 @@
-# Bloqueio Total de Cadastro no Modo Restrito + Painel de Controle
+# Plano: Suporte a NFC-e do Ceará (CE) via InfoSimples
 
 ## Objetivo
 
-Com `app_config.acesso_restrito = true`, **nenhum** usuário novo entra no sistema sem convite válido — independente do provider (email, Google, Facebook). E dar ao master controle direto sobre essa flag, com reautenticação.
+Adicionar processamento de NFC-e emitidas no Ceará (UF 23) usando o endpoint InfoSimples específico do CE, **sem alterar nada do fluxo atual** (RJ via InfoSimples e demais UFs via extração HTML).
 
----
+## Estratégia
 
-## Parte 1 — Trigger de Bloqueio em `auth.users` (camada autoritativa)
+Criar uma **nova edge function isolada** `process-nfce-infosimples-ce` (clone enxuto do RJ adaptado ao payload do CE) e adicionar **um único `else if`** em `process-url-nota` para rotear UF=23 para ela. Tudo o que já funciona segue intacto.
 
-Migration nova com função `public.enforce_invite_on_signup()` `SECURITY DEFINER` + trigger `BEFORE INSERT ON auth.users`.
-
-**Lógica:**
-
-1. Lê `acesso_restrito` de `app_config`. Se `false` → permite (early return).
-2. Se `true`, identifica provider em `NEW.raw_app_meta_data->>'provider'`.
-3. Busca em `convites_acesso` um convite ligado ao e-mail `lower(NEW.email)`:
-   - **Para `email`**: aceita convite com `status = 'reservado'` E `token_expira_em > now()` E `email_destino = lower(NEW.email)`. Esse é o estado deixado pelo `consumir-convite` momentos antes do `signUp`.
-   - **Para `google` / `facebook` / outros OAuth**: aceita convite com `status IN ('disponivel','reservado')` E `email_destino = lower(NEW.email)` E (sem `token_expira_em` OU `token_expira_em > now()` no caso de reservado) E (sem `expira_em` global OU `expira_em > now()`).
-4. Se **nenhum** convite válido → `RAISE EXCEPTION 'PICOTINHO_NO_INVITE: cadastro restrito a usuários convidados'`.
-
-**Trigger `AFTER INSERT ON auth.users`** (`public.mark_invite_used_after_signup`) — só age quando `acesso_restrito = true` E provider é OAuth (não email):
-- Marca o convite (`email_destino = NEW.email`, `status IN ('disponivel','reservado')`) como `usado`, `usado_por = NEW.id`, `usado_em = now()`, limpa `token_temp`.
-- Para provider `email`, **não toca** no convite — o fluxo existente (`confirmar-convite` chamado pós-login) continua dono dessa transição. Isso evita conflito com o que já está em produção.
-
-**Garantias:**
-- Usuário antigo (já em `auth.users`) → trigger não dispara, login intacto.
-- `acesso_restrito = false` → early return, comportamento atual liberado.
-- Cadastro por e-mail com convite válido → `consumir-convite` reserva → `signUp` passa pelo trigger (encontra reservado) → fluxo atual segue.
-- Cadastro por e-mail SEM passar pelo `consumir-convite` (ex: chamada direta da API) → bloqueado.
-- OAuth novo sem convite → bloqueado.
-- OAuth novo com convite emitido → permitido, convite vira `usado`.
-
----
-
-## Parte 2 — Cleanup no Frontend (defesa em profundidade)
-
-`src/components/auth/AuthProvider.tsx`: no `onAuthStateChange`, evento `SIGNED_IN`:
-
-- Se `acesso_restrito = true` E provider OAuth E o usuário **não tem** convite `usado` ligado a ele (`usado_por = user.id` OU `email_destino = user.email`):
-  - `signOut()` imediato.
-  - Toast: *"Cadastro restrito. É necessário um convite para acessar o Picotinho."*
-  - Redirect para `/auth`.
-
-Cobre edge cases (sessão antiga, falha de trigger, OAuth criado antes do bloqueio).
-
-`src/pages/Auth.tsx`:
-- Quando `acesso_restrito` true, mostrar nota discreta sob os botões sociais: *"Login social disponível apenas para usuários convidados."*
-- Tratar erro do `signUp` por e-mail: se mensagem contém `PICOTINHO_NO_INVITE` ou `database error` em modo restrito, exibir toast claro de "convite obrigatório".
-
----
-
-## Parte 3 — Painel "Controle de Acesso" para Master
-
-### Backend: edge function nova `toggle-acesso-restrito`
-
-`supabase/functions/toggle-acesso-restrito/index.ts` (com `verify_jwt = true` em `config.toml`):
-
-1. Valida JWT via `requireMaster` (já existe em `_shared/auth.ts`).
-2. Body: `{ novo_valor: boolean, senha: string }`.
-3. **Reautentica**: chama `supabase.auth.signInWithPassword({ email: ctx.email, password: senha })` usando client anônimo. Se falhar → 401 `senha_invalida`.
-4. Lê `valor` atual de `app_config` onde `chave = 'acesso_restrito'`.
-5. Faz `UPDATE app_config SET valor = novo_valor WHERE chave = 'acesso_restrito'`.
-6. Insere log em nova tabela `acesso_restrito_log`: `{ alterado_por, email, valor_anterior, valor_novo, alterado_em }`.
-7. Retorna `{ ok: true, valor_atual: novo_valor }`.
-
-### Migration adicional
-
-```sql
-CREATE TABLE public.acesso_restrito_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  alterado_por uuid NOT NULL REFERENCES auth.users(id),
-  email text,
-  valor_anterior boolean NOT NULL,
-  valor_novo boolean NOT NULL,
-  alterado_em timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.acesso_restrito_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Masters podem ver logs"
-  ON public.acesso_restrito_log FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'master'));
--- INSERT só via service_role (edge function).
+```text
+QR escaneado
+   │
+   ▼
+process-url-nota  ── modelo=65 + UF=33 ──▶ process-nfce-infosimples       (RJ, inalterado)
+                 ── modelo=65 + UF=23 ──▶ process-nfce-infosimples-ce    (NOVO)
+                 ── modelo=65 + outras─▶ extract-receipt-image           (inalterado)
+                 ── modelo=55         ──▶ process-nfe-infosimples        (inalterado)
 ```
 
-### Frontend: nova página `src/pages/admin/ControleAcesso.tsx`
+## Mudanças
 
-- Rota `/admin/controle-acesso` registrada em `App.tsx`.
-- Link na área master/menu admin (mesmo lugar onde está `/admin/convites`), visível só para `has_role('master')`.
-- Conteúdo:
-  - **Status atual** com badge: "🔒 Acesso Restrito ATIVO" ou "🔓 Acesso Liberado".
-  - Texto explicativo curto do que significa cada estado.
-  - Botão "Desativar restrição" / "Ativar restrição" conforme estado.
-  - Ao clicar, abre `AlertDialog` de confirmação com:
-    - Texto explicando consequência.
-    - Campo `Input type="password"` "Confirme sua senha".
-    - Botões "Cancelar" / "Confirmar alteração".
-  - "Confirmar" chama `supabase.functions.invoke('toggle-acesso-restrito', { body: { novo_valor, senha } })`.
-  - Em caso de sucesso: toast verde + `queryClient.invalidateQueries(['app_config'])` para refletir em todo o app.
-  - Em caso de senha inválida: toast vermelho específico, dialog permanece aberto.
-  - Tabela "Histórico de alterações" mostrando últimos 20 registros de `acesso_restrito_log` (data, e-mail, anterior → novo).
+### 1. Nova edge function: `supabase/functions/process-nfce-infosimples-ce/index.ts`
 
-### Proteção da rota
+Provider exclusivo do Ceará. Estrutura espelhada na do RJ para reaproveitar o restante do pipeline (cache `nfce_cache_infosimples`, normalização de estabelecimento via RPC `normalizar_nome_estabelecimento`, `finalize-nota-estoque`, status `aguardando_estoque`, `NfcePendenteSefazError`, idempotência etc.).
 
-Wrapper que verifica role master no client (UX) — proteção real é a RLS + JWT da edge function.
+**Pontos específicos do CE:**
 
----
+- **Endpoint:** `POST https://api.infosimples.com/api/v2/consultas/sefaz/ce/nfce`
+  - Body `application/x-www-form-urlencoded`: `token`, `nfce` (chave 44 dígitos), `timeout=600`.
+  - Reusa o secret `INFOSIMPLES_TOKEN` já existente.
+- **Log:** prefixo `[NFCE-CE]` em toda execução para auditar uso do provider.
+- **Cache:** `nfce_cache_infosimples` reaproveitado (chave de acesso é única globalmente).
+- **Mapeamento da resposta:**
+  | Campo destino                  | Origem                                                  |
+  |-------------------------------|----------------------------------------------------------|
+  | `estabelecimento.nome`        | `data[0].emitente.nome` (com normalização via RPC)       |
+  | `estabelecimento.cnpj`        | `data[0].emitente.cnpj` (apenas dígitos)                 |
+  | `compra.data_emissao`         | `data[0].nfe.data_emissao` (parser seguro — ver abaixo)  |
+  | `valor_total` / `compra.valor_total` | `data[0].nfe.normalizado_valor_total`             |
+  | `itens[]`                     | `data[0].produtos[]`                                     |
 
-## Arquivos Tocados
+  Para cada item:
+  | Campo destino       | Origem                          |
+  |---------------------|---------------------------------|
+  | `nome` / `descricao`| `descricao`                     |
+  | `quantidade`        | `qtd` (via `parseBrazilianFloat`) |
+  | `valor_total`       | `normalizado_valor`             |
+  | `valor_unitario`    | `valor_unitario_comercial`      |
+  | `codigo_barras`     | `ean_comercial` (sanitizado, ver abaixo) |
+  | `categoria`         | `categorizarProduto(descricao)` |
+  | `unidade`           | `p.unidade || 'UN'`             |
 
-**Migrations:**
-- `<ts>_oauth_invite_gate.sql` — funções e triggers em `auth.users`.
-- `<ts>_acesso_restrito_log.sql` — tabela de log + RLS.
+- **Fallback de `valor_unitario`:**
+  ```ts
+  let valorUnitario = parseBrazilianFloat(p.valor_unitario_comercial);
+  if (!valorUnitario || valorUnitario <= 0) {
+    valorUnitario = quantidade > 0 ? +(valorTotalItem / quantidade).toFixed(6) : 0;
+    console.log('[NFCE-CE] valor_unitario_comercial ausente, calculado');
+  }
+  ```
 
-**Edge functions:**
-- `supabase/functions/toggle-acesso-restrito/index.ts` (novo).
-- `supabase/config.toml` — registrar `verify_jwt = true` para a nova função.
+- **AJUSTE 1 — Parser seguro de data:** função `parseDataEmissao(raw)` que aceita ISO (`2025-10-04T09:43:14-03:00`) e formato brasileiro (`DD/MM/YYYY HH:mm:ss`, com ou sem timezone), e trata `YYYY-MM-DD` como literal local (`YYYY-MM-DDT00:00:00`). **Nunca** usa `new Date('YYYY-MM-DD')` direto, evitando o bug clássico de timezone que retrocede o dia em UTC-3. Mesma estratégia já adotada no provider RJ.
 
-**Frontend:**
-- `src/components/auth/AuthProvider.tsx` — cleanup OAuth pós-`SIGNED_IN`.
-- `src/pages/Auth.tsx` — aviso sob botões sociais + tratamento `PICOTINHO_NO_INVITE`.
-- `src/pages/admin/ControleAcesso.tsx` (novo).
-- `src/App.tsx` — rota `/admin/controle-acesso`.
-- `src/pages/admin/Convites.tsx` ou Menu admin — link para "Controle de Acesso".
+- **AJUSTE 2 — Sanitização de EAN:** função `limparEAN(valor)` retorna `null` para:
+  - vazio / `undefined` / `null`
+  - string `"SEM GTIN"` (qualquer caixa, com ou sem espaços)
+  - somente zeros
+  - tamanhos diferentes de 8/12/13/14 dígitos (padrões EAN-8, UPC-A, EAN-13, GTIN-14)
+  - qualquer valor sem dígitos válidos
 
----
+  Garante que `codigo_barras` no banco fique limpo, sem poluição.
 
-## O Que NÃO Muda
+- **Pendência SEFAZ:** mesma classificação via `classificarRespostaInfoSimples` + `NfcePendenteSefazError` para integrar com retry/notificações já existentes.
+- **Persistência:** mesmo `update` em `notas_imagens` com `status_processamento: 'aguardando_estoque'` e disparo fire-and-forget de `finalize-nota-estoque` — mantém o ciclo `pendente_consulta → aguardando_estoque → processando → processada` idêntico ao atual.
+- **Sem alterações** em normalização, categorização, banco, RLS, schema ou tabelas.
 
-- Login por e-mail/senha de usuários existentes.
-- Login Google/Facebook de usuários já existentes.
-- Fluxo de cadastro por convite (e-mail/senha) já implementado.
-- Edge functions `consumir-convite`, `confirmar-convite`, `liberar-convite`.
-- Comportamento com `acesso_restrito = false`.
+### 2. Roteamento em `supabase/functions/process-url-nota/index.ts`
 
----
+Adicionar **um único bloco** antes do `else if (modelo === '65' && uf === '33')`:
 
-## Critério de Aceitação
+```ts
+} else if (modelo === '65' && uf === '23') {
+  console.log('🎫 [NFCE-CE] Processando via InfoSimples (Ceará)...');
+  const { data: nfceData, error: nfceError } = await supabase.functions.invoke(
+    'process-nfce-infosimples-ce',
+    { body: { chaveAcesso: chave, userId, notaImagemId: notaId } }
+  );
+  if (nfceError) {
+    console.error('⚠️ Erro ao processar NFCe-CE via InfoSimples:', nfceError);
+    errosCapturados.push(await extrairBodyErroEdge(nfceError));
+  } else if (nfceData?.pendente === true) {
+    console.warn('⏳ [NFCE-CE] Pendente SEFAZ:', nfceData.motivo);
+    pendenteSefaz = { motivo: nfceData.motivo || 'sefaz_nao_autorizada', detalhe: nfceData.detalhe || '' };
+  } else {
+    console.log('✅ NFCe-CE processada via InfoSimples:', nfceData);
+    extracaoSucesso = true;
+  }
+}
+```
 
-Com `acesso_restrito = true`:
-1. Cadastro por e-mail SEM passar pelo fluxo de convite → bloqueado pelo trigger.
-2. Cadastro por e-mail COM convite reservado pelo `consumir-convite` → funciona.
-3. Google/Facebook novo sem convite → bloqueado, sem usuário criado, toast claro.
-4. Google/Facebook novo com convite emitido para o e-mail → entra, convite vira `usado`.
-5. Login de qualquer usuário antigo → funciona normalmente.
-6. Master acessa `/admin/controle-acesso`, vê status, alterna com confirmação + senha, log é gravado.
-7. Não-master que tente acessar a rota ou chamar a edge function → 403.
+Nada mais é alterado nesse arquivo. UF 33 segue no caminho RJ; demais UFs seguem para `extract-receipt-image`.
 
-Posso aplicar?
+### 3. Nada a fazer
+
+- Sem migrations.
+- Sem mudanças em `process-receipt-full`, `finalize-nota-estoque`, `retry-consulta-nfce-pendente`, frontend, normalização, ou tipos.
+- Sem novos secrets (`INFOSIMPLES_TOKEN` já existe).
+
+## Garantias
+
+- Fluxo RJ (UF 33) **não tocado**.
+- Fluxo NFe (modelo 55) **não tocado**.
+- Fallback HTML para outras UFs **não tocado**.
+- Reentrada de pendências, idempotência de reescaneamento e notificações pós-pendência continuam funcionando porque o provider CE termina exatamente no mesmo estado (`aguardando_estoque`) e usa o mesmo `NfcePendenteSefazError`.
+- Datas livres do bug de timezone (parser seguro).
+- `codigo_barras` nunca será gravado como `"SEM GTIN"`, vazio, ou string inválida.
+- Logs `[NFCE-CE]` permitem auditar quando o provider foi utilizado.
+
+## Validação sugerida pós-deploy
+
+1. Escanear NFC-e do Ceará → conferir log `[NFCE-CE] Iniciando (provider Ceará)...`.
+2. Conferir em `notas_imagens.dados_extraidos.itens` se `valor_unitario` veio correto (com e sem `valor_unitario_comercial` na origem) e `codigo_barras` como `null` quando origem é `"SEM GTIN"`.
+3. Conferir `compra.data_emissao` no fuso correto (sem retroceder um dia).
+4. Conferir transição `aguardando_estoque → processando → processada`.
+5. Reescanear a mesma chave durante `pendente_consulta` → resposta idempotente (já garantida em `process-url-nota`).
