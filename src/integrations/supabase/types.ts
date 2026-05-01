@@ -1488,15 +1488,18 @@ export type Database = {
         Row: {
           chave_acesso: string | null
           compra_id: string | null
+          consulta_finalizada_em: string | null
           created_at: string | null
           dados_extraidos: Json | null
           data_criacao: string
           debug_texto: string | null
           erro_mensagem: string | null
           excluida: boolean | null
+          historico_tentativas: Json
           id: string
           imagem_path: string
           imagem_url: string
+          motivo_pendencia: string | null
           nome_original: string | null
           normalizada: boolean | null
           normalizada_em: string | null
@@ -1506,8 +1509,10 @@ export type Database = {
           processada: boolean | null
           processing_started_at: string | null
           produtos_normalizados: number | null
+          proxima_tentativa_em: string | null
           status_aprovacao: string | null
           status_processamento: string | null
+          tentativas_consulta: number
           tentativas_finalizacao: number
           tentativas_normalizacao: number | null
           updated_at: string | null
@@ -1516,15 +1521,18 @@ export type Database = {
         Insert: {
           chave_acesso?: string | null
           compra_id?: string | null
+          consulta_finalizada_em?: string | null
           created_at?: string | null
           dados_extraidos?: Json | null
           data_criacao?: string
           debug_texto?: string | null
           erro_mensagem?: string | null
           excluida?: boolean | null
+          historico_tentativas?: Json
           id?: string
           imagem_path: string
           imagem_url: string
+          motivo_pendencia?: string | null
           nome_original?: string | null
           normalizada?: boolean | null
           normalizada_em?: string | null
@@ -1534,8 +1542,10 @@ export type Database = {
           processada?: boolean | null
           processing_started_at?: string | null
           produtos_normalizados?: number | null
+          proxima_tentativa_em?: string | null
           status_aprovacao?: string | null
           status_processamento?: string | null
+          tentativas_consulta?: number
           tentativas_finalizacao?: number
           tentativas_normalizacao?: number | null
           updated_at?: string | null
@@ -1544,15 +1554,18 @@ export type Database = {
         Update: {
           chave_acesso?: string | null
           compra_id?: string | null
+          consulta_finalizada_em?: string | null
           created_at?: string | null
           dados_extraidos?: Json | null
           data_criacao?: string
           debug_texto?: string | null
           erro_mensagem?: string | null
           excluida?: boolean | null
+          historico_tentativas?: Json
           id?: string
           imagem_path?: string
           imagem_url?: string
+          motivo_pendencia?: string | null
           nome_original?: string | null
           normalizada?: boolean | null
           normalizada_em?: string | null
@@ -1562,8 +1575,10 @@ export type Database = {
           processada?: boolean | null
           processing_started_at?: string | null
           produtos_normalizados?: number | null
+          proxima_tentativa_em?: string | null
           status_aprovacao?: string | null
           status_processamento?: string | null
+          tentativas_consulta?: number
           tentativas_finalizacao?: number
           tentativas_normalizacao?: number | null
           updated_at?: string | null
