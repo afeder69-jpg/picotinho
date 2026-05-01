@@ -230,6 +230,7 @@ serve(async (req) => {
 
       if (nfeError) {
         console.error('⚠️ Erro ao processar NFe via InfoSimples (falha definitiva - única via):', nfeError);
+        errosCapturados.push(String(nfeError?.message || nfeError || ''));
       } else {
         console.log('✅ NFe processada via InfoSimples:', nfeData);
         extracaoSucesso = true;
