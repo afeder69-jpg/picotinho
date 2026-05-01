@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/inappbrowser';
+import { useAppConfig } from '@/hooks/useAppConfig';
 
 const COOLDOWN_SECONDS = 60;
 
@@ -49,11 +50,13 @@ const AuthPage = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    telefone: ''
+    telefone: '',
+    codigoConvite: ''
   });
   const { toast } = useToast();
   const navigate = useNavigate();
   const isNative = Capacitor.isNativePlatform();
+  const { acessoRestrito } = useAppConfig();
 
   const resetCooldown = useCooldown();
   const signupCooldown = useCooldown();
