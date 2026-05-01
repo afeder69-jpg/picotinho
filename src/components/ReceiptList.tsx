@@ -1326,6 +1326,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                                     )}
                                   </div>
                                 );
+                              }
                               if (sp === 'pendente_consulta') {
                                 const tent = receipt.tentativas_consulta ?? 0;
                                 const prox = receipt.proxima_tentativa_em
