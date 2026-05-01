@@ -266,7 +266,7 @@ serve(async (req) => {
 
       if (nfeError) {
         console.error('⚠️ Erro ao processar NFe via InfoSimples (falha definitiva - única via):', nfeError);
-        errosCapturados.push(String(nfeError?.message || nfeError || ''));
+        errosCapturados.push(await extrairBodyErroEdge(nfeError));
       } else {
         console.log('✅ NFe processada via InfoSimples:', nfeData);
         extracaoSucesso = true;
@@ -284,7 +284,7 @@ serve(async (req) => {
 
       if (nfceError) {
         console.error('⚠️ Erro ao processar NFCe via InfoSimples:', nfceError);
-        errosCapturados.push(String(nfceError?.message || nfceError || ''));
+        errosCapturados.push(await extrairBodyErroEdge(nfceError));
         console.log('🔄 Tentando fallback via extração HTML...');
 
         const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
@@ -296,7 +296,7 @@ serve(async (req) => {
 
         if (extractError) {
           console.error('⚠️ Erro no fallback HTML (falha definitiva - ambas vias falharam):', extractError);
-          errosCapturados.push(String(extractError?.message || extractError || ''));
+          errosCapturados.push(await extrairBodyErroEdge(extractError));
         } else {
           console.log('✅ Fallback concluído:', extractData);
           extracaoSucesso = true;
@@ -317,7 +317,7 @@ serve(async (req) => {
 
       if (extractError) {
         console.error('⚠️ Erro ao extrair NFCe (falha definitiva - única via):', extractError);
-        errosCapturados.push(String(extractError?.message || extractError || ''));
+        errosCapturados.push(await extrairBodyErroEdge(extractError));
       } else {
         console.log('✅ NFCe extraída:', extractData);
         extracaoSucesso = true;
@@ -340,7 +340,9 @@ serve(async (req) => {
       const errosJoined = errosCapturados.join(' | ').toLowerCase();
       const padroesInstabilidade = [
         'code 600', 'code: 600', '"code":600',
-        'unexpected error', 'unexpected_error',
+        'unexpected error', 'unexpected_error', 'unexpected',
+        'erro inesperado', 'um erro inesperado',
+        'infosimples error',
         'timeout', 'timed out',
         '502', '503', '504',
         'html vazio', 'empty html', 'no valid html',
