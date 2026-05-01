@@ -254,58 +254,18 @@ const BottomNavigation = () => {
             return newMap;
           });
 
-          // Tentar extrair body estruturado do erro (FunctionsHttpError)
-          let errorCode = '';
-          let errorMessage = '';
-          let errorReason = '';
-          try {
-            const ctx = (processError as any).context;
-            if (ctx) {
-              const body = typeof ctx.body === 'string' ? JSON.parse(ctx.body) : (typeof ctx.json === 'function' ? await ctx.json() : null);
-              if (body) {
-                errorCode = body.error || '';
-                errorMessage = body.message || '';
-                errorReason = body.reason || '';
-              }
-            }
-          } catch (_) { /* ignore parse errors */ }
-
-          // Mensagem específica para falha definitiva de extração
-          if (errorCode === 'EXTRACAO_FALHOU') {
-            if (errorReason === 'SEFAZ_INSTAVEL') {
-              toast({
-                title: "⏳ Consulta indisponível no momento",
-                description: "Estamos com uma instabilidade na SEFAZ para consultar essa nota agora. Pode aguardar alguns minutos e tentar novamente — normalmente isso se resolve rápido. Se preferir, você pode tentar mais tarde também. Seus dados estão seguros 👍",
-                duration: 9000,
-              });
-              queueMarkErrorRef.current(queueItemId, 'SEFAZ instável');
-              return;
-            }
-            const msg = errorMessage || 'Não conseguimos ler esta nota agora. Tente novamente em instantes.';
-            toast({
-              title: "⚠️ Não foi possível ler a nota",
-              description: msg,
-              duration: 8000,
-            });
-            queueMarkErrorRef.current(queueItemId, msg);
-            return;
+          const info = await interpretarErroProcessUrlNota(processError);
+          const toastConfig = montarToastErroNota(info);
+          if (toastConfig) {
+            toast(toastConfig);
           }
-
-          // Nunca exibir mensagem genérica do SDK em inglês para o usuário
-          const rawMsg = processError.message || '';
-          const isGenericSdkError = rawMsg.includes('non-2xx') || rawMsg.includes('Edge Function') || rawMsg.includes('FunctionsHttpError');
-          const userMessage = isGenericSdkError 
-            ? 'Erro ao processar nota fiscal. Tente novamente.' 
-            : rawMsg || 'Tente novamente';
-          toast({
-            title: "❌ Erro ao processar nota",
-            description: userMessage,
-            variant: "destructive",
-          });
-          queueMarkErrorRef.current(queueItemId, userMessage);
+          const erroLog = info.codigo === 'EXTRACAO_FALHOU' && info.reason === 'SEFAZ_INSTAVEL'
+            ? 'SEFAZ instável'
+            : (info.mensagem || 'Erro ao processar nota');
+          queueMarkErrorRef.current(queueItemId, erroLog);
           return;
         }
-        
+
         // Verificar possíveis nomes do campo
         const noteId = processData?.notaId || processData?.nota_id || processData?.id;
         
