@@ -1986,6 +1986,13 @@ const EstoqueAtual = () => {
         </DropdownMenu>
       </PageHeader>
 
+      {notasPendentesCount > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          <strong>Você possui {notasPendentesCount} nota{notasPendentesCount > 1 ? 's' : ''} fiscal{notasPendentesCount > 1 ? 'is' : ''} em processamento.</strong>{' '}
+          Os produtos podem ainda não aparecer no estoque até a conclusão.
+        </div>
+      )}
+
       {/* Painel de busca local isolado */}
       {buscaEstoqueAberta && (
         <div className="bg-card border-b border-border px-4 py-3 sticky top-[57px] z-10">
