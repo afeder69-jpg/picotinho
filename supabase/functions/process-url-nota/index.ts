@@ -251,22 +251,22 @@ serve(async (req) => {
     console.log('✅ Nota criada com sucesso:', notaId);
 
     let extracaoSucesso = false;
+    let pendenteSefaz: { motivo: string; detalhe: string } | null = null;
     const errosCapturados: string[] = [];
 
     if (modelo === '55') {
       console.log('📄 [NFE] Processando via InfoSimples...');
 
       const { data: nfeData, error: nfeError } = await supabase.functions.invoke('process-nfe-infosimples', {
-        body: {
-          chaveAcesso: chave,
-          userId,
-          notaImagemId: notaId
-        }
+        body: { chaveAcesso: chave, userId, notaImagemId: notaId }
       });
 
       if (nfeError) {
-        console.error('⚠️ Erro ao processar NFe via InfoSimples (falha definitiva - única via):', nfeError);
+        console.error('⚠️ Erro ao processar NFe via InfoSimples:', nfeError);
         errosCapturados.push(await extrairBodyErroEdge(nfeError));
+      } else if (nfeData?.pendente === true) {
+        console.warn('⏳ [NFE] Pendente SEFAZ:', nfeData.motivo);
+        pendenteSefaz = { motivo: nfeData.motivo || 'sefaz_nao_autorizada', detalhe: nfeData.detalhe || '' };
       } else {
         console.log('✅ NFe processada via InfoSimples:', nfeData);
         extracaoSucesso = true;
@@ -275,11 +275,7 @@ serve(async (req) => {
       console.log('🎫 [NFCE-RJ] Processando via InfoSimples...');
 
       const { data: nfceData, error: nfceError } = await supabase.functions.invoke('process-nfce-infosimples', {
-        body: {
-          chaveAcesso: chave,
-          userId,
-          notaImagemId: notaId
-        }
+        body: { chaveAcesso: chave, userId, notaImagemId: notaId }
       });
 
       if (nfceError) {
@@ -288,40 +284,72 @@ serve(async (req) => {
         console.log('🔄 Tentando fallback via extração HTML...');
 
         const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
-          body: {
-            notaImagemId: notaId,
-            userId
-          }
+          body: { notaImagemId: notaId, userId }
         });
 
         if (extractError) {
-          console.error('⚠️ Erro no fallback HTML (falha definitiva - ambas vias falharam):', extractError);
+          console.error('⚠️ Erro no fallback HTML:', extractError);
           errosCapturados.push(await extrairBodyErroEdge(extractError));
         } else {
           console.log('✅ Fallback concluído:', extractData);
           extracaoSucesso = true;
         }
+      } else if (nfceData?.pendente === true) {
+        console.warn('⏳ [NFCE-RJ] Pendente SEFAZ:', nfceData.motivo);
+        pendenteSefaz = { motivo: nfceData.motivo || 'sefaz_nao_autorizada', detalhe: nfceData.detalhe || '' };
       } else {
         console.log('✅ NFCe-RJ processada via InfoSimples:', nfceData);
         extracaoSucesso = true;
       }
     } else if (modelo === '65') {
-      console.log(`🎫 [NFCE-${uf}] Processando via extração HTML (UF não suportada pelo InfoSimples)...`);
+      console.log(`🎫 [NFCE-${uf}] Processando via extração HTML...`);
 
       const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
-        body: {
-          notaImagemId: notaId,
-          userId
-        }
+        body: { notaImagemId: notaId, userId }
       });
 
       if (extractError) {
-        console.error('⚠️ Erro ao extrair NFCe (falha definitiva - única via):', extractError);
+        console.error('⚠️ Erro ao extrair NFCe:', extractError);
         errosCapturados.push(await extrairBodyErroEdge(extractError));
       } else {
         console.log('✅ NFCe extraída:', extractData);
         extracaoSucesso = true;
       }
+    }
+
+    // Caso 1: SEFAZ ainda não autorizou — marcar como pendente_consulta (NÃO excluir)
+    if (!extracaoSucesso && pendenteSefaz) {
+      const proximaTentativa = new Date(Date.now() + 10 * 60 * 1000); // primeira retry em 10min
+      const historicoEntry = {
+        tentativa: 1,
+        em: new Date().toISOString(),
+        motivo: pendenteSefaz.motivo,
+        detalhe: pendenteSefaz.detalhe,
+      };
+      await supabase
+        .from('notas_imagens')
+        .update({
+          status_processamento: 'pendente_consulta',
+          motivo_pendencia: pendenteSefaz.motivo,
+          tentativas_consulta: 1,
+          proxima_tentativa_em: proximaTentativa.toISOString(),
+          historico_tentativas: [historicoEntry],
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', notaId);
+
+      console.log(`⏳ Nota ${notaId} marcada como pendente_consulta. Próxima tentativa: ${proximaTentativa.toISOString()}`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          pendente: true,
+          notaId,
+          motivo: pendenteSefaz.motivo,
+          message: 'Nota recebida! Ela ainda não foi autorizada pela SEFAZ (provavelmente em contingência). O Picotinho vai tentar novamente automaticamente nos próximos minutos e horas. Você será avisado quando processar.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
     }
 
     // Se TODAS as vias de extração falharam: marcar como excluída e retornar erro
