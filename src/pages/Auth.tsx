@@ -135,9 +135,53 @@ const AuthPage = () => {
       return;
     }
 
+    // Validação de código de convite (somente em modo restrito)
+    const codigoNorm = formData.codigoConvite.toUpperCase().trim();
+    if (acessoRestrito) {
+      if (!/^[A-Z0-9]{8}$/.test(codigoNorm)) {
+        toast({
+          title: "Código de convite obrigatório",
+          description: "Informe um código de 8 caracteres (letras e números).",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
+      // 1) Em modo restrito: reservar convite ANTES do signUp
+      let tokenTemp: string | null = null;
+      if (acessoRestrito) {
+        const { data: consumirData, error: consumirErr } = await supabase.functions.invoke(
+          'consumir-convite',
+          { body: { codigo: codigoNorm, email: formData.email.toLowerCase().trim() } }
+        );
+
+        if (consumirErr || !consumirData?.ok) {
+          const motivo = consumirData?.motivo;
+          const mensagens: Record<string, string> = {
+            formato_invalido: "Código inválido. Use 8 caracteres (letras e números).",
+            email_invalido: "Informe um e-mail válido.",
+            inexistente: "Código de convite não encontrado.",
+            usado: "Este código já foi utilizado.",
+            expirado: "Este código de convite expirou.",
+            reservado: "Este código está em uso. Tente novamente em alguns minutos.",
+            email_nao_corresponde: "Este código foi gerado para outro e-mail.",
+            rate_limit: "Muitas tentativas. Aguarde um instante e tente novamente.",
+          };
+          toast({
+            title: "Não foi possível usar o convite",
+            description: mensagens[motivo as string] || consumirData?.mensagem || "Convite inválido.",
+            variant: "destructive",
+          });
+          return;
+        }
+        tokenTemp = consumirData.token_temp;
+      }
+
+      // 2) signUp normal
       const cleanPhone = formData.telefone.replace(/\D/g, '');
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -170,13 +214,28 @@ const AuthPage = () => {
           return;
         }
 
+        // 3) Confirmar convite (best-effort — só após confirmar e-mail e logar é que o JWT estará ativo).
+        // Como Supabase exige confirmação por e-mail, o token_temp (10min) será usado pelo
+        // próprio confirmar-convite no primeiro login. Disparamos aqui caso já haja sessão (auto-confirm habilitado).
+        if (tokenTemp && data.session) {
+          try {
+            await supabase.functions.invoke('confirmar-convite', { body: { token_temp: tokenTemp } });
+          } catch (e) {
+            console.warn('confirmar-convite falhou (best-effort):', e);
+          }
+        }
+        // Guarda o token para confirmação posterior, no primeiro login
+        if (tokenTemp) {
+          try { localStorage.setItem('picotinho_convite_token', tokenTemp); } catch {}
+        }
+
         signupCooldown.startCooldown();
         toast({
           title: "Cadastro realizado com sucesso! ✅",
           description: "Enviamos um e-mail de confirmação para sua caixa de entrada. Acesse seu e-mail e clique no link para ativar sua conta.",
           variant: "default",
         });
-        setFormData({ email: '', password: '', telefone: '' });
+        setFormData({ email: '', password: '', telefone: '', codigoConvite: '' });
       }
     } catch (error) {
       console.error('Erro no cadastro:', error);
