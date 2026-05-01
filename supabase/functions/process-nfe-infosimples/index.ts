@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { classificarRespostaInfoSimples, NfcePendenteSefazError } from '../_shared/nfcePendente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -176,6 +177,11 @@ async function consultarNFeInfoSimples(chaveNFe: string): Promise<any> {
   const data = await response.json();
 
   if (data.code && data.code !== 200) {
+    const classif = classificarRespostaInfoSimples(data);
+    if (classif.pendente) {
+      console.warn(`⏳ [NFE-INFOSIMPLES] Pendente SEFAZ (${classif.motivo}): ${classif.detalhe}`);
+      throw new NfcePendenteSefazError(classif.motivo, classif.detalhe);
+    }
     throw new Error(`InfoSimples error: ${data.code_message || data.message || 'consulta sem sucesso'}`);
   }
 
@@ -434,8 +440,20 @@ serve(async (req) => {
       }
     );
   } catch (error) {
+    if (error instanceof NfcePendenteSefazError) {
+      console.warn('⏳ [NFE-INFOSIMPLES] Pendente SEFAZ, retornando 200');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          pendente: true,
+          motivo: error.motivo,
+          detalhe: error.detalhe,
+          message: 'Nota fiscal ainda não autorizada pela SEFAZ. Será reprocessada automaticamente.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
     console.error('❌ [NFE-INFOSIMPLES] Erro:', error);
-
     return new Response(
       JSON.stringify({
         error: error.message,
