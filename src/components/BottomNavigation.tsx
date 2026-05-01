@@ -34,6 +34,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useAppConfig } from "@/hooks/useAppConfig";
 import { detectarTipoDocumento, TipoDocumento, extrairChaveNFe, construirUrlConsulta } from "@/lib/documentDetection";
 import { interpretarErroProcessUrlNota, montarToastErroNota, classificarMensagemErroNota } from "@/lib/notasFiscais";
 import { supabase } from "@/integrations/supabase/client";
@@ -93,23 +94,34 @@ const BottomNavigation = () => {
   useEffect(() => { showCupomViewerRef.current = showCupomViewer; }, [showCupomViewer]);
   useEffect(() => { showInternalWebViewerRef.current = showInternalWebViewer; }, [showInternalWebViewer]);
 
+  const debounceTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastProcessingTimestamp = useRef<Map<string, number>>(new Map());
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const { acessoRestrito } = useAppConfig();
+  const visitanteBloqueado = acessoRestrito && !user;
+
   // Listen for open-scanner event from other pages
   useEffect(() => {
-    const handleOpenScanner = () => setShowQRScanner(true);
+    const handleOpenScanner = () => {
+      if (visitanteBloqueado) {
+        toast({
+          title: "Você precisa estar logado para enviar nota fiscal.",
+        });
+        return;
+      }
+      setShowQRScanner(true);
+    };
     window.addEventListener('open-scanner', handleOpenScanner);
     return () => window.removeEventListener('open-scanner', handleOpenScanner);
-  }, []);
+  }, [visitanteBloqueado]);
 
   // 🔵 Sub-fase D: notifica o GlobalProcessingIndicator quando o scanner está ATIVO
   // (única exceção em que o indicador global é ocultado).
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('scanner-active', { detail: showQRScanner }));
   }, [showQRScanner]);
-  const debounceTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const lastProcessingTimestamp = useRef<Map<string, number>>(new Map());
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
 
   // Sub-fase C: rastrear última navegação manual do usuário
   // (usado para guardar a navegação automática para /screenshots)
@@ -1056,6 +1068,12 @@ const BottomNavigation = () => {
     console.log('🔘 Botão QR Code clicado');
     console.log('📱 Plataforma:', Capacitor.getPlatform());
     console.log('🏠 Nativo?', Capacitor.isNativePlatform());
+    if (visitanteBloqueado) {
+      toast({
+        title: "Você precisa estar logado para enviar nota fiscal.",
+      });
+      return;
+    }
     setShowQRScanner(true);
   };
 
