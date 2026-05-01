@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ProcessingNotesProvider } from "@/contexts/ProcessingNotesContext";
+import { RestrictedRouteGuard } from "@/components/auth/RestrictedRouteGuard";
 import Index from "./pages/Index";
 import Screenshots from "./pages/Screenshots";
 import Menu from "./pages/Menu";
@@ -104,6 +105,7 @@ const App = () => {
               <Toaster />
               <Sonner />
               <BrowserRouter>
+                <RestrictedRouteGuard>
                 <Routes>
                   <Route path="/" element={<Index />} />
                 <Route path="/menu" element={<Menu />} />
@@ -137,6 +139,7 @@ const App = () => {
               </Routes>
               <GlobalProcessingIndicator />
               <BottomNavigation />
+              </RestrictedRouteGuard>
             </BrowserRouter>
           </TooltipProvider>
         </ProcessingNotesProvider>
