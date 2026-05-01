@@ -1570,28 +1570,61 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         </DialogContent>
       </Dialog>
       
-      <AlertDialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
+      <AlertDialog
+        open={deleteConfirmId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteConfirmId(null);
+            setDeleteConfirmReceipt(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteConfirmReceipt?.status_processamento === 'pendente_consulta' ||
+              deleteConfirmReceipt?.status_processamento === 'falha_definitiva_consulta'
+                ? 'Excluir nota em acompanhamento?'
+                : 'Confirmar Exclusão'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              ❗ Você tem certeza que deseja excluir esta nota fiscal?
-              <br />
-              Essa operação é irreversível e removerá todos os registros associados a esta nota (produtos em normalização, histórico, estoque, etc.).
+              {deleteConfirmReceipt?.status_processamento === 'pendente_consulta' ? (
+                <>
+                  Esta nota ainda está em acompanhamento pelo Picotinho. Se você excluir agora,
+                  o sistema deixará de tentar processá-la automaticamente.
+                  <br /><br />
+                  Tentativas já realizadas: {deleteConfirmReceipt?.tentativas_consulta ?? 0}/6.
+                </>
+              ) : deleteConfirmReceipt?.status_processamento === 'falha_definitiva_consulta' ? (
+                <>
+                  Esta nota está em acompanhamento pelo Picotinho (sem sucesso após várias tentativas).
+                  Se você excluir agora, o sistema removerá o registro permanentemente e não tentará mais processá-la.
+                </>
+              ) : (
+                <>
+                  ❗ Você tem certeza que deseja excluir esta nota fiscal?
+                  <br />
+                  Essa operação é irreversível e removerá todos os registros associados a esta nota (produtos em normalização, histórico, estoque, etc.).
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 if (deleteConfirmId) {
                   deleteReceipt(deleteConfirmId);
                   setDeleteConfirmId(null);
+                  setDeleteConfirmReceipt(null);
                 }
               }}
             >
-              Confirmar Exclusão
+              {deleteConfirmReceipt?.status_processamento === 'pendente_consulta' ||
+              deleteConfirmReceipt?.status_processamento === 'falha_definitiva_consulta'
+                ? 'Sim, excluir mesmo assim'
+                : 'Confirmar Exclusão'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
