@@ -281,6 +281,7 @@ serve(async (req) => {
 
       if (extractError) {
         console.error('⚠️ Erro ao extrair NFCe (falha definitiva - única via):', extractError);
+        errosCapturados.push(String(extractError?.message || extractError || ''));
       } else {
         console.log('✅ NFCe extraída:', extractData);
         extracaoSucesso = true;
@@ -299,11 +300,33 @@ serve(async (req) => {
         console.error('⚠️ Erro ao marcar nota como excluída no cleanup:', cleanupError);
       }
 
+      // Classificação: instabilidade da SEFAZ vs falha genérica
+      const errosJoined = errosCapturados.join(' | ').toLowerCase();
+      const padroesInstabilidade = [
+        'code 600', 'code: 600', '"code":600',
+        'unexpected error', 'unexpected_error',
+        'timeout', 'timed out',
+        '502', '503', '504',
+        'html vazio', 'empty html', 'no valid html',
+        'image too small', '1.6 kb', '1.6kb',
+        'ocr', 'sefaz',
+      ];
+      const isInstabilidade = padroesInstabilidade.some(p => errosJoined.includes(p));
+
+      const responseBody: Record<string, unknown> = {
+        error: 'EXTRACAO_FALHOU',
+        message: isInstabilidade
+          ? 'A SEFAZ está com instabilidade no momento. Aguarde alguns minutos e tente novamente.'
+          : 'Não foi possível extrair os dados desta nota fiscal. Tente novamente.',
+      };
+      if (isInstabilidade) {
+        responseBody.reason = 'SEFAZ_INSTAVEL';
+      }
+
+      console.log(`📤 [RETORNO] EXTRACAO_FALHOU${isInstabilidade ? ' (SEFAZ_INSTAVEL)' : ''} — erros: ${errosJoined.substring(0, 300)}`);
+
       return new Response(
-        JSON.stringify({
-          error: 'EXTRACAO_FALHOU',
-          message: 'Não foi possível extrair os dados desta nota fiscal. Tente novamente.'
-        }),
+        JSON.stringify(responseBody),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 500
