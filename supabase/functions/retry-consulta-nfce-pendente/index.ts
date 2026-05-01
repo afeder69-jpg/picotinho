@@ -56,10 +56,21 @@ serve(async (req) => {
     let detalheTent = '';
 
     try {
-      // Determinar modelo a partir da chave (bytes 20-22)
+      // Determinar provider pela chave: UF (bytes 0-2) + modelo (bytes 20-22)
+      // Mesma lógica de roteamento do process-url-nota.
       const chave = String(nota.chave_acesso || '');
+      const uf = chave.substring(0, 2);
       const modelo = chave.substring(20, 22);
-      const fnAlvo = modelo === '55' ? 'process-nfe-infosimples' : 'process-nfce-infosimples';
+      let fnAlvo: string;
+      if (modelo === '55') {
+        fnAlvo = 'process-nfe-infosimples';
+      } else if (modelo === '65' && uf === '23') {
+        fnAlvo = 'process-nfce-infosimples-ce';
+        console.log(`🎫 [NFCE-CE] Retry roteado para provider Ceará (nota ${nota.id})`);
+      } else {
+        // modelo 65 demais UFs (incluindo 33/RJ) → provider RJ atual
+        fnAlvo = 'process-nfce-infosimples';
+      }
 
       // Invocar diretamente a função InfoSimples sobre a MESMA nota (mesmo id),
       // evitando o gargalo de duplicidade do process-url-nota.
