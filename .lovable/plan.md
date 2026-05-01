@@ -1,63 +1,53 @@
-## Fase 2 — Finalização (Reprocessamento Sequencial)
+## Modo de Acesso Restrito — Plano Final (com ajustes)
 
-### Estado atual confirmado no banco
-- **23 notas totais**, **19 processadas**, **4 pendentes**
-- **309 itens em estoque**, **100% com preço > 0** ✅
-- **R$ 5.055,34** em valor recuperado
-- **69,58%** de cobertura de `produto_master_id`
+### 1. Migration
 
-### Notas pendentes (a reprocessar, uma por vez)
-1. `87fd3951-d76c-47f7-957e-415f30dd037a` (criada 2026-03-14)
-2. `b3bee413-21b3-4a0b-9790-5289d5aac598` (criada 2026-04-14) — **descoberta extra**
-3. `5d100c72-f33a-4c23-86f6-41f058fd0c1f` (criada 2026-04-15)
-4. `db308873-8d02-49ae-83c9-c0f5d06c6901` (criada 2026-04-17)
+**Tabela `app_config`**
+- `chave` text PK, `valor` jsonb, `updated_at` timestamptz
+- Seed: `('acesso_restrito', 'true')`
+- RLS: SELECT público; UPDATE/INSERT apenas role `master`
 
-Todas estão com `processada=false`, `status_processamento='processada'`, sem `erro_mensagem` registrado — indicando que o gateway timeout interrompeu antes da finalização, mas sem persistir erro.
+**Tabela `convites_acesso`**
+- `id` uuid PK
+- `codigo` text unique (8 chars alfanuméricos maiúsculos, formato `^[A-Z0-9]{8}$`)
+- `email_destino` text nullable (se preenchido, signup precisa bater)
+- `status` text NOT NULL default `'disponivel'` — enum check (`disponivel`, `reservado`, `usado`)
+- `token_temp` text nullable
+- `token_expira_em` timestamptz nullable
+- `criado_por` uuid, `usado_por` uuid nullable, `usado_em` timestamptz nullable
+- `expira_em` timestamptz nullable
+- `created_at` timestamptz
+- RLS: master-only; consumo via edge function (service_role)
 
-### Plano de execução (estritamente sequencial)
+**RPC `validar_codigo_convite(codigo text)`** — SECURITY DEFINER, retorna jsonb:
+```
+{ valido: bool, motivo: 'ok'|'inexistente'|'expirado'|'usado'|'reservado'|'formato_invalido' }
+```
 
-**Sem alterar código.** Apenas operações de dados + invocações da função existente `process-receipt-full` (já corrigida na Fase 2.2).
+### 2. Edge function `consumir-convite` (verify_jwt = false)
 
-Para **cada uma das 4 notas**, executar nesta ordem:
+Input: `{ codigo, email }`. Validações:
+1. Formato do código (`^[A-Z0-9]{8}$`) e email (zod)
+2. Rate limit básico em memória por IP (5 tentativas / 60s — ad-hoc, sem infra)
+3. Busca convite (case-insensitive)
+4. Checa status, expira_em, e se `email_destino` existir, exige match exato (lowercase)
+5. Marca `status='reservado'`, gera `token_temp` (uuid), `token_expira_em = now() + 10min`
+6. Retorna `{ ok, token_temp }`
 
-1. **Reset de flags** (via migration SQL):
-   ```sql
-   UPDATE notas_imagens
-   SET processada = false, normalizada = false, tentativas_finalizacao = 0
-   WHERE id = '<NOTA_ID>';
-   ```
+Edge `confirmar-convite` (verify_jwt = true): valida token + user.email do JWT, marca `status='usado'`, `usado_por = user.id`.
 
-2. **Invocar `process-receipt-full`** via `supabase--curl_edge_functions`:
-   - `POST /process-receipt-full` com body `{"notaId":"<NOTA_ID>","force":true}`
-   - Aguardar retorno completo (não disparar a próxima até confirmar)
+### 3. Frontend
 
-3. **Validação imediata** da nota (query):
-   ```sql
-   SELECT id, processada, status_processamento, erro_mensagem,
-          (SELECT COUNT(*) FROM estoque_app WHERE nota_id = ni.id) AS itens_inseridos,
-          (SELECT COUNT(*) FROM estoque_app WHERE nota_id = ni.id AND preco_unitario_ultimo > 0) AS itens_com_preco
-   FROM notas_imagens ni WHERE id = '<NOTA_ID>';
-   ```
+- `src/hooks/useAppConfig.ts` — lê flag (cache + React Query)
+- `src/components/auth/RestrictedRouteGuard.tsx` — **whitelist explícita**: `['/', '/auth', '/reset-password', '/privacy', '/terms', '/data-deletion']`. Se `acessoRestrito && !user && !whitelist.includes(pathname)` → redirect `/auth`
+- `src/App.tsx` — envolver `<Routes>` com guard
+- `src/pages/Menu.tsx` — quando restrito + sem user, opções desabilitadas + toast "Você precisa estar logado para acessar"
+- `src/pages/Auth.tsx` — aba Cadastrar:
+  - Banner explicativo no topo: "🔒 Cadastros são por convite. Insira o código recebido para criar sua conta."
+  - Campo "Código de convite" obrigatório
+  - Fluxo: `consumir-convite` → `signUp` → `confirmar-convite`
+  - Login intocado
 
-4. **Pausa de 3s** entre notas para evitar pressão no gateway.
-
-5. Se uma nota falhar (timeout, erro 5xx, `processada` continua false), **pausar a sequência** e reportar antes de seguir para a próxima.
-
-### Relatório final (após as 4 notas)
-
-Rodar a mesma query consolidada do início:
-- Total notas / processadas / pendentes
-- Total de itens em `estoque_app`
-- % com preço > 0
-- Cobertura de `produto_master_id`
-- Valor total recuperado
-- Listar qualquer nota que ainda tenha ficado pendente
-
-### Garantias
-- ❌ **Nenhuma alteração em código** (Edge Functions, frontend, schema)
-- ❌ **Nenhuma alteração nos 309 registros já criados** com sucesso
-- ✅ Apenas reset de 3 flags em 4 notas + invocação da função já corrigida
-- ✅ Estritamente sequencial (1 nota por vez, com validação entre cada uma)
-
-### Observação sobre os build errors reportados
-Os erros TypeScript listados na mensagem (`aplicar-normalizacao-retroativa`, `auto-fix-stuck-notes`, `consolidar-masters-*`, etc.) são **pré-existentes** e **não foram introduzidos** pelas correções da Fase 2.2 (que tocou apenas em `process-receipt-full/index.ts`). Eles não bloqueiam o reprocessamento. Se quiser que eu inclua a correção desses erros, posso propor isso em um plano separado depois — mas conforme sua instrução ("não alterar mais código neste momento"), eles ficam fora deste plano.
+### 4. Garantias
+- Flag `false` → comportamento atual 100% preservado
+- Login (email/Google/Facebook), reset de senha, usuários antigos: intocados
