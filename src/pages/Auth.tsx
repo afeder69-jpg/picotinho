@@ -160,26 +160,43 @@ const AuthPage = () => {
         );
 
         if (consumirErr || !consumirData?.ok) {
+          console.warn('[signup] consumir-convite falhou:', { consumirErr, consumirData });
           const motivo = consumirData?.motivo;
           const mensagens: Record<string, string> = {
             formato_invalido: "Código inválido. Use 8 caracteres (letras e números).",
             email_invalido: "Informe um e-mail válido.",
             inexistente: "Código de convite não encontrado.",
             usado: "Este código já foi utilizado.",
+            cancelado: "Este código de convite foi cancelado.",
             expirado: "Este código de convite expirou.",
             reservado: "Este código está em uso. Tente novamente em alguns minutos.",
             email_nao_corresponde: "Este código foi gerado para outro e-mail.",
             rate_limit: "Muitas tentativas. Aguarde um instante e tente novamente.",
           };
+          const descricao =
+            mensagens[motivo as string] ||
+            consumirData?.mensagem ||
+            consumirErr?.message ||
+            "Não foi possível validar o convite. Tente novamente.";
           toast({
             title: "Não foi possível usar o convite",
-            description: mensagens[motivo as string] || consumirData?.mensagem || "Convite inválido.",
+            description: descricao,
             variant: "destructive",
           });
           return;
         }
         tokenTemp = consumirData.token_temp;
       }
+
+      // Helper: libera reserva caso o signUp falhe depois
+      const liberarReserva = async () => {
+        if (!tokenTemp) return;
+        try {
+          await supabase.functions.invoke('liberar-convite', { body: { token_temp: tokenTemp } });
+        } catch (e) {
+          console.warn('[signup] liberar-convite falhou (best-effort):', e);
+        }
+      };
 
       // 2) signUp normal
       const cleanPhone = formData.telefone.replace(/\D/g, '');
@@ -193,12 +210,21 @@ const AuthPage = () => {
       });
 
       if (signUpError) {
-        if (signUpError.message.includes('already registered')) {
+        console.warn('[signup] supabase.auth.signUp falhou:', signUpError);
+        await liberarReserva();
+        const msg = signUpError.message || '';
+        if (msg.includes('already registered')) {
           toast({ title: "E-mail já cadastrado", description: "Este e-mail já possui uma conta. Por favor, faça login ou use outro e-mail.", variant: "default" });
-        } else if (signUpError.message.includes('rate limit')) {
+        } else if (msg.includes('rate limit')) {
           toast({ title: "Muitas tentativas", description: "Por favor, aguarde alguns segundos antes de tentar novamente.", variant: "default" });
+        } else if (msg.toLowerCase().includes('database error') || msg.toLowerCase().includes('saving new user')) {
+          toast({
+            title: "Não foi possível concluir o cadastro",
+            description: "Verifique se o telefone informado já não está cadastrado em outra conta.",
+            variant: "destructive",
+          });
         } else {
-          toast({ title: "Aguarde um momento", description: "Por favor, aguarde alguns segundos antes de tentar novamente.", variant: "default" });
+          toast({ title: "Erro no cadastro", description: msg || "Tente novamente em alguns segundos.", variant: "destructive" });
         }
         return;
       }
@@ -206,6 +232,7 @@ const AuthPage = () => {
       if (data.user) {
         // Supabase retorna user com identities vazio quando e-mail já existe
         if (!data.user.identities || data.user.identities.length === 0) {
+          await liberarReserva();
           toast({
             title: "E-mail já cadastrado",
             description: "Este e-mail já está cadastrado. Caso não lembre sua senha, utilize 'Esqueci minha senha'.",

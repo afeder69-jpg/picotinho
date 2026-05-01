@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Plus, Copy, Ban, Loader2 } from "lucide-react";
+import { ArrowLeft, RefreshCw, Plus, Copy, Ban, Loader2, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -250,6 +250,32 @@ export default function Convites() {
     carregarConvites();
   }
 
+  async function liberarReserva(c: Convite) {
+    if (c.status !== "reservado") return;
+    const { data, error } = await supabase
+      .from("convites_acesso")
+      .update({
+        status: "disponivel",
+        token_temp: null,
+        token_expira_em: null,
+      })
+      .eq("id", c.id)
+      .eq("status", "reservado")
+      .select("id");
+    if (error) {
+      console.error(error);
+      toast.error("Erro ao liberar reserva.");
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error("Convite não pôde ser liberado (status mudou).");
+      carregarConvites();
+      return;
+    }
+    toast.success(`Convite ${c.codigo} liberado.`);
+    carregarConvites();
+  }
+
   function copiarCodigo(codigo: string) {
     navigator.clipboard.writeText(codigo).then(
       () => toast.success(`Código ${codigo} copiado!`),
@@ -423,6 +449,16 @@ export default function Convites() {
                               >
                                 <Copy className="w-4 h-4" />
                               </Button>
+                              {c.status === "reservado" && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => liberarReserva(c)}
+                                  title="Liberar reserva (volta para disponível)"
+                                >
+                                  <Unlock className="w-4 h-4" />
+                                </Button>
+                              )}
                               {podeCancelar && (
                                 <Button
                                   variant="ghost"
