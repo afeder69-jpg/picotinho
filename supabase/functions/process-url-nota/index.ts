@@ -215,6 +215,7 @@ serve(async (req) => {
     console.log('✅ Nota criada com sucesso:', notaId);
 
     let extracaoSucesso = false;
+    const errosCapturados: string[] = [];
 
     if (modelo === '55') {
       console.log('📄 [NFE] Processando via InfoSimples...');
