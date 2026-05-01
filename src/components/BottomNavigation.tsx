@@ -278,6 +278,42 @@ const BottomNavigation = () => {
           return;
         }
 
+        // 🟡 Reescaneamento de nota já em pendente_consulta (usuário distraído)
+        if (processData?.pendente === true && processData?.jaRecebida === true) {
+          console.log('🟡 Nota já recebida, em retry automático:', processData);
+          removeProcessingNote(tempId);
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(tempId);
+            return newMap;
+          });
+          let descricao = 'Essa nota já foi recebida e está em processamento. Vamos continuar tentando automaticamente.';
+          const tentativa = Number(processData.tentativaAtual || 0);
+          const maxTent = Number(processData.maxTentativas || 6);
+          if (processData.proximaTentativaEm) {
+            const ms = new Date(processData.proximaTentativaEm).getTime() - Date.now();
+            if (Number.isFinite(ms)) {
+              const minutos = Math.max(1, Math.round(ms / 60000));
+              descricao += ms <= 0
+                ? ' Próxima tentativa a qualquer momento.'
+                : ` Próxima tentativa em ~${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}.`;
+            }
+          }
+          if (tentativa > 0 && maxTent > 0) {
+            descricao += ` (tentativa ${tentativa} de ${maxTent})`;
+          }
+          toast({
+            title: '🟡 Essa nota já está sendo processada',
+            description: descricao,
+            duration: 12000,
+          });
+          if (processData?.notaId) {
+            queueToNotaIdRef.current.set(queueItemId, processData.notaId);
+          }
+          queueMarkDoneRef.current(queueItemId);
+          return;
+        }
+
         // 🆕 NFC-e em contingência: SEFAZ ainda não autorizou. Não é erro!
         if (processData?.pendente === true) {
           console.log('⏳ Nota pendente na SEFAZ:', processData);
