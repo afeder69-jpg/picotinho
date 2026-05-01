@@ -95,6 +95,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, motivo: 'usado', mensagem: 'Este código já foi utilizado.' }, 409);
     }
 
+    if (convite.status === 'cancelado') {
+      return jsonResponse({ ok: false, motivo: 'cancelado', mensagem: 'Este código de convite foi cancelado.' }, 409);
+    }
+
     if (convite.expira_em && new Date(convite.expira_em).getTime() < Date.now()) {
       return jsonResponse({ ok: false, motivo: 'expirado', mensagem: 'Este código de convite expirou.' }, 410);
     }
@@ -135,8 +139,8 @@ Deno.serve(async (req) => {
         email_destino: convite.email_destino ?? emailNorm,
       })
       .eq('id', convite.id)
-      // proteção contra corrida: só aceita se ainda não foi marcado como usado
-      .neq('status', 'usado');
+      // proteção contra corrida: só aceita se ainda não foi marcado como usado/cancelado
+      .not('status', 'in', '(usado,cancelado)');
 
     if (updateErr) {
       console.error('[consumir-convite] erro ao reservar:', updateErr);
