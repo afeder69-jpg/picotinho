@@ -250,6 +250,32 @@ export default function Convites() {
     carregarConvites();
   }
 
+  async function liberarReserva(c: Convite) {
+    if (c.status !== "reservado") return;
+    const { data, error } = await supabase
+      .from("convites_acesso")
+      .update({
+        status: "disponivel",
+        token_temp: null,
+        token_expira_em: null,
+      })
+      .eq("id", c.id)
+      .eq("status", "reservado")
+      .select("id");
+    if (error) {
+      console.error(error);
+      toast.error("Erro ao liberar reserva.");
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error("Convite não pôde ser liberado (status mudou).");
+      carregarConvites();
+      return;
+    }
+    toast.success(`Convite ${c.codigo} liberado.`);
+    carregarConvites();
+  }
+
   function copiarCodigo(codigo: string) {
     navigator.clipboard.writeText(codigo).then(
       () => toast.success(`Código ${codigo} copiado!`),
