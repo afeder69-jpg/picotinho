@@ -1625,6 +1625,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notificacoes_usuario: {
+        Row: {
+          created_at: string
+          id: string
+          lida: boolean
+          mensagem: string
+          nota_id: string | null
+          tipo: string
+          titulo: string
+          usuario_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lida?: boolean
+          mensagem: string
+          nota_id?: string | null
+          tipo: string
+          titulo: string
+          usuario_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lida?: boolean
+          mensagem?: string
+          nota_id?: string | null
+          tipo?: string
+          titulo?: string
+          usuario_id?: string
+        }
+        Relationships: []
+      }
       open_food_facts_controle: {
         Row: {
           com_imagem: boolean
