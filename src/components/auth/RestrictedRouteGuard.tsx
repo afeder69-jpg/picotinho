@@ -9,6 +9,7 @@ import { useAppConfig } from '@/hooks/useAppConfig';
  */
 const ROTAS_PUBLICAS = new Set<string>([
   '/',
+  '/menu',
   '/auth',
   '/reset-password',
   '/privacy',
