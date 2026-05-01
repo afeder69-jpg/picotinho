@@ -256,6 +256,7 @@ const BottomNavigation = () => {
           // Tentar extrair body estruturado do erro (FunctionsHttpError)
           let errorCode = '';
           let errorMessage = '';
+          let errorReason = '';
           try {
             const ctx = (processError as any).context;
             if (ctx) {
@@ -263,17 +264,27 @@ const BottomNavigation = () => {
               if (body) {
                 errorCode = body.error || '';
                 errorMessage = body.message || '';
+                errorReason = body.reason || '';
               }
             }
           } catch (_) { /* ignore parse errors */ }
 
           // Mensagem específica para falha definitiva de extração
           if (errorCode === 'EXTRACAO_FALHOU') {
-            const msg = errorMessage || 'Não foi possível extrair os dados desta nota fiscal. Tente novamente.';
+            if (errorReason === 'SEFAZ_INSTAVEL') {
+              toast({
+                title: "⏳ Consulta indisponível no momento",
+                description: "Estamos com uma instabilidade na SEFAZ para consultar essa nota agora. Pode aguardar alguns minutos e tentar novamente — normalmente isso se resolve rápido. Se preferir, você pode tentar mais tarde também. Seus dados estão seguros 👍",
+                duration: 9000,
+              });
+              queueMarkErrorRef.current(queueItemId, 'SEFAZ instável');
+              return;
+            }
+            const msg = errorMessage || 'Não conseguimos ler esta nota agora. Tente novamente em instantes.';
             toast({
-              title: "❌ Falha na extração",
+              title: "⚠️ Não foi possível ler a nota",
               description: msg,
-              variant: "destructive",
+              duration: 8000,
             });
             queueMarkErrorRef.current(queueItemId, msg);
             return;
