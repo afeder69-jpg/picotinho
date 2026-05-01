@@ -176,6 +176,50 @@ export async function interpretarErroProcessUrlNota(error: any): Promise<ErroPro
 }
 
 /**
+ * Padrões que indicam instabilidade SEFAZ/InfoSimples (mesmos usados no backend).
+ * Mantido sincronizado com `process-url-nota`.
+ */
+const PADROES_SEFAZ_INSTAVEL = [
+  'sefaz',
+  'timeout',
+  'time out',
+  'time-out',
+  'unexpected error',
+  'erro inesperado',
+  'infosimples error',
+  'code 600',
+  '"code":600',
+  'html vazio',
+  'sistema indisponível',
+  'sistema indisponivel',
+  'indisponível no momento',
+  'serviço indisponível',
+  'servico indisponivel',
+  'gateway timeout',
+  '504',
+  '503',
+];
+
+/**
+ * Classifica uma mensagem de erro crua (ex: vinda do campo `erro_mensagem`
+ * via realtime, sem o objeto de erro do SDK) usando os mesmos padrões
+ * de SEFAZ_INSTAVEL aplicados no backend. Retorna um `ErroProcessUrlNota`
+ * compatível com `montarToastErroNota`.
+ */
+export function classificarMensagemErroNota(mensagemCrua: string | null | undefined): ErroProcessUrlNota {
+  const msg = String(mensagemCrua || '').trim();
+  const lower = msg.toLowerCase();
+
+  const isSefaz = PADROES_SEFAZ_INSTAVEL.some((p) => lower.includes(p));
+
+  return {
+    codigo: 'EXTRACAO_FALHOU',
+    mensagem: msg || 'Não conseguimos ler esta nota agora. Tente novamente em instantes.',
+    reason: isSefaz ? 'SEFAZ_INSTAVEL' : '',
+  };
+}
+
+/**
  * Conteúdo padronizado dos toasts amigáveis para falhas do `process-url-nota`.
  * Retorna null quando o erro deve ser tratado fora desse fluxo (ex: NOTA_DUPLICADA).
  */
