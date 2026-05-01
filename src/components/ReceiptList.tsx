@@ -37,6 +37,10 @@ interface Receipt {
   status_processamento?: string | null;
   tentativas_finalizacao?: number | null;
   erro_mensagem?: string | null;
+  // 🆕 NFC-e em contingência (aguardando autorização SEFAZ)
+  motivo_pendencia?: string | null;
+  tentativas_consulta?: number | null;
+  proxima_tentativa_em?: string | null;
 }
 
 // Helper para extrair bairro de um endereço brasileiro em formatos variados
