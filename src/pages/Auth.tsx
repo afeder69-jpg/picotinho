@@ -332,6 +332,18 @@ const AuthPage = () => {
       }
 
       toast({ title: "Login realizado!", description: "Bem-vindo de volta!" });
+
+      // Best-effort: confirma convite pendente após primeiro login
+      try {
+        const tokenPendente = localStorage.getItem('picotinho_convite_token');
+        if (tokenPendente) {
+          await supabase.functions.invoke('confirmar-convite', { body: { token_temp: tokenPendente } });
+          localStorage.removeItem('picotinho_convite_token');
+        }
+      } catch (e) {
+        console.warn('confirmar-convite pós-login falhou:', e);
+      }
+
       navigate('/');
     } catch (error) {
       console.error('Erro no login:', error);
