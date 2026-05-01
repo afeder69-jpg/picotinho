@@ -352,51 +352,76 @@ serve(async (req) => {
       );
     }
 
-    // Se TODAS as vias de extração falharam: marcar como excluída e retornar erro
+    // Se TODAS as vias de extração falharam: classificar entre incerteza (pendente)
+    // e falha definitiva (chave inválida confirmada / erro de entrada).
     if (!extracaoSucesso) {
-      console.log('🧹 Falha definitiva de extração. Marcando nota como excluída para não poluir a tela:', notaId);
-      const { error: cleanupError } = await supabase
+      const errosJoined = errosCapturados.join(' | ').toLowerCase();
+
+      // Padrões que indicam ERRO DEFINITIVO (chave inválida, schema, entrada inválida)
+      // Apenas esses casos resultam em exclusão imediata.
+      const padroesFalhaDefinitiva = [
+        'chave inválida', 'chave invalida', 'invalid key',
+        'chave de acesso inválida', 'chave de acesso invalida',
+        'dígito verificador', 'digito verificador',
+        'schema', 'validation error', 'validação',
+        'parâmetro obrigatório', 'parametro obrigatorio',
+        'missing required', 'required field',
+        'cnpj inválido', 'cnpj invalido',
+      ];
+      const isFalhaDefinitiva = padroesFalhaDefinitiva.some(p => errosJoined.includes(p));
+
+      if (isFalhaDefinitiva) {
+        console.log('🧹 Falha DEFINITIVA (entrada/schema). Marcando nota como excluída:', notaId);
+        await supabase
+          .from('notas_imagens')
+          .update({ excluida: true, updated_at: new Date().toISOString() })
+          .eq('id', notaId);
+
+        return new Response(
+          JSON.stringify({
+            error: 'EXTRACAO_FALHOU',
+            message: 'Não foi possível ler esta nota fiscal. Verifique se a chave de acesso está correta.',
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+
+      // INCERTEZA (instabilidade SEFAZ/InfoSimples, code 600, fallback HTML falhou,
+      // timeout, etc.) → tratar como pendente_consulta. NÃO excluir.
+      const motivoIncerto = errosJoined.includes('600') || errosJoined.includes('erro inesperado') || errosJoined.includes('unexpected')
+        ? 'infosimples_code_600_incerto'
+        : 'consulta_indisponivel';
+      const detalheIncerto = errosCapturados.join(' | ').substring(0, 500);
+      const proximaTentativa = new Date(Date.now() + 10 * 60 * 1000);
+      const historicoEntry = {
+        tentativa: 1,
+        em: new Date().toISOString(),
+        motivo: motivoIncerto,
+        detalhe: detalheIncerto,
+      };
+      await supabase
         .from('notas_imagens')
-        .update({ excluida: true, updated_at: new Date().toISOString() })
+        .update({
+          status_processamento: 'pendente_consulta',
+          motivo_pendencia: motivoIncerto,
+          tentativas_consulta: 1,
+          proxima_tentativa_em: proximaTentativa.toISOString(),
+          historico_tentativas: [historicoEntry],
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', notaId);
 
-      if (cleanupError) {
-        console.error('⚠️ Erro ao marcar nota como excluída no cleanup:', cleanupError);
-      }
-
-      // Classificação: instabilidade da SEFAZ vs falha genérica
-      const errosJoined = errosCapturados.join(' | ').toLowerCase();
-      const padroesInstabilidade = [
-        'code 600', 'code: 600', '"code":600',
-        'unexpected error', 'unexpected_error', 'unexpected',
-        'erro inesperado', 'um erro inesperado',
-        'infosimples error',
-        'timeout', 'timed out',
-        '502', '503', '504',
-        'html vazio', 'empty html', 'no valid html',
-        'image too small', '1.6 kb', '1.6kb',
-        'ocr', 'sefaz',
-      ];
-      const isInstabilidade = padroesInstabilidade.some(p => errosJoined.includes(p));
-
-      const responseBody: Record<string, unknown> = {
-        error: 'EXTRACAO_FALHOU',
-        message: isInstabilidade
-          ? 'A SEFAZ está com instabilidade no momento. Aguarde alguns minutos e tente novamente.'
-          : 'Não foi possível extrair os dados desta nota fiscal. Tente novamente.',
-      };
-      if (isInstabilidade) {
-        responseBody.reason = 'SEFAZ_INSTAVEL';
-      }
-
-      console.log(`📤 [RETORNO] EXTRACAO_FALHOU${isInstabilidade ? ' (SEFAZ_INSTAVEL)' : ''} — erros: ${errosJoined.substring(0, 300)}`);
+      console.log(`⏳ Nota ${notaId} marcada como pendente_consulta por INCERTEZA. Erros: ${detalheIncerto.substring(0, 200)}`);
 
       return new Response(
-        JSON.stringify(responseBody),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500
-        }
+        JSON.stringify({
+          success: true,
+          pendente: true,
+          notaId,
+          motivo: motivoIncerto,
+          message: 'Sua nota foi recebida! Ela ainda não está disponível para consulta na SEFAZ. Isso pode acontecer quando a NFC-e foi emitida em contingência. Já salvamos sua nota e vamos tentar processar automaticamente. Você será avisado quando ela for processada.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
     
