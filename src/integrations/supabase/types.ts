@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      acesso_restrito_log: {
+        Row: {
+          alterado_em: string
+          alterado_por: string
+          email: string | null
+          id: string
+          valor_anterior: boolean
+          valor_novo: boolean
+        }
+        Insert: {
+          alterado_em?: string
+          alterado_por: string
+          email?: string | null
+          id?: string
+          valor_anterior: boolean
+          valor_novo: boolean
+        }
+        Update: {
+          alterado_em?: string
+          alterado_por?: string
+          email?: string | null
+          id?: string
+          valor_anterior?: boolean
+          valor_novo?: boolean
+        }
+        Relationships: []
+      }
       app_config: {
         Row: {
           chave: string

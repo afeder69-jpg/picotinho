@@ -44,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'SIGNED_IN' && session?.user) {
           setTimeout(() => {
             handleGoogleProfileCreation(session.user);
+            enforceInviteForOAuth(session.user);
           }, 0);
         }
       }
@@ -147,6 +148,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Erro no processamento do perfil Google:', error);
+    }
+  };
+
+  /**
+   * Defesa em profundidade: se o trigger em auth.users falhar e um usuário OAuth
+   * conseguir criar conta sem convite no modo restrito, derrubamos a sessão aqui.
+   * Roda apenas para providers OAuth (não 'email').
+   */
+  const enforceInviteForOAuth = async (user: User) => {
+    try {
+      const provider = (user.app_metadata as any)?.provider as string | undefined;
+      if (!provider || provider === 'email') return;
+
+      const { data: cfg } = await supabase
+        .from('app_config')
+        .select('valor')
+        .eq('chave', 'acesso_restrito')
+        .maybeSingle();
+      const restrito = cfg?.valor === true || (cfg?.valor as any) === 'true';
+      if (!restrito) return;
+
+      const email = (user.email || '').toLowerCase();
+      const filtro = email
+        ? `usado_por.eq.${user.id},email_destino.eq.${email}`
+        : `usado_por.eq.${user.id}`;
+      const { data: convites } = await supabase
+        .from('convites_acesso')
+        .select('id')
+        .or(filtro)
+        .limit(1);
+
+      if (convites && convites.length > 0) return;
+
+      console.warn('[AuthProvider] OAuth sem convite no modo restrito — signOut');
+      await supabase.auth.signOut({ scope: 'global' });
+      setUser(null);
+      setSession(null);
+      try {
+        const { toast } = await import('sonner');
+        toast.error('Cadastro restrito. É necessário um convite para acessar o Picotinho.');
+      } catch {}
+      if (typeof window !== 'undefined' && window.location.pathname !== '/auth') {
+        window.location.replace('/auth');
+      }
+    } catch (e) {
+      console.warn('[AuthProvider] enforceInviteForOAuth falhou:', e);
     }
   };
 
