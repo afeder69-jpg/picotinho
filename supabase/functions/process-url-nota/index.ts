@@ -248,6 +248,7 @@ serve(async (req) => {
 
       if (nfceError) {
         console.error('⚠️ Erro ao processar NFCe via InfoSimples:', nfceError);
+        errosCapturados.push(String(nfceError?.message || nfceError || ''));
         console.log('🔄 Tentando fallback via extração HTML...');
 
         const { data: extractData, error: extractError } = await supabase.functions.invoke('extract-receipt-image', {
@@ -259,6 +260,7 @@ serve(async (req) => {
 
         if (extractError) {
           console.error('⚠️ Erro no fallback HTML (falha definitiva - ambas vias falharam):', extractError);
+          errosCapturados.push(String(extractError?.message || extractError || ''));
         } else {
           console.log('✅ Fallback concluído:', extractData);
           extracaoSucesso = true;
