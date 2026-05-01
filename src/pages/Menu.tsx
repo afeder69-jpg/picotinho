@@ -277,7 +277,7 @@ const Menu = () => {
               const desabilitado = bloqueado || !option.isActive;
               const handleClick = () => {
                 if (bloqueado) {
-                  toast.info("Você precisa estar logado para acessar");
+                  toast.info("Você precisa estar logado para acessar.");
                   return;
                 }
                 if (option.isActive) option.onClick();
