@@ -718,8 +718,20 @@ serve(async (req) => {
     );
 
   } catch (error) {
+    if (error instanceof NfcePendenteSefazError) {
+      console.warn('⏳ [NFCE-INFOSIMPLES] Pendente SEFAZ, retornando 200 com pendente=true');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          pendente: true,
+          motivo: error.motivo,
+          detalhe: error.detalhe,
+          message: 'Nota fiscal ainda não autorizada pela SEFAZ. Será reprocessada automaticamente.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
     console.error('❌ [NFCE-INFOSIMPLES] Erro:', error);
-    
     return new Response(
       JSON.stringify({ 
         error: error.message,
