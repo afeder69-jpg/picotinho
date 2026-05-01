@@ -160,26 +160,43 @@ const AuthPage = () => {
         );
 
         if (consumirErr || !consumirData?.ok) {
+          console.warn('[signup] consumir-convite falhou:', { consumirErr, consumirData });
           const motivo = consumirData?.motivo;
           const mensagens: Record<string, string> = {
             formato_invalido: "Código inválido. Use 8 caracteres (letras e números).",
             email_invalido: "Informe um e-mail válido.",
             inexistente: "Código de convite não encontrado.",
             usado: "Este código já foi utilizado.",
+            cancelado: "Este código de convite foi cancelado.",
             expirado: "Este código de convite expirou.",
             reservado: "Este código está em uso. Tente novamente em alguns minutos.",
             email_nao_corresponde: "Este código foi gerado para outro e-mail.",
             rate_limit: "Muitas tentativas. Aguarde um instante e tente novamente.",
           };
+          const descricao =
+            mensagens[motivo as string] ||
+            consumirData?.mensagem ||
+            consumirErr?.message ||
+            "Não foi possível validar o convite. Tente novamente.";
           toast({
             title: "Não foi possível usar o convite",
-            description: mensagens[motivo as string] || consumirData?.mensagem || "Convite inválido.",
+            description: descricao,
             variant: "destructive",
           });
           return;
         }
         tokenTemp = consumirData.token_temp;
       }
+
+      // Helper: libera reserva caso o signUp falhe depois
+      const liberarReserva = async () => {
+        if (!tokenTemp) return;
+        try {
+          await supabase.functions.invoke('liberar-convite', { body: { token_temp: tokenTemp } });
+        } catch (e) {
+          console.warn('[signup] liberar-convite falhou (best-effort):', e);
+        }
+      };
 
       // 2) signUp normal
       const cleanPhone = formData.telefone.replace(/\D/g, '');
