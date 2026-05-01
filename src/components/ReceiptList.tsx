@@ -1375,7 +1375,10 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setDeleteConfirmId(receipt.id)}
+                              onClick={() => {
+                                setDeleteConfirmReceipt(receipt);
+                                setDeleteConfirmId(receipt.id);
+                              }}
                               className="text-destructive hover:text-destructive delete-btn"
                             >
                               <Trash2 className="w-3 h-3" />
