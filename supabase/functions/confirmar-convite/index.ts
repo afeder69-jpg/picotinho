@@ -72,6 +72,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, motivo: 'ja_usado' }, 409);
     }
 
+    if (convite.status === 'cancelado') {
+      return jsonResponse({ ok: false, motivo: 'cancelado' }, 409);
+    }
+
     if (
       !convite.token_expira_em ||
       new Date(convite.token_expira_em).getTime() < Date.now()
@@ -95,7 +99,7 @@ Deno.serve(async (req) => {
         token_expira_em: null,
       })
       .eq('id', convite.id)
-      .neq('status', 'usado');
+      .not('status', 'in', '(usado,cancelado)');
 
     if (updateErr) {
       console.error('[confirmar-convite] erro ao confirmar:', updateErr);
