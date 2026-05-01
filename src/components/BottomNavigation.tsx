@@ -292,10 +292,11 @@ const BottomNavigation = () => {
             description:
               'Recebemos sua nota fiscal. Ela ainda não foi autorizada pela SEFAZ (geralmente isso acontece quando a nota foi emitida em contingência). O Picotinho vai tentar novamente automaticamente nos próximos minutos. Você pode continuar usando o app — avisaremos quando processar.',
           });
-          // Mantemos o registro na fila como concluído (o backend reagenda sozinho)
+          // Liberar a fila imediatamente — o backend reagenda sozinho via cron.
           if (processData?.notaId) {
             queueToNotaIdRef.current.set(queueItemId, processData.notaId);
           }
+          queueMarkDoneRef.current(queueItemId);
           return;
         }
 
