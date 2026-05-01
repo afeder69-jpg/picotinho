@@ -1,48 +1,148 @@
-## Correção do bloqueio de acesso restrito
+# Bloqueio Total de Cadastro no Modo Restrito + Painel de Controle
 
-Hoje, com `acesso_restrito = true` e visitante não logado:
-- `/menu` é redirecionado para `/auth` pelo `RestrictedRouteGuard` (rota não está na whitelist).
-- O botão central de QR Code abre o scanner livremente — só checa login depois do scan.
+## Objetivo
 
-A correção é cirúrgica e mexe apenas no comportamento de visitante no modo restrito. Login, cadastro com convite e fluxo de usuários logados ficam intactos.
+Com `app_config.acesso_restrito = true`, **nenhum** usuário novo entra no sistema sem convite válido — independente do provider (email, Google, Facebook). E dar ao master controle direto sobre essa flag, com reautenticação.
 
-### Arquivos a editar
+---
 
-**1. `src/components/auth/RestrictedRouteGuard.tsx`**
-- Adicionar `/menu` à lista `ROTAS_PUBLICAS`.
-- Resultado: a página `/menu` carrega para visitante, mas (item 2) renderiza tudo travado.
+## Parte 1 — Trigger de Bloqueio em `auth.users` (camada autoritativa)
 
-**2. `src/pages/Menu.tsx`** (já tem `bloqueado = acessoRestrito && !user` e exibe banner)
-- Garantir que, quando `bloqueado`, TODOS os cards (incluindo os cards master e o card "Convites") fiquem desabilitados visualmente e, ao clicar, exibam apenas o toast `"Você precisa estar logado para acessar."` sem navegar.
-- Os cards master/convites já só aparecem quando `isMaster=true`, então sem login eles não aparecem — nada a fazer aí.
-- Os cards do `menuOptions` já têm a checagem `bloqueado`. Confirmar que está aplicada e que o toast é exatamente esse texto.
+Migration nova com função `public.enforce_invite_on_signup()` `SECURITY DEFINER` + trigger `BEFORE INSERT ON auth.users`.
 
-**3. `src/components/BottomNavigation.tsx`**
-- No `handleQRButtonClick`, antes de `setShowQRScanner(true)`, ler `useAppConfig` + `useAuth`:
-  - Se `acessoRestrito && !user`: `toast({ title: "Você precisa estar logado para enviar nota fiscal." })` e `return`.
-- Adicionar import do hook `useAppConfig`.
-- O botão Menu (`navigate('/menu')`) continua livre — agora `/menu` é público e a própria página trava as opções.
+**Lógica:**
 
-**4. Proteção das telas de leitura de nota (defesa em profundidade)**
+1. Lê `acesso_restrito` de `app_config`. Se `false` → permite (early return).
+2. Se `true`, identifica provider em `NEW.raw_app_meta_data->>'provider'`.
+3. Busca em `convites_acesso` um convite ligado ao e-mail `lower(NEW.email)`:
+   - **Para `email`**: aceita convite com `status = 'reservado'` E `token_expira_em > now()` E `email_destino = lower(NEW.email)`. Esse é o estado deixado pelo `consumir-convite` momentos antes do `signUp`.
+   - **Para `google` / `facebook` / outros OAuth**: aceita convite com `status IN ('disponivel','reservado')` E `email_destino = lower(NEW.email)` E (sem `token_expira_em` OU `token_expira_em > now()` no caso de reservado) E (sem `expira_em` global OU `expira_em > now()`).
+4. Se **nenhum** convite válido → `RAISE EXCEPTION 'PICOTINHO_NO_INVITE: cadastro restrito a usuários convidados'`.
 
-O scanner é renderizado dentro do `BottomNavigation` (não há rota dedicada), então bloquear o `handleQRButtonClick` já cobre o caminho normal. Mesmo assim, para garantir que visitante não consiga abrir scanner por outros caminhos (evento `open-scanner` disparado por outras páginas):
+**Trigger `AFTER INSERT ON auth.users`** (`public.mark_invite_used_after_signup`) — só age quando `acesso_restrito = true` E provider é OAuth (não email):
+- Marca o convite (`email_destino = NEW.email`, `status IN ('disponivel','reservado')`) como `usado`, `usado_por = NEW.id`, `usado_em = now()`, limpa `token_temp`.
+- Para provider `email`, **não toca** no convite — o fluxo existente (`confirmar-convite` chamado pós-login) continua dono dessa transição. Isso evita conflito com o que já está em produção.
 
-- No `useEffect` que escuta `'open-scanner'`, adicionar a mesma checagem `acessoRestrito && !user` antes de `setShowQRScanner(true)` e exibir o mesmo toast.
+**Garantias:**
+- Usuário antigo (já em `auth.users`) → trigger não dispara, login intacto.
+- `acesso_restrito = false` → early return, comportamento atual liberado.
+- Cadastro por e-mail com convite válido → `consumir-convite` reserva → `signUp` passa pelo trigger (encontra reservado) → fluxo atual segue.
+- Cadastro por e-mail SEM passar pelo `consumir-convite` (ex: chamada direta da API) → bloqueado.
+- OAuth novo sem convite → bloqueado.
+- OAuth novo com convite emitido → permitido, convite vira `usado`.
 
-- Também checar dentro do early-return do `executeNoteProcessing`/`handleQRScanSuccess` já existe (`if (!user?.id)`), o que garante que mesmo se o scanner abrir, o processamento não acontece.
+---
 
-### Comportamento final (visitante, modo restrito)
+## Parte 2 — Cleanup no Frontend (defesa em profundidade)
 
-- Botão Home → abre `/` (público). OK.
-- Botão Menu → abre `/menu` com banner "🔒 Acesso restrito" e todos os cards desabilitados; clique em qualquer card mostra toast `"Você precisa estar logado para acessar."`.
-- Botão central QR Code → não abre scanner; mostra toast `"Você precisa estar logado para enviar nota fiscal."`.
-- Tentativa de disparar evento `open-scanner` → bloqueada com mesmo toast.
+`src/components/auth/AuthProvider.tsx`: no `onAuthStateChange`, evento `SIGNED_IN`:
 
-### O que NÃO é alterado
+- Se `acesso_restrito = true` E provider OAuth E o usuário **não tem** convite `usado` ligado a ele (`usado_por = user.id` OU `email_destino = user.email`):
+  - `signOut()` imediato.
+  - Toast: *"Cadastro restrito. É necessário um convite para acessar o Picotinho."*
+  - Redirect para `/auth`.
 
-- `RestrictedRouteGuard` continua redirecionando todas as outras rotas privadas (`/estoque`, `/screenshots`, `/relatorios`, etc.) para `/auth`.
-- Login, signup, fluxo de convite (`/auth`, `consumir-convite`, `confirmar-convite`) — intocados.
-- Comportamento para usuários logados — intocado.
-- Pipeline de processamento de nota — intocado.
+Cobre edge cases (sessão antiga, falha de trigger, OAuth criado antes do bloqueio).
+
+`src/pages/Auth.tsx`:
+- Quando `acesso_restrito` true, mostrar nota discreta sob os botões sociais: *"Login social disponível apenas para usuários convidados."*
+- Tratar erro do `signUp` por e-mail: se mensagem contém `PICOTINHO_NO_INVITE` ou `database error` em modo restrito, exibir toast claro de "convite obrigatório".
+
+---
+
+## Parte 3 — Painel "Controle de Acesso" para Master
+
+### Backend: edge function nova `toggle-acesso-restrito`
+
+`supabase/functions/toggle-acesso-restrito/index.ts` (com `verify_jwt = true` em `config.toml`):
+
+1. Valida JWT via `requireMaster` (já existe em `_shared/auth.ts`).
+2. Body: `{ novo_valor: boolean, senha: string }`.
+3. **Reautentica**: chama `supabase.auth.signInWithPassword({ email: ctx.email, password: senha })` usando client anônimo. Se falhar → 401 `senha_invalida`.
+4. Lê `valor` atual de `app_config` onde `chave = 'acesso_restrito'`.
+5. Faz `UPDATE app_config SET valor = novo_valor WHERE chave = 'acesso_restrito'`.
+6. Insere log em nova tabela `acesso_restrito_log`: `{ alterado_por, email, valor_anterior, valor_novo, alterado_em }`.
+7. Retorna `{ ok: true, valor_atual: novo_valor }`.
+
+### Migration adicional
+
+```sql
+CREATE TABLE public.acesso_restrito_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  alterado_por uuid NOT NULL REFERENCES auth.users(id),
+  email text,
+  valor_anterior boolean NOT NULL,
+  valor_novo boolean NOT NULL,
+  alterado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.acesso_restrito_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Masters podem ver logs"
+  ON public.acesso_restrito_log FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'master'));
+-- INSERT só via service_role (edge function).
+```
+
+### Frontend: nova página `src/pages/admin/ControleAcesso.tsx`
+
+- Rota `/admin/controle-acesso` registrada em `App.tsx`.
+- Link na área master/menu admin (mesmo lugar onde está `/admin/convites`), visível só para `has_role('master')`.
+- Conteúdo:
+  - **Status atual** com badge: "🔒 Acesso Restrito ATIVO" ou "🔓 Acesso Liberado".
+  - Texto explicativo curto do que significa cada estado.
+  - Botão "Desativar restrição" / "Ativar restrição" conforme estado.
+  - Ao clicar, abre `AlertDialog` de confirmação com:
+    - Texto explicando consequência.
+    - Campo `Input type="password"` "Confirme sua senha".
+    - Botões "Cancelar" / "Confirmar alteração".
+  - "Confirmar" chama `supabase.functions.invoke('toggle-acesso-restrito', { body: { novo_valor, senha } })`.
+  - Em caso de sucesso: toast verde + `queryClient.invalidateQueries(['app_config'])` para refletir em todo o app.
+  - Em caso de senha inválida: toast vermelho específico, dialog permanece aberto.
+  - Tabela "Histórico de alterações" mostrando últimos 20 registros de `acesso_restrito_log` (data, e-mail, anterior → novo).
+
+### Proteção da rota
+
+Wrapper que verifica role master no client (UX) — proteção real é a RLS + JWT da edge function.
+
+---
+
+## Arquivos Tocados
+
+**Migrations:**
+- `<ts>_oauth_invite_gate.sql` — funções e triggers em `auth.users`.
+- `<ts>_acesso_restrito_log.sql` — tabela de log + RLS.
+
+**Edge functions:**
+- `supabase/functions/toggle-acesso-restrito/index.ts` (novo).
+- `supabase/config.toml` — registrar `verify_jwt = true` para a nova função.
+
+**Frontend:**
+- `src/components/auth/AuthProvider.tsx` — cleanup OAuth pós-`SIGNED_IN`.
+- `src/pages/Auth.tsx` — aviso sob botões sociais + tratamento `PICOTINHO_NO_INVITE`.
+- `src/pages/admin/ControleAcesso.tsx` (novo).
+- `src/App.tsx` — rota `/admin/controle-acesso`.
+- `src/pages/admin/Convites.tsx` ou Menu admin — link para "Controle de Acesso".
+
+---
+
+## O Que NÃO Muda
+
+- Login por e-mail/senha de usuários existentes.
+- Login Google/Facebook de usuários já existentes.
+- Fluxo de cadastro por convite (e-mail/senha) já implementado.
+- Edge functions `consumir-convite`, `confirmar-convite`, `liberar-convite`.
+- Comportamento com `acesso_restrito = false`.
+
+---
+
+## Critério de Aceitação
+
+Com `acesso_restrito = true`:
+1. Cadastro por e-mail SEM passar pelo fluxo de convite → bloqueado pelo trigger.
+2. Cadastro por e-mail COM convite reservado pelo `consumir-convite` → funciona.
+3. Google/Facebook novo sem convite → bloqueado, sem usuário criado, toast claro.
+4. Google/Facebook novo com convite emitido para o e-mail → entra, convite vira `usado`.
+5. Login de qualquer usuário antigo → funciona normalmente.
+6. Master acessa `/admin/controle-acesso`, vê status, alterna com confirmação + senha, log é gravado.
+7. Não-master que tente acessar a rota ou chamar a edge function → 403.
 
 Posso aplicar?
