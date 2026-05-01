@@ -130,6 +130,46 @@ const BottomNavigation = () => {
     lastUserNavigationAt.current = Date.now();
   }, [location.pathname]);
 
+  // 🔔 Realtime: notificações finais ao usuário (sucesso pós-pendência ou falha definitiva)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`notif-user-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notificacoes_usuario',
+          filter: `usuario_id=eq.${user.id}`,
+        },
+        async (payload: any) => {
+          const n = payload?.new;
+          if (!n) return;
+          const isSucesso = n.tipo === 'nota_processada_sucesso';
+          toast({
+            title: `${isSucesso ? '✅' : '⚠️'} ${n.titulo}`,
+            description: n.mensagem,
+            duration: 12000,
+          });
+          try {
+            await supabase
+              .from('notificacoes_usuario')
+              .update({ lida: true })
+              .eq('id', n.id);
+          } catch (e) {
+            console.warn('Falha ao marcar notificação como lida:', e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const handleNoteConfirm = async () => {
     console.log('✅ [VIEWER] Nota confirmada, navegando para screenshots');
     
