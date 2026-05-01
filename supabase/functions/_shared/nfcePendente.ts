@@ -48,6 +48,9 @@ export function classificarRespostaInfoSimples(data: any): { pendente: boolean; 
   if (CODIGOS_INFOSIMPLES_PENDENTES.has(code)) {
     return { pendente: true, motivo: `infosimples_code_${code}`, detalhe: data?.code_message || '' };
   }
+  if (CODIGOS_INFOSIMPLES_INCERTOS.has(code)) {
+    return { pendente: true, motivo: `infosimples_code_${code}_incerto`, detalhe: data?.code_message || '' };
+  }
   if (PALAVRAS_PENDENTES.some(p => msg.includes(p))) {
     return { pendente: true, motivo: 'sefaz_nao_autorizada', detalhe: data?.code_message || '' };
   }
