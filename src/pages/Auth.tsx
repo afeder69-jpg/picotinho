@@ -210,12 +210,21 @@ const AuthPage = () => {
       });
 
       if (signUpError) {
-        if (signUpError.message.includes('already registered')) {
+        console.warn('[signup] supabase.auth.signUp falhou:', signUpError);
+        await liberarReserva();
+        const msg = signUpError.message || '';
+        if (msg.includes('already registered')) {
           toast({ title: "E-mail já cadastrado", description: "Este e-mail já possui uma conta. Por favor, faça login ou use outro e-mail.", variant: "default" });
-        } else if (signUpError.message.includes('rate limit')) {
+        } else if (msg.includes('rate limit')) {
           toast({ title: "Muitas tentativas", description: "Por favor, aguarde alguns segundos antes de tentar novamente.", variant: "default" });
+        } else if (msg.toLowerCase().includes('database error') || msg.toLowerCase().includes('saving new user')) {
+          toast({
+            title: "Não foi possível concluir o cadastro",
+            description: "Verifique se o telefone informado já não está cadastrado em outra conta.",
+            variant: "destructive",
+          });
         } else {
-          toast({ title: "Aguarde um momento", description: "Por favor, aguarde alguns segundos antes de tentar novamente.", variant: "default" });
+          toast({ title: "Erro no cadastro", description: msg || "Tente novamente em alguns segundos.", variant: "destructive" });
         }
         return;
       }
@@ -223,6 +232,7 @@ const AuthPage = () => {
       if (data.user) {
         // Supabase retorna user com identities vazio quando e-mail já existe
         if (!data.user.identities || data.user.identities.length === 0) {
+          await liberarReserva();
           toast({
             title: "E-mail já cadastrado",
             description: "Este e-mail já está cadastrado. Caso não lembre sua senha, utilize 'Esqueci minha senha'.",
