@@ -94,6 +94,14 @@ const BottomNavigation = () => {
   useEffect(() => { showCupomViewerRef.current = showCupomViewer; }, [showCupomViewer]);
   useEffect(() => { showInternalWebViewerRef.current = showInternalWebViewer; }, [showInternalWebViewer]);
 
+  const debounceTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastProcessingTimestamp = useRef<Map<string, number>>(new Map());
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const { acessoRestrito } = useAppConfig();
+  const visitanteBloqueado = acessoRestrito && !user;
+
   // Listen for open-scanner event from other pages
   useEffect(() => {
     const handleOpenScanner = () => {
@@ -114,13 +122,6 @@ const BottomNavigation = () => {
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('scanner-active', { detail: showQRScanner }));
   }, [showQRScanner]);
-  const debounceTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const lastProcessingTimestamp = useRef<Map<string, number>>(new Map());
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
-  const { acessoRestrito } = useAppConfig();
-  const visitanteBloqueado = acessoRestrito && !user;
 
   // Sub-fase C: rastrear última navegação manual do usuário
   // (usado para guardar a navegação automática para /screenshots)
