@@ -247,11 +247,12 @@ export function montarToastErroNota(info: ErroProcessUrlNota): {
     };
   }
 
-  // Erro inesperado: ainda assim sem vermelho agressivo se for falha de extração mascarada
+  // Fallback neutro: nunca usar variant destrutivo nesse fluxo
   return {
-    title: 'Não foi possível processar a nota',
-    description: info.mensagem,
+    title: '⚠️ Não foi possível processar a nota',
+    description:
+      info.mensagem ||
+      'Não conseguimos processar essa nota agora. Tente novamente em alguns instantes.',
     duration: 7000,
-    variant: 'destructive',
   };
 }
