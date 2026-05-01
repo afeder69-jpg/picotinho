@@ -37,6 +37,10 @@ interface Receipt {
   status_processamento?: string | null;
   tentativas_finalizacao?: number | null;
   erro_mensagem?: string | null;
+  // 🆕 NFC-e em contingência (aguardando autorização SEFAZ)
+  motivo_pendencia?: string | null;
+  tentativas_consulta?: number | null;
+  proxima_tentativa_em?: string | null;
 }
 
 // Helper para extrair bairro de um endereço brasileiro em formatos variados
@@ -281,6 +285,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmReceipt, setDeleteConfirmReceipt] = useState<Receipt | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(highlightNotaId || null);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   // 🆕 Sub-fase C: controle de "Tentar de novo"
@@ -377,6 +382,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
               status_processamento: (nota as any).status_processamento ?? null,
               tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
               erro_mensagem: (nota as any).erro_mensagem ?? null,
+              motivo_pendencia: (nota as any).motivo_pendencia ?? null,
+              tentativas_consulta: (nota as any).tentativas_consulta ?? null,
+              proxima_tentativa_em: (nota as any).proxima_tentativa_em ?? null,
             };
           }
           
@@ -412,6 +420,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             status_processamento: (nota as any).status_processamento ?? null,
             tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
             erro_mensagem: (nota as any).erro_mensagem ?? null,
+            motivo_pendencia: (nota as any).motivo_pendencia ?? null,
+            tentativas_consulta: (nota as any).tentativas_consulta ?? null,
+            proxima_tentativa_em: (nota as any).proxima_tentativa_em ?? null,
           };
         })
         .filter(nota => nota !== null);
@@ -1316,7 +1327,33 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                                   </div>
                                 );
                               }
-                              // Default: comportamento atual (processada / pendente)
+                              if (sp === 'pendente_consulta') {
+                                const tent = receipt.tentativas_consulta ?? 0;
+                                const prox = receipt.proxima_tentativa_em
+                                  ? new Date(receipt.proxima_tentativa_em).toLocaleString('pt-BR')
+                                  : null;
+                                return (
+                                  <Badge
+                                    variant="secondary"
+                                    className="badge gap-1"
+                                    title={`Aguardando autorização da SEFAZ (provavelmente em contingência). Tentativas: ${tent}/6.${prox ? ` Próxima tentativa: ${prox}.` : ''}`}
+                                  >
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Aguardando autorização SEFAZ
+                                  </Badge>
+                                );
+                              }
+                              if (sp === 'falha_definitiva_consulta') {
+                                return (
+                                  <Badge
+                                    variant="destructive"
+                                    className="badge"
+                                    title="Não foi possível confirmar esta nota fiscal. Ela pode não ter sido autorizada pela SEFAZ ou pode haver problema no emissor."
+                                  >
+                                    Não confirmada pela SEFAZ
+                                  </Badge>
+                                );
+                              }
                               return (
                                 <Badge
                                   variant={receipt.status === 'processed' || receipt.processada ? 'default' : 'secondary'}
@@ -1338,7 +1375,10 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setDeleteConfirmId(receipt.id)}
+                              onClick={() => {
+                                setDeleteConfirmReceipt(receipt);
+                                setDeleteConfirmId(receipt.id);
+                              }}
                               className="text-destructive hover:text-destructive delete-btn"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -1530,28 +1570,61 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
         </DialogContent>
       </Dialog>
       
-      <AlertDialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
+      <AlertDialog
+        open={deleteConfirmId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteConfirmId(null);
+            setDeleteConfirmReceipt(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteConfirmReceipt?.status_processamento === 'pendente_consulta' ||
+              deleteConfirmReceipt?.status_processamento === 'falha_definitiva_consulta'
+                ? 'Excluir nota em acompanhamento?'
+                : 'Confirmar Exclusão'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              ❗ Você tem certeza que deseja excluir esta nota fiscal?
-              <br />
-              Essa operação é irreversível e removerá todos os registros associados a esta nota (produtos em normalização, histórico, estoque, etc.).
+              {deleteConfirmReceipt?.status_processamento === 'pendente_consulta' ? (
+                <>
+                  Esta nota ainda está em acompanhamento pelo Picotinho. Se você excluir agora,
+                  o sistema deixará de tentar processá-la automaticamente.
+                  <br /><br />
+                  Tentativas já realizadas: {deleteConfirmReceipt?.tentativas_consulta ?? 0}/6.
+                </>
+              ) : deleteConfirmReceipt?.status_processamento === 'falha_definitiva_consulta' ? (
+                <>
+                  Esta nota está em acompanhamento pelo Picotinho (sem sucesso após várias tentativas).
+                  Se você excluir agora, o sistema removerá o registro permanentemente e não tentará mais processá-la.
+                </>
+              ) : (
+                <>
+                  ❗ Você tem certeza que deseja excluir esta nota fiscal?
+                  <br />
+                  Essa operação é irreversível e removerá todos os registros associados a esta nota (produtos em normalização, histórico, estoque, etc.).
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 if (deleteConfirmId) {
                   deleteReceipt(deleteConfirmId);
                   setDeleteConfirmId(null);
+                  setDeleteConfirmReceipt(null);
                 }
               }}
             >
-              Confirmar Exclusão
+              {deleteConfirmReceipt?.status_processamento === 'pendente_consulta' ||
+              deleteConfirmReceipt?.status_processamento === 'falha_definitiva_consulta'
+                ? 'Sim, excluir mesmo assim'
+                : 'Confirmar Exclusão'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -80,6 +80,7 @@ const EstoqueAtual = () => {
   const [itemEditando, setItemEditando] = useState<EstoqueItem | null>(null);
   const [novaQuantidade, setNovaQuantidade] = useState<number>(0);
   const [mostrarItensZerados, setMostrarItensZerados] = useState(false);
+  const [notasPendentesCount, setNotasPendentesCount] = useState(0);
   
   // Estados para inserção de produto
   const [modalInserirAberto, setModalInserirAberto] = useState(false);
@@ -240,6 +241,25 @@ const EstoqueAtual = () => {
       console.log('🔕 Removendo subscription realtime');
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  // 🆕 Banner de notas em contingência (pendente_consulta)
+  useEffect(() => {
+    let cancelado = false;
+    const carregarPendentes = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { count } = await supabase
+        .from('notas_imagens')
+        .select('id', { count: 'exact', head: true })
+        .eq('usuario_id', user.id)
+        .eq('status_processamento', 'pendente_consulta')
+        .neq('excluida', true);
+      if (!cancelado) setNotasPendentesCount(count ?? 0);
+    };
+    carregarPendentes();
+    const interval = setInterval(carregarPendentes, 60_000);
+    return () => { cancelado = true; clearInterval(interval); };
   }, []);
 
   // Carregar histórico de preços quando o estoque for carregado
@@ -1965,6 +1985,13 @@ const EstoqueAtual = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
+
+      {notasPendentesCount > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          <strong>Você possui {notasPendentesCount} nota{notasPendentesCount > 1 ? 's' : ''} fiscal{notasPendentesCount > 1 ? 'is' : ''} em processamento.</strong>{' '}
+          Os produtos podem ainda não aparecer no estoque até a conclusão.
+        </div>
+      )}
 
       {/* Painel de busca local isolado */}
       {buscaEstoqueAberta && (

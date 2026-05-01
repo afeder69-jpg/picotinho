@@ -278,6 +278,27 @@ const BottomNavigation = () => {
           return;
         }
 
+        // 🆕 NFC-e em contingência: SEFAZ ainda não autorizou. Não é erro!
+        if (processData?.pendente === true) {
+          console.log('⏳ Nota pendente na SEFAZ:', processData);
+          removeProcessingNote(tempId);
+          setProcessingNotesData(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(tempId);
+            return newMap;
+          });
+          toast({
+            title: '⏳ Nota recebida — aguardando autorização da SEFAZ',
+            description:
+              'Recebemos sua nota fiscal. Ela ainda não foi autorizada pela SEFAZ (geralmente isso acontece quando a nota foi emitida em contingência). O Picotinho vai tentar novamente automaticamente nos próximos minutos. Você pode continuar usando o app — avisaremos quando processar.',
+          });
+          // Mantemos o registro na fila como concluído (o backend reagenda sozinho)
+          if (processData?.notaId) {
+            queueToNotaIdRef.current.set(queueItemId, processData.notaId);
+          }
+          return;
+        }
+
         // Verificar possíveis nomes do campo
         const noteId = processData?.notaId || processData?.nota_id || processData?.id;
         
