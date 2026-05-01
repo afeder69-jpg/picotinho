@@ -294,6 +294,23 @@ serve(async (req) => {
         console.log('✅ NFe processada via InfoSimples:', nfeData);
         extracaoSucesso = true;
       }
+    } else if (modelo === '65' && uf === '23') {
+      console.log('🎫 [NFCE-CE] Processando via InfoSimples (Ceará)...');
+
+      const { data: nfceData, error: nfceError } = await supabase.functions.invoke('process-nfce-infosimples-ce', {
+        body: { chaveAcesso: chave, userId, notaImagemId: notaId }
+      });
+
+      if (nfceError) {
+        console.error('⚠️ Erro ao processar NFCe-CE via InfoSimples:', nfceError);
+        errosCapturados.push(await extrairBodyErroEdge(nfceError));
+      } else if (nfceData?.pendente === true) {
+        console.warn('⏳ [NFCE-CE] Pendente SEFAZ:', nfceData.motivo);
+        pendenteSefaz = { motivo: nfceData.motivo || 'sefaz_nao_autorizada', detalhe: nfceData.detalhe || '' };
+      } else {
+        console.log('✅ NFCe-CE processada via InfoSimples:', nfceData);
+        extracaoSucesso = true;
+      }
     } else if (modelo === '65' && uf === '33') {
       console.log('🎫 [NFCE-RJ] Processando via InfoSimples...');
 
