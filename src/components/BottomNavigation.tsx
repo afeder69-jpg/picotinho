@@ -290,7 +290,8 @@ const BottomNavigation = () => {
           toast({
             title: '⏳ Nota recebida — aguardando autorização da SEFAZ',
             description:
-              'Recebemos sua nota fiscal. Ela ainda não foi autorizada pela SEFAZ (geralmente isso acontece quando a nota foi emitida em contingência). O Picotinho vai tentar novamente automaticamente nos próximos minutos. Você pode continuar usando o app — avisaremos quando processar.',
+              'Sua nota foi recebida! Ela ainda não está disponível para consulta na SEFAZ. Isso pode acontecer quando a NFC-e foi emitida em contingência. Já salvamos sua nota e vamos tentar processar automaticamente. Você será avisado quando ela for processada.',
+            duration: 9000,
           });
           // Liberar a fila imediatamente — o backend reagenda sozinho via cron.
           if (processData?.notaId) {
