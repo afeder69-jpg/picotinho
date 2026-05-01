@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Plus, Copy, Ban, Loader2, Unlock } from "lucide-react";
+import { ArrowLeft, RefreshCw, Plus, Copy, Ban, Loader2, Unlock, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -306,6 +306,9 @@ export default function Convites() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="text-lg font-semibold flex-1">Convites de Acesso</h1>
+          <Button variant="outline" size="sm" onClick={() => navigate("/admin/controle-acesso")}>
+            <Shield className="w-4 h-4 mr-2" /> Controle de Acesso
+          </Button>
           <Button variant="outline" size="sm" onClick={carregarConvites} disabled={carregando}>
             <RefreshCw className={`w-4 h-4 ${carregando ? "animate-spin" : ""}`} />
           </Button>

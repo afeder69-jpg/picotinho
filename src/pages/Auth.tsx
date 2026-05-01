@@ -538,6 +538,12 @@ const AuthPage = () => {
                   </svg>
                   {isOAuthLoading ? "Abrindo..." : "Entrar com Facebook"}
                 </Button>
+
+                {acessoRestrito && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    🔒 Login social disponível apenas para usuários convidados.
+                  </p>
+                )}
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4">
@@ -665,6 +671,12 @@ const AuthPage = () => {
                   </svg>
                   Entrar com Facebook
                 </Button>
+
+                {acessoRestrito && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    🔒 Cadastro por Google/Facebook só funciona se houver convite emitido para o seu e-mail.
+                  </p>
+                )}
 
                 <p className="text-xs text-muted-foreground text-center mt-4">
                   * Campos obrigatórios
