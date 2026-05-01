@@ -4,6 +4,7 @@ import { X, CheckCircle2, XCircle, ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { extrairChaveNFe, obterTipoDocumentoPorChave } from "@/lib/documentDetection";
+import { interpretarErroProcessUrlNota, montarToastErroNota } from "@/lib/notasFiscais";
 
 const UF_MAP: Record<string, string> = {
   '11': 'RO', '12': 'AC', '13': 'AM', '14': 'RR', '15': 'PA',

@@ -4,6 +4,7 @@ import { Check, X, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { interpretarErroProcessUrlNota, montarToastErroNota } from '@/lib/notasFiscais';
 
 interface NFCeWebViewerProps {
   url: string;
