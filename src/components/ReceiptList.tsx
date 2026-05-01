@@ -285,6 +285,7 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
   const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
   const [launchingToStock, setLaunchingToStock] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmReceipt, setDeleteConfirmReceipt] = useState<Receipt | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(highlightNotaId || null);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   // 🆕 Sub-fase C: controle de "Tentar de novo"
