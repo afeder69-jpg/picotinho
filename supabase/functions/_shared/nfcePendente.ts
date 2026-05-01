@@ -25,6 +25,11 @@ export class NfcePendenteSefazError extends Error {
  */
 const CODIGOS_INFOSIMPLES_PENDENTES = new Set([612, 616, 618]);
 
+// Code 600 = "Erro inesperado" do InfoSimples. Tratado como incerteza
+// fiscal/consulta indisponível (NÃO falha definitiva), pois pode indicar
+// nota em contingência ou consulta SEFAZ temporariamente indisponível.
+const CODIGOS_INFOSIMPLES_INCERTOS = new Set([600]);
+
 const PALAVRAS_PENDENTES = [
   'contingência', 'contingencia',
   'não autorizada', 'nao autorizada', 'não autorizado', 'nao autorizado',
@@ -33,6 +38,7 @@ const PALAVRAS_PENDENTES = [
   'documento não localizado', 'documento nao localizado',
   'nfe não localizada', 'nfe nao localizada',
   'nfce não localizada', 'nfce nao localizada',
+  'erro inesperado', 'um erro inesperado',
 ];
 
 export function classificarRespostaInfoSimples(data: any): { pendente: boolean; motivo: string; detalhe: string } {
