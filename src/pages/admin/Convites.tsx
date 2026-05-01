@@ -449,6 +449,16 @@ export default function Convites() {
                               >
                                 <Copy className="w-4 h-4" />
                               </Button>
+                              {c.status === "reservado" && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => liberarReserva(c)}
+                                  title="Liberar reserva (volta para disponível)"
+                                >
+                                  <Unlock className="w-4 h-4" />
+                                </Button>
+                              )}
                               {podeCancelar && (
                                 <Button
                                   variant="ghost"
