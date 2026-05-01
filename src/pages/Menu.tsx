@@ -289,11 +289,12 @@ const Menu = () => {
                       </div>
                       {!desabilitado && (
                         <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
           
           
