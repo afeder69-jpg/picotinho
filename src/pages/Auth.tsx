@@ -217,10 +217,18 @@ const AuthPage = () => {
           toast({ title: "E-mail já cadastrado", description: "Este e-mail já possui uma conta. Por favor, faça login ou use outro e-mail.", variant: "default" });
         } else if (msg.includes('rate limit')) {
           toast({ title: "Muitas tentativas", description: "Por favor, aguarde alguns segundos antes de tentar novamente.", variant: "default" });
+        } else if (msg.includes('PICOTINHO_NO_INVITE')) {
+          toast({
+            title: "Cadastro restrito",
+            description: "É necessário um convite válido para criar uma conta no Picotinho.",
+            variant: "destructive",
+          });
         } else if (msg.toLowerCase().includes('database error') || msg.toLowerCase().includes('saving new user')) {
           toast({
             title: "Não foi possível concluir o cadastro",
-            description: "Verifique se o telefone informado já não está cadastrado em outra conta.",
+            description: acessoRestrito
+              ? "Verifique se há um convite válido para este e-mail e se o telefone não está em uso."
+              : "Verifique se o telefone informado já não está cadastrado em outra conta.",
             variant: "destructive",
           });
         } else {

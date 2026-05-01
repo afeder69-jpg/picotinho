@@ -21,6 +21,7 @@ import NormalizacaoGlobal from "./pages/admin/NormalizacaoGlobal";
 import GerenciarMasters from "./pages/admin/GerenciarMasters";
 import NormalizacoesEstabelecimentos from "./pages/admin/NormalizacoesEstabelecimentos";
 import Convites from "./pages/admin/Convites";
+import ControleAcesso from "./pages/admin/ControleAcesso";
 import RecategorizarProdutosInteligente from "./pages/RecategorizarProdutosInteligente";
 import Receitas from "./pages/Receitas";
 import ReceitaDetalhes from "./pages/ReceitaDetalhes";
@@ -123,6 +124,7 @@ const App = () => {
                 <Route path="/admin/gerenciar-masters" element={<GerenciarMasters />} />
                 <Route path="/admin/normalizacoes-estabelecimentos" element={<NormalizacoesEstabelecimentos />} />
                 <Route path="/admin/convites" element={<Convites />} />
+                <Route path="/admin/controle-acesso" element={<ControleAcesso />} />
                 <Route path="/recategorizar-inteligente" element={<RecategorizarProdutosInteligente />} />
                 <Route path="/receitas" element={<Receitas />} />
                 <Route path="/receita/:id" element={<ReceitaDetalhes />} />
