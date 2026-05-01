@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_config: {
+        Row: {
+          chave: string
+          updated_at: string
+          valor: Json
+        }
+        Insert: {
+          chave: string
+          updated_at?: string
+          valor: Json
+        }
+        Update: {
+          chave?: string
+          updated_at?: string
+          valor?: Json
+        }
+        Relationships: []
+      }
       campanhas_whatsapp: {
         Row: {
           concluida_em: string | null
@@ -429,6 +447,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      convites_acesso: {
+        Row: {
+          codigo: string
+          created_at: string
+          criado_por: string | null
+          email_destino: string | null
+          expira_em: string | null
+          id: string
+          observacoes: string | null
+          status: string
+          token_expira_em: string | null
+          token_temp: string | null
+          updated_at: string
+          usado_em: string | null
+          usado_por: string | null
+        }
+        Insert: {
+          codigo: string
+          created_at?: string
+          criado_por?: string | null
+          email_destino?: string | null
+          expira_em?: string | null
+          id?: string
+          observacoes?: string | null
+          status?: string
+          token_expira_em?: string | null
+          token_temp?: string | null
+          updated_at?: string
+          usado_em?: string | null
+          usado_por?: string | null
+        }
+        Update: {
+          codigo?: string
+          created_at?: string
+          criado_por?: string | null
+          email_destino?: string | null
+          expira_em?: string | null
+          id?: string
+          observacoes?: string | null
+          status?: string
+          token_expira_em?: string | null
+          token_temp?: string | null
+          updated_at?: string
+          usado_em?: string | null
+          usado_por?: string | null
+        }
+        Relationships: []
       }
       estoque_app: {
         Row: {
@@ -4222,6 +4288,7 @@ export type Database = {
         }
         Returns: Json
       }
+      validar_codigo_convite: { Args: { _codigo: string }; Returns: Json }
       validar_telefone_whatsapp: {
         Args: { telefone_numero: string }
         Returns: boolean
