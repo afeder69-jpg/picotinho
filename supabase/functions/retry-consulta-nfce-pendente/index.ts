@@ -56,12 +56,18 @@ serve(async (req) => {
     let detalheTent = '';
 
     try {
-      // Reaproveitar process-url-nota (mesma roteamento NFe/NFCe)
-      const { data, error: invokeError } = await supabase.functions.invoke('process-url-nota', {
+      // Determinar modelo a partir da chave (bytes 20-22)
+      const chave = String(nota.chave_acesso || '');
+      const modelo = chave.substring(20, 22);
+      const fnAlvo = modelo === '55' ? 'process-nfe-infosimples' : 'process-nfce-infosimples';
+
+      // Invocar diretamente a função InfoSimples sobre a MESMA nota (mesmo id),
+      // evitando o gargalo de duplicidade do process-url-nota.
+      const { data, error: invokeError } = await supabase.functions.invoke(fnAlvo, {
         body: {
-          url: nota.imagem_url || `https://www.fazenda.rj.gov.br/?p=${nota.chave_acesso}`,
+          chaveAcesso: chave,
           userId: nota.usuario_id,
-          chaveAcesso: nota.chave_acesso,
+          notaImagemId: nota.id,
         },
       });
 
@@ -71,7 +77,7 @@ serve(async (req) => {
       } else if (data?.pendente === true) {
         resultadoStatus = 'pendente';
         motivoTent = data.motivo || 'sefaz_nao_autorizada';
-        detalheTent = data.message || '';
+        detalheTent = data.detalhe || data.message || '';
       } else if (data?.success) {
         resultadoStatus = 'autorizada';
         motivoTent = 'autorizada';
@@ -93,12 +99,10 @@ serve(async (req) => {
       detalhe: detalheTent,
     });
 
-    // process-url-nota cria registro novo se autorizado; o atual fica "obsoleto".
-    // Como reusamos a mesma chave (única), ele detecta duplicidade. Vamos marcar
-    // o registro atual conforme resultado:
     if (resultadoStatus === 'autorizada') {
+      // process-nfce/nfe-infosimples já fez UPDATE para 'aguardando_estoque'.
+      // Apenas registramos histórico/tentativas/finaliza consulta.
       await supabase.from('notas_imagens').update({
-        status_processamento: 'aguardando_estoque',
         consulta_finalizada_em: new Date().toISOString(),
         proxima_tentativa_em: null,
         tentativas_consulta: tentativaAtual,
@@ -121,6 +125,25 @@ serve(async (req) => {
         historico_tentativas: historico,
         updated_at: new Date().toISOString(),
       }).eq('id', nota.id);
+
+      // 🔔 Notificação de falha definitiva (idempotente via UNIQUE (nota_id, tipo))
+      try {
+        const { error: notifErr } = await supabase
+          .from('notificacoes_usuario')
+          .insert({
+            usuario_id: nota.usuario_id,
+            tipo: 'nota_falha_definitiva',
+            titulo: 'Nota não pôde ser processada',
+            mensagem: 'Não conseguimos processar sua nota fiscal após várias tentativas. Ela pode não ter sido autorizada pela SEFAZ. Recomendamos verificar com o estabelecimento.',
+            nota_id: nota.id,
+          });
+        if (notifErr && !String(notifErr.message || '').includes('uniq_notificacao_nota_tipo')) {
+          console.warn('⚠️ Falha ao inserir notificação:', notifErr.message);
+        }
+      } catch (e: any) {
+        console.warn('⚠️ Exceção ao inserir notificação:', e?.message);
+      }
+
       resultados.push({ id: nota.id, status: 'falha_definitiva' });
     } else {
       await supabase.from('notas_imagens').update({
