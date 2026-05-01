@@ -381,6 +381,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
               status_processamento: (nota as any).status_processamento ?? null,
               tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
               erro_mensagem: (nota as any).erro_mensagem ?? null,
+              motivo_pendencia: (nota as any).motivo_pendencia ?? null,
+              tentativas_consulta: (nota as any).tentativas_consulta ?? null,
+              proxima_tentativa_em: (nota as any).proxima_tentativa_em ?? null,
             };
           }
           
@@ -416,6 +419,9 @@ const ReceiptList = ({ highlightNotaId }: ReceiptListProps) => {
             status_processamento: (nota as any).status_processamento ?? null,
             tentativas_finalizacao: (nota as any).tentativas_finalizacao ?? null,
             erro_mensagem: (nota as any).erro_mensagem ?? null,
+            motivo_pendencia: (nota as any).motivo_pendencia ?? null,
+            tentativas_consulta: (nota as any).tentativas_consulta ?? null,
+            proxima_tentativa_em: (nota as any).proxima_tentativa_em ?? null,
           };
         })
         .filter(nota => nota !== null);
