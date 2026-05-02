@@ -278,20 +278,23 @@ serve(async (req) => {
     const errosCapturados: string[] = [];
 
     if (modelo === '55') {
-      console.log('📄 [NFE] Processando via InfoSimples...');
+      // Roteamento por UF: CE (23) tem provider exclusivo; demais usam o RJ atual
+      const fnNFe = uf === '23' ? 'process-nfe-infosimples-ce' : 'process-nfe-infosimples';
+      const tagNFe = uf === '23' ? '[NFE-CE]' : '[NFE]';
+      console.log(`📄 ${tagNFe} Processando via InfoSimples (${fnNFe})...`);
 
-      const { data: nfeData, error: nfeError } = await supabase.functions.invoke('process-nfe-infosimples', {
+      const { data: nfeData, error: nfeError } = await supabase.functions.invoke(fnNFe, {
         body: { chaveAcesso: chave, userId, notaImagemId: notaId }
       });
 
       if (nfeError) {
-        console.error('⚠️ Erro ao processar NFe via InfoSimples:', nfeError);
+        console.error(`⚠️ ${tagNFe} Erro ao processar NFe via InfoSimples:`, nfeError);
         errosCapturados.push(await extrairBodyErroEdge(nfeError));
       } else if (nfeData?.pendente === true) {
-        console.warn('⏳ [NFE] Pendente SEFAZ:', nfeData.motivo);
+        console.warn(`⏳ ${tagNFe} Pendente SEFAZ:`, nfeData.motivo);
         pendenteSefaz = { motivo: nfeData.motivo || 'sefaz_nao_autorizada', detalhe: nfeData.detalhe || '' };
       } else {
-        console.log('✅ NFe processada via InfoSimples:', nfeData);
+        console.log(`✅ ${tagNFe} NFe processada via InfoSimples:`, nfeData);
         extracaoSucesso = true;
       }
     } else if (modelo === '65' && uf === '23') {

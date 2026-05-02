@@ -62,7 +62,10 @@ serve(async (req) => {
       const uf = chave.substring(0, 2);
       const modelo = chave.substring(20, 22);
       let fnAlvo: string;
-      if (modelo === '55') {
+      if (modelo === '55' && uf === '23') {
+        fnAlvo = 'process-nfe-infosimples-ce';
+        console.log(`📄 [NFE-CE] Retry roteado para provider Ceará (nota ${nota.id})`);
+      } else if (modelo === '55') {
         fnAlvo = 'process-nfe-infosimples';
       } else if (modelo === '65' && uf === '23') {
         fnAlvo = 'process-nfce-infosimples-ce';
