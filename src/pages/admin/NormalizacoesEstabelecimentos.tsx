@@ -1043,9 +1043,15 @@ const NormalizacoesEstabelecimentos = () => {
                         </Badge>
                       </div>
                       {norm.cnpj_original && (
-                        <div className="text-xs font-mono text-muted-foreground mb-1">
+                        <button
+                          type="button"
+                          onClick={() => copiarCnpj(norm.cnpj_original!)}
+                          className="text-xs font-mono text-muted-foreground hover:text-primary mb-1 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Clique para copiar o CNPJ"
+                        >
                           CNPJ: {formatCnpj(norm.cnpj_original)}
-                        </div>
+                          <Copy className="w-3 h-3" />
+                        </button>
                       )}
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>→</span>
