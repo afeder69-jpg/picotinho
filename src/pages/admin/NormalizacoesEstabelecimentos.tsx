@@ -517,6 +517,23 @@ const NormalizacoesEstabelecimentos = () => {
     return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
   };
 
+  const copiarCnpj = async (cnpj: string) => {
+    const formatado = formatCnpj(cnpj);
+    try {
+      await navigator.clipboard.writeText(formatado);
+      toast({
+        title: "CNPJ copiado!",
+        description: `${formatado} copiado para a área de transferência.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar o CNPJ.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Determinar quais estabelecimentos mostrar na busca (excluir os que já têm regra nas normalizacoesFiltradas)
   const estabelecimentosBuscaExibir = searchTerm.trim()
     ? pendentesBusca
