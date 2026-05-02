@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { normalizarParaBusca } from "@/lib/utils";
-import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History, FileText } from "lucide-react";
+import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History, FileText, Copy } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { format } from "date-fns";
 
