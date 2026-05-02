@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { normalizarParaBusca } from "@/lib/utils";
-import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History, FileText } from "lucide-react";
+import { ArrowLeft, Building2, Plus, Search, Edit3, Trash2, Loader2, RefreshCw, CheckCircle, ArrowRight, History, FileText, Copy } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { format } from "date-fns";
 
@@ -517,6 +517,23 @@ const NormalizacoesEstabelecimentos = () => {
     return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
   };
 
+  const copiarCnpj = async (cnpj: string) => {
+    const formatado = formatCnpj(cnpj);
+    try {
+      await navigator.clipboard.writeText(formatado);
+      toast({
+        title: "CNPJ copiado!",
+        description: `${formatado} copiado para a área de transferência.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar o CNPJ.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Determinar quais estabelecimentos mostrar na busca (excluir os que já têm regra nas normalizacoesFiltradas)
   const estabelecimentosBuscaExibir = searchTerm.trim()
     ? pendentesBusca
@@ -873,9 +890,15 @@ const NormalizacoesEstabelecimentos = () => {
                         </CardTitle>
                       </div>
                       {item.cnpj_estabelecimento && (
-                        <div className="text-xs font-mono text-muted-foreground mb-1">
+                        <button
+                          type="button"
+                          onClick={() => copiarCnpj(item.cnpj_estabelecimento!)}
+                          className="text-xs font-mono text-muted-foreground hover:text-primary mb-1 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Clique para copiar o CNPJ"
+                        >
                           CNPJ: {formatCnpj(item.cnpj_estabelecimento)}
-                        </div>
+                          <Copy className="w-3 h-3" />
+                        </button>
                       )}
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="gap-1">
@@ -924,9 +947,15 @@ const NormalizacoesEstabelecimentos = () => {
                             </CardTitle>
                           </div>
                           {item.cnpj_estabelecimento && (
-                            <div className="text-xs font-mono text-muted-foreground mb-1">
+                            <button
+                              type="button"
+                              onClick={() => copiarCnpj(item.cnpj_estabelecimento!)}
+                              className="text-xs font-mono text-muted-foreground hover:text-primary mb-1 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Clique para copiar o CNPJ"
+                            >
                               CNPJ: {formatCnpj(item.cnpj_estabelecimento)}
-                            </div>
+                              <Copy className="w-3 h-3" />
+                            </button>
                           )}
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="gap-1">
@@ -1014,9 +1043,15 @@ const NormalizacoesEstabelecimentos = () => {
                         </Badge>
                       </div>
                       {norm.cnpj_original && (
-                        <div className="text-xs font-mono text-muted-foreground mb-1">
+                        <button
+                          type="button"
+                          onClick={() => copiarCnpj(norm.cnpj_original!)}
+                          className="text-xs font-mono text-muted-foreground hover:text-primary mb-1 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Clique para copiar o CNPJ"
+                        >
                           CNPJ: {formatCnpj(norm.cnpj_original)}
-                        </div>
+                          <Copy className="w-3 h-3" />
+                        </button>
                       )}
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>→</span>
