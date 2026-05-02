@@ -189,13 +189,18 @@ async function saveToCache(supabase: any, chaveNFCe: string, dadosNFCe: any): Pr
   try {
     const emitente = dadosNFCe.data?.[0]?.emitente;
     const nfe = dadosNFCe.data?.[0]?.nfe;
+    const dataEmissaoCacheRaw = nfe?.data_emissao
+      || dadosNFCe.data?.[0]?.informacoes_nota?.data_emissao
+      || dadosNFCe.data?.[0]?.data_emissao
+      || null;
+    const dataEmissaoCacheISO = parseDataEmissao(dataEmissaoCacheRaw);
     const { error } = await supabase
       .from('nfce_cache_infosimples')
       .insert({
         chave_nfce: chaveNFCe,
         cnpj_emitente: (emitente?.cnpj || '').replace(/\D/g, ''),
         nome_emitente: emitente?.nome || emitente?.nome_razao_social,
-        data_emissao: nfe?.data_emissao || null,
+        data_emissao: dataEmissaoCacheISO,
         valor_total: parseBrazilianFloat(nfe?.normalizado_valor_total) || 0,
         tipo_consulta: 'completa',
         dados_completos: dadosNFCe
