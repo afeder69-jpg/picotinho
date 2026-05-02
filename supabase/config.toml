@@ -53,6 +53,8 @@ project_id = "mjsbwrtegorjxcepvrik"
     verify_jwt = false
   [functions.process-nfe-infosimples]
     verify_jwt = false
+  [functions.process-nfe-infosimples-ce]
+    verify_jwt = false
   [functions.process-nfe-serpro]
     verify_jwt = false
   [functions.process-receipt]
