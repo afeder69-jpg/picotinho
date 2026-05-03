@@ -886,7 +886,7 @@ async function buscarProdutoSimilar(
     .or(`texto_variacao.ilike.${textoNormalizado},texto_variacao.ilike.${textoParaMatching}`)
     .maybeSingle();
   
-  if (sinonimo?.produtos_master_global) {
+  if (sinonimo?.produtos_master_global && (sinonimo.produtos_master_global as any).provisorio !== true) {
     console.log(`✅ Encontrado em sinônimos: ${sinonimo.produtos_master_global.sku_global}`);
     return {
       encontrado: true,
