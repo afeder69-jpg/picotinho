@@ -1448,6 +1448,7 @@ async function criarCandidato(
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
         status: status, // Mudar de 'pendente' para 'auto_aprovado'
+        precisa_ia: false, // ✅ Fase 1: IA já preencheu
         observacoes_revisor: obsEmbalagem || null,
         updated_at: new Date().toISOString()
       })
