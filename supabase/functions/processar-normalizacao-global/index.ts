@@ -1215,7 +1215,7 @@ RESPONDA APENAS COM JSON (sem markdown):
       systemPrompt: 'Você é um especialista em normalização de produtos. Sempre responda com JSON válido, sem markdown.',
       userPrompt: prompt,
       temperature: 0.3,
-      timeoutMs: 45000,
+      timeoutMs,
       supabase,
       texto_original: produto?.texto_original ?? textoOriginal,
       candidato_id: null,
