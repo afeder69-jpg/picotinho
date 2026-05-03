@@ -101,8 +101,21 @@ Deno.serve(async (req) => {
   // 🔐 Wave 1 hotfix: master-only.
   try { await requireMaster(req); } catch (e) { return authErrorResponse(e); }
 
+  // Parse body opcional para controle de modo teste
+  let bodyOpts: { modo_teste?: boolean; limite_candidatos?: number; limite_notas?: number } = {};
   try {
-    console.log('🚀 Iniciando processamento de normalização global');
+    if (req.headers.get('content-type')?.includes('application/json')) {
+      bodyOpts = await req.json().catch(() => ({}));
+    }
+  } catch (_) {}
+  const MODO_TESTE = bodyOpts.modo_teste === true;
+  const LIMITE_CANDIDATOS = MODO_TESTE
+    ? Math.max(1, Math.min(20, Number(bodyOpts.limite_candidatos) || 5))
+    : null; // null = sem cap (comportamento original)
+  const LIMITE_NOTAS_INPUT = Math.max(1, Math.min(5, Number(bodyOpts.limite_notas) || (MODO_TESTE ? 2 : 5)));
+
+  try {
+    console.log(`🚀 Iniciando processamento de normalização global (modo_teste=${MODO_TESTE}, cap_candidatos=${LIMITE_CANDIDATOS ?? 'sem cap'})`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
