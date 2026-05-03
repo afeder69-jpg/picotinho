@@ -2092,6 +2092,7 @@ serve(async (req) => {
               nota_item_hash: hashPadronizado, // ✅ Hash padronizado
               status: 'pendente',
               confianca_ia: 0, // Será preenchido por processar-normalizacao-global
+              precisa_ia: true, // ✅ Fase 1: marca placeholder para a IA processar
               categoria_sugerida: produto.categoria,
               marca_sugerida: produto.marca || null,
               nome_base_sugerido: produto.nome_base || produto.produto_nome
