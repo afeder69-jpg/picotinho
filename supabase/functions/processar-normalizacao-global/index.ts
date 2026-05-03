@@ -101,8 +101,21 @@ Deno.serve(async (req) => {
   // 🔐 Wave 1 hotfix: master-only.
   try { await requireMaster(req); } catch (e) { return authErrorResponse(e); }
 
+  // Parse body opcional para controle de modo teste
+  let bodyOpts: { modo_teste?: boolean; limite_candidatos?: number; limite_notas?: number } = {};
   try {
-    console.log('🚀 Iniciando processamento de normalização global');
+    if (req.headers.get('content-type')?.includes('application/json')) {
+      bodyOpts = await req.json().catch(() => ({}));
+    }
+  } catch (_) {}
+  const MODO_TESTE = bodyOpts.modo_teste === true;
+  const LIMITE_CANDIDATOS = MODO_TESTE
+    ? Math.max(1, Math.min(20, Number(bodyOpts.limite_candidatos) || 5))
+    : null; // null = sem cap (comportamento original)
+  const LIMITE_NOTAS_INPUT = Math.max(1, Math.min(5, Number(bodyOpts.limite_notas) || (MODO_TESTE ? 2 : 5)));
+
+  try {
+    console.log(`🚀 Iniciando processamento de normalização global (modo_teste=${MODO_TESTE}, cap_candidatos=${LIMITE_CANDIDATOS ?? 'sem cap'})`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -129,7 +142,7 @@ Deno.serve(async (req) => {
       .eq('processada', true)
       .eq('normalizada', false)
       .not('dados_extraidos', 'is', null)
-      .limit(5); // ✅ Fase 1: até 5 notas por execução (cron de 2min mantém ritmo)
+      .limit(LIMITE_NOTAS_INPUT); // ✅ Fase 1: até 5 notas / modo_teste: até limite_notas
 
     if (notasError) {
       throw new Error(`Erro ao buscar notas: ${notasError.message}`);
@@ -138,7 +151,10 @@ Deno.serve(async (req) => {
     console.log(`📦 Notas fiscais: ${notasProcessadas?.length || 0} notas processadas`);
 
     // 2. BUSCAR PRODUTOS DO OPEN FOOD FACTS NÃO NORMALIZADOS
-    const { data: openFoodProducts, error: offError } = await supabase
+    // ⚠️ Em modo_teste, pular Open Food Facts para limitar escopo
+    const { data: openFoodProducts, error: offError } = MODO_TESTE
+      ? { data: [] as any[], error: null }
+      : await supabase
       .from('open_food_facts_staging')
       .select('id, codigo_barras, texto_original, dados_brutos, imagem_url, imagem_path')
       .eq('processada', false)
@@ -194,6 +210,14 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Encontrados ${produtosParaNormalizar.length} produtos para processar`);
 
+    // 🛑 MODO TESTE: limitar quantidade real de candidatos processados
+    let candidatosTruncados = 0;
+    if (LIMITE_CANDIDATOS !== null && produtosParaNormalizar.length > LIMITE_CANDIDATOS) {
+      candidatosTruncados = produtosParaNormalizar.length - LIMITE_CANDIDATOS;
+      produtosParaNormalizar.length = LIMITE_CANDIDATOS;
+      console.log(`✂️  MODO TESTE: cap aplicado → processando ${LIMITE_CANDIDATOS} candidatos (${candidatosTruncados} ignorados)`);
+    }
+
     // ✅ VALIDAÇÃO: Retornar early se não houver produtos novos
     if (produtosParaNormalizar.length === 0) {
       console.log('ℹ️ Nenhum produto novo para processar');
@@ -212,7 +236,8 @@ Deno.serve(async (req) => {
     }
 
     // 2. PROCESSAR EM LOTES
-    const LOTE_SIZE = 10;
+    // ⚠️ Em modo_teste, usar lote = total para 1 ciclo único (sem múltiplas iterações)
+    const LOTE_SIZE = MODO_TESTE ? produtosParaNormalizar.length : 10;
     let totalProcessados = 0;
     let totalAutoAprovados = 0;
     let totalParaRevisao = 0;
@@ -454,7 +479,8 @@ Deno.serve(async (req) => {
               lovableApiKey,
               embalagemInfo,
               supabase,
-              produto
+              produto,
+              MODO_TESTE ? 20000 : 45000
             );
 
             // 🛑 Falha total da IA — manter pendente, NÃO criar master, NÃO inventar fallback.
@@ -706,6 +732,9 @@ Deno.serve(async (req) => {
       notas_parciais_reprocessar: notasParciaisReprocessar,
       notas_falharam: notasFalharam,
       garantia_atomica: notasParciaisReprocessar === 0 ? '✅ TODAS COMPLETAS' : '⚠️ REPROCESSAMENTO NECESSÁRIO',
+      modo_teste: MODO_TESTE,
+      cap_candidatos: LIMITE_CANDIDATOS,
+      candidatos_truncados_por_cap: candidatosTruncados,
       timestamp: new Date().toISOString()
     };
 
@@ -1040,7 +1069,8 @@ async function normalizarComIA(
   apiKey: string,
   embalagemInfo?: { isMultiUnit: boolean; quantity: number },
   supabase?: any,
-  produto?: ProdutoParaNormalizar
+  produto?: ProdutoParaNormalizar,
+  timeoutMs: number = 45000
 ): Promise<NormalizacaoSugerida | null> {
   console.log(`🤖 Analisando com Gemini: "${textoOriginal}"`);
 
@@ -1185,7 +1215,7 @@ RESPONDA APENAS COM JSON (sem markdown):
       systemPrompt: 'Você é um especialista em normalização de produtos. Sempre responda com JSON válido, sem markdown.',
       userPrompt: prompt,
       temperature: 0.3,
-      timeoutMs: 45000,
+      timeoutMs,
       supabase,
       texto_original: produto?.texto_original ?? textoOriginal,
       candidato_id: null,

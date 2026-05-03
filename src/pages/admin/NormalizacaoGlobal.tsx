@@ -2718,7 +2718,7 @@ export default function NormalizacaoGlobal() {
                   <div key={n} className="flex items-center gap-1.5">
                     <RadioGroupItem value={String(n)} id={`lote-${n}`} />
                     <Label htmlFor={`lote-${n}`} className="text-xs cursor-pointer">
-                      {n === 5 ? 'Teste (5)' : n === 10 ? 'Pequeno (10)' : 'Médio (20)'}
+                      {n === 5 ? 'Teste (5 candidatos)' : n === 10 ? 'Pequeno (10 candidatos)' : 'Médio (20 candidatos)'}
                     </Label>
                   </div>
                 ))}
@@ -2731,7 +2731,7 @@ export default function NormalizacaoGlobal() {
                 className="gap-2 border-amber-500/60"
               >
                 {reprocessandoOrfaos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {reprocessandoOrfaos ? 'Processando...' : `Executar lote de ${loteTeste}`}
+                {reprocessandoOrfaos ? 'Processando...' : `Executar lote de ${loteTeste} candidatos`}
               </Button>
             </div>
 
@@ -2785,9 +2785,9 @@ export default function NormalizacaoGlobal() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar reprocessamento controlado</AlertDialogTitle>
             <AlertDialogDescription>
-              Você vai reprocessar até <strong>{loteTeste} notas</strong> com candidatos órfãos pendentes.
-              O kill-switch geral permanece ativo. Esta execução é exclusiva para validar wrapper IA,
-              anti-duplicata e masters provisórios. Deseja continuar?
+              Você vai reprocessar exatamente <strong>{loteTeste} candidatos</strong> órfãos pendentes
+              (cap real, não notas). O kill-switch geral permanece ativo. Esta execução é exclusiva
+              para validar wrapper IA, anti-duplicata e masters provisórios. Deseja continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
