@@ -1089,6 +1089,55 @@ export default function NormalizacaoGlobal() {
     }
   }
 
+  // 🆕 Fase 9 — Reprocessa candidatos órfãos (placeholders sem IA)
+  const [reprocessandoOrfaos, setReprocessandoOrfaos] = useState(false);
+  async function reprocessarOrfaos() {
+    setReprocessandoOrfaos(true);
+    try {
+      toast({
+        title: "Reprocessamento iniciado",
+        description: "Enviando candidatos órfãos para a IA...",
+      });
+
+      let restantes = Infinity;
+      let totalAuto = 0, totalRevisao = 0, totalProc = 0;
+      let voltas = 0;
+      const MAX_VOLTAS = 30; // ~150 notas por sessão
+
+      while (restantes > 0 && voltas < MAX_VOLTAS) {
+        voltas++;
+        const { data, error } = await supabase.functions.invoke('reprocessar-candidatos-orfaos', {
+          body: { lote: 5 },
+        });
+        if (error) throw error;
+        if (!data?.sucesso) throw new Error(data?.error || 'Falha desconhecida');
+
+        totalAuto += Number(data.auto_aprovados || 0);
+        totalRevisao += Number(data.para_revisao || 0);
+        totalProc += Number(data.processados || 0);
+        restantes = Number(data.total_orfaos || 0) - Number(data.notas_reprocessadas || 0);
+
+        if (Number(data.notas_reprocessadas || 0) === 0) break;
+      }
+
+      toast({
+        title: "Reprocessamento concluído",
+        description: `${totalProc} processados • ${totalAuto} auto-aprovados • ${totalRevisao} para revisão`,
+      });
+
+      await carregarDados();
+    } catch (err: any) {
+      console.error('Erro no reprocessamento de órfãos:', err);
+      toast({
+        title: "Erro",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setReprocessandoOrfaos(false);
+    }
+  }
+
   async function detectarPendentesAbsorviveis() {
     setDetectandoAbsorviveis(true);
     setAbsorcaoResultados(null);
