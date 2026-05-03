@@ -210,6 +210,14 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Encontrados ${produtosParaNormalizar.length} produtos para processar`);
 
+    // 🛑 MODO TESTE: limitar quantidade real de candidatos processados
+    let candidatosTruncados = 0;
+    if (LIMITE_CANDIDATOS !== null && produtosParaNormalizar.length > LIMITE_CANDIDATOS) {
+      candidatosTruncados = produtosParaNormalizar.length - LIMITE_CANDIDATOS;
+      produtosParaNormalizar.length = LIMITE_CANDIDATOS;
+      console.log(`✂️  MODO TESTE: cap aplicado → processando ${LIMITE_CANDIDATOS} candidatos (${candidatosTruncados} ignorados)`);
+    }
+
     // ✅ VALIDAÇÃO: Retornar early se não houver produtos novos
     if (produtosParaNormalizar.length === 0) {
       console.log('ℹ️ Nenhum produto novo para processar');
@@ -228,7 +236,8 @@ Deno.serve(async (req) => {
     }
 
     // 2. PROCESSAR EM LOTES
-    const LOTE_SIZE = 10;
+    // ⚠️ Em modo_teste, usar lote = total para 1 ciclo único (sem múltiplas iterações)
+    const LOTE_SIZE = MODO_TESTE ? produtosParaNormalizar.length : 10;
     let totalProcessados = 0;
     let totalAutoAprovados = 0;
     let totalParaRevisao = 0;
