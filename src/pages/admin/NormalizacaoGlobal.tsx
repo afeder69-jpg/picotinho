@@ -2718,7 +2718,7 @@ export default function NormalizacaoGlobal() {
                   <div key={n} className="flex items-center gap-1.5">
                     <RadioGroupItem value={String(n)} id={`lote-${n}`} />
                     <Label htmlFor={`lote-${n}`} className="text-xs cursor-pointer">
-                      {n === 5 ? 'Teste (5)' : n === 10 ? 'Pequeno (10)' : 'Médio (20)'}
+                      {n === 5 ? 'Teste (5 candidatos)' : n === 10 ? 'Pequeno (10 candidatos)' : 'Médio (20 candidatos)'}
                     </Label>
                   </div>
                 ))}
