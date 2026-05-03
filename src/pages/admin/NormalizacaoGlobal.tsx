@@ -2731,7 +2731,7 @@ export default function NormalizacaoGlobal() {
                 className="gap-2 border-amber-500/60"
               >
                 {reprocessandoOrfaos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {reprocessandoOrfaos ? 'Processando...' : `Executar lote de ${loteTeste}`}
+                {reprocessandoOrfaos ? 'Processando...' : `Executar lote de ${loteTeste} candidatos`}
               </Button>
             </div>
 
