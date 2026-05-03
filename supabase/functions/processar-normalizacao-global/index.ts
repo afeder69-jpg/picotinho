@@ -919,8 +919,10 @@ async function buscarProdutoSimilar(
     threshold: 0.3
   });
 
-  if (similares && similares.length > 0) {
-    const melhorMatch = similares[0];
+  // 🛡️ Filtra masters provisórios — não devem servir como referência de matching
+  const similaresFiltrados = (similares || []).filter((c: any) => !c.provisorio);
+  if (similaresFiltrados && similaresFiltrados.length > 0) {
+    const melhorMatch = similaresFiltrados[0];
     
     // 🔧 PARTE C + D: Aplicar fuzzy matching com Levenshtein + logs de debugging
     console.log(`\n🔍 ANÁLISE FUZZY DETALHADA:`);
