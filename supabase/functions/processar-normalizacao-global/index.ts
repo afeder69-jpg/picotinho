@@ -1493,7 +1493,8 @@ async function criarCandidato(
         observacoes_revisor: obsEmbalagem || null,
         updated_at: new Date().toISOString()
       })
-      .eq('id', candidatoExistente.id);
+      .eq('id', candidatoExistente.id)
+      .eq('status', 'pendente'); // 🔒 invariante: nunca reabrir auto_aprovado/aprovado/rejeitado/pendente_revisao
 
     if (error) {
       throw new Error(`Erro ao atualizar candidato: ${error.message}`);
