@@ -124,8 +124,13 @@ export default function NormalizacaoGlobal() {
     // Fila de Processamento - Aprovados Manualmente
     aprovadosManuaisTotal: 0,
     
-    // Fila de Processamento - Pendentes
+    // Fila de Processamento - Pendentes (total agregado, mantido para compatibilidade)
     pendentesTotal: 0,
+    
+    // Detalhamento dos pendentes (separação por origem)
+    aguardandoIA: 0,                    // status='pendente' AND precisa_ia=true AND motivo_bloqueio IS NULL
+    bloqueadosSimilaridade: 0,          // status='pendente' AND motivo_bloqueio IS NOT NULL
+    aguardandoRevisaoHumana: 0,         // status='pendente_revisao'
     
     // Outros
     totalUsuarios: 0,
