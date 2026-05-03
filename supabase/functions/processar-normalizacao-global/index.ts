@@ -1069,7 +1069,8 @@ async function normalizarComIA(
   apiKey: string,
   embalagemInfo?: { isMultiUnit: boolean; quantity: number },
   supabase?: any,
-  produto?: ProdutoParaNormalizar
+  produto?: ProdutoParaNormalizar,
+  timeoutMs: number = 45000
 ): Promise<NormalizacaoSugerida | null> {
   console.log(`🤖 Analisando com Gemini: "${textoOriginal}"`);
 
