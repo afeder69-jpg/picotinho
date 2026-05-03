@@ -1021,6 +1021,7 @@ async function buscarProdutoSimilar(
     .from('produtos_master_global')
     .select('*')
     .eq('status', 'ativo')
+    .eq('provisorio', false)
     .order('total_usuarios', { ascending: false })
     .limit(50);
 
