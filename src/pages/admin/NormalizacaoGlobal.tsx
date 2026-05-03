@@ -2577,13 +2577,27 @@ export default function NormalizacaoGlobal() {
                     <div className="text-3xl font-bold text-yellow-700 dark:text-yellow-300 mb-1">
                       {stats.pendentesTotal}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      ~{stats.estimativaNovos} novos estimados
+                    <div className="text-[11px] text-muted-foreground space-y-0.5 leading-tight">
+                      <div className="flex justify-between gap-2">
+                        <span>🤖 Aguardando IA</span>
+                        <span className="font-semibold">{stats.aguardandoIA}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span>🛡️ Bloq. similaridade</span>
+                        <span className="font-semibold">{stats.bloqueadosSimilaridade}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span>👤 Revisão humana</span>
+                        <span className="font-semibold">{stats.aguardandoRevisaoHumana}</span>
+                      </div>
                     </div>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="font-semibold">Candidatos aguardando revisão</p>
+                  <p className="font-semibold">Detalhamento dos candidatos pendentes</p>
+                  <p className="text-xs mt-1">🤖 Aguardando IA: ainda não processados</p>
+                  <p className="text-xs">🛡️ Bloq. similaridade: anti-duplicata ativada</p>
+                  <p className="text-xs">👤 Revisão humana: status pendente_revisao</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
