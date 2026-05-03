@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { requireMaster, authErrorResponse, corsHeaders } from "../_shared/auth.ts";
-
+import { chamarIANormalizacao } from "../_shared/ia-cliente.ts";
+import { verificarAntiDuplicata } from "../_shared/anti-duplicata.ts";
 // Interfaces e função para detecção de embalagem via tabela de regras
 interface RegraConversao {
   produto_pattern: string;
