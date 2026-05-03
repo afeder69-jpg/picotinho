@@ -1321,7 +1321,8 @@ RESPONDA APENAS COM JSON (sem markdown):
 async function criarProdutoMaster(
   supabase: any,
   normalizacao: NormalizacaoSugerida,
-  codigoBarras?: string
+  codigoBarras?: string,
+  provisorio: boolean = false
 ): Promise<{ id: string, nome_padrao: string }> {
   // 🛡️ GUARD: Verificar se já existe master com mesmo EAN antes de criar
   // Considera variantes com/sem zeros à esquerda para evitar duplicatas por formatação
