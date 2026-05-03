@@ -451,8 +451,21 @@ Deno.serve(async (req) => {
               textoParaNormalizar,
               resultadoBusca.candidatos || [],
               lovableApiKey,
-              embalagemInfo
+              embalagemInfo,
+              supabase,
+              produto
             );
+
+            // 🛑 Falha total da IA — manter pendente, NÃO criar master, NÃO inventar fallback.
+            if (!normalizacao) {
+              console.warn(`⚠️ IA falhou para "${produto.texto_original}" — mantido pendente para reprocessamento.`);
+              await supabase
+                .from('produtos_candidatos_normalizacao')
+                .update({ precisa_ia: true })
+                .eq('nota_item_hash', produto.nota_item_hash);
+              totalParaRevisao++;
+              continue;
+            }
 
             // Adicionar campos de imagem
             if (produto.imagem_url) {
@@ -488,23 +501,51 @@ Deno.serve(async (req) => {
               console.log(`✅ Auto-aprovado pela IA (variação reconhecida): ${normalizacao.nome_padrao}`);
               
             } else if (normalizacao.confianca >= 90) {
-              // Produto novo com alta confiança - criar master e auto-aprovar
-              while (tentativas < MAX_TENTATIVAS) {
-                try {
-                  const masterCriado = await criarProdutoMaster(supabase, normalizacao, produto.codigo_barras);
-                  normalizacao.produto_master_id = masterCriado.id; // ✅ Preencher o ID do master criado
-                  console.log(`🔗 Master criado e vinculado: ${masterCriado.id}`);
-                  await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
-                  break;
-                } catch (erro: any) {
-                  tentativas++;
-                  if (tentativas >= MAX_TENTATIVAS) throw erro;
-                  await new Promise(r => setTimeout(r, 1000 * tentativas));
+              // 🛡️ ANTI-DUPLICATA: bloqueia criação se houver master estruturalmente próximo
+              const antiDup = await verificarAntiDuplicata(
+                supabase,
+                {
+                  nome_padrao: normalizacao.nome_padrao,
+                  nome_base: normalizacao.nome_base,
+                  marca: normalizacao.marca,
+                  categoria: normalizacao.categoria,
+                  qtd_base: normalizacao.qtd_base,
+                  unidade_base: normalizacao.unidade_base,
+                },
+                produto.codigo_barras
+              );
+
+              if (antiDup.bloquear) {
+                console.warn(`🛡️ Anti-duplicata bloqueou criação de "${normalizacao.nome_padrao}" — motivo=${antiDup.motivo}`);
+                // Cria candidato pendente com motivo + lista de candidatos próximos
+                await criarCandidato(supabase, produto, normalizacao, 'pendente', obsEmbalagem);
+                await supabase
+                  .from('produtos_candidatos_normalizacao')
+                  .update({
+                    motivo_bloqueio: antiDup.motivo,
+                    candidatos_proximos: antiDup.candidatos as any,
+                    precisa_ia: false,
+                  })
+                  .eq('nota_item_hash', produto.nota_item_hash);
+                totalParaRevisao++;
+              } else {
+                // Produto novo com alta confiança - criar master PROVISÓRIO + auto-aprovar
+                while (tentativas < MAX_TENTATIVAS) {
+                  try {
+                    const masterCriado = await criarProdutoMaster(supabase, normalizacao, produto.codigo_barras, true);
+                    normalizacao.produto_master_id = masterCriado.id;
+                    console.log(`🔗 Master PROVISÓRIO criado e vinculado: ${masterCriado.id}`);
+                    await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
+                    break;
+                  } catch (erro: any) {
+                    tentativas++;
+                    if (tentativas >= MAX_TENTATIVAS) throw erro;
+                    await new Promise(r => setTimeout(r, 1000 * tentativas));
+                  }
                 }
+                totalAutoAprovados++;
+                console.log(`✅ Auto-aprovado pela IA (master provisório ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
               }
-              
-              totalAutoAprovados++;
-              console.log(`✅ Auto-aprovado pela IA (produto novo ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
               
             } else {
               // Baixa confiança - enviar para revisão manual
