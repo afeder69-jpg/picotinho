@@ -1304,24 +1304,17 @@ RESPONDA APENAS COM JSON (sem markdown):
     return resultado;
 
   } catch (error: any) {
-    console.error('❌ Erro ao chamar Lovable AI:', error);
-    return {
-      sku_global: `TEMP-${Date.now()}`,
-      nome_padrao: textoOriginal.toUpperCase(),
-      categoria: 'OUTROS',
-      nome_base: textoOriginal.toUpperCase(),
-      marca: null,
-      tipo_embalagem: null,
-      qtd_valor: null,
-      qtd_unidade: null,
-      qtd_base: null,
-      unidade_base: null,
-      categoria_unidade: null,
-      granel: false,
-      confianca: 30,
-      razao: `Erro na IA: ${error.message}`,
-      produto_master_id: null
-    };
+    console.error('❌ Erro ao processar resposta da IA:', error);
+    try {
+      await supabase?.from('ia_normalizacao_erros').insert({
+        texto_original: produto?.texto_original ?? textoOriginal,
+        tipo_erro: 'desconhecido',
+        modelo: 'google/gemini-2.5-flash',
+        mensagem: (error?.message || '').slice(0, 2000),
+        tentativa: 1,
+      });
+    } catch (_) {}
+    return null;
   }
 }
 
