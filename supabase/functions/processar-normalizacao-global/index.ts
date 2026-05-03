@@ -1175,40 +1175,26 @@ RESPONDA APENAS COM JSON (sem markdown):
 }`;
 
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { 
-            role: 'system', 
-            content: 'Você é um especialista em normalização de produtos. Sempre responda com JSON válido, sem markdown.' 
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-      }),
+    const ia = await chamarIANormalizacao({
+      apiKey,
+      modelo: 'google/gemini-2.5-flash',
+      systemPrompt: 'Você é um especialista em normalização de produtos. Sempre responda com JSON válido, sem markdown.',
+      userPrompt: prompt,
+      temperature: 0.3,
+      timeoutMs: 45000,
+      supabase,
+      texto_original: produto?.texto_original ?? textoOriginal,
+      candidato_id: null,
+      camposObrigatorios: ['nome_padrao', 'categoria', 'confianca'],
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Erro na API Lovable AI: ${response.status} - ${errorText}`);
+    if (!ia.ok) {
+      console.warn(`❌ IA falhou (${ia.tipo_erro}): ${ia.mensagem}`);
+      return null;
     }
 
-    const data = await response.json();
-    const conteudo = data.choices[0].message.content;
-    
-    const jsonLimpo = conteudo
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
-    
-    const resultado = JSON.parse(jsonLimpo);
-    
+    const resultado = ia.data;
+
     // 🔧 VALIDAR E CORRIGIR CATEGORIA (GARANTIR CATEGORIAS OFICIAIS DO PICOTINHO)
     const CATEGORIAS_VALIDAS = [
       'AÇOUGUE', 'BEBIDAS', 'CONGELADOS', 'HIGIENE/FARMÁCIA',
