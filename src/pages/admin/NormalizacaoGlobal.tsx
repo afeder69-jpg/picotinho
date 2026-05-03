@@ -124,8 +124,13 @@ export default function NormalizacaoGlobal() {
     // Fila de Processamento - Aprovados Manualmente
     aprovadosManuaisTotal: 0,
     
-    // Fila de Processamento - Pendentes
+    // Fila de Processamento - Pendentes (total agregado, mantido para compatibilidade)
     pendentesTotal: 0,
+    
+    // Detalhamento dos pendentes (separação por origem)
+    aguardandoIA: 0,                    // status='pendente' AND precisa_ia=true AND motivo_bloqueio IS NULL
+    bloqueadosSimilaridade: 0,          // status='pendente' AND motivo_bloqueio IS NOT NULL
+    aguardandoRevisaoHumana: 0,         // status='pendente_revisao'
     
     // Outros
     totalUsuarios: 0,
@@ -417,6 +422,20 @@ export default function NormalizacaoGlobal() {
 
       // Separar por status
       const pendentes = todosCandidatos?.filter(c => c.status === 'pendente') || [];
+
+      // 🆕 Detalhar a origem dos "Aguardando":
+      //  - Aguardando IA: pendente, precisa_ia=true, sem motivo_bloqueio
+      //  - Bloqueados por similaridade: pendente com motivo_bloqueio
+      //  - Aguardando revisão humana: pendente_revisao
+      const aguardandoIA = pendentes.filter(
+        (c: any) => c.precisa_ia === true && !c.motivo_bloqueio
+      ).length;
+      const bloqueadosSimilaridade = pendentes.filter(
+        (c: any) => !!c.motivo_bloqueio
+      ).length;
+      const aguardandoRevisaoHumana = (todosCandidatos || []).filter(
+        (c: any) => c.status === 'pendente_revisao'
+      ).length;
       
       // 🔍 CONTAR APENAS ÓRFÃOS: candidatos auto_aprovados cujo estoque não foi sincronizado
       const idsAutoAprovados = todosCandidatos?.filter(c => c.status === 'auto_aprovado').map(c => c.id) || [];
@@ -503,6 +522,11 @@ export default function NormalizacaoGlobal() {
         
         // Fila de Processamento - Aguardando (corrigido)
         pendentesTotal: totalAguardando,
+
+        // Detalhamento dos pendentes
+        aguardandoIA,
+        bloqueadosSimilaridade,
+        aguardandoRevisaoHumana,
         
         // Outros
         totalUsuarios: usuarios?.length || 0,
@@ -2553,13 +2577,27 @@ export default function NormalizacaoGlobal() {
                     <div className="text-3xl font-bold text-yellow-700 dark:text-yellow-300 mb-1">
                       {stats.pendentesTotal}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      ~{stats.estimativaNovos} novos estimados
+                    <div className="text-[11px] text-muted-foreground space-y-0.5 leading-tight">
+                      <div className="flex justify-between gap-2">
+                        <span>🤖 Aguardando IA</span>
+                        <span className="font-semibold">{stats.aguardandoIA}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span>🛡️ Bloq. similaridade</span>
+                        <span className="font-semibold">{stats.bloqueadosSimilaridade}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span>👤 Revisão humana</span>
+                        <span className="font-semibold">{stats.aguardandoRevisaoHumana}</span>
+                      </div>
                     </div>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="font-semibold">Candidatos aguardando revisão</p>
+                  <p className="font-semibold">Detalhamento dos candidatos pendentes</p>
+                  <p className="text-xs mt-1">🤖 Aguardando IA: ainda não processados</p>
+                  <p className="text-xs">🛡️ Bloq. similaridade: anti-duplicata ativada</p>
+                  <p className="text-xs">👤 Revisão humana: status pendente_revisao</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
