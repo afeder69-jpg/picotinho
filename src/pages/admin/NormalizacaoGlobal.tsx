@@ -2718,10 +2718,20 @@ export default function NormalizacaoGlobal() {
             </Button>
 
             <Button 
+              onClick={reprocessarOrfaos}
+              disabled={processando || consolidando || sincronizandoManual || reprocessandoOrfaos}
+              variant="outline"
+              className="gap-2 shadow-lg hover:shadow-xl transition-all border-amber-500/40 hover:bg-amber-500/10"
+            >
+              <Sparkles className="w-4 h-4" />
+              {reprocessandoOrfaos ? 'Reprocessando órfãos...' : 'Reprocessar Pendentes Órfãos (IA)'}
+            </Button>
+
+            <Button 
               onClick={() => navigate("/admin/normalizacoes-estabelecimentos")}
               variant="outline"
               className="gap-2 shadow-lg hover:shadow-xl transition-all"
-              disabled={processando || consolidando || sincronizandoManual}
+              disabled={processando || consolidando || sincronizandoManual || reprocessandoOrfaos}
             >
               <Building2 className="w-4 h-4" />
               Gerenciar Estabelecimentos
