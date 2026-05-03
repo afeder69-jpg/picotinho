@@ -333,6 +333,7 @@ Deno.serve(async (req) => {
                 .select('*')
                 .in('codigo_barras', Array.from(variantesEan))
                 .eq('status', 'ativo')
+                .eq('provisorio', false)
                 .limit(5);
 
               const mastersPorEan = mastersPorEanRaw
