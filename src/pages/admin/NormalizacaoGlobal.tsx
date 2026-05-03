@@ -2779,6 +2779,65 @@ export default function NormalizacaoGlobal() {
         </Card>
       )}
 
+      {/* Confirmação de reprocessamento em modo teste */}
+      <AlertDialog open={confirmarReprocessOpen} onOpenChange={setConfirmarReprocessOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar reprocessamento controlado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você vai reprocessar até <strong>{loteTeste} notas</strong> com candidatos órfãos pendentes.
+              O kill-switch geral permanece ativo. Esta execução é exclusiva para validar wrapper IA,
+              anti-duplicata e masters provisórios. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executarReprocessamentoTeste}>
+              Sim, executar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Relatório do último reprocessamento de teste */}
+      {relatorioReprocess && (
+        <Card className="border-amber-500/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BarChart3 className="w-5 h-5 text-amber-600" />
+              Relatório — último lote de teste
+            </CardTitle>
+            <CardDescription>Validação empírica do wrapper IA e proteções ativas.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Notas reprocessadas</div><div className="font-semibold text-lg">{relatorioReprocess.notas_reprocessadas}</div></div>
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Candidatos no escopo</div><div className="font-semibold text-lg">{relatorioReprocess.candidatos_no_escopo}</div></div>
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Processados</div><div className="font-semibold text-lg">{relatorioReprocess.candidatos_processados}</div></div>
+              <div className="p-2 rounded border border-green-500/40 bg-green-500/5"><div className="text-xs text-muted-foreground">Sucessos IA</div><div className="font-semibold text-lg text-green-700 dark:text-green-400">{relatorioReprocess.sucessos_ia}</div></div>
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Auto-aprovados</div><div className="font-semibold text-lg">{relatorioReprocess.auto_aprovados}</div></div>
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Para revisão</div><div className="font-semibold text-lg">{relatorioReprocess.para_revisao}</div></div>
+              <div className="p-2 rounded border border-orange-500/40 bg-orange-500/5"><div className="text-xs text-muted-foreground">Bloqueados (similaridade)</div><div className="font-semibold text-lg text-orange-700 dark:text-orange-400">{relatorioReprocess.candidatos_bloqueados_similaridade}</div></div>
+              <div className="p-2 rounded border border-red-500/40 bg-red-500/5"><div className="text-xs text-muted-foreground">Erros IA novos</div><div className="font-semibold text-lg text-red-700 dark:text-red-400">{relatorioReprocess.erros_ia_novos}</div></div>
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Permaneceram pendentes</div><div className="font-semibold text-lg">{relatorioReprocess.permaneceram_pendentes}</div></div>
+              <div className="p-2 rounded border border-blue-500/40 bg-blue-500/5"><div className="text-xs text-muted-foreground">Novos masters provisórios</div><div className="font-semibold text-lg text-blue-700 dark:text-blue-400">{relatorioReprocess.novos_masters_provisorios}</div></div>
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Total em ia_normalizacao_erros</div><div className="font-semibold text-lg">{relatorioReprocess.registros_ia_normalizacao_erros_total}</div></div>
+              <div className="p-2 rounded border bg-muted/30"><div className="text-xs text-muted-foreground">Falhas chamada interna</div><div className="font-semibold text-lg">{relatorioReprocess.falhas_chamada_interna}</div></div>
+            </div>
+            {relatorioReprocess.erros_por_tipo && Object.keys(relatorioReprocess.erros_por_tipo).length > 0 && (
+              <div className="mt-3 p-2 rounded border border-red-500/30 bg-red-500/5">
+                <div className="text-xs font-semibold mb-1">Erros por tipo (este lote):</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(relatorioReprocess.erros_por_tipo).map(([k, v]: any) => (
+                    <Badge key={k} variant="destructive" className="text-xs">{k}: {String(v)}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Progresso da Consolidação */}
       {consolidando && (
         <Card className="border-destructive">
