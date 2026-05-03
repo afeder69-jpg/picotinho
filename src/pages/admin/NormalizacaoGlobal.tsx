@@ -422,6 +422,20 @@ export default function NormalizacaoGlobal() {
 
       // Separar por status
       const pendentes = todosCandidatos?.filter(c => c.status === 'pendente') || [];
+
+      // 🆕 Detalhar a origem dos "Aguardando":
+      //  - Aguardando IA: pendente, precisa_ia=true, sem motivo_bloqueio
+      //  - Bloqueados por similaridade: pendente com motivo_bloqueio
+      //  - Aguardando revisão humana: pendente_revisao
+      const aguardandoIA = pendentes.filter(
+        (c: any) => c.precisa_ia === true && !c.motivo_bloqueio
+      ).length;
+      const bloqueadosSimilaridade = pendentes.filter(
+        (c: any) => !!c.motivo_bloqueio
+      ).length;
+      const aguardandoRevisaoHumana = (todosCandidatos || []).filter(
+        (c: any) => c.status === 'pendente_revisao'
+      ).length;
       
       // 🔍 CONTAR APENAS ÓRFÃOS: candidatos auto_aprovados cujo estoque não foi sincronizado
       const idsAutoAprovados = todosCandidatos?.filter(c => c.status === 'auto_aprovado').map(c => c.id) || [];
