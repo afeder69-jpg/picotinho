@@ -2785,9 +2785,9 @@ export default function NormalizacaoGlobal() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar reprocessamento controlado</AlertDialogTitle>
             <AlertDialogDescription>
-              Você vai reprocessar até <strong>{loteTeste} notas</strong> com candidatos órfãos pendentes.
-              O kill-switch geral permanece ativo. Esta execução é exclusiva para validar wrapper IA,
-              anti-duplicata e masters provisórios. Deseja continuar?
+              Você vai reprocessar exatamente <strong>{loteTeste} candidatos</strong> órfãos pendentes
+              (cap real, não notas). O kill-switch geral permanece ativo. Esta execução é exclusiva
+              para validar wrapper IA, anti-duplicata e masters provisórios. Deseja continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
