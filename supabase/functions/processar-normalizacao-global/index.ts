@@ -641,47 +641,41 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 🔒 VALIDAÇÃO ATÔMICA: Só marca nota como normalizada se TODOS os itens foram processados
-    let notasMarcadasComSucesso = 0;
+    // ✅ NORMALIZAÇÃO INCREMENTAL: cada candidato é unidade independente.
+    // Nota é marcada normalizada=true quando TODO item tem decisão terminal:
+    //   - auto_aprovado, aprovado, rejeitado, pendente_revisao → decididos
+    //   - pendente COM motivo_bloqueio → decisão (anti-duplicata)
+    //   - pendente SEM motivo_bloqueio E precisa_ia=true → órfão real (não decidido)
+    let notasTotalmenteDecididas = 0;
+    let notasComOrfaosRestantes = 0;
     let notasFalharam = 0;
-    let notasParciaisReprocessar = 0;
     
-    console.log(`\n📝 Validando processamento de ${notasIds.length} notas...`);
+    console.log(`\n📝 Avaliando estado incremental de ${notasIds.length} notas...`);
     
     if (notasIds.length > 0) {
       for (const notaId of notasIds) {
         try {
           const metadata = notasMetadata.get(notaId);
-          if (!metadata) {
-            console.warn(`⚠️ Metadata não encontrado para nota ${notaId}`);
-            continue;
-          }
+          const totalItens = metadata?.totalItens ?? null;
           
-          const { totalItens, itensProcessados } = metadata;
-          
-          // ✅ VALIDAÇÃO: Contar candidatos criados (incluindo órfãos reprocessados)
-          const { count: candidatosCriados } = await supabase
+          // Conta órfãos remanescentes (única condição que impede marcar nota como completa)
+          const { count: itensOrfaos } = await supabase
             .from('produtos_candidatos_normalizacao')
             .select('*', { count: 'exact', head: true })
             .eq('nota_imagem_id', notaId)
-            .in('status', ['pendente', 'processando', 'auto_aprovado', 'aprovado']);
+            .eq('status', 'pendente')
+            .is('motivo_bloqueio', null)
+            .eq('precisa_ia', true);
           
-          console.log(`📊 Nota ${notaId}: ${candidatosCriados}/${totalItens} candidatos criados`);
+          console.log(`📊 Nota ${notaId}: ${itensOrfaos ?? 0} órfãos restantes (de ${totalItens ?? '?'} itens)`);
           
-          // ✅ SÓ MARCA COMO NORMALIZADA SE 100% DOS ITENS VIRARAM CANDIDATOS
-          if (candidatosCriados === totalItens && itensProcessados === totalItens) {
+          if ((itensOrfaos ?? 0) === 0) {
             const { error: updateError } = await supabase
               .from('notas_imagens')
               .update({ 
                 normalizada: true,
                 normalizada_em: new Date().toISOString(),
-                produtos_normalizados: totalItens,
-                tentativas_normalizacao: (await supabase
-                  .from('notas_imagens')
-                  .select('tentativas_normalizacao')
-                  .eq('id', notaId)
-                  .single()
-                ).data?.tentativas_normalizacao || 0 + 1
+                produtos_normalizados: totalItens ?? undefined,
               })
               .eq('id', notaId);
             
@@ -689,36 +683,23 @@ Deno.serve(async (req) => {
               console.error(`❌ Erro ao marcar nota ${notaId}:`, updateError.message);
               notasFalharam++;
             } else {
-              console.log(`✅ Nota ${notaId} marcada como normalizada (${totalItens} produtos)`);
-              notasMarcadasComSucesso++;
+              console.log(`✅ Nota ${notaId} totalmente decidida — marcada normalizada`);
+              notasTotalmenteDecididas++;
             }
           } else {
-            // ⚠️ PROCESSAMENTO PARCIAL - NÃO MARCAR
-            console.warn(`⚠️ Nota ${notaId} INCOMPLETA: ${candidatosCriados}/${totalItens} - NÃO marcada (será reprocessada)`);
-            
-            // Incrementar tentativas
-            await supabase
-              .from('notas_imagens')
-              .update({ 
-                tentativas_normalizacao: (await supabase
-                  .from('notas_imagens')
-                  .select('tentativas_normalizacao')
-                  .eq('id', notaId)
-                  .single()
-                ).data?.tentativas_normalizacao || 0 + 1
-              })
-              .eq('id', notaId);
-            
-            notasParciaisReprocessar++;
+            // Ainda há órfãos. NÃO incrementar tentativas_normalizacao
+            // (evita inflar contador em modo cap onde múltiplos lotes são esperados).
+            console.log(`ℹ️ Nota ${notaId} ainda incremental: ${itensOrfaos} órfãos pendentes de IA`);
+            notasComOrfaosRestantes++;
           }
           
         } catch (error: any) {
-          console.error(`❌ Exceção ao validar nota ${notaId}:`, error.message);
+          console.error(`❌ Exceção ao avaliar nota ${notaId}:`, error.message);
           notasFalharam++;
         }
       }
     } else {
-      console.log('ℹ️ Nenhuma nota para marcar');
+      console.log('ℹ️ Nenhuma nota para avaliar');
     }
 
     const resultado = {
@@ -728,10 +709,10 @@ Deno.serve(async (req) => {
       auto_aprovados: totalAutoAprovados,
       para_revisao: totalParaRevisao,
       notas_processadas: notasIds.length,
-      notas_marcadas_completas: notasMarcadasComSucesso,
-      notas_parciais_reprocessar: notasParciaisReprocessar,
+      notas_totalmente_decididas: notasTotalmenteDecididas,
+      notas_com_orfaos_restantes: notasComOrfaosRestantes,
       notas_falharam: notasFalharam,
-      garantia_atomica: notasParciaisReprocessar === 0 ? '✅ TODAS COMPLETAS' : '⚠️ REPROCESSAMENTO NECESSÁRIO',
+      modo: notasComOrfaosRestantes === 0 ? 'COMPLETO' : 'INCREMENTAL',
       modo_teste: MODO_TESTE,
       cap_candidatos: LIMITE_CANDIDATOS,
       candidatos_truncados_por_cap: candidatosTruncados,
