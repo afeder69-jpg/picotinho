@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
       .eq('processada', true)
       .eq('normalizada', false)
       .not('dados_extraidos', 'is', null)
-      .limit(5); // ✅ Fase 1: até 5 notas por execução (cron de 2min mantém ritmo)
+      .limit(LIMITE_NOTAS_INPUT); // ✅ Fase 1: até 5 notas / modo_teste: até limite_notas
 
     if (notasError) {
       throw new Error(`Erro ao buscar notas: ${notasError.message}`);
@@ -151,7 +151,10 @@ Deno.serve(async (req) => {
     console.log(`📦 Notas fiscais: ${notasProcessadas?.length || 0} notas processadas`);
 
     // 2. BUSCAR PRODUTOS DO OPEN FOOD FACTS NÃO NORMALIZADOS
-    const { data: openFoodProducts, error: offError } = await supabase
+    // ⚠️ Em modo_teste, pular Open Food Facts para limitar escopo
+    const { data: openFoodProducts, error: offError } = MODO_TESTE
+      ? { data: [] as any[], error: null }
+      : await supabase
       .from('open_food_facts_staging')
       .select('id, codigo_barras, texto_original, dados_brutos, imagem_url, imagem_path')
       .eq('processada', false)
