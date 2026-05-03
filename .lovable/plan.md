@@ -1,126 +1,273 @@
-# Plano: Suporte a NFC-e do Ceará (CE) via InfoSimples
 
-## Objetivo
+# Plano técnico v3 — Refator do motor de normalização
 
-Adicionar processamento de NFC-e emitidas no Ceará (UF 23) usando o endpoint InfoSimples específico do CE, **sem alterar nada do fluxo atual** (RJ via InfoSimples e demais UFs via extração HTML).
+Versão final consolidada. Incorpora os 2 ajustes adicionais: **bloqueio de criação por similaridade textual** e **status `provisorio` para masters novos**.
 
-## Estratégia
+---
 
-Criar uma **nova edge function isolada** `process-nfce-infosimples-ce` (clone enxuto do RJ adaptado ao payload do CE) e adicionar **um único `else if`** em `process-url-nota` para rotear UF=23 para ela. Tudo o que já funciona segue intacto.
+## Causa raiz (confirmada)
+
+- 481 de 482 candidatos pendentes têm `confianca_ia=0` e sugestões NULL.
+- `process-receipt-full` cria placeholder com hash `${notaId}_${nomeUpper}`.
+- `processar-normalizacao-global` (linhas 245-312) detecta o placeholder via `nota_item_hash`, cai em `if (jaExiste) continue` e **nunca chama a IA**.
+- Adicional: `LIMIT 1` no loop de notas + ausência de cron específico para candidatos órfãos.
+
+---
+
+## Ordem de execução
 
 ```text
-QR escaneado
-   │
-   ▼
-process-url-nota  ── modelo=65 + UF=33 ──▶ process-nfce-infosimples       (RJ, inalterado)
-                 ── modelo=65 + UF=23 ──▶ process-nfce-infosimples-ce    (NOVO)
-                 ── modelo=65 + outras─▶ extract-receipt-image           (inalterado)
-                 ── modelo=55         ──▶ process-nfe-infosimples        (inalterado)
+1. Fase 1  → Fechar ciclo da IA           (destrava o pipeline)
+2. Fase 9  → Reprocessar 482 pendentes    (ganho imediato)
+3. Fase 2  → Classificação de EAN          (segurança de matching)
+4. Fase 3  → Contexto rico para IA         (qualidade das decisões)
+5. Fase 5  → Categoria obrigatória         (pré-requisito da Fase 8)
+6. Fase 4  → Comercial vs comparável       (chaves estruturais)
+7. Fase 7  → Níveis de confiança           (decidirAcao)
+8. Fase 8  → Anti-duplicatas + provisório  (controle final)
+9. Fase 6  → Aprendizado humano            (loop contínuo)
 ```
 
-## Mudanças
+Cada fase é deployável e reversível de forma independente.
 
-### 1. Nova edge function: `supabase/functions/process-nfce-infosimples-ce/index.ts`
+---
 
-Provider exclusivo do Ceará. Estrutura espelhada na do RJ para reaproveitar o restante do pipeline (cache `nfce_cache_infosimples`, normalização de estabelecimento via RPC `normalizar_nome_estabelecimento`, `finalize-nota-estoque`, status `aguardando_estoque`, `NfcePendenteSefazError`, idempotência etc.).
+## FASE 1 — Fechar o ciclo da IA
 
-**Pontos específicos do CE:**
+- `process-receipt-full/index.ts` (2070-2125): adicionar `precisa_ia=true` no placeholder.
+- `processar-normalizacao-global/index.ts` (245-312): se `jaExiste.status='pendente' AND jaExiste.confianca_ia=0` → executar pipeline e fazer `UPDATE` no registro existente.
+- Remover `LIMIT 1` da busca de notas.
+- **Nova:** `processar-candidatos-pendentes` (cron, lote 20, a cada 2min).
 
-- **Endpoint:** `POST https://api.infosimples.com/api/v2/consultas/sefaz/ce/nfce`
-  - Body `application/x-www-form-urlencoded`: `token`, `nfce` (chave 44 dígitos), `timeout=600`.
-  - Reusa o secret `INFOSIMPLES_TOKEN` já existente.
-- **Log:** prefixo `[NFCE-CE]` em toda execução para auditar uso do provider.
-- **Cache:** `nfce_cache_infosimples` reaproveitado (chave de acesso é única globalmente).
-- **Mapeamento da resposta:**
-  | Campo destino                  | Origem                                                  |
-  |-------------------------------|----------------------------------------------------------|
-  | `estabelecimento.nome`        | `data[0].emitente.nome` (com normalização via RPC)       |
-  | `estabelecimento.cnpj`        | `data[0].emitente.cnpj` (apenas dígitos)                 |
-  | `compra.data_emissao`         | `data[0].nfe.data_emissao` (parser seguro — ver abaixo)  |
-  | `valor_total` / `compra.valor_total` | `data[0].nfe.normalizado_valor_total`             |
-  | `itens[]`                     | `data[0].produtos[]`                                     |
+---
 
-  Para cada item:
-  | Campo destino       | Origem                          |
-  |---------------------|---------------------------------|
-  | `nome` / `descricao`| `descricao`                     |
-  | `quantidade`        | `qtd` (via `parseBrazilianFloat`) |
-  | `valor_total`       | `normalizado_valor`             |
-  | `valor_unitario`    | `valor_unitario_comercial`      |
-  | `codigo_barras`     | `ean_comercial` (sanitizado, ver abaixo) |
-  | `categoria`         | `categorizarProduto(descricao)` |
-  | `unidade`           | `p.unidade || 'UN'`             |
+## FASE 9 — Reprocessar 482 pendentes
 
-- **Fallback de `valor_unitario`:**
-  ```ts
-  let valorUnitario = parseBrazilianFloat(p.valor_unitario_comercial);
-  if (!valorUnitario || valorUnitario <= 0) {
-    valorUnitario = quantidade > 0 ? +(valorTotalItem / quantidade).toFixed(6) : 0;
-    console.log('[NFCE-CE] valor_unitario_comercial ausente, calculado');
-  }
-  ```
+- **Nova:** `reprocessar-candidatos-orfaos` (admin, `requireMaster`).
+- Filtro: `status='pendente' AND confianca_ia=0`.
+- Lote 20, retorna `{processados, auto_aprovados, para_revisao, falhas}`.
+- Vincula `produto_master_id` em `estoque_app` quando auto-aprovado. Nunca toca quantidade/preço.
+- Botão em `/admin/normalizacao` com barra de progresso.
 
-- **AJUSTE 1 — Parser seguro de data:** função `parseDataEmissao(raw)` que aceita ISO (`2025-10-04T09:43:14-03:00`) e formato brasileiro (`DD/MM/YYYY HH:mm:ss`, com ou sem timezone), e trata `YYYY-MM-DD` como literal local (`YYYY-MM-DDT00:00:00`). **Nunca** usa `new Date('YYYY-MM-DD')` direto, evitando o bug clássico de timezone que retrocede o dia em UTC-3. Mesma estratégia já adotada no provider RJ.
+---
 
-- **AJUSTE 2 — Sanitização de EAN:** função `limparEAN(valor)` retorna `null` para:
-  - vazio / `undefined` / `null`
-  - string `"SEM GTIN"` (qualquer caixa, com ou sem espaços)
-  - somente zeros
-  - tamanhos diferentes de 8/12/13/14 dígitos (padrões EAN-8, UPC-A, EAN-13, GTIN-14)
-  - qualquer valor sem dígitos válidos
+## FASE 2 — Classificação de EAN (2 camadas)
 
-  Garante que `codigo_barras` no banco fique limpo, sem poluição.
+- Migration: `+ tipo_ean` em `produtos_candidatos_normalizacao` e `produtos_master_global`.
+- **Novo:** `_shared/classificar-ean.ts`.
+- Camada 1 (regex): `ausente` | `balanca_peso_variavel` (prefixo 2) | `global` (789/790 ou 8-14 dígitos válidos) | `local_mercado`.
+- Camada 2 (comportamental): ≥2 CNPJs em `precos_atuais` confirma `global`; 1 CNPJ rebaixa para `local_mercado`.
+- Apenas `tipo_ean='global'` é verdade absoluta no matching.
 
-- **Pendência SEFAZ:** mesma classificação via `classificarRespostaInfoSimples` + `NfcePendenteSefazError` para integrar com retry/notificações já existentes.
-- **Persistência:** mesmo `update` em `notas_imagens` com `status_processamento: 'aguardando_estoque'` e disparo fire-and-forget de `finalize-nota-estoque` — mantém o ciclo `pendente_consulta → aguardando_estoque → processando → processada` idêntico ao atual.
-- **Sem alterações** em normalização, categorização, banco, RLS, schema ou tabelas.
+---
 
-### 2. Roteamento em `supabase/functions/process-url-nota/index.ts`
+## FASE 3 — Contexto completo para a IA (tool calling estruturado)
 
-Adicionar **um único bloco** antes do `else if (modelo === '65' && uf === '33')`:
-
-```ts
-} else if (modelo === '65' && uf === '23') {
-  console.log('🎫 [NFCE-CE] Processando via InfoSimples (Ceará)...');
-  const { data: nfceData, error: nfceError } = await supabase.functions.invoke(
-    'process-nfce-infosimples-ce',
-    { body: { chaveAcesso: chave, userId, notaImagemId: notaId } }
-  );
-  if (nfceError) {
-    console.error('⚠️ Erro ao processar NFCe-CE via InfoSimples:', nfceError);
-    errosCapturados.push(await extrairBodyErroEdge(nfceError));
-  } else if (nfceData?.pendente === true) {
-    console.warn('⏳ [NFCE-CE] Pendente SEFAZ:', nfceData.motivo);
-    pendenteSefaz = { motivo: nfceData.motivo || 'sefaz_nao_autorizada', detalhe: nfceData.detalhe || '' };
-  } else {
-    console.log('✅ NFCe-CE processada via InfoSimples:', nfceData);
-    extracaoSucesso = true;
+Payload enviado:
+```json
+{
+  "produto_atual": {"texto_original","ean","tipo_ean","cnpj_mercado","quantidade","unidade","preco_unitario","preco_total","marca_detectada","categoria_preliminar"},
+  "candidatos_similares": [/* até 10 */],
+  "sinonimos_globais": [/* até 10 por trigram > 0.3 */],
+  "decisoes_humanas": {
+    "recentes_semelhantes": [/* até 5 */],
+    "padroes_recorrentes": [/* até 5 mais frequentes */],
+    "alta_confianca_historica": [/* até 5 com taxa_aprovacao ≥ 0.90 */]
   }
 }
 ```
 
-Nada mais é alterado nesse arquivo. UF 33 segue no caminho RJ; demais UFs seguem para `extract-receipt-image`.
+Saída obrigatória (tool schema): `nome_padrao, nome_base, tipo, marca, categoria (enum 11), tipo_embalagem, quantidade, unidade, confianca, acao_sugerida (vincular_master|criar_novo|incerto), master_id_sugerido, razao`.
 
-### 3. Nada a fazer
+---
 
-- Sem migrations.
-- Sem mudanças em `process-receipt-full`, `finalize-nota-estoque`, `retry-consulta-nfce-pendente`, frontend, normalização, ou tipos.
-- Sem novos secrets (`INFOSIMPLES_TOKEN` já existe).
+## FASE 5 — Categoria obrigatória (sinal estrutural forte)
 
-## Garantias
+- **Novo:** `_shared/categoria-heuristica.ts` (palavras-chave + unidade).
+- Categoria nunca NULL. Inválida → `OUTROS` + `revisao_categoria=true`.
+- Categoria entra como **filtro obrigatório** em todas as buscas de similaridade.
+- Categorias divergentes nunca formam equivalência, mesmo com mesmo `nome_base + qtd_base + unidade_base`.
 
-- Fluxo RJ (UF 33) **não tocado**.
-- Fluxo NFe (modelo 55) **não tocado**.
-- Fallback HTML para outras UFs **não tocado**.
-- Reentrada de pendências, idempotência de reescaneamento e notificações pós-pendência continuam funcionando porque o provider CE termina exatamente no mesmo estado (`aguardando_estoque`) e usa o mesmo `NfcePendenteSefazError`.
-- Datas livres do bug de timezone (parser seguro).
-- `codigo_barras` nunca será gravado como `"SEM GTIN"`, vazio, ou string inválida.
-- Logs `[NFCE-CE]` permitem auditar quando o provider foi utilizado.
+---
 
-## Validação sugerida pós-deploy
+## FASE 4 — Comercial vs comparável (chave refinada)
 
-1. Escanear NFC-e do Ceará → conferir log `[NFCE-CE] Iniciando (provider Ceará)...`.
-2. Conferir em `notas_imagens.dados_extraidos.itens` se `valor_unitario` veio correto (com e sem `valor_unitario_comercial` na origem) e `codigo_barras` como `null` quando origem é `"SEM GTIN"`.
-3. Conferir `compra.data_emissao` no fuso correto (sem retroceder um dia).
-4. Conferir transição `aguardando_estoque → processando → processada`.
-5. Reescanear a mesma chave durante `pendente_consulta` → resposta idempotente (já garantida em `process-url-nota`).
+Migration em `produtos_master_global`:
+- `+ tipo_produto text` (integral, desnatado, light, zero, tipo_1, extra_virgem, etc.)
+- `+ chave_comparavel text` = `nome_base | tipo_produto | categoria | qtd_base | unidade_base | tipo_embalagem`
+- `+ chave_comercial text` = `chave_comparavel | marca | coalesce(ean_global,'')`
+- Índices em ambas.
+- **Novo:** `_shared/tipos-produto.ts` (dicionário canônico por categoria).
+
+---
+
+## FASE 7 — Níveis de confiança (`decidirAcao`)
+
+| Confiança | Evidência | Ação |
+|---|---|---|
+| ≥95 | qualquer | `auto_aprovado` |
+| 85-94 | EAN global ∨ chave_comercial exata ∨ sinônimo global exato | `auto_aprovado` |
+| 85-94 | sem evidência forte | `pendente_revisao` |
+| 70-84 | qualquer | `pendente_revisao` (sugestão preenchida) |
+| <70 | qualquer | `pendente` (com `razao` obrigatória) |
+
+Match estrutural:
+- **forte** = EAN global ∨ chave_comercial exata ∨ sinônimo global exato.
+- **médio** = chave_comparavel exata + mesma marca ∨ trigram nome_base ≥ 0.85 + mesma categoria + mesma qtd_base.
+- **fraco** = trigram 0.6-0.85 + mesma categoria.
+
+Categoria divergente → downgrade automático para `pendente_revisao`.
+
+---
+
+## FASE 8 — Anti-duplicatas + Master Provisório
+
+### 8.1 Pipeline de matching antes de criar master
+
+1. EAN global exato.
+2. Sinônimo global exato.
+3. `chave_comercial` exata.
+4. `chave_comparavel` + mesma marca.
+5. Trigram `nome_base` ≥ 0.85 + mesma categoria + mesma qtd_base + mesma unidade_base.
+
+### 8.2 Regra rígida de criação automática
+
+Só cria novo master se TODOS forem verdadeiros:
+- ✅ Todas as 5 estratégias acima falharam.
+- ✅ `confianca_ia ≥ 92`.
+- ✅ NÃO existe match estrutural médio nem forte.
+- ✅ `acao_sugerida = 'criar_novo'` (não `incerto`).
+- ✅ Categoria definida (não `OUTROS` por fallback).
+- ✅ **NOVO — Bloqueio por similaridade textual:** NÃO existe NENHUM candidato com:
+  - `similarity(nome_base, sugestao.nome_base) > 0.75` na mesma categoria, OU
+  - match estrutural **fraco** (trigram 0.6-0.85 + mesma categoria), OU
+  - match estrutural **médio**.
+  
+  Se qualquer desses existir → **forçar `pendente_revisao`** apresentando os candidatos próximos para decisão humana, mesmo com confiança ≥ 92.
+
+### 8.3 Master Provisório (anti-cascata de erros) — NOVO
+
+Migration:
+```sql
+ALTER TABLE produtos_master_global
+  ADD COLUMN provisorio boolean NOT NULL DEFAULT false,
+  ADD COLUMN ocorrencias_notas int NOT NULL DEFAULT 0,
+  ADD COLUMN promovido_em timestamptz,
+  ADD COLUMN promovido_por text;  -- 'auto_threshold' | 'manual' | uuid do master humano
+```
+
+Estados de `produtos_master_global.status`:
+- `provisorio` (NOVO) — criado automaticamente pela IA, ainda não confiável.
+- `ativo` — validado (manual ou por threshold).
+- `inativo` — descontinuado.
+
+Comportamento:
+
+| Aspecto | `provisorio` | `ativo` |
+|---|---|---|
+| Criado por | IA automática | manual ∨ promoção |
+| Aparece em buscas de match para outros produtos | **NÃO** | SIM |
+| Usado como `candidato_similar` enviado à IA | **NÃO** | SIM |
+| Usado como verdade em sinônimos / consolidação | **NÃO** | SIM |
+| Vincula estoque do usuário que originou | SIM | SIM |
+| Aparece em UI normal de catálogo | filtrado (badge "Provisório") | SIM |
+| Aparece em fila de revisão admin | SIM (destaque) | não |
+
+Promoção automática para `ativo`:
+- Quando `ocorrencias_notas ≥ 3` (configurável via `app_config.master_promocao_min_notas`, default 3).
+- Trigger em `estoque_app` (ou função periódica) incrementa `ocorrencias_notas` por nota distinta (`nota_imagem_id`) que vincula o master.
+- Ao atingir threshold, atualiza `status='ativo'`, `provisorio=false`, `promovido_em=now()`, `promovido_por='auto_threshold'`.
+
+Promoção manual:
+- Botão "Promover para ativo" em `/admin/masters` na lista filtrada por `provisorio=true`.
+- Define `promovido_por = auth.uid()`.
+
+Constraint UNIQUE em `chave_comercial`:
+```sql
+CREATE UNIQUE INDEX ux_master_chave_comercial_ativo
+  ON produtos_master_global(chave_comercial)
+  WHERE status='ativo' AND chave_comercial IS NOT NULL;
+```
+Aplicada após `consolidar-masters-duplicados` rodar no passivo. **Provisórios não entram na constraint** (índice condicional por `status='ativo'`), permitindo múltiplos provisórios convivendo até validação.
+
+Garantias adicionais:
+- Reprocessamento (Fase 9) tenta sempre **vincular a `ativo`** primeiro; só cria provisório se passar pela regra rígida 8.2.
+- Quando dois provisórios viram candidatos do mesmo produto futuro, a IA pode sugerir consolidação (entra em `pendente_revisao` com ambos listados).
+
+---
+
+## FASE 6 — Aprendizado humano (loop contínuo)
+
+Migration: `normalizacao_decisoes_log` com agregados (`ocorrencias`, `taxa_aprovacao`).
+
+Gravação:
+- `aplicar-candidatos-aprovados`
+- Edge dedicada chamada por `GerenciarMasters.tsx` em corrigir/rejeitar.
+- Promoção manual de provisório também registra entrada (`decisao='promoveu_provisorio'`).
+
+Consumo (Fase 3): 3 blocos — recentes semelhantes, padrões recorrentes, alta confiança histórica.
+
+---
+
+## NOVO — Logging de erros da IA
+
+```sql
+CREATE TABLE ia_normalizacao_erros (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  candidato_id uuid REFERENCES produtos_candidatos_normalizacao(id) ON DELETE CASCADE,
+  texto_original text,
+  tipo_erro text NOT NULL,  -- timeout|parse|invalid_response|gateway_429|gateway_402|gateway_5xx|tool_call_missing|desconhecido
+  http_status int,
+  modelo text,
+  mensagem text,
+  payload_enviado jsonb,
+  resposta_bruta jsonb,
+  tentativa int DEFAULT 1,
+  criado_em timestamptz DEFAULT now()
+);
+CREATE INDEX ix_ia_erros_tipo ON ia_normalizacao_erros(tipo_erro, criado_em DESC);
+```
+
+Wrapper único `_shared/ia-cliente.ts` envolve toda chamada do gateway, classifica e loga, com retry exponencial 1x para 429/5xx. Painel admin em `/admin/normalizacao` mostra contagens por tipo nas últimas 24h.
+
+---
+
+## Resumo consolidado de impacto
+
+### Tabelas
+| Tabela | Mudança |
+|---|---|
+| `produtos_candidatos_normalizacao` | + `tipo_ean`, + `precisa_ia`, + `revisao_categoria`; novo status `pendente_revisao` |
+| `produtos_master_global` | + `tipo_ean`, + `tipo_produto`, + `chave_comparavel`, + `chave_comercial`, + `provisorio`, + `ocorrencias_notas`, + `promovido_em`, + `promovido_por`; novo status `provisorio`; UNIQUE condicional em `chave_comercial` para `ativo` |
+| `normalizacao_decisoes_log` | criar (com agregados) |
+| `ia_normalizacao_erros` | **nova** |
+
+### Edge functions
+| Função | Ação |
+|---|---|
+| `process-receipt-full` | flag `precisa_ia` no placeholder |
+| `processar-normalizacao-global` | core refactor (não pular órfãos, novo prompt, decidirAcao, anti-duplicata, bloqueio por similaridade, criação como `provisorio`) |
+| `processar-candidatos-pendentes` | **nova** — cron 2min, lote 20 |
+| `reprocessar-candidatos-orfaos` | **nova** — botão admin |
+| `aplicar-candidatos-aprovados` | + log decisão humana |
+| `promover-master-provisorio` | **nova** — manual + verificação threshold |
+| `_shared/classificar-ean.ts` | **nova** |
+| `_shared/categoria-heuristica.ts` | **nova** |
+| `_shared/tipos-produto.ts` | **nova** |
+| `_shared/decidir-acao.ts` | **nova** |
+| `_shared/ia-cliente.ts` | **nova** — wrapper com logging |
+
+### Frontend
+- `/admin/normalizacao`: botão de reprocessamento + barra de progresso + painel de erros IA.
+- `/admin/masters` (`GerenciarMasters.tsx`): filtro/badge "Provisório" + botão "Promover para ativo".
+
+### Riscos globais e mitigações
+- **Custo IA**: ~482 chamadas iniciais + ~5/min em regime. Mitigado por lote 20/2min e cache por hash.
+- **Quebra de fluxos atuais (RJ/CE/NFC-e/NFe/estoque/preços)**: ZERO mudança. Todas alterações são aditivas.
+- **Crescimento descontrolado do catálogo**: bloqueado por (a) regras rígidas 8.2, (b) bloqueio por similaridade textual, (c) status `provisorio` que isola erros.
+- **Erros da IA viram referência**: impossível — provisórios não entram em buscas de matching nem em contexto da IA.
+- **Constraint UNIQUE**: aplicada só em `ativo`, após consolidação do passivo.
+- **Variação de decisões da IA**: mitigada por aprendizado humano (Fase 6) e logging (`ia_normalizacao_erros`).
+- **Reabrir candidatos já decididos**: filtro estrito `confianca_ia=0 AND status='pendente'`.
+
+Pronto para autorização.
