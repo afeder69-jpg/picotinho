@@ -731,6 +731,9 @@ Deno.serve(async (req) => {
       notas_parciais_reprocessar: notasParciaisReprocessar,
       notas_falharam: notasFalharam,
       garantia_atomica: notasParciaisReprocessar === 0 ? '✅ TODAS COMPLETAS' : '⚠️ REPROCESSAMENTO NECESSÁRIO',
+      modo_teste: MODO_TESTE,
+      cap_candidatos: LIMITE_CANDIDATOS,
+      candidatos_truncados_por_cap: candidatosTruncados,
       timestamp: new Date().toISOString()
     };
 
