@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
       .eq('processada', true)
       .eq('normalizada', false)
       .not('dados_extraidos', 'is', null)
-      .limit(1); // ✅ Reduzido para 1 nota por execução para evitar timeout
+      .limit(5); // ✅ Fase 1: até 5 notas por execução (cron de 2min mantém ritmo)
 
     if (notasError) {
       throw new Error(`Erro ao buscar notas: ${notasError.message}`);
@@ -248,11 +248,17 @@ Deno.serve(async (req) => {
           // Verificar se já foi normalizado usando hash único
           const { data: jaExiste } = await supabase
             .from('produtos_candidatos_normalizacao')
-            .select('id, status, sugestao_produto_master, sugestao_sku_global, nome_padrao_sugerido, marca_sugerida, nome_base_sugerido, categoria_sugerida')
+            .select('id, status, sugestao_produto_master, sugestao_sku_global, nome_padrao_sugerido, marca_sugerida, nome_base_sugerido, categoria_sugerida, confianca_ia, precisa_ia')
             .eq('nota_item_hash', produto.nota_item_hash)
             .maybeSingle();
 
-          if (jaExiste) {
+          // 🆕 FASE 1: candidatos órfãos (placeholders pendentes sem IA) NÃO devem ser pulados.
+          // Detectar e seguir o pipeline normal — criarCandidato() faz UPDATE no existente.
+          const ehOrfao = !!jaExiste
+            && jaExiste.status === 'pendente'
+            && (jaExiste.precisa_ia === true || (Number(jaExiste.confianca_ia ?? 0) === 0 && !jaExiste.nome_padrao_sugerido));
+
+          if (jaExiste && !ehOrfao) {
             console.log(`⏭️  Produto já tem candidato: ${produto.texto_original} (status: ${jaExiste.status})`);
             
             // 🔗 CORREÇÃO RAIZ: Se candidato já foi aprovado, vincular novo item do estoque ao master
@@ -1401,6 +1407,7 @@ async function criarCandidato(
           granel_sugerido: normalizacao.granel,
           // ⚡ PARTE A: REMOVIDO colunas que não existem (obs_embalagem_sugerida, dados_extraidos)
           status: status,
+          precisa_ia: false, // ✅ Fase 1: IA já preencheu
           updated_at: new Date().toISOString()
         })
         .eq('id', candidatoExistente.id);
@@ -1442,6 +1449,7 @@ async function criarCandidato(
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
         status: status, // Mudar de 'pendente' para 'auto_aprovado'
+        precisa_ia: false, // ✅ Fase 1: IA já preencheu
         observacoes_revisor: obsEmbalagem || null,
         updated_at: new Date().toISOString()
       })

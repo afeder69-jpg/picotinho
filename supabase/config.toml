@@ -73,6 +73,8 @@ project_id = "mjsbwrtegorjxcepvrik"
     verify_jwt = false
   [functions.processar-normalizacao-global]
     verify_jwt = false
+  [functions.reprocessar-candidatos-orfaos]
+    verify_jwt = false
   [functions.reconciliar-estoque-master]
     verify_jwt = false
   [functions.transcribe-audio]

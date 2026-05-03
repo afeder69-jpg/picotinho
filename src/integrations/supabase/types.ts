@@ -778,6 +778,56 @@ export type Database = {
           },
         ]
       }
+      ia_normalizacao_erros: {
+        Row: {
+          candidato_id: string | null
+          criado_em: string
+          http_status: number | null
+          id: string
+          mensagem: string | null
+          modelo: string | null
+          payload_enviado: Json | null
+          resposta_bruta: Json | null
+          tentativa: number
+          texto_original: string | null
+          tipo_erro: string
+        }
+        Insert: {
+          candidato_id?: string | null
+          criado_em?: string
+          http_status?: number | null
+          id?: string
+          mensagem?: string | null
+          modelo?: string | null
+          payload_enviado?: Json | null
+          resposta_bruta?: Json | null
+          tentativa?: number
+          texto_original?: string | null
+          tipo_erro: string
+        }
+        Update: {
+          candidato_id?: string | null
+          criado_em?: string
+          http_status?: number | null
+          id?: string
+          mensagem?: string | null
+          modelo?: string | null
+          payload_enviado?: Json | null
+          resposta_bruta?: Json | null
+          tentativa?: number
+          texto_original?: string | null
+          tipo_erro?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_normalizacao_erros_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_candidatos_normalizacao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingestion_jobs: {
         Row: {
           access_key: string | null
@@ -2176,6 +2226,7 @@ export type Database = {
           nota_imagem_id: string | null
           nota_item_hash: string | null
           observacoes_revisor: string | null
+          precisa_ia: boolean
           qtd_base_sugerida: number | null
           qtd_unidade_sugerido: string | null
           qtd_valor_sugerido: number | null
@@ -2205,6 +2256,7 @@ export type Database = {
           nota_imagem_id?: string | null
           nota_item_hash?: string | null
           observacoes_revisor?: string | null
+          precisa_ia?: boolean
           qtd_base_sugerida?: number | null
           qtd_unidade_sugerido?: string | null
           qtd_valor_sugerido?: number | null
@@ -2234,6 +2286,7 @@ export type Database = {
           nota_imagem_id?: string | null
           nota_item_hash?: string | null
           observacoes_revisor?: string | null
+          precisa_ia?: boolean
           qtd_base_sugerida?: number | null
           qtd_unidade_sugerido?: string | null
           qtd_valor_sugerido?: number | null
