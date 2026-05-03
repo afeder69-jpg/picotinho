@@ -2719,12 +2719,13 @@ export default function NormalizacaoGlobal() {
 
             <Button 
               onClick={reprocessarOrfaos}
-              disabled={processando || consolidando || sincronizandoManual || reprocessandoOrfaos}
+              disabled
               variant="outline"
-              className="gap-2 shadow-lg hover:shadow-xl transition-all border-amber-500/40 hover:bg-amber-500/10"
+              className="gap-2 shadow-lg border-amber-500/40 opacity-60 cursor-not-allowed"
+              title="Pausado — proteções (wrapper IA, anti-duplicata e master provisório) ativadas. Liberar via app_config.normalizacao_orfaos_pausado=false após validação."
             >
               <Sparkles className="w-4 h-4" />
-              {reprocessandoOrfaos ? 'Reprocessando órfãos...' : 'Reprocessar Pendentes Órfãos (IA)'}
+              Pausado — proteções ativadas
             </Button>
 
             <Button 
