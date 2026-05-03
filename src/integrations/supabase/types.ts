@@ -3879,6 +3879,26 @@ export type Database = {
         Args: { p_candidato_id: string }
         Returns: string
       }
+      buscar_masters_similares: {
+        Args: {
+          p_categoria?: string
+          p_limit?: number
+          p_nome_base: string
+          p_threshold?: number
+        }
+        Returns: {
+          categoria: string
+          id: string
+          marca: string
+          nome_base: string
+          nome_padrao: string
+          provisorio: boolean
+          qtd_base: number
+          similaridade: number
+          sku_global: string
+          unidade_base: string
+        }[]
+      }
       buscar_matches_pendentes_masters: {
         Args: { p_limit?: number }
         Returns: {
