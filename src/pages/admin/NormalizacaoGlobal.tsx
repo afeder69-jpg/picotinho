@@ -522,6 +522,11 @@ export default function NormalizacaoGlobal() {
         
         // Fila de Processamento - Aguardando (corrigido)
         pendentesTotal: totalAguardando,
+
+        // Detalhamento dos pendentes
+        aguardandoIA,
+        bloqueadosSimilaridade,
+        aguardandoRevisaoHumana,
         
         // Outros
         totalUsuarios: usuarios?.length || 0,
