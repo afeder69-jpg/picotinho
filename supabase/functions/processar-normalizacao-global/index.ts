@@ -479,7 +479,8 @@ Deno.serve(async (req) => {
               lovableApiKey,
               embalagemInfo,
               supabase,
-              produto
+              produto,
+              MODO_TESTE ? 20000 : 45000
             );
 
             // 🛑 Falha total da IA — manter pendente, NÃO criar master, NÃO inventar fallback.
