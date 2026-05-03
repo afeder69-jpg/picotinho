@@ -1375,7 +1375,8 @@ async function criarProdutoMaster(
     p_imagem_url: normalizacao.imagem_url || null,
     p_imagem_path: normalizacao.imagem_path || null,
     p_confianca: normalizacao.confianca,
-    p_codigo_barras: codigoBarrasLimpo
+    p_codigo_barras: codigoBarrasLimpo,
+    p_provisorio: provisorio
   });
 
   if (error) {
