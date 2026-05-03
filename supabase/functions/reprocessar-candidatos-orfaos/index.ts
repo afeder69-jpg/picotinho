@@ -27,6 +27,24 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // 🔒 KILL-SWITCH — só roda se app_config.normalizacao_orfaos_pausado = false
+    const { data: cfg } = await supabase
+      .from('app_config')
+      .select('valor')
+      .eq('chave', 'normalizacao_orfaos_pausado')
+      .maybeSingle();
+    const pausado = (cfg?.valor === true) || ((cfg?.valor as any) === 'true');
+    if (pausado !== false) {
+      return new Response(
+        JSON.stringify({
+          sucesso: false,
+          pausado: true,
+          mensagem: 'Reprocessamento de órfãos está pausado. Defina app_config.normalizacao_orfaos_pausado=false para liberar.',
+        }),
+        { status: 423, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`🔄 [REPROCESSAR-ORFAOS] Iniciando (lote=${loteNotas} notas)`);
 
     // 1. Localizar notas que têm candidatos órfãos

@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { requireMaster, authErrorResponse, corsHeaders } from "../_shared/auth.ts";
-
+import { chamarIANormalizacao } from "../_shared/ia-cliente.ts";
+import { verificarAntiDuplicata } from "../_shared/anti-duplicata.ts";
 // Interfaces e função para detecção de embalagem via tabela de regras
 interface RegraConversao {
   produto_pattern: string;
@@ -332,6 +333,7 @@ Deno.serve(async (req) => {
                 .select('*')
                 .in('codigo_barras', Array.from(variantesEan))
                 .eq('status', 'ativo')
+                .eq('provisorio', false)
                 .limit(5);
 
               const mastersPorEan = mastersPorEanRaw
@@ -450,8 +452,21 @@ Deno.serve(async (req) => {
               textoParaNormalizar,
               resultadoBusca.candidatos || [],
               lovableApiKey,
-              embalagemInfo
+              embalagemInfo,
+              supabase,
+              produto
             );
+
+            // 🛑 Falha total da IA — manter pendente, NÃO criar master, NÃO inventar fallback.
+            if (!normalizacao) {
+              console.warn(`⚠️ IA falhou para "${produto.texto_original}" — mantido pendente para reprocessamento.`);
+              await supabase
+                .from('produtos_candidatos_normalizacao')
+                .update({ precisa_ia: true })
+                .eq('nota_item_hash', produto.nota_item_hash);
+              totalParaRevisao++;
+              continue;
+            }
 
             // Adicionar campos de imagem
             if (produto.imagem_url) {
@@ -487,23 +502,51 @@ Deno.serve(async (req) => {
               console.log(`✅ Auto-aprovado pela IA (variação reconhecida): ${normalizacao.nome_padrao}`);
               
             } else if (normalizacao.confianca >= 90) {
-              // Produto novo com alta confiança - criar master e auto-aprovar
-              while (tentativas < MAX_TENTATIVAS) {
-                try {
-                  const masterCriado = await criarProdutoMaster(supabase, normalizacao, produto.codigo_barras);
-                  normalizacao.produto_master_id = masterCriado.id; // ✅ Preencher o ID do master criado
-                  console.log(`🔗 Master criado e vinculado: ${masterCriado.id}`);
-                  await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
-                  break;
-                } catch (erro: any) {
-                  tentativas++;
-                  if (tentativas >= MAX_TENTATIVAS) throw erro;
-                  await new Promise(r => setTimeout(r, 1000 * tentativas));
+              // 🛡️ ANTI-DUPLICATA: bloqueia criação se houver master estruturalmente próximo
+              const antiDup = await verificarAntiDuplicata(
+                supabase,
+                {
+                  nome_padrao: normalizacao.nome_padrao,
+                  nome_base: normalizacao.nome_base,
+                  marca: normalizacao.marca,
+                  categoria: normalizacao.categoria,
+                  qtd_base: normalizacao.qtd_base,
+                  unidade_base: normalizacao.unidade_base,
+                },
+                produto.codigo_barras
+              );
+
+              if (antiDup.bloquear) {
+                console.warn(`🛡️ Anti-duplicata bloqueou criação de "${normalizacao.nome_padrao}" — motivo=${antiDup.motivo}`);
+                // Cria candidato pendente com motivo + lista de candidatos próximos
+                await criarCandidato(supabase, produto, normalizacao, 'pendente', obsEmbalagem);
+                await supabase
+                  .from('produtos_candidatos_normalizacao')
+                  .update({
+                    motivo_bloqueio: antiDup.motivo,
+                    candidatos_proximos: antiDup.candidatos as any,
+                    precisa_ia: false,
+                  })
+                  .eq('nota_item_hash', produto.nota_item_hash);
+                totalParaRevisao++;
+              } else {
+                // Produto novo com alta confiança - criar master PROVISÓRIO + auto-aprovar
+                while (tentativas < MAX_TENTATIVAS) {
+                  try {
+                    const masterCriado = await criarProdutoMaster(supabase, normalizacao, produto.codigo_barras, true);
+                    normalizacao.produto_master_id = masterCriado.id;
+                    console.log(`🔗 Master PROVISÓRIO criado e vinculado: ${masterCriado.id}`);
+                    await criarCandidato(supabase, produto, normalizacao, 'auto_aprovado', obsEmbalagem);
+                    break;
+                  } catch (erro: any) {
+                    tentativas++;
+                    if (tentativas >= MAX_TENTATIVAS) throw erro;
+                    await new Promise(r => setTimeout(r, 1000 * tentativas));
+                  }
                 }
+                totalAutoAprovados++;
+                console.log(`✅ Auto-aprovado pela IA (master provisório ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
               }
-              
-              totalAutoAprovados++;
-              console.log(`✅ Auto-aprovado pela IA (produto novo ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
               
             } else {
               // Baixa confiança - enviar para revisão manual
@@ -843,7 +886,7 @@ async function buscarProdutoSimilar(
     .or(`texto_variacao.ilike.${textoNormalizado},texto_variacao.ilike.${textoParaMatching}`)
     .maybeSingle();
   
-  if (sinonimo?.produtos_master_global) {
+  if (sinonimo?.produtos_master_global && (sinonimo.produtos_master_global as any).provisorio !== true) {
     console.log(`✅ Encontrado em sinônimos: ${sinonimo.produtos_master_global.sku_global}`);
     return {
       encontrado: true,
@@ -876,8 +919,10 @@ async function buscarProdutoSimilar(
     threshold: 0.3
   });
 
-  if (similares && similares.length > 0) {
-    const melhorMatch = similares[0];
+  // 🛡️ Filtra masters provisórios — não devem servir como referência de matching
+  const similaresFiltrados = (similares || []).filter((c: any) => !c.provisorio);
+  if (similaresFiltrados && similaresFiltrados.length > 0) {
+    const melhorMatch = similaresFiltrados[0];
     
     // 🔧 PARTE C + D: Aplicar fuzzy matching com Levenshtein + logs de debugging
     console.log(`\n🔍 ANÁLISE FUZZY DETALHADA:`);
@@ -887,7 +932,7 @@ async function buscarProdutoSimilar(
     if (pesoExtraido) console.log(`⚖️  Peso/Volume detectado: ${pesoExtraido.valor}${pesoExtraido.unidade}`);
     
     // Iterar sobre os candidatos e aplicar Levenshtein
-    for (const candidato of similares.slice(0, 5)) { // Top 5 candidatos
+    for (const candidato of similaresFiltrados.slice(0, 5)) { // Top 5 candidatos
       const masterNormalizado = normalizarTextoParaMatching(candidato.nome_padrao);
       const similaridadeLevenshtein = calcularSimilaridadeLevenshtein(textoParaMatching, masterNormalizado);
       
@@ -962,10 +1007,10 @@ async function buscarProdutoSimilar(
 
     // Se > 60%, enviar top candidatos para IA decidir
     if (melhorMatch.similarity > 0.6) {
-      console.log(`📋 ${similares.length} candidatos fuzzy encontrados para IA avaliar`);
+      console.log(`📋 ${similaresFiltrados.length} candidatos fuzzy encontrados para IA avaliar`);
       return {
         encontrado: false,
-        candidatos: similares.slice(0, 10),
+        candidatos: similaresFiltrados.slice(0, 10),
         metodo: 'fuzzy_candidatos'
       };
     }
@@ -978,6 +1023,7 @@ async function buscarProdutoSimilar(
     .from('produtos_master_global')
     .select('*')
     .eq('status', 'ativo')
+    .eq('provisorio', false)
     .order('total_usuarios', { ascending: false })
     .limit(50);
 
@@ -992,8 +1038,10 @@ async function normalizarComIA(
   textoOriginal: string,
   produtosSimilares: any[],
   apiKey: string,
-  embalagemInfo?: { isMultiUnit: boolean; quantity: number }
-): Promise<NormalizacaoSugerida> {
+  embalagemInfo?: { isMultiUnit: boolean; quantity: number },
+  supabase?: any,
+  produto?: ProdutoParaNormalizar
+): Promise<NormalizacaoSugerida | null> {
   console.log(`🤖 Analisando com Gemini: "${textoOriginal}"`);
 
   const promptExtra = embalagemInfo?.isMultiUnit 
@@ -1131,40 +1179,26 @@ RESPONDA APENAS COM JSON (sem markdown):
 }`;
 
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { 
-            role: 'system', 
-            content: 'Você é um especialista em normalização de produtos. Sempre responda com JSON válido, sem markdown.' 
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-      }),
+    const ia = await chamarIANormalizacao({
+      apiKey,
+      modelo: 'google/gemini-2.5-flash',
+      systemPrompt: 'Você é um especialista em normalização de produtos. Sempre responda com JSON válido, sem markdown.',
+      userPrompt: prompt,
+      temperature: 0.3,
+      timeoutMs: 45000,
+      supabase,
+      texto_original: produto?.texto_original ?? textoOriginal,
+      candidato_id: null,
+      camposObrigatorios: ['nome_padrao', 'categoria', 'confianca'],
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Erro na API Lovable AI: ${response.status} - ${errorText}`);
+    if (!ia.ok) {
+      console.warn(`❌ IA falhou (${ia.tipo_erro}): ${ia.mensagem}`);
+      return null;
     }
 
-    const data = await response.json();
-    const conteudo = data.choices[0].message.content;
-    
-    const jsonLimpo = conteudo
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
-    
-    const resultado = JSON.parse(jsonLimpo);
-    
+    const resultado = ia.data;
+
     // 🔧 VALIDAR E CORRIGIR CATEGORIA (GARANTIR CATEGORIAS OFICIAIS DO PICOTINHO)
     const CATEGORIAS_VALIDAS = [
       'AÇOUGUE', 'BEBIDAS', 'CONGELADOS', 'HIGIENE/FARMÁCIA',
@@ -1274,31 +1308,25 @@ RESPONDA APENAS COM JSON (sem markdown):
     return resultado;
 
   } catch (error: any) {
-    console.error('❌ Erro ao chamar Lovable AI:', error);
-    return {
-      sku_global: `TEMP-${Date.now()}`,
-      nome_padrao: textoOriginal.toUpperCase(),
-      categoria: 'OUTROS',
-      nome_base: textoOriginal.toUpperCase(),
-      marca: null,
-      tipo_embalagem: null,
-      qtd_valor: null,
-      qtd_unidade: null,
-      qtd_base: null,
-      unidade_base: null,
-      categoria_unidade: null,
-      granel: false,
-      confianca: 30,
-      razao: `Erro na IA: ${error.message}`,
-      produto_master_id: null
-    };
+    console.error('❌ Erro ao processar resposta da IA:', error);
+    try {
+      await supabase?.from('ia_normalizacao_erros').insert({
+        texto_original: produto?.texto_original ?? textoOriginal,
+        tipo_erro: 'desconhecido',
+        modelo: 'google/gemini-2.5-flash',
+        mensagem: (error?.message || '').slice(0, 2000),
+        tentativa: 1,
+      });
+    } catch (_) {}
+    return null;
   }
 }
 
 async function criarProdutoMaster(
   supabase: any,
   normalizacao: NormalizacaoSugerida,
-  codigoBarras?: string
+  codigoBarras?: string,
+  provisorio: boolean = false
 ): Promise<{ id: string, nome_padrao: string }> {
   // 🛡️ GUARD: Verificar se já existe master com mesmo EAN antes de criar
   // Considera variantes com/sem zeros à esquerda para evitar duplicatas por formatação
@@ -1351,7 +1379,8 @@ async function criarProdutoMaster(
     p_imagem_url: normalizacao.imagem_url || null,
     p_imagem_path: normalizacao.imagem_path || null,
     p_confianca: normalizacao.confianca,
-    p_codigo_barras: codigoBarrasLimpo
+    p_codigo_barras: codigoBarrasLimpo,
+    p_provisorio: provisorio
   });
 
   if (error) {
