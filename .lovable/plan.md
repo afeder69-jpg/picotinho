@@ -1,273 +1,121 @@
 
-# Plano técnico v3 — Refator do motor de normalização
+# Plano — Proteções obrigatórias antes de retomar reprocessamento
 
-Versão final consolidada. Incorpora os 2 ajustes adicionais: **bloqueio de criação por similaridade textual** e **status `provisorio` para masters novos**.
+Pausa imediata do botão de reprocessamento e implementação de três barreiras de segurança. Nenhum lote da IA volta a rodar até que as 3 estejam ativas e validadas.
 
----
+## 1. Pausa imediata (defensivo)
 
-## Causa raiz (confirmada)
+- `src/pages/admin/NormalizacaoGlobal.tsx` (linha 2721): botão "Reprocessar Pendentes Órfãos (IA)" fica `disabled` permanentemente com texto "Pausado — proteções pendentes" e tooltip explicando o motivo. Reabre só após validação das 3 etapas.
+- `supabase/functions/reprocessar-candidatos-orfaos/index.ts`: kill-switch no início — lê `app_config.normalizacao_orfaos_pausado` (default `true`) e retorna `423 Locked` se ativo. O admin libera manualmente quando tudo estiver verificado.
+- Cron (se existir agendado para essa função) também respeita o flag.
 
-- 481 de 482 candidatos pendentes têm `confianca_ia=0` e sugestões NULL.
-- `process-receipt-full` cria placeholder com hash `${notaId}_${nomeUpper}`.
-- `processar-normalizacao-global` (linhas 245-312) detecta o placeholder via `nota_item_hash`, cai em `if (jaExiste) continue` e **nunca chama a IA**.
-- Adicional: `LIMIT 1` no loop de notas + ausência de cron específico para candidatos órfãos.
+## 2. Wrapper de IA com observabilidade — `_shared/ia-cliente.ts`
 
----
+Função única que toda chamada de normalização à IA passa a usar. Substitui o `fetch` cru atualmente em `processar-normalizacao-global/index.ts` (linha 1134).
 
-## Ordem de execução
+Responsabilidades:
+- Timeout explícito (45s) via `AbortController`.
+- Captura e classifica falhas em `tipo_erro`:
+  - `timeout` (AbortError)
+  - `gateway_429` / `gateway_402` / `gateway_5xx` (HTTP status)
+  - `parse` (JSON.parse falhou no conteúdo)
+  - `invalid_response` (JSON sem campos obrigatórios mínimos: `nome_padrao`, `categoria`, `confianca`)
+  - `tool_call_missing` (quando migrarmos para tool calling — placeholder pronto)
+  - `desconhecido` (qualquer outro `Error`)
+- Em todo caminho de falha, grava em `ia_normalizacao_erros` com: `candidato_id` (quando disponível), `texto_original`, `tipo_erro`, `http_status`, `modelo`, `mensagem`, `payload_enviado`, `resposta_bruta`, `tentativa`.
+- Retry exponencial de 1 tentativa só para `gateway_429` e `gateway_5xx` (1s e 3s). `402` nunca retenta.
+- Retorna `{ ok: true, data }` ou `{ ok: false, tipo_erro, mensagem }` — chamador decide o que fazer (manter `pendente`, marcar como falha, etc.).
+- Deixa o candidato com `precisa_ia=true` e `confianca_ia=0` quando `ok=false`, para que o passivo continue rastreável (não some da fila).
 
-```text
-1. Fase 1  → Fechar ciclo da IA           (destrava o pipeline)
-2. Fase 9  → Reprocessar 482 pendentes    (ganho imediato)
-3. Fase 2  → Classificação de EAN          (segurança de matching)
-4. Fase 3  → Contexto rico para IA         (qualidade das decisões)
-5. Fase 5  → Categoria obrigatória         (pré-requisito da Fase 8)
-6. Fase 4  → Comercial vs comparável       (chaves estruturais)
-7. Fase 7  → Níveis de confiança           (decidirAcao)
-8. Fase 8  → Anti-duplicatas + provisório  (controle final)
-9. Fase 6  → Aprendizado humano            (loop contínuo)
-```
+Integração mínima:
+- `processar-normalizacao-global/index.ts`: a função `normalizarComIA` (em torno da linha 1133) passa a chamar o wrapper. Quando `ok=false`, em vez de devolver fallback `{ confianca: 30, razao: "Erro na IA: ..." }` (linha 1290), devolve `null` e o loop principal pula a criação de candidato/master mantendo o registro pendente. Hoje esse fallback é exatamente o que faz a IA "passar batido" sem deixar rastro — esta é a causa raiz dos 466 sumiços silenciosos.
 
-Cada fase é deployável e reversível de forma independente.
+## 3. Bloqueio antecipado de duplicatas (Fase 8 parcial)
 
----
+Novo módulo `_shared/anti-duplicata.ts` chamado dentro de `processar-normalizacao-global` **logo antes** de `criarProdutoMaster` (linha 493).
 
-## FASE 1 — Fechar o ciclo da IA
+Sequência de checks (qualquer hit positivo → bloqueia criação):
+1. **Match estrutural forte**: existe master `ativo` com mesmo EAN canônico ou mesmo `nome_padrao` exato (case-insensitive) na mesma categoria.
+2. **Match estrutural médio**: existe master `ativo` com `nome_base` igual + mesma marca + mesma categoria, ou trigram(`nome_base`) ≥ 0.85 + mesma categoria + mesma `qtd_base` + mesma `unidade_base`.
+3. **Similaridade textual**: existe master `ativo` com `similarity(nome_base, sugestao.nome_base) > 0.75` na mesma categoria.
 
-- `process-receipt-full/index.ts` (2070-2125): adicionar `precisa_ia=true` no placeholder.
-- `processar-normalizacao-global/index.ts` (245-312): se `jaExiste.status='pendente' AND jaExiste.confianca_ia=0` → executar pipeline e fazer `UPDATE` no registro existente.
-- Remover `LIMIT 1` da busca de notas.
-- **Nova:** `processar-candidatos-pendentes` (cron, lote 20, a cada 2min).
+Comportamento ao bloquear:
+- NÃO cria master novo.
+- Cria candidato com `status='pendente'`, `precisa_ia=false`, `confianca_ia` da IA, e popula `sugestao_produto_master` com **a lista de candidatos próximos em JSON** (campo já existente `dados_brutos` ou novo `candidatos_proximos jsonb`).
+- Marca `motivo_bloqueio = 'similaridade_alta' | 'match_estrutural_medio' | 'match_estrutural_forte'`.
+- Esses casos passam a aparecer numa nova aba "Revisão por similaridade" em `/admin/normalizacao` (somente leitura nesta fase — UI completa fica para depois).
 
----
+Implementação SQL de apoio: usa `pg_trgm` já habilitado (memória `RPC Similarity Fix` confirma `real`). Nenhuma RPC nova obrigatória — query parametrizada via cliente.
 
-## FASE 9 — Reprocessar 482 pendentes
+## 4. Master provisório
 
-- **Nova:** `reprocessar-candidatos-orfaos` (admin, `requireMaster`).
-- Filtro: `status='pendente' AND confianca_ia=0`.
-- Lote 20, retorna `{processados, auto_aprovados, para_revisao, falhas}`.
-- Vincula `produto_master_id` em `estoque_app` quando auto-aprovado. Nunca toca quantidade/preço.
-- Botão em `/admin/normalizacao` com barra de progresso.
-
----
-
-## FASE 2 — Classificação de EAN (2 camadas)
-
-- Migration: `+ tipo_ean` em `produtos_candidatos_normalizacao` e `produtos_master_global`.
-- **Novo:** `_shared/classificar-ean.ts`.
-- Camada 1 (regex): `ausente` | `balanca_peso_variavel` (prefixo 2) | `global` (789/790 ou 8-14 dígitos válidos) | `local_mercado`.
-- Camada 2 (comportamental): ≥2 CNPJs em `precos_atuais` confirma `global`; 1 CNPJ rebaixa para `local_mercado`.
-- Apenas `tipo_ean='global'` é verdade absoluta no matching.
-
----
-
-## FASE 3 — Contexto completo para a IA (tool calling estruturado)
-
-Payload enviado:
-```json
-{
-  "produto_atual": {"texto_original","ean","tipo_ean","cnpj_mercado","quantidade","unidade","preco_unitario","preco_total","marca_detectada","categoria_preliminar"},
-  "candidatos_similares": [/* até 10 */],
-  "sinonimos_globais": [/* até 10 por trigram > 0.3 */],
-  "decisoes_humanas": {
-    "recentes_semelhantes": [/* até 5 */],
-    "padroes_recorrentes": [/* até 5 mais frequentes */],
-    "alta_confianca_historica": [/* até 5 com taxa_aprovacao ≥ 0.90 */]
-  }
-}
-```
-
-Saída obrigatória (tool schema): `nome_padrao, nome_base, tipo, marca, categoria (enum 11), tipo_embalagem, quantidade, unidade, confianca, acao_sugerida (vincular_master|criar_novo|incerto), master_id_sugerido, razao`.
-
----
-
-## FASE 5 — Categoria obrigatória (sinal estrutural forte)
-
-- **Novo:** `_shared/categoria-heuristica.ts` (palavras-chave + unidade).
-- Categoria nunca NULL. Inválida → `OUTROS` + `revisao_categoria=true`.
-- Categoria entra como **filtro obrigatório** em todas as buscas de similaridade.
-- Categorias divergentes nunca formam equivalência, mesmo com mesmo `nome_base + qtd_base + unidade_base`.
-
----
-
-## FASE 4 — Comercial vs comparável (chave refinada)
-
-Migration em `produtos_master_global`:
-- `+ tipo_produto text` (integral, desnatado, light, zero, tipo_1, extra_virgem, etc.)
-- `+ chave_comparavel text` = `nome_base | tipo_produto | categoria | qtd_base | unidade_base | tipo_embalagem`
-- `+ chave_comercial text` = `chave_comparavel | marca | coalesce(ean_global,'')`
-- Índices em ambas.
-- **Novo:** `_shared/tipos-produto.ts` (dicionário canônico por categoria).
-
----
-
-## FASE 7 — Níveis de confiança (`decidirAcao`)
-
-| Confiança | Evidência | Ação |
-|---|---|---|
-| ≥95 | qualquer | `auto_aprovado` |
-| 85-94 | EAN global ∨ chave_comercial exata ∨ sinônimo global exato | `auto_aprovado` |
-| 85-94 | sem evidência forte | `pendente_revisao` |
-| 70-84 | qualquer | `pendente_revisao` (sugestão preenchida) |
-| <70 | qualquer | `pendente` (com `razao` obrigatória) |
-
-Match estrutural:
-- **forte** = EAN global ∨ chave_comercial exata ∨ sinônimo global exato.
-- **médio** = chave_comparavel exata + mesma marca ∨ trigram nome_base ≥ 0.85 + mesma categoria + mesma qtd_base.
-- **fraco** = trigram 0.6-0.85 + mesma categoria.
-
-Categoria divergente → downgrade automático para `pendente_revisao`.
-
----
-
-## FASE 8 — Anti-duplicatas + Master Provisório
-
-### 8.1 Pipeline de matching antes de criar master
-
-1. EAN global exato.
-2. Sinônimo global exato.
-3. `chave_comercial` exata.
-4. `chave_comparavel` + mesma marca.
-5. Trigram `nome_base` ≥ 0.85 + mesma categoria + mesma qtd_base + mesma unidade_base.
-
-### 8.2 Regra rígida de criação automática
-
-Só cria novo master se TODOS forem verdadeiros:
-- ✅ Todas as 5 estratégias acima falharam.
-- ✅ `confianca_ia ≥ 92`.
-- ✅ NÃO existe match estrutural médio nem forte.
-- ✅ `acao_sugerida = 'criar_novo'` (não `incerto`).
-- ✅ Categoria definida (não `OUTROS` por fallback).
-- ✅ **NOVO — Bloqueio por similaridade textual:** NÃO existe NENHUM candidato com:
-  - `similarity(nome_base, sugestao.nome_base) > 0.75` na mesma categoria, OU
-  - match estrutural **fraco** (trigram 0.6-0.85 + mesma categoria), OU
-  - match estrutural **médio**.
-  
-  Se qualquer desses existir → **forçar `pendente_revisao`** apresentando os candidatos próximos para decisão humana, mesmo com confiança ≥ 92.
-
-### 8.3 Master Provisório (anti-cascata de erros) — NOVO
-
-Migration:
+Migração:
 ```sql
 ALTER TABLE produtos_master_global
-  ADD COLUMN provisorio boolean NOT NULL DEFAULT false,
-  ADD COLUMN ocorrencias_notas int NOT NULL DEFAULT 0,
-  ADD COLUMN promovido_em timestamptz,
-  ADD COLUMN promovido_por text;  -- 'auto_threshold' | 'manual' | uuid do master humano
+  ADD COLUMN IF NOT EXISTS provisorio boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS ocorrencias_notas int NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS promovido_em timestamptz,
+  ADD COLUMN IF NOT EXISTS promovido_por text;
+
+CREATE INDEX IF NOT EXISTS ix_master_provisorio ON produtos_master_global(provisorio) WHERE provisorio = true;
 ```
 
-Estados de `produtos_master_global.status`:
-- `provisorio` (NOVO) — criado automaticamente pela IA, ainda não confiável.
-- `ativo` — validado (manual ou por threshold).
-- `inativo` — descontinuado.
+Não altera `status` enum — `provisorio` é flag booleano paralelo (mais simples, evita refator dos consumers que filtram por `status='ativo'`). Masters provisórios continuam com `status='ativo'` para consumo do dono, mas o flag os exclui de buscas de matching.
 
-Comportamento:
+Mudanças de código:
+- `criarProdutoMaster` (linha 1298): aceita parâmetro `provisorio: boolean`. Quando chamado pelo fluxo da IA, passa `true`. RPC `upsert_produto_master` recebe novo argumento `p_provisorio` (migração da função também).
+- Buscas de matching usadas pela IA filtram `provisorio = false`:
+  - `processar-normalizacao-global` linhas 270, 331, 978, 1314, 1507 (todas as `from('produtos_master_global').select(...)` em contexto de matching/candidatos).
+  - Sinônimos globais e RAG: idem.
+- Estoque do dono: continua vinculando normalmente (provisório não bloqueia uso pessoal, só não vira referência global).
 
-| Aspecto | `provisorio` | `ativo` |
-|---|---|---|
-| Criado por | IA automática | manual ∨ promoção |
-| Aparece em buscas de match para outros produtos | **NÃO** | SIM |
-| Usado como `candidato_similar` enviado à IA | **NÃO** | SIM |
-| Usado como verdade em sinônimos / consolidação | **NÃO** | SIM |
-| Vincula estoque do usuário que originou | SIM | SIM |
-| Aparece em UI normal de catálogo | filtrado (badge "Provisório") | SIM |
-| Aparece em fila de revisão admin | SIM (destaque) | não |
+Promoção:
+- Trigger em `estoque_app` (AFTER INSERT/UPDATE de `produto_master_id`): incrementa `ocorrencias_notas` por `nota_imagem_id` distinto. Ao atingir threshold (`app_config.master_promocao_min_notas`, default 3), seta `provisorio=false`, `promovido_em=now()`, `promovido_por='auto_threshold'`.
+- Manual: nova edge `promover-master-provisorio` (master-only) + botão em `GerenciarMasters.tsx` filtrado por `provisorio=true` (UI completa em fase posterior; nesta entrega entra apenas a edge + listagem mínima).
 
-Promoção automática para `ativo`:
-- Quando `ocorrencias_notas ≥ 3` (configurável via `app_config.master_promocao_min_notas`, default 3).
-- Trigger em `estoque_app` (ou função periódica) incrementa `ocorrencias_notas` por nota distinta (`nota_imagem_id`) que vincula o master.
-- Ao atingir threshold, atualiza `status='ativo'`, `provisorio=false`, `promovido_em=now()`, `promovido_por='auto_threshold'`.
+## 5. Limpeza dos 26 masters criados na primeira rodada (consulta-only nesta fase)
 
-Promoção manual:
-- Botão "Promover para ativo" em `/admin/masters` na lista filtrada por `provisorio=true`.
-- Define `promovido_por = auth.uid()`.
+Não vamos deletar nem modificar agora — apenas marcar todos os 26 com `provisorio=true` retroativamente via `UPDATE` único, para que parem imediatamente de ser usados como referência por novos matches. As duplicatas detectadas no diagnóstico (Glória ×2, Rivel ×2, Alcatra, Trident, Pão Francês, Powerade, Bis Lacta, etc.) entram na fila de "Promoção/Consolidação manual" para o admin decidir caso a caso.
 
-Constraint UNIQUE em `chave_comercial`:
-```sql
-CREATE UNIQUE INDEX ux_master_chave_comercial_ativo
-  ON produtos_master_global(chave_comercial)
-  WHERE status='ativo' AND chave_comercial IS NOT NULL;
-```
-Aplicada após `consolidar-masters-duplicados` rodar no passivo. **Provisórios não entram na constraint** (índice condicional por `status='ativo'`), permitindo múltiplos provisórios convivendo até validação.
+## 6. Ordem de release e validação
 
-Garantias adicionais:
-- Reprocessamento (Fase 9) tenta sempre **vincular a `ativo`** primeiro; só cria provisório se passar pela regra rígida 8.2.
-- Quando dois provisórios viram candidatos do mesmo produto futuro, a IA pode sugerir consolidação (entra em `pendente_revisao` com ambos listados).
-
----
-
-## FASE 6 — Aprendizado humano (loop contínuo)
-
-Migration: `normalizacao_decisoes_log` com agregados (`ocorrencias`, `taxa_aprovacao`).
-
-Gravação:
-- `aplicar-candidatos-aprovados`
-- Edge dedicada chamada por `GerenciarMasters.tsx` em corrigir/rejeitar.
-- Promoção manual de provisório também registra entrada (`decisao='promoveu_provisorio'`).
-
-Consumo (Fase 3): 3 blocos — recentes semelhantes, padrões recorrentes, alta confiança histórica.
-
----
-
-## NOVO — Logging de erros da IA
-
-```sql
-CREATE TABLE ia_normalizacao_erros (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  candidato_id uuid REFERENCES produtos_candidatos_normalizacao(id) ON DELETE CASCADE,
-  texto_original text,
-  tipo_erro text NOT NULL,  -- timeout|parse|invalid_response|gateway_429|gateway_402|gateway_5xx|tool_call_missing|desconhecido
-  http_status int,
-  modelo text,
-  mensagem text,
-  payload_enviado jsonb,
-  resposta_bruta jsonb,
-  tentativa int DEFAULT 1,
-  criado_em timestamptz DEFAULT now()
-);
-CREATE INDEX ix_ia_erros_tipo ON ia_normalizacao_erros(tipo_erro, criado_em DESC);
+```text
+Passo A — Migração: provisorio + ia_normalizacao_erros (ia_normalizacao_erros já existe)
+Passo B — _shared/ia-cliente.ts + integração
+Passo C — _shared/anti-duplicata.ts + integração
+Passo D — Marcar 26 masters recém-criados como provisorio=true
+Passo E — Trigger de promoção + edge promover-master-provisorio
+Passo F — Liberar app_config.normalizacao_orfaos_pausado=false
+Passo G — Reprocessar 1 lote pequeno (5 notas) e auditar
 ```
 
-Wrapper único `_shared/ia-cliente.ts` envolve toda chamada do gateway, classifica e loga, com retry exponencial 1x para 429/5xx. Painel admin em `/admin/normalizacao` mostra contagens por tipo nas últimas 24h.
+Cada passo é deployável e reversível. Só após Passo G limpo (sem novas duplicatas, erros aparecendo em `ia_normalizacao_erros` quando ocorrerem) o botão volta a ficar disponível na UI.
 
----
-
-## Resumo consolidado de impacto
+## Detalhes técnicos
 
 ### Tabelas
-| Tabela | Mudança |
-|---|---|
-| `produtos_candidatos_normalizacao` | + `tipo_ean`, + `precisa_ia`, + `revisao_categoria`; novo status `pendente_revisao` |
-| `produtos_master_global` | + `tipo_ean`, + `tipo_produto`, + `chave_comparavel`, + `chave_comercial`, + `provisorio`, + `ocorrencias_notas`, + `promovido_em`, + `promovido_por`; novo status `provisorio`; UNIQUE condicional em `chave_comercial` para `ativo` |
-| `normalizacao_decisoes_log` | criar (com agregados) |
-| `ia_normalizacao_erros` | **nova** |
+- `produtos_master_global`: + `provisorio`, `ocorrencias_notas`, `promovido_em`, `promovido_por`.
+- `produtos_candidatos_normalizacao`: + `motivo_bloqueio text NULL`, + `candidatos_proximos jsonb NULL`.
+- `ia_normalizacao_erros`: já existe (criada na Fase 1). Nenhuma alteração.
+- `app_config`: linhas `normalizacao_orfaos_pausado=true`, `master_promocao_min_notas=3`.
 
 ### Edge functions
-| Função | Ação |
-|---|---|
-| `process-receipt-full` | flag `precisa_ia` no placeholder |
-| `processar-normalizacao-global` | core refactor (não pular órfãos, novo prompt, decidirAcao, anti-duplicata, bloqueio por similaridade, criação como `provisorio`) |
-| `processar-candidatos-pendentes` | **nova** — cron 2min, lote 20 |
-| `reprocessar-candidatos-orfaos` | **nova** — botão admin |
-| `aplicar-candidatos-aprovados` | + log decisão humana |
-| `promover-master-provisorio` | **nova** — manual + verificação threshold |
-| `_shared/classificar-ean.ts` | **nova** |
-| `_shared/categoria-heuristica.ts` | **nova** |
-| `_shared/tipos-produto.ts` | **nova** |
-| `_shared/decidir-acao.ts` | **nova** |
-| `_shared/ia-cliente.ts` | **nova** — wrapper com logging |
+- **Nova** `_shared/ia-cliente.ts` (módulo, não edge).
+- **Nova** `_shared/anti-duplicata.ts` (módulo).
+- **Nova** `promover-master-provisorio` (master-only).
+- **Modificada** `processar-normalizacao-global`: usa wrapper IA + anti-duplicata + cria master como `provisorio=true`. Filtra `provisorio=false` em todas as queries de matching.
+- **Modificada** `reprocessar-candidatos-orfaos`: kill-switch via `app_config`.
+- **Modificada** RPC `upsert_produto_master`: aceita `p_provisorio boolean default true`.
 
 ### Frontend
-- `/admin/normalizacao`: botão de reprocessamento + barra de progresso + painel de erros IA.
-- `/admin/masters` (`GerenciarMasters.tsx`): filtro/badge "Provisório" + botão "Promover para ativo".
+- `NormalizacaoGlobal.tsx`: botão desabilitado + badge "Pausado".
+- (fora do escopo desta entrega) Aba de revisão por similaridade — apenas backend nesta fase.
 
-### Riscos globais e mitigações
-- **Custo IA**: ~482 chamadas iniciais + ~5/min em regime. Mitigado por lote 20/2min e cache por hash.
-- **Quebra de fluxos atuais (RJ/CE/NFC-e/NFe/estoque/preços)**: ZERO mudança. Todas alterações são aditivas.
-- **Crescimento descontrolado do catálogo**: bloqueado por (a) regras rígidas 8.2, (b) bloqueio por similaridade textual, (c) status `provisorio` que isola erros.
-- **Erros da IA viram referência**: impossível — provisórios não entram em buscas de matching nem em contexto da IA.
-- **Constraint UNIQUE**: aplicada só em `ativo`, após consolidação do passivo.
-- **Variação de decisões da IA**: mitigada por aprendizado humano (Fase 6) e logging (`ia_normalizacao_erros`).
-- **Reabrir candidatos já decididos**: filtro estrito `confianca_ia=0 AND status='pendente'`.
+### Riscos e mitigações
+- **Quebra de fluxos existentes (RJ/CE/NFC-e/NFe/estoque/preços)**: zero — `provisorio=false` é default; só novos masters da IA nascem `true`. Tudo o que já existe continua `false`.
+- **RPC `upsert_produto_master` quebrada**: novo parâmetro com default; chamadas legadas continuam funcionais.
+- **Trigger de promoção spam**: usa `nota_imagem_id` distinto; idempotente.
+- **Custo IA durante validação**: lote G é 5 notas apenas.
+- **Performance da consulta de similaridade**: índice GIN trigram já existe em `produtos_master_global.nome_base` (memória `RPC Similarity Fix`); custo aceitável.
 
-Pronto para autorização.
+Aguardo aprovação para executar na ordem A→G.
