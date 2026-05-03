@@ -2213,6 +2213,7 @@ export type Database = {
       }
       produtos_candidatos_normalizacao: {
         Row: {
+          candidatos_proximos: Json | null
           candidatos_similares: Json | null
           categoria_sugerida: string | null
           categoria_unidade_sugerida: string | null
@@ -2221,6 +2222,7 @@ export type Database = {
           granel_sugerido: boolean | null
           id: string
           marca_sugerida: string | null
+          motivo_bloqueio: string | null
           nome_base_sugerido: string | null
           nome_padrao_sugerido: string | null
           nota_imagem_id: string | null
@@ -2243,6 +2245,7 @@ export type Database = {
           usuario_id: string | null
         }
         Insert: {
+          candidatos_proximos?: Json | null
           candidatos_similares?: Json | null
           categoria_sugerida?: string | null
           categoria_unidade_sugerida?: string | null
@@ -2251,6 +2254,7 @@ export type Database = {
           granel_sugerido?: boolean | null
           id?: string
           marca_sugerida?: string | null
+          motivo_bloqueio?: string | null
           nome_base_sugerido?: string | null
           nome_padrao_sugerido?: string | null
           nota_imagem_id?: string | null
@@ -2273,6 +2277,7 @@ export type Database = {
           usuario_id?: string | null
         }
         Update: {
+          candidatos_proximos?: Json | null
           candidatos_similares?: Json | null
           categoria_sugerida?: string | null
           categoria_unidade_sugerida?: string | null
@@ -2281,6 +2286,7 @@ export type Database = {
           granel_sugerido?: boolean | null
           id?: string
           marca_sugerida?: string | null
+          motivo_bloqueio?: string | null
           nome_base_sugerido?: string | null
           nome_padrao_sugerido?: string | null
           nota_imagem_id?: string | null
@@ -2337,6 +2343,10 @@ export type Database = {
           marca: string | null
           nome_base: string
           nome_padrao: string
+          ocorrencias_notas: number
+          promovido_em: string | null
+          promovido_por: string | null
+          provisorio: boolean
           qtd_base: number | null
           qtd_unidade: string | null
           qtd_valor: number | null
@@ -2365,6 +2375,10 @@ export type Database = {
           marca?: string | null
           nome_base: string
           nome_padrao: string
+          ocorrencias_notas?: number
+          promovido_em?: string | null
+          promovido_por?: string | null
+          provisorio?: boolean
           qtd_base?: number | null
           qtd_unidade?: string | null
           qtd_valor?: number | null
@@ -2393,6 +2407,10 @@ export type Database = {
           marca?: string | null
           nome_base?: string
           nome_padrao?: string
+          ocorrencias_notas?: number
+          promovido_em?: string | null
+          promovido_por?: string | null
+          provisorio?: boolean
           qtd_base?: number | null
           qtd_unidade?: string | null
           qtd_valor?: number | null
@@ -3933,6 +3951,10 @@ export type Database = {
               marca: string | null
               nome_base: string
               nome_padrao: string
+              ocorrencias_notas: number
+              promovido_em: string | null
+              promovido_por: string | null
+              provisorio: boolean
               qtd_base: number | null
               qtd_unidade: string | null
               qtd_valor: number | null
@@ -4395,27 +4417,50 @@ export type Database = {
           user_id: string
         }[]
       }
-      upsert_produto_master: {
-        Args: {
-          p_categoria: string
-          p_categoria_unidade: string
-          p_codigo_barras?: string
-          p_confianca: number
-          p_granel: boolean
-          p_imagem_path: string
-          p_imagem_url: string
-          p_marca: string
-          p_nome_base: string
-          p_nome_padrao: string
-          p_qtd_base: number
-          p_qtd_unidade: string
-          p_qtd_valor: number
-          p_sku_global: string
-          p_tipo_embalagem: string
-          p_unidade_base: string
-        }
-        Returns: Json
-      }
+      upsert_produto_master:
+        | {
+            Args: {
+              p_categoria: string
+              p_categoria_unidade: string
+              p_codigo_barras?: string
+              p_confianca: number
+              p_granel: boolean
+              p_imagem_path: string
+              p_imagem_url: string
+              p_marca: string
+              p_nome_base: string
+              p_nome_padrao: string
+              p_qtd_base: number
+              p_qtd_unidade: string
+              p_qtd_valor: number
+              p_sku_global: string
+              p_tipo_embalagem: string
+              p_unidade_base: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_categoria: string
+              p_categoria_unidade: string
+              p_codigo_barras?: string
+              p_confianca: number
+              p_granel: boolean
+              p_imagem_path: string
+              p_imagem_url: string
+              p_marca: string
+              p_nome_base: string
+              p_nome_padrao: string
+              p_provisorio?: boolean
+              p_qtd_base: number
+              p_qtd_unidade: string
+              p_qtd_valor: number
+              p_sku_global: string
+              p_tipo_embalagem: string
+              p_unidade_base: string
+            }
+            Returns: Json
+          }
       validar_codigo_convite: { Args: { _codigo: string }; Returns: Json }
       validar_telefone_whatsapp: {
         Args: { telefone_numero: string }
