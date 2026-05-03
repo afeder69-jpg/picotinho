@@ -2701,16 +2701,39 @@ export default function NormalizacaoGlobal() {
               {detectandoDuplicatas ? 'Detectando...' : consolidando ? 'Consolidando...' : 'Buscar e Consolidar Duplicatas'}
             </Button>
 
-            <Button 
-              onClick={reprocessarOrfaos}
-              disabled
-              variant="outline"
-              className="gap-2 shadow-lg border-amber-500/40 opacity-60 cursor-not-allowed"
-              title="Pausado — proteções (wrapper IA, anti-duplicata e master provisório) ativadas. Liberar via app_config.normalizacao_orfaos_pausado=false após validação."
-            >
-              <Sparkles className="w-4 h-4" />
-              Pausado — proteções ativadas
-            </Button>
+            <div className="flex flex-col gap-2 p-3 rounded-lg border border-amber-500/40 bg-amber-500/5 flex-1 min-w-[280px]">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                <Sparkles className="w-4 h-4" />
+                Modo Teste — Reprocessar Órfãos
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Kill-switch geral ativo. Execução controlada para validar wrapper IA, anti-duplicata e masters provisórios.
+              </p>
+              <RadioGroup
+                value={String(loteTeste)}
+                onValueChange={(v) => setLoteTeste(Number(v) as 5 | 10 | 20)}
+                className="flex gap-3"
+              >
+                {[5, 10, 20].map(n => (
+                  <div key={n} className="flex items-center gap-1.5">
+                    <RadioGroupItem value={String(n)} id={`lote-${n}`} />
+                    <Label htmlFor={`lote-${n}`} className="text-xs cursor-pointer">
+                      {n === 5 ? 'Teste (5)' : n === 10 ? 'Pequeno (10)' : 'Médio (20)'}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <Button
+                onClick={() => setConfirmarReprocessOpen(true)}
+                disabled={reprocessandoOrfaos || processando || consolidando || sincronizandoManual}
+                size="sm"
+                variant="outline"
+                className="gap-2 border-amber-500/60"
+              >
+                {reprocessandoOrfaos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {reprocessandoOrfaos ? 'Processando...' : `Executar lote de ${loteTeste}`}
+              </Button>
+            </div>
 
             <Button 
               onClick={() => navigate("/admin/normalizacoes-estabelecimentos")}
