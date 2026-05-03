@@ -932,7 +932,7 @@ async function buscarProdutoSimilar(
     if (pesoExtraido) console.log(`⚖️  Peso/Volume detectado: ${pesoExtraido.valor}${pesoExtraido.unidade}`);
     
     // Iterar sobre os candidatos e aplicar Levenshtein
-    for (const candidato of similares.slice(0, 5)) { // Top 5 candidatos
+    for (const candidato of similaresFiltrados.slice(0, 5)) { // Top 5 candidatos
       const masterNormalizado = normalizarTextoParaMatching(candidato.nome_padrao);
       const similaridadeLevenshtein = calcularSimilaridadeLevenshtein(textoParaMatching, masterNormalizado);
       
@@ -1007,10 +1007,10 @@ async function buscarProdutoSimilar(
 
     // Se > 60%, enviar top candidatos para IA decidir
     if (melhorMatch.similarity > 0.6) {
-      console.log(`📋 ${similares.length} candidatos fuzzy encontrados para IA avaliar`);
+      console.log(`📋 ${similaresFiltrados.length} candidatos fuzzy encontrados para IA avaliar`);
       return {
         encontrado: false,
-        candidatos: similares.slice(0, 10),
+        candidatos: similaresFiltrados.slice(0, 10),
         metodo: 'fuzzy_candidatos'
       };
     }
