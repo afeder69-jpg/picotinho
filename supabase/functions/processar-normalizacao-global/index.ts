@@ -1796,42 +1796,89 @@ async function criarCandidato(
     // ✏️ ATUALIZAR apenas candidatos pendentes
     console.log(`🔄 Atualizando candidato pendente: ${produto.texto_original}`);
     
-    const { data: updRows, error } = await supabase
+    const updatePayload: any = {
+      sugestao_sku_global: normalizacao.sku_global,
+      sugestao_produto_master: normalizacao.produto_master_id,
+      confianca_ia: normalizacao.confianca,
+      nome_padrao_sugerido: normalizacao.nome_padrao,
+      categoria_sugerida: normalizacao.categoria,
+      nome_base_sugerido: normalizacao.nome_base,
+      marca_sugerida: normalizacao.marca,
+      tipo_embalagem_sugerido: normalizacao.tipo_embalagem,
+      qtd_valor_sugerido: normalizacao.qtd_valor,
+      qtd_unidade_sugerido: normalizacao.qtd_unidade,
+      qtd_base_sugerida: normalizacao.qtd_base,
+      unidade_base_sugerida: normalizacao.unidade_base,
+      categoria_unidade_sugerida: normalizacao.categoria_unidade,
+      granel_sugerido: normalizacao.granel,
+      razao_ia: normalizacao.razao,
+      resposta_bruta: (normalizacao as any)._raw_ia ?? null,
+      status: status,
+      precisa_ia: false,
+      motivo_bloqueio: motivoBloqueio,
+      candidatos_proximos: candidatosProximos,
+      observacoes_revisor: obsEmbalagem || null,
+      updated_at: new Date().toISOString()
+    };
+
+    let q = supabase
       .from('produtos_candidatos_normalizacao')
-      .update({
-        sugestao_sku_global: normalizacao.sku_global,
-        sugestao_produto_master: normalizacao.produto_master_id,
-        confianca_ia: normalizacao.confianca,
-        nome_padrao_sugerido: normalizacao.nome_padrao,
-        categoria_sugerida: normalizacao.categoria,
-        nome_base_sugerido: normalizacao.nome_base,
-        marca_sugerida: normalizacao.marca,
-        tipo_embalagem_sugerido: normalizacao.tipo_embalagem,
-        qtd_valor_sugerido: normalizacao.qtd_valor,
-        qtd_unidade_sugerido: normalizacao.qtd_unidade,
-        qtd_base_sugerida: normalizacao.qtd_base,
-        unidade_base_sugerida: normalizacao.unidade_base,
-        categoria_unidade_sugerida: normalizacao.categoria_unidade,
-        granel_sugerido: normalizacao.granel,
-        razao_ia: normalizacao.razao,
-        resposta_bruta: (normalizacao as any)._raw_ia ?? null,
-        status: status, // Mudar de 'pendente' para terminal (auto_aprovado | pendente_revisao)
-        precisa_ia: false, // ✅ Fase 1: IA já preencheu
-        motivo_bloqueio: motivoBloqueio,
-        candidatos_proximos: candidatosProximos,
-        observacoes_revisor: obsEmbalagem || null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', candidatoExistente.id)
-      .in('status', ['pendente']) // 🔒 invariante: só transitar a partir de pendente
-      .select('id, status');
+      .update(updatePayload)
+      .eq('id', candidatoExistente.id);
+    if (!forcarTerminal) {
+      q = q.in('status', ['pendente']); // 🔒 invariante para sucessos
+    } else {
+      q = q.not('status', 'in', '("aprovado","rejeitado")'); // não sobrescreve decisões finais humanas
+    }
+    const { data: updRows, error } = await q.select('id, status');
 
     if (error) {
+      if (forcarTerminal) {
+        // Fallback forçado: UPDATE direto sem filtro de status
+        console.warn(`⚠️ criarCandidato(forcar_terminal): erro inicial ${error.message} — aplicando UPDATE direto`);
+        const { error: e2 } = await supabase
+          .from('produtos_candidatos_normalizacao')
+          .update(updatePayload)
+          .eq('id', candidatoExistente.id);
+        try {
+          await supabase.from('ia_normalizacao_erros').insert({
+            candidato_id: candidatoExistente.id,
+            texto_original: produto.texto_original,
+            tipo_erro: 'fallback_forcado_terminal',
+            modelo: 'google/gemini-2.5-flash',
+            mensagem: `Fallback após erro: ${error.message}`,
+            tentativa: 1,
+          });
+        } catch {}
+        if (e2) console.error(`🚨 Fallback também falhou: ${e2.message}`);
+        else console.log(`✅ Fallback forçado aplicado: ${candidatoExistente.id} → ${status}`);
+        return;
+      }
       throw new Error(`Erro ao atualizar candidato: ${error.message}`);
     }
 
     if (!updRows || updRows.length === 0) {
-      // 🚨 Update silenciosamente afetou 0 linhas — invariante violado ou status mudou no meio do caminho.
+      if (forcarTerminal) {
+        // Mesmo cenário: registrar fallback e fazer UPDATE direto
+        console.warn(`⚠️ criarCandidato(forcar_terminal): UPDATE 0 linhas id=${candidatoExistente.id} — aplicando UPDATE direto`);
+        const { error: e2 } = await supabase
+          .from('produtos_candidatos_normalizacao')
+          .update(updatePayload)
+          .eq('id', candidatoExistente.id);
+        try {
+          await supabase.from('ia_normalizacao_erros').insert({
+            candidato_id: candidatoExistente.id,
+            texto_original: produto.texto_original,
+            tipo_erro: 'fallback_forcado_terminal',
+            modelo: 'google/gemini-2.5-flash',
+            mensagem: `Fallback após 0 linhas (snapshot=${candidatoExistente.status}, alvo=${status})`,
+            tentativa: 1,
+          });
+        } catch {}
+        if (e2) console.error(`🚨 Fallback também falhou: ${e2.message}`);
+        else console.log(`✅ Fallback forçado aplicado: ${candidatoExistente.id} → ${status}`);
+        return;
+      }
       console.error(`🚨 criarCandidato: UPDATE 0 linhas para id=${candidatoExistente.id} (status snapshot=${candidatoExistente.status}). status alvo=${status}`);
       throw new Error(`UPDATE retornou 0 linhas para candidato ${candidatoExistente.id} (status snapshot=${candidatoExistente.status}, alvo=${status})`);
     }
