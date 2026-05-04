@@ -1408,8 +1408,11 @@ async function criarCandidato(
   produto: ProdutoParaNormalizar,
   normalizacao: NormalizacaoSugerida,
   status: string,
-  obsEmbalagem?: string | null
+  obsEmbalagem?: string | null,
+  extras?: { motivo_bloqueio?: string | null; candidatos_proximos?: any[] | null }
 ) {
+  const motivoBloqueio = extras?.motivo_bloqueio ?? null;
+  const candidatosProximos = extras?.candidatos_proximos ?? null;
   // ✅ CORREÇÃO 1: Buscar candidato existente ANTES de criar (SEM filtrar por status)
   const { data: candidatoExistente } = await supabase
     .from('produtos_candidatos_normalizacao')
