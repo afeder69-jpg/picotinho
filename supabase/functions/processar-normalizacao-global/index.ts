@@ -544,16 +544,15 @@ Deno.serve(async (req) => {
 
               if (antiDup.bloquear) {
                 console.warn(`🛡️ Anti-duplicata bloqueou criação de "${normalizacao.nome_padrao}" — motivo=${antiDup.motivo}`);
-                // Cria candidato pendente com motivo + lista de candidatos próximos
-                await criarCandidato(supabase, produto, normalizacao, 'pendente', obsEmbalagem);
-                await supabase
-                  .from('produtos_candidatos_normalizacao')
-                  .update({
-                    motivo_bloqueio: antiDup.motivo,
-                    candidatos_proximos: antiDup.candidatos as any,
-                    precisa_ia: false,
-                  })
-                  .eq('nota_item_hash', produto.nota_item_hash);
+                // ✅ Decisão terminal: pendente_revisao + motivo_bloqueio gravados no MESMO update
+                await criarCandidato(
+                  supabase,
+                  produto,
+                  normalizacao,
+                  'pendente_revisao',
+                  obsEmbalagem,
+                  { motivo_bloqueio: antiDup.motivo, candidatos_proximos: antiDup.candidatos }
+                );
                 totalParaRevisao++;
               } else {
                 // Produto novo com alta confiança - criar master PROVISÓRIO + auto-aprovar
