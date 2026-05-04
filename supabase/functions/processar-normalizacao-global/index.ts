@@ -1492,8 +1492,10 @@ async function criarCandidato(
         categoria_unidade_sugerida: normalizacao.categoria_unidade,
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
-        status: status, // Mudar de 'pendente' para 'auto_aprovado'
+        status: status, // Mudar de 'pendente' para terminal (auto_aprovado | pendente_revisao)
         precisa_ia: false, // ✅ Fase 1: IA já preencheu
+        motivo_bloqueio: motivoBloqueio,
+        candidatos_proximos: candidatosProximos,
         observacoes_revisor: obsEmbalagem || null,
         updated_at: new Date().toISOString()
       })
