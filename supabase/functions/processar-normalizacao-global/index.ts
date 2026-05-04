@@ -669,10 +669,17 @@ Deno.serve(async (req) => {
               }
               
             } else {
-              // Baixa confiança - enviar para revisão manual
+              // Baixa confiança - decisão terminal: pendente_revisao com motivo explícito
               while (tentativas < MAX_TENTATIVAS) {
                 try {
-                  await criarCandidato(supabase, produto, normalizacao, 'pendente', obsEmbalagem);
+                  await criarCandidato(
+                    supabase,
+                    produto,
+                    normalizacao,
+                    'pendente_revisao',
+                    obsEmbalagem,
+                    { motivo_bloqueio: 'baixa_confianca_ia', candidatos_proximos: null }
+                  );
                   break;
                 } catch (erro: any) {
                   tentativas++;
@@ -681,7 +688,7 @@ Deno.serve(async (req) => {
                 }
               }
               totalParaRevisao++;
-              console.log(`⏳ Para revisão (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+              console.log(`⏳ Para revisão (baixa confiança ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
             }
           }
 
@@ -1271,6 +1278,28 @@ Exemplos de MATCH INCORRETO (criar produto NOVO - não usar produto_master_id):
    - 50-69: Nome confuso ou incompleto
    - 0-49: Nome muito vago ou problemático
 
+🚨 REGRAS CRÍTICAS DE QUALIDADE (OBRIGATÓRIAS):
+
+A) UNIDADE/QUANTIDADE:
+   - "k", "kg", "kilo", "quilo", "quilos", "kilos" → SEMPRE normalize para "kg" (qtd_unidade) e converta para "g" em qtd_base.
+   - "l", "lt", "litro", "litros" → "L" e "ml" em qtd_base.
+   - PLAUSIBILIDADE: rejeite volumes/pesos absurdos. Refrigerante/refresco normalmente 200ml–3L; leite 200ml–2L; cerveja lata 269–473ml; sabão líquido 500ml–5L. Se o número parecer fora de escala (ex.: "15L" para refresco), prefira a leitura mais plausível (1.5L) e reduza confiança em 10 pontos.
+   - Se NÃO houver quantidade explícita E o produto NÃO for tipicamente vendido por peso (ex.: pão francês, frutas, granel), retorne qtd_valor=null, qtd_unidade=null, qtd_base=null, unidade_base=null. NUNCA invente quantidade.
+   - Se qtd_valor=null então qtd_base DEVE ser null obrigatoriamente.
+
+B) MARCA:
+   - NUNCA use nome de estabelecimento/distribuidor/atacado como marca. Lista negra (não exaustiva): JFC, ATACADAO, ASSAI, MAKRO, SAM'S, SAMS CLUB, CARREFOUR, EXTRA, BIG, GUANABARA, PREZUNIC, MUNDIAL, SUPERMERCADO, MERCADO, COMERCIAL, DISTRIBUIDORA, ATACADO, HORTIFRUTI.
+   - NUNCA use marcas truncadas/fragmentos sem sentido (ex.: "OL", "L GLORIA", "C/", "DA", "DE", "P/"). Se a string da marca tiver < 3 caracteres alfabéticos OU for uma preposição/fragmento, retorne marca=null.
+   - Se a marca for ambígua, desconhecida ou inválida → retorne null (NÃO invente "GENERICO" — o sistema decide o fallback).
+
+C) NOME:
+   - Remova ruídos do texto fiscal: "FAV", "PROMO", "OFERTA", códigos numéricos isolados (ex.: "REF 123"), prefixos "PROD ", sufixos "FAV/PROMO".
+   - nome_base deve conter APENAS o substantivo do produto + qualificadores essenciais (tipo/sabor/cor), SEM marca, SEM peso/volume, SEM ruído.
+   - nome_padrao pode conter marca + quantidade.
+
+D) CATEGORIA:
+   - "OUTROS" só quando realmente não couber em nenhuma. Prefira sempre uma das 10 categorias específicas.
+
 RESPONDA APENAS COM JSON (sem markdown):
 {
   "sku_global": "string",
@@ -1388,6 +1417,47 @@ RESPONDA APENAS COM JSON (sem markdown):
     resultado.marca = resultado.marca?.toUpperCase() || null;
     resultado.categoria = resultado.categoria?.toUpperCase() || 'OUTROS';
 
+    // 🧹 SANITIZAÇÃO DE NOME (remove ruídos comuns de cupom fiscal)
+    const RUIDOS_NOME = /\b(FAV|PROMO|OFERTA|PROD|REF|COD)\b/gi;
+    const limparNome = (s: string) => (s || '')
+      .replace(RUIDOS_NOME, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    resultado.nome_padrao = limparNome(resultado.nome_padrao);
+    resultado.nome_base = limparNome(resultado.nome_base);
+
+    // 🏷️ SANITIZAÇÃO DE MARCA (blacklist + fragmentos)
+    const MARCAS_INVALIDAS = new Set([
+      'JFC','ATACADAO','ATACADÃO','ASSAI','ASSAÍ','MAKRO','SAMS',"SAM'S",'SAMS CLUB',"SAM'S CLUB",
+      'CARREFOUR','EXTRA','BIG','GUANABARA','PREZUNIC','MUNDIAL','SUPERMERCADO','MERCADO',
+      'COMERCIAL','DISTRIBUIDORA','ATACADO','HORTIFRUTI','SUPER','HIPER','REDE','LOJA'
+    ]);
+    const FRAGMENTOS = new Set(['C','C/','S','S/','P','P/','DA','DE','DO','DAS','DOS','OL','L','E','OU','UN','KG','G','ML']);
+    if (resultado.marca) {
+      const m = resultado.marca.trim();
+      const soLetras = m.replace(/[^A-ZÁÉÍÓÚÂÊÔÃÕÇ]/gi, '');
+      const invalida = MARCAS_INVALIDAS.has(m)
+        || FRAGMENTOS.has(m)
+        || soLetras.length < 3;
+      if (invalida) {
+        console.log(`🏷️ Marca inválida descartada: "${m}" → null`);
+        resultado.marca = null;
+      }
+    }
+
+    // 📏 NORMALIZAR UNIDADE (k/kg/quilo → kg, etc.)
+    if (resultado.qtd_unidade) {
+      const u = String(resultado.qtd_unidade).trim().toLowerCase();
+      const mapU: Record<string,string> = {
+        'k':'kg','kg':'kg','kilo':'kg','kilos':'kg','quilo':'kg','quilos':'kg',
+        'g':'g','grama':'g','gramas':'g',
+        'l':'L','lt':'L','litro':'L','litros':'L',
+        'ml':'ml','mililitro':'ml','mililitros':'ml',
+        'un':'UN','und':'UN','unidade':'UN','unidades':'UN','pc':'UN','pç':'UN'
+      };
+      resultado.qtd_unidade = mapU[u] || resultado.qtd_unidade;
+    }
+
     // 🔥 VALIDAR CAMPOS DE UNIDADE BASE (fallback se IA não calcular)
     if (!resultado.qtd_base && resultado.qtd_valor && resultado.qtd_unidade) {
       const unidadeLower = resultado.qtd_unidade.toLowerCase();
@@ -1396,7 +1466,7 @@ RESPONDA APENAS COM JSON (sem markdown):
         resultado.qtd_base = resultado.qtd_valor * 1000;
         resultado.unidade_base = 'ml';
         resultado.categoria_unidade = 'VOLUME';
-      } else if (unidadeLower === 'kg' || unidadeLower === 'kilo' || unidadeLower === 'kilos') {
+      } else if (['kg','k','kilo','kilos','quilo','quilos'].includes(unidadeLower)) {
         resultado.qtd_base = resultado.qtd_valor * 1000;
         resultado.unidade_base = 'g';
         resultado.categoria_unidade = 'PESO';
@@ -1413,6 +1483,22 @@ RESPONDA APENAS COM JSON (sem markdown):
         resultado.unidade_base = 'un';
         resultado.categoria_unidade = 'UNIDADE';
       }
+    }
+
+    // 🚫 INVARIANTE: qtd_valor null ⇒ qtd_base/unidade_base/categoria_unidade DEVEM ser null
+    if (resultado.qtd_valor == null) {
+      if (resultado.qtd_base != null) {
+        console.log(`⚠️ qtd_valor null mas qtd_base=${resultado.qtd_base} → forçando null (coerência)`);
+      }
+      resultado.qtd_base = null;
+      resultado.unidade_base = null;
+      resultado.categoria_unidade = null;
+    }
+
+    // 🔍 PLAUSIBILIDADE DE VOLUME (reduz confiança em casos suspeitos)
+    if (resultado.qtd_base && resultado.unidade_base === 'ml' && resultado.qtd_base > 6000) {
+      console.log(`⚠️ Volume suspeito ${resultado.qtd_base}ml para "${resultado.nome_padrao}" — reduzindo confiança`);
+      resultado.confianca = Math.max(0, (resultado.confianca || 0) - 15);
     }
     
     console.log(`✅ IA respondeu com ${resultado.confianca}% de confiança`);
