@@ -272,7 +272,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`📊 Encontrados ${produtosParaNormalizar.length} produtos para processar`);
+    pushDebug('📊 produtosParaNormalizar montado', {
+      quantidade: produtosParaNormalizar.length,
+      origem: MODO_CANDIDATOS_DIRETO ? 'modo_candidatos_direto' : 'varredura_por_notas',
+      primeiros_itens: produtosParaNormalizar.slice(0, 5).map((p) => ({
+        texto_original: p.texto_original,
+        nota_imagem_id: p.nota_imagem_id,
+        nota_item_hash: p.nota_item_hash,
+        origem: p.origem,
+      })),
+    });
 
     // 🛑 MODO TESTE: limitar quantidade real de candidatos processados
     let candidatosTruncados = 0;
@@ -284,7 +293,11 @@ Deno.serve(async (req) => {
 
     // ✅ VALIDAÇÃO: Retornar early se não houver produtos novos
     if (produtosParaNormalizar.length === 0) {
-      console.log('ℹ️ Nenhum produto novo para processar');
+      pushDebug('ℹ️ produtosParaNormalizar ficou vazio', {
+        motivo: MODO_CANDIDATOS_DIRETO
+          ? 'Todos os candidato_ids recebidos foram descartados na revalidação de elegibilidade ou não retornaram da consulta por id.'
+          : 'A varredura de notas/Open Food Facts não encontrou itens elegíveis para processamento.',
+      });
       return new Response(
         JSON.stringify({
           sucesso: true,
@@ -293,7 +306,14 @@ Deno.serve(async (req) => {
           processados: 0,
           auto_aprovados: 0,
           para_revisao: 0,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          debug: {
+            modo_teste: MODO_TESTE,
+            modo_candidatos_direto: MODO_CANDIDATOS_DIRETO,
+            candidato_ids_recebidos: CANDIDATO_IDS,
+            produtos_para_normalizar: 0,
+            trace: debugTrace,
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
