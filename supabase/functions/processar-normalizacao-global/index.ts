@@ -1450,6 +1450,8 @@ async function criarCandidato(
           // ⚡ PARTE A: REMOVIDO colunas que não existem (obs_embalagem_sugerida, dados_extraidos)
           status: status,
           precisa_ia: false, // ✅ Fase 1: IA já preencheu
+          motivo_bloqueio: motivoBloqueio,
+          candidatos_proximos: candidatosProximos,
           updated_at: new Date().toISOString()
         })
         .eq('id', candidatoExistente.id);
