@@ -799,7 +799,14 @@ Deno.serve(async (req) => {
       modo_teste: MODO_TESTE,
       cap_candidatos: LIMITE_CANDIDATOS,
       candidatos_truncados_por_cap: candidatosTruncados,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      debug: {
+        modo_teste: MODO_TESTE,
+        modo_candidatos_direto: MODO_CANDIDATOS_DIRETO,
+        candidato_ids_recebidos: CANDIDATO_IDS,
+        produtos_para_normalizar: produtosParaNormalizar.length,
+        trace: debugTrace,
+      }
     };
 
     console.log('\n✅ Processamento concluído:', resultado);
