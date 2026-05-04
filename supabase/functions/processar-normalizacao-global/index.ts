@@ -1536,9 +1536,63 @@ RESPONDA APENAS COM JSON (sem markdown):
       console.log(`⚠️ Volume suspeito ${resultado.qtd_base}ml para "${resultado.nome_padrao}" — reduzindo confiança`);
       resultado.confianca = Math.max(0, (resultado.confianca || 0) - 15);
     }
-    
+
+    // 🛡️ ANTI-ALUCINAÇÃO: textos muito curtos/ambíguos não permitem inferências fortes.
+    // Se o texto original tiver < 4 caracteres alfabéticos, força reduzir confiança e zerar marca.
+    const alfaOrig = (textoOriginal || '').replace(/[^A-Za-zÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç]/g, '');
+    if (alfaOrig.length < 4) {
+      console.log(`🛡️ Texto curto/ambíguo ("${textoOriginal}") — anti-alucinação ativa`);
+      resultado.confianca = Math.min(resultado.confianca ?? 0, 50);
+      resultado.marca = null;
+    }
+    // Se nome_base/nome_padrao "inventou" tokens longos não presentes no original, reduz confiança.
+    const tokensOrig = new Set(
+      (textoOriginal || '').toUpperCase().split(/[^A-ZÁÉÍÓÚÂÊÔÃÕÇ0-9]+/).filter(t => t.length >= 4)
+    );
+    const tokensSugeridos = (resultado.nome_base || '').toUpperCase().split(/\s+/).filter((t: string) => t.length >= 5);
+    const inventados = tokensSugeridos.filter((t: string) => !Array.from(tokensOrig).some((o) => o.startsWith(t.slice(0,4)) || t.startsWith(o.slice(0,4))));
+    if (inventados.length > 0 && alfaOrig.length < 8) {
+      console.log(`🛡️ Possível alucinação (tokens novos: ${inventados.join(',')}) — reduzindo confiança`);
+      resultado.confianca = Math.max(0, (resultado.confianca ?? 0) - 20);
+    }
+
+    // ✅ VALIDAÇÃO FORTE DE SCHEMA: se faltar qualquer campo obrigatório → falha_ia
+    const camposObrigatorios: Array<keyof NormalizacaoSugerida> = [
+      'nome_padrao', 'nome_base', 'categoria'
+    ];
+    const faltando = camposObrigatorios.filter((c) => {
+      const v = (resultado as any)[c];
+      return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+    });
+    if (faltando.length > 0 || typeof resultado.confianca !== 'number') {
+      console.warn(`❌ Schema IA inválido — campos faltando: ${faltando.join(',')}`);
+      try {
+        await supabase?.from('ia_normalizacao_erros').insert({
+          texto_original: produto?.texto_original ?? textoOriginal,
+          tipo_erro: 'invalid_response',
+          modelo: 'google/gemini-2.5-flash',
+          mensagem: `Schema incompleto: ${faltando.join(',')}`,
+          resposta_bruta: { raw: ia.raw?.slice(0, 4000) ?? null, parsed: resultado },
+          tentativa: 1,
+        });
+      } catch {}
+      return null; // dispara branch falha_ia → pendente_revisao
+    }
+
+    // 🧮 COERÊNCIA QUANTIDADE: se qtd_valor presente, qtd_unidade obrigatório
+    if (resultado.qtd_valor != null && !resultado.qtd_unidade) {
+      console.warn(`⚠️ qtd_valor=${resultado.qtd_valor} sem qtd_unidade → invalidando quantidade`);
+      resultado.qtd_valor = null;
+      resultado.qtd_base = null;
+      resultado.unidade_base = null;
+      resultado.categoria_unidade = null;
+    }
+
+    // 📦 Anexa raw para persistência/auditoria
+    resultado._raw_ia = ia.raw ?? null;
+
     console.log(`✅ IA respondeu com ${resultado.confianca}% de confiança`);
-    
+
     return resultado;
 
   } catch (error: any) {
