@@ -1621,7 +1621,7 @@ RESPONDA APENAS COM JSON (sem markdown):
         tentativa: 1,
       });
     } catch (_) {}
-    return null;
+    return { __falha_motivo: 'erro_processamento_ia', __falha_msg: (error?.message || 'erro').slice(0,500) } as any;
   }
 }
 
