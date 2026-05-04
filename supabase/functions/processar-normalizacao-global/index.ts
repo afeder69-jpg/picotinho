@@ -1797,6 +1797,7 @@ async function criarCandidato(
         categoria_unidade_sugerida: normalizacao.categoria_unidade,
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
+        resposta_bruta: (normalizacao as any)._raw_ia ?? null,
         status: status, // Mudar de 'pendente' para terminal (auto_aprovado | pendente_revisao)
         precisa_ia: false, // ✅ Fase 1: IA já preencheu
         motivo_bloqueio: motivoBloqueio,
