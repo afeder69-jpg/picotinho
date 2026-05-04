@@ -71,6 +71,9 @@ interface ProdutoParaNormalizar {
   dados_brutos?: any;
   imagem_url?: string;
   imagem_path?: string;
+  // 🎯 ID do candidato (preenchido em MODO_CANDIDATOS_DIRETO).
+  // Quando presente, criarCandidato faz lookup/UPDATE pelo id em vez de (nota_imagem_id, texto_original).
+  candidato_id?: string;
 }
 
 interface NormalizacaoSugerida {
