@@ -1706,10 +1706,11 @@ async function criarCandidato(
   normalizacao: NormalizacaoSugerida,
   status: string,
   obsEmbalagem?: string | null,
-  extras?: { motivo_bloqueio?: string | null; candidatos_proximos?: any[] | null }
+  extras?: { motivo_bloqueio?: string | null; candidatos_proximos?: any[] | null; forcar_terminal?: boolean }
 ) {
   const motivoBloqueio = extras?.motivo_bloqueio ?? null;
   const candidatosProximos = extras?.candidatos_proximos ?? null;
+  const forcarTerminal = extras?.forcar_terminal === true;
 
   // 🎯 PRIORIDADE: se temos o id do candidato (modo direto), buscar pelo id.
   // Isso evita qualquer divergência por (nota_imagem_id, texto_original) — case, espaços, etc.
