@@ -1430,7 +1430,9 @@ RESPONDA APENAS COM JSON (sem markdown):
     const MARCAS_INVALIDAS = new Set([
       'JFC','ATACADAO','ATACADÃO','ASSAI','ASSAÍ','MAKRO','SAMS',"SAM'S",'SAMS CLUB',"SAM'S CLUB",
       'CARREFOUR','EXTRA','BIG','GUANABARA','PREZUNIC','MUNDIAL','SUPERMERCADO','MERCADO',
-      'COMERCIAL','DISTRIBUIDORA','ATACADO','HORTIFRUTI','SUPER','HIPER','REDE','LOJA'
+      'COMERCIAL','DISTRIBUIDORA','ATACADO','HORTIFRUTI','SUPER','HIPER','REDE','LOJA',
+      // Placeholders inválidos: hortifruti e produtos sem marca devem ficar NULL
+      'GENERICO','GENÉRICO','GENERICA','GENÉRICA','SEM MARCA','N/A','NA','NULL','NONE','OUTROS'
     ]);
     const FRAGMENTOS = new Set(['C','C/','S','S/','P','P/','DA','DE','DO','DAS','DOS','OL','L','E','OU','UN','KG','G','ML']);
     if (resultado.marca) {
