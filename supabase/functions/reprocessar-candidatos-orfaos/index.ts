@@ -42,6 +42,22 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const debugTrace: string[] = [];
+    const pushDebug = (mensagem: string, dados?: Record<string, unknown>) => {
+      const linha = dados ? `${mensagem} ${JSON.stringify(dados)}` : mensagem;
+      debugTrace.push(linha);
+      console.log(linha);
+    };
+    const debugInfo: Record<string, unknown> = {
+      modo_teste: modoTeste,
+      lote_solicitado: lote,
+      elegiveis_encontrados: 0,
+      candidatos_selecionados: 0,
+      notas_selecionadas: 0,
+      candidato_ids_enviados: [],
+      payload_interno: null,
+      resposta_interna: null,
+    };
 
     // 🔒 KILL-SWITCH só vale para execução AMPLA
     if (!modoTeste) {
@@ -56,7 +72,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`🔄 [REPROCESSAR-ORFAOS] modo_teste=${modoTeste} lote=${lote}`);
+    pushDebug('🔄 [REPROCESSAR-ORFAOS] início', { modo_teste: modoTeste, lote });
 
     // ===== SNAPSHOT INICIAL =====
     const tInicio = new Date().toISOString();
@@ -76,7 +92,8 @@ Deno.serve(async (req) => {
       .not('nota_imagem_id', 'is', null);
     if (countErr) throw countErr;
 
-    console.log(`📊 Total de candidatos elegíveis (Aguardando IA): ${totalElegiveis ?? 0}`);
+    debugInfo.elegiveis_encontrados = totalElegiveis ?? 0;
+    pushDebug('📊 Total de candidatos elegíveis (Aguardando IA)', { total: totalElegiveis ?? 0 });
 
     if (!totalElegiveis || totalElegiveis === 0) {
       return new Response(
@@ -88,6 +105,10 @@ Deno.serve(async (req) => {
             total_elegiveis: 0,
             candidatos_no_escopo: 0,
             mensagem: 'Nenhum candidato elegível para processamento',
+          },
+          debug: {
+            reprocessar: debugInfo,
+            trace: debugTrace,
           },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -113,7 +134,10 @@ Deno.serve(async (req) => {
 
     // Validação: garantir alinhamento entre solicitado e selecionado
     if (modoTeste && candidatosNoEscopo.length < lote) {
-      console.log(`ℹ️ Solicitado lote=${lote}, mas só ${candidatosNoEscopo.length} elegíveis disponíveis.`);
+      pushDebug('ℹ️ Menos elegíveis do que o lote solicitado', {
+        lote_solicitado: lote,
+        candidatos_encontrados: candidatosNoEscopo.length,
+      });
     }
 
     // Em produção, limitar pelo nº de notas (compatibilidade com kill-switch amplo)
@@ -128,7 +152,16 @@ Deno.serve(async (req) => {
         .map(o => o.id as string);
     }
 
-    console.log(`📊 Elegíveis=${totalElegiveis}. Escopo: ${candidatoIdsParaInterna.length} candidatos / ${notasFinaisParaProcessar.length} notas. cap_interna=${limiteCandidatosParaInterna}`);
+    debugInfo.candidatos_selecionados = candidatoIdsParaInterna.length;
+    debugInfo.notas_selecionadas = notasFinaisParaProcessar.length;
+    debugInfo.candidato_ids_enviados = candidatoIdsParaInterna;
+    pushDebug('📊 Escopo selecionado para processamento', {
+      total_elegiveis: totalElegiveis ?? 0,
+      candidatos_no_escopo: candidatoIdsParaInterna.length,
+      notas_no_escopo: notasFinaisParaProcessar.length,
+      cap_interna: limiteCandidatosParaInterna,
+      candidato_ids: candidatoIdsParaInterna,
+    });
 
     // 2. Forçar normalizada=false p/ que processar-normalizacao-global aceite as notas
     //    (em modo candidatos diretos a interna ignora a varredura por nota, mas mantemos por compat)
@@ -143,12 +176,22 @@ Deno.serve(async (req) => {
 
     const chamarInterna = async (payload: any) => {
       try {
+        debugInfo.payload_interno = payload;
+        pushDebug('📤 Chamando processar-normalizacao-global', payload);
         const resp = await fetch(`${supabaseUrl}/functions/v1/processar-normalizacao-global`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': authHeader, 'apikey': supabaseKey },
           body: JSON.stringify(payload),
         });
         const data = await resp.json().catch(() => ({}));
+        debugInfo.resposta_interna = { status_http: resp.status, body: data };
+        pushDebug('📥 Resposta de processar-normalizacao-global', {
+          status_http: resp.status,
+          processados: data?.processados ?? null,
+          auto_aprovados: data?.auto_aprovados ?? null,
+          para_revisao: data?.para_revisao ?? null,
+          debug_presente: !!data?.debug,
+        });
         if (!resp.ok || data?.sucesso === false) {
           totFalhas++;
           console.warn('⚠️ Falha interna:', resp.status, data?.error || data?.mensagem);
@@ -238,10 +281,20 @@ Deno.serve(async (req) => {
       duracao_fim: new Date().toISOString(),
     };
 
-    console.log('✅ Relatório:', JSON.stringify(relatorio));
+    pushDebug('✅ Relatório final do reprocessamento', relatorio as unknown as Record<string, unknown>);
 
     return new Response(
-      JSON.stringify({ sucesso: true, modo_teste: modoTeste, lote_solicitado: lote, relatorio }),
+      JSON.stringify({
+        sucesso: true,
+        modo_teste: modoTeste,
+        lote_solicitado: lote,
+        relatorio,
+        debug: {
+          reprocessar: debugInfo,
+          trace: debugTrace,
+          processar_normalizacao_global: (debugInfo.resposta_interna as any)?.body?.debug ?? null,
+        },
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

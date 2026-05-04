@@ -117,9 +117,21 @@ Deno.serve(async (req) => {
     ? bodyOpts.candidato_ids.filter((x): x is string => typeof x === 'string' && x.length > 0)
     : [];
   const MODO_CANDIDATOS_DIRETO = CANDIDATO_IDS.length > 0;
+  const debugTrace: string[] = [];
+  const pushDebug = (mensagem: string, dados?: Record<string, unknown>) => {
+    const linha = dados ? `${mensagem} ${JSON.stringify(dados)}` : mensagem;
+    debugTrace.push(linha);
+    console.log(linha);
+  };
 
   try {
-    console.log(`🚀 Iniciando processamento de normalização global (modo_teste=${MODO_TESTE}, cap_candidatos=${LIMITE_CANDIDATOS ?? 'sem cap'})`);
+    pushDebug('🚀 Iniciando processamento de normalização global', {
+      modo_teste: MODO_TESTE,
+      cap_candidatos: LIMITE_CANDIDATOS ?? 'sem cap',
+      limite_notas_input: LIMITE_NOTAS_INPUT,
+      modo_candidatos_direto: MODO_CANDIDATOS_DIRETO,
+      candidato_ids_recebidos: CANDIDATO_IDS,
+    });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -147,20 +159,41 @@ Deno.serve(async (req) => {
     if (MODO_CANDIDATOS_DIRETO) {
       // 🎯 SELEÇÃO DIRETA POR CANDIDATO (vinda de reprocessar-candidatos-orfaos).
       // Bypass da varredura por nota: garante que processamos EXATAMENTE os candidatos elegíveis.
-      console.log(`🎯 Modo candidatos diretos: ${CANDIDATO_IDS.length} ids recebidos`);
+      pushDebug('🎯 Entrou no branch MODO_CANDIDATOS_DIRETO', {
+        quantidade_ids: CANDIDATO_IDS.length,
+        candidato_ids: CANDIDATO_IDS,
+      });
 
       const { data: candidatosAlvo, error: candErr } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('id, nota_imagem_id, nota_item_hash, texto_original, usuario_id, status, precisa_ia, motivo_bloqueio')
         .in('id', CANDIDATO_IDS);
       if (candErr) throw new Error(`Erro ao buscar candidatos: ${candErr.message}`);
+      pushDebug('📥 Candidatos carregados do banco no modo direto', {
+        retornados: candidatosAlvo?.length || 0,
+        ids_retornados: (candidatosAlvo || []).map((c: any) => c.id),
+      });
 
       // 🔒 Re-validar elegibilidade no momento do processamento
       const elegiveis = (candidatosAlvo || []).filter(c =>
         c.status === 'pendente' && c.precisa_ia === true && !c.motivo_bloqueio && c.nota_imagem_id && c.texto_original
       );
       const descartados = (candidatosAlvo?.length || 0) - elegiveis.length;
-      console.log(`📋 Candidatos elegíveis confirmados: ${elegiveis.length} (descartados: ${descartados})`);
+      pushDebug('📋 Candidatos elegíveis confirmados no modo direto', {
+        elegiveis: elegiveis.length,
+        descartados,
+        exemplos_descartados: (candidatosAlvo || [])
+          .filter((c: any) => !(c.status === 'pendente' && c.precisa_ia === true && !c.motivo_bloqueio && c.nota_imagem_id && c.texto_original))
+          .slice(0, 5)
+          .map((c: any) => ({
+            id: c.id,
+            status: c.status,
+            precisa_ia: c.precisa_ia,
+            motivo_bloqueio: c.motivo_bloqueio,
+            nota_imagem_id: c.nota_imagem_id,
+            tem_texto_original: !!c.texto_original,
+          })),
+      });
 
       for (const c of elegiveis) {
         produtosParaNormalizar.push({
@@ -239,7 +272,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`📊 Encontrados ${produtosParaNormalizar.length} produtos para processar`);
+    pushDebug('📊 produtosParaNormalizar montado', {
+      quantidade: produtosParaNormalizar.length,
+      origem: MODO_CANDIDATOS_DIRETO ? 'modo_candidatos_direto' : 'varredura_por_notas',
+      primeiros_itens: produtosParaNormalizar.slice(0, 5).map((p) => ({
+        texto_original: p.texto_original,
+        nota_imagem_id: p.nota_imagem_id,
+        nota_item_hash: p.nota_item_hash,
+        origem: p.origem,
+      })),
+    });
 
     // 🛑 MODO TESTE: limitar quantidade real de candidatos processados
     let candidatosTruncados = 0;
@@ -251,7 +293,11 @@ Deno.serve(async (req) => {
 
     // ✅ VALIDAÇÃO: Retornar early se não houver produtos novos
     if (produtosParaNormalizar.length === 0) {
-      console.log('ℹ️ Nenhum produto novo para processar');
+      pushDebug('ℹ️ produtosParaNormalizar ficou vazio', {
+        motivo: MODO_CANDIDATOS_DIRETO
+          ? 'Todos os candidato_ids recebidos foram descartados na revalidação de elegibilidade ou não retornaram da consulta por id.'
+          : 'A varredura de notas/Open Food Facts não encontrou itens elegíveis para processamento.',
+      });
       return new Response(
         JSON.stringify({
           sucesso: true,
@@ -260,7 +306,14 @@ Deno.serve(async (req) => {
           processados: 0,
           auto_aprovados: 0,
           para_revisao: 0,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          debug: {
+            modo_teste: MODO_TESTE,
+            modo_candidatos_direto: MODO_CANDIDATOS_DIRETO,
+            candidato_ids_recebidos: CANDIDATO_IDS,
+            produtos_para_normalizar: 0,
+            trace: debugTrace,
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -316,7 +369,14 @@ Deno.serve(async (req) => {
             && (jaExiste.precisa_ia === true || (Number(jaExiste.confianca_ia ?? 0) === 0 && !jaExiste.nome_padrao_sugerido));
 
           if (jaExiste && !ehOrfao) {
-            console.log(`⏭️  Produto já tem candidato: ${produto.texto_original} (status: ${jaExiste.status})`);
+            pushDebug('⏭️ Produto ignorado por já ter candidato não órfão', {
+              texto_original: produto.texto_original,
+              nota_item_hash: produto.nota_item_hash,
+              status_existente: jaExiste.status,
+              precisa_ia_existente: jaExiste.precisa_ia,
+              confianca_ia_existente: Number(jaExiste.confianca_ia ?? 0),
+              ehOrfao,
+            });
             
             // 🔗 CORREÇÃO RAIZ: Se candidato já foi aprovado, vincular novo item do estoque ao master
             if (jaExiste.status === 'auto_aprovado' && jaExiste.sugestao_produto_master && produto.nota_imagem_id) {
@@ -746,7 +806,14 @@ Deno.serve(async (req) => {
       modo_teste: MODO_TESTE,
       cap_candidatos: LIMITE_CANDIDATOS,
       candidatos_truncados_por_cap: candidatosTruncados,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      debug: {
+        modo_teste: MODO_TESTE,
+        modo_candidatos_direto: MODO_CANDIDATOS_DIRETO,
+        candidato_ids_recebidos: CANDIDATO_IDS,
+        produtos_para_normalizar: produtosParaNormalizar.length,
+        trace: debugTrace,
+      }
     };
 
     console.log('\n✅ Processamento concluído:', resultado);
