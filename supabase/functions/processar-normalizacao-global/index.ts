@@ -1515,13 +1515,36 @@ async function criarCandidato(
 ) {
   const motivoBloqueio = extras?.motivo_bloqueio ?? null;
   const candidatosProximos = extras?.candidatos_proximos ?? null;
-  // ✅ CORREÇÃO 1: Buscar candidato existente ANTES de criar (SEM filtrar por status)
-  const { data: candidatoExistente } = await supabase
-    .from('produtos_candidatos_normalizacao')
-    .select('id, status')
-    .eq('nota_imagem_id', produto.nota_imagem_id)
-    .eq('texto_original', produto.texto_original)
-    .maybeSingle();
+
+  // 🎯 PRIORIDADE: se temos o id do candidato (modo direto), buscar pelo id.
+  // Isso evita qualquer divergência por (nota_imagem_id, texto_original) — case, espaços, etc.
+  let candidatoExistente: { id: string; status: string } | null = null;
+  if (produto.candidato_id) {
+    const { data: byId, error: byIdErr } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .select('id, status')
+      .eq('id', produto.candidato_id)
+      .maybeSingle();
+    if (byIdErr) {
+      console.warn(`⚠️ criarCandidato: erro lookup por id ${produto.candidato_id}: ${byIdErr.message}`);
+    }
+    candidatoExistente = byId || null;
+    console.log(`🔎 criarCandidato lookup por ID ${produto.candidato_id} → ${candidatoExistente ? `encontrado (status=${candidatoExistente.status})` : 'NÃO encontrado'}`);
+  }
+
+  // Fallback: lookup tradicional por (nota_imagem_id, texto_original)
+  if (!candidatoExistente) {
+    const { data: byKey } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .select('id, status')
+      .eq('nota_imagem_id', produto.nota_imagem_id)
+      .eq('texto_original', produto.texto_original)
+      .maybeSingle();
+    candidatoExistente = byKey || null;
+    if (!produto.candidato_id) {
+      console.log(`🔎 criarCandidato lookup por (nota_imagem_id, texto_original) → ${candidatoExistente ? `encontrado id=${candidatoExistente.id} status=${candidatoExistente.status}` : 'NÃO encontrado'}`);
+    }
+  }
 
   if (candidatoExistente) {
     // ✅ REPROCESSAR candidatos órfãos (notas excluídas e reinseridas)
