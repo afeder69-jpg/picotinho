@@ -1591,7 +1591,7 @@ RESPONDA APENAS COM JSON (sem markdown):
           tentativa: 1,
         });
       } catch {}
-      return null; // dispara branch falha_ia → pendente_revisao
+      return { __falha_motivo: 'schema_invalido_ia', __falha_msg: `Schema incompleto: ${faltando.join(',')}`, __raw: ia.raw } as any;
     }
 
     // 🧮 COERÊNCIA QUANTIDADE: se qtd_valor presente, qtd_unidade obrigatório
