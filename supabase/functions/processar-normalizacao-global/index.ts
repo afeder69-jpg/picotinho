@@ -693,7 +693,11 @@ Deno.serve(async (req) => {
               }
               
             } else {
-              // Baixa confiança - decisão terminal: pendente_revisao com motivo explícito
+              // Confiança < 90 → pendente_revisao
+              // 60–89 = média confiança (motivo distinto); < 60 = baixa confiança real
+              const motivoConf = (normalizacao.confianca ?? 0) < 60
+                ? 'baixa_confianca_ia'
+                : 'media_confianca_ia';
               while (tentativas < MAX_TENTATIVAS) {
                 try {
                   await criarCandidato(
@@ -702,7 +706,7 @@ Deno.serve(async (req) => {
                     normalizacao,
                     'pendente_revisao',
                     obsEmbalagem,
-                    { motivo_bloqueio: 'baixa_confianca_ia', candidatos_proximos: null }
+                    { motivo_bloqueio: motivoConf, candidatos_proximos: null }
                   );
                   break;
                 } catch (erro: any) {
@@ -712,7 +716,7 @@ Deno.serve(async (req) => {
                 }
               }
               totalParaRevisao++;
-              console.log(`⏳ Para revisão (baixa confiança ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+              console.log(`⏳ Para revisão (${motivoConf} ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
             }
           }
 
