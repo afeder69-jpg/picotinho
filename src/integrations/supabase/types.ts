@@ -2233,6 +2233,7 @@ export type Database = {
           qtd_unidade_sugerido: string | null
           qtd_valor_sugerido: number | null
           razao_ia: string | null
+          resposta_bruta: Json | null
           revisado_em: string | null
           revisado_por: string | null
           status: string | null
@@ -2265,6 +2266,7 @@ export type Database = {
           qtd_unidade_sugerido?: string | null
           qtd_valor_sugerido?: number | null
           razao_ia?: string | null
+          resposta_bruta?: Json | null
           revisado_em?: string | null
           revisado_por?: string | null
           status?: string | null
@@ -2297,6 +2299,7 @@ export type Database = {
           qtd_unidade_sugerido?: string | null
           qtd_valor_sugerido?: number | null
           razao_ia?: string | null
+          resposta_bruta?: Json | null
           revisado_em?: string | null
           revisado_por?: string | null
           status?: string | null
