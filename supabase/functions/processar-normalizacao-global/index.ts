@@ -578,13 +578,36 @@ Deno.serve(async (req) => {
               MODO_TESTE ? 20000 : 45000
             );
 
-            // 🛑 Falha total da IA — manter pendente, NÃO criar master, NÃO inventar fallback.
+            // 🛑 Falha total da IA — registrar decisão terminal para evitar limbo (status pendente sem motivo).
             if (!normalizacao) {
-              console.warn(`⚠️ IA falhou para "${produto.texto_original}" — mantido pendente para reprocessamento.`);
-              await supabase
-                .from('produtos_candidatos_normalizacao')
-                .update({ precisa_ia: true })
-                .eq('nota_item_hash', produto.nota_item_hash);
+              console.warn(`⚠️ IA falhou para "${produto.texto_original}" — marcando pendente_revisao (falha_ia).`);
+              const stub: NormalizacaoSugerida = {
+                sku_global: null as any,
+                nome_padrao: produto.texto_original,
+                categoria: 'OUTROS',
+                nome_base: produto.texto_original,
+                marca: null,
+                tipo_embalagem: null,
+                qtd_valor: null,
+                qtd_unidade: null,
+                qtd_base: null,
+                unidade_base: null,
+                categoria_unidade: null,
+                granel: false,
+                confianca: 0,
+                razao: 'IA indisponível/erro — requer revisão manual',
+                produto_master_id: null,
+                imagem_url: produto.imagem_url || null,
+                imagem_path: produto.imagem_path || null,
+              } as any;
+              try {
+                await criarCandidato(
+                  supabase, produto, stub, 'pendente_revisao', obsEmbalagem,
+                  { motivo_bloqueio: 'falha_ia', candidatos_proximos: null }
+                );
+              } catch (e: any) {
+                console.error(`❌ Falha ao registrar pendente_revisao(falha_ia): ${e?.message}`);
+              }
               totalParaRevisao++;
               continue;
             }
