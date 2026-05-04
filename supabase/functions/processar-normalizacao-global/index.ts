@@ -71,6 +71,9 @@ interface ProdutoParaNormalizar {
   dados_brutos?: any;
   imagem_url?: string;
   imagem_path?: string;
+  // 🎯 ID do candidato (preenchido em MODO_CANDIDATOS_DIRETO).
+  // Quando presente, criarCandidato faz lookup/UPDATE pelo id em vez de (nota_imagem_id, texto_original).
+  candidato_id?: string;
 }
 
 interface NormalizacaoSugerida {
@@ -202,6 +205,7 @@ Deno.serve(async (req) => {
           nota_imagem_id: c.nota_imagem_id,
           origem: 'nota_fiscal',
           nota_item_hash: c.nota_item_hash || `${c.nota_imagem_id}-${c.id}-${(c.texto_original || '').slice(0, 20)}`,
+          candidato_id: c.id, // 🎯 propaga ID para criarCandidato fazer UPDATE direto pelo id
         });
         if (!notasIds.includes(c.nota_imagem_id)) notasIds.push(c.nota_imagem_id);
       }
@@ -1511,13 +1515,36 @@ async function criarCandidato(
 ) {
   const motivoBloqueio = extras?.motivo_bloqueio ?? null;
   const candidatosProximos = extras?.candidatos_proximos ?? null;
-  // ✅ CORREÇÃO 1: Buscar candidato existente ANTES de criar (SEM filtrar por status)
-  const { data: candidatoExistente } = await supabase
-    .from('produtos_candidatos_normalizacao')
-    .select('id, status')
-    .eq('nota_imagem_id', produto.nota_imagem_id)
-    .eq('texto_original', produto.texto_original)
-    .maybeSingle();
+
+  // 🎯 PRIORIDADE: se temos o id do candidato (modo direto), buscar pelo id.
+  // Isso evita qualquer divergência por (nota_imagem_id, texto_original) — case, espaços, etc.
+  let candidatoExistente: { id: string; status: string } | null = null;
+  if (produto.candidato_id) {
+    const { data: byId, error: byIdErr } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .select('id, status')
+      .eq('id', produto.candidato_id)
+      .maybeSingle();
+    if (byIdErr) {
+      console.warn(`⚠️ criarCandidato: erro lookup por id ${produto.candidato_id}: ${byIdErr.message}`);
+    }
+    candidatoExistente = byId || null;
+    console.log(`🔎 criarCandidato lookup por ID ${produto.candidato_id} → ${candidatoExistente ? `encontrado (status=${candidatoExistente.status})` : 'NÃO encontrado'}`);
+  }
+
+  // Fallback: lookup tradicional por (nota_imagem_id, texto_original)
+  if (!candidatoExistente) {
+    const { data: byKey } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .select('id, status')
+      .eq('nota_imagem_id', produto.nota_imagem_id)
+      .eq('texto_original', produto.texto_original)
+      .maybeSingle();
+    candidatoExistente = byKey || null;
+    if (!produto.candidato_id) {
+      console.log(`🔎 criarCandidato lookup por (nota_imagem_id, texto_original) → ${candidatoExistente ? `encontrado id=${candidatoExistente.id} status=${candidatoExistente.status}` : 'NÃO encontrado'}`);
+    }
+  }
 
   if (candidatoExistente) {
     // ✅ REPROCESSAR candidatos órfãos (notas excluídas e reinseridas)
@@ -1572,7 +1599,7 @@ async function criarCandidato(
     // ✏️ ATUALIZAR apenas candidatos pendentes
     console.log(`🔄 Atualizando candidato pendente: ${produto.texto_original}`);
     
-    const { error } = await supabase
+    const { data: updRows, error } = await supabase
       .from('produtos_candidatos_normalizacao')
       .update({
         sugestao_sku_global: normalizacao.sku_global,
@@ -1598,12 +1625,19 @@ async function criarCandidato(
         updated_at: new Date().toISOString()
       })
       .eq('id', candidatoExistente.id)
-      .eq('status', 'pendente'); // 🔒 invariante: nunca reabrir auto_aprovado/aprovado/rejeitado/pendente_revisao
+      .in('status', ['pendente']) // 🔒 invariante: só transitar a partir de pendente
+      .select('id, status');
 
     if (error) {
       throw new Error(`Erro ao atualizar candidato: ${error.message}`);
     }
-    
+
+    if (!updRows || updRows.length === 0) {
+      // 🚨 Update silenciosamente afetou 0 linhas — invariante violado ou status mudou no meio do caminho.
+      console.error(`🚨 criarCandidato: UPDATE 0 linhas para id=${candidatoExistente.id} (status snapshot=${candidatoExistente.status}). status alvo=${status}`);
+      throw new Error(`UPDATE retornou 0 linhas para candidato ${candidatoExistente.id} (status snapshot=${candidatoExistente.status}, alvo=${status})`);
+    }
+
     console.log(`✅ Candidato atualizado: ${candidatoExistente.id} → status: ${status}`);
     
   } else {
