@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
   try { await requireMaster(req); } catch (e) { return authErrorResponse(e); }
 
   // Parse body opcional para controle de modo teste
-  let bodyOpts: { modo_teste?: boolean; limite_candidatos?: number; limite_notas?: number } = {};
+  let bodyOpts: { modo_teste?: boolean; limite_candidatos?: number; limite_notas?: number; candidato_ids?: string[] } = {};
   try {
     if (req.headers.get('content-type')?.includes('application/json')) {
       bodyOpts = await req.json().catch(() => ({}));
@@ -113,6 +113,10 @@ Deno.serve(async (req) => {
     ? Math.max(1, Math.min(20, Number(bodyOpts.limite_candidatos) || 5))
     : null; // null = sem cap (comportamento original)
   const LIMITE_NOTAS_INPUT = Math.max(1, Math.min(5, Number(bodyOpts.limite_notas) || (MODO_TESTE ? 2 : 5)));
+  const CANDIDATO_IDS = Array.isArray(bodyOpts.candidato_ids)
+    ? bodyOpts.candidato_ids.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : [];
+  const MODO_CANDIDATOS_DIRETO = CANDIDATO_IDS.length > 0;
 
   try {
     console.log(`🚀 Iniciando processamento de normalização global (modo_teste=${MODO_TESTE}, cap_candidatos=${LIMITE_CANDIDATOS ?? 'sem cap'})`);
