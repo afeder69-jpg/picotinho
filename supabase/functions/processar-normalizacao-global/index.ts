@@ -578,13 +578,36 @@ Deno.serve(async (req) => {
               MODO_TESTE ? 20000 : 45000
             );
 
-            // 🛑 Falha total da IA — manter pendente, NÃO criar master, NÃO inventar fallback.
+            // 🛑 Falha total da IA — registrar decisão terminal para evitar limbo (status pendente sem motivo).
             if (!normalizacao) {
-              console.warn(`⚠️ IA falhou para "${produto.texto_original}" — mantido pendente para reprocessamento.`);
-              await supabase
-                .from('produtos_candidatos_normalizacao')
-                .update({ precisa_ia: true })
-                .eq('nota_item_hash', produto.nota_item_hash);
+              console.warn(`⚠️ IA falhou para "${produto.texto_original}" — marcando pendente_revisao (falha_ia).`);
+              const stub: NormalizacaoSugerida = {
+                sku_global: null as any,
+                nome_padrao: produto.texto_original,
+                categoria: 'OUTROS',
+                nome_base: produto.texto_original,
+                marca: null,
+                tipo_embalagem: null,
+                qtd_valor: null,
+                qtd_unidade: null,
+                qtd_base: null,
+                unidade_base: null,
+                categoria_unidade: null,
+                granel: false,
+                confianca: 0,
+                razao: 'IA indisponível/erro — requer revisão manual',
+                produto_master_id: null,
+                imagem_url: produto.imagem_url || null,
+                imagem_path: produto.imagem_path || null,
+              } as any;
+              try {
+                await criarCandidato(
+                  supabase, produto, stub, 'pendente_revisao', obsEmbalagem,
+                  { motivo_bloqueio: 'falha_ia', candidatos_proximos: null }
+                );
+              } catch (e: any) {
+                console.error(`❌ Falha ao registrar pendente_revisao(falha_ia): ${e?.message}`);
+              }
               totalParaRevisao++;
               continue;
             }
@@ -1430,32 +1453,44 @@ RESPONDA APENAS COM JSON (sem markdown):
     const MARCAS_INVALIDAS = new Set([
       'JFC','ATACADAO','ATACADÃO','ASSAI','ASSAÍ','MAKRO','SAMS',"SAM'S",'SAMS CLUB',"SAM'S CLUB",
       'CARREFOUR','EXTRA','BIG','GUANABARA','PREZUNIC','MUNDIAL','SUPERMERCADO','MERCADO',
-      'COMERCIAL','DISTRIBUIDORA','ATACADO','HORTIFRUTI','SUPER','HIPER','REDE','LOJA'
+      'COMERCIAL','DISTRIBUIDORA','ATACADO','HORTIFRUTI','SUPER','HIPER','REDE','LOJA',
+      // Placeholders inválidos: hortifruti e produtos sem marca devem ficar NULL
+      'GENERICO','GENÉRICO','GENERICA','GENÉRICA','SEM MARCA','N/A','NA','NULL','NONE','OUTROS'
     ]);
     const FRAGMENTOS = new Set(['C','C/','S','S/','P','P/','DA','DE','DO','DAS','DOS','OL','L','E','OU','UN','KG','G','ML']);
     if (resultado.marca) {
-      const m = resultado.marca.trim();
+      const m = String(resultado.marca).trim().toUpperCase();
       const soLetras = m.replace(/[^A-ZÁÉÍÓÚÂÊÔÃÕÇ]/gi, '');
       const invalida = MARCAS_INVALIDAS.has(m)
         || FRAGMENTOS.has(m)
         || soLetras.length < 3;
       if (invalida) {
-        console.log(`🏷️ Marca inválida descartada: "${m}" → null`);
+        console.log(`🏷️ Marca inválida descartada: "${resultado.marca}" → null`);
         resultado.marca = null;
       }
     }
 
-    // 📏 NORMALIZAR UNIDADE (k/kg/quilo → kg, etc.)
-    if (resultado.qtd_unidade) {
-      const u = String(resultado.qtd_unidade).trim().toLowerCase();
+    // 📏 NORMALIZAR UNIDADE (k/kg/quilo → kg, etc.) — sanitização DURA pós-IA
+    if (resultado.qtd_unidade != null) {
+      const u = String(resultado.qtd_unidade).trim().toLowerCase().replace(/\.+$/,'');
       const mapU: Record<string,string> = {
-        'k':'kg','kg':'kg','kilo':'kg','kilos':'kg','quilo':'kg','quilos':'kg',
-        'g':'g','grama':'g','gramas':'g',
-        'l':'L','lt':'L','litro':'L','litros':'L',
-        'ml':'ml','mililitro':'ml','mililitros':'ml',
-        'un':'UN','und':'UN','unidade':'UN','unidades':'UN','pc':'UN','pç':'UN'
+        'k':'kg','kg':'kg','kgs':'kg','kilo':'kg','kilos':'kg','quilo':'kg','quilos':'kg','quilograma':'kg','quilogramas':'kg',
+        'g':'g','gr':'g','grs':'g','grama':'g','gramas':'g',
+        'l':'L','lt':'L','lts':'L','litro':'L','litros':'L',
+        'ml':'ml','mls':'ml','mililitro':'ml','mililitros':'ml',
+        'un':'UN','und':'UN','unid':'UN','unidade':'UN','unidades':'UN','pc':'UN','pç':'UN','pcs':'UN'
       };
-      resultado.qtd_unidade = mapU[u] || resultado.qtd_unidade;
+      const norm = mapU[u];
+      if (norm) {
+        resultado.qtd_unidade = norm;
+      } else {
+        console.log(`⚠️ Unidade desconhecida "${resultado.qtd_unidade}" → forçando null`);
+        resultado.qtd_unidade = null;
+      }
+    }
+    // 🚫 Nunca permitir "k" isolado como unidade (defesa em profundidade)
+    if (resultado.qtd_unidade && String(resultado.qtd_unidade).trim().toLowerCase() === 'k') {
+      resultado.qtd_unidade = 'kg';
     }
 
     // 🔥 VALIDAR CAMPOS DE UNIDADE BASE (fallback se IA não calcular)
