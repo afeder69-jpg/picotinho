@@ -1363,7 +1363,18 @@ RESPONDA APENAS COM JSON (sem markdown):
 
     if (!ia.ok) {
       console.warn(`❌ IA falhou (${ia.tipo_erro}): ${ia.mensagem}`);
-      return null;
+      const motivoMap: Record<string, string> = {
+        invalid_response: 'schema_invalido_ia',
+        parse: 'falha_ia',
+        timeout: 'falha_ia',
+        gateway_429: 'falha_ia',
+        gateway_402: 'falha_ia',
+        gateway_5xx: 'falha_ia',
+        gateway_4xx: 'falha_ia',
+        tool_call_missing: 'falha_ia',
+        desconhecido: 'erro_processamento_ia',
+      };
+      return { __falha_motivo: motivoMap[ia.tipo_erro] || 'falha_ia', __falha_msg: ia.mensagem } as any;
     }
 
     const resultado = ia.data;
