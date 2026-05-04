@@ -1410,6 +1410,47 @@ RESPONDA APENAS COM JSON (sem markdown):
     resultado.marca = resultado.marca?.toUpperCase() || null;
     resultado.categoria = resultado.categoria?.toUpperCase() || 'OUTROS';
 
+    // 🧹 SANITIZAÇÃO DE NOME (remove ruídos comuns de cupom fiscal)
+    const RUIDOS_NOME = /\b(FAV|PROMO|OFERTA|PROD|REF|COD)\b/gi;
+    const limparNome = (s: string) => (s || '')
+      .replace(RUIDOS_NOME, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    resultado.nome_padrao = limparNome(resultado.nome_padrao);
+    resultado.nome_base = limparNome(resultado.nome_base);
+
+    // 🏷️ SANITIZAÇÃO DE MARCA (blacklist + fragmentos)
+    const MARCAS_INVALIDAS = new Set([
+      'JFC','ATACADAO','ATACADÃO','ASSAI','ASSAÍ','MAKRO','SAMS',"SAM'S",'SAMS CLUB',"SAM'S CLUB",
+      'CARREFOUR','EXTRA','BIG','GUANABARA','PREZUNIC','MUNDIAL','SUPERMERCADO','MERCADO',
+      'COMERCIAL','DISTRIBUIDORA','ATACADO','HORTIFRUTI','SUPER','HIPER','REDE','LOJA'
+    ]);
+    const FRAGMENTOS = new Set(['C','C/','S','S/','P','P/','DA','DE','DO','DAS','DOS','OL','L','E','OU','UN','KG','G','ML']);
+    if (resultado.marca) {
+      const m = resultado.marca.trim();
+      const soLetras = m.replace(/[^A-ZÁÉÍÓÚÂÊÔÃÕÇ]/gi, '');
+      const invalida = MARCAS_INVALIDAS.has(m)
+        || FRAGMENTOS.has(m)
+        || soLetras.length < 3;
+      if (invalida) {
+        console.log(`🏷️ Marca inválida descartada: "${m}" → null`);
+        resultado.marca = null;
+      }
+    }
+
+    // 📏 NORMALIZAR UNIDADE (k/kg/quilo → kg, etc.)
+    if (resultado.qtd_unidade) {
+      const u = String(resultado.qtd_unidade).trim().toLowerCase();
+      const mapU: Record<string,string> = {
+        'k':'kg','kg':'kg','kilo':'kg','kilos':'kg','quilo':'kg','quilos':'kg',
+        'g':'g','grama':'g','gramas':'g',
+        'l':'L','lt':'L','litro':'L','litros':'L',
+        'ml':'ml','mililitro':'ml','mililitros':'ml',
+        'un':'UN','und':'UN','unidade':'UN','unidades':'UN','pc':'UN','pç':'UN'
+      };
+      resultado.qtd_unidade = mapU[u] || resultado.qtd_unidade;
+    }
+
     // 🔥 VALIDAR CAMPOS DE UNIDADE BASE (fallback se IA não calcular)
     if (!resultado.qtd_base && resultado.qtd_valor && resultado.qtd_unidade) {
       const unidadeLower = resultado.qtd_unidade.toLowerCase();
@@ -1418,7 +1459,7 @@ RESPONDA APENAS COM JSON (sem markdown):
         resultado.qtd_base = resultado.qtd_valor * 1000;
         resultado.unidade_base = 'ml';
         resultado.categoria_unidade = 'VOLUME';
-      } else if (unidadeLower === 'kg' || unidadeLower === 'kilo' || unidadeLower === 'kilos') {
+      } else if (['kg','k','kilo','kilos','quilo','quilos'].includes(unidadeLower)) {
         resultado.qtd_base = resultado.qtd_valor * 1000;
         resultado.unidade_base = 'g';
         resultado.categoria_unidade = 'PESO';
@@ -1435,6 +1476,22 @@ RESPONDA APENAS COM JSON (sem markdown):
         resultado.unidade_base = 'un';
         resultado.categoria_unidade = 'UNIDADE';
       }
+    }
+
+    // 🚫 INVARIANTE: qtd_valor null ⇒ qtd_base/unidade_base/categoria_unidade DEVEM ser null
+    if (resultado.qtd_valor == null) {
+      if (resultado.qtd_base != null) {
+        console.log(`⚠️ qtd_valor null mas qtd_base=${resultado.qtd_base} → forçando null (coerência)`);
+      }
+      resultado.qtd_base = null;
+      resultado.unidade_base = null;
+      resultado.categoria_unidade = null;
+    }
+
+    // 🔍 PLAUSIBILIDADE DE VOLUME (reduz confiança em casos suspeitos)
+    if (resultado.qtd_base && resultado.unidade_base === 'ml' && resultado.qtd_base > 6000) {
+      console.log(`⚠️ Volume suspeito ${resultado.qtd_base}ml para "${resultado.nome_padrao}" — reduzindo confiança`);
+      resultado.confianca = Math.max(0, (resultado.confianca || 0) - 15);
     }
     
     console.log(`✅ IA respondeu com ${resultado.confianca}% de confiança`);
