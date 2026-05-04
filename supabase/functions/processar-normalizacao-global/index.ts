@@ -1599,7 +1599,7 @@ async function criarCandidato(
     // ✏️ ATUALIZAR apenas candidatos pendentes
     console.log(`🔄 Atualizando candidato pendente: ${produto.texto_original}`);
     
-    const { error } = await supabase
+    const { data: updRows, error } = await supabase
       .from('produtos_candidatos_normalizacao')
       .update({
         sugestao_sku_global: normalizacao.sku_global,
@@ -1625,12 +1625,19 @@ async function criarCandidato(
         updated_at: new Date().toISOString()
       })
       .eq('id', candidatoExistente.id)
-      .eq('status', 'pendente'); // 🔒 invariante: nunca reabrir auto_aprovado/aprovado/rejeitado/pendente_revisao
+      .in('status', ['pendente']) // 🔒 invariante: só transitar a partir de pendente
+      .select('id, status');
 
     if (error) {
       throw new Error(`Erro ao atualizar candidato: ${error.message}`);
     }
-    
+
+    if (!updRows || updRows.length === 0) {
+      // 🚨 Update silenciosamente afetou 0 linhas — invariante violado ou status mudou no meio do caminho.
+      console.error(`🚨 criarCandidato: UPDATE 0 linhas para id=${candidatoExistente.id} (status snapshot=${candidatoExistente.status}). status alvo=${status}`);
+      throw new Error(`UPDATE retornou 0 linhas para candidato ${candidatoExistente.id} (status snapshot=${candidatoExistente.status}, alvo=${status})`);
+    }
+
     console.log(`✅ Candidato atualizado: ${candidatoExistente.id} → status: ${status}`);
     
   } else {
