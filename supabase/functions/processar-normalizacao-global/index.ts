@@ -669,10 +669,17 @@ Deno.serve(async (req) => {
               }
               
             } else {
-              // Baixa confiança - enviar para revisão manual
+              // Baixa confiança - decisão terminal: pendente_revisao com motivo explícito
               while (tentativas < MAX_TENTATIVAS) {
                 try {
-                  await criarCandidato(supabase, produto, normalizacao, 'pendente', obsEmbalagem);
+                  await criarCandidato(
+                    supabase,
+                    produto,
+                    normalizacao,
+                    'pendente_revisao',
+                    obsEmbalagem,
+                    { motivo_bloqueio: 'baixa_confianca_ia', candidatos_proximos: null }
+                  );
                   break;
                 } catch (erro: any) {
                   tentativas++;
@@ -681,7 +688,7 @@ Deno.serve(async (req) => {
                 }
               }
               totalParaRevisao++;
-              console.log(`⏳ Para revisão (${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+              console.log(`⏳ Para revisão (baixa confiança ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
             }
           }
 
