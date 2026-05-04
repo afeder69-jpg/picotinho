@@ -65,48 +65,70 @@ Deno.serve(async (req) => {
     const { count: mastersProvAntes } = await supabase
       .from('produtos_master_global').select('*', { count: 'exact', head: true }).eq('provisorio', true);
 
-    // 1. Localizar candidatos órfãos pendentes (limit alto para escolher escopo)
-    const { data: orfaos, error: orfaosErr } = await supabase
+    // 1. Localizar candidatos ELEGÍVEIS (filtro estrito)
+    //    status='pendente' AND precisa_ia=true AND motivo_bloqueio IS NULL
+    const { count: totalElegiveis, error: countErr } = await supabase
       .from('produtos_candidatos_normalizacao')
-      .select('id, nota_imagem_id')
+      .select('*', { count: 'exact', head: true })
       .eq('status', 'pendente')
       .eq('precisa_ia', true)
-      .not('nota_imagem_id', 'is', null)
-      .order('created_at', { ascending: true })
-      .limit(500);
-    if (orfaosErr) throw orfaosErr;
+      .is('motivo_bloqueio', null)
+      .not('nota_imagem_id', 'is', null);
+    if (countErr) throw countErr;
 
-    const totalOrfaos = orfaos?.length || 0;
-    if (totalOrfaos === 0) {
+    console.log(`📊 Total de candidatos elegíveis (Aguardando IA): ${totalElegiveis ?? 0}`);
+
+    if (!totalElegiveis || totalElegiveis === 0) {
       return new Response(
         JSON.stringify({
-          sucesso: true, modo_teste: modoTeste, lote_solicitado: lote,
-          relatorio: { total_orfaos: 0, mensagem: 'Sem órfãos para reprocessar' },
+          sucesso: true,
+          modo_teste: modoTeste,
+          lote_solicitado: lote,
+          relatorio: {
+            total_elegiveis: 0,
+            candidatos_no_escopo: 0,
+            mensagem: 'Nenhum candidato elegível para processamento',
+          },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 🛑 MODO TESTE: pegar exatamente N candidatos (não notas)
-    // Em produção (modo amplo), interpretar `lote` como nº de notas (compatibilidade)
-    let candidatosNoEscopo: string[] = [];
-    let notasParaProcessar: string[] = [];
-    let limiteCandidatosParaInterna: number | null = null;
+    // Em MODO TESTE: pegar EXATAMENTE N candidatos elegíveis (não notas)
+    // Em produção: pegar até 500 elegíveis e agrupar por nota
+    const limiteSelecao = modoTeste ? lote : 500;
+    const { data: orfaos, error: orfaosErr } = await supabase
+      .from('produtos_candidatos_normalizacao')
+      .select('id, nota_imagem_id')
+      .eq('status', 'pendente')
+      .eq('precisa_ia', true)
+      .is('motivo_bloqueio', null)
+      .not('nota_imagem_id', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(limiteSelecao);
+    if (orfaosErr) throw orfaosErr;
 
-    if (modoTeste) {
-      const escolhidos = orfaos!.slice(0, lote);
-      candidatosNoEscopo = escolhidos.map(o => o.id as string);
-      notasParaProcessar = Array.from(new Set(escolhidos.map(o => o.nota_imagem_id as string)));
-      limiteCandidatosParaInterna = lote;
-    } else {
-      const notasUnicas = Array.from(new Set(orfaos!.map(o => o.nota_imagem_id as string)));
-      notasParaProcessar = notasUnicas.slice(0, lote);
-      candidatosNoEscopo = (orfaos || [])
-        .filter(o => notasParaProcessar.includes(o.nota_imagem_id as string))
+    const candidatosNoEscopo: string[] = (orfaos || []).map(o => o.id as string);
+    const notasParaProcessar: string[] = Array.from(new Set((orfaos || []).map(o => o.nota_imagem_id as string)));
+
+    // Validação: garantir alinhamento entre solicitado e selecionado
+    if (modoTeste && candidatosNoEscopo.length < lote) {
+      console.log(`ℹ️ Solicitado lote=${lote}, mas só ${candidatosNoEscopo.length} elegíveis disponíveis.`);
+    }
+
+    // Em produção, limitar pelo nº de notas (compatibilidade com kill-switch amplo)
+    let limiteCandidatosParaInterna: number | null = modoTeste ? lote : null;
+    let candidatoIdsParaInterna = candidatosNoEscopo;
+    let notasFinaisParaProcessar = notasParaProcessar;
+
+    if (!modoTeste) {
+      notasFinaisParaProcessar = notasParaProcessar.slice(0, lote);
+      candidatoIdsParaInterna = (orfaos || [])
+        .filter(o => notasFinaisParaProcessar.includes(o.nota_imagem_id as string))
         .map(o => o.id as string);
     }
 
-    console.log(`📊 ${totalOrfaos} órfãos. Escopo: ${candidatosNoEscopo.length} candidatos / ${notasParaProcessar.length} notas. cap_interna=${limiteCandidatosParaInterna}`);
+    console.log(`📊 Elegíveis=${totalElegiveis}. Escopo: ${candidatoIdsParaInterna.length} candidatos / ${notasFinaisParaProcessar.length} notas. cap_interna=${limiteCandidatosParaInterna}`);
 
     // 2. Forçar normalizada=false p/ que processar-normalizacao-global pegue
     await supabase.from('notas_imagens').update({ normalizada: false }).in('id', notasParaProcessar);
