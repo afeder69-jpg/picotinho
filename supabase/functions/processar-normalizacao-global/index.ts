@@ -1741,6 +1741,7 @@ async function criarCandidato(
           sugestao_produto_master: normalizacao.produto_master_id,
           confianca_ia: normalizacao.confianca,
           razao_ia: normalizacao.razao,
+          resposta_bruta: (normalizacao as any)._raw_ia ?? null,
           nome_padrao_sugerido: normalizacao.nome_padrao,
           categoria_sugerida: normalizacao.categoria,
           nome_base_sugerido: normalizacao.nome_base,
