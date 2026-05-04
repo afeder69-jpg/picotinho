@@ -369,7 +369,14 @@ Deno.serve(async (req) => {
             && (jaExiste.precisa_ia === true || (Number(jaExiste.confianca_ia ?? 0) === 0 && !jaExiste.nome_padrao_sugerido));
 
           if (jaExiste && !ehOrfao) {
-            console.log(`⏭️  Produto já tem candidato: ${produto.texto_original} (status: ${jaExiste.status})`);
+            pushDebug('⏭️ Produto ignorado por já ter candidato não órfão', {
+              texto_original: produto.texto_original,
+              nota_item_hash: produto.nota_item_hash,
+              status_existente: jaExiste.status,
+              precisa_ia_existente: jaExiste.precisa_ia,
+              confianca_ia_existente: Number(jaExiste.confianca_ia ?? 0),
+              ehOrfao,
+            });
             
             // 🔗 CORREÇÃO RAIZ: Se candidato já foi aprovado, vincular novo item do estoque ao master
             if (jaExiste.status === 'auto_aprovado' && jaExiste.sugestao_produto_master && produto.nota_imagem_id) {
