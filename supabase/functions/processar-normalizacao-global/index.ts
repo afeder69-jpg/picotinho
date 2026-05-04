@@ -1848,6 +1848,7 @@ async function criarCandidato(
         categoria_unidade_sugerida: normalizacao.categoria_unidade,
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
+        resposta_bruta: (normalizacao as any)._raw_ia ?? null,
         status: status,
         motivo_bloqueio: motivoBloqueio,
         candidatos_proximos: candidatosProximos,
