@@ -205,6 +205,7 @@ Deno.serve(async (req) => {
           nota_imagem_id: c.nota_imagem_id,
           origem: 'nota_fiscal',
           nota_item_hash: c.nota_item_hash || `${c.nota_imagem_id}-${c.id}-${(c.texto_original || '').slice(0, 20)}`,
+          candidato_id: c.id, // 🎯 propaga ID para criarCandidato fazer UPDATE direto pelo id
         });
         if (!notasIds.includes(c.nota_imagem_id)) notasIds.push(c.nota_imagem_id);
       }
