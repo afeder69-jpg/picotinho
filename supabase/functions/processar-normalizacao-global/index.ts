@@ -1447,17 +1447,27 @@ RESPONDA APENAS COM JSON (sem markdown):
       }
     }
 
-    // 📏 NORMALIZAR UNIDADE (k/kg/quilo → kg, etc.)
-    if (resultado.qtd_unidade) {
-      const u = String(resultado.qtd_unidade).trim().toLowerCase();
+    // 📏 NORMALIZAR UNIDADE (k/kg/quilo → kg, etc.) — sanitização DURA pós-IA
+    if (resultado.qtd_unidade != null) {
+      const u = String(resultado.qtd_unidade).trim().toLowerCase().replace(/\.+$/,'');
       const mapU: Record<string,string> = {
-        'k':'kg','kg':'kg','kilo':'kg','kilos':'kg','quilo':'kg','quilos':'kg',
-        'g':'g','grama':'g','gramas':'g',
-        'l':'L','lt':'L','litro':'L','litros':'L',
-        'ml':'ml','mililitro':'ml','mililitros':'ml',
-        'un':'UN','und':'UN','unidade':'UN','unidades':'UN','pc':'UN','pç':'UN'
+        'k':'kg','kg':'kg','kgs':'kg','kilo':'kg','kilos':'kg','quilo':'kg','quilos':'kg','quilograma':'kg','quilogramas':'kg',
+        'g':'g','gr':'g','grs':'g','grama':'g','gramas':'g',
+        'l':'L','lt':'L','lts':'L','litro':'L','litros':'L',
+        'ml':'ml','mls':'ml','mililitro':'ml','mililitros':'ml',
+        'un':'UN','und':'UN','unid':'UN','unidade':'UN','unidades':'UN','pc':'UN','pç':'UN','pcs':'UN'
       };
-      resultado.qtd_unidade = mapU[u] || resultado.qtd_unidade;
+      const norm = mapU[u];
+      if (norm) {
+        resultado.qtd_unidade = norm;
+      } else {
+        console.log(`⚠️ Unidade desconhecida "${resultado.qtd_unidade}" → forçando null`);
+        resultado.qtd_unidade = null;
+      }
+    }
+    // 🚫 Nunca permitir "k" isolado como unidade (defesa em profundidade)
+    if (resultado.qtd_unidade && String(resultado.qtd_unidade).trim().toLowerCase() === 'k') {
+      resultado.qtd_unidade = 'kg';
     }
 
     // 🔥 VALIDAR CAMPOS DE UNIDADE BASE (fallback se IA não calcular)
