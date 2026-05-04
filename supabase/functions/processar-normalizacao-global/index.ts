@@ -1271,6 +1271,28 @@ Exemplos de MATCH INCORRETO (criar produto NOVO - não usar produto_master_id):
    - 50-69: Nome confuso ou incompleto
    - 0-49: Nome muito vago ou problemático
 
+🚨 REGRAS CRÍTICAS DE QUALIDADE (OBRIGATÓRIAS):
+
+A) UNIDADE/QUANTIDADE:
+   - "k", "kg", "kilo", "quilo", "quilos", "kilos" → SEMPRE normalize para "kg" (qtd_unidade) e converta para "g" em qtd_base.
+   - "l", "lt", "litro", "litros" → "L" e "ml" em qtd_base.
+   - PLAUSIBILIDADE: rejeite volumes/pesos absurdos. Refrigerante/refresco normalmente 200ml–3L; leite 200ml–2L; cerveja lata 269–473ml; sabão líquido 500ml–5L. Se o número parecer fora de escala (ex.: "15L" para refresco), prefira a leitura mais plausível (1.5L) e reduza confiança em 10 pontos.
+   - Se NÃO houver quantidade explícita E o produto NÃO for tipicamente vendido por peso (ex.: pão francês, frutas, granel), retorne qtd_valor=null, qtd_unidade=null, qtd_base=null, unidade_base=null. NUNCA invente quantidade.
+   - Se qtd_valor=null então qtd_base DEVE ser null obrigatoriamente.
+
+B) MARCA:
+   - NUNCA use nome de estabelecimento/distribuidor/atacado como marca. Lista negra (não exaustiva): JFC, ATACADAO, ASSAI, MAKRO, SAM'S, SAMS CLUB, CARREFOUR, EXTRA, BIG, GUANABARA, PREZUNIC, MUNDIAL, SUPERMERCADO, MERCADO, COMERCIAL, DISTRIBUIDORA, ATACADO, HORTIFRUTI.
+   - NUNCA use marcas truncadas/fragmentos sem sentido (ex.: "OL", "L GLORIA", "C/", "DA", "DE", "P/"). Se a string da marca tiver < 3 caracteres alfabéticos OU for uma preposição/fragmento, retorne marca=null.
+   - Se a marca for ambígua, desconhecida ou inválida → retorne null (NÃO invente "GENERICO" — o sistema decide o fallback).
+
+C) NOME:
+   - Remova ruídos do texto fiscal: "FAV", "PROMO", "OFERTA", códigos numéricos isolados (ex.: "REF 123"), prefixos "PROD ", sufixos "FAV/PROMO".
+   - nome_base deve conter APENAS o substantivo do produto + qualificadores essenciais (tipo/sabor/cor), SEM marca, SEM peso/volume, SEM ruído.
+   - nome_padrao pode conter marca + quantidade.
+
+D) CATEGORIA:
+   - "OUTROS" só quando realmente não couber em nenhuma. Prefira sempre uma das 10 categorias específicas.
+
 RESPONDA APENAS COM JSON (sem markdown):
 {
   "sku_global": "string",
