@@ -94,6 +94,7 @@ interface NormalizacaoSugerida {
   produto_master_id: string | null;
   imagem_url?: string;
   imagem_path?: string;
+  _raw_ia?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -692,7 +693,11 @@ Deno.serve(async (req) => {
               }
               
             } else {
-              // Baixa confiança - decisão terminal: pendente_revisao com motivo explícito
+              // Confiança < 90 → pendente_revisao
+              // 60–89 = média confiança (motivo distinto); < 60 = baixa confiança real
+              const motivoConf = (normalizacao.confianca ?? 0) < 60
+                ? 'baixa_confianca_ia'
+                : 'media_confianca_ia';
               while (tentativas < MAX_TENTATIVAS) {
                 try {
                   await criarCandidato(
@@ -701,7 +706,7 @@ Deno.serve(async (req) => {
                     normalizacao,
                     'pendente_revisao',
                     obsEmbalagem,
-                    { motivo_bloqueio: 'baixa_confianca_ia', candidatos_proximos: null }
+                    { motivo_bloqueio: motivoConf, candidatos_proximos: null }
                   );
                   break;
                 } catch (erro: any) {
@@ -711,7 +716,7 @@ Deno.serve(async (req) => {
                 }
               }
               totalParaRevisao++;
-              console.log(`⏳ Para revisão (baixa confiança ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
+              console.log(`⏳ Para revisão (${motivoConf} ${normalizacao.confianca}%): ${normalizacao.nome_padrao}`);
             }
           }
 
@@ -1535,9 +1540,63 @@ RESPONDA APENAS COM JSON (sem markdown):
       console.log(`⚠️ Volume suspeito ${resultado.qtd_base}ml para "${resultado.nome_padrao}" — reduzindo confiança`);
       resultado.confianca = Math.max(0, (resultado.confianca || 0) - 15);
     }
-    
+
+    // 🛡️ ANTI-ALUCINAÇÃO: textos muito curtos/ambíguos não permitem inferências fortes.
+    // Se o texto original tiver < 4 caracteres alfabéticos, força reduzir confiança e zerar marca.
+    const alfaOrig = (textoOriginal || '').replace(/[^A-Za-zÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç]/g, '');
+    if (alfaOrig.length < 4) {
+      console.log(`🛡️ Texto curto/ambíguo ("${textoOriginal}") — anti-alucinação ativa`);
+      resultado.confianca = Math.min(resultado.confianca ?? 0, 50);
+      resultado.marca = null;
+    }
+    // Se nome_base/nome_padrao "inventou" tokens longos não presentes no original, reduz confiança.
+    const tokensOrig = new Set(
+      (textoOriginal || '').toUpperCase().split(/[^A-ZÁÉÍÓÚÂÊÔÃÕÇ0-9]+/).filter(t => t.length >= 4)
+    );
+    const tokensSugeridos = (resultado.nome_base || '').toUpperCase().split(/\s+/).filter((t: string) => t.length >= 5);
+    const inventados = tokensSugeridos.filter((t: string) => !Array.from(tokensOrig).some((o) => o.startsWith(t.slice(0,4)) || t.startsWith(o.slice(0,4))));
+    if (inventados.length > 0 && alfaOrig.length < 8) {
+      console.log(`🛡️ Possível alucinação (tokens novos: ${inventados.join(',')}) — reduzindo confiança`);
+      resultado.confianca = Math.max(0, (resultado.confianca ?? 0) - 20);
+    }
+
+    // ✅ VALIDAÇÃO FORTE DE SCHEMA: se faltar qualquer campo obrigatório → falha_ia
+    const camposObrigatorios: Array<keyof NormalizacaoSugerida> = [
+      'nome_padrao', 'nome_base', 'categoria'
+    ];
+    const faltando = camposObrigatorios.filter((c) => {
+      const v = (resultado as any)[c];
+      return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+    });
+    if (faltando.length > 0 || typeof resultado.confianca !== 'number') {
+      console.warn(`❌ Schema IA inválido — campos faltando: ${faltando.join(',')}`);
+      try {
+        await supabase?.from('ia_normalizacao_erros').insert({
+          texto_original: produto?.texto_original ?? textoOriginal,
+          tipo_erro: 'invalid_response',
+          modelo: 'google/gemini-2.5-flash',
+          mensagem: `Schema incompleto: ${faltando.join(',')}`,
+          resposta_bruta: { raw: ia.raw?.slice(0, 4000) ?? null, parsed: resultado },
+          tentativa: 1,
+        });
+      } catch {}
+      return null; // dispara branch falha_ia → pendente_revisao
+    }
+
+    // 🧮 COERÊNCIA QUANTIDADE: se qtd_valor presente, qtd_unidade obrigatório
+    if (resultado.qtd_valor != null && !resultado.qtd_unidade) {
+      console.warn(`⚠️ qtd_valor=${resultado.qtd_valor} sem qtd_unidade → invalidando quantidade`);
+      resultado.qtd_valor = null;
+      resultado.qtd_base = null;
+      resultado.unidade_base = null;
+      resultado.categoria_unidade = null;
+    }
+
+    // 📦 Anexa raw para persistência/auditoria
+    resultado._raw_ia = ia.raw ?? null;
+
     console.log(`✅ IA respondeu com ${resultado.confianca}% de confiança`);
-    
+
     return resultado;
 
   } catch (error: any) {
@@ -1682,6 +1741,7 @@ async function criarCandidato(
           sugestao_produto_master: normalizacao.produto_master_id,
           confianca_ia: normalizacao.confianca,
           razao_ia: normalizacao.razao,
+          resposta_bruta: (normalizacao as any)._raw_ia ?? null,
           nome_padrao_sugerido: normalizacao.nome_padrao,
           categoria_sugerida: normalizacao.categoria,
           nome_base_sugerido: normalizacao.nome_base,
@@ -1738,6 +1798,7 @@ async function criarCandidato(
         categoria_unidade_sugerida: normalizacao.categoria_unidade,
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
+        resposta_bruta: (normalizacao as any)._raw_ia ?? null,
         status: status, // Mudar de 'pendente' para terminal (auto_aprovado | pendente_revisao)
         precisa_ia: false, // ✅ Fase 1: IA já preencheu
         motivo_bloqueio: motivoBloqueio,
@@ -1787,6 +1848,7 @@ async function criarCandidato(
         categoria_unidade_sugerida: normalizacao.categoria_unidade,
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
+        resposta_bruta: (normalizacao as any)._raw_ia ?? null,
         status: status,
         motivo_bloqueio: motivoBloqueio,
         candidatos_proximos: candidatosProximos,
