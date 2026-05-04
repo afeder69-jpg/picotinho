@@ -94,6 +94,7 @@ interface NormalizacaoSugerida {
   produto_master_id: string | null;
   imagem_url?: string;
   imagem_path?: string;
+  _raw_ia?: string | null;
 }
 
 Deno.serve(async (req) => {
