@@ -194,11 +194,11 @@ Deno.serve(async (req) => {
     });
 
     let bloqueadosSimilaridade = 0, permaneceramPendentes = 0, autoAprovadosLote = 0, revisaoLote = 0;
-    if (candidatosNoEscopo.length > 0) {
+    if (candidatoIdsParaInterna.length > 0) {
       const { data: statusFinal } = await supabase
         .from('produtos_candidatos_normalizacao')
         .select('id, status, motivo_bloqueio')
-        .in('id', candidatosNoEscopo);
+        .in('id', candidatoIdsParaInterna);
       (statusFinal || []).forEach(c => {
         if (c.status === 'pendente') permaneceramPendentes++;
         if (c.status === 'auto_aprovado') autoAprovadosLote++;
@@ -214,9 +214,9 @@ Deno.serve(async (req) => {
     const novosMastersProvisorios = Math.max(0, (mastersProvDepois || 0) - (mastersProvAntes || 0));
 
     const relatorio = {
-      total_orfaos_disponiveis: totalOrfaos,
-      candidatos_no_escopo: candidatosNoEscopo.length,
-      notas_envolvidas: notasParaProcessar.length,
+      total_elegiveis: totalElegiveis ?? 0,
+      candidatos_no_escopo: candidatoIdsParaInterna.length,
+      notas_envolvidas: notasFinaisParaProcessar.length,
       cap_candidatos_aplicado: limiteCandidatosParaInterna,
       candidatos_truncados_por_cap: totTruncados,
 
