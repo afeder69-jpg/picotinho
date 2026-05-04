@@ -580,8 +580,11 @@ Deno.serve(async (req) => {
             );
 
             // 🛑 Falha total da IA — registrar decisão terminal para evitar limbo (status pendente sem motivo).
-            if (!normalizacao) {
-              console.warn(`⚠️ IA falhou para "${produto.texto_original}" — marcando pendente_revisao (falha_ia).`);
+            const falhaMotivo = (normalizacao && (normalizacao as any).__falha_motivo) || (!normalizacao ? 'falha_ia' : null);
+            if (falhaMotivo) {
+              const falhaMsg = (normalizacao as any)?.__falha_msg || 'IA indisponível/erro';
+              const rawIA = (normalizacao as any)?.__raw || null;
+              console.warn(`⚠️ IA falhou (${falhaMotivo}) para "${produto.texto_original}" — marcando pendente_revisao.`);
               const stub: NormalizacaoSugerida = {
                 sku_global: null as any,
                 nome_padrao: produto.texto_original,
@@ -596,18 +599,19 @@ Deno.serve(async (req) => {
                 categoria_unidade: null,
                 granel: false,
                 confianca: 0,
-                razao: 'IA indisponível/erro — requer revisão manual',
+                razao: `IA falhou: ${falhaMsg}`,
                 produto_master_id: null,
                 imagem_url: produto.imagem_url || null,
                 imagem_path: produto.imagem_path || null,
               } as any;
+              (stub as any)._raw_ia = rawIA;
               try {
                 await criarCandidato(
                   supabase, produto, stub, 'pendente_revisao', obsEmbalagem,
-                  { motivo_bloqueio: 'falha_ia', candidatos_proximos: null }
+                  { motivo_bloqueio: falhaMotivo, candidatos_proximos: null, forcar_terminal: true }
                 );
               } catch (e: any) {
-                console.error(`❌ Falha ao registrar pendente_revisao(falha_ia): ${e?.message}`);
+                console.error(`❌ Falha ao registrar pendente_revisao(${falhaMotivo}): ${e?.message}`);
               }
               totalParaRevisao++;
               continue;
