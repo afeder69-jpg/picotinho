@@ -130,11 +130,14 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Elegíveis=${totalElegiveis}. Escopo: ${candidatoIdsParaInterna.length} candidatos / ${notasFinaisParaProcessar.length} notas. cap_interna=${limiteCandidatosParaInterna}`);
 
-    // 2. Forçar normalizada=false p/ que processar-normalizacao-global pegue
-    await supabase.from('notas_imagens').update({ normalizada: false }).in('id', notasParaProcessar);
+    // 2. Forçar normalizada=false p/ que processar-normalizacao-global aceite as notas
+    //    (em modo candidatos diretos a interna ignora a varredura por nota, mas mantemos por compat)
+    if (notasFinaisParaProcessar.length > 0) {
+      await supabase.from('notas_imagens').update({ normalizada: false }).in('id', notasFinaisParaProcessar);
+    }
 
-    // 3. Em MODO TESTE: 1 chamada única à interna com cap de candidatos.
-    //    Em produção: 1 chamada por nota (comportamento original).
+    // 3. Em MODO TESTE: 1 chamada única à interna passando candidato_ids EXATOS.
+    //    Em produção: 1 chamada por nota com candidato_ids daquela nota.
     let totProcessados = 0, totAuto = 0, totRevisao = 0, totFalhas = 0, totTruncados = 0;
     const authHeader = req.headers.get('Authorization') || '';
 
@@ -165,11 +168,15 @@ Deno.serve(async (req) => {
       await chamarInterna({
         modo_teste: true,
         limite_candidatos: limiteCandidatosParaInterna,
-        limite_notas: Math.min(5, notasParaProcessar.length),
+        limite_notas: Math.min(5, notasFinaisParaProcessar.length),
+        candidato_ids: candidatoIdsParaInterna,
       });
     } else {
-      for (const _ of notasParaProcessar) {
-        await chamarInterna({});
+      for (const notaId of notasFinaisParaProcessar) {
+        const idsDaNota = (orfaos || [])
+          .filter(o => o.nota_imagem_id === notaId)
+          .map(o => o.id as string);
+        await chamarInterna({ candidato_ids: idsDaNota });
       }
     }
 
