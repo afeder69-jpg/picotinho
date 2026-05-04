@@ -544,16 +544,15 @@ Deno.serve(async (req) => {
 
               if (antiDup.bloquear) {
                 console.warn(`🛡️ Anti-duplicata bloqueou criação de "${normalizacao.nome_padrao}" — motivo=${antiDup.motivo}`);
-                // Cria candidato pendente com motivo + lista de candidatos próximos
-                await criarCandidato(supabase, produto, normalizacao, 'pendente', obsEmbalagem);
-                await supabase
-                  .from('produtos_candidatos_normalizacao')
-                  .update({
-                    motivo_bloqueio: antiDup.motivo,
-                    candidatos_proximos: antiDup.candidatos as any,
-                    precisa_ia: false,
-                  })
-                  .eq('nota_item_hash', produto.nota_item_hash);
+                // ✅ Decisão terminal: pendente_revisao + motivo_bloqueio gravados no MESMO update
+                await criarCandidato(
+                  supabase,
+                  produto,
+                  normalizacao,
+                  'pendente_revisao',
+                  obsEmbalagem,
+                  { motivo_bloqueio: antiDup.motivo, candidatos_proximos: antiDup.candidatos }
+                );
                 totalParaRevisao++;
               } else {
                 // Produto novo com alta confiança - criar master PROVISÓRIO + auto-aprovar
@@ -1409,8 +1408,11 @@ async function criarCandidato(
   produto: ProdutoParaNormalizar,
   normalizacao: NormalizacaoSugerida,
   status: string,
-  obsEmbalagem?: string | null
+  obsEmbalagem?: string | null,
+  extras?: { motivo_bloqueio?: string | null; candidatos_proximos?: any[] | null }
 ) {
+  const motivoBloqueio = extras?.motivo_bloqueio ?? null;
+  const candidatosProximos = extras?.candidatos_proximos ?? null;
   // ✅ CORREÇÃO 1: Buscar candidato existente ANTES de criar (SEM filtrar por status)
   const { data: candidatoExistente } = await supabase
     .from('produtos_candidatos_normalizacao')
@@ -1448,6 +1450,8 @@ async function criarCandidato(
           // ⚡ PARTE A: REMOVIDO colunas que não existem (obs_embalagem_sugerida, dados_extraidos)
           status: status,
           precisa_ia: false, // ✅ Fase 1: IA já preencheu
+          motivo_bloqueio: motivoBloqueio,
+          candidatos_proximos: candidatosProximos,
           updated_at: new Date().toISOString()
         })
         .eq('id', candidatoExistente.id);
@@ -1488,8 +1492,10 @@ async function criarCandidato(
         categoria_unidade_sugerida: normalizacao.categoria_unidade,
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
-        status: status, // Mudar de 'pendente' para 'auto_aprovado'
+        status: status, // Mudar de 'pendente' para terminal (auto_aprovado | pendente_revisao)
         precisa_ia: false, // ✅ Fase 1: IA já preencheu
+        motivo_bloqueio: motivoBloqueio,
+        candidatos_proximos: candidatosProximos,
         observacoes_revisor: obsEmbalagem || null,
         updated_at: new Date().toISOString()
       })
@@ -1529,6 +1535,9 @@ async function criarCandidato(
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
         status: status,
+        motivo_bloqueio: motivoBloqueio,
+        candidatos_proximos: candidatosProximos,
+        precisa_ia: motivoBloqueio ? false : undefined,
         observacoes_revisor: obsEmbalagem || null
       });
 
