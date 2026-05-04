@@ -1535,6 +1535,9 @@ async function criarCandidato(
         granel_sugerido: normalizacao.granel,
         razao_ia: normalizacao.razao,
         status: status,
+        motivo_bloqueio: motivoBloqueio,
+        candidatos_proximos: candidatosProximos,
+        precisa_ia: motivoBloqueio ? false : undefined,
         observacoes_revisor: obsEmbalagem || null
       });
 
