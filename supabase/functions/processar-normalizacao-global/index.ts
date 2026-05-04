@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
   try { await requireMaster(req); } catch (e) { return authErrorResponse(e); }
 
   // Parse body opcional para controle de modo teste
-  let bodyOpts: { modo_teste?: boolean; limite_candidatos?: number; limite_notas?: number } = {};
+  let bodyOpts: { modo_teste?: boolean; limite_candidatos?: number; limite_notas?: number; candidato_ids?: string[] } = {};
   try {
     if (req.headers.get('content-type')?.includes('application/json')) {
       bodyOpts = await req.json().catch(() => ({}));
@@ -113,6 +113,10 @@ Deno.serve(async (req) => {
     ? Math.max(1, Math.min(20, Number(bodyOpts.limite_candidatos) || 5))
     : null; // null = sem cap (comportamento original)
   const LIMITE_NOTAS_INPUT = Math.max(1, Math.min(5, Number(bodyOpts.limite_notas) || (MODO_TESTE ? 2 : 5)));
+  const CANDIDATO_IDS = Array.isArray(bodyOpts.candidato_ids)
+    ? bodyOpts.candidato_ids.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : [];
+  const MODO_CANDIDATOS_DIRETO = CANDIDATO_IDS.length > 0;
 
   try {
     console.log(`🚀 Iniciando processamento de normalização global (modo_teste=${MODO_TESTE}, cap_candidatos=${LIMITE_CANDIDATOS ?? 'sem cap'})`);
@@ -135,77 +139,104 @@ Deno.serve(async (req) => {
 
     // 1. BUSCAR PRODUTOS DE NOTAS NÃO NORMALIZADAS
     console.log('📋 Buscando produtos para normalizar...');
-    
-    const { data: notasProcessadas, error: notasError } = await supabase
-      .from('notas_imagens')
-      .select('id, usuario_id, dados_extraidos')
-      .eq('processada', true)
-      .eq('normalizada', false)
-      .not('dados_extraidos', 'is', null)
-      .limit(LIMITE_NOTAS_INPUT); // ✅ Fase 1: até 5 notas / modo_teste: até limite_notas
-
-    if (notasError) {
-      throw new Error(`Erro ao buscar notas: ${notasError.message}`);
-    }
-
-    console.log(`📦 Notas fiscais: ${notasProcessadas?.length || 0} notas processadas`);
-
-    // 2. BUSCAR PRODUTOS DO OPEN FOOD FACTS NÃO NORMALIZADOS
-    // ⚠️ Em modo_teste, pular Open Food Facts para limitar escopo
-    const { data: openFoodProducts, error: offError } = MODO_TESTE
-      ? { data: [] as any[], error: null }
-      : await supabase
-      .from('open_food_facts_staging')
-      .select('id, codigo_barras, texto_original, dados_brutos, imagem_url, imagem_path')
-      .eq('processada', false)
-      .limit(100);
-
-    if (offError) {
-      console.warn(`⚠️ Erro ao buscar Open Food Facts: ${offError.message}`);
-    }
-
-    console.log(`🌍 Open Food Facts: ${openFoodProducts?.length || 0} produtos para normalizar`);
 
     const produtosParaNormalizar: ProdutoParaNormalizar[] = [];
-
-    // Extrair produtos de cada nota fiscal com hash único por item
     const notasIds: string[] = [];
     const notasMetadata = new Map<string, { totalItens: number, itensProcessados: number }>();
-    
-    for (const nota of notasProcessadas || []) {
-      const itens = nota.dados_extraidos?.itens || [];
-      notasMetadata.set(nota.id, { totalItens: itens.length, itensProcessados: 0 });
-      
-      for (let i = 0; i < itens.length; i++) {
-        const item = itens[i];
-        const descricao = item.descricao || item.nome;
-        if (descricao) {
-          // Criar hash único para este item desta nota
-          const notaItemHash = `${nota.id}-${i}-${descricao.slice(0, 20)}`;
-          
-          produtosParaNormalizar.push({
-            texto_original: descricao,
-            usuario_id: nota.usuario_id,
-            nota_imagem_id: nota.id,
-            origem: 'nota_fiscal',
-            nota_item_hash: notaItemHash
-          });
-        }
-      }
-      notasIds.push(nota.id);
-    }
 
-    // Adicionar produtos do Open Food Facts
-    for (const offProduto of openFoodProducts || []) {
-      produtosParaNormalizar.push({
-        texto_original: offProduto.texto_original,
-        open_food_facts_id: offProduto.id,
-        origem: 'open_food_facts',
-        codigo_barras: offProduto.codigo_barras,
-        dados_brutos: offProduto.dados_brutos,
-        imagem_url: offProduto.imagem_url,
-        imagem_path: offProduto.imagem_path
-      });
+    if (MODO_CANDIDATOS_DIRETO) {
+      // 🎯 SELEÇÃO DIRETA POR CANDIDATO (vinda de reprocessar-candidatos-orfaos).
+      // Bypass da varredura por nota: garante que processamos EXATAMENTE os candidatos elegíveis.
+      console.log(`🎯 Modo candidatos diretos: ${CANDIDATO_IDS.length} ids recebidos`);
+
+      const { data: candidatosAlvo, error: candErr } = await supabase
+        .from('produtos_candidatos_normalizacao')
+        .select('id, nota_imagem_id, nota_item_hash, texto_original, usuario_id, status, precisa_ia, motivo_bloqueio')
+        .in('id', CANDIDATO_IDS);
+      if (candErr) throw new Error(`Erro ao buscar candidatos: ${candErr.message}`);
+
+      // 🔒 Re-validar elegibilidade no momento do processamento
+      const elegiveis = (candidatosAlvo || []).filter(c =>
+        c.status === 'pendente' && c.precisa_ia === true && !c.motivo_bloqueio && c.nota_imagem_id && c.texto_original
+      );
+      const descartados = (candidatosAlvo?.length || 0) - elegiveis.length;
+      console.log(`📋 Candidatos elegíveis confirmados: ${elegiveis.length} (descartados: ${descartados})`);
+
+      for (const c of elegiveis) {
+        produtosParaNormalizar.push({
+          texto_original: c.texto_original,
+          usuario_id: c.usuario_id,
+          nota_imagem_id: c.nota_imagem_id,
+          origem: 'nota_fiscal',
+          nota_item_hash: c.nota_item_hash || `${c.nota_imagem_id}-${c.id}-${(c.texto_original || '').slice(0, 20)}`,
+        });
+        if (!notasIds.includes(c.nota_imagem_id)) notasIds.push(c.nota_imagem_id);
+      }
+    } else {
+      const { data: notasProcessadas, error: notasError } = await supabase
+        .from('notas_imagens')
+        .select('id, usuario_id, dados_extraidos')
+        .eq('processada', true)
+        .eq('normalizada', false)
+        .not('dados_extraidos', 'is', null)
+        .limit(LIMITE_NOTAS_INPUT); // ✅ Fase 1: até 5 notas / modo_teste: até limite_notas
+
+      if (notasError) {
+        throw new Error(`Erro ao buscar notas: ${notasError.message}`);
+      }
+
+      console.log(`📦 Notas fiscais: ${notasProcessadas?.length || 0} notas processadas`);
+
+      // 2. BUSCAR PRODUTOS DO OPEN FOOD FACTS NÃO NORMALIZADOS
+      // ⚠️ Em modo_teste, pular Open Food Facts para limitar escopo
+      const { data: openFoodProducts, error: offError } = MODO_TESTE
+        ? { data: [] as any[], error: null }
+        : await supabase
+        .from('open_food_facts_staging')
+        .select('id, codigo_barras, texto_original, dados_brutos, imagem_url, imagem_path')
+        .eq('processada', false)
+        .limit(100);
+
+      if (offError) {
+        console.warn(`⚠️ Erro ao buscar Open Food Facts: ${offError.message}`);
+      }
+
+      console.log(`🌍 Open Food Facts: ${openFoodProducts?.length || 0} produtos para normalizar`);
+
+      // Extrair produtos de cada nota fiscal com hash único por item
+      for (const nota of notasProcessadas || []) {
+        const itens = nota.dados_extraidos?.itens || [];
+        notasMetadata.set(nota.id, { totalItens: itens.length, itensProcessados: 0 });
+
+        for (let i = 0; i < itens.length; i++) {
+          const item = itens[i];
+          const descricao = item.descricao || item.nome;
+          if (descricao) {
+            const notaItemHash = `${nota.id}-${i}-${descricao.slice(0, 20)}`;
+            produtosParaNormalizar.push({
+              texto_original: descricao,
+              usuario_id: nota.usuario_id,
+              nota_imagem_id: nota.id,
+              origem: 'nota_fiscal',
+              nota_item_hash: notaItemHash
+            });
+          }
+        }
+        notasIds.push(nota.id);
+      }
+
+      // Adicionar produtos do Open Food Facts
+      for (const offProduto of openFoodProducts || []) {
+        produtosParaNormalizar.push({
+          texto_original: offProduto.texto_original,
+          open_food_facts_id: offProduto.id,
+          origem: 'open_food_facts',
+          codigo_barras: offProduto.codigo_barras,
+          dados_brutos: offProduto.dados_brutos,
+          imagem_url: offProduto.imagem_url,
+          imagem_path: offProduto.imagem_path
+        });
+      }
     }
 
     console.log(`📊 Encontrados ${produtosParaNormalizar.length} produtos para processar`);
