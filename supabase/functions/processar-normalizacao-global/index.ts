@@ -1436,13 +1436,13 @@ RESPONDA APENAS COM JSON (sem markdown):
     ]);
     const FRAGMENTOS = new Set(['C','C/','S','S/','P','P/','DA','DE','DO','DAS','DOS','OL','L','E','OU','UN','KG','G','ML']);
     if (resultado.marca) {
-      const m = resultado.marca.trim();
+      const m = String(resultado.marca).trim().toUpperCase();
       const soLetras = m.replace(/[^A-ZÁÉÍÓÚÂÊÔÃÕÇ]/gi, '');
       const invalida = MARCAS_INVALIDAS.has(m)
         || FRAGMENTOS.has(m)
         || soLetras.length < 3;
       if (invalida) {
-        console.log(`🏷️ Marca inválida descartada: "${m}" → null`);
+        console.log(`🏷️ Marca inválida descartada: "${resultado.marca}" → null`);
         resultado.marca = null;
       }
     }
